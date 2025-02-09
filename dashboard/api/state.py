@@ -19,8 +19,11 @@ class Experiments:
         experiments_list = [Experiment(**exp) for exp in data]
         return cls(experiments_list)
 
+    def get_dicts(self) -> list[dict]:
+        return [asdict(exp) for exp in self.experiments]
+
     def save(self, filepath: str) -> None:
-        data = [asdict(exp) for exp in self.experiments]
+        data = self.get_dicts()
         with open(filepath, "w") as f:
             # TODO: in production, use json.dump(data, f) to save space
             json.dump(data, f, indent=4)

@@ -3,7 +3,8 @@ FROM node:21 as build-stage
 WORKDIR /usr/src/app
 COPY ./dash .
 
-RUN npm install --force && npm run build
+RUN npm install --force
+RUN npm run build
 
 FROM quay.io/jupyter/base-notebook:latest
 
@@ -13,8 +14,8 @@ USER root
 COPY --from=build-stage /usr/src/app/dist /var/www/dash
 
 # Nginx
-RUN apt-get update && \
-    apt-get install -y nginx
+RUN apt-get update
+RUN apt-get install -y nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Jupyter

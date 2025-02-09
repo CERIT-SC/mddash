@@ -15,15 +15,15 @@ c.ServerProxy.servers = {
         }
     },
 
-    'dash-api': {
-        'command': None,
-        'absolute_url': False,
-        'port': 3000,
-        'url_prefix': '/api',
-        'map_url': True,
-        'launcher_entry': {
-            'title': 'API',
-            'icon_path': ''
-        }
-    }
+    # 'dash-api': {
+    #     'command': None,
+    #     'absolute_url': False,
+    #     'port': 3000,
+    #     'url_prefix': '/api',
+    #     'map_url': True,
+    #     'launcher_entry': {
+    #         'title': 'API',
+    #         'icon_path': ''
+    #     }
+    # }
 }
