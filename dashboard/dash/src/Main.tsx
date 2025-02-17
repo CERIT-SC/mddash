@@ -17,7 +17,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="/__BASE_PATH__/" element={<Layout />}>
                     <Route index element={<Home />} />
                     <Route path="/__BASE_PATH__/new" element={<New />} />
-                    <Route path="/__BASE_PATH__/wizard" element={<Wizard />} />
+                    <Route path="/__BASE_PATH__/:id/wizard" element={<Wizard />} />
                 </Route>
             </Routes>
         </BrowserRouter>

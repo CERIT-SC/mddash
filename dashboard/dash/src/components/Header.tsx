@@ -1,6 +1,6 @@
 import { Typography, useTheme } from '@mui/material'
 import { Link } from 'react-router-dom';
-import { BASE_PATH } from '../Const';
+import { BASE_PATH } from '../util/const';
 
 const Header = () => {
     const theme = useTheme();

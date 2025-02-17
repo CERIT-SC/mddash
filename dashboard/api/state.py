@@ -5,8 +5,8 @@ from experiment import Experiment
 
 
 class Experiments:
-    def __init__(self, experiments: list[Experiment] = None):
-        self.experiments = experiments or []
+    def __init__(self, experiments: dict[str, Experiment] = None):
+        self.experiments = experiments or {}
 
     @classmethod
     def load(cls, filepath: str) -> "Experiments":
@@ -14,31 +14,32 @@ class Experiments:
             with open(filepath, "r") as f:
                 data = json.load(f)
         except FileNotFoundError:
-            data = []
+            data = {}
 
-        experiments_list = [Experiment(**exp) for exp in data]
-        return cls(experiments_list)
+        experiments_dict = {id: Experiment(**exp) for id, exp in data.items()}
+        return cls(experiments_dict)
 
-    def get_dicts(self) -> list[dict]:
-        return [asdict(exp) for exp in self.experiments]
+    def get_all(self) -> list[dict]:
+        return [asdict(exp) for exp in self.experiments.values()]
 
     def save(self, filepath: str) -> None:
-        data = self.get_dicts()
+        data = {id: asdict(exp) for id, exp in self.experiments.items()}
+
         with open(filepath, "w") as f:
-            # TODO: in production, use json.dump(data, f) to save space
+            # TODO: in production, use json.dump(data, f) (without indent)
             json.dump(data, f, indent=4)
 
     def add(self, experiment: Experiment) -> None:
-        self.experiments.append(experiment)
+        self.experiments[experiment.id] = experiment
 
     def remove(self, experiment_id: str) -> None:
-        self.experiments = list(filter(lambda exp: exp.id != experiment_id, self.experiments))
+        del self.experiments[experiment_id]
 
     def get(self, experiment_id: str) -> Experiment:
-        for exp in self.experiments:
-            if exp.id == experiment_id:
-                return exp
-        return None
+        if experiment_id not in self.experiments:
+            raise ValueError(f"Experiment with id '{experiment_id}' not found")
+
+        return self.experiments[experiment_id]
 
 
 if __name__ == '__main__':
