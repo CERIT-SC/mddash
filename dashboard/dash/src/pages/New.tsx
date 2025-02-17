@@ -4,7 +4,8 @@ import { Stack, Button, TextField, Typography, FormControl, Radio, RadioGroup, F
 
 import Dropzone from '../components/Dropzone';
 import ErrorMessage from '../components/ErrorMessage';
-import { API_BASE, BASE_PATH } from '../Const';
+import { BASE_PATH } from '../util/const';
+import { create_experiment } from '../util/api';
 
 const New = () => {
     const navigate = useNavigate();
@@ -54,21 +55,9 @@ const New = () => {
         const formData = new FormData(form);
 
         try {
-            const response = await fetch(`${API_BASE}/experiments`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!response.ok)
-                throw new Error('Failed to create experiment');
-
-            const data = await response.json();
-
-            if (data.status === 'error')
-                throw new Error(data.message);
-
+            const data = await create_experiment(formData);
             console.log('Experiment created:', data);
-            navigate(`${BASE_PATH}/wizard?id=${data.data.id}`);
+            navigate(`${BASE_PATH}/${data.data.id}/wizard`);
         }
         catch (error: Error | any) {
             setErrorMessage(error.message);
@@ -124,9 +113,7 @@ const New = () => {
                     Create Experiment
                 </Button>
 
-                {errorMessage && (
-                    <ErrorMessage message={errorMessage} />
-                )}
+                {errorMessage && <ErrorMessage message={errorMessage} />}
             </Stack>
         </>
     );

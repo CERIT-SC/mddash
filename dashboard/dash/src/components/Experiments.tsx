@@ -1,32 +1,23 @@
 import { useState, useEffect } from 'react'
 import { Typography, Card, CardActionArea, CardActions, Grid2 as Grid, Stack, CardContent, Button } from '@mui/material'
 import { Add } from '@mui/icons-material'
-import { API_BASE, BASE_PATH } from '../Const'
+import { BASE_PATH } from '../util/const'
 
-
-interface Experiment {
-    id: string
-    name: string
-    status: string
-    step: number
-}
+import { Experiment } from '../util/types'
+import { delete_experiment, get_experiments } from '../util/api'
 
 
 const Experiments = () => {
     const [experiments, setExperiments] = useState<Experiment[]>([])
 
     const getExperiments = async () => {
-        const response = await fetch(`${API_BASE}/experiments`)
-        const data = await response.json()
+        const data = await get_experiments();
         console.log(data)
         setExperiments(data.data || [])
     }
 
     const deleteExperiment = async (id: string) => {
-        await fetch(`${API_BASE}/experiments/${id}`, {
-            method: 'DELETE'
-        })
-
+        delete_experiment(id);
         getExperiments()
     }
 
@@ -48,7 +39,7 @@ const Experiments = () => {
                             <Typography variant="body1">Step: {experiment.step}</Typography>
                         </CardContent>
                         <CardActions>
-                            <Button size="small" variant='contained' href={`${BASE_PATH}/wizard?id=${experiment.id}`}>Wizard</Button>
+                            <Button size="small" variant='contained' href={`${BASE_PATH}/${experiment.id}/wizard`}>Wizard</Button>
                             <Button size="small" variant='outlined' color="error" onClick={() => {deleteExperiment(experiment.id)}}>Delete</Button>
                         </CardActions>
                     </Card>

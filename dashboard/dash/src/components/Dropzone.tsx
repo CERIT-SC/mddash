@@ -1,15 +1,26 @@
 import { useState } from 'react';
-import { useDropzone, DropzoneOptions, FileRejection, DropEvent } from 'react-dropzone';
+import { useDropzone, DropzoneOptions, FileRejection, DropEvent, Accept } from 'react-dropzone';
 import { Typography, Paper, alpha, useTheme, Stack, List, ListItem, ListItemAvatar, ListItemText, SxProps } from '@mui/material';
 import { Check } from '@mui/icons-material';
 
 import ErrorMessage from './ErrorMessage';
 
+
+const getAcceptedExtensions = (acceptedTypes: Accept) => {
+    const extensions: string[] = [];
+    for (const key in acceptedTypes) {
+        if (acceptedTypes.hasOwnProperty(key)) {
+            extensions.push(...acceptedTypes[key]);
+        }
+    }
+    return extensions;
+};
+
+
 interface DropzoneProps extends DropzoneOptions {
     inputName: string;
     sx?: SxProps;
 }
-
 
 const Dropzone = (props: DropzoneProps) => {
     const { inputName, sx, onDrop, onError, ...dropzoneOptions } = props;
@@ -44,6 +55,8 @@ const Dropzone = (props: DropzoneProps) => {
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop: handleDrop, onError: handleError, ...dropzoneOptions });
 
+    const acceptedExtensions = getAcceptedExtensions(dropzoneOptions.accept || {}).map(ext => `*${ext}`).join(', ');
+
     const formatFileSize = (size: number) => {
         if (size < 1024) {
             return `${size} B`;
@@ -76,11 +89,12 @@ const Dropzone = (props: DropzoneProps) => {
                 ) : (
                     <Typography variant="h6">Drop files here or click.</Typography>
                 )}
+                {acceptedExtensions && (
+                    <Typography variant="body2">Accepted file types: {acceptedExtensions}</Typography>
+                )}
             </Paper>
 
-            {error && (
-                <ErrorMessage message={error.message} />
-            )}
+            {error && <ErrorMessage message={error.message} />}
 
             {files.length > 0 && (
                 <Paper elevation={2}>

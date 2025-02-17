@@ -1,7 +1,7 @@
 import { Typography, Card, Grid2 as Grid, CardContent } from '@mui/material'
 
 import Experiments from '../components/Experiments'
-import { USER } from '../Const'
+import { USER } from '../util/const'
 
 const Home = () => {
     return (

@@ -9,6 +9,10 @@ experiments = Experiments.load(STATE_FILE)
 app = Flask(__name__)
 
 
+from flask_cors import CORS # DEV ONLY
+CORS(app)   # DEV ONLY
+
+
 @app.route("/")
 def index():
     return {"status": "success", "message": "FAIR MD Dash API"}
@@ -17,7 +21,15 @@ def index():
 @app.route("/experiments", methods=["GET"])
 def list_experiments():
     try:
-        return {"status": "success", "data": experiments.get_dicts()}
+        return {"status": "success", "data": experiments.get_all()}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.route("/experiments/<experiment_id>", methods=["GET"])
+def get_experiment(experiment_id):
+    try:
+        return {"status": "success", "data": experiments.get(experiment_id)}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
