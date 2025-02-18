@@ -33,6 +33,10 @@ class Experiments:
         self.experiments[experiment.id] = experiment
 
     def remove(self, experiment_id: str) -> None:
+        if experiment_id not in self.experiments:
+            raise ValueError(f"Experiment with id '{experiment_id}' not found")
+
+        self.experiments[experiment_id].delete() # Clean up experiment directory
         del self.experiments[experiment_id]
 
     def get(self, experiment_id: str) -> Experiment:

@@ -16,6 +16,9 @@ class Experiment:
     @classmethod
     def prepare_env(cls) -> str:
         id = get_unique_id()
+
+        # TODO: create pvc
+
         (DATA_DIR / id).mkdir(parents=True, exist_ok=True)
         return id
 
@@ -45,3 +48,6 @@ class Experiment:
         tpr.save(DATA_DIR / id / 'input.tpr')
 
         return cls(id=id, name=name, status='setup complete', step=1)
+
+    def delete(self) -> None:
+        (DATA_DIR / self.id).rmdir()
