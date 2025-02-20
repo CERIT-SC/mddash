@@ -1,18 +1,13 @@
-#!/bin/bash
+#!/bin/sh
 
 # inject base path
 echo "injecting base path"
 BASE_PATH="/user/${JUPYTERHUB_USER}/dash"
-sudo find /var/www/dash -type f -exec sed -i "s|/__BASE_PATH__|${BASE_PATH}|g" {} +
+API_PATH="/user/${JUPYTERHUB_USER}/api"
+for f in $(cd /opt && find dash -type f); do
+	mkdir -p $(dirname /var/tmp/$f)
+	sed "s|/__BASE_PATH__|${BASE_PATH}|g; s|/__API_PATH__|${API_PATH}|g" /opt/$f >/var/tmp/$f
+done
 
-# Jupyter Notebook
-echo "starting jupyter notebook"
-/usr/local/bin/start-notebook.py --config=/home/jovyan/.jupyter/jupyter_server_config.py &
-
-# Nginx (frontend)
-echo "starting nginx"
-sudo nginx -g 'daemon off;' &
-
-# API
 echo "starting API"
-python /var/www/api/main.py
+python /opt/api/main.py

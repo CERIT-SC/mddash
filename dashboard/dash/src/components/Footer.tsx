@@ -6,7 +6,7 @@ const Footer = () => {
 
     return (
         <footer style={{ backgroundColor: theme.palette.primary.main }}>
-            <Typography variant="caption">Made with ❤️ by <Link color='secondary' href="https://disa.fi.muni.cz/complex-data-analysis/home">Intelligent Systems for Complex Data Research Group</Link></Typography>
+            <Typography variant="caption">TODO</Typography>
         </footer>
     )
 }
