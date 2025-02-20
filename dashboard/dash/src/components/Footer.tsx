@@ -1,4 +1,4 @@
-import { useTheme, Typography, Link } from '@mui/material'
+import { useTheme, Typography } from '@mui/material'
 
 
 const Footer = () => {
