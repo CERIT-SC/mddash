@@ -3,33 +3,37 @@
 from flask import Flask, Blueprint, request, send_from_directory
 from dataclasses import asdict
 
-from config import STATE_FILE
+from config import STATE_FILE, PREFIX, FRONTEND_DIR
 from experiment import Experiment
 from state import Experiments
 
-import os
 
 experiments = Experiments.load(STATE_FILE)
-prefix = f'/user/{os.environ["JUPYTERHUB_USER"]}'
 
 #from flask_cors import CORS # DEV ONLY
 #CORS(app)   # DEV ONLY
 
-bp = Blueprint('dash',__name__,
-    url_prefix = prefix,
+bp = Blueprint('dash', __name__,
+        url_prefix = PREFIX,
     )
 
 @bp.route("/")
 def index():
     return {"status": "success", "message": "FAIR MD Dashboard & API"}
 
+
 @bp.route("/dash", defaults={'path':''})
 @bp.route("/dash/<path:path>")
-def static(path):
-    if path == '' or path.endswith('/'):
-        return send_from_directory('/var/tmp/dash','index.html')
-    else:
-        return send_from_directory('/var/tmp/dash',path)
+def static(path: str):
+    file_path = FRONTEND_DIR / path
+
+    # static files
+    if file_path.is_file():
+        return send_from_directory(FRONTEND_DIR, path)
+
+    # send everything else to the index.html (React Router will handle the routing)
+    return send_from_directory(FRONTEND_DIR, 'index.html')
+
 
 @bp.route("/api/experiments", methods=["GET"])
 def list_experiments():
@@ -84,9 +88,10 @@ def delete_experiment(experiment_id):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+
 app = Flask(__name__)
-app.register_blueprint(bp,url_prefix=prefix)
+app.register_blueprint(bp, url_prefix=PREFIX)
 
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0',port=8888,debug=True)
+    app.run(host='0.0.0.0', port=8888, debug=True)
