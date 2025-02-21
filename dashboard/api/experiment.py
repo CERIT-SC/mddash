@@ -1,3 +1,4 @@
+from shutil import rmtree
 from dataclasses import dataclass
 from werkzeug.datastructures import FileStorage
 
@@ -49,5 +50,6 @@ class Experiment:
 
         return cls(id=id, name=name, status='setup complete', step=1)
 
+
     def delete(self) -> None:
-        (DATA_DIR / self.id).rmdir()
+        rmtree(DATA_DIR / self.id)
