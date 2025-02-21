@@ -6,7 +6,7 @@ const WizardAnalyze = (props: WizardStepperProps) => {
 
     return (
         <div>
-            <h1>Analyze</h1>
+            <h1>TODO: Analyze</h1>
         </div>
     )
 }

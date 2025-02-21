@@ -5,7 +5,7 @@ const WizardPublish = (props: WizardStepperProps) => {
 
     return (
         <div>
-            <h1>Publish</h1>
+            <h1>TODO: Publish</h1>
         </div>
     );
 }
