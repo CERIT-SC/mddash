@@ -5,7 +5,7 @@ import { Stack, Button, TextField, Typography, FormControl, Radio, RadioGroup, F
 import Dropzone from '../components/Dropzone';
 import ErrorMessage from '../components/ErrorMessage';
 import { BASE_PATH } from '../util/const';
-import { create_experiment } from '../util/api';
+import { ApiError, create_experiment } from '../util/api';
 
 const New = () => {
     const navigate = useNavigate();
@@ -59,9 +59,13 @@ const New = () => {
             console.log('Experiment created:', data);
             navigate(`${BASE_PATH}/${data.data.id}/wizard`);
         }
-        catch (error: Error | any) {
-            setErrorMessage(error.message);
+        catch (error) {
             console.error(error);
+
+            if (error instanceof ApiError)
+                setErrorMessage(error.message);
+            else
+                setErrorMessage('Failed to create experiment.');
         }
     };
 

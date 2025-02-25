@@ -4,7 +4,7 @@ import { Add } from '@mui/icons-material'
 import { BASE_PATH } from '../util/const'
 
 import { Experiment } from '../util/types'
-import { delete_experiment, get_experiments } from '../util/api'
+import { delete_experiment, get_experiments, ApiError } from '../util/api'
 import ErrorMessage from './ErrorMessage'
 
 const Experiments = () => {
@@ -12,33 +12,33 @@ const Experiments = () => {
     const [errorMessage, setErrorMessage] = useState<string>('')
 
     const getExperiments = async () => {
-        let data: any = []
+        let data
 
         try {
             data = await get_experiments()
-
-            console.log(data)
-
-            if (data.status === 'error')
-                setErrorMessage(data.message)
-            else
-                setErrorMessage('')
         }
         catch (error) {
-            setErrorMessage('Failed to fetch experiments.')
-            console.error(error)
+            if (error instanceof ApiError)
+                setErrorMessage(error.message)
+            else
+                setErrorMessage('Failed to fetch experiments.')
         }
 
-        setExperiments(data.data || [])
+        setExperiments(data?.data || [])
     }
 
     const deleteExperiment = async (id: string) => {
-        const data = await delete_experiment(id);
+        try {
+            await delete_experiment(id);
+        }
+        catch (error) {
+            if (error instanceof ApiError)
+                setErrorMessage(error.message);
+            else
+                setErrorMessage('Failed to delete experiment.');
+        }
 
-        if (data.status === 'success')
-            getExperiments()
-        else
-            setErrorMessage(data.message)
+        getExperiments();
     }
 
     useEffect(() => {
