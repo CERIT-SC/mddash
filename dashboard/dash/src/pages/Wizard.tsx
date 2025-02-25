@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import WizardStepper from '../components/Wizard/Stepper'
 import { Experiment } from '../util/types';
-import { get_experiment } from '../util/api';
+import { ApiError, get_experiment } from '../util/api';
 import ErrorMessage from '../components/ErrorMessage';
 
 const Wizard = () => {
@@ -15,13 +15,18 @@ const Wizard = () => {
 
     const getExperiment = async () => {
         if (!id) return;
+        let data;
 
-        const data = await get_experiment(id);
+        try {
+            data = await get_experiment(id);
+        } catch (error) {
+            if (error instanceof ApiError)
+                setErrorMessage(error.message);
+            else
+                setErrorMessage('Failed to fetch experiment.');
+        }
 
-        if (data.status === 'error')
-            setErrorMessage(data.message || 'Failed to fetch experiment');
-
-        setExperiment(data.data || null);
+        setExperiment(data?.data || null);
     }
 
     useEffect(() => {
@@ -33,6 +38,10 @@ const Wizard = () => {
 
             <Typography variant="h2">
                 Wizard
+            </Typography>
+
+            <Typography variant="h3" sx={{ textAlign: 'center' }}>
+                {experiment ? experiment.name : 'Loading...'}
             </Typography>
 
             {errorMessage && <ErrorMessage message={errorMessage} />}

@@ -26,7 +26,7 @@ class Experiments:
         data = {id: asdict(exp) for id, exp in self.experiments.items()}
 
         with open(filepath, "w") as f:
-            # TODO: in production, use json.dump(data, f) (without indent)
+            # TODO: in production, use json.dump(data, f) (without indent to save space)
             json.dump(data, f, indent=4)
 
     def add(self, experiment: Experiment) -> None:
