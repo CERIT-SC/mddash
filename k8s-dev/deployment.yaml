@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gromacs-portal-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gromacs-portal-dev
+  template:
+    metadata:
+      labels:
+        app: gromacs-portal-dev
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1002
+        fsGroup: 1002
+        fsGroupChangePolicy: "OnRootMismatch"
+        seccompProfile:
+          type: RuntimeDefault
+      containers:      
+      - name: gromacs-portal-dev
+        image: IMAGE
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+
+        ports:
+          - containerPort: 9000
+        resources:
+          requests:
+            cpu: .2
+            memory: 16Gi
+          limits:
+            cpu: 6
+            memory: 16Gi
+        volumeMounts:
+          - mountPath: /home/jovyan
+            name: gromacs-work-volume
+        command: ['start-devel.sh', 'jupyter', 'notebook', '--ip', '0.0.0.0', '--port', '9000' ]
+        env:
+      volumes:
+        - name: gromacs-work-volume
+          persistentVolumeClaim:
+            claimName: ljocha-home-default

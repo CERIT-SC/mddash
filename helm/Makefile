@@ -1,5 +1,5 @@
 ns?=gmxhub-ns
-dashboard_image?=cerit.io/ljocha/mddash
+dashboard_image?=$(shell cat ../IMAGE)
 
 
 install:
