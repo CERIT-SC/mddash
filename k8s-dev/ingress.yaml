@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1                                                
+kind: Ingress                                                                   
+metadata:                                                                       
+  name: gromacs-portal-dev
+  annotations:                                                                  
+    kuberentes.io/ingress.class: "nginx"                                        
+    kubernetes.io/tls-acme: "true"                                              
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: 300m 
+spec:                                                                           
+  tls:                                                                          
+    - hosts:                                                                    
+        - "gromacs-portal-dev.dyn.cloud.e-infra.cz"
+      secretName: gromacs-portal-dev-dyn-cloud-e-infra-cz-tls
+  rules:                                                                        
+  - host: "gromacs-portal-dev.dyn.cloud.e-infra.cz"
+    http:                                                                       
+      paths:                                                                    
+      - backend:                                                                
+          service:                                                              
+            name: gromacs-portal-dev
+            port:                                                               
+              number: 80                                                      
+        pathType: ImplementationSpecific
