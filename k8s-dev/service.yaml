@@ -7,7 +7,7 @@ spec:
   ports:
   - name: mddash-dev-port
     port: 80                                                                    
-    targetPort: 9000    
+    targetPort: 8888    
   selector:
     app: mddash-dev
 

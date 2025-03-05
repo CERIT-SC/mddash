@@ -1,5 +1,6 @@
-devNamespace: ljocha-ns
+devNamespace: krenek-ns
 
 dashboard:
   hostname: mddash-ljocha.dyn.cloud.e-infra.cz
+  user: ljocha
   image: cerit.io/ljocha/mddash
