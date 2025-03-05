@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mddash-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mddash-dev
+  template:
+    metadata:
+      labels:
+        app: mddash-dev
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1002
+        fsGroup: 1002
+        fsGroupChangePolicy: "OnRootMismatch"
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:      
+      - name: mddash-dev
+        image: cerit.io/ljocha/mddash
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+
+        ports:
+          - containerPort: 9000
+        resources:
+          requests:
+            cpu: .2
+            memory: 4Gi
+          limits:
+            cpu: 1
+            memory: 4Gi
+        volumeMounts:
+          - mountPath: /mddash
+            name: work-volume
+        command: ['/start.sh']
+        env:
+          - name: JUPYTERHUB_USER
+            value: ljocha
+      volumes:
+        - name: work-volume
+          persistentVolumeClaim:
+            claimName: mddash-data
