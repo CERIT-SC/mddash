@@ -4,3 +4,6 @@ dashboard:
   hostname: mddash-ljocha.dyn.cloud.e-infra.cz
   user: ljocha
   image: cerit.io/ljocha/mddash
+
+data:
+  size: 10Gi
