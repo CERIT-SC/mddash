@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: gromacs-portal-dev
+  name: mddash-dev
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: gromacs-portal-dev
+      app: mddash-dev
   template:
     metadata:
       labels:
-        app: gromacs-portal-dev
+        app: mddash-dev
     spec:
       securityContext:
         runAsUser: 1000
@@ -20,8 +20,8 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:      
-      - name: gromacs-portal-dev
-        image: IMAGE
+      - name: mddash-dev
+        image: {{ dashboard.image }}
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -33,14 +33,14 @@ spec:
         resources:
           requests:
             cpu: .2
-            memory: 16Gi
+            memory: 4Gi
           limits:
-            cpu: 6
-            memory: 16Gi
+            cpu: 1
+            memory: 4Gi
         volumeMounts:
           - mountPath: /home/jovyan
             name: gromacs-work-volume
-        command: ['start-devel.sh', 'jupyter', 'notebook', '--ip', '0.0.0.0', '--port', '9000' ]
+        command: ['/start.sh']
         env:
       volumes:
         - name: gromacs-work-volume
