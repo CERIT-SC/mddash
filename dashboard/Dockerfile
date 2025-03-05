@@ -17,6 +17,9 @@ COPY ./start.sh /start.sh
 COPY --from=build-stage /usr/src/app/dist /opt/dash
 
 # User environment
+
+RUN adduser --uid 1000 jovyan
+
 # TODO: PVC
 #RUN mkdir -p /home/jovyan/work/data
 #RUN ln -s /home/jovyan/work/data /home/jovyan/work/experiment
