@@ -17,12 +17,14 @@ spec:
         runAsGroup: 1002
         fsGroup: 1002
         fsGroupChangePolicy: "OnRootMismatch"
+        runAsNonRoot: true
         seccompProfile:
           type: RuntimeDefault
       containers:      
       - name: mddash-dev
         image: {{ dashboard.image }}
         securityContext:
+          runAsNonRoot: true
           allowPrivilegeEscalation: false
           capabilities:
             drop:
@@ -42,6 +44,8 @@ spec:
             name: gromacs-work-volume
         command: ['/start.sh']
         env:
+          - name: JUPYTERHUB_USER
+            value: {{ dashboard.user }}
       volumes:
         - name: gromacs-work-volume
           persistentVolumeClaim:

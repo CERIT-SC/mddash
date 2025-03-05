@@ -11,7 +11,7 @@ spec:
   tls:                                                                          
     - hosts:                                                                    
         - "{{ dashboard.hostname }}"
-      secretName: "{{ dashboard.hostname | replace('.','-') }}"-tls
+      secretName: {{ dashboard.hostname | replace('.','-') }}-tls
   rules:                                                                        
   - host: "{{ dashboard.hostname }}"
     http:                                                                       
