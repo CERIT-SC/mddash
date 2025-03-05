@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: gromacs-portal-dev
+  name: mddash-dev
 spec:
   type: ClusterIP
   ports:
-  - name: gromacs-portal-dev-port
+  - name: mddash-dev-port
     port: 80                                                                    
     targetPort: 9000    
   selector:
-    app: gromacs-portal-dev
+    app: mddash-dev
 

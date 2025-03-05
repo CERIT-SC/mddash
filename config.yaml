@@ -1,0 +1,5 @@
+devNamespace: ljocha-ns
+
+dashboard:
+  hostname: mddash-ljocha.dyn.cloud.e-infra.cz
+  image: cerit.io/ljocha/mddash

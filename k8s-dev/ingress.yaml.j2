@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1                                                
 kind: Ingress                                                                   
 metadata:                                                                       
-  name: gromacs-portal-dev
+  name: mddash-dev
   annotations:                                                                  
     kuberentes.io/ingress.class: "nginx"                                        
     kubernetes.io/tls-acme: "true"                                              
@@ -10,15 +10,15 @@ metadata:
 spec:                                                                           
   tls:                                                                          
     - hosts:                                                                    
-        - "gromacs-portal-dev.dyn.cloud.e-infra.cz"
-      secretName: gromacs-portal-dev-dyn-cloud-e-infra-cz-tls
+        - "{{ dashboard.hostname }}"
+      secretName: "{{ dashboard.hostname | replace('.','-') }}"-tls
   rules:                                                                        
-  - host: "gromacs-portal-dev.dyn.cloud.e-infra.cz"
+  - host: "{{ dashboard.hostname }}"
     http:                                                                       
       paths:                                                                    
       - backend:                                                                
           service:                                                              
-            name: gromacs-portal-dev
+            name: mddash-dev
             port:                                                               
               number: 80                                                      
         pathType: ImplementationSpecific
