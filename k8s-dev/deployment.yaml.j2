@@ -22,7 +22,7 @@ spec:
           type: RuntimeDefault
       containers:      
       - name: mddash-dev
-        image: {{ dashboard.image }}
+        image: {{ dashboard.devImage if dashboard.devel else dashboard.image }}
         securityContext:
           runAsNonRoot: true
           allowPrivilegeEscalation: false
