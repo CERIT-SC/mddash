@@ -19,5 +19,5 @@ uninstall:
 log:
 	kubectl -n ${ns} logs -f pod/${pod}
 	
-sh:
-	kubectl -n ${ns} exec -ti pod/${pod} -- /bin/sh
+bash:
+	kubectl -n ${ns} exec -ti pod/${pod} -- /bin/bash
