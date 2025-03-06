@@ -21,3 +21,9 @@ log:
 	
 bash:
 	kubectl -n ${ns} exec -ti pod/${pod} -- /bin/bash
+
+diff:
+	kubectl -n ${ns} exec pod/${pod} -- bash -c "cd /opt/mddash && git diff"
+
+patch:
+	kubectl -n ${ns} exec pod/${pod} -- bash -c "cd /opt/mddash && git diff" | (cd .. && patch -p1)
