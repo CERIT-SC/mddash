@@ -41,13 +41,13 @@ spec:
             cpu: 1
             memory: 4Gi
         volumeMounts:
-          - mountPath: /home/jovyan
-            name: work-volume
+          - mountPath: /mddash
+            name: data-volume
         command: ['/start.sh']
         env:
           - name: JUPYTERHUB_USER
             value: {{ dashboard.user }}
       volumes:
-        - name: work-volume
+        - name: data-volume
           persistentVolumeClaim:
             claimName: mddash-data
