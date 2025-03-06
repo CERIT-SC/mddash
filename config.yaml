@@ -6,3 +6,6 @@ dashboard:
   image: cerit.io/ljocha/mddash
   devImage: cerit.io/ljocha/mddash:dev
   devel: true
+
+data:
+  size: 10Gi
