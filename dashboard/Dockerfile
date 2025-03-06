@@ -18,7 +18,7 @@ COPY --from=build-stage /usr/src/app/dist /opt/dash
 
 # User environment
 
-RUN adduser --uid 1000 jovyan
+RUN adduser --disabled-password --uid 1000 jovyan
 
 # TODO: PVC
 #RUN mkdir -p /home/jovyan/work/data
