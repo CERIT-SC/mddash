@@ -1,5 +1,5 @@
 
-j2s=deployment.yaml ingress.yaml
+j2s=pvc.yaml deployment.yaml ingress.yaml
 yamls=service.yaml ${j2s}
 
 ns=$(shell yq .devNamespace ../config.yaml)
