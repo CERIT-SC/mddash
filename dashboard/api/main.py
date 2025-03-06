@@ -55,10 +55,11 @@ def create_experiment():
 
     try:
         name = form["experiment-name"]
-        pdb_id = form.get("pdb-id")
+        pdb_id = form.get("pdb-id","XXX:fake")
         repo_url = form.get("repo-url")
         simulation_file = request.files.get("simulation-file")
 
+        app.logger.debug(f'{request.form}')
         match form["type"]:
             case "pdb" if pdb_id:
                 experiment = Experiment.from_pdb(name, pdb_id)
