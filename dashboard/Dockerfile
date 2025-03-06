@@ -1,4 +1,4 @@
-FROM node:21 as build-stage
+FROM node:21 AS build-stage
 
 WORKDIR /usr/src/app
 COPY ./dash .
