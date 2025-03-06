@@ -7,6 +7,6 @@ RUN apk add bash vim git
 RUN rm -rf /opt/api
 
 RUN cd opt && git clone https://github.com/CERIT-SC/mddash.git 
-RUN ln -s dashboard/api /opt
+RUN ln -s mddash/dashboard/api /opt
 
 RUN chown -R jovyan /opt/mddash
