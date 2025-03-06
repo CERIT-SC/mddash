@@ -41,12 +41,12 @@ spec:
             memory: 4Gi
         volumeMounts:
           - mountPath: /home/jovyan
-            name: gromacs-work-volume
+            name: work-volume
         command: ['/start.sh']
         env:
           - name: JUPYTERHUB_USER
             value: {{ dashboard.user }}
       volumes:
-        - name: gromacs-work-volume
+        - name: work-volume
           persistentVolumeClaim:
-            claimName: ljocha-home-default
+            claimName: mddash-data
