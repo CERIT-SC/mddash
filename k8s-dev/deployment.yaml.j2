@@ -23,6 +23,7 @@ spec:
       containers:      
       - name: mddash-dev
         image: {{ dashboard.devImage if dashboard.devel else dashboard.image }}
+        imagePullPolicy: Always
         securityContext:
           runAsNonRoot: true
           allowPrivilegeEscalation: false
