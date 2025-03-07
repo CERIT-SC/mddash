@@ -99,8 +99,8 @@ def start_notebook(experiment_id):
     return {'status': 'success', 'message': 'Notebook created'}
     
 
-# TODO
 @bp.route("/notebook/<experiment_id>", defaults={'path':''})
+@bp.route("/notebook/<experiment_id>/", defaults={'path':''})
 @bp.route('/notebook/<experiment_id>/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def proxy_notebook(experiment_id,path):
     target = f'http://svc-{experiment_id}.{NAMESPACE}.svc.cluster.local/{PREFIX}/notebook/{experiment_id}/{path}'

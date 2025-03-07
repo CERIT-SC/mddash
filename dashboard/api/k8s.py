@@ -43,9 +43,22 @@ def create_notebook_pod(image,ns,id,prefix):
                         },
                     'name': f'jupyter-{id}',
                     'image': image,
-                    'env': [ {'name':'JUPYTERHUB_SERVICE_PREFIX', 'value':prefix } ],
-                    'args': [ 'start-notebook.sh', f'--NotebookApp.base_url={prefix}' ]
+#                    'env': [ {'name':'JUPYTERHUB_SERVICE_PREFIX', 'value':prefix } ],
+                    'args': [
+                      'start-notebook.sh',
+                      f'--NotebookApp.base_url={prefix}',
+                      '--NotebookApp.allow_origin="*"',
+                      f'--NotebookApp.notebook_dir=/mddash/{id}',
+                    ],
+                    'volumeMounts' : [
+                      { 'mountPath': '/mddash', 'name' : 'data-volume' }
+                    ]
                 }
+            ],
+            'volumes': [ 
+              { 'name': 'data-volume',
+                'persistentVolumeClaim': { 'claimName' : 'mddash-data' }
+              }
             ]
         }
     }
