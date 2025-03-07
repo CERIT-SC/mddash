@@ -5,12 +5,15 @@ from werkzeug.datastructures import FileStorage
 from config import DATA_DIR
 from utils import get_unique_id
 
+import uuid
+
 
 @dataclass
 class Experiment:
     id: str
     name: str
     status: str
+    token: str = str(uuid.uuid4())
     step: int = 0
 
 

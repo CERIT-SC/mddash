@@ -3,11 +3,13 @@
 from flask import Flask, Blueprint, request, send_from_directory, Response
 from dataclasses import asdict
 
+from urllib.parse import urlencode
+
 from config import STATE_FILE, PREFIX, FRONTEND_DIR, NAMESPACE, NOTEBOOK_IMAGE
 from experiment import Experiment
 from state import Experiments
 
-from k8s import create_notebook_pod, create_notebook_service
+from k8s import create_notebook_pod, create_notebook_service, delete_notebook_pod, delete_notebook_service
 
 import requests
 
@@ -86,6 +88,7 @@ def delete_experiment(experiment_id):
     try:
         experiments.remove(experiment_id)
         experiments.save(STATE_FILE)
+        delete_notebook(experiment_id)
         return {"status": "success", "message": "Experiment deleted."}
 
     except Exception as e:
@@ -94,16 +97,23 @@ def delete_experiment(experiment_id):
 # TODO: delete it one day
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=["POST"])
 def start_notebook(experiment_id):
-    create_notebook_pod(NOTEBOOK_IMAGE,NAMESPACE,experiment_id,f'{PREFIX}/notebook/{experiment_id}')
+    create_notebook_pod(NOTEBOOK_IMAGE,NAMESPACE,experiment_id,f'{PREFIX}/notebook/{experiment_id}',experiments.get(experiment_id).token)
     create_notebook_service(NAMESPACE,experiment_id)
     return {'status': 'success', 'message': 'Notebook created'}
+
+@bp.route('/api/experiments/<experiment_id>/notebook', methods=["DELETE"])
+def delete_notebook(experiment_id):
+    delete_notebook_pod(NAMESPACE,experiment_id)
+    delete_notebook_service(NAMESPACE,experiment_id)
+    return {'status': 'success', 'message': 'Notebook deleted'}
     
 
 @bp.route("/notebook/<experiment_id>", defaults={'path':''})
 @bp.route("/notebook/<experiment_id>/", defaults={'path':''})
 @bp.route('/notebook/<experiment_id>/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def proxy_notebook(experiment_id,path):
-    target = f'http://svc-{experiment_id}.{NAMESPACE}.svc.cluster.local/{PREFIX}/notebook/{experiment_id}/{path}'
+    qry = urlencode({**request.args, 'token': experiments.get(experiment_id).token} )
+    target = f'http://svc-{experiment_id}.{NAMESPACE}.svc.cluster.local/{PREFIX}/notebook/{experiment_id}/{path}?{qry}'
     response = requests.request(
         method=request.method,
         url=target,

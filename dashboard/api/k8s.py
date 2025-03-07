@@ -6,7 +6,7 @@ from kubernetes.client.rest import ApiException
 # TODO
 #  Ensure your pod has a corresponding label, such as spec.template.metadata.labels.app: example-pod.
 
-def create_notebook_pod(image,ns,id,prefix):
+def create_notebook_pod(image,ns,id,prefix,token):
     # Load in-cluster config
     config.load_incluster_config()
 
@@ -47,8 +47,8 @@ def create_notebook_pod(image,ns,id,prefix):
                     'args': [
                       'start-notebook.sh',
                       f'--NotebookApp.base_url={prefix}',
-                      '--NotebookApp.allow_origin="*"',
                       f'--NotebookApp.notebook_dir=/mddash/{id}',
+                      f'--NotebookApp.token="{token}"',
                     ],
                     'volumeMounts' : [
                       { 'mountPath': '/mddash', 'name' : 'data-volume' }
@@ -70,6 +70,19 @@ def create_notebook_pod(image,ns,id,prefix):
 # TODO
 # ping example-service.krenek-ns.svc.cluster.local
 
+
+
+def delete_notebook_pod(ns,id):
+  config.load_incluster_config()
+  api = client.CoreV1Api()
+
+  api.delete_namespaced_pod(name='jupyter-'+id, namespace=ns)
+
+def delete_notebook_service(ns,id):
+  config.load_incluster_config()
+  api = client.CoreV1Api()
+
+  api.delete_namespaced_service(name='svc-'+id, namespace=ns)
 
 def create_notebook_service(ns,id):
   config.load_incluster_config()
