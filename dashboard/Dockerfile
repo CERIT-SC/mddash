@@ -8,7 +8,7 @@ RUN npm run build
 
 FROM alpine:3.21
 
-RUN apk add py3-flask
+RUN apk add py3-flask py3-kubernetes
 
 COPY ./api /opt/api
 COPY ./start.sh /start.sh

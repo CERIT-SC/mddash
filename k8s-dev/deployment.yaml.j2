@@ -47,6 +47,9 @@ spec:
         env:
           - name: JUPYTERHUB_USER
             value: {{ dashboard.user }}
+          - name: NOTEBOOK_IMAGE
+            value: {{ notebook.image }}
+
       volumes:
         - name: data-volume
           persistentVolumeClaim:

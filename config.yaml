@@ -1,4 +1,5 @@
 devNamespace: krenek-ns
+prodNamespace: gmxhub-ns
 
 dashboard:
   hostname: mddash-ljocha.dyn.cloud.e-infra.cz
@@ -9,3 +10,6 @@ dashboard:
 
 data:
   size: 10Gi
+
+notebook:
+  image: quay.io/jupyter/base-notebook

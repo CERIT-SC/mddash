@@ -1,5 +1,5 @@
-ns?=gmxhub-ns
-dashboard_image?=$(shell cat ../IMAGE)
+ns=$(shell yq .prodNamespace ../config.yaml)
+dashboard_image=$(shell yq .dashboard.image ../config.yaml)
 
 
 install:
