@@ -41,7 +41,7 @@ def create_notebook_pod(image,ns,id):
                             'drop': [ 'ALL' ]
                             }
                         },
-                    'name': f'jupyter-{id{',
+                    'name': f'jupyter-{id}',
                     'image': image
                 }
             ]
@@ -57,13 +57,12 @@ def create_notebook_pod(image,ns,id):
 
 
 def create_notebook_service(ns,id):
-  config.load_kube_config()  # Or use config.load_incluster_config() if running inside a cluster
+  config.load_incluster_config()
   
-  # Define the service object
   service = client.V1Service(
       metadata=client.V1ObjectMeta(
           name=f'svc-{id}',
-          namespace=id
+          namespace=ns
       ),
       spec=client.V1ServiceSpec(
           selector={"app": f"jupyter-{id}"},  
@@ -75,7 +74,6 @@ def create_notebook_service(ns,id):
       )
   )
   
-  # Create the service in the specified namespace
   api_instance = client.CoreV1Api()
   api_response = api_instance.create_namespaced_service(
      namespace=ns,

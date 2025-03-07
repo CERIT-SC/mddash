@@ -1,12 +1,15 @@
 # vim: set ai ts=4 expandtab :
 
-from flask import Flask, Blueprint, request, send_from_directory
+from flask import Flask, Blueprint, request, send_from_directory, Response
 from dataclasses import asdict
 
 from config import STATE_FILE, PREFIX, FRONTEND_DIR, NAMESPACE, NOTEBOOK_IMAGE
 from experiment import Experiment
 from state import Experiments
 
+from k8s import create_notebook_pod, create_notebook_service
+
+import requests
 
 experiments = Experiments.load(STATE_FILE)
 
@@ -91,7 +94,7 @@ def delete_experiment(experiment_id):
 # TODO: delete it one day
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=["POST"])
 def start_notebook(experiment_id):
-    create_notebook_pod(NAMESPACE,NOTEBOOK_IMAGE,experiment_id)
+    create_notebook_pod(NOTEBOOK_IMAGE,NAMESPACE,experiment_id)
     create_notebook_service(NAMESPACE,experiment_id)
     return {'status': 'success', 'message': 'Notebook created'}
     
@@ -99,11 +102,11 @@ def start_notebook(experiment_id):
 # TODO
 @bp.route("/notebook/<experiment_id>", defaults={'path':''})
 @bp.route('/notebook/<experiment_id>/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
-def proxy_notebook():
-    target = f'http://{experiment_id}-svc.{NAMESPACE}.svc.cluster.local/{path}'
+def proxy_notebook(experiment_id,path):
+    target = f'http://svc-{experiment_id}.{NAMESPACE}.svc.cluster.local/{path}'
     response = requests.request(
         method=request.method,
-        url=target_service_url,
+        url=target,
         headers={key: value for (key, value) in request.headers},
         data=request.get_data(),
         cookies=request.cookies,
