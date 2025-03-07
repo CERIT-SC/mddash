@@ -93,7 +93,7 @@ def delete_experiment(experiment_id):
 def start_notebook(experiment_id):
     create_notebook_pod(NAMESPACE,NOTEBOOK_IMAGE,experiment_id)
     create_notebook_service(NAMESPACE,experiment_id)
-    return {'status': 'success', 'message', 'Notebook created'}
+    return {'status': 'success', 'message': 'Notebook created'}
     
 
 # TODO
