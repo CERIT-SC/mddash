@@ -3,7 +3,7 @@
 from flask import Flask, Blueprint, request, send_from_directory
 from dataclasses import asdict
 
-from config import STATE_FILE, PREFIX, FRONTEND_DIR
+from config import STATE_FILE, PREFIX, FRONTEND_DIR, NAMESPACE, NOTEBOOK_IMAGE
 from experiment import Experiment
 from state import Experiments
 
@@ -87,6 +87,29 @@ def delete_experiment(experiment_id):
 
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# TODO: delete it one day
+@bp.route('/api/experiments/<experiment_id>/notebook', methods=["POST"])
+def start_notebook(experiment_id):
+    create_notebook_pod(NAMESPACE,NOTEBOOK_IMAGE,experiment_id)
+    create_notebook_service(NAMESPACE,experiment_id)
+    return {'status': 'success', 'message', 'Notebook created'}
+    
+
+# TODO
+@bp.route("/notebook/<experiment_id>", defaults={'path':''})
+@bp.route('/notebook/<experiment_id>/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+def proxy_notebook():
+    target = f'http://{experiment_id}-svc.{NAMESPACE}.svc.cluster.local/{path}'
+    response = requests.request(
+        method=request.method,
+        url=target_service_url,
+        headers={key: value for (key, value) in request.headers},
+        data=request.get_data(),
+        cookies=request.cookies,
+        allow_redirects=False)
+
+    return Response(response.content, response.status_code, response.headers.items())
 
 
 app = Flask(__name__)
