@@ -103,7 +103,7 @@ def start_notebook(experiment_id):
 @bp.route("/notebook/<experiment_id>", defaults={'path':''})
 @bp.route('/notebook/<experiment_id>/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
 def proxy_notebook(experiment_id,path):
-    target = f'http://svc-{experiment_id}.{NAMESPACE}.svc.cluster.local/{path}'
+    target = f'http://svc-{experiment_id}.{NAMESPACE}.svc.cluster.local/{PREFIX}/notebook/{experiment_id}/{path}'
     response = requests.request(
         method=request.method,
         url=target,
