@@ -6,7 +6,7 @@ from kubernetes.client.rest import ApiException
 # TODO
 #  Ensure your pod has a corresponding label, such as spec.template.metadata.labels.app: example-pod.
 
-def create_notebook_pod(image,ns,id):
+def create_notebook_pod(image,ns,id,prefix):
     # Load in-cluster config
     config.load_incluster_config()
 
@@ -42,7 +42,9 @@ def create_notebook_pod(image,ns,id):
                             }
                         },
                     'name': f'jupyter-{id}',
-                    'image': image
+                    'image': image,
+                    'env': [ {'name':'JUPYTERHUB_SERVICE_PREFIX', 'value':prefix } ],
+                    'args': [ 'start-notebook.sh', f'--NotebookApp.base_url={prefix}' ]
                 }
             ]
         }
