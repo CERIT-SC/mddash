@@ -43,7 +43,11 @@ def create_notebook_pod(image,ns,id,prefix,token):
                         },
                     'name': f'jupyter-{id}',
                     'image': image,
-#                    'env': [ {'name':'JUPYTERHUB_SERVICE_PREFIX', 'value':prefix } ],
+                    'imagePullPolicy': 'Always',
+                    'resources': {
+                        'requests' : { 'cpu': .1, 'memory': '2Gi' }, 
+                        'limits' : { 'cpu': 2, 'memory' : '8Gi' }
+                        },
                     'args': [
                       'start-notebook.sh',
                       f'--NotebookApp.base_url={prefix}',

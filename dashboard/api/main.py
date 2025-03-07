@@ -1,4 +1,4 @@
-# vim: set ai ts=4 expandtab :
+# vim: set ai ts=4 expandtab nomouse:
 
 from flask import Flask, Blueprint, request, send_from_directory, Response
 from dataclasses import asdict
@@ -110,8 +110,9 @@ def delete_notebook(experiment_id):
 
 @bp.route("/notebook/<experiment_id>", defaults={'path':''})
 @bp.route("/notebook/<experiment_id>/", defaults={'path':''})
-@bp.route('/notebook/<experiment_id>/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE'])
+@bp.route('/notebook/<experiment_id>/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
 def proxy_notebook(experiment_id,path):
+    app.logger.debug(f'{experiment_id}, {path}, {request.args}')
     qry = urlencode({**request.args, 'token': experiments.get(experiment_id).token} )
     target = f'http://svc-{experiment_id}.{NAMESPACE}.svc.cluster.local/{PREFIX}/notebook/{experiment_id}/{path}?{qry}'
     response = requests.request(
@@ -121,6 +122,8 @@ def proxy_notebook(experiment_id,path):
         data=request.get_data(),
         cookies=request.cookies,
         allow_redirects=False)
+
+    app.logger.debug(f'response: {response}')
 
     return Response(response.content, response.status_code, response.headers.items())
 
