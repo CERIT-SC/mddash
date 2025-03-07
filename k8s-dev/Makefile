@@ -1,6 +1,6 @@
 
-j2s=pvc.yaml deployment.yaml ingress.yaml
-yamls=service.yaml ${j2s}
+j2s=pvc-data.yaml deployment.yaml ingress.yaml
+yamls=service.yaml pvc-home.yaml ${j2s}
 
 ns=$(shell yq .devNamespace ../config.yaml)
 pod=$(shell kubectl -n ${ns} get pods | grep ^mddash-dev | awk '{print $$1}')
@@ -15,6 +15,8 @@ install: ${yamls}
 uninstall:
 	kubectl -n ${ns} delete service/mddash-dev deployment.apps/mddash-dev   
 
+start:
+	kubectl -n ${ns} exec -ti pod/${pod} -- /start.sh
 	
 log:
 	kubectl -n ${ns} logs -f pod/${pod}
@@ -23,7 +25,7 @@ bash:
 	kubectl -n ${ns} exec -ti pod/${pod} -- /bin/bash
 
 diff:
-	kubectl -n ${ns} exec pod/${pod} -- bash -c "cd /opt/mddash && git diff"
+	kubectl -n ${ns} exec pod/${pod} -- bash -c "cd /home/jovyan/mddash && git diff"
 
 patch:
-	kubectl -n ${ns} exec pod/${pod} -- bash -c "cd /opt/mddash && git diff" | (cd .. && patch -p1)
+	kubectl -n ${ns} exec pod/${pod} -- bash -c "cd /home/jovyan/mddash && git diff" | (cd .. && patch -p1)

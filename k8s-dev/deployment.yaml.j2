@@ -43,7 +43,9 @@ spec:
         volumeMounts:
           - mountPath: /mddash
             name: data-volume
-        command: ['/start.sh']
+          - mountPath: /home/jovyan
+            name: home-volume
+        command: ['sleep', '365d' ]
         env:
           - name: JUPYTERHUB_USER
             value: {{ dashboard.user }}
@@ -54,3 +56,6 @@ spec:
         - name: data-volume
           persistentVolumeClaim:
             claimName: mddash-data
+        - name: home-volume
+          persistentVolumeClaim:
+            claimName: mddash-home
