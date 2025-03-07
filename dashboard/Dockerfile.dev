@@ -6,7 +6,8 @@ RUN apk add bash vim git openssh-client-default
 
 RUN rm -rf /opt/api
 
-RUN cd opt && git clone https://github.com/CERIT-SC/mddash.git 
-RUN ln -s mddash/dashboard/api /opt
+# assumes volume with API mounted on /home/jovyan
+RUN ln -s /home/jovyan/mddash/dashboard/api /opt
 
-RUN chown -R jovyan /opt/mddash
+# RUN chown -R jovyan /opt/mddash
+
