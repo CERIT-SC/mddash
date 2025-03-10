@@ -6,8 +6,8 @@ spec:
   type: ClusterIP
   ports:
   - name: mddash-dev-port
-    port: 80                                                                    
-    targetPort: 8888    
+    port: 80
+    targetPort: 8888
   selector:
     app: mddash-dev
 
