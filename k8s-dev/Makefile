@@ -13,14 +13,20 @@ install: ${yamls}
 	for f in ${yamls}; do kubectl -n ${ns} apply -f $$f; done
 
 uninstall:
-	kubectl -n ${ns} delete service/mddash-dev deployment.apps/mddash-dev   
+	kubectl -n ${ns} delete service/mddash-dev deployment.apps/mddash-dev
+
+clean:
+	kubectl -n ${ns} delete pvc mddash-home || true
+	kubectl -n ${ns} delete pvc mddash-data || true
+	kubectl -n ${ns} delete ingress mddash-dev || true
+	rm -f ${j2s}
 
 start:
 	kubectl -n ${ns} exec -ti pod/${pod} -- /start.sh
-	
+
 log:
 	kubectl -n ${ns} logs -f pod/${pod}
-	
+
 bash:
 	kubectl -n ${ns} exec -ti pod/${pod} -- /bin/bash
 
