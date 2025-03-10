@@ -26,6 +26,7 @@ def index():
 
 
 @bp.route("/dash", defaults={'path':''})
+@bp.route("/dash/", defaults={'path':''})
 @bp.route("/dash/<path:path>")
 def static(path: str):
     file_path = FRONTEND_DIR / path

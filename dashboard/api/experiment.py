@@ -21,7 +21,7 @@ class Experiment:
     def prepare_env(cls) -> str:
         id = get_unique_id()
 
-        # TODO: create pvc
+        # TODO: copy jupyter notebook
 
         (DATA_DIR / id).mkdir(parents=True, exist_ok=True)
         return id
