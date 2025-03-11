@@ -71,24 +71,41 @@ def create_notebook_pod(image,ns,id,prefix,token):
     # except ApiException as e:
 
 
-def ping_service(ns, id):
+def ping_resource(resource_type, name, ns):
     config.load_incluster_config()
     api = client.CoreV1Api()
 
     try:
-        api.read_namespaced_service(name='svc-'+id, namespace=ns)
+        if resource_type == 'svc':
+            api.read_namespaced_service(name=name, namespace=ns)
+        elif resource_type == 'pod':
+            api.read_namespaced_pod(name=name, namespace=ns)
+        elif resource_type == 'configmap':
+            api.read_namespaced_config_map(name=name, namespace=ns)
+        elif resource_type == 'secret':
+            api.read_namespaced_secret(name=name, namespace=ns)
+        elif resource_type == 'pvc':
+            api.read_namespaced_persistent_volume_claim(name=name, namespace=ns)
+        else:
+            raise ValueError(f"Unsupported resource type: {resource_type}")
         return True
     except ApiException as e:
         return False
 
 
 def delete_notebook_pod(ns, id):
+    if not ping_resource('pod', f'jupyter-{id}', ns):
+        return
+
     config.load_incluster_config()
     api = client.CoreV1Api()
     api.delete_namespaced_pod(name='jupyter-'+id, namespace=ns)
 
 
 def delete_notebook_service(ns, id):
+    if not ping_resource('svc', f'svc-{id}', ns):
+        return
+
     config.load_incluster_config()
     api = client.CoreV1Api()
     api.delete_namespaced_service(name='svc-'+id, namespace=ns)
