@@ -42,3 +42,21 @@ export const delete_experiment = async (id: string) => {
     const response = await axios.delete(`${API_BASE}/experiments/${id}`);
     return data_or_throw(response);
 }
+
+
+export const get_notebook = async (id: string) => {
+    const response = await axios.get(`${API_BASE}/experiments/${id}/notebook`);
+    return data_or_throw(response);
+}
+
+
+export const spawn_notebook = async (id: string) => {
+    const response = await axios.post(`${API_BASE}/experiments/${id}/notebook`);
+    return data_or_throw(response);
+}
+
+
+export const delete_notebook = async (id: string) => {
+    const response = await axios.delete(`${API_BASE}/experiments/${id}/notebook`);
+    return data_or_throw(response);
+}

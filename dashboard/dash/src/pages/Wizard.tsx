@@ -48,7 +48,7 @@ const Wizard = () => {
 
             {experiment && (
                 <Paper elevation={2} sx={{ p: 4, mt: 4 }}>
-                    <WizardStepper experiment={experiment} setExperiment={setExperiment} />
+                    <WizardStepper experiment={experiment} setExperiment={setExperiment} setErrorMessage={setErrorMessage} />
                 </Paper>
             )}
         </div>
