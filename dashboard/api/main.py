@@ -112,7 +112,7 @@ def delete_notebook(experiment_id):
 def get_notebook(experiment_id):
     try:
         is_up = ping_service(NAMESPACE, experiment_id)
-        return {'status': 'success', 'message': 'up' if is_up else 'down', 'path': f'{PREFIX}/notebook/{experiment_id}'}
+        return {'status': 'success', 'message': 'up' if is_up else 'down', 'path': f'{PREFIX}/notebook/{experiment_id}/'}
 
     except Exception as e:
         return {'status': 'error', 'message': str(e)}
