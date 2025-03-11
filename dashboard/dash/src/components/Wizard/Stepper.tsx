@@ -74,6 +74,7 @@ const ColorlibStepIconRoot = styled('div')<{
 export interface WizardStepperProps {
     experiment: Experiment;
     setExperiment: Function;
+    setErrorMessage: Function;
 }
 
 export default function WizardStepper(props: WizardStepperProps) {
