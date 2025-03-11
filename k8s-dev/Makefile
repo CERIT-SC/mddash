@@ -1,6 +1,6 @@
 
-j2s=pvc-data.yaml deployment.yaml ingress.yaml
-yamls=service.yaml pvc-home.yaml ${j2s}
+j2s=pvc-data.yaml deployment.yaml ingress.yaml rolebinding.yaml
+yamls=service.yaml pvc-home.yaml role.yaml ${j2s}
 
 ns=$(shell yq .devNamespace ../config.yaml)
 pod=$(shell kubectl -n ${ns} get pods | grep ^mddash-dev | awk '{print $$1}')
