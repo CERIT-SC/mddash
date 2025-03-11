@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { styled, Stepper, Step, StepLabel, StepIconProps, StepConnector, stepConnectorClasses, Box, Button } from '@mui/material';
 import { BlurOn, Tune, PlayArrow, Assessment, Publish } from '@mui/icons-material';
 
@@ -44,9 +44,7 @@ const ColorlibConnector = styled(StepConnector)(({ theme }) => ({
     },
 }));
 
-const ColorlibStepIconRoot = styled('div')<{
-    ownerState: { completed?: boolean; active?: boolean };
-}>(({ theme, ownerState }) => ({
+const ColorlibStepIconRoot = styled('div')<{ownerState: { completed?: boolean; active?: boolean }}>(({ theme, ownerState }) => ({
     backgroundColor: '#ccc',
     zIndex: 1,
     color: '#fff',
@@ -70,7 +68,6 @@ const ColorlibStepIconRoot = styled('div')<{
     }),
 }));
 
-
 export interface WizardStepperProps {
     experiment: Experiment;
     setExperiment: Function;
@@ -80,7 +77,6 @@ export interface WizardStepperProps {
 export default function WizardStepper(props: WizardStepperProps) {
     const { experiment, setExperiment } = props;
     const [activeStep, setActiveStep] = useState(experiment.step);
-
 
     const changeStep = async (step: number) => {
         if (step < 0 || step >= steps.length) return;
@@ -95,7 +91,6 @@ export default function WizardStepper(props: WizardStepperProps) {
         setActiveStep(experiment.step + 1);
         setExperiment((prev: Experiment) => {return { ...prev, step: prev.step + 1 }});
     }
-
 
     const ColorlibStepIcon = (props: StepIconProps) => {
         const { active, completed, className, icon } = props;
@@ -122,7 +117,7 @@ export default function WizardStepper(props: WizardStepperProps) {
             </Stepper>
             
             <Box sx={{ mt: 4 }} >
-                { steps[activeStep].child(props) }
+                { React.createElement(steps[activeStep].child, props) }
             </Box>
         </>
     );
