@@ -5,7 +5,7 @@ import { Stack, Button, TextField, Typography, FormControl, Radio, RadioGroup, F
 import Dropzone from '../components/Dropzone';
 import ErrorMessage from '../components/ErrorMessage';
 import { BASE_PATH } from '../util/const';
-import { ApiError, create_experiment } from '../util/api';
+import { create_experiment } from '../util/api';
 
 const New = () => {
     const navigate = useNavigate();
@@ -53,19 +53,13 @@ const New = () => {
         if (type === 'repo') formData.append('repo-url', repoUrl);
         if (type === 'file' && file) formData.append('simulation-file', file);
 
-        try {
-            const data = await create_experiment(formData);
-            console.log('Experiment created:', data);
-            navigate(`${BASE_PATH}/${data.data.id}/wizard`);
-        }
-        catch (error) {
-            console.error(error);
+        const { data, error } = await create_experiment(formData);
+        setErrorMessage(error || '');
 
-            if (error instanceof ApiError)
-                setErrorMessage(error.message);
-            else
-                setErrorMessage('Failed to create experiment.');
-        }
+        console.log('Experiment created:', data);
+
+        if (!error)
+            navigate(`${BASE_PATH}/${data.data.id}/wizard`);
     };
 
     const handleTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Box, Button, Typography } from '@mui/material'
 
 import { WizardStepperProps } from "./Stepper"
-import { get_notebook, spawn_notebook, delete_notebook, ApiError } from '../../util/api';
+import { get_notebook, spawn_notebook, delete_notebook } from '../../util/api';
 
 
 const WizardSetup = (props: WizardStepperProps) => {
@@ -11,45 +11,20 @@ const WizardSetup = (props: WizardStepperProps) => {
     const [ notebookPath, setNotebookPath ] = useState('');
 
     const getNotebook = async () => {
-        let data;
-
-        try {
-            data = await get_notebook(experiment.id);
-            setNotebookUp(data.message === 'up');
-            setNotebookPath(data.path);
-        }
-        catch (error) {
-            if (error instanceof ApiError)
-                setErrorMessage(error.message);
-            else
-                setErrorMessage('Failed to get notebook status.');
-        }
+        const { data, error } = await get_notebook(experiment.id);
+        setErrorMessage(error || '');
+        setNotebookUp(data?.status === 'up');
+        setNotebookPath(data?.path || '');
     }
 
     const spawnNotebook = async () => {
-        try {
-            await spawn_notebook(experiment.id);
-            getNotebook();
-        }
-        catch (error) {
-            if (error instanceof ApiError)
-                setErrorMessage(error.message);
-            else
-                setErrorMessage('Failed to spawn notebook.');
-        }
+        const { error } = await spawn_notebook(experiment.id);
+        setErrorMessage(error || '');
     }
 
     const deleteNotebook = async () => {
-        try {
-            await delete_notebook(experiment.id);
-            getNotebook();
-        }
-        catch (error) {
-            if (error instanceof ApiError)
-                setErrorMessage(error.message);
-            else
-                setErrorMessage('Failed to delete notebook.');
-        }
+        const { error } = await delete_notebook(experiment.id);
+        setErrorMessage(error || '');
     }
 
     useEffect(() => {
