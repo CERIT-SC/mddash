@@ -9,7 +9,7 @@ from config import STATE_FILE, PREFIX, FRONTEND_DIR, NAMESPACE, NOTEBOOK_IMAGE
 from experiment import Experiment
 from state import Experiments
 
-from k8s import create_notebook_pod, create_notebook_service, delete_notebook_pod, delete_notebook_service, ping_service
+from k8s import create_notebook_pod, create_notebook_service, delete_notebook_pod, delete_notebook_service, ping_resource
 
 import requests
 
@@ -111,7 +111,7 @@ def delete_notebook(experiment_id):
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['GET'])
 def get_notebook(experiment_id):
     try:
-        is_up = ping_service(NAMESPACE, experiment_id)
+        is_up = ping_resource('svc', f'svc-{experiment_id}', NAMESPACE)
         return {'status': 'success', 'message': 'up' if is_up else 'down', 'path': f'{PREFIX}/notebook/{experiment_id}/'}
 
     except Exception as e:
