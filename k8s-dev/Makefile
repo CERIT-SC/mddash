@@ -16,9 +16,9 @@ uninstall:
 	kubectl -n ${ns} delete service/mddash-dev deployment.apps/mddash-dev
 
 clean:
-	kubectl -n ${ns} delete pvc mddash-home || true
-	kubectl -n ${ns} delete pvc mddash-data || true
 	kubectl -n ${ns} delete ingress mddash-dev || true
+	kubectl -n ${ns} delete pods --all || true
+	kubectl -n ${ns} delete pvc --all || true
 	rm -f ${j2s}
 
 start:
