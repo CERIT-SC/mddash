@@ -95,11 +95,12 @@ def delete_experiment(experiment_id):
     except Exception as e:
         return {'status': 'error', 'message': str(e)}
 
+
 # TODO: delete it one day
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['POST'])
 def start_notebook(experiment_id):
-    create_notebook_pod(NOTEBOOK_IMAGE,NAMESPACE,experiment_id,f'{PREFIX}/notebook/{experiment_id}',experiments.get(experiment_id).token)
-    create_notebook_service(NAMESPACE,experiment_id)
+    create_notebook_pod(NOTEBOOK_IMAGE, NAMESPACE, experiment_id, f'{PREFIX}/notebook/{experiment_id}', experiments.get(experiment_id).token)
+    create_notebook_service(NAMESPACE, experiment_id)
     return {'status': 'success', 'message': 'Notebook created.'}
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['DELETE'])
