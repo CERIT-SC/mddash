@@ -6,7 +6,7 @@ from kubernetes.client.rest import ApiException
 # TODO
 #  Ensure your pod has a corresponding label, such as spec.template.metadata.labels.app: example-pod.
 
-def create_notebook_pod(image,ns,id,prefix,token):
+def create_notebook_pod(image, ns, id, prefix, token):
     # Load in-cluster config
     config.load_incluster_config()
 
@@ -21,7 +21,7 @@ def create_notebook_pod(image,ns,id,prefix,token):
             'name': f'jupyter-{id}',
             'namespace': ns,
             'labels': {
-              'app': f'jupyter-{id}'
+                'app': f'jupyter-{id}'
             }
         },
         'spec': {
@@ -29,9 +29,9 @@ def create_notebook_pod(image,ns,id,prefix,token):
                 'runAsNonRoot' : True,
                 'allowPrivilegeEscalation': False,
                 'seccompProfile': {
-                      'type': 'RuntimeDefault'
-                    }
-                },
+                    'type': 'RuntimeDefault'
+                }
+            },
             'containers': [
                 {
                     'securityContext': {
@@ -39,30 +39,31 @@ def create_notebook_pod(image,ns,id,prefix,token):
                         'allowPrivilegeEscalation': False,
                         'capabilities':  {
                             'drop': [ 'ALL' ]
-                            }
-                        },
+                        }
+                    },
                     'name': f'jupyter-{id}',
                     'image': image,
                     'imagePullPolicy': 'Always',
                     'resources': {
                         'requests' : { 'cpu': .1, 'memory': '2Gi' }, 
                         'limits' : { 'cpu': 2, 'memory' : '8Gi' }
-                        },
+                    },
                     'args': [
-                      'start-notebook.sh',
-                      f'--NotebookApp.base_url={prefix}',
-                      f'--NotebookApp.notebook_dir=/mddash/{id}',
-                      f'--NotebookApp.token="{token}"',
+                        'start-notebook.sh',
+                        f'--NotebookApp.base_url={prefix}',
+                        f'--NotebookApp.notebook_dir=/mddash/{id}',
+                        f'--NotebookApp.token="{token}"',
                     ],
                     'volumeMounts' : [
-                      { 'mountPath': '/mddash', 'name' : 'data-volume' }
+                        { 'mountPath': '/mddash', 'name' : 'data-volume' }
                     ]
                 }
             ],
             'volumes': [ 
-              { 'name': 'data-volume',
-                'persistentVolumeClaim': { 'claimName' : 'mddash-data' }
-              }
+                {
+                    'name': 'data-volume',
+                    'persistentVolumeClaim': { 'claimName' : 'mddash-data' }
+                }
             ]
         }
     }
@@ -76,18 +77,19 @@ def ping_resource(resource_type, name, ns):
     api = client.CoreV1Api()
 
     try:
-        if resource_type == 'svc':
-            api.read_namespaced_service(name=name, namespace=ns)
-        elif resource_type == 'pod':
-            api.read_namespaced_pod(name=name, namespace=ns)
-        elif resource_type == 'configmap':
-            api.read_namespaced_config_map(name=name, namespace=ns)
-        elif resource_type == 'secret':
-            api.read_namespaced_secret(name=name, namespace=ns)
-        elif resource_type == 'pvc':
-            api.read_namespaced_persistent_volume_claim(name=name, namespace=ns)
-        else:
-            raise ValueError(f"Unsupported resource type: {resource_type}")
+        match resource_type:
+            case 'svc':
+                api.read_namespaced_service(name=name, namespace=ns)
+            case 'pod':
+                api.read_namespaced_pod(name=name, namespace=ns)
+            case 'configmap':
+                api.read_namespaced_config_map(name=name, namespace=ns)
+            case 'secret':
+                api.read_namespaced_secret(name=name, namespace=ns)
+            case 'pvc':
+                api.read_namespaced_persistent_volume_claim(name=name, namespace=ns)
+            case _:
+                raise ValueError(f"Unsupported resource type: {resource_type}")
         return True
     except ApiException as e:
         return False
