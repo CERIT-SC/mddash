@@ -76,7 +76,7 @@ export interface WizardStepperProps {
 
 export default function WizardStepper(props: WizardStepperProps) {
     const { experiment, setExperiment } = props;
-    const [activeStep, setActiveStep] = useState(experiment.step);
+    const [activeStep, setActiveStep] = useState(Math.min(experiment.step, steps.length - 1));
 
     const changeStep = async (step: number) => {
         if (step < 0 || step >= steps.length) return;
