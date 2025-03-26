@@ -1,24 +1,24 @@
-apiVersion: networking.k8s.io/v1                                                
-kind: Ingress                                                                   
-metadata:                                                                       
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
   name: mddash-dev
-  annotations:                                                                  
-    kuberentes.io/ingress.class: "nginx"                                        
-    kubernetes.io/tls-acme: "true"                                              
+  annotations:
+    kuberentes.io/ingress.class: "nginx"
+    kubernetes.io/tls-acme: "true"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/proxy-body-size: 300m 
-spec:                                                                           
-  tls:                                                                          
-    - hosts:                                                                    
+    nginx.ingress.kubernetes.io/proxy-body-size: 300m
+spec:
+  tls:
+    - hosts:
         - "{{ dashboard.hostname }}"
       secretName: {{ dashboard.hostname | replace('.','-') }}-tls
-  rules:                                                                        
+  rules:
   - host: "{{ dashboard.hostname }}"
-    http:                                                                       
-      paths:                                                                    
-      - backend:                                                                
-          service:                                                              
+    http:
+      paths:
+      - backend:
+          service:
             name: mddash-dev
-            port:                                                               
-              number: 80                                                      
+            port:
+              number: 80
         pathType: ImplementationSpecific
