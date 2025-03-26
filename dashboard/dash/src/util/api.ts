@@ -1,44 +1,86 @@
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 
 import { API_BASE } from './const';
 
 
-export class ApiError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = 'ApiError';
-        Object.setPrototypeOf(this, ApiError.prototype);
+interface ApiData {
+    data: any;
+    error: string | null;
+}
+
+
+/**
+ * Handle response from axios request with error handling
+ * 
+ * @param request - axios request promise
+ * @param fallbackMsg - message to return if request fails
+ * @returns Object with data and error fields
+ */
+const handle_request = async (request: Promise<AxiosResponse>, fallbackMsg: string): Promise<ApiData> => {
+    try {
+        const response = await request;
+        const errMsg = response.data.status === 'error' 
+            ? response.data.message || fallbackMsg 
+            : null;
+
+        return { data: response.data, error: errMsg };
+    } catch (error) {
+        return { data: null, error: fallbackMsg };
     }
 }
 
 
-const data_or_throw = (response: any) => {
-    if (response.data.status === 'error')
-        throw new ApiError(response.data.message || 'Failed to perform operation.');
-
-    return response.data;
-}
-
-
 export const get_experiments = async () => {
-    const response = await axios.get(`${API_BASE}/experiments`);
-    return data_or_throw(response);
+    return await handle_request(
+        axios.get(`${API_BASE}/experiments`),
+        'Failed to fetch experiments.'
+    )
 }
 
 
 export const get_experiment = async (id: string) => {
-    const response = await axios.get(`${API_BASE}/experiments/${id}`);
-    return data_or_throw(response);
+    return await handle_request(
+        axios.get(`${API_BASE}/experiments/${id}`),
+        'Failed to fetch experiment.'
+    )
 }
 
 
 export const create_experiment = async (formData: FormData) => {
-    const response = await axios.post(`${API_BASE}/experiments`, formData);
-    return data_or_throw(response);
+    return await handle_request(
+        axios.post(`${API_BASE}/experiments`, formData),
+        'Failed to create experiment.'
+    )
 }
 
 
 export const delete_experiment = async (id: string) => {
-    const response = await axios.delete(`${API_BASE}/experiments/${id}`);
-    return data_or_throw(response);
+    return await handle_request(
+        axios.delete(`${API_BASE}/experiments/${id}`),
+        'Failed to delete experiment.'
+    )
+}
+
+
+export const get_notebook = async (id: string) => {
+    return await handle_request(
+        axios.get(`${API_BASE}/experiments/${id}/notebook`),
+        'Failed to fetch notebook.'
+    )
+}
+
+
+export const spawn_notebook = async (id: string) => {
+    return await handle_request(
+        axios.post(`${API_BASE}/experiments/${id}/notebook`),
+        'Failed to spawn notebook.'
+    )
+}
+
+
+export const delete_notebook = async (id: string) => {
+    return await handle_request(
+        axios.delete(`${API_BASE}/experiments/${id}/notebook`),
+        'Failed to delete notebook.'
+    )
 }

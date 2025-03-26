@@ -13,4 +13,4 @@ FRONTEND_DIR = Path("/var/tmp/dash")
 NOTEBOOK_IMAGE=os.environ.get('NOTEBOOK_IMAGE','quay.io/jupyter/base-notebook')
 
 with open('/var/run/secrets/kubernetes.io/serviceaccount/namespace') as ns:
-  NAMESPACE=ns.read().strip()
+    NAMESPACE=ns.read().strip()

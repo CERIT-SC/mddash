@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import WizardStepper from '../components/Wizard/Stepper'
 import { Experiment } from '../util/types';
-import { ApiError, get_experiment } from '../util/api';
+import { get_experiment } from '../util/api';
 import ErrorMessage from '../components/ErrorMessage';
 
 const Wizard = () => {
@@ -15,17 +15,9 @@ const Wizard = () => {
 
     const getExperiment = async () => {
         if (!id) return;
-        let data;
 
-        try {
-            data = await get_experiment(id);
-        } catch (error) {
-            if (error instanceof ApiError)
-                setErrorMessage(error.message);
-            else
-                setErrorMessage('Failed to fetch experiment.');
-        }
-
+        const { data, error } = await get_experiment(id);
+        setErrorMessage(error || '');
         setExperiment(data?.data || null);
     }
 
@@ -48,7 +40,7 @@ const Wizard = () => {
 
             {experiment && (
                 <Paper elevation={2} sx={{ p: 4, mt: 4 }}>
-                    <WizardStepper experiment={experiment} setExperiment={setExperiment} />
+                    <WizardStepper experiment={experiment} setExperiment={setExperiment} setErrorMessage={setErrorMessage} />
                 </Paper>
             )}
         </div>
