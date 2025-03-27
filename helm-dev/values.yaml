@@ -18,6 +18,9 @@ hub:
     egressAllowRules:
       cloudMetadataServer: false
   allowNamedServers: false
+  resources:
+    limits:
+      memory: 1Gi
 
 proxy:
   service:
@@ -40,7 +43,7 @@ singleuser:
     limit:
     guarantee:
   memory:
-    limit:
+    limit: 1G
     guarantee: 1G
   extraResource:
     limits: {}
@@ -78,12 +81,12 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-body-size: 20000m
     nginx.org/client-max-body-size: 20000m
   hosts:
-  - example-hub.dyn.cloud.e-infra.cz
+  - mddash-ljocha.dyn.cloud.e-infra.cz
   pathType: Prefix
   tls:
   - hosts:
-      - example-hub.dyn.cloud.e-infra.cz
-    secretName: example-hub-dyn-cloud-e-infra-cz
+      - mddash-ljocha.dyn.cloud.e-infra.cz
+    secretName: mddash-ljocha-dyn-cloud-e-infra-cz
 
 cull:
   enabled: true
