@@ -1,0 +1,96 @@
+hub:
+  config:
+    JupyterHub:
+      authenticator_class: jupyterhub.auth.DummyAuthenticator
+     
+  service:
+    type: ClusterIP
+  baseUrl: /
+  db:
+    type: sqlite-pvc
+    pvc:
+      storageClassName: nfs-csi
+  extraConfig:
+    01-security-context: |
+      c.KubeSpawner.container_security_context = {"capabilities": { "drop": ["ALL"] } }
+  networkPolicy:
+    enabled: false
+    egressAllowRules:
+      cloudMetadataServer: false
+  allowNamedServers: false
+
+proxy:
+  service:
+    type: ClusterIP
+  https:
+    enabled: false
+
+singleuser:
+  cloudMetadata:
+    blockWithIptables: false
+  networkPolicy:
+    enabled: false
+  storage:
+    type: dynamic
+    dynamic:
+      storageClass: nfs-csi
+      storageAccessModes: [ReadWriteMany]
+  startTimeout: 300
+  cpu:
+    limit:
+    guarantee:
+  memory:
+    limit:
+    guarantee: 1G
+  extraResource:
+    limits: {}
+    guarantees: {}
+  cmd: jupyterhub-singleuser
+  extraPodConfig:
+    securityContext:
+      fsGroupChangePolicy: OnRootMismatch
+      runAsNonRoot: true
+      seccompProfile:
+        type: RuntimeDefault
+
+# scheduling relates to the user-scheduler pods and user-placeholder pods.
+scheduling:
+  userScheduler:
+    enabled: false
+  podPriority:
+    enabled: false
+  userPlaceholder:
+    enabled: false
+
+# prePuller relates to the hook|continuous-image-puller DaemonsSets
+prePuller:
+  hook:
+    enabled: false
+  continuous:
+    enabled: false
+
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+    kubernetes.io/tls-acme: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: 20000m
+    nginx.org/client-max-body-size: 20000m
+  hosts:
+  - example-hub.dyn.cloud.e-infra.cz
+  pathType: Prefix
+  tls:
+  - hosts:
+      - example-hub.dyn.cloud.e-infra.cz
+    secretName: example-hub-dyn-cloud-e-infra-cz
+
+cull:
+  enabled: true
+  users: false # --cull-users
+  adminUsers: false # --cull-admin-users
+  removeNamedServers: false # --remove-named-servers
+  timeout: 3600 # --timeout
+  every: 600 # --cull-every
+  concurrency: 10 # --concurrency
+  maxAge: 0 # --max-age
