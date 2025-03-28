@@ -29,15 +29,30 @@ proxy:
     enabled: false
 
 singleuser:
+  image:
+    pullPolicy: Always
   cloudMetadata:
     blockWithIptables: false
   networkPolicy:
     enabled: false
   storage:
-    type: dynamic
-    dynamic:
-      storageClass: nfs-csi
-      storageAccessModes: [ReadWriteMany]
+#    type: dynamic
+#    dynamic:
+#      storageClass: nfs-csi
+#      storageAccessModes: [ReadWriteMany]
+    extraVolumes:
+#      - name: home-jovyan-volume
+#        persistentVolumeClaim:
+#          claimName: mddash-home
+      - name: mddash-volume
+        persistentVolumeClaim:
+          claimName: mddash-data
+    extraVolumeMounts:
+#      - name: home-jovyan-volume
+#        mountPath: /home/jovyan
+      - name: mddash-volume
+        mountPath: /mddash
+
   startTimeout: 300
   cpu:
     limit:
@@ -48,13 +63,14 @@ singleuser:
   extraResource:
     limits: {}
     guarantees: {}
-  cmd: jupyterhub-singleuser
+#   cmd: jupyterhub-singleuser
   extraPodConfig:
     securityContext:
       fsGroupChangePolicy: OnRootMismatch
       runAsNonRoot: true
       seccompProfile:
         type: RuntimeDefault
+    automountServiceAccountToken: true
 
 # scheduling relates to the user-scheduler pods and user-placeholder pods.
 scheduling:
