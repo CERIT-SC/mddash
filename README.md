@@ -4,17 +4,19 @@ TODO: with helm in `helm/`
 
 ## Testing deployment
 
-Everything below the authentication layer, i.e. the dashboard itself, volumes and notebooks.
+Single-user deployment with full JupyterHub (just dummy authentication), dashboard, volumes, notebooks.
+
+**Quite different from previous version without JupyterHub!**
 
 To set it up:
-1. edit `config.yaml`, provide your values for at least `devNamespace`, `dashboard.hostname`, `dashboard.user`
-2. optionally, define also `dashboard.devImage`, go to `dashboard/` and build your images:
+1. edit `config.yaml`, provide your values for at least `devNamespace`, `dashboard.hostname`
+2. optionally, define also `dashboard.image`, go to `dashboard/` and build your images:
    - make build-stage
    - make push-dev
-3. go to `k8s-dev` and run `make install`; it starts the dashboard container which runs just `sleep 365d`
-4. run `make bash`; it gives an interactive shell in the container
-5. chdir to `/home/jovyan` and clone this github repository, the development version of the container expects it there
-6. exit the shell and run `make start`; this runs `/start.sh` in the container in foreground to see all the logs
+3. go to `helm-dev` and run `make notebook`; it starts quite normal Jupyter Hub with Jupyter Lab inside
+4. open terminal there, and clone this git repository to become `/home/jovyan/mddash`
+5. run `make upgrade`; it reconfigures the hub to start our GUI instead
+7. run `make bash` to log in to the running container or `make logs` to see its logs
 
 Now pointing a browser to https://YOUR_HOSTNAME/user/YOUR_USERNAME/dash/ yields the running dashboard.
 
