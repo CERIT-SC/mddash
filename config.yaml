@@ -4,8 +4,9 @@ prodNamespace: gmxhub-ns
 dashboard:
   hostname: mddash-ljocha.dyn.cloud.e-infra.cz
   user: ljocha
-  image: cerit.io/ljocha/mddash
-  devImage: cerit.io/ljocha/mddash:dev
+  image: 
+    name: cerit.io/ljocha/mddash
+    tag: dev
   devel: true
 
 data:
