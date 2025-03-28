@@ -2,7 +2,9 @@ hub:
   config:
     JupyterHub:
       authenticator_class: jupyterhub.auth.DummyAuthenticator
-     
+    DummyAuthenticator:
+      password: "your-strong-password"
+
   service:
     type: ClusterIP
   baseUrl: /

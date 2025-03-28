@@ -4,6 +4,7 @@ prodNamespace: gmxhub-ns
 dashboard:
   hostname: mddash-ljocha.dyn.cloud.e-infra.cz
   user: ljocha
+  password: SOMETHING_STRONG
   image: 
     name: cerit.io/ljocha/mddash
     tag: dev
