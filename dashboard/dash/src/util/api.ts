@@ -84,3 +84,18 @@ export const delete_notebook = async (id: string) => {
         'Failed to delete notebook.'
     )
 }
+
+
+export const tuner_status = async (id: string) => {
+    return await handle_request(
+        axios.get(`${API_BASE}/experiments/${id}/tuner`),
+        'Failed to fetch tuner status.'
+    )
+}
+
+export const run_tuner = async (id: string) => {
+    return await handle_request(
+        axios.post(`${API_BASE}/experiments/${id}/tuner`),
+        'Failed to run tuner.'
+    )
+}

@@ -77,6 +77,65 @@ def delete_notebook(experiment_id):
 def get_notebook(experiment_id):
     return {'status': 'success', 'message': 'up' if notebook_running else 'down', 'path': '/__BASE_PATH__/'}
 
+tuner_running = False
+tuner_demo_status = {
+    'tuner_run_id': '6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
+    'summary': {
+        'RUNNING': 2,
+        'PENDING': 0,
+        'TERMINATED': 1,
+        'ERROR': 0
+    },
+    'trials': [
+        {
+            'id': 'e5167_00000',
+            'status': 'RUNNING',
+            'np': 2,
+            'ntomp': 2,
+            'nb': 'cpu',
+            'pme': 'cpu',
+            'performance': None
+        },
+        {
+            'id': 'e5167_00002',
+            'status': 'TERMINATED',
+            'np': 8,
+            'ntomp': 1,
+            'nb': 'gpu',
+            'pme': 'cpu',
+            'performance': 70.158
+        },
+        {
+            'id': 'e5167_00001',
+            'status': 'RUNNING',
+            'np': 2,
+            'ntomp': 8,
+            'nb': 'cpu',
+            'pme': 'cpu',
+            'performance': None
+        }
+    ],
+    'cluster_resources': '32/32 CPUs, 0/1 GPUs used'
+}
+
+
+@bp.route('/api/experiments/<experiment_id>/tuner', methods=['POST'])
+def submit_tuner(experiment_id):
+    global tuner_running
+    tuner_running = True
+    return {'status': 'success', 'message': 'Tuner submitted.'}
+
+
+@bp.route('/api/experiments/<experiment_id>/tuner', methods=['GET'])
+def get_tuner_status(experiment_id):
+    global tuner_running
+    if tuner_running:
+        return {'status': 'success', 'message': 'up', 'status': tuner_demo_status}
+    else:
+        return {'status': 'success', 'message': 'down', 'status': None}
+
+
+
 
 if __name__ == '__main__':
     app = Flask(__name__)
