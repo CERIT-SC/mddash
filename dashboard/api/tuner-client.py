@@ -30,3 +30,15 @@ def poll_status(run_id: str) -> dict:
     response = requests.get(f'{TUNER_URL}/tuner_runs/{run_id}/status')
     response.raise_for_status()
     return response.json()
+
+
+def delete_job(run_id: str) -> dict:
+    '''
+    Delete a submitted job.
+
+    :param run_id: The ID of the job to delete.
+    :return: The response from the tuner.
+    '''
+    response = requests.delete(f'{TUNER_URL}/tuner_runs/{run_id}')
+    response.raise_for_status()
+    return response.json()

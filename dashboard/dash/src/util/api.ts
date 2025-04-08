@@ -19,8 +19,8 @@ interface ApiData {
 const handle_request = async (request: Promise<AxiosResponse>, fallbackMsg: string): Promise<ApiData> => {
     try {
         const response = await request;
-        const errMsg = response.data.status === 'error' 
-            ? response.data.message || fallbackMsg 
+        const errMsg = response.data.status === 'error'
+            ? response.data.message || fallbackMsg
             : null;
 
         return { data: response.data, error: errMsg };
@@ -97,5 +97,12 @@ export const run_tuner = async (id: string) => {
     return await handle_request(
         axios.post(`${API_BASE}/experiments/${id}/tuner`),
         'Failed to run tuner.'
+    )
+}
+
+export const kill_tuner = async (id: string) => {
+    return await handle_request(
+        axios.delete(`${API_BASE}/experiments/${id}/tuner`),
+        'Failed to kill tuner.'
     )
 }

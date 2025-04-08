@@ -135,6 +135,12 @@ def get_tuner_status(experiment_id):
         return {'status': 'success', 'message': 'down', 'status': None}
 
 
+@bp.route('/api/experiments/<experiment_id>/tuner', methods=['DELETE'])
+def delete_tuner(experiment_id):
+    global tuner_running
+    tuner_running = False
+    return {'status': 'success', 'message': 'Tuner deleted.'}
+
 
 
 if __name__ == '__main__':
