@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Box, Stack, Button, Typography, CircularProgress } from '@mui/material'
 
 import { WizardStepperProps } from "./Stepper"
-import { tuner_status, run_tuner } from '../../util/api';
+import { tuner_status, run_tuner, kill_tuner } from '../../util/api';
 
 const WizardTune = (props: WizardStepperProps) => {
     const { experiment, setErrorMessage } = props;
@@ -29,6 +29,12 @@ const WizardTune = (props: WizardStepperProps) => {
         getTuner();
     }
 
+    const killTuner = async () => {
+        const { error } = await kill_tuner(experiment.id);
+        setErrorMessage(error || '');
+        getTuner();
+    }
+
     useEffect(() => {
         getTuner();
     }, []);
@@ -43,6 +49,8 @@ const WizardTune = (props: WizardStepperProps) => {
                     {tunerUp && (
                         <>
                             <Typography variant="h5">Tuner running 🚀</Typography>
+                            <Button variant="contained" color="error" onClick={killTuner}>Kill tuner 🔪</Button>
+                            <h3>TODO: create a nice overview for this data:</h3>
                             <pre>{ JSON.stringify(tunerStatus, null, 4) }</pre>
                         </>
                     ) || (
