@@ -12,6 +12,7 @@ import {
     TableCell,
     TableBody,
     Paper,
+    Tooltip,
 } from "@mui/material";
 import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
@@ -42,11 +43,21 @@ const TunerTable = ({ rows }: { rows: TunerTrial[] }) => {
                     <TableRow>
                         <StyledTableCell>Trial ID</StyledTableCell>
                         <StyledTableCell>Status</StyledTableCell>
-                        <StyledTableCell align="right">Performance</StyledTableCell>
-                        <StyledTableCell align="right">PME</StyledTableCell>
-                        <StyledTableCell align="right">NB</StyledTableCell>
-                        <StyledTableCell align="right">NP</StyledTableCell>
-                        <StyledTableCell align="right">NTOMP</StyledTableCell>
+                        <Tooltip title="Measured performance (ns/day)">
+                            <StyledTableCell align="right">Performance</StyledTableCell>
+                        </Tooltip>
+                        <Tooltip title="Particle Mesh Ewald offload setting">
+                            <StyledTableCell align="right">PME</StyledTableCell>
+                        </Tooltip>
+                        <Tooltip title="Non-bonded kernel type">
+                            <StyledTableCell align="right">NB</StyledTableCell>
+                        </Tooltip>
+                        <Tooltip title="Number of MPI Processes">
+                            <StyledTableCell align="right">NP</StyledTableCell>
+                        </Tooltip>
+                        <Tooltip title="Number of OpenMP Threads">
+                            <StyledTableCell align="right">NTOMP</StyledTableCell>
+                        </Tooltip>
                     </TableRow>
                 </TableHead>
                 <TableBody>
