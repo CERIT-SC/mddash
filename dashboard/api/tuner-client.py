@@ -52,28 +52,29 @@ def delete_job(run_id: str) -> dict:
     return response.json()
 
 
-def get_results(run_id: str) -> dict:
-    '''
-    Get the results of a completed job.
+# DEPRECATED
+# def get_results(run_id: str) -> dict:
+#     '''
+#     Get the results of a completed job.
 
-    :param run_id: The ID of the job to get results for.
-    :return: The response from the tuner.
-    '''
-    response = requests.get(f'{TUNER_URL}/tuner_runs/{run_id}/results')
-    response.raise_for_status()
-    return response.json()
+#     :param run_id: The ID of the job to get results for.
+#     :return: The response from the tuner.
+#     '''
+#     response = requests.get(f'{TUNER_URL}/tuner_runs/{run_id}/results')
+#     response.raise_for_status()
+#     return response.json()
 
 
 # DEMO
 if __name__ == '__main__':
     tpr_path = Path('private/md.tpr')
 
-    # NOTE: these options are most likely wrong
+    # NOTE: these options are probably wrong
     tunning_options = {
-        'cpu_range': [1, 4],
-        'memory': '8GB',
-        'dd': 2,
-        'omp': 4
+        'pme': "cpu",
+        'nb': "gpu",
+        'np': [1, 4],
+        'ntomp': [1, 2, 4],
     }
 
     # # Submit a job
@@ -88,13 +89,6 @@ if __name__ == '__main__':
     run_id = response['tuner_run_id']
     status = poll_status(run_id)
     print('Job status:', status)
-
-    # Get results
-    try:
-        results = get_results(run_id)
-        print('Job results:', results)
-    except:
-        print('Job not finished yet.')
 
     # Delete the job
     delete_response = delete_job(run_id)
