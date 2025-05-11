@@ -33,6 +33,12 @@ class Experiments:
         self.experiments[experiment.id] = experiment
 
     def remove(self, experiment_id: str) -> None:
+        '''
+        Remove an experiment by its ID and clean up its directory.
+
+        :param experiment_id: The ID of the experiment to remove.
+        :raise ValueError: If the experiment ID is not found.
+        '''
         if experiment_id not in self.experiments:
             raise ValueError(f"Experiment with id '{experiment_id}' not found")
 
@@ -40,6 +46,13 @@ class Experiments:
         del self.experiments[experiment_id]
 
     def get(self, experiment_id: str) -> Experiment:
+        '''
+        Get an experiment by its ID.
+
+        :param experiment_id: The ID of the experiment to retrieve.
+        :return: The experiment object.
+        :raise ValueError: If the experiment ID is not found.
+        '''
         if experiment_id not in self.experiments:
             raise ValueError(f"Experiment with id '{experiment_id}' not found")
 

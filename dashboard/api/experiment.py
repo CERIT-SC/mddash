@@ -13,11 +13,18 @@ import uuid
 
 @dataclass
 class Experiment:
+    # unique ID of the experiment, also used as the directory name
     id: str
+    # name of the experiment
     name: str
+    # status message shown in the UI
     status: str
+    # token for accessing jupyter notebook
     token: str = str(uuid.uuid4())
+    # current step in the experiment
     step: int = 0
+    # ID of the experiment in MDRepo
+    mdrepo_id: str | None = None
 
 
     @classmethod
