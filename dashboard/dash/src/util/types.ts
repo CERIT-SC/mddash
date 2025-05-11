@@ -4,6 +4,8 @@ export interface Experiment {
     name: string
     status: string
     step: number
+    token: string
+    mdrepo_id: string | null
 }
 
 
