@@ -106,3 +106,10 @@ export const kill_tuner = async (id: string) => {
         'Failed to kill tuner.'
     )
 }
+
+export const publish_experiment = async (id: string) => {
+    return await handle_request(
+        axios.get(`${API_BASE}/experiments/${id}/publish`),
+        'Failed to publish experiment.'
+    )
+}

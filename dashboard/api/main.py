@@ -149,6 +149,7 @@ def publish_experiment(experiment_id):
         # create experiment in MDRepo
         mdrepo_experiment = mdrepo_client.create_experiment(session, community, metadata)
         experiment.mdrepo_id = mdrepo_experiment['id']
+        experiments.save(STATE_FILE)
 
         # upload files to MDRepo
         for file in os.listdir(DATA_DIR / experiment_id):
