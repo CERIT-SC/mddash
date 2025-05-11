@@ -14,6 +14,7 @@ def run_submit(tpr_path: Path, tuning_options: dict | None = None) -> dict:
                            This is an open-ended JSON object, and its structure may evolve.
                            NOTE: It currently seems to do nothing.
     :return: The response from the tuner.
+    :raise HTTPError: If the request fails.
     '''
     data = {}
     if tuning_options:
@@ -34,6 +35,7 @@ def poll_status(run_id: str) -> dict:
 
     :param run_id: The ID of the job to poll.
     :return: The response from the tuner.
+    :raise HTTPError: If the request fails.
     '''
     response = requests.get(f'{TUNER_URL}/tuner_runs/{run_id}/status')
     response.raise_for_status()
@@ -46,6 +48,7 @@ def delete_job(run_id: str) -> dict:
 
     :param run_id: The ID of the job to delete.
     :return: The response from the tuner.
+    :raise HTTPError: If the request fails.
     '''
     response = requests.delete(f'{TUNER_URL}/tuner_runs/{run_id}')
     response.raise_for_status()
