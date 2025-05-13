@@ -1,4 +1,10 @@
 {
+    log {
+        output file /caddy/default.log
+        level INFO
+        format console
+    }
+
     # Enable the Admin API
     admin 0.0.0.0:2019
 
@@ -13,25 +19,25 @@
 
 http://:8888 {
     log {
-        output file /caddy/access.log {
-            roll_keep 3
-            roll_size 10mb
-        }
+        output file /caddy/access.log
         format console
     }
 
-    # Handle jupyterhub prefix
+    # Handle JupyterHub prefix
     handle_path {$CADDY_ROUTE_PREFIX}/* {
 
+        # API proxy
         route /api/* {
             reverse_proxy localhost:5000
         }
 
+        # add trailing slash for /dash
         @dash_needs_slash {
-            path /dash # Matches exactly /dash
+            path /dash
         }
         redir @dash_needs_slash {$CADDY_ROUTE_PREFIX}/dash/ 308
 
+        # dashboard website
         route /dash/* {
             root * /var/tmp
 
