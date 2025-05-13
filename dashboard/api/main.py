@@ -10,7 +10,6 @@ from config import STATE_FILE, PREFIX, FRONTEND_DIR, NAMESPACE, NOTEBOOK_IMAGE, 
 from experiment import Experiment
 from state import Experiments
 import mdrepo_client
-import metadump_client
 
 from k8s import create_notebook_pod, create_notebook_service, delete_notebook_pod, delete_notebook_service, ping_resource
 
@@ -132,18 +131,8 @@ def publish_experiment(experiment_id):
         experiment = experiments.get(experiment_id)
         session = mdrepo_client.login('test@test.com', '123456')  # TODO: once mdrepo supports our auth, use its token here
 
-        annotations = []
-
-        # TODO: currently the annotations dont match the model in mdrepo, but code is here
-        # for file in os.listdir(DATA_DIR / experiment_id):
-        #     if not file.endswith('.tpr'):
-        #         continue
-
-        #     file_path = os.path.join(DATA_DIR / experiment_id, file)
-        #     annotations.append(metadump_client.annotate(file_path))
-
         metadata = {
-            "simulations:": annotations,
+            "simulations:": [],
         }
 
         # create experiment in MDRepo
