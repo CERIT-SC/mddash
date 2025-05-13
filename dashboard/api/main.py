@@ -1,44 +1,26 @@
 # vim: set ai ts=4 expandtab nomouse:
 
 import os
-from flask import Flask, Blueprint, request, send_from_directory, Response
+from flask import Flask, Blueprint, request
 from dataclasses import asdict
 
-from urllib.parse import urlencode
 
-from config import STATE_FILE, PREFIX, FRONTEND_DIR, NAMESPACE, NOTEBOOK_IMAGE, DATA_DIR
+from config import STATE_FILE, PREFIX, NAMESPACE, NOTEBOOK_IMAGE, DATA_DIR
 from experiment import Experiment
 from state import Experiments
 import mdrepo_client
 
 from k8s import create_notebook_pod, create_notebook_service, delete_notebook_pod, delete_notebook_service, ping_resource
 
-import requests
 
 experiments = Experiments.load(STATE_FILE)
 
-bp = Blueprint('dash', __name__,
-        url_prefix = PREFIX,
-    )
+bp = Blueprint('dash', __name__)
 
 
-@bp.route('/')
+@bp.route('/api/')
 def index():
-    return {'status': 'success', 'message': 'FAIR MD Dashboard & API'}
-
-
-@bp.route('/dash', defaults={'path':''})
-@bp.route('/dash/', defaults={'path':''})
-@bp.route('/dash/<path:path>')
-def static(path: str):
-    file_path = FRONTEND_DIR / path
-
-    # static files
-    if file_path.is_file():
-        return send_from_directory(FRONTEND_DIR, path)
-
-    # send everything else to the index.html (React Router will handle the routing)
-    return send_from_directory(FRONTEND_DIR, 'index.html')
+    return {'status': 'success', 'message': 'FAIR MD Dashboard API'}
 
 
 @bp.route('/api/experiments', methods=['GET'])
@@ -151,28 +133,28 @@ def publish_experiment(experiment_id):
         return {'status': 'error', 'message': str(e)}
 
 
-@bp.route('/notebook/<experiment_id>', defaults={'path':''})
-@bp.route('/notebook/<experiment_id>/', defaults={'path':''})
-@bp.route('/notebook/<experiment_id>/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
-def proxy_notebook(experiment_id, path):
-    app.logger.debug(f'{experiment_id}, {path}, {request.args}')
-    qry = urlencode({**request.args, 'token': experiments.get(experiment_id).token} )
-    target = f'http://svc-{experiment_id}.{NAMESPACE}.svc.cluster.local{PREFIX}/notebook/{experiment_id}/{path}?{qry}'
-    response = requests.request(
-        method=request.method,
-        url=target,
-        headers={key: value for (key, value) in request.headers},
-        data=request.get_data(),
-        cookies=request.cookies,
-        allow_redirects=False)
+# @bp.route('/notebook/<experiment_id>', defaults={'path':''})
+# @bp.route('/notebook/<experiment_id>/', defaults={'path':''})
+# @bp.route('/notebook/<experiment_id>/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+# def proxy_notebook(experiment_id, path):
+#     app.logger.debug(f'{experiment_id}, {path}, {request.args}')
+#     qry = urlencode({**request.args, 'token': experiments.get(experiment_id).token} )
+#     target = f'http://svc-{experiment_id}.{NAMESPACE}.svc.cluster.local{PREFIX}/notebook/{experiment_id}/{path}?{qry}'
+#     response = requests.request(
+#         method=request.method,
+#         url=target,
+#         headers={key: value for (key, value) in request.headers},
+#         data=request.get_data(),
+#         cookies=request.cookies,
+#         allow_redirects=False)
 
-    app.logger.debug(f'response: {response}')
+#     app.logger.debug(f'response: {response}')
 
-    return Response(response.content, response.status_code, response.headers.items())
+#     return Response(response.content, response.status_code, response.headers.items())
 
 
 app = Flask(__name__)
-app.register_blueprint(bp, url_prefix=PREFIX)
+app.register_blueprint(bp)
 
 
 if __name__ == '__main__':

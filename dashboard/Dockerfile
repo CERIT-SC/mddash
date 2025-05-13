@@ -7,9 +7,7 @@ RUN npm install --force
 RUN npm run build
 
 
-FROM caddy:2.10-builder-alpine AS caddy-stage
-
-RUN xcaddy build
+FROM caddy:2.10-alpine AS caddy-stage
 
 
 FROM alpine:3.21
@@ -27,16 +25,18 @@ RUN adduser --disabled-password --uid 1000 jovyan
 
 
 # Copy Caddy binary from caddy-stage
-COPY --from=caddy-stage /usr/bin/caddy /usr/bin/caddy
+COPY --from=caddy-stage --chown=jovyan:jovyan /usr/bin/caddy /usr/bin/caddy
 
-# Create Caddy directories and set permissions for jovyan user
-RUN mkdir -p /etc/caddy /data/caddy /var/tmp && \
-    chown -R jovyan:jovyan /etc/caddy /data/caddy /var/tmp
+# Create Caddy files and set permissions for jovyan user
+RUN mkdir -p /caddy/data /caddy/config
+COPY ./Caddyfile /caddy
+RUN chown -R jovyan:jovyan /caddy
+RUN chmod 644 /caddy/Caddyfile
 
-# Copy Caddyfile
-COPY --chown=jovyan:jovyan ./Caddyfile /etc/caddy/Caddyfile
-RUN chmod 644 /etc/caddy/Caddyfile
+ENV XDG_DATA_HOME=/caddy/data
+ENV XDG_CONFIG_HOME=/caddy/config
 
+# Copy the API code and start script
 COPY --chown=jovyan:jovyan ./api /opt/api
 COPY --chown=jovyan:jovyan ./start.sh /start.sh
 RUN chmod +x /start.sh

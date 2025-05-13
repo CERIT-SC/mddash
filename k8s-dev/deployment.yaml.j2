@@ -14,8 +14,8 @@ spec:
     spec:
       securityContext:
         runAsUser: 1000
-        runAsGroup: 1002
-        fsGroup: 1002
+        runAsGroup: 1000
+        fsGroup: 1000
         fsGroupChangePolicy: "OnRootMismatch"
         runAsNonRoot: true
         seccompProfile:
@@ -26,10 +26,10 @@ spec:
         imagePullPolicy: IfNotPresent
         securityContext:
           runAsNonRoot: true
-          allowPrivilegeEscalation: false
-          capabilities:
+          allowPrivilegeEscalation: true
+          {# capabilities:
             drop:
-            - ALL
+            - ALL #}
 
         ports:
           - containerPort: 9000

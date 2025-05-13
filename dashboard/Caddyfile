@@ -2,33 +2,51 @@
     # Enable the Admin API
     admin 0.0.0.0:2019
 
-    # Store Caddy's state (like certificates) in /data/caddy
-    # This directory should be mounted as a volume for persistence
+    # Store Caddy's state (like certificates) in /caddy/data
     storage file_system {
-        root /data/caddy
+        root /caddy/data
     }
 
     # Disable automatic HTTPS because k8s handles certificates
     auto_https off
 }
 
-# Default server block for HTTP on port 80.
-# Caddy will automatically redirect HTTP to HTTPS if a domain is specified and HTTPS is enabled.
 http://:8888 {
-
     log {
-        output stdout # Log to container's stdout
+        output file /caddy/access.log {
+            roll_keep 3
+            roll_size 10mb
+        }
         format console
     }
 
-    route /api/* {
-      reverse_proxy localhost:5000
+    # Handle jupyterhub prefix
+    handle_path {$CADDY_ROUTE_PREFIX}/* {
+
+        route /api/* {
+            reverse_proxy localhost:5000
+        }
+
+        @dash_needs_slash {
+            path /dash # Matches exactly /dash
+        }
+        redir @dash_needs_slash {$CADDY_ROUTE_PREFIX}/dash/ 308
+
+        route /dash/* {
+            root * /var/tmp
+
+            @not_a_file {
+                not file {path}
+            }
+            rewrite @not_a_file /dash/index.html
+
+            file_server
+            encode zstd gzip
+        }
     }
 
-    route /dash/* {
-        root * /var/tmp
-        file_server
-        try_files {path} {path}/index.html
-        encode zstd gzip
+    # Fallback response
+    route {
+      respond "Where the hell do you think you are going?" 404
     }
 }
