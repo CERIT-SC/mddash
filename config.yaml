@@ -1,11 +1,11 @@
-devNamespace: krenek-ns
+devNamespace: fida-ns
 prodNamespace: gmxhub-ns
 
 dashboard:
-  hostname: mddash-ljocha.dyn.cloud.e-infra.cz
-  user: ljocha
+  hostname: mddash.k8s.local
+  user: fida
   image: cerit.io/ljocha/mddash
-  devImage: cerit.io/ljocha/mddash:dev
+  devImage: mddash:dev
   devel: true
 
 data:

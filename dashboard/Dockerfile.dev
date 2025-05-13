@@ -2,12 +2,19 @@ ARG IMAGE=cerit.io/ljocha/mddash
 
 FROM ${IMAGE}
 
-RUN apk add bash vim git openssh-client-default
+USER root
 
-RUN rm -rf /opt/api
+RUN apk add sudo bash vim git openssh-client-default \
+    strace file binutils
+
+# Allow jovyan user to use sudo without a password
+RUN echo "jovyan ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/jovyan-sudo && \
+    chmod 0440 /etc/sudoers.d/jovyan-sudo
+
+# RUN rm -rf /opt/api
 
 # assumes volume with API mounted on /home/jovyan
-RUN ln -s /home/jovyan/mddash/dashboard/api /opt
+# RUN ln -s /home/jovyan/mddash/dashboard/api /opt
 
 # RUN chown -R jovyan /opt/mddash
 

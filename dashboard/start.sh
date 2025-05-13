@@ -9,8 +9,9 @@ for f in $(cd /opt && find dash -type f); do
 	sed "s|/__BASE_PATH__|${BASE_PATH}|g; s|/__API_PATH__|${API_PATH}|g" /opt/$f >/var/tmp/$f
 done
 
-echo "Starting Caddy"
-caddy start --config /etc/caddy/Caddyfile --adapter caddyfile
+export CADDY_ROUTE_PREFIX="/user/${JUPYTERHUB_USER}"
+echo "Starting Caddy with route prefix ${CADDY_ROUTE_PREFIX}"
+caddy start --config /caddy/Caddyfile --adapter caddyfile
 
 echo "starting API"
 python /opt/api/main.py

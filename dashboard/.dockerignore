@@ -2,3 +2,4 @@ Dockerfile
 __pycahce__/
 dist/
 node_modules/
+Makefile
