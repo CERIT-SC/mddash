@@ -4,13 +4,13 @@ This is just the demo version of the API. It just returns hardcoded responses.
 I mainly use it to develop the frontend.
 """
 
-from flask import Flask, Blueprint, request, send_from_directory, Response
+from flask import Flask, Blueprint
 from flask_cors import CORS
-from urllib.parse import urlencode
-import requests
+
 
 bp = Blueprint('dash', __name__)
 CORS(bp)
+
 
 demo_experiments = [
     {
