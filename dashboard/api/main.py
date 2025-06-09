@@ -1,5 +1,3 @@
-# vim: set ai ts=4 expandtab nomouse:
-
 import os
 from flask import Flask, Blueprint, request, send_file, abort
 from dataclasses import asdict

@@ -1,5 +1,3 @@
-#! vim: ts=2 expandtab ai:
-
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
