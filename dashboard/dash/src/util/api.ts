@@ -113,3 +113,10 @@ export const publish_experiment = async (id: string) => {
         'Failed to publish experiment.'
     )
 }
+
+export const get_metrics = async () => {
+    return await handle_request(
+        axios.get(`${API_BASE}/metrics`),
+        'Failed to fetch metrics.'
+    )
+}
