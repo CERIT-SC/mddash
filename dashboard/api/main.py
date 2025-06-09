@@ -1,7 +1,7 @@
 # vim: set ai ts=4 expandtab nomouse:
 
 import os
-from flask import Flask, Blueprint, request
+from flask import Flask, Blueprint, request, send_file, abort
 from dataclasses import asdict
 
 
@@ -164,24 +164,51 @@ def get_metrics():
     return {'status': 'success', 'data': metrics}
 
 
-# @bp.route('/notebook/<experiment_id>', defaults={'path':''})
-# @bp.route('/notebook/<experiment_id>/', defaults={'path':''})
-# @bp.route('/notebook/<experiment_id>/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
-# def proxy_notebook(experiment_id, path):
-#     app.logger.debug(f'{experiment_id}, {path}, {request.args}')
-#     qry = urlencode({**request.args, 'token': experiments.get(experiment_id).token} )
-#     target = f'http://svc-{experiment_id}.{NAMESPACE}.svc.cluster.local{PREFIX}/notebook/{experiment_id}/{path}?{qry}'
-#     response = requests.request(
-#         method=request.method,
-#         url=target,
-#         headers={key: value for (key, value) in request.headers},
-#         data=request.get_data(),
-#         cookies=request.cookies,
-#         allow_redirects=False)
+@bp.route('/api/experiments/<experiment_id>/files', methods=['GET'])
+def list_experiment_files(experiment_id):
+    try:
+        extension = request.args.get('ext', '').lower()
+        experiment_dir = DATA_DIR / experiment_id
+        
+        if not experiment_dir.exists():
+            return {'status': 'error', 'message': 'Experiment not found.'}
 
-#     app.logger.debug(f'response: {response}')
+        files = []
+        for file_path in experiment_dir.iterdir():
+            if not file_path.is_file() or extension and not file_path.name.lower().endswith(f'.{extension}'):
+                continue
 
-#     return Response(response.content, response.status_code, response.headers.items())
+            # Create the file URL
+            file_url = f"/experiments/{experiment_id}/files/{file_path.name}"
+            files.append({
+                'name': file_path.name,
+                'url': file_url,
+                'size': file_path.stat().st_size
+            })
+
+        return {'status': 'success', 'data': files}
+
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
+
+
+@bp.route('/api/experiments/<experiment_id>/files/<path:path>', methods=['GET'])
+def get_experiment_file(experiment_id, path):
+    try:
+        file_path = DATA_DIR / experiment_id / path
+
+        # prevent path traversal
+        if not str(file_path.resolve()).startswith(str((DATA_DIR / experiment_id).resolve())):
+            abort(403)
+
+        # Check if file exists and is a file
+        if not file_path.exists() or not file_path.is_file():
+            abort(404)
+
+        return send_file(file_path, as_attachment=False)
+
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
 
 
 app = Flask(__name__)
