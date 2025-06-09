@@ -157,6 +157,23 @@ def publish_experiment(experiment_id):
     return {'status': 'success', 'message': 'Experiment created.', 'data': demo_experiment}
 
 
+@bp.route('/api/experiments/<experiment_id>/files', methods=['GET'])
+def list_experiment_files(experiment_id):
+
+    return {
+        'status': 'success',
+        'data': [
+            {'name': 'SPC.tpr', 'url': f'/api/experiments/{experiment_id}/files/SPC.tpr', 'size': 123456},
+            {'name': 'ABC.tpr', 'url': f'/api/experiments/{experiment_id}/files/ABC.tpr', 'size': 654321},
+        ]
+    }
+
+
+@bp.route('/api/experiments/<experiment_id>/files/<path:path>', methods=['GET'])
+def get_experiment_file(experiment_id, path):
+    return {'status': 'error', 'message': 'File not found.'}
+
+
 if __name__ == '__main__':
     app = Flask(__name__)
     app.register_blueprint(bp)

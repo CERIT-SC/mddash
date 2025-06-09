@@ -7,6 +7,8 @@ import MolStar from "../MolStar";
 
 
 const WizardAnalyze = (props: WizardStepperProps) => {
+    console.log(props);
+
     const [molstarComponent, setMolstarComponent] = useState<JSX.Element | null>(null);
 
     useEffect(() => {
