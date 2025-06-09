@@ -120,3 +120,17 @@ export const get_metrics = async () => {
         'Failed to fetch metrics.'
     )
 }
+
+export const find_files = async (id: string, extension: string) => {
+    return await handle_request(
+        axios.get(`${API_BASE}/experiments/${id}/files?ext=${extension}`),
+        'Failed to find files.'
+    )
+}
+
+export const get_file = async (id: string, path: string) => {
+    return await handle_request(
+        axios.get(`${API_BASE}/experiments/${id}/files/${path}`),
+        'Failed to fetch file.'
+    )
+}
