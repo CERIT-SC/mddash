@@ -12,6 +12,11 @@ bp = Blueprint('dash', __name__)
 CORS(bp)
 
 
+@bp.route('/api/metrics', methods=['GET'])
+def get_metrics():
+    return {'status': 'success', 'data': {'cpu': 20, 'memory': 64, 'gpu': 4}}
+
+
 demo_experiments = [
     {
         'id': 'aaaaa',

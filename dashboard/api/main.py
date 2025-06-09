@@ -11,7 +11,14 @@ from state import Experiments
 import mdrepo_client
 import caddy_client
 
-from k8s import create_notebook_pod, create_notebook_service, delete_notebook_pod, delete_notebook_service, ping_resource
+from k8s import (
+    create_notebook_pod,
+    create_notebook_service,
+    delete_notebook_pod,
+    delete_notebook_service,
+    ping_resource, 
+    get_namespace_resource_allocation
+)
 
 
 experiments = Experiments.load(STATE_FILE)
@@ -46,7 +53,7 @@ def create_experiment():
 
     try:
         name = form['experiment-name']
-        pdb_id = form.get('pdb-id','XXX:fake')
+        pdb_id = form.get('pdb-id', 'XXX:fake')
         repo_url = form.get('repo-url')
         simulation_file = request.files.get('simulation-file')
 
@@ -86,7 +93,7 @@ def delete_experiment(experiment_id):
 def start_notebook(experiment_id):
     create_notebook_pod(NOTEBOOK_IMAGE, NAMESPACE, experiment_id, f'{PREFIX}/notebook/{experiment_id}', experiments.get(experiment_id).token)
     create_notebook_service(NAMESPACE, experiment_id)
-    
+
     route_id = caddy_client.add_proxy_route(
         path=f'/notebook/{experiment_id}/*',
         upstream=f'svc-{experiment_id}.{NAMESPACE}.svc.cluster.local:80',
@@ -99,6 +106,7 @@ def start_notebook(experiment_id):
 
     return {'status': 'success', 'message': 'Notebook created.'}
 
+
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['DELETE'])
 def delete_notebook(experiment_id):
     delete_notebook_pod(NAMESPACE, experiment_id)
@@ -106,6 +114,7 @@ def delete_notebook(experiment_id):
     if not caddy_client.remove_route(f'route-{experiment_id}'):
         print('Failed to remove route from Caddy.')
     return {'status': 'success', 'message': 'Notebook deleted.'}
+
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['GET'])
 def get_notebook(experiment_id):
@@ -147,6 +156,12 @@ def publish_experiment(experiment_id):
 
     except Exception as e:
         return {'status': 'error', 'message': str(e)}
+
+
+@bp.route('/api/metrics', methods=['GET'])
+def get_metrics():
+    metrics = get_namespace_resource_allocation(NAMESPACE)
+    return {'status': 'success', 'data': metrics}
 
 
 # @bp.route('/notebook/<experiment_id>', defaults={'path':''})
