@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FormControl, InputLabel, Select, MenuItem, SelectChangeEvent } from '@mui/material';
 
 import { find_files } from '../util/api';
@@ -9,6 +9,8 @@ export interface FileSelectorProps {
     onFileSelected: (filePath: string) => void;
     setErrorMessage?: (message: string) => void;
     disabled?: boolean;
+    width?: React.CSSProperties['width'];
+    height?: React.CSSProperties['height'];
 }
 
 interface FileOption {
@@ -18,7 +20,7 @@ interface FileOption {
 }
 
 export default function FileSelector(props: FileSelectorProps) {
-    const { experimentId, extension, onFileSelected, setErrorMessage, disabled } = props;
+    const { experimentId, extension, onFileSelected, setErrorMessage, disabled, width } = props;
     const [availableFiles, setAvailableFiles] = useState<FileOption[]>([]);
     const [selectedFile, setSelectedFile] = useState<string>('');
     
@@ -39,7 +41,7 @@ export default function FileSelector(props: FileSelectorProps) {
     };
 
     return (
-        <FormControl disabled={disabled}>
+        <FormControl disabled={disabled} style={{ width: width || '100%' }}>
             <InputLabel id="file-selector-label">
                 Select {extension.toUpperCase()} file
             </InputLabel>

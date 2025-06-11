@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { Paper, Typography } from '@mui/material';
+import { Paper, Typography, CircularProgress } from '@mui/material';
 import { useEffect, useState } from 'react';
 
 import WizardStepper from '../components/Wizard/Stepper'
@@ -42,6 +42,10 @@ const Wizard = () => {
                 <Paper elevation={2} sx={{ p: 4, mt: 4 }}>
                     <WizardStepper experiment={experiment} setExperiment={setExperiment} setErrorMessage={setErrorMessage} />
                 </Paper>
+            ) || (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px' }}>
+                    <CircularProgress />
+                </div>
             )}
         </div>
     )

@@ -20,22 +20,22 @@ def get_metrics():
 demo_experiments = [
     {
         'id': 'aaaaa',
-        'name': 'Cancer Cure',
+        'name': 'Cancer cure',
         'status': 'setup',
         'step': 0,
         'token': '2f2be97e-15db-4cb4-8ef7-905efe5a4968',
     },
     {
         'id': 'bbbbb',
-        'name': 'hokus pokus there is pizza on your focus',
-        'status': 'setup',
+        'name': 'HIV protein behavior research for drug development',
+        'status': 'simulating',
         'step': 3,
         'token': '191eb452-5505-4328-9004-99eb1b0d570a',
     },
     {
         'id': 'ccccc',
         'name': 'My first experiment',
-        'status': 'setup',
+        'status': 'published',
         'step': 5,
         'token': '2578b922-7b12-49d0-8962-b2d79afda1dc',
     },
