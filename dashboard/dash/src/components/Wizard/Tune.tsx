@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
     Box,
     Stack,
@@ -13,6 +13,8 @@ import {
     TableBody,
     Paper,
     Tooltip,
+    Tabs,
+    Tab,
 } from "@mui/material";
 import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
@@ -20,6 +22,7 @@ import { styled } from "@mui/material/styles";
 import { WizardStepperProps } from "./Stepper";
 import { tuner_status, run_tuner, kill_tuner } from "../../util/api";
 import { TunerStatus, TunerTrial } from "../../util/types";
+import FileSelector from "../FileSelector";
 
 const StyledTableCell = styled(TableCell)(({ theme }) => ({
     [`&.${tableCellClasses.head}`]: {
@@ -82,14 +85,12 @@ const TunerTable = ({ rows }: { rows: TunerTrial[] }) => {
     );
 };
 
-const WizardTune = (props: WizardStepperProps) => {
+const TunerView = (props: WizardStepperProps) => {
     const { experiment, setErrorMessage } = props;
+
     const [loading, setLoading] = useState(false);
     const [tunerUp, setTunerUp] = useState(false);
     const [tunerStatus, setTunerStatus] = useState<TunerStatus | null>(null);
-
-    console.log(experiment);
-    console.log(setErrorMessage);
 
     const getTuner = async () => {
         const { data, error } = await tuner_status(experiment.id);
@@ -133,7 +134,7 @@ const WizardTune = (props: WizardStepperProps) => {
     }, [tunerUp]);
 
     return (
-        <Box sx={{ p: 4, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        <>
             {(loading && <CircularProgress />) || (
                 <Stack spacing={2} direction="column">
                     {(tunerUp && (
@@ -154,7 +155,62 @@ const WizardTune = (props: WizardStepperProps) => {
                     )}
                 </Stack>
             )}
-        </Box>
+        </>
+    );
+};
+
+const WizardTune = (props: WizardStepperProps) => {
+    const { experiment, setErrorMessage } = props;
+
+    const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
+    const [tunerJobs, setTunerJobs] = useState<Record<string, any>>({});
+
+    const handleChange = (event: React.SyntheticEvent, newValue: string) => {
+        setSelectedTpr(newValue);
+    };
+
+    const newTpr = (newSelectedTpr: string) => {
+        const tprFile = newSelectedTpr.split("/").pop() || newSelectedTpr;
+        setSelectedTpr(tprFile);
+
+        if (tunerJobs[tprFile])
+            return; // If the TPR file is already getting tuned, do nothing
+
+        setTunerJobs((prev) => ({
+            ...prev,
+            [tprFile]: {
+                tuner_run_id: `${experiment.id}-${tprFile}`,
+                trials: [],
+            },
+        }));
+    }
+
+
+    return (
+        <>
+            <Tabs
+                value={selectedTpr}
+                onChange={handleChange}
+                variant="scrollable"
+                scrollButtons="auto"
+            >
+                {Object.keys(tunerJobs).map((tprFile) => (
+                    <Tab label={tprFile} value={tprFile} />
+                ))}
+
+                <FileSelector experimentId={experiment.id} extension="tpr" onFileSelected={newTpr} width={300} />
+            </Tabs>
+
+            {selectedTpr && (
+                <Box sx={{ mt: 2 }}>
+                    <Typography variant="h6">Selected TPR: {selectedTpr}</Typography>
+                    <Typography variant="body1">
+                        Tuner Run ID: {tunerJobs[selectedTpr]?.tuner_run_id || "N/A"}
+                    </Typography>
+                    <TunerView experiment={experiment} setExperiment={props.setExperiment} setErrorMessage={setErrorMessage} />
+                </Box>
+            )}
+        </>
     );
 };
 
