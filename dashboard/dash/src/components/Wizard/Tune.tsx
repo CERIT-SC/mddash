@@ -15,11 +15,6 @@ import {
     Tooltip,
     Tabs,
     Tab,
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogContentText,
-    DialogActions,
 } from "@mui/material";
 import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
@@ -28,6 +23,7 @@ import { WizardStepperProps } from "./Stepper";
 import { tuner_status, run_tuner, delete_tuner } from "../../util/api";
 import { TunerStatus, TunerTrial } from "../../util/types";
 import FileSelector from "../FileSelector";
+import ConfirmDialog from "../ConfirmDialog";
 
 const StyledTableCell = styled(TableCell)(({ theme }) => ({
     [`&.${tableCellClasses.head}`]: {
@@ -119,66 +115,42 @@ const TunerView = (props: TunerViewProps) => {
     const { experiment, tprName, setErrorMessage, deleteJob } = props;
 
     const [loading, setLoading] = useState(false);
-    const [tunerUp, setTunerUp] = useState(false);
+    const [tunerRunning, setTunerRunning] = useState(false);
     const [tunerStatus, setTunerStatus] = useState<TunerStatus | null>(null);
     const [selectedTrial, setSelectedTrial] = useState<string | null>(null);
 
-    const [confirmOpen, setConfirmOpen] = useState(false);
-    const [pendingAction, setPendingAction] = useState<() => void>(() => {});
+    const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
+    const [confirmRunDialog, setConfirmRunDialog] = useState(false);
 
-    const initialLoad = async () => {
-        const { data } = await tuner_status(experiment.id, tprName);
-        setTunerStatus(data?.data || null);
-        setTunerUp(!!data?.data);
-    }
-
-    const getTuner = async () => {
+    const fetchStatus = async (showError: boolean) => {
         const { data, error } = await tuner_status(experiment.id, tprName);
-        setErrorMessage(error || "");
+        if (showError && error) setErrorMessage(error);
         setTunerStatus(data?.data || null);
-        setTunerUp(!!data?.data);
+        setTunerRunning(!!data?.data);
     };
 
     const runTuner = async () => {
         const { error } = await run_tuner(experiment.id, tprName);
         setErrorMessage(error || "");
-        getTuner();
+        fetchStatus(true);
     };
 
     const runSimulation = async () => {
-        handleConfirmAction(() => {
-            console.log(`Running trial ${selectedTrial}...`);
-            // TODO: Run simulation
-        });
-    };
-
-    const handleConfirmAction = (action: () => void) => {
-        setPendingAction(() => action);
-        setConfirmOpen(true);
-    };
-
-    const handleConfirm = () => {
-        pendingAction();
-        setConfirmOpen(false);
-        setPendingAction(() => {});
-    };
-
-    const handleCancel = () => {
-        setConfirmOpen(false);
-        setPendingAction(() => {});
+        console.log(`Running trial ${selectedTrial}...`);
+        // TODO: Run simulation
     };
 
     useEffect(() => {
+        setLoading(true);
+        fetchStatus(false).finally(() => setLoading(false));
+
         let intervalId: number | null = null;
-        
+
         // refresh tuner status every 5 seconds if the tuner is up
-        if (tunerUp) {
+        if (tunerRunning) {
             intervalId = window.setInterval(() => {
-                getTuner();
+                fetchStatus(true);
             }, 5000);
-        } else {
-            setLoading(true);
-            initialLoad().finally(() => setLoading(false));
         }
 
         return () => {
@@ -187,17 +159,17 @@ const TunerView = (props: TunerViewProps) => {
                 window.clearInterval(intervalId);
             }
         };
-    }, [tprName, experiment.id, tunerUp]);
+    }, [tprName, experiment.id, tunerRunning]);
 
     return (
         <>
-            {loading && (
+            {(loading && (
                 <Box display="flex" justifyContent="center" alignItems="center" height="100%">
                     <CircularProgress />
                 </Box>
-            ) || (
+            )) || (
                 <Stack spacing={2} direction="column">
-                    {(tunerUp && (
+                    {(tunerRunning && (
                         <>
                             <TunerTable
                                 rows={tunerStatus?.trials || []}
@@ -206,16 +178,12 @@ const TunerView = (props: TunerViewProps) => {
                             />
 
                             <Stack direction="row" spacing={2} justifyContent="space-between">
-                                <Button
-                                    variant="contained"
-                                    color="error"
-                                    onClick={() => handleConfirmAction(async () => deleteJob(tprName))}
-                                >
+                                <Button variant="contained" color="error" onClick={() => setConfirmDeleteDialog(true)}>
                                     Delete tune job 🗑️
                                 </Button>
 
                                 {selectedTrial && (
-                                    <Button variant="contained" onClick={runSimulation}>
+                                    <Button variant="contained" onClick={() => setConfirmRunDialog(true)}>
                                         Run simulation with selected parameters ▶️
                                     </Button>
                                 )}
@@ -232,22 +200,20 @@ const TunerView = (props: TunerViewProps) => {
                 </Stack>
             )}
 
-            <Dialog open={confirmOpen} onClose={handleCancel} aria-labelledby="confirm-dialog-title">
-                <DialogTitle id="confirm-dialog-title">Confirm Action</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Are you sure you want to proceed? This action cannot be undone.
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCancel} color="primary">
-                        Cancel
-                    </Button>
-                    <Button onClick={handleConfirm} color="error" variant="contained">
-                        Confirm
-                    </Button>
-                </DialogActions>
-            </Dialog>
+            <ConfirmDialog
+                open={confirmDeleteDialog}
+                setOpen={setConfirmDeleteDialog}
+                onConfirm={() => deleteJob(tprName)}
+                message="Are you sure you want to delete this tuning job? The data will be lost."
+            />
+
+            <ConfirmDialog
+                open={confirmRunDialog}
+                setOpen={setConfirmRunDialog}
+                onConfirm={runSimulation}
+                message="Are you sure you want to run simulation with these parameters?"
+                confirmColor="primary"
+            />
         </>
     );
 };
