@@ -39,7 +39,15 @@ const StyledTableCell = styled(TableCell)(({ theme }) => ({
     },
 }));
 
-const TunerTable = ({ rows }: { rows: TunerTrial[] }) => {
+interface TunerTableProps {
+    rows: TunerTrial[];
+    selectedTrial: string | null;
+    setSelectedTrial: (trialId: string | null) => void;
+}
+
+const TunerTable = (props: TunerTableProps) => {
+    const { rows, selectedTrial, setSelectedTrial } = props;
+
     if (!rows || rows.length === 0) {
         return <Typography>No tuning trials available yet.</Typography>;
     }
@@ -49,6 +57,7 @@ const TunerTable = ({ rows }: { rows: TunerTrial[] }) => {
             <Table sx={{ minWidth: 650 }} aria-label="tuner trials table">
                 <TableHead sx={{ backgroundColor: "primary.main" }}>
                     <TableRow>
+                        <StyledTableCell>Select</StyledTableCell>
                         <StyledTableCell>Status</StyledTableCell>
                         <Tooltip title="Measured performance (ns/day)">
                             <StyledTableCell align="right">Performance</StyledTableCell>
@@ -77,6 +86,14 @@ const TunerTable = ({ rows }: { rows: TunerTrial[] }) => {
                         })
                         .map((row) => (
                             <TableRow key={row.id} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                                <StyledTableCell>
+                                    <input
+                                        type="radio"
+                                        name="selectedTrial"
+                                        checked={selectedTrial === row.id}
+                                        onClick={() => setSelectedTrial(selectedTrial === row.id ? null : row.id)}
+                                    />
+                                </StyledTableCell>
                                 <StyledTableCell>{row.status}</StyledTableCell>
                                 <StyledTableCell align="right">
                                     {row.performance !== null ? row.performance.toFixed(2) : "N/A"}
@@ -103,6 +120,7 @@ const TunerView = (props: TunerViewProps) => {
     const [loading, setLoading] = useState(false);
     const [tunerUp, setTunerUp] = useState(false);
     const [tunerStatus, setTunerStatus] = useState<TunerStatus | null>(null);
+    const [selectedTrial, setSelectedTrial] = useState<string | null>(null);
 
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [pendingAction, setPendingAction] = useState<() => void>(() => {});
@@ -125,6 +143,13 @@ const TunerView = (props: TunerViewProps) => {
             const { error } = await delete_tuner(experiment.id, tprName);
             setErrorMessage(error || "");
             getTuner();
+        });
+    };
+
+    const runSimulation = async () => {
+        handleConfirmAction(() => {
+            console.log(`Running trial ${selectedTrial}...`);
+            // TODO: Run simulation
         });
     };
 
@@ -172,10 +197,23 @@ const TunerView = (props: TunerViewProps) => {
                 <Stack spacing={2} direction="column">
                     {(tunerUp && (
                         <>
-                            <TunerTable rows={tunerStatus?.trials || []} />
-                            <Button variant="contained" color="error" onClick={deleteTuner}>
-                                Delete tune job 🗑️
-                            </Button>
+                            <TunerTable
+                                rows={tunerStatus?.trials || []}
+                                selectedTrial={selectedTrial}
+                                setSelectedTrial={setSelectedTrial}
+                            />
+
+                            <Stack direction="row" spacing={2} justifyContent="space-between">
+                                <Button variant="contained" color="error" onClick={deleteTuner}>
+                                    Delete tune job 🗑️
+                                </Button>
+
+                                {selectedTrial && (
+                                    <Button variant="contained" onClick={runSimulation}>
+                                        Run simulation with selected parameters ▶️
+                                    </Button>
+                                )}
+                            </Stack>
                         </>
                     )) || (
                         <>
@@ -187,6 +225,7 @@ const TunerView = (props: TunerViewProps) => {
                     )}
                 </Stack>
             )}
+
             <Dialog open={confirmOpen} onClose={handleCancel} aria-labelledby="confirm-dialog-title">
                 <DialogTitle id="confirm-dialog-title">Confirm Action</DialogTitle>
                 <DialogContent>
