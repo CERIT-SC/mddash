@@ -15,12 +15,17 @@ import {
     Tooltip,
     Tabs,
     Tab,
+    Dialog,
+    DialogTitle,
+    DialogContent,
+    DialogContentText,
+    DialogActions,
 } from "@mui/material";
 import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
 
 import { WizardStepperProps } from "./Stepper";
-import { tuner_status, run_tuner, kill_tuner } from "../../util/api";
+import { tuner_status, run_tuner, delete_tuner } from "../../util/api";
 import { TunerStatus, TunerTrial } from "../../util/types";
 import FileSelector from "../FileSelector";
 
@@ -44,7 +49,6 @@ const TunerTable = ({ rows }: { rows: TunerTrial[] }) => {
             <Table sx={{ minWidth: 650 }} aria-label="tuner trials table">
                 <TableHead sx={{ backgroundColor: "primary.main" }}>
                     <TableRow>
-                        <StyledTableCell>Trial ID</StyledTableCell>
                         <StyledTableCell>Status</StyledTableCell>
                         <Tooltip title="Measured performance (ns/day)">
                             <StyledTableCell align="right">Performance</StyledTableCell>
@@ -64,51 +68,80 @@ const TunerTable = ({ rows }: { rows: TunerTrial[] }) => {
                     </TableRow>
                 </TableHead>
                 <TableBody>
-                    {rows.map((row) => (
-                        <TableRow key={row.id} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
-                            <StyledTableCell component="th" scope="row">
-                                {row.id}
-                            </StyledTableCell>
-                            <StyledTableCell>{row.status}</StyledTableCell>
-                            <StyledTableCell align="right">
-                                {row.performance !== null ? row.performance.toFixed(2) : "N/A"}
-                            </StyledTableCell>
-                            <StyledTableCell align="right">{row.pme}</StyledTableCell>
-                            <StyledTableCell align="right">{row.nb}</StyledTableCell>
-                            <StyledTableCell align="right">{row.np}</StyledTableCell>
-                            <StyledTableCell align="right">{row.ntomp}</StyledTableCell>
-                        </TableRow>
-                    ))}
+                    {rows
+                        .sort((a, b) => {
+                            if (a.performance === null && b.performance === null) return 0;
+                            if (a.performance === null) return 1;
+                            if (b.performance === null) return -1;
+                            return b.performance - a.performance;
+                        })
+                        .map((row) => (
+                            <TableRow key={row.id} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                                <StyledTableCell>{row.status}</StyledTableCell>
+                                <StyledTableCell align="right">
+                                    {row.performance !== null ? row.performance.toFixed(2) : "N/A"}
+                                </StyledTableCell>
+                                <StyledTableCell align="right">{row.pme}</StyledTableCell>
+                                <StyledTableCell align="right">{row.nb}</StyledTableCell>
+                                <StyledTableCell align="right">{row.np}</StyledTableCell>
+                                <StyledTableCell align="right">{row.ntomp}</StyledTableCell>
+                            </TableRow>
+                        ))}
                 </TableBody>
             </Table>
         </TableContainer>
     );
 };
 
-const TunerView = (props: WizardStepperProps) => {
-    const { experiment, setErrorMessage } = props;
+interface TunerViewProps extends WizardStepperProps {
+    tprName: string;
+}
+
+const TunerView = (props: TunerViewProps) => {
+    const { experiment, tprName, setErrorMessage } = props;
 
     const [loading, setLoading] = useState(false);
     const [tunerUp, setTunerUp] = useState(false);
     const [tunerStatus, setTunerStatus] = useState<TunerStatus | null>(null);
 
+    const [confirmOpen, setConfirmOpen] = useState(false);
+    const [pendingAction, setPendingAction] = useState<() => void>(() => {});
+
     const getTuner = async () => {
-        const { data, error } = await tuner_status(experiment.id);
+        const { data, error } = await tuner_status(experiment.id, tprName);
         setErrorMessage(error || "");
         setTunerUp(data?.message === "up");
-        setTunerStatus(data?.status || {});
+        setTunerStatus(data?.data || {});
     };
 
     const runTuner = async () => {
-        const { error } = await run_tuner(experiment.id);
+        const { error } = await run_tuner(experiment.id, tprName);
         setErrorMessage(error || "");
         getTuner();
     };
 
-    const killTuner = async () => {
-        const { error } = await kill_tuner(experiment.id);
-        setErrorMessage(error || "");
-        getTuner();
+    const deleteTuner = async () => {
+        handleConfirmAction(async () => {
+            const { error } = await delete_tuner(experiment.id, tprName);
+            setErrorMessage(error || "");
+            getTuner();
+        });
+    };
+
+    const handleConfirmAction = (action: () => void) => {
+        setPendingAction(() => action);
+        setConfirmOpen(true);
+    };
+
+    const handleConfirm = () => {
+        pendingAction();
+        setConfirmOpen(false);
+        setPendingAction(() => {});
+    };
+
+    const handleCancel = () => {
+        setConfirmOpen(false);
+        setPendingAction(() => {});
     };
 
     useEffect(() => {
@@ -131,7 +164,7 @@ const TunerView = (props: WizardStepperProps) => {
                 window.clearInterval(intervalId);
             }
         };
-    }, [tunerUp]);
+    }, [tunerUp, tprName, experiment.id]);
 
     return (
         <>
@@ -139,22 +172,37 @@ const TunerView = (props: WizardStepperProps) => {
                 <Stack spacing={2} direction="column">
                     {(tunerUp && (
                         <>
-                            <Typography variant="h5">Tuner running 🚀</Typography>
-                            <Button variant="contained" color="error" onClick={killTuner}>
-                                Kill tuner 🔪
-                            </Button>
                             <TunerTable rows={tunerStatus?.trials || []} />
+                            <Button variant="contained" color="error" onClick={deleteTuner}>
+                                Delete tune job 🗑️
+                            </Button>
                         </>
                     )) || (
                         <>
                             <Typography variant="h5">Tuner isn't running 💔</Typography>
                             <Button variant="contained" color="primary" onClick={runTuner}>
-                                Run tuner
+                                Start tune job 🏃
                             </Button>
                         </>
                     )}
                 </Stack>
             )}
+            <Dialog open={confirmOpen} onClose={handleCancel} aria-labelledby="confirm-dialog-title">
+                <DialogTitle id="confirm-dialog-title">Confirm Action</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Are you sure you want to proceed? This action cannot be undone.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleCancel} color="primary">
+                        Cancel
+                    </Button>
+                    <Button onClick={handleConfirm} color="error" variant="contained">
+                        Confirm
+                    </Button>
+                </DialogActions>
+            </Dialog>
         </>
     );
 };
@@ -165,7 +213,7 @@ const WizardTune = (props: WizardStepperProps) => {
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
     const [tunerJobs, setTunerJobs] = useState<Record<string, any>>({});
 
-    const handleChange = (event: React.SyntheticEvent, newValue: string) => {
+    const handleChange = (_: React.SyntheticEvent, newValue: string) => {
         setSelectedTpr(newValue);
     };
 
@@ -173,8 +221,7 @@ const WizardTune = (props: WizardStepperProps) => {
         const tprFile = newSelectedTpr.split("/").pop() || newSelectedTpr;
         setSelectedTpr(tprFile);
 
-        if (tunerJobs[tprFile])
-            return; // If the TPR file is already getting tuned, do nothing
+        if (tunerJobs[tprFile]) return; // If the TPR file is already getting tuned, do nothing
 
         setTunerJobs((prev) => ({
             ...prev,
@@ -183,17 +230,32 @@ const WizardTune = (props: WizardStepperProps) => {
                 trials: [],
             },
         }));
-    }
+    };
 
+    const fetchTunerJobs = async () => {
+        const { data, error } = await tuner_status(experiment.id);
+        setErrorMessage(error || "");
+        const jobs = data.data || {};
+
+        console.log("Fetched tuner jobs:", jobs);
+
+        if (Object.keys(jobs).length === 0) setSelectedTpr(null);
+        setTunerJobs(jobs);
+    };
+
+    useEffect(() => {
+        fetchTunerJobs();
+
+        return () => {
+            console.log("Cleaning up tuner jobs.");
+            setTunerJobs({});
+            setSelectedTpr(null);
+        };
+    }, [experiment.id, setErrorMessage]);
 
     return (
         <>
-            <Tabs
-                value={selectedTpr}
-                onChange={handleChange}
-                variant="scrollable"
-                scrollButtons="auto"
-            >
+            <Tabs value={selectedTpr} onChange={handleChange} variant="scrollable" scrollButtons="auto">
                 {Object.keys(tunerJobs).map((tprFile) => (
                     <Tab label={tprFile} value={tprFile} />
                 ))}
@@ -203,11 +265,12 @@ const WizardTune = (props: WizardStepperProps) => {
 
             {selectedTpr && (
                 <Box sx={{ mt: 2 }}>
-                    <Typography variant="h6">Selected TPR: {selectedTpr}</Typography>
-                    <Typography variant="body1">
-                        Tuner Run ID: {tunerJobs[selectedTpr]?.tuner_run_id || "N/A"}
-                    </Typography>
-                    <TunerView experiment={experiment} setExperiment={props.setExperiment} setErrorMessage={setErrorMessage} />
+                    <TunerView
+                        tprName={selectedTpr}
+                        experiment={experiment}
+                        setExperiment={props.setExperiment}
+                        setErrorMessage={setErrorMessage}
+                    />
                 </Box>
             )}
         </>
