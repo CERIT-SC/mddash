@@ -86,23 +86,23 @@ export const delete_notebook = async (id: string) => {
 }
 
 
-export const tuner_status = async (id: string) => {
+export const tuner_status = async (id: string, tprName?: string) => {
     return await handle_request(
-        axios.get(`${API_BASE}/experiments/${id}/tuner`),
+        axios.get(`${API_BASE}/experiments/${id}/tuner${tprName ? `/${tprName}` : ''}`),
         'Failed to fetch tuner status.'
     )
 }
 
-export const run_tuner = async (id: string) => {
+export const run_tuner = async (id: string, tprName: string) => {
     return await handle_request(
-        axios.post(`${API_BASE}/experiments/${id}/tuner`),
+        axios.post(`${API_BASE}/experiments/${id}/tuner/${tprName}`),
         'Failed to run tuner.'
     )
 }
 
-export const kill_tuner = async (id: string) => {
+export const delete_tuner = async (id: string, tprName: string) => {
     return await handle_request(
-        axios.delete(`${API_BASE}/experiments/${id}/tuner`),
+        axios.delete(`${API_BASE}/experiments/${id}/tuner/${tprName}`),
         'Failed to kill tuner.'
     )
 }

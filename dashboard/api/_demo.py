@@ -83,7 +83,6 @@ def get_notebook(experiment_id):
     return {'status': 'success', 'message': 'up' if notebook_running else 'down', 'path': '/__BASE_PATH__/'}
 
 
-tuner_running = False
 tuner_demo_status = {
     'tuner_run_id': '6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
     'summary': {
@@ -124,28 +123,30 @@ tuner_demo_status = {
     'cluster_resources': '32/32 CPUs, 0/1 GPUs used'
 }
 
+tuner_demo_statuses = {
+    "LSD.tpr": tuner_demo_status,
+    "MDMA.tpr": tuner_demo_status,
+}
 
-@bp.route('/api/experiments/<experiment_id>/tuner', methods=['POST'])
-def submit_tuner(experiment_id):
-    global tuner_running
-    tuner_running = True
-    return {'status': 'success', 'message': 'Tuner submitted.'}
+
+@bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['POST'])
+def submit_tuner(experiment_id, tpr_name):
+    return {'status': 'success', 'message': 'Tune job submitted.'}
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner', methods=['GET'])
-def get_tuner_status(experiment_id):
-    global tuner_running
-    if tuner_running:
-        return {'status': 'success', 'message': 'up', 'status': tuner_demo_status}
-    else:
-        return {'status': 'success', 'message': 'down', 'status': None}
+def get_tuner_statuses(experiment_id):
+    return {'status': 'success', 'message': 'up', 'data': tuner_demo_statuses}
 
 
-@bp.route('/api/experiments/<experiment_id>/tuner', methods=['DELETE'])
-def delete_tuner(experiment_id):
-    global tuner_running
-    tuner_running = False
-    return {'status': 'success', 'message': 'Tuner deleted.'}
+@bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['GET'])
+def get_tuner_status(experiment_id, tpr_name):
+    return {'status': 'success', 'message': 'up', 'data': tuner_demo_status}
+
+
+@bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['DELETE'])
+def delete_tuner(experiment_id, tpr_name):
+    return {'status': 'success', 'message': 'Tune job deleted.'}
 
 
 demo_experiment = {"id": "xej9e-x3720", "created": "2025-05-11T14:24:31.964333+00:00", "updated": "2025-05-11T14:24:32.188250+00:00", "links": {"applicable-requests": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft/requests/applicable", "communities": {"b53d8a89-d370-475c-be34-67b698e088b1": {"self": "https://mdrepo.eu/api/communities/b53d8a89-d370-475c-be34-67b698e088b1", "self_html": "https://mdrepo.eu/communities/ceitec/records"}}, "draft": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft", "edit_html": "https://mdrepo.eu/experiments/xej9e-x3720/edit", "files": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft/files", "latest": "https://mdrepo.eu/api/experiments/xej9e-x3720/versions/latest", "latest_html": "https://mdrepo.eu/experiments/xej9e-x3720/latest", "publish": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft/actions/publish", "requests": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft/requests", "self": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft", "self_html": "https://mdrepo.eu/experiments/xej9e-x3720/preview", "versions": "https://mdrepo.eu/api/experiments/xej9e-x3720/versions"}, "revision_id": 3, "$schema": "local://experiments-1.0.0.json", "metadata": {"simulations": [{"_dump_sw_version": "127", "_exit_code": 0, "_gromacs_version": "5.1.4", "_metadata_date": "2024-10-24T08:25:13.824043", "_metadump_version": "1.0.0", "_protein_sequences": ["LRIPCCPVNLKRLLVVVVVVVLVVVVIVGALLMGL", "LRIPCCPVNLKRLLVVVVVVVLVVVVIVGALLMGL"], "_tpx_version": "103", "_uniprot_id": "P15785", "detailed_information": {"comm_mode": "linear", "constraint_algorithm": "lincs", "electrostatic_interactions": {"coulomb_modifier": "potential-shift", "coulombtype": "pme", "epsilon_r": 1.0, "epsilon_rf": -1.0, "rcoulomb": 1.2}, "fourierspacing": 0.12, "lincs_iter": 1, "lincs_order": 4, "neighbour_list": {"cutoff_scheme": "verlet", "nstlist": 20, "pbc": "xyz", "rlist": 1.2}, "nstcomm": 1000, "thermostat": {"nsttcouple": 20, "tau_t": [1.0, 1.0, 1.0], "tc_grps": {
