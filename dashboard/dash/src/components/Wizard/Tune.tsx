@@ -49,7 +49,7 @@ const TunerTable = (props: TunerTableProps) => {
     const { rows, selectedTrial, setSelectedTrial } = props;
 
     if (!rows || rows.length === 0) {
-        return <Typography>No tuning trials available yet.</Typography>;
+        return <Typography>No tuning trials available yet...</Typography>;
     }
 
     return (
@@ -112,10 +112,11 @@ const TunerTable = (props: TunerTableProps) => {
 
 interface TunerViewProps extends WizardStepperProps {
     tprName: string;
+    deleteJob: (tprName: string) => void;
 }
 
 const TunerView = (props: TunerViewProps) => {
-    const { experiment, tprName, setErrorMessage } = props;
+    const { experiment, tprName, setErrorMessage, deleteJob } = props;
 
     const [loading, setLoading] = useState(false);
     const [tunerUp, setTunerUp] = useState(false);
@@ -125,25 +126,23 @@ const TunerView = (props: TunerViewProps) => {
     const [confirmOpen, setConfirmOpen] = useState(false);
     const [pendingAction, setPendingAction] = useState<() => void>(() => {});
 
+    const initialLoad = async () => {
+        const { data } = await tuner_status(experiment.id, tprName);
+        setTunerStatus(data?.data || null);
+        setTunerUp(!!data?.data);
+    }
+
     const getTuner = async () => {
         const { data, error } = await tuner_status(experiment.id, tprName);
         setErrorMessage(error || "");
-        setTunerUp(data?.message === "up");
-        setTunerStatus(data?.data || {});
+        setTunerStatus(data?.data || null);
+        setTunerUp(!!data?.data);
     };
 
     const runTuner = async () => {
         const { error } = await run_tuner(experiment.id, tprName);
         setErrorMessage(error || "");
         getTuner();
-    };
-
-    const deleteTuner = async () => {
-        handleConfirmAction(async () => {
-            const { error } = await delete_tuner(experiment.id, tprName);
-            setErrorMessage(error || "");
-            getTuner();
-        });
     };
 
     const runSimulation = async () => {
@@ -170,17 +169,16 @@ const TunerView = (props: TunerViewProps) => {
     };
 
     useEffect(() => {
-        setLoading(true);
-        getTuner().finally(() => setLoading(false));
-
         let intervalId: number | null = null;
-
+        
         // refresh tuner status every 5 seconds if the tuner is up
         if (tunerUp) {
             intervalId = window.setInterval(() => {
-                console.log("Refreshing tuner status...");
                 getTuner();
             }, 5000);
+        } else {
+            setLoading(true);
+            initialLoad().finally(() => setLoading(false));
         }
 
         return () => {
@@ -189,11 +187,15 @@ const TunerView = (props: TunerViewProps) => {
                 window.clearInterval(intervalId);
             }
         };
-    }, [tunerUp, tprName, experiment.id]);
+    }, [tprName, experiment.id, tunerUp]);
 
     return (
         <>
-            {(loading && <CircularProgress />) || (
+            {loading && (
+                <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+                    <CircularProgress />
+                </Box>
+            ) || (
                 <Stack spacing={2} direction="column">
                     {(tunerUp && (
                         <>
@@ -204,7 +206,11 @@ const TunerView = (props: TunerViewProps) => {
                             />
 
                             <Stack direction="row" spacing={2} justifyContent="space-between">
-                                <Button variant="contained" color="error" onClick={deleteTuner}>
+                                <Button
+                                    variant="contained"
+                                    color="error"
+                                    onClick={() => handleConfirmAction(async () => deleteJob(tprName))}
+                                >
                                     Delete tune job 🗑️
                                 </Button>
 
@@ -282,6 +288,13 @@ const WizardTune = (props: WizardStepperProps) => {
         setTunerJobs(jobs);
     };
 
+    const deleteJob = async (tprName: string) => {
+        const { error } = await delete_tuner(experiment.id, tprName);
+        setErrorMessage(error || "");
+        setSelectedTpr(null);
+        fetchTunerJobs();
+    };
+
     useEffect(() => {
         fetchTunerJobs();
 
@@ -309,6 +322,7 @@ const WizardTune = (props: WizardStepperProps) => {
                         experiment={experiment}
                         setExperiment={props.setExperiment}
                         setErrorMessage={setErrorMessage}
+                        deleteJob={deleteJob}
                     />
                 </Box>
             )}

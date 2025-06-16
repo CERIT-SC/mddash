@@ -8,6 +8,7 @@ from experiment import Experiment
 from state import Experiments
 import mdrepo_client
 import caddy_client
+import tuner_client
 
 from k8s import (
     create_notebook_pod,
@@ -27,6 +28,12 @@ bp = Blueprint('dash', __name__)
 @bp.route('/api/')
 def index():
     return {'status': 'success', 'message': 'FAIR MD Dashboard API'}
+
+
+@bp.route('/api/metrics', methods=['GET'])
+def get_metrics():
+    metrics = get_namespace_resource_allocation(NAMESPACE)
+    return {'status': 'success', 'data': metrics}
 
 
 @bp.route('/api/experiments', methods=['GET'])
@@ -126,6 +133,95 @@ def get_notebook(experiment_id):
         return {'status': 'error', 'message': str(e)}
 
 
+@bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['POST'])
+def submit_tuner(experiment_id, tpr_name):
+    try:
+        experiment = experiments.get(experiment_id)
+        if not experiment:
+            return {'status': 'error', 'message': 'Experiment not found.'}
+
+        tpr_path = DATA_DIR / experiment_id / tpr_name
+
+        if not tpr_path.exists():
+            return {'status': 'error', 'message': f'TPR file {tpr_name} not found.'}
+        
+        # if the job already exists, return success
+        if experiment.tuner_jobs.get(tpr_name):
+            return {'status': 'success', 'message': f'Tune job for {tpr_name} already exists.'}
+        
+        # Submit the TPR file to the tuner
+        data = tuner_client.run_submit(tpr_path)
+        experiment.tuner_jobs[tpr_name] = data
+        experiments.save(STATE_FILE)
+        
+        return {'status': 'success', 'message': f'Tune job for {tpr_name} submitted.'}
+
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
+
+
+@bp.route('/api/experiments/<experiment_id>/tuner', methods=['GET'])
+def get_tuner_statuses(experiment_id):
+    try:
+        experiment = experiments.get(experiment_id)
+        if not experiment:
+            return {'status': 'error', 'message': 'Experiment not found.'}
+
+        tuner_statuses = {}
+        for tpr_name, job in experiment.tuner_jobs.items():
+            status = tuner_client.poll_status(job['tuner_run_id'])
+            tuner_statuses[tpr_name] = status
+        
+        experiment.tuner_jobs = tuner_statuses
+        experiments.save(STATE_FILE)
+        
+        return {'status': 'success', 'data': tuner_statuses}
+
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
+
+
+@bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['GET'])
+def get_tuner_status(experiment_id, tpr_name):
+    try:
+        experiment = experiments.get(experiment_id)
+        if not experiment:
+            return {'status': 'error', 'message': 'Experiment not found.'}
+
+        job = experiment.tuner_jobs.get(tpr_name)
+        if not job:
+            return {'status': 'error', 'message': f'Tune job for {tpr_name} not found.'}
+
+        status = tuner_client.poll_status(job['tuner_run_id'])
+        experiment.tuner_jobs[tpr_name] = status
+        experiments.save(STATE_FILE)
+        
+        return {'status': 'success', 'data': status}
+
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
+
+
+@bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['DELETE'])
+def delete_tuner(experiment_id, tpr_name):
+    try:
+        experiment = experiments.get(experiment_id)
+        if not experiment:
+            return {'status': 'error', 'message': 'Experiment not found.'}
+
+        job = experiment.tuner_jobs.pop(tpr_name, None)
+        if not job:
+            return {'status': 'error', 'message': f'Tune job for {tpr_name} not found.'}
+
+        tuner_client.delete_job(job['tuner_run_id'])
+        experiments.save(STATE_FILE)
+
+        return {'status': 'success', 'message': f'Tune job for {tpr_name} deleted.'}
+
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}
+
+
 @bp.route('/api/experiments/<experiment_id>/publish', methods=['GET'])
 def publish_experiment(experiment_id):
     
@@ -154,12 +250,6 @@ def publish_experiment(experiment_id):
 
     except Exception as e:
         return {'status': 'error', 'message': str(e)}
-
-
-@bp.route('/api/metrics', methods=['GET'])
-def get_metrics():
-    metrics = get_namespace_resource_allocation(NAMESPACE)
-    return {'status': 'success', 'data': metrics}
 
 
 @bp.route('/api/experiments/<experiment_id>/files', methods=['GET'])

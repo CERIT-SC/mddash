@@ -1,5 +1,5 @@
 from shutil import rmtree
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from werkzeug.datastructures import FileStorage
 import requests
 import zipfile
@@ -23,6 +23,8 @@ class Experiment:
     token: str = str(uuid.uuid4())
     # current step in the experiment
     step: int = 0
+    # Tuner jobs of the experiment, key is a TPR file name
+    tuner_jobs: dict[str, dict] = field(default_factory=dict)
     # ID of the experiment in MDRepo
     mdrepo_id: str | None = None
 
