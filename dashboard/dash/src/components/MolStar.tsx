@@ -10,62 +10,60 @@ import { DefaultPluginUISpec, PluginUISpec } from "molstar/lib/mol-plugin-ui/spe
 import { PluginUIContext } from "molstar/lib/mol-plugin-ui/context";
 import { Plugin } from "molstar/lib/mol-plugin-ui/plugin";
 
-export async function initViewerUI(element: string | HTMLDivElement, options?: { spec?: PluginUISpec }) {
+export const initViewerUI = async (element: string | HTMLDivElement, options?: { spec?: PluginUISpec }) => {
     const parent = typeof element === "string" ? (document.getElementById(element)! as HTMLDivElement) : element;
     const spec = { ...DefaultPluginUISpec(), ...options?.spec };
     const plugin = new PluginUIContext(spec);
     await plugin.init();
     createRoot(parent).render(<Plugin plugin={plugin} />);
     return plugin;
-}
+};
 
-export async function loadStructure(
+export const loadStructure = async (
     plugin: PluginUIContext,
     url: string,
     options?: { format?: string; isBinary?: boolean }
-) {
+) => {
     const data = await plugin.builders.data.download({ url, isBinary: options?.isBinary });
     const trajectory = await plugin.builders.structure.parseTrajectory(data, options?.format ?? ("mmcif" as any));
     await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default");
-}
+};
 
-
-export async function loadTrajectory(
+export const loadTrajectory = async (
     plugin: PluginUIContext,
-    structureUrl: string,   // .gro, .pdb, .tpr
-    trajectoryUrl: string,  // .xtc, .trr
-    options?: { 
-        structureFormat?: string; 
+    structureUrl: string, // .gro, .pdb, .tpr
+    trajectoryUrl: string, // .xtc, .trr
+    options?: {
+        structureFormat?: string;
         trajectoryFormat?: string;
         isBinary?: boolean;
     }
-) {
+) => {
     // Load structure file (topology)
-    const structureData = await plugin.builders.data.download({ 
-        url: structureUrl, 
-        isBinary: options?.isBinary ?? false 
+    const structureData = await plugin.builders.data.download({
+        url: structureUrl,
+        isBinary: options?.isBinary ?? false,
     });
     const structure = await plugin.builders.structure.parseTrajectory(
-        structureData, 
+        structureData,
         (options?.structureFormat ?? "gro") as any
     );
 
     // Load trajectory file
-    const trajectoryData = await plugin.builders.data.download({ 
-        url: trajectoryUrl, 
-        isBinary: true
+    const trajectoryData = await plugin.builders.data.download({
+        url: trajectoryUrl,
+        isBinary: true,
     });
     const trajectory = await plugin.builders.structure.parseTrajectory(
-        trajectoryData, 
+        trajectoryData,
         (options?.trajectoryFormat ?? "xtc") as any
     );
 
     // Combine structure + trajectory
     await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default");
-    
-    return { structure, trajectory };
-}
 
+    return { structure, trajectory };
+};
 
 interface MolStarProps {
     width?: React.CSSProperties["width"];
@@ -77,13 +75,20 @@ interface MolStarProps {
     trajectoryFormat?: "xtc" | "trr" | "dcd";
 }
 
-
 export default function MolStar(props: MolStarProps) {
-    const { width = "500px", height = "500px", pdbId, structureUrl, structureFormat, trajectoryUrl, trajectoryFormat } = props;
+    const {
+        width = "500px",
+        height = "500px",
+        pdbId,
+        structureUrl,
+        structureFormat,
+        trajectoryUrl,
+        trajectoryFormat,
+    } = props;
     const [loading, setLoading] = useState(true);
     const containerId = `molstar-container-${Math.random().toString(36).substr(2, 9)}`;
 
-    async function init() {
+    const init = async () => {
         try {
             const plugin = await initViewerUI(containerId, {
                 spec: {
@@ -102,13 +107,11 @@ export default function MolStar(props: MolStarProps) {
                 await loadTrajectory(plugin, structureUrl, trajectoryUrl, {
                     structureFormat: structureFormat ?? "gro",
                     trajectoryFormat: trajectoryFormat ?? "xtc",
-                    isBinary: structureFormat !== "pdb" // Most formats except PDB are binary
+                    isBinary: structureFormat !== "pdb", // Most formats except PDB are binary
                 });
-            }
-            else if (structureUrl) {
+            } else if (structureUrl) {
                 await loadStructure(plugin, structureUrl, { isBinary: true });
-            }
-            else if (pdbId) {
+            } else if (pdbId) {
                 await loadStructure(plugin, `https://models.rcsb.org/${pdbId.toLowerCase()}.bcif`, { isBinary: true });
             }
         } catch (error) {
@@ -116,7 +119,7 @@ export default function MolStar(props: MolStarProps) {
         } finally {
             setLoading(false);
         }
-    }
+    };
 
     useEffect(() => {
         init();

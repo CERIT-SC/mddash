@@ -273,13 +273,15 @@ const WizardTune = (props: WizardStepperProps) => {
 
     return (
         <>
-            <Tabs value={selectedTpr} onChange={handleChange} variant="scrollable" scrollButtons="auto">
-                {Object.keys(tunerJobs).map((tprFile) => (
-                    <Tab label={tprFile} value={tprFile} />
-                ))}
+            <Stack direction="row" spacing={2} alignItems="center">
+                <Tabs value={selectedTpr} onChange={handleChange} variant="scrollable" scrollButtons="auto">
+                    {Object.keys(tunerJobs).map((tprFile) => (
+                        <Tab label={tprFile} value={tprFile} />
+                    ))}
+                </Tabs>
 
                 <FileSelector experimentId={experiment.id} extension="tpr" onFileSelected={newTpr} width={300} />
-            </Tabs>
+            </Stack>
 
             {selectedTpr && (
                 <Box sx={{ mt: 2 }}>
