@@ -1,35 +1,48 @@
 import requests
+from requests import Response, HTTPError
+from requests.auth import HTTPBasicAuth
 from pathlib import Path
 
 
 TUNER_URL = 'https://gromacs-tuner.dyn.cloud.e-infra.cz/api'
+TUNER_USERNAME = 'admin'
+TUNER_PASSWORD = 'strong-secret-here'
+AUTH = HTTPBasicAuth(TUNER_USERNAME, TUNER_PASSWORD)
 
 
-def run_submit(tpr_path: Path, tuning_options: dict | None = None) -> dict:
+def get_tuner_response_data(response: Response) -> dict:
     '''
-    Submit an experiment to the tuner.
+    Extract JSON data from a tuner response.
+
+    :param response: The response object from the tuner API.
+    :return: The JSON data from the response.
+    :raise HTTPError: If the request failed.
+    :raise ValueError: If the response does not contain valid JSON.
+    '''
+    response.raise_for_status()
+    data = response.json()
+
+    if data['success'] is not True:
+        raise HTTPError(data['message'])
+
+    return data['data']
+
+
+def run_submit(tpr_path: Path) -> dict:
+    '''
+    Submit a TPR to get tuned.
 
     :param tpr_path: The .tpr file for the simulation to be tuned.
-    :param tuning_options: Optional constraints for tuning (e.g., CPU range, memory, DD, OMP).
-                           This is an open-ended JSON object, and its structure may evolve.
-                           NOTE: It currently seems to do nothing.
     :return: The response from the tuner.
     :raise HTTPError: If the request fails.
     '''
-    data = {}
-    if tuning_options:
-        data['tuning_options'] = tuning_options
-
     with open(tpr_path, 'rb') as f:
         files = {'file': f}
-        response = requests.post(
-            f'{TUNER_URL}/tuner_runs', files=files, data=data)
-
-    response.raise_for_status()
-    return response.json()
+        response = requests.post(f'{TUNER_URL}/tuner_runs', files=files, auth=AUTH)
+    return get_tuner_response_data(response)
 
 
-def poll_status(run_id: str) -> dict:
+def poll_status(job_id: str) -> dict:
     '''
     Poll the status of a submitted job.
 
@@ -37,12 +50,11 @@ def poll_status(run_id: str) -> dict:
     :return: The response from the tuner.
     :raise HTTPError: If the request fails.
     '''
-    response = requests.get(f'{TUNER_URL}/tuner_runs/{run_id}/status')
-    response.raise_for_status()
-    return response.json()
+    response = requests.get(f'{TUNER_URL}/tuner_runs/{job_id}/status', auth=AUTH)
+    return get_tuner_response_data(response)
 
 
-def delete_job(run_id: str) -> dict:
+def delete_job(job_id: str) -> dict:
     '''
     Delete a submitted job.
 
@@ -50,38 +62,16 @@ def delete_job(run_id: str) -> dict:
     :return: The response from the tuner.
     :raise HTTPError: If the request fails.
     '''
-    response = requests.delete(f'{TUNER_URL}/tuner_runs/{run_id}')
-    response.raise_for_status()
-    return response.json()
-
-
-# DEPRECATED
-# def get_results(run_id: str) -> dict:
-#     '''
-#     Get the results of a completed job.
-
-#     :param run_id: The ID of the job to get results for.
-#     :return: The response from the tuner.
-#     '''
-#     response = requests.get(f'{TUNER_URL}/tuner_runs/{run_id}/results')
-#     response.raise_for_status()
-#     return response.json()
+    response = requests.delete(f'{TUNER_URL}/tuner_runs/{job_id}', auth=AUTH)
+    return get_tuner_response_data(response)
 
 
 # DEMO
 if __name__ == '__main__':
     tpr_path = Path('private/md.tpr')
 
-    # NOTE: these options are probably wrong
-    tunning_options = {
-        'pme': "cpu",
-        'nb': "gpu",
-        'np': [1, 4],
-        'ntomp': [1, 2, 4],
-    }
-
-    # # Submit a job
-    response = run_submit(tpr_path, tunning_options)
+    # Submit a job
+    response = run_submit(tpr_path)
     print('Submitted job:', response)
 
     print('Waiting for job to start...')
