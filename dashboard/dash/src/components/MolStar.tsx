@@ -31,7 +31,7 @@ export const loadStructure = async (
 
 export const loadTrajectory = async (
     plugin: PluginUIContext,
-    structureUrl: string, // .gro, .pdb, .tpr
+    structureUrl: string, // .gro, .pdb
     trajectoryUrl: string, // .xtc, .trr
     options?: {
         structureFormat?: string;
@@ -71,7 +71,7 @@ interface MolStarProps {
     pdbId?: string;
     structureUrl?: string;
     trajectoryUrl?: string;
-    structureFormat?: "gro" | "pdb" | "tpr";
+    structureFormat?: "gro" | "pdb" | "cif" | "mmcif" | "bcif" | "sfd" | "mol" | "mol2";
     trajectoryFormat?: "xtc" | "trr" | "dcd";
 }
 

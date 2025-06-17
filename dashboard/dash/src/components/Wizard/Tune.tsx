@@ -15,6 +15,7 @@ import {
     Tooltip,
     Tabs,
     Tab,
+    Radio,
 } from "@mui/material";
 import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
@@ -83,11 +84,10 @@ const TunerTable = (props: TunerTableProps) => {
                         .map((row) => (
                             <TableRow key={row.id} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
                                 <StyledTableCell>
-                                    <input
-                                        type="radio"
-                                        name="selectedTrial"
+                                    <Radio
                                         checked={selectedTrial === row.id}
-                                        onClick={() => setSelectedTrial(selectedTrial === row.id ? null : row.id)}
+                                        onChange={() => setSelectedTrial(selectedTrial === row.id ? null : row.id)}
+                                        name="selectedTrial"
                                     />
                                 </StyledTableCell>
                                 <StyledTableCell>{row.status}</StyledTableCell>

@@ -6,7 +6,7 @@ import zipfile
 import io
 
 from config import DATA_DIR
-from utils import get_unique_id
+from utils import get_unique_id, get_files_with_extension
 
 import uuid
 
@@ -17,14 +17,18 @@ class Experiment:
     id: str
     # name of the experiment
     name: str
+    # message for user to understand the source of the experiment
+    source_message: str
+    # current step in the experiment
+    step: int
     # status message shown in the UI
     status: str
     # token for accessing jupyter notebook
     token: str = str(uuid.uuid4())
-    # current step in the experiment
-    step: int = 0
     # Tuner jobs of the experiment, key is a TPR file name
     tuner_jobs: dict[str, dict] = field(default_factory=dict)
+    # GROMACS jobs of the experiment, key is a TPR file name
+    gromacs_jobs: dict[str, dict] = field(default_factory=dict)
     # ID of the experiment in MDRepo
     mdrepo_id: str | None = None
 
@@ -60,7 +64,8 @@ class Experiment:
             rmtree(DATA_DIR / id)
             raise
 
-        return cls(id=id, name=name, status='setup', step=0)
+        message = f"Created by downloading '{pdb_id}' from RCSB PDB."
+        return cls(id=id, name=name, status='setup', step=0, source_message=message)
 
 
     @classmethod
@@ -88,7 +93,8 @@ class Experiment:
             rmtree(DATA_DIR / id)
             raise
 
-        return cls(id=id, name=name, status='setup', step=0)
+        message = f"Created by downloading repository from '{repo_link}'."
+        return cls(id=id, name=name, status='setup', step=0, source_message=message)
 
 
     @classmethod
@@ -99,8 +105,47 @@ class Experiment:
         id = cls.prepare_env()
         tpr.save(DATA_DIR / id / 'input.tpr')
 
-        return cls(id=id, name=name, status='setup complete', step=1)
+        message = f"Created by uploading TPR file '{tpr.filename}'."
+        return cls(id=id, name=name, status='setup complete', step=1, source_message=message)
 
 
     def delete(self) -> None:
         rmtree(DATA_DIR / self.id)
+
+
+    def update_step(self) -> None:
+        
+        # Step 5: Published (experiment has mdrepo_id)
+        if self.mdrepo_id:
+            self.step = 5
+            self.status = 'published'
+            return
+
+        # Step 4: Analyzing (directory contains XTC file)
+        if get_files_with_extension(DATA_DIR / self.id, 'xtc'):
+            self.step = 4
+            self.status = 'analyzing'
+            return
+
+        # Step 3: Running simulation (experiment has GROMACS jobs)
+        if self.gromacs_jobs:
+            self.step = 3
+            self.status = 'simulating'
+            return
+
+        # Step 2: Running Tuner (experiment has Tuner jobs)
+        if self.tuner_jobs:
+            self.step = 2
+            self.status = 'tuning'
+            return
+
+        # Step 1: Setup complete (directory contains a TPR file)
+        # TODO: user action in notebook
+        if get_files_with_extension(DATA_DIR / self.id, 'tpr'):
+            self.step = 1
+            self.status = 'setup complete'
+            return
+
+        # Step 0: Setup
+        self.step = 0
+        self.status = 'setup'

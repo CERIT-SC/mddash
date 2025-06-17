@@ -21,22 +21,25 @@ demo_experiments = [
     {
         'id': 'aaaaa',
         'name': 'Cancer cure',
-        'status': 'setup',
+        'source_message': 'Created by uploading TPR file "cancer_cure.tpr".',
         'step': 0,
+        'status': 'setup',
         'token': '2f2be97e-15db-4cb4-8ef7-905efe5a4968',
     },
     {
         'id': 'bbbbb',
         'name': 'HIV protein behavior research for drug development',
-        'status': 'simulating',
+        "source_message': 'Created by downloading repository from 'https://zenodo.org/records/7261108'"
         'step': 3,
+        'status': 'simulating',
         'token': '191eb452-5505-4328-9004-99eb1b0d570a',
     },
     {
         'id': 'ccccc',
         'name': 'My first experiment',
-        'status': 'published',
+        'source_message': 'Created by uploading TPR file "my_first_experiment.tpr".',
         'step': 5,
+        'status': 'published',
         'token': '2578b922-7b12-49d0-8962-b2d79afda1dc',
     },
 ]
