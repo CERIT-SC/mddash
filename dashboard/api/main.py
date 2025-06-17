@@ -6,6 +6,7 @@ from dataclasses import asdict
 from config import STATE_FILE, PREFIX, NAMESPACE, NOTEBOOK_IMAGE, DATA_DIR
 from experiment import Experiment
 from state import Experiments
+from utils import get_files_with_extension
 import mdrepo_client
 import caddy_client
 import tuner_client
@@ -261,18 +262,9 @@ def list_experiment_files(experiment_id):
         if not experiment_dir.exists():
             return {'status': 'error', 'message': 'Experiment not found.'}
 
-        files = []
-        for file_path in experiment_dir.iterdir():
-            if not file_path.is_file() or extension and not file_path.name.lower().endswith(f'.{extension}'):
-                continue
-
-            # Create the file URL
-            file_url = f"/experiments/{experiment_id}/files/{file_path.name}"
-            files.append({
-                'name': file_path.name,
-                'url': file_url,
-                'size': file_path.stat().st_size
-            })
+        files = get_files_with_extension(experiment_dir, extension)
+        # add URLs to file list
+        map(lambda f: f.update({'url': f'/experiments/{experiment_id}/files/{f['name']}'}), files)
 
         return {'status': 'success', 'data': files}
 

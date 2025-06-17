@@ -2,6 +2,7 @@ import json
 from dataclasses import asdict
 
 from experiment import Experiment
+from config import STATE_FILE
 
 
 class Experiments:
@@ -20,7 +21,7 @@ class Experiments:
         return cls(experiments_dict)
 
     def get_all(self) -> list[dict]:
-        return [asdict(exp) for exp in self.experiments.values()]
+        return [asdict(self.get(exp_id)) for exp_id in self.experiments.keys()]
 
     def save(self, filepath: str) -> None:
         data = {id: asdict(exp) for id, exp in self.experiments.items()}
@@ -55,6 +56,14 @@ class Experiments:
         '''
         if experiment_id not in self.experiments:
             raise ValueError(f"Experiment with id '{experiment_id}' not found")
+        
+        # update step and status
+        old_step = self.experiments[experiment_id].step
+        self.experiments[experiment_id].update_step()
+
+        # save if step changed
+        if self.experiments[experiment_id].step != old_step:
+            self.save(STATE_FILE)
 
         return self.experiments[experiment_id]
 
