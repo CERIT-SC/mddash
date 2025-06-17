@@ -264,7 +264,8 @@ def list_experiment_files(experiment_id):
 
         files = get_files_with_extension(experiment_dir, extension)
         # add URLs to file list
-        map(lambda f: f.update({'url': f'/experiments/{experiment_id}/files/{f['name']}'}), files)
+        for f in files:
+            f['url'] = f'/experiments/{experiment_id}/files/{f["name"]}'
 
         return {'status': 'success', 'data': files}
 
