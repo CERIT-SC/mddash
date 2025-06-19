@@ -20,7 +20,7 @@ import {
 import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
 
-import { WizardStepperProps } from "./Stepper";
+import { WizardStepProps } from "./Stepper";
 import { tuner_status, run_tuner, delete_tuner } from "../../util/api";
 import { TunerStatus, TunerTrial } from "../../util/types";
 import FileSelector from "../FileSelector";
@@ -106,13 +106,13 @@ const TunerTable = (props: TunerTableProps) => {
     );
 };
 
-interface TunerViewProps extends WizardStepperProps {
+interface TunerViewProps extends WizardStepProps {
     tprName: string;
     deleteJob: (tprName: string) => void;
 }
 
 const TunerView = (props: TunerViewProps) => {
-    const { experiment, tprName, setErrorMessage, deleteJob } = props;
+    const { experiment, tprName, setErrorMessage, deleteJob, nextStep, changeStep } = props;
 
     const [loading, setLoading] = useState(false);
     const [tunerRunning, setTunerRunning] = useState(false);
@@ -138,6 +138,13 @@ const TunerView = (props: TunerViewProps) => {
     const runSimulation = async () => {
         console.log(`Running trial ${selectedTrial}...`);
         // TODO: Run simulation
+
+        // go to run step in wizard
+        if (experiment.step < 2) {
+            nextStep();
+        } else {
+            changeStep(2);
+        }
     };
 
     useEffect(() => {
@@ -218,7 +225,7 @@ const TunerView = (props: TunerViewProps) => {
     );
 };
 
-const WizardTune = (props: WizardStepperProps) => {
+const WizardTune = (props: WizardStepProps) => {
     const { experiment, setErrorMessage } = props;
 
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
@@ -291,6 +298,8 @@ const WizardTune = (props: WizardStepperProps) => {
                         setExperiment={props.setExperiment}
                         setErrorMessage={setErrorMessage}
                         deleteJob={deleteJob}
+                        nextStep={props.nextStep}
+                        changeStep={props.changeStep}
                     />
                 </Box>
             )}

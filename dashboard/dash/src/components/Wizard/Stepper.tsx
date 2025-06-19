@@ -82,6 +82,11 @@ export interface WizardStepperProps {
     setErrorMessage: (message: string) => void;
 }
 
+export interface WizardStepProps extends WizardStepperProps {
+    nextStep: () => void;
+    changeStep: (step: number) => void;
+}
+
 const WizardStepper = (props: WizardStepperProps) => {
     const { experiment, setExperiment } = props;
     const [activeStep, setActiveStep] = useState(Math.min(experiment.step, steps.length - 1));
@@ -100,6 +105,12 @@ const WizardStepper = (props: WizardStepperProps) => {
         setExperiment((prev: Experiment) => {
             return { ...prev, step: prev.step + 1 };
         });
+    };
+
+    const childProps = {
+        ...props,
+        nextStep: nextStep,
+        changeStep: changeStep,
     };
 
     const ColorlibStepIcon = (props: StepIconProps) => {
@@ -132,7 +143,7 @@ const WizardStepper = (props: WizardStepperProps) => {
                 ))}
             </Stepper>
 
-            <Box sx={{ mt: 4 }}>{React.createElement(steps[activeStep].child, props)}</Box>
+            <Box sx={{ mt: 4 }}>{React.createElement(steps[activeStep].child, childProps)}</Box>
         </>
     );
 };

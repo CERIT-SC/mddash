@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import { Box, Stack, Button, Typography, CircularProgress } from "@mui/material";
+import { Stack, Button, Typography, CircularProgress } from "@mui/material";
 
-import { WizardStepperProps } from "./Stepper";
+import { WizardStepProps } from "./Stepper";
 import { get_notebook, spawn_notebook, delete_notebook } from "../../util/api";
+import ConfirmDialog from "../ConfirmDialog";
 
-const WizardSetup = (props: WizardStepperProps) => {
-    const { experiment, setErrorMessage } = props;
+const WizardSetup = (props: WizardStepProps) => {
+    const { experiment, setErrorMessage, nextStep } = props;
     const [loading, setLoading] = useState(false);
     const [notebookUp, setNotebookUp] = useState(false);
     const [notebookPath, setNotebookPath] = useState("");
+    const [nextStepDialog, setNextStepDialog] = useState(false);
 
     const getNotebook = async () => {
         setLoading(true);
@@ -36,10 +38,17 @@ const WizardSetup = (props: WizardStepperProps) => {
     }, []);
 
     return (
-        <Box sx={{ p: 4, display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <Typography variant="h4" gutterBottom>
-                {experiment.source_message}
-            </Typography>
+        <Stack direction="column" alignItems="center" spacing={5}>
+            <Stack direction="row" justifyContent="space-between" width="100%">
+                <Typography variant="h6">
+                    {experiment.source_message}
+                </Typography>
+                {experiment.step === 0 && (
+                    <Button variant="contained" color="error" onClick={() => setNextStepDialog(true)}>
+                        Complete Setup
+                    </Button>
+                )}
+            </Stack>
             {(loading && <CircularProgress />) || (
                 <Stack spacing={2} direction="column">
                     {(notebookUp && (
@@ -62,7 +71,15 @@ const WizardSetup = (props: WizardStepperProps) => {
                     )}
                 </Stack>
             )}
-        </Box>
+
+            <ConfirmDialog
+                open={nextStepDialog}
+                setOpen={setNextStepDialog}
+                title="Complete Setup?"
+                message="Are you sure you want to proceed to the next step? Setup doesn't appear to be complete in the notebook. Stuff may break later."
+                onConfirm={nextStep}
+            />
+        </Stack>
     );
 };
 

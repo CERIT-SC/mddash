@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Box, Button } from "@mui/material";
 
-import { WizardStepperProps } from "./Stepper"
+import { WizardStepProps } from "./Stepper"
 import { publish_experiment } from "../../util/api";
 
-const WizardPublish = (props: WizardStepperProps) => {
+const WizardPublish = (props: WizardStepProps) => {
     const { experiment, setErrorMessage } = props;
     const [loading, setLoading] = useState(false);
 
