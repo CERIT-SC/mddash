@@ -6,6 +6,7 @@ from dataclasses import asdict
 from config import STATE_FILE, PREFIX, NAMESPACE, NOTEBOOK_IMAGE, DATA_DIR
 from experiment import Experiment
 from state import Experiments
+from api_response import ApiResponse
 from utils import get_files_with_extension
 import mdrepo_client
 import caddy_client
@@ -28,29 +29,29 @@ bp = Blueprint('dash', __name__)
 
 @bp.route('/api/')
 def index():
-    return {'status': 'success', 'message': 'FAIR MD Dashboard API'}
+    return ApiResponse.success('Welcome to the Dashboard API!')
 
 
 @bp.route('/api/metrics', methods=['GET'])
 def get_metrics():
     metrics = get_namespace_resource_allocation(NAMESPACE)
-    return {'status': 'success', 'data': metrics}
+    return ApiResponse.success(metrics)
 
 
 @bp.route('/api/experiments', methods=['GET'])
 def list_experiments():
     try:
-        return {'status': 'success', 'data': experiments.get_all()}
+        return ApiResponse.success(experiments.get_all())
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}
+        return ApiResponse.error(str(e))
 
 
 @bp.route('/api/experiments/<experiment_id>', methods=['GET'])
 def get_experiment(experiment_id):
     try:
-        return {'status': 'success', 'data': experiments.get(experiment_id)}
+        return ApiResponse.success(experiments.get(experiment_id))
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}
+        return ApiResponse.error(str(e))
 
 
 @bp.route('/api/experiments', methods=['POST'])
@@ -72,14 +73,14 @@ def create_experiment():
             case 'file' if simulation_file:
                 experiment = Experiment.from_tpr(name, simulation_file)
             case _:
-                return {'status': 'error', 'message': 'Invalid experiment type or missing data.'}
+                return ApiResponse.error('Invalid experiment type or missing data.')
 
         experiments.add(experiment)
         experiments.save(STATE_FILE)
-        return {'status': 'success', 'message': 'Experiment created.', 'data': asdict(experiment)}
+        return ApiResponse.success(asdict(experiment))
 
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}
+        return ApiResponse.error(str(e))
 
 
 @bp.route('/api/experiments/<experiment_id>', methods=['DELETE'])
@@ -88,141 +89,143 @@ def delete_experiment(experiment_id):
         experiments.remove(experiment_id)
         experiments.save(STATE_FILE)
         delete_notebook(experiment_id)
-        return {'status': 'success', 'message': 'Experiment deleted.'}
-
+        return ApiResponse.success()
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}
+        return ApiResponse.error(str(e))
 
 
-# TODO: delete it one day
+# TODO: delete it one day (or not idk, can we spawn notebooks with jupyterhub?)
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['POST'])
 def start_notebook(experiment_id):
-    create_notebook_pod(NOTEBOOK_IMAGE, NAMESPACE, experiment_id, f'{PREFIX}/notebook/{experiment_id}', experiments.get(experiment_id).token)
-    create_notebook_service(NAMESPACE, experiment_id)
+    try:
+        token = experiments.get(experiment_id).token
+        create_notebook_pod(NOTEBOOK_IMAGE, NAMESPACE, experiment_id, f'{PREFIX}/notebook/{experiment_id}', token)
+        create_notebook_service(NAMESPACE, experiment_id)
 
-    route_id = caddy_client.add_proxy_route(
-        path=f'/notebook/{experiment_id}/*',
-        upstream=f'svc-{experiment_id}.{NAMESPACE}.svc.cluster.local:80',
-        route_id=f'route-{experiment_id}',
-    )
-    if route_id is None:
-        return {'status': 'error', 'message': 'Failed to create connection to notebook.'}
+        route_id = caddy_client.add_proxy_route(
+            path=f'/notebook/{experiment_id}/*',
+            upstream=f'svc-{experiment_id}.{NAMESPACE}.svc.cluster.local:80',
+            route_id=f'route-{experiment_id}-notebook',
+        )
+        if route_id is None:
+            return ApiResponse.error('Failed to create connection to notebook.')
 
-    # TODO: store route_id
-
-    # TODO: wrap in try/except
-    # TODO return notebook status
-    return {'status': 'success', 'message': 'Notebook created.'}
-
+        return ApiResponse.success({
+            'up': True,
+            'path': f'{PREFIX}/notebook/{experiment_id}/?token={token}'
+        })
+    except Exception as e:
+        return ApiResponse.error(str(e))
+ 
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['DELETE'])
 def delete_notebook(experiment_id):
-    delete_notebook_pod(NAMESPACE, experiment_id)
-    delete_notebook_service(NAMESPACE, experiment_id)
-    if not caddy_client.remove_route(f'route-{experiment_id}'):
-        print('Failed to remove route from Caddy.')
-    return {'status': 'success', 'message': 'Notebook deleted.'}
+    try:
+        delete_notebook_pod(NAMESPACE, experiment_id)
+        delete_notebook_service(NAMESPACE, experiment_id)
+
+        if not caddy_client.remove_route(f'route-{experiment_id}-notebook'):
+            print('Failed to remove route from Caddy.')
+
+        return ApiResponse.success()
+    except Exception as e:
+        return ApiResponse.error(str(e))
 
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['GET'])
 def get_notebook(experiment_id):
-    token = experiments.get(experiment_id).token
-
     try:
+        token = experiments.get(experiment_id).token
         is_up = ping_resource('svc', f'svc-{experiment_id}', NAMESPACE)
-        return {'status': 'success', 'message': 'up' if is_up else 'down', 'path': f'{PREFIX}/notebook/{experiment_id}/?token={token}'}
-
+        return ApiResponse.success({
+            'up': is_up,
+            'path': f'{PREFIX}/notebook/{experiment_id}/?token={token}'
+        })
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}
+        return ApiResponse.error(str(e))
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['POST'])
 def submit_tuner(experiment_id, tpr_name):
     try:
         experiment = experiments.get(experiment_id)
-        if not experiment:
-            return {'status': 'error', 'message': 'Experiment not found.'}
-
         tpr_path = DATA_DIR / experiment_id / tpr_name
 
+        if not tpr_name.endswith('.tpr'):
+            return ApiResponse.error("TPR file must have a '.tpr' extension.")
+
         if not tpr_path.exists():
-            return {'status': 'error', 'message': f'TPR file {tpr_name} not found.'}
-        
-        # if the job already exists, return success
+            return ApiResponse.error(f"TPR file '{tpr_name}' not found.")
+
+        # if the job already exists, return that job
         if experiment.tuner_jobs.get(tpr_name):
-            return {'status': 'success', 'message': f'Tune job for {tpr_name} already exists.'}
-        
+            return ApiResponse.success(experiment.tuner_jobs[tpr_name])
+
         # Submit the TPR file to the tuner
         data = tuner_client.run_submit(tpr_path)
         experiment.tuner_jobs[tpr_name] = data
         experiments.save(STATE_FILE)
-        
-        return {'status': 'success', 'message': f'Tune job for {tpr_name} submitted.'}
+
+        return ApiResponse.success(data)
 
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}
+        return ApiResponse.error(str(e))
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner', methods=['GET'])
 def get_tuner_statuses(experiment_id):
     try:
         experiment = experiments.get(experiment_id)
-        if not experiment:
-            return {'status': 'error', 'message': 'Experiment not found.'}
-
         tuner_statuses = {}
+
         for tpr_name, job in experiment.tuner_jobs.items():
             status = tuner_client.poll_status(job['tuner_run_id'])
             tuner_statuses[tpr_name] = status
-        
+
         experiment.tuner_jobs = tuner_statuses
         experiments.save(STATE_FILE)
-        
-        return {'status': 'success', 'data': tuner_statuses}
+
+        return ApiResponse.success(tuner_statuses)
 
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}
+        return ApiResponse.error(str(e))
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['GET'])
 def get_tuner_status(experiment_id, tpr_name):
     try:
         experiment = experiments.get(experiment_id)
-        if not experiment:
-            return {'status': 'error', 'message': 'Experiment not found.'}
-
         job = experiment.tuner_jobs.get(tpr_name)
+
         if not job:
-            return {'status': 'error', 'message': f'Tune job for {tpr_name} not found.'}
+            return ApiResponse.error(f"Tune job for '{tpr_name}' not found.")
 
         status = tuner_client.poll_status(job['tuner_run_id'])
         experiment.tuner_jobs[tpr_name] = status
         experiments.save(STATE_FILE)
         
-        return {'status': 'success', 'data': status}
+        return ApiResponse.success(status)
 
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}
+        return ApiResponse.error(str(e))
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['DELETE'])
 def delete_tuner(experiment_id, tpr_name):
     try:
         experiment = experiments.get(experiment_id)
-        if not experiment:
-            return {'status': 'error', 'message': 'Experiment not found.'}
-
         job = experiment.tuner_jobs.pop(tpr_name, None)
+
         if not job:
-            return {'status': 'error', 'message': f'Tune job for {tpr_name} not found.'}
+            return ApiResponse.error(f"Tune job for '{tpr_name}' not found.")
 
         tuner_client.delete_job(job['tuner_run_id'])
         experiments.save(STATE_FILE)
 
-        return {'status': 'success', 'message': f'Tune job for {tpr_name} deleted.'}
+        return ApiResponse.success()
 
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}
+        return ApiResponse.error(str(e))
 
 
 @bp.route('/api/experiments/<experiment_id>/publish', methods=['GET'])
@@ -249,10 +252,10 @@ def publish_experiment(experiment_id):
             file_path = os.path.join(DATA_DIR / experiment_id, file)
             mdrepo_client.upload_file(session, experiment.mdrepo_id, file_path)
 
-        return {'status': 'success', 'message': 'Experiment created.', 'data': mdrepo_experiment}
+        return ApiResponse.success(mdrepo_experiment)
 
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}
+        return ApiResponse.error(str(e))
 
 
 @bp.route('/api/experiments/<experiment_id>/files', methods=['GET'])
@@ -262,17 +265,17 @@ def list_experiment_files(experiment_id):
         experiment_dir = DATA_DIR / experiment_id
         
         if not experiment_dir.exists():
-            return {'status': 'error', 'message': 'Experiment not found.'}
+            return ApiResponse.error('Experiment directory not found.')
 
         files = get_files_with_extension(experiment_dir, extension)
         # add URLs to file list
         for f in files:
             f['url'] = f'/experiments/{experiment_id}/files/{f["name"]}'
 
-        return {'status': 'success', 'data': files}
+        return ApiResponse.success(files)
 
     except Exception as e:
-        return {'status': 'error', 'message': str(e)}
+        return ApiResponse.error(str(e))
 
 
 @bp.route('/api/experiments/<experiment_id>/files/<path:path>', methods=['GET'])

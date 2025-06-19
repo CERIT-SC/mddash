@@ -154,8 +154,7 @@ def get_tuner_status(experiment_id, tpr_name):
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['DELETE'])
 def delete_tuner(experiment_id, tpr_name):
-    if tpr_name in tuner_demo_statuses:
-        del tuner_demo_statuses[tpr_name]
+    if tuner_demo_statuses.pop(tpr_name, None) is not None:
         return ApiResponse.success()
     else:
         return ApiResponse.error('Tuner not found.')

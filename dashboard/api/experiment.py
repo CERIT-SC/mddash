@@ -99,7 +99,7 @@ class Experiment:
 
     @classmethod
     def from_tpr(cls, name: str, tpr: FileStorage) -> 'Experiment':
-        if not tpr.filename.endswith('.tpr'):
+        if not tpr.filename or not tpr.filename.endswith('.tpr'):
             raise ValueError('Invalid file format (expected .tpr)')
 
         id = cls.prepare_env()
