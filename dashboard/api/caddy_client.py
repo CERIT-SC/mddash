@@ -9,7 +9,7 @@ from config import PREFIX
 CADDY_ADMIN_API_URL = "http://localhost:2019"
 
 
-def add_proxy_route(path: str, upstream: str, route_id: str = None) -> str:
+def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> str | None:
     """
     Adds a new WebSocket proxy route inside the first handle_path block of the first HTTP server in Caddy.
     Assigns a unique ID to the route for easier deletion.
@@ -79,7 +79,7 @@ def remove_route(route_id: str) -> bool:
     :param route_id: The ID of the route to remove.
     :return: True if the route was removed successfully, False otherwise.
     """
-    url = f"{CADDY_ADMIN_API_URL}/config/apps/http/servers/srv0/routes/0/handle/0/routes/id/{route_id}"
+    url = f"{CADDY_ADMIN_API_URL}/id/{route_id}"
     
     try:
         response = requests.delete(url)
