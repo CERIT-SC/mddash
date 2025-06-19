@@ -4,15 +4,10 @@ import { Typography, Card, Grid2 as Grid, CardContent } from "@mui/material";
 import Experiments from "../components/Experiments";
 import { USER } from "../util/const";
 import { get_metrics } from "../util/api";
-
-interface Metrics {
-    cpu: number;
-    gpu: number;
-    memory: number;
-}
+import { ResourceUsage } from "../util/types";
 
 const Home = () => {
-    const [metrics, setMetrics] = useState<Metrics>({ cpu: 0, gpu: 0, memory: 0 });
+    const [metrics, setMetrics] = useState<ResourceUsage>({ cpu: 0, gpu: 0, memory: 0 });
 
     const fetchMetrics = async () => {
         const { data, error } = await get_metrics();
@@ -20,7 +15,7 @@ const Home = () => {
             console.error(error);
             return;
         }
-        setMetrics(data.data);
+        setMetrics(data || { cpu: 0, gpu: 0, memory: 0 });
     };
 
     useEffect(() => {

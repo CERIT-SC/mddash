@@ -6,6 +6,7 @@ I mainly use it to develop the frontend.
 
 from flask import Flask, Blueprint
 from flask_cors import CORS
+from api_response import ApiResponse
 
 
 bp = Blueprint('dash', __name__)
@@ -14,14 +15,14 @@ CORS(bp)
 
 @bp.route('/api/metrics', methods=['GET'])
 def get_metrics():
-    return {'status': 'success', 'data': {'cpu': 20, 'memory': 64, 'gpu': 4}}
+    return ApiResponse.success({'cpu': 20, 'memory': 64, 'gpu': 4})
 
 
 demo_experiments = [
     {
         'id': 'aaaaa',
         'name': 'Cancer cure',
-        'source_message': 'Created by uploading TPR file "cancer_cure.tpr".',
+        'source_message': "Created by uploading TPR file 'cancer_cure.tpr''.",
         'step': 0,
         'status': 'setup',
         'token': '2f2be97e-15db-4cb4-8ef7-905efe5a4968',
@@ -29,7 +30,7 @@ demo_experiments = [
     {
         'id': 'bbbbb',
         'name': 'HIV protein behavior research for drug development',
-        "source_message': 'Created by downloading repository from 'https://zenodo.org/records/7261108'"
+        'source_message': "Created by downloading repository from 'https://zenodo.org/records/7261108'.",
         'step': 3,
         'status': 'simulating',
         'token': '191eb452-5505-4328-9004-99eb1b0d570a',
@@ -37,7 +38,7 @@ demo_experiments = [
     {
         'id': 'ccccc',
         'name': 'My first experiment',
-        'source_message': 'Created by uploading TPR file "my_first_experiment.tpr".',
+        'source_message': "Created by uploading TPR file 'my_first_experiment.tpr'.",
         'step': 5,
         'status': 'published',
         'token': '2578b922-7b12-49d0-8962-b2d79afda1dc',
@@ -49,41 +50,41 @@ notebook_running = False
 
 @bp.route('/api/experiments', methods=['GET'])
 def list_experiments():
-    return {'status': 'success', 'data': demo_experiments}
+    return ApiResponse.success(demo_experiments)
 
 
 @bp.route('/api/experiments/<experiment_id>', methods=['GET'])
 def get_experiment(experiment_id):
-    return {'status': 'success', 'data': next(e for e in demo_experiments if e['id'] == experiment_id)}
+    return ApiResponse.success(next(e for e in demo_experiments if e['id'] == experiment_id))
 
 
 @bp.route('/api/experiments', methods=['POST'])
 def create_experiment():
-    return {'status': 'success', 'message': 'Experiment created.', 'data': demo_experiments[0]}
+    return ApiResponse.success(demo_experiments[0])
 
 
 @bp.route('/api/experiments/<experiment_id>', methods=['DELETE'])
 def delete_experiment(experiment_id):
-    return {'status': 'success', 'message': 'Experiment deleted.'}
+    return ApiResponse.success()
 
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['POST'])
 def create_notebook(experiment_id):
     global notebook_running
     notebook_running = True
-    return {'status': 'success', 'message': 'Notebook created.'}
+    return ApiResponse.success()
 
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['DELETE'])
 def delete_notebook(experiment_id):
     global notebook_running
     notebook_running = False
-    return {'status': 'success', 'message': 'Notebook deleted.'}
+    return ApiResponse.success()
 
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['GET'])
 def get_notebook(experiment_id):
-    return {'status': 'success', 'message': 'up' if notebook_running else 'down', 'path': '/__BASE_PATH__/'}
+    return ApiResponse.success({'up': notebook_running, 'path': '/__BASE_PATH__/notebook/' + experiment_id})
 
 
 tuner_demo_status = {
@@ -134,22 +135,30 @@ tuner_demo_statuses = {
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['POST'])
 def submit_tuner(experiment_id, tpr_name):
-    return {'status': 'success', 'message': 'Tune job submitted.'}
+    tuner_demo_statuses[tpr_name] = tuner_demo_status
+    return ApiResponse.success(tuner_demo_status)
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner', methods=['GET'])
 def get_tuner_statuses(experiment_id):
-    return {'status': 'success', 'message': 'up', 'data': tuner_demo_statuses}
+    return ApiResponse.success(tuner_demo_statuses)
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['GET'])
 def get_tuner_status(experiment_id, tpr_name):
-    return {'status': 'success', 'message': 'up', 'data': tuner_demo_status}
+    if tpr_name in tuner_demo_statuses:
+        return ApiResponse.success(tuner_demo_statuses[tpr_name])
+    else:
+        return ApiResponse.error(f"Tuner for '{tpr_name}' not found.")
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['DELETE'])
 def delete_tuner(experiment_id, tpr_name):
-    return {'status': 'success', 'message': 'Tune job deleted.'}
+    if tpr_name in tuner_demo_statuses:
+        del tuner_demo_statuses[tpr_name]
+        return ApiResponse.success()
+    else:
+        return ApiResponse.error('Tuner not found.')
 
 
 demo_experiment = {"id": "xej9e-x3720", "created": "2025-05-11T14:24:31.964333+00:00", "updated": "2025-05-11T14:24:32.188250+00:00", "links": {"applicable-requests": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft/requests/applicable", "communities": {"b53d8a89-d370-475c-be34-67b698e088b1": {"self": "https://mdrepo.eu/api/communities/b53d8a89-d370-475c-be34-67b698e088b1", "self_html": "https://mdrepo.eu/communities/ceitec/records"}}, "draft": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft", "edit_html": "https://mdrepo.eu/experiments/xej9e-x3720/edit", "files": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft/files", "latest": "https://mdrepo.eu/api/experiments/xej9e-x3720/versions/latest", "latest_html": "https://mdrepo.eu/experiments/xej9e-x3720/latest", "publish": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft/actions/publish", "requests": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft/requests", "self": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft", "self_html": "https://mdrepo.eu/experiments/xej9e-x3720/preview", "versions": "https://mdrepo.eu/api/experiments/xej9e-x3720/versions"}, "revision_id": 3, "$schema": "local://experiments-1.0.0.json", "metadata": {"simulations": [{"_dump_sw_version": "127", "_exit_code": 0, "_gromacs_version": "5.1.4", "_metadata_date": "2024-10-24T08:25:13.824043", "_metadump_version": "1.0.0", "_protein_sequences": ["LRIPCCPVNLKRLLVVVVVVVLVVVVIVGALLMGL", "LRIPCCPVNLKRLLVVVVVVVLVVVVIVGALLMGL"], "_tpx_version": "103", "_uniprot_id": "P15785", "detailed_information": {"comm_mode": "linear", "constraint_algorithm": "lincs", "electrostatic_interactions": {"coulomb_modifier": "potential-shift", "coulombtype": "pme", "epsilon_r": 1.0, "epsilon_rf": -1.0, "rcoulomb": 1.2}, "fourierspacing": 0.12, "lincs_iter": 1, "lincs_order": 4, "neighbour_list": {"cutoff_scheme": "verlet", "nstlist": 20, "pbc": "xyz", "rlist": 1.2}, "nstcomm": 1000, "thermostat": {"nsttcouple": 20, "tau_t": [1.0, 1.0, 1.0], "tc_grps": {
@@ -158,24 +167,21 @@ demo_experiment = {"id": "xej9e-x3720", "created": "2025-05-11T14:24:31.964333+0
 
 @bp.route('/api/experiments/<experiment_id>/publish', methods=['GET'])
 def publish_experiment(experiment_id):
-    return {'status': 'success', 'message': 'Experiment created.', 'data': demo_experiment}
+    return ApiResponse.success(demo_experiment)
 
 
 @bp.route('/api/experiments/<experiment_id>/files', methods=['GET'])
 def list_experiment_files(experiment_id):
 
-    return {
-        'status': 'success',
-        'data': [
-            {'name': 'SPC.tpr', 'url': f'/api/experiments/{experiment_id}/files/SPC.tpr', 'size': 123456},
-            {'name': 'ABC.tpr', 'url': f'/api/experiments/{experiment_id}/files/ABC.tpr', 'size': 654321},
-        ]
-    }
+    return ApiResponse.success([
+        {'name': 'SPC.tpr', 'url': f'/api/experiments/{experiment_id}/files/SPC.tpr', 'size': 123456},
+        {'name': 'ABC.tpr', 'url': f'/api/experiments/{experiment_id}/files/ABC.tpr', 'size': 654321},
+    ])
 
 
 @bp.route('/api/experiments/<experiment_id>/files/<path:path>', methods=['GET'])
 def get_experiment_file(experiment_id, path):
-    return {'status': 'error', 'message': 'File not found.'}
+    return ApiResponse.error('File not found.')
 
 
 if __name__ == '__main__':

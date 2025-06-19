@@ -16,7 +16,7 @@ const WizardSetup = (props: WizardStepProps) => {
         setLoading(true);
         const { data, error } = await get_notebook(experiment.id);
         setErrorMessage(error || "");
-        setNotebookUp(data?.message === "up");
+        setNotebookUp(data?.up || false);
         setNotebookPath(data?.path || "");
         setLoading(false);
     };

@@ -14,7 +14,7 @@ const Experiments = () => {
     const getExperiments = async () => {
         const { data, error } = await get_experiments()
         setErrorMessage(error || '')
-        setExperiments(data?.data || [])
+        setExperiments(data || [])
     }
 
     const deleteExperiment = async (id: string) => {

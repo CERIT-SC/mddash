@@ -59,7 +59,7 @@ const New = () => {
         console.log('Experiment created:', data);
 
         if (!error)
-            navigate(`${BASE_PATH}/${data.data.id}/wizard`);
+            navigate(`${BASE_PATH}/${data!.id}/wizard`);
     };
 
     const handleTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
