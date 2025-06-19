@@ -28,7 +28,7 @@ def get_unique_id() -> str:
     return id
 
 
-def get_files_with_extension(dir: Path, ext: str) -> list[dict[str, any]]:
+def get_files_with_extension(dir: Path, ext: str) -> list[dict[str, object]]:
     '''
     Get all files in a directory with a specific extension.
 

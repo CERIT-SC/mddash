@@ -1,16 +1,17 @@
 import json
 from dataclasses import asdict
+from pathlib import Path
 
 from experiment import Experiment
 from config import STATE_FILE
 
 
 class Experiments:
-    def __init__(self, experiments: dict[str, Experiment] = None):
-        self.experiments = experiments or {}
+    def __init__(self, experiments: dict[str, Experiment] = {}):
+        self.experiments = experiments
 
     @classmethod
-    def load(cls, filepath: str) -> "Experiments":
+    def load(cls, filepath: Path | str) -> "Experiments":
         try:
             with open(filepath, "r") as f:
                 data = json.load(f)
@@ -23,7 +24,7 @@ class Experiments:
     def get_all(self) -> list[dict]:
         return [asdict(self.get(exp_id)) for exp_id in self.experiments.keys()]
 
-    def save(self, filepath: str) -> None:
+    def save(self, filepath: Path | str) -> None:
         data = {id: asdict(exp) for id, exp in self.experiments.items()}
 
         with open(filepath, "w") as f:
