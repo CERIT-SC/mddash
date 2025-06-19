@@ -2,11 +2,11 @@ import { useState, useEffect } from "react";
 
 import { Stack, CircularProgress } from "@mui/material";
 
-import { WizardStepperProps } from "./Stepper";
+import { WizardStepProps } from "./Stepper";
 import MolStar from "../MolStar";
 
 
-const WizardAnalyze = (props: WizardStepperProps) => {
+const WizardAnalyze = (props: WizardStepProps) => {
     console.log(props);
 
     const [molstarComponent, setMolstarComponent] = useState<JSX.Element | null>(null);

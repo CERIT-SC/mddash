@@ -2,10 +2,10 @@ import { useState } from "react";
 
 import { Box, Button, Typography } from "@mui/material";
 
-import { WizardStepperProps } from "./Stepper"
+import { WizardStepProps } from "./Stepper"
 import FileSelector from "../FileSelector";
 
-const WizardRun = (props: WizardStepperProps) => {
+const WizardRun = (props: WizardStepProps) => {
     const { experiment, setErrorMessage } = props;
     const [tprFile, setTprFile] = useState<string | null>(null);
 
