@@ -2,12 +2,8 @@ import React, { useState, useEffect } from "react";
 import { FormControl, InputLabel, Select, MenuItem, SelectChangeEvent } from "@mui/material";
 
 import { find_files } from "../util/api";
+import { FileOption } from "../util/types";
 
-interface FileOption {
-    name: string;
-    url: string;
-    size: number;
-}
 
 const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 B";
@@ -35,7 +31,7 @@ const FileSelector = (props: FileSelectorProps) => {
     const fetchFiles = async () => {
         const { data, error } = await find_files(experimentId, extension);
         setErrorMessage?.(error || "");
-        setAvailableFiles(data.data || []);
+        setAvailableFiles(data || []);
     };
 
     useEffect(() => {

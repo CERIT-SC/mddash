@@ -21,7 +21,7 @@ import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
 
 import { WizardStepProps } from "./Stepper";
-import { tuner_status, run_tuner, delete_tuner } from "../../util/api";
+import { tuner_status, tuner_statuses, run_tuner, delete_tuner } from "../../util/api";
 import { TunerStatus, TunerTrial } from "../../util/types";
 import FileSelector from "../FileSelector";
 import ConfirmDialog from "../ConfirmDialog";
@@ -125,8 +125,8 @@ const TunerView = (props: TunerViewProps) => {
     const fetchStatus = async (showError: boolean) => {
         const { data, error } = await tuner_status(experiment.id, tprName);
         if (showError && error) setErrorMessage(error);
-        setTunerStatus(data?.data || null);
-        setTunerRunning(!!data?.data);
+        setTunerStatus(data || null);
+        setTunerRunning(!!data?.trials);
     };
 
     const runTuner = async () => {
@@ -251,9 +251,9 @@ const WizardTune = (props: WizardStepProps) => {
     };
 
     const fetchTunerJobs = async () => {
-        const { data, error } = await tuner_status(experiment.id);
+        const { data, error } = await tuner_statuses(experiment.id);
         setErrorMessage(error || "");
-        const jobs = data.data || {};
+        const jobs = data || {};
 
         console.log("Fetched tuner jobs:", jobs);
 

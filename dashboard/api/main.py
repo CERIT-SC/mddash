@@ -110,6 +110,8 @@ def start_notebook(experiment_id):
 
     # TODO: store route_id
 
+    # TODO: wrap in try/except
+    # TODO return notebook status
     return {'status': 'success', 'message': 'Notebook created.'}
 
 
@@ -275,21 +277,17 @@ def list_experiment_files(experiment_id):
 
 @bp.route('/api/experiments/<experiment_id>/files/<path:path>', methods=['GET'])
 def get_experiment_file(experiment_id, path):
-    try:
-        file_path = DATA_DIR / experiment_id / path
+    file_path = DATA_DIR / experiment_id / path
 
-        # prevent path traversal
-        if not str(file_path.resolve()).startswith(str((DATA_DIR / experiment_id).resolve())):
-            abort(403)
+    # prevent path traversal
+    if not str(file_path.resolve()).startswith(str((DATA_DIR / experiment_id).resolve())):
+        abort(403)
 
-        # Check if file exists and is a file
-        if not file_path.exists() or not file_path.is_file():
-            abort(404)
+    # Check if file exists and is a file
+    if not file_path.exists() or not file_path.is_file():
+        abort(404)
 
-        return send_file(file_path, as_attachment=False)
-
-    except Exception as e:
-        return {'status': 'error', 'message': str(e)}
+    return send_file(file_path, as_attachment=False)
 
 
 app = Flask(__name__)

@@ -18,7 +18,7 @@ const Wizard = () => {
 
         const { data, error } = await get_experiment(id);
         setErrorMessage(error || '');
-        setExperiment(data?.data || null);
+        setExperiment(data || null);
     }
 
     useEffect(() => {

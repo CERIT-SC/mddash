@@ -11,6 +11,22 @@ export interface Experiment {
     mdrepo_id: string | null
 }
 
+export interface ResourceUsage {
+    cpu: number
+    memory: number
+    gpu: number
+}
+
+export interface FileOption {
+    name: string;
+    url: string;
+    size: number;
+}
+
+export interface NotebookStatus {
+    up: boolean
+    path: string
+}
 
 export interface TunerStatus {
     tuner_run_id: string

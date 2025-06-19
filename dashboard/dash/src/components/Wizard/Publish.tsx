@@ -20,8 +20,8 @@ const WizardPublish = (props: WizardStepProps) => {
             setErrorMessage(error || '');
             if (error) return;
     
-            experiment.mdrepo_id = data.data.id;
-            window.location.href = data.data.links.edit_html;
+            experiment.mdrepo_id = data.id;
+            window.location.href = data.links.edit_html;
         }
         catch (e) {
             setErrorMessage('Invalid response from server.');
