@@ -9,6 +9,7 @@ const WizardSetup = (props: WizardStepProps) => {
     const { experiment, setErrorMessage, nextStep } = props;
     const [loading, setLoading] = useState(false);
     const [notebookUp, setNotebookUp] = useState(false);
+    const [notebookLoading, setNotebookLoading] = useState(false);
     const [notebookPath, setNotebookPath] = useState("");
     const [nextStepDialog, setNextStepDialog] = useState(false);
 
@@ -25,12 +26,41 @@ const WizardSetup = (props: WizardStepProps) => {
         const { error } = await spawn_notebook(experiment.id);
         setErrorMessage(error || "");
         getNotebook();
+
+        if (!error) pollNotebookReady();
     };
 
     const deleteNotebook = async () => {
         const { error } = await delete_notebook(experiment.id);
         setErrorMessage(error || "");
         getNotebook();
+    };
+
+    const pollNotebookReady = async () => {
+        const maxRetries = 30;
+        const retryInterval = 500; // ms
+        let attempts = 0;
+
+        const poll = async () => {
+            try {
+                const response = await fetch(notebookPath);
+                if (!response.ok) throw new Error("Notebook is not ready yet");
+                setNotebookLoading(false);
+            } catch (error) {
+                attempts++;
+                if (attempts < maxRetries) {
+                    setTimeout(poll, retryInterval);
+                } else {
+                    deleteNotebook();
+                    setErrorMessage("Notebook startup timed out. Please try again.");
+                    setNotebookLoading(false);
+                    setNotebookUp(false);
+                }
+            }
+        };
+
+        setNotebookLoading(true);
+        poll();
     };
 
     useEffect(() => {
@@ -40,9 +70,7 @@ const WizardSetup = (props: WizardStepProps) => {
     return (
         <Stack direction="column" alignItems="center" spacing={5}>
             <Stack direction="row" justifyContent="space-between" width="100%">
-                <Typography variant="h6">
-                    {experiment.source_message}
-                </Typography>
+                <Typography variant="h6">{experiment.source_message}</Typography>
                 {experiment.step === 0 && (
                     <Button variant="contained" color="error" onClick={() => setNextStepDialog(true)}>
                         Complete Setup
@@ -54,7 +82,13 @@ const WizardSetup = (props: WizardStepProps) => {
                     {(notebookUp && (
                         <>
                             <Typography variant="h5">Notebook running 🚀</Typography>
-                            <Button variant="contained" color="success" href={notebookPath} target="_blank">
+                            <Button
+                                variant="contained"
+                                color="success"
+                                href={notebookPath}
+                                target="_blank"
+                                loading={notebookLoading}
+                            >
                                 Open Jupyter Notebook
                             </Button>
                             <Button variant="contained" color="error" onClick={deleteNotebook}>
