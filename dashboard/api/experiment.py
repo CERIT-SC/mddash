@@ -1,14 +1,14 @@
-from shutil import rmtree
-from dataclasses import dataclass, field
-from werkzeug.datastructures import FileStorage
-import requests
-import zipfile
 import io
+import requests
+import uuid
+import zipfile
+from dataclasses import dataclass, field
+from shutil import rmtree
+from werkzeug.datastructures import FileStorage
 
 from config import DATA_DIR
+from gromacs_job import GromacsJob
 from utils import get_unique_id, get_files_with_extension
-
-import uuid
 
 
 @dataclass
@@ -28,7 +28,7 @@ class Experiment:
     # Tuner jobs of the experiment, key is a TPR file name
     tuner_jobs: dict[str, dict] = field(default_factory=dict)
     # GROMACS jobs of the experiment, key is a TPR file name
-    gromacs_jobs: dict[str, dict] = field(default_factory=dict)
+    gromacs_jobs: dict[str, GromacsJob] = field(default_factory=dict)
     # ID of the experiment in MDRepo
     mdrepo_id: str | None = None
 
