@@ -59,16 +59,16 @@ const TunerTable = (props: TunerTableProps) => {
                         <Tooltip title="Measured performance (ns/day)">
                             <StyledTableCell align="right">Performance</StyledTableCell>
                         </Tooltip>
-                        <Tooltip title="Particle Mesh Ewald offload setting">
+                        <Tooltip title="Device type for PME calculations">
                             <StyledTableCell align="right">PME</StyledTableCell>
                         </Tooltip>
-                        <Tooltip title="Non-bonded kernel type">
+                        <Tooltip title="Device type for non-bonded interactions">
                             <StyledTableCell align="right">NB</StyledTableCell>
                         </Tooltip>
-                        <Tooltip title="Number of MPI Processes">
+                        <Tooltip title="Number of MPI processes">
                             <StyledTableCell align="right">NP</StyledTableCell>
                         </Tooltip>
-                        <Tooltip title="Number of OpenMP Threads">
+                        <Tooltip title="Number of OpenMP threads per MPI rank to start">
                             <StyledTableCell align="right">NTOMP</StyledTableCell>
                         </Tooltip>
                     </TableRow>
