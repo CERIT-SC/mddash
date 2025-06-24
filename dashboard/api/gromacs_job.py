@@ -35,3 +35,5 @@ class GromacsJob:
     np: int
     # Number of OpenMP threads per MPI rank to start (0 is guess)
     ntomp: int
+    # Performance (ns/day)
+    performance: float

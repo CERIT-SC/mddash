@@ -116,7 +116,7 @@ def start_notebook(experiment_id):
         })
     except Exception as e:
         return ApiResponse.error(str(e))
- 
+
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['DELETE'])
 def delete_notebook(experiment_id):
@@ -270,7 +270,7 @@ def list_experiment_files(experiment_id):
         files = get_files_with_extension(experiment_dir, extension)
         # add URLs to file list
         for f in files:
-            f['url'] = f'/experiments/{experiment_id}/files/{f["name"]}'
+            f['url'] = f'{PREFIX}/api/experiments/{experiment_id}/files/{f["name"]}'
 
         return ApiResponse.success(files)
 

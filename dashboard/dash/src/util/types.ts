@@ -43,19 +43,20 @@ export interface TunerStatus {
 export interface TunerTrial {
     id: string
     status: "RUNNING" | "PENDING" | "TERMINATED" | "ERROR"
-    performance: number | null
-    pme: string
-    nb: string
     np: number
     ntomp: number
+    pme: 'cpu' | 'gpu' | 'auto'
+    nb: 'cpu' | 'gpu' | 'auto'
+    performance: number | null
 }
 
-// NOTE: work in progress
+// NOTE: work in progress (could extend TunerTrial)
 export interface GromacsJob {
     id: string
     status: "RUNNING" | "PENDING" | "TERMINATED" | "ERROR"
-    pme: string
     np: number
     ntomp: number
-    nb: string
+    pme: 'cpu' | 'gpu' | 'auto'
+    nb: 'cpu' | 'gpu' | 'auto'
+    performance: number | null
 }
