@@ -1,7 +1,7 @@
 import axios, { AxiosResponse } from 'axios';
 
 import { API_BASE } from './const';
-import { Experiment, FileOption, NotebookStatus, ResourceUsage, TunerStatus } from './types'
+import { Experiment, FileOption, GromacsJob, NotebookStatus, ResourceUsage, TunerStatus } from './types'
 
 
 interface ApiData<T = any> {
@@ -33,6 +33,7 @@ const handle_request = async <T = any>(
     }
 }
 
+
 // ----- Experiment -----
 
 export const get_experiments = async (): Promise<ApiData<Experiment[]>> => {
@@ -63,6 +64,7 @@ export const delete_experiment = async (id: string): Promise<ApiData<null>> => {
     )
 }
 
+
 // ----- Notebook -----
 
 export const get_notebook = async (id: string): Promise<ApiData<NotebookStatus>> => {
@@ -85,6 +87,7 @@ export const delete_notebook = async (id: string): Promise<ApiData<null>> => {
         'Failed to delete notebook.'
     )
 }
+
 
 // ----- Tuner -----
 
@@ -116,6 +119,38 @@ export const delete_tuner = async (id: string, tprName: string): Promise<ApiData
     )
 }
 
+
+// ----- Gromacs -----
+
+export const submit_gmx = async (id: string, tprName: string, formData: FormData): Promise<ApiData<GromacsJob>> => {
+    return await handle_request(
+        axios.post(`${API_BASE}/experiments/${id}/gmx/${tprName}`, formData),
+        'Failed to submit Gromacs job.'
+    )
+}
+
+export const gmx_statuses = async (id: string): Promise<ApiData<Record<string, GromacsJob>>> => {
+    return await handle_request(
+        axios.get(`${API_BASE}/experiments/${id}/gmx`),
+        'Failed to fetch Gromacs statuses.'
+    )
+}
+
+export const gmx_status = async (id: string, tprName: string): Promise<ApiData<GromacsJob>> => {
+    return await handle_request(
+        axios.get(`${API_BASE}/experiments/${id}/gmx/${tprName}`),
+        'Failed to fetch Gromacs status.'
+    )
+}
+
+export const delete_gmx = async (id: string, tprName: string): Promise<ApiData<null>> => {
+    return await handle_request(
+        axios.delete(`${API_BASE}/experiments/${id}/gmx/${tprName}`),
+        'Failed to delete Gromacs job.'
+    )
+}
+
+
 // ----- Files -----
 
 export const find_files = async (id: string, extension: string): Promise<ApiData<FileOption[]>> => {
@@ -136,6 +171,7 @@ export const get_file = async (id: string, path: string): Promise<ApiData<File>>
         return { data: null, error: 'Failed to fetch file.' };
     }
 }
+
 
 // ----- Other -----
 

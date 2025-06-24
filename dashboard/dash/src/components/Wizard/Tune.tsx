@@ -21,7 +21,7 @@ import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
 
 import { WizardStepProps } from "./Stepper";
-import { tuner_status, tuner_statuses, run_tuner, delete_tuner } from "../../util/api";
+import { tuner_status, tuner_statuses, run_tuner, delete_tuner, submit_gmx } from "../../util/api";
 import { TunerStatus, TunerTrial } from "../../util/types";
 import FileSelector from "../FileSelector";
 import ConfirmDialog from "../ConfirmDialog";
@@ -38,8 +38,8 @@ const StyledTableCell = styled(TableCell)(({ theme }) => ({
 
 interface TunerTableProps {
     rows: TunerTrial[];
-    selectedTrial: string | null;
-    setSelectedTrial: (trialId: string | null) => void;
+    selectedTrial: TunerTrial | null;
+    setSelectedTrial: (trial: TunerTrial | null) => void;
 }
 
 const TunerTable = (props: TunerTableProps) => {
@@ -85,8 +85,8 @@ const TunerTable = (props: TunerTableProps) => {
                             <TableRow key={row.id} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
                                 <StyledTableCell>
                                     <Radio
-                                        checked={selectedTrial === row.id}
-                                        onChange={() => setSelectedTrial(selectedTrial === row.id ? null : row.id)}
+                                        checked={selectedTrial?.id === row.id}
+                                        onChange={() => setSelectedTrial(selectedTrial?.id === row.id ? null : row)}
                                         name="selectedTrial"
                                     />
                                 </StyledTableCell>
@@ -117,7 +117,7 @@ const TunerView = (props: TunerViewProps) => {
     const [loading, setLoading] = useState(false);
     const [tunerRunning, setTunerRunning] = useState(false);
     const [tunerStatus, setTunerStatus] = useState<TunerStatus | null>(null);
-    const [selectedTrial, setSelectedTrial] = useState<string | null>(null);
+    const [selectedTrial, setSelectedTrial] = useState<TunerTrial | null>(null);
 
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
     const [confirmRunDialog, setConfirmRunDialog] = useState(false);
@@ -136,8 +136,20 @@ const TunerView = (props: TunerViewProps) => {
     };
 
     const runSimulation = async () => {
-        console.log(`Running trial ${selectedTrial}...`);
-        // TODO: Run simulation
+        if (!selectedTrial) return;
+
+        const formData = new FormData();
+        formData.append("np", selectedTrial.np.toString());
+        formData.append("ntomp", selectedTrial.ntomp.toString());
+        formData.append("pme", selectedTrial.pme);
+        formData.append("nb", selectedTrial.nb);
+
+        // Submit to gmx API
+        const { error } = await submit_gmx(experiment.id, tprName, formData);
+        if (error) {
+            setErrorMessage(error);
+            return;
+        }
 
         // go to run step in wizard
         if (experiment.step < 2) {
@@ -243,10 +255,7 @@ const WizardTune = (props: WizardStepProps) => {
 
         setTunerJobs((prev) => ({
             ...prev,
-            [tprFile]: {
-                tuner_run_id: `${experiment.id}-${tprFile}`,
-                trials: [],
-            },
+            [tprFile]: {},
         }));
     };
 
@@ -292,15 +301,7 @@ const WizardTune = (props: WizardStepProps) => {
 
             {selectedTpr && (
                 <Box sx={{ mt: 2 }}>
-                    <TunerView
-                        tprName={selectedTpr}
-                        experiment={experiment}
-                        setExperiment={props.setExperiment}
-                        setErrorMessage={setErrorMessage}
-                        deleteJob={deleteJob}
-                        nextStep={props.nextStep}
-                        changeStep={props.changeStep}
-                    />
+                    <TunerView tprName={selectedTpr} deleteJob={deleteJob} {...props} />
                 </Box>
             )}
         </>
