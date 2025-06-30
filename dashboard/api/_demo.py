@@ -4,7 +4,7 @@ This is just the demo version of the API. It just returns hardcoded responses.
 I mainly use it to develop the frontend.
 """
 
-from flask import Flask, Blueprint, request
+from flask import Flask, Blueprint, request, send_file
 from flask_cors import CORS
 from api_response import ApiResponse
 
@@ -246,14 +246,19 @@ def publish_experiment(experiment_id):
 def list_experiment_files(experiment_id):
 
     return ApiResponse.success([
-        {'name': 'SPC.tpr', 'url': f'/api/experiments/{experiment_id}/files/SPC.tpr', 'size': 123456},
-        {'name': 'ABC.tpr', 'url': f'/api/experiments/{experiment_id}/files/ABC.tpr', 'size': 654321},
+        {'name': 'SPC.tpr', 'url': f'http://localhost:8888/api/experiments/{experiment_id}/files/md.tpr', 'size': 123456},
+        {'name': 'ABC.tpr', 'url': f'http://localhost:8888/api/experiments/{experiment_id}/files/md.tpr', 'size': 654321},
+        {'name': 'trajectory.xtc', 'url': f'http://localhost:8888/api/experiments/{experiment_id}/files/sampled.xtc', 'size': 987654},
+        {'name': 'structure.pdb', 'url': f'http://localhost:8888/api/experiments/{experiment_id}/files/minimal.pdb', 'size': 456789},
+        {'name': 'structure.gro', 'url': f'/api/experiments/{experiment_id}/files/structure.gro', 'size': 321654},
     ])
 
 
 @bp.route('/api/experiments/<experiment_id>/files/<path:path>', methods=['GET'])
-def get_experiment_file(experiment_id, path):
-    return ApiResponse.error('File not found.')
+def get_experiment_file(experiment_id, path: str):
+    from pathlib import Path
+    file_path = Path(__file__).parent / "_demo" / path
+    return send_file(file_path, as_attachment=False)
 
 
 if __name__ == '__main__':
