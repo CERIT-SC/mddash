@@ -246,10 +246,10 @@ def publish_experiment(experiment_id):
 # ----- FILES -----
 
 demo_files = [
-    {'name': 'SPC.tpr', 'url': 'http://localhost:8888/api/experiments/aaaaa/files/md.tpr', 'size': 123456},
-    {'name': 'ABC.tpr', 'url': 'http://localhost:8888/api/experiments/aaaaa/files/md.tpr', 'size': 654321},
-    {'name': 'trajectory.xtc', 'url': 'http://localhost:8888/api/experiments/aaaaa/files/sampled.xtc', 'size': 987654},
-    {'name': 'structure.pdb', 'url': 'http://localhost:8888/api/experiments/aaaaa/files/minimal.pdb', 'size': 456789},
+    {'name': 'SPC.tpr', 'url': 'http://localhost:8888/api/experiments/aaaaa/files/md.tpr', 'size': 514912},
+    {'name': 'ABC.tpr', 'url': 'http://localhost:8888/api/experiments/aaaaa/files/md.tpr', 'size': 514912},
+    {'name': 'trajectory.xtc', 'url': 'http://localhost:8888/api/experiments/aaaaa/files/sampled.xtc', 'size': 3038996},
+    {'name': 'structure.pdb', 'url': 'http://localhost:8888/api/experiments/aaaaa/files/minimal.pdb', 'size': 630792},
     {'name': 'structure.gro', 'url': '/api/experiments/aaaaa/files/structure.gro', 'size': 321654},
 ]
 

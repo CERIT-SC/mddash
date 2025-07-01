@@ -53,6 +53,9 @@ const FileSelector = (props: FileSelectorProps) => {
                 label={`Select ${extension.toUpperCase()} file`}
                 onChange={handleFileChange}
             >
+                <MenuItem value="">
+                    <em>None</em>
+                </MenuItem>
                 {availableFiles.map((file) => (
                     <MenuItem key={file.name} value={file.url}>
                         {file.name} ({formatFileSize(file.size)})
