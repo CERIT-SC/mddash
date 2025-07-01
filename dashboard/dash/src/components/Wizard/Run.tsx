@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 import {
     Box,
@@ -20,7 +20,7 @@ import {
 import { WizardStepProps } from "./Stepper";
 import FileSelector from "../FileSelector";
 import { GromacsJob } from "../../util/types";
-import { delete_gmx, gmx_status, gmx_statuses } from "../../util/api";
+import { submit_gmx, delete_gmx, gmx_status, gmx_statuses } from "../../util/api";
 
 const MDRUN_ARGUMENTS = [
     { key: "deffnm", type: "text", description: "Set default filename for all file options" },
@@ -62,18 +62,25 @@ const MDRUN_ARGUMENTS = [
     { key: "reseed", type: "number", description: "Replica exchange seed, -1 generates seed" },
 ];
 
-const ManualStartForm = (props: WizardStepProps) => {
-    const { setErrorMessage } = props;
+interface ManualStartFormProps extends WizardStepProps {
+    tprName: string;
+    fetchStatus: (showError: boolean) => Promise<void>;
+}
+
+const ManualStartForm = (props: ManualStartFormProps) => {
+    const { experiment, tprName, setErrorMessage, fetchStatus } = props;
 
     const [selectedArgument, setSelectedArgument] = useState("");
     const [argumentValue, setArgumentValue] = useState("");
     const [addedArguments, setAddedArguments] = useState<Array<{ key: string; value: any; description: string }>>([]);
 
-    const handleAddArgument = () => {
-        if (!selectedArgument || !argumentValue.trim()) return;
+    const formRef = useRef<HTMLFormElement>(null);
 
+    const handleAddArgument = () => {
+        if (!selectedArgument) return;
         const selectedArgConfig = MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument);
         if (!selectedArgConfig) return;
+        if (selectedArgConfig.type !== "boolean" && argumentValue.trim() === "") return;
 
         // Check if argument already exists
         if (addedArguments.some((arg) => arg.key === selectedArgument)) {
@@ -94,6 +101,24 @@ const ManualStartForm = (props: WizardStepProps) => {
         setArgumentValue("");
     };
 
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault(); // Prevent page reload
+
+        const formData = new FormData(formRef.current!);
+        formData.append("extra_args", addedArguments.map((arg) => `-${arg.key} ${arg.value}`).join(" "));
+
+        await runSimulation(formData);
+        await fetchStatus(true);
+    };
+
+    const runSimulation = async (formData: FormData) => {
+        const { error } = await submit_gmx(experiment.id, tprName, formData);
+        if (error) {
+            setErrorMessage(error);
+            return;
+        }
+    }
+
     const handleDeleteArgument = (keyToDelete: string) => {
         setAddedArguments((prev) => prev.filter((arg) => arg.key !== keyToDelete));
     };
@@ -104,23 +129,25 @@ const ManualStartForm = (props: WizardStepProps) => {
                 Manually start simulation
             </Typography>
 
-            <Grid container spacing={2}>
+            <Grid container spacing={2} ref={formRef} component="form" onSubmit={handleSubmit} >
                 <Grid size={6}>
-                    <TextField fullWidth type="number" label="Number of MPI processes (np)" />
+                    <TextField name="np" type="number" label="Number of MPI processes (np)" required fullWidth />
                 </Grid>
 
                 <Grid size={6}>
                     <TextField
-                        fullWidth
+                        name="ntomp"
                         type="number"
                         label="Number of OpenMP threads per MPI rank to start (-ntomp)"
+                        required
+                        fullWidth
                     />
                 </Grid>
 
                 <Grid size={6}>
-                    <FormControl fullWidth>
+                    <FormControl fullWidth required>
                         <InputLabel id="nb-device-selector">Device type for non-bonded interactions (-nb)</InputLabel>
-                        <Select labelId="nb-device-selector" label={"Device type for non-bonded interactions (-nb)"}>
+                        <Select name="nb" labelId="nb-device-selector" label={"Device type for non-bonded interactions (-nb)"}>
                             <MenuItem value="cpu">CPU</MenuItem>
                             <MenuItem value="gpu">GPU</MenuItem>
                             <MenuItem value="auto">Auto</MenuItem>
@@ -129,9 +156,9 @@ const ManualStartForm = (props: WizardStepProps) => {
                 </Grid>
 
                 <Grid size={6}>
-                    <FormControl fullWidth>
+                    <FormControl fullWidth required>
                         <InputLabel id="pme-device-selector">Device type for PME calculations (-pme)</InputLabel>
-                        <Select labelId="pme-device-selector" label={"Device type for PME calculations (-pme)"}>
+                        <Select name="pme" labelId="pme-device-selector" label={"Device type for PME calculations (-pme)"}>
                             <MenuItem value="cpu">CPU</MenuItem>
                             <MenuItem value="gpu">GPU</MenuItem>
                             <MenuItem value="auto">Auto</MenuItem>
@@ -229,14 +256,7 @@ const ManualStartForm = (props: WizardStepProps) => {
                 </Grid>
 
                 <Grid size={12} sx={{ mt: 2 }}>
-                    <Button
-                        variant="contained"
-                        color="primary"
-                        onClick={() => {
-                            // TODO: Implement submit functionality
-                            console.log("Submit button clicked", addedArguments);
-                        }}
-                    >
+                    <Button type="submit" variant="contained" color="primary">
                         Submit
                     </Button>
                 </Grid>
@@ -337,6 +357,13 @@ const RunView = (props: RunViewProps) => {
                             </Typography>
 
                             <Typography variant="subtitle2" color="text.secondary">
+                                Extra Arguments
+                            </Typography>
+                            <Typography variant="body2">
+                                {jobStatus.extra_args || "None"}
+                            </Typography>
+
+                            <Typography variant="subtitle2" color="text.secondary">
                                 Actions
                             </Typography>
 
@@ -350,7 +377,7 @@ const RunView = (props: RunViewProps) => {
                                 {jobStatus.status === "RUNNING" ? "Stop" : "Delete"}
                             </Button>
                         </Stack>
-                    )) || <ManualStartForm {...props} />}
+                    )) || <ManualStartForm fetchStatus={fetchStatus} {...props} />}
                 </Box>
             )}
         </>
