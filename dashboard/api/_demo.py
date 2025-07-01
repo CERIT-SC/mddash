@@ -177,6 +177,7 @@ gromacs_demo_job = {
     'ntomp': 8,
     'nb': 'cpu',
     'pme': 'cpu',
+    'extra_args': '',
     'performance': None
 }
 
@@ -189,6 +190,7 @@ gromacs_demo_jobs = {
         'ntomp': 1,
         'nb': 'gpu',
         'pme': 'cpu',
+        'extra_args': '-v  -nt 8 -ddorder pp_pme',
         'performance': 70.158
     }
 }
@@ -203,7 +205,8 @@ def submit_gmx(experiment_id, tpr_name):
     job['ntomp'] = request.form.get('ntomp', job['ntomp'])
     job['nb'] = request.form.get('nb', job['nb'])
     job['pme'] = request.form.get('pme', job['pme'])
-    
+    job['extra_args'] = request.form.get('extra_args', job['extra_args'])
+
     gromacs_demo_jobs[tpr_name] = job
     return ApiResponse.success(job)
 
@@ -242,16 +245,20 @@ def publish_experiment(experiment_id):
 
 # ----- FILES -----
 
+demo_files = [
+    {'name': 'SPC.tpr', 'url': 'http://localhost:8888/api/experiments/aaaaa/files/md.tpr', 'size': 123456},
+    {'name': 'ABC.tpr', 'url': 'http://localhost:8888/api/experiments/aaaaa/files/md.tpr', 'size': 654321},
+    {'name': 'trajectory.xtc', 'url': 'http://localhost:8888/api/experiments/aaaaa/files/sampled.xtc', 'size': 987654},
+    {'name': 'structure.pdb', 'url': 'http://localhost:8888/api/experiments/aaaaa/files/minimal.pdb', 'size': 456789},
+    {'name': 'structure.gro', 'url': '/api/experiments/aaaaa/files/structure.gro', 'size': 321654},
+]
+
+
 @bp.route('/api/experiments/<experiment_id>/files', methods=['GET'])
 def list_experiment_files(experiment_id):
-
-    return ApiResponse.success([
-        {'name': 'SPC.tpr', 'url': f'http://localhost:8888/api/experiments/{experiment_id}/files/md.tpr', 'size': 123456},
-        {'name': 'ABC.tpr', 'url': f'http://localhost:8888/api/experiments/{experiment_id}/files/md.tpr', 'size': 654321},
-        {'name': 'trajectory.xtc', 'url': f'http://localhost:8888/api/experiments/{experiment_id}/files/sampled.xtc', 'size': 987654},
-        {'name': 'structure.pdb', 'url': f'http://localhost:8888/api/experiments/{experiment_id}/files/minimal.pdb', 'size': 456789},
-        {'name': 'structure.gro', 'url': f'/api/experiments/{experiment_id}/files/structure.gro', 'size': 321654},
-    ])
+    ext = request.args.get('ext', '').lower()
+    files = list(filter(lambda f: f['name'].endswith(ext), demo_files)) if ext else demo_files
+    return ApiResponse.success(files)
 
 
 @bp.route('/api/experiments/<experiment_id>/files/<path:path>', methods=['GET'])
