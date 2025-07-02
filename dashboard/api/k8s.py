@@ -4,6 +4,8 @@ from kubernetes.client.rest import ApiException
 # TODO
 #  Ensure your pod has a corresponding label, such as spec.template.metadata.labels.app: example-pod.
 
+# XXX: hardcoded gromacs image
+
 def create_notebook_pod(image, ns, id, prefix, token):
     # Load in-cluster config
     config.load_incluster_config()
@@ -34,23 +36,50 @@ def create_notebook_pod(image, ns, id, prefix, token):
                 {
                     'securityContext': {
                         'runAsNonRoot' : True,
+                        'runAsUser': 1000,
                         'allowPrivilegeEscalation': False,
                         'capabilities':  {
                             'drop': [ 'ALL' ]
                         }
                     },
-                    'name': f'jupyter-{id}',
+                    'name': f'jupyter',
                     'image': image,
                     'imagePullPolicy': 'Always',
                     'resources': {
                         'requests' : { 'cpu': .1, 'memory': '2Gi' }, 
                         'limits' : { 'cpu': 2, 'memory' : '8Gi' }
                     },
+                    'workdir': f'/mddash/{id}',
                     'args': [
                         'start-notebook.sh',
                         f'--NotebookApp.base_url={prefix}',
                         f'--NotebookApp.notebook_dir=/mddash/{id}',
                         f'--NotebookApp.token="{token}"',
+                    ],
+                    'volumeMounts' : [
+                        { 'mountPath': '/mddash', 'name' : 'data-volume' }
+                    ]
+                },
+                {
+                    'securityContext': {
+                        'runAsNonRoot' : True,
+                        'runAsUser': 1000,
+                        'allowPrivilegeEscalation': False,
+                        'capabilities':  {
+                            'drop': [ 'ALL' ]
+                        }
+                    },
+                    'name': f'gmx',
+                    'image': 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2',
+                    'imagePullPolicy': 'Always',
+                    'resources': {
+                        'requests' : { 'cpu': .1, 'memory': '2Gi' }, 
+                        'limits' : { 'cpu': 2, 'memory' : '8Gi' }
+                    },
+                    'workdir': f'/mddash/{id}',
+                    'args': [
+                        'sleep',
+                        '365d'
                     ],
                     'volumeMounts' : [
                         { 'mountPath': '/mddash', 'name' : 'data-volume' }
