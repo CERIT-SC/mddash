@@ -1,0 +1,3 @@
+#!/bin/bash
+
+kubectl exec -i -c gmx $HOSTNAME -- bash -c "cd $JUPYTER_SERVER_ROOT && gmx $@"
