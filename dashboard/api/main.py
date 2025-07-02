@@ -6,6 +6,7 @@ from dataclasses import asdict
 from config import STATE_FILE, PREFIX, NAMESPACE, NOTEBOOK_IMAGE, DATA_DIR
 from experiment import Experiment
 from state import Experiments
+from gromacs_job import GromacsJob
 from api_response import ApiResponse
 from utils import get_files_with_extension
 import mdrepo_client
@@ -27,6 +28,8 @@ experiments = Experiments.load(STATE_FILE)
 bp = Blueprint('dash', __name__)
 
 
+# ----- HEALTH CHECK -----
+
 @bp.route('/api/')
 def index():
     return ApiResponse.success('Welcome to the Dashboard API!')
@@ -37,6 +40,8 @@ def get_metrics():
     metrics = get_namespace_resource_allocation(NAMESPACE)
     return ApiResponse.success(metrics)
 
+
+# ----- EXPERIMENTS -----
 
 @bp.route('/api/experiments', methods=['GET'])
 def list_experiments():
@@ -94,6 +99,8 @@ def delete_experiment(experiment_id):
         return ApiResponse.error(str(e))
 
 
+# ----- NOTEBOOK -----
+
 # TODO: delete it one day (or not idk, can we spawn notebooks with jupyterhub?)
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['POST'])
 def start_notebook(experiment_id):
@@ -144,6 +151,8 @@ def get_notebook(experiment_id):
     except Exception as e:
         return ApiResponse.error(str(e))
 
+
+# ----- TUNER -----
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['POST'])
 def submit_tuner(experiment_id, tpr_name):
@@ -228,6 +237,97 @@ def delete_tuner(experiment_id, tpr_name):
         return ApiResponse.error(str(e))
 
 
+# ----- GROMACS -----
+
+@bp.route('/api/experiments/<experiment_id>/gmx/<tpr_name>', methods=['POST'])
+def submit_gmx(experiment_id, tpr_name):
+    try:
+        experiment = experiments.get(experiment_id)
+        tpr_path = DATA_DIR / experiment_id / tpr_name
+
+        if not tpr_name.endswith('.tpr'):
+            return ApiResponse.error("TPR file must have a '.tpr' extension.")
+
+        if not tpr_path.exists():
+            return ApiResponse.error(f"TPR file '{tpr_name}' not found.")
+
+        # if the job already exists, return that job
+        if experiment.gromacs_jobs.get(tpr_name):
+            return ApiResponse.error("Gromacs job already exists for this TPR file.")
+
+        # Submit the TPR file to Gromacs
+        job = GromacsJob(
+            id=tpr_name, # TODO: do we need an ID?
+            pme=request.form['pme'],
+            nb=request.form['nb'],
+            np=request.form['np'],
+            ntomp=request.form['ntomp'],
+            extra_args=request.form['extra_args'],
+        )
+        experiment.gromacs_jobs[tpr_name] = job
+        experiments.save(STATE_FILE)
+
+        return ApiResponse.success(job)
+    except Exception as e:
+        return ApiResponse.error(str(e))
+
+
+@bp.route('/api/experiments/<experiment_id>/gmx', methods=['GET'])
+def get_gmx_statuses(experiment_id):
+    try:
+        experiment = experiments.get(experiment_id)
+        gmx_statuses = {}
+
+        for tpr_name, job in experiment.gromacs_jobs.items():
+            job.poll_status()
+            gmx_statuses[tpr_name] = asdict(job)
+
+        experiments.save(STATE_FILE)
+
+        return ApiResponse.success(gmx_statuses)
+
+    except Exception as e:
+        return ApiResponse.error(str(e))
+
+
+@bp.route('/api/experiments/<experiment_id>/gmx/<tpr_name>', methods=['GET'])
+def get_gmx_status(experiment_id, tpr_name):
+    try:
+        experiment = experiments.get(experiment_id)
+        job = experiment.gromacs_jobs.get(tpr_name)
+
+        if not job:
+            return ApiResponse.error(f"Gromacs job for '{tpr_name}' not found.")
+
+        job.poll_status()
+        experiments.save(STATE_FILE)
+
+        return ApiResponse.success(asdict(job))
+
+    except Exception as e:
+        return ApiResponse.error(str(e))
+
+
+@bp.route('/api/experiments/<experiment_id>/gmx/<tpr_name>', methods=['DELETE'])
+def delete_gmx(experiment_id, tpr_name):
+    try:
+        experiment = experiments.get(experiment_id)
+        job = experiment.gromacs_jobs.pop(tpr_name, None)  # TODO: maybe keep the job?
+
+        if not job:
+            return ApiResponse.error(f"Gromacs job for '{tpr_name}' not found.")
+
+        job.stop()
+        experiments.save(STATE_FILE)
+
+        return ApiResponse.success()
+
+    except Exception as e:
+        return ApiResponse.error(str(e))
+
+
+# ----- PUBLISHING -----
+
 @bp.route('/api/experiments/<experiment_id>/publish', methods=['GET'])
 def publish_experiment(experiment_id):
     
@@ -258,16 +358,14 @@ def publish_experiment(experiment_id):
         return ApiResponse.error(str(e))
 
 
+# ----- FILES -----
+
 @bp.route('/api/experiments/<experiment_id>/files', methods=['GET'])
 def list_experiment_files(experiment_id):
     try:
         extension = request.args.get('ext', '').lower()
-        experiment_dir = DATA_DIR / experiment_id
-        
-        if not experiment_dir.exists():
-            return ApiResponse.error('Experiment directory not found.')
 
-        files = get_files_with_extension(experiment_dir, extension)
+        files = get_files_with_extension(DATA_DIR / experiment_id, extension)
         # add URLs to file list
         for f in files:
             f['url'] = f'{PREFIX}/api/experiments/{experiment_id}/files/{f["name"]}'

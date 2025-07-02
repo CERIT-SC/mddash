@@ -39,6 +39,9 @@ def get_files_with_extension(dir: Path, ext: str) -> list[dict[str, object]]:
     ext = ext.lower()
     files = []
 
+    if not dir.is_dir():
+        raise ValueError(f'{dir} is not a directory')
+
     for file_path in dir.iterdir():
         if not file_path.is_file() or ext and not file_path.name.lower().endswith(f'.{ext}'):
             continue
