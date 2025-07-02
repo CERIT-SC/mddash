@@ -4,6 +4,7 @@ from kubernetes.client.rest import ApiException
 # TODO
 #  Ensure your pod has a corresponding label, such as spec.template.metadata.labels.app: example-pod.
 
+
 def create_notebook_pod(image, ns, id, prefix, token):
     # Load in-cluster config
     config.load_incluster_config()
@@ -24,7 +25,7 @@ def create_notebook_pod(image, ns, id, prefix, token):
         },
         'spec': {
             'securityContext': {
-                'runAsNonRoot' : True,
+                'runAsNonRoot': True,
                 'allowPrivilegeEscalation': False,
                 'seccompProfile': {
                     'type': 'RuntimeDefault'
@@ -33,18 +34,18 @@ def create_notebook_pod(image, ns, id, prefix, token):
             'containers': [
                 {
                     'securityContext': {
-                        'runAsNonRoot' : True,
+                        'runAsNonRoot': True,
                         'allowPrivilegeEscalation': False,
                         'capabilities':  {
-                            'drop': [ 'ALL' ]
+                            'drop': ['ALL']
                         }
                     },
                     'name': f'jupyter-{id}',
                     'image': image,
                     'imagePullPolicy': 'Always',
                     'resources': {
-                        'requests' : { 'cpu': .1, 'memory': '2Gi' }, 
-                        'limits' : { 'cpu': 2, 'memory' : '8Gi' }
+                        'requests': {'cpu': .1, 'memory': '2Gi'},
+                        'limits': {'cpu': 2, 'memory': '8Gi'}
                     },
                     'args': [
                         'start-notebook.sh',
@@ -52,15 +53,15 @@ def create_notebook_pod(image, ns, id, prefix, token):
                         f'--NotebookApp.notebook_dir=/mddash/{id}',
                         f'--NotebookApp.token="{token}"',
                     ],
-                    'volumeMounts' : [
-                        { 'mountPath': '/mddash', 'name' : 'data-volume' }
+                    'volumeMounts': [
+                        {'mountPath': '/mddash', 'name': 'data-volume'}
                     ]
                 }
             ],
-            'volumes': [ 
+            'volumes': [
                 {
                     'name': 'data-volume',
-                    'persistentVolumeClaim': { 'claimName' : 'mddash-data' }
+                    'persistentVolumeClaim': {'claimName': 'mddash-data'}
                 }
             ]
         }
@@ -85,7 +86,11 @@ def ping_resource(resource_type, name, ns):
             case 'secret':
                 api.read_namespaced_secret(name=name, namespace=ns)
             case 'pvc':
-                api.read_namespaced_persistent_volume_claim(name=name, namespace=ns)
+                api.read_namespaced_persistent_volume_claim(
+                    name=name, namespace=ns)
+            case 'job':
+                batch_api = client.BatchV1Api()
+                batch_api.read_namespaced_job(name=name, namespace=ns)
             case _:
                 raise ValueError(f"Unsupported resource type: {resource_type}")
         return True
@@ -120,22 +125,20 @@ def create_notebook_service(ns, id):
             namespace=ns
         ),
         spec=client.V1ServiceSpec(
-            selector={"app": f"jupyter-{id}"},  
+            selector={"app": f"jupyter-{id}"},
             ports=[client.V1ServicePort(
                 protocol="TCP",
-                port=80,  
-                target_port=8888  
+                port=80,
+                target_port=8888
             )]
         )
     )
 
-    api_instance = client.CoreV1Api()
-    api_response = api_instance.create_namespaced_service(
-       namespace=ns,
-       body=service
+    api = client.CoreV1Api()
+    api.create_namespaced_service(
+        namespace=ns,
+        body=service
     )
- 
-#  except client.ApiException as e:
 
 
 def get_namespace_resource_allocation(ns):
@@ -146,12 +149,12 @@ def get_namespace_resource_allocation(ns):
     '''
     config.load_incluster_config()
     api = client.CoreV1Api()
-    
+
     try:
         pods = api.list_namespaced_pod(namespace=ns)
         total_cpu_requests = 0
         total_memory_requests = 0
-        
+
         for pod in pods.items:
             for container in pod.spec.containers:
                 if container.resources and container.resources.requests:
@@ -162,15 +165,15 @@ def get_namespace_resource_allocation(ns):
                             total_cpu_requests += int(cpu_str[:-1]) / 1000
                         else:
                             total_cpu_requests += float(cpu_str)
-                    
-                    # Parse memory requests  
+
+                    # Parse memory requests
                     if 'memory' in container.resources.requests:
                         mem_str = container.resources.requests['memory']
                         if mem_str.endswith('Gi'):
                             total_memory_requests += float(mem_str[:-2])
                         elif mem_str.endswith('Mi'):
                             total_memory_requests += float(mem_str[:-2]) / 1024
-        
+
         return {
             'cpu': round(total_cpu_requests, 3),
             'memory': round(total_memory_requests, 2),
@@ -179,3 +182,136 @@ def get_namespace_resource_allocation(ns):
     except Exception as e:
         print(f"Error: {e}")
         return {'cpu': 0, 'memory': 0, 'gpu': 0}
+
+
+def create_gromacs_job(ns: str, name: str, experiment_id: str, tpr_name: str, np: int, ntomp: int, nb: str, pme: str, extra_args: str):
+    config.load_incluster_config()
+    batch_v1 = client.BatchV1Api()
+
+    np = int(np)
+    ntomp = int(ntomp)
+    nb = nb.lower()
+    pme = pme.lower()
+
+    image = 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2'
+
+    # TODO extra_args
+    command = f"mpirun -np {np} gmx mdrun -ntomp {ntomp} -nb {nb} -pme {pme} -deffnm {tpr_name.strip('.tpr')}  >{name}.out 2>{name}.err"
+
+    # Define the job specification
+    job_manifest = {
+        'apiVersion': 'batch/v1',
+        'kind': 'Job',
+        'metadata': {
+            'name': name,
+            'namespace': ns,
+            'labels': {
+                'app': name,
+            }
+        },
+        'spec': {
+            'backoffLimit': 0,
+            'template': {
+                'metadata': {
+                    'labels': {
+                        'job': name,
+                    }
+                },
+                'spec': {
+                    'restartPolicy': 'Never',
+                    'containers': [
+                        {
+                            'name': name,
+                            'image': image,
+                            'workingDir': f'/mddash/{experiment_id}',
+                            'command': ['bash', '-c', command],
+                            'securityContext': {
+                                'runAsUser': 1000,
+                                'runAsGroup': 1000,
+                                'runAsNonRoot': True,
+                                'seccompProfile': {
+                                    'type': 'RuntimeDefault'
+                                },
+                                'allowPrivilegeEscalation': False,
+                                'capabilities': {
+                                    'drop': ['ALL']
+                                }
+                            },
+                            'env': [
+                                {
+                                    'name': 'OMP_NUM_THREADS',
+                                    'value': str(ntomp)
+                                }
+                            ],
+                            'resources': {
+                                'requests': {
+                                    'cpu': str(np * ntomp),
+                                    'memory': f'{4 * np}Gi',
+                                    # 'nvidia.com/mig-1g.10gb': '1'
+                                },
+                                'limits': {
+                                    'cpu': str(np * ntomp),
+                                    'memory': f'{4 * np}Gi',
+                                    # 'nvidia.com/mig-1g.10gb': '1'
+                                }
+                            },
+                            'volumeMounts': [
+                                {
+                                    'name': 'vol-1',
+                                    'mountPath': '/mddash',
+                                }
+                            ]
+                        }
+                    ],
+                    'volumes': [
+                        {
+                            'name': 'vol-1',
+                            'persistentVolumeClaim': {
+                                'claimName': 'mddash-data'
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    }
+
+    batch_v1.create_namespaced_job(namespace=ns, body=job_manifest)
+
+
+def delete_gromacs_job(ns: str, name: str):
+    config.load_incluster_config()
+    batch_v1 = client.BatchV1Api()
+    batch_v1.delete_namespaced_job(
+        name=name,
+        namespace=ns,
+        body=client.V1DeleteOptions(
+            propagation_policy='Background',
+            grace_period_seconds=5,
+        )
+    )
+
+
+def get_job_status(ns: str, name: str) -> str:
+    config.load_incluster_config()
+    batch_v1 = client.BatchV1Api()
+
+    job = batch_v1.read_namespaced_job(name=name, namespace=ns)
+
+    # Check for completion conditions first
+    if job.status.conditions:
+        for condition in job.status.conditions:
+            if condition.type == "Complete" and condition.status == "True":
+                return "TERMINATED"
+            elif condition.type == "Failed" and condition.status == "True":
+                return "ERROR"
+
+    # Check numeric status fields
+    if job.status.succeeded and job.status.succeeded > 0:
+        return "TERMINATED"
+    elif job.status.failed and job.status.failed > 0:
+        return "ERROR"
+    elif job.status.active and job.status.active > 0:
+        return "RUNNING"
+    else:
+        return "PENDING"
