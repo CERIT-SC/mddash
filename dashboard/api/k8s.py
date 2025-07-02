@@ -195,10 +195,8 @@ def create_gromacs_job(ns: str, name: str, experiment_id: str, tpr_name: str, np
 
     image = 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2'
 
-    # TODO extra_args
-    command = f"mpirun -np {np} gmx mdrun -ntomp {ntomp} -nb {nb} -pme {pme} -deffnm {tpr_name.strip('.tpr')}  >{name}.out 2>{name}.err"
+    command = f"mpirun -np {np} gmx mdrun -ntomp {ntomp} -nb {nb} -pme {pme} -deffnm {tpr_name.strip('.tpr')} {extra_args} >{name}.out 2>{name}.err"
 
-    # Define the job specification
     job_manifest = {
         'apiVersion': 'batch/v1',
         'kind': 'Job',
@@ -247,12 +245,12 @@ def create_gromacs_job(ns: str, name: str, experiment_id: str, tpr_name: str, np
                                 'requests': {
                                     'cpu': str(np * ntomp),
                                     'memory': f'{4 * np}Gi',
-                                    # 'nvidia.com/mig-1g.10gb': '1'
+                                    'nvidia.com/mig-1g.10gb': '1' if nb == 'gpu' or pme == 'gpu' else '0'
                                 },
                                 'limits': {
                                     'cpu': str(np * ntomp),
                                     'memory': f'{4 * np}Gi',
-                                    # 'nvidia.com/mig-1g.10gb': '1'
+                                    'nvidia.com/mig-1g.10gb': '1' if nb == 'gpu' or pme == 'gpu' else '0'
                                 }
                             },
                             'volumeMounts': [

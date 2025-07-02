@@ -4,7 +4,7 @@ from enum import Enum
 from uuid import uuid4
 
 from k8s import create_gromacs_job, delete_gromacs_job, get_job_status
-from config import NAMESPACE
+from config import NAMESPACE, DATA_DIR
 
 
 class DeviceType(str, Enum):
@@ -61,6 +61,14 @@ class GromacsJob:
         :param tpr_name: Name of the TPR file
         """
         try:
+            deffnm = tpr_name.strip('.tpr')
+            result_extensions = ['edr', 'gro', 'log', 'trr', 'xtc', 'cpt']
+
+            # delete files from previous runs
+            for ext in result_extensions:
+                file = DATA_DIR / experiment_id / f'{deffnm}.{ext}'
+                file.unlink(missing_ok=True)
+
             create_gromacs_job(
                 ns=NAMESPACE,
                 name=self.job_name,
