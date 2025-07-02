@@ -23,10 +23,8 @@ class JobStatus(str, Enum):
 
 @dataclass
 class GromacsJob:
-    # unique ID of the job
+    # Unique ID of the job
     id: str
-    # Status of the job
-    status: JobStatus
     # Device type for PME calculations
     pme: DeviceType
     # Device type for non-bonded interactions
@@ -37,5 +35,28 @@ class GromacsJob:
     ntomp: int
     # Extra arguments for the job
     extra_args: str
+    # Status of the job
+    status: JobStatus = JobStatus.PENDING
     # Performance (ns/day)
-    performance: float
+    performance: float | None = None
+
+    def start(self) -> None:
+        """
+        Start the job with the specified parameters.
+        """
+        print(f"Starting Gromacs job...")
+        # TODO
+
+    def stop(self) -> None:
+        """
+        Stop the job.
+        """
+        print(f"Stopping Gromacs job...")
+        # TODO
+
+    def poll_status(self) -> None:
+        """
+        Poll the status of the job.
+        """
+        print(f"Polling status for Gromacs job...")
+        # TODO

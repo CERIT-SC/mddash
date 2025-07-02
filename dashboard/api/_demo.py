@@ -201,11 +201,11 @@ def submit_gmx(experiment_id, tpr_name):
         return ApiResponse.error(f"Gromacs job for '{tpr_name}' already exists.")
 
     job = gromacs_demo_job.copy()
-    job['np'] = request.form.get('np', job['np'])
-    job['ntomp'] = request.form.get('ntomp', job['ntomp'])
-    job['nb'] = request.form.get('nb', job['nb'])
-    job['pme'] = request.form.get('pme', job['pme'])
-    job['extra_args'] = request.form.get('extra_args', job['extra_args'])
+    job['np'] = request.form['np']
+    job['ntomp'] = request.form['ntomp']
+    job['nb'] = request.form['nb']
+    job['pme'] = request.form['pme']
+    job['extra_args'] = request.form['extra_args']
 
     gromacs_demo_jobs[tpr_name] = job
     return ApiResponse.success(job)
