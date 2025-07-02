@@ -248,6 +248,8 @@ const WizardTune = (props: WizardStepProps) => {
     };
 
     const newTpr = (newSelectedTpr: string) => {
+        if (!newSelectedTpr) return;
+
         const tprFile = newSelectedTpr.split("/").pop() || newSelectedTpr;
         setSelectedTpr(tprFile);
 
