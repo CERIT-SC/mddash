@@ -6,7 +6,7 @@ from dataclasses import asdict
 from config import STATE_FILE, PREFIX, NAMESPACE, NOTEBOOK_IMAGE, DATA_DIR
 from experiment import Experiment
 from state import Experiments
-from gromacs_job import GromacsJob
+from gromacs_job import GromacsJob, DeviceType
 from api_response import ApiResponse
 from utils import get_files_with_extension
 import mdrepo_client
@@ -257,13 +257,14 @@ def submit_gmx(experiment_id, tpr_name):
 
         # Submit the TPR file to Gromacs
         job = GromacsJob(
-            id=tpr_name, # TODO: do we need an ID?
-            pme=request.form['pme'],
-            nb=request.form['nb'],
-            np=request.form['np'],
-            ntomp=request.form['ntomp'],
+            pme=DeviceType.from_string(request.form['pme']),
+            nb=DeviceType.from_string(request.form['nb']),
+            np=int(request.form['np']),
+            ntomp=int(request.form['ntomp']),
             extra_args=request.form['extra_args'],
         )
+        job.start(experiment_id, tpr_name)
+
         experiment.gromacs_jobs[tpr_name] = job
         experiments.save(STATE_FILE)
 
