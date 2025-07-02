@@ -329,7 +329,7 @@ const RunView = (props: RunViewProps) => {
             )) || (
                 <Box sx={{ mt: 2 }}>
                     {(jobStatus && (
-                        <Stack spacing={2}>
+                        <Stack spacing={2} alignItems="flex-start">
                             <Typography variant="subtitle2" color="text.secondary">
                                 Status
                             </Typography>
