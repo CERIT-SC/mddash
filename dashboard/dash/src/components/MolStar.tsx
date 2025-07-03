@@ -7,17 +7,17 @@ import "molstar/lib/mol-plugin-ui/skin/light.scss";
 import { DefaultPluginUISpec, PluginUISpec } from "molstar/lib/mol-plugin-ui/spec";
 import { PluginUIContext } from "molstar/lib/mol-plugin-ui/context";
 import { Plugin } from "molstar/lib/mol-plugin-ui/plugin";
-import { TrajectoryFromModelAndCoordinates } from 'molstar/lib/mol-plugin-state/transforms/model';
+import { TrajectoryFromModelAndCoordinates } from "molstar/lib/mol-plugin-state/transforms/model";
 
 export const initViewerUI = async (element: string | HTMLDivElement, options?: { spec?: PluginUISpec }) => {
     const parent = typeof element === "string" ? (document.getElementById(element)! as HTMLDivElement) : element;
     const spec = { ...DefaultPluginUISpec(), ...options?.spec };
     const plugin = new PluginUIContext(spec);
     await plugin.init();
-    
+
     // Clear existing content first
-    parent.innerHTML = '';
-    
+    parent.innerHTML = "";
+
     const root = createRoot(parent);
     root.render(<Plugin plugin={plugin} />);
     return { plugin, root };
@@ -28,18 +28,14 @@ export const loadStructure = async (
     url: string,
     options?: { format?: string; isBinary?: boolean }
 ) => {
-    const data = await plugin.builders.data.download({ 
-        url, 
-        isBinary: options?.isBinary ?? false 
+    const data = await plugin.builders.data.download({
+        url,
+        isBinary: options?.isBinary ?? false,
     });
-    const trajectory = await plugin.builders.structure.parseTrajectory(
-        data, 
-        options?.format ?? "mmcif" as any
-    );
+    const trajectory = await plugin.builders.structure.parseTrajectory(data, options?.format ?? ("mmcif" as any));
     await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default");
     return trajectory;
 };
-
 
 interface LoadTrajectoryParams {
     plugin: PluginUIContext;
@@ -51,7 +47,7 @@ interface LoadTrajectoryParams {
     trajectoryIsBinary?: boolean;
     structureLabel?: string;
     trajectoryLabel?: string;
-    preset?: 'default' | 'all-models';
+    preset?: "default" | "all-models";
 }
 
 export const loadTrajectory = async (params: LoadTrajectoryParams) => {
@@ -59,13 +55,13 @@ export const loadTrajectory = async (params: LoadTrajectoryParams) => {
         plugin,
         structureUrl,
         trajectoryUrl,
-        structureFormat = 'gro',
-        trajectoryFormat = 'xtc', 
+        structureFormat = "gro",
+        trajectoryFormat = "xtc",
         structureIsBinary = false,
         trajectoryIsBinary = true,
         structureLabel,
         trajectoryLabel,
-        preset = 'default'
+        preset = "default",
     } = params;
 
     let model;
@@ -74,16 +70,13 @@ export const loadTrajectory = async (params: LoadTrajectoryParams) => {
     const structureData = await plugin.builders.data.download({
         url: structureUrl,
         isBinary: structureIsBinary,
-        label: structureLabel
+        label: structureLabel,
     });
 
     // Check if we should parse as trajectory or use topology provider
-    if (structureFormat === 'pdb' || structureFormat === 'mmcif' || structureFormat === 'cif') {
+    if (structureFormat === "pdb" || structureFormat === "mmcif" || structureFormat === "cif") {
         // Parse as trajectory for standard formats
-        const trajectory = await plugin.builders.structure.parseTrajectory(
-            structureData, 
-            structureFormat as any
-        );
+        const trajectory = await plugin.builders.structure.parseTrajectory(structureData, structureFormat as any);
         model = await plugin.builders.structure.createModel(trajectory);
     } else {
         // Use data format provider for topology formats like GRO
@@ -99,7 +92,7 @@ export const loadTrajectory = async (params: LoadTrajectoryParams) => {
     const trajectoryData = await plugin.builders.data.download({
         url: trajectoryUrl,
         isBinary: trajectoryIsBinary,
-        label: trajectoryLabel
+        label: trajectoryLabel,
     });
 
     const coordProvider = plugin.dataFormats.get(trajectoryFormat);
@@ -109,18 +102,21 @@ export const loadTrajectory = async (params: LoadTrajectoryParams) => {
     const coords = await coordProvider.parse(plugin, trajectoryData);
 
     // Create trajectory from model and coordinates
-    const trajectory = await plugin.build().toRoot()
-        .apply(TrajectoryFromModelAndCoordinates, {
-            modelRef: model.ref,
-            coordinatesRef: coords.ref
-        }, { dependsOn: [model.ref, coords.ref] })
+    const trajectory = await plugin
+        .build()
+        .toRoot()
+        .apply(
+            TrajectoryFromModelAndCoordinates,
+            {
+                modelRef: model.ref,
+                coordinatesRef: coords.ref,
+            },
+            { dependsOn: [model.ref, coords.ref] }
+        )
         .commit();
 
     // Apply default preset to create hierarchy
-    const presetResult = await plugin.builders.structure.hierarchy.applyPreset(
-        trajectory, 
-        preset
-    );
+    const presetResult = await plugin.builders.structure.hierarchy.applyPreset(trajectory, preset);
 
     return { model, coords, trajectory, preset: presetResult };
 };
@@ -167,14 +163,14 @@ export default function MolStar(props: MolStarProps) {
 
     const init = async () => {
         if (!containerRef.current) return;
-        
+
         try {
             setLoading(true);
             setErrorMessage?.("");
-            
+
             // Cleanup previous instance
             cleanup();
-            
+
             const { plugin, root } = await initViewerUI(containerRef.current, {
                 spec: {
                     layout: {
@@ -193,27 +189,22 @@ export default function MolStar(props: MolStarProps) {
 
             // Add validation for URLs
             if (trajectoryUrl && structureUrl) {
-                if (!isValidUrl(structureUrl) || !isValidUrl(trajectoryUrl)) {
-                    throw new Error('Invalid URL provided');
-                }
-                
-                await loadTrajectory({plugin, structureUrl, trajectoryUrl, structureFormat, trajectoryFormat, structureIsBinary: structureFormat !== "pdb" });
+                await loadTrajectory({
+                    plugin,
+                    structureUrl,
+                    trajectoryUrl,
+                    structureFormat,
+                    trajectoryFormat,
+                    structureIsBinary: structureFormat !== "pdb",
+                });
             } else if (structureUrl) {
-                if (!isValidUrl(structureUrl)) {
-                    throw new Error('Invalid structure URL provided');
-                }
-                
-                await loadStructure(plugin, structureUrl, { 
+                await loadStructure(plugin, structureUrl, {
                     format: structureFormat,
-                    isBinary: structureFormat !== "pdb" 
+                    isBinary: structureFormat !== "pdb",
                 });
             } else if (pdbId) {
-                if (!isValidPdbId(pdbId)) {
-                    throw new Error('Invalid PDB ID provided');
-                }
-                
-                await loadStructure(plugin, `https://models.rcsb.org/${pdbId.toLowerCase()}.bcif`, { 
-                    isBinary: true 
+                await loadStructure(plugin, `https://models.rcsb.org/${pdbId.toLowerCase()}.bcif`, {
+                    isBinary: true,
                 });
             }
         } catch (error) {
@@ -226,22 +217,9 @@ export default function MolStar(props: MolStarProps) {
         }
     };
 
-    const isValidUrl = (url: string): boolean => {
-        try {
-            new URL(url);
-            return true;
-        } catch {
-            return false;
-        }
-    };
-
-    const isValidPdbId = (pdbId: string): boolean => {
-        return /^[a-zA-Z0-9]{4}$/.test(pdbId);
-    };
-
     useEffect(() => {
         init();
-        
+
         // Cleanup on unmount
         return cleanup;
     }, [structureUrl, trajectoryUrl, pdbId]);
@@ -261,11 +239,7 @@ export default function MolStar(props: MolStarProps) {
                     <CircularProgress />
                 </div>
             )}
-            <div 
-                ref={containerRef}
-                id={containerId.current} 
-                style={{ width: "100%", height: "100%" }} 
-            />
+            <div ref={containerRef} id={containerId.current} style={{ width: "100%", height: "100%" }} />
         </div>
     );
 }

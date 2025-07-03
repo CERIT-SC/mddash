@@ -23,14 +23,12 @@ import { GromacsJob } from "../../util/types";
 import { submit_gmx, delete_gmx, gmx_status, gmx_statuses } from "../../util/api";
 
 const MDRUN_ARGUMENTS = [
-    { key: "deffnm", type: "text", description: "Set default filename for all file options" },
     { key: "xvg", type: "select", options: ["xmgrace", "xmgr", "none"], description: "xvg plot formatting" },
     { key: "dd", type: "text", description: "Domain decomposition grid, 0 is optimize" },
     { key: "ddorder", type: "select", options: ["interleave", "pp_pme", "cartesian"], description: "DD rank order" },
     { key: "npme", type: "number", description: "Number of PME ranks, -1 is guess" },
     { key: "nt", type: "number", description: "Total threads to start (0 is guess)" },
     { key: "ntmpi", type: "number", description: "Number of thread-MPI ranks (0 is guess)" },
-    { key: "ntomp", type: "number", description: "OpenMP threads per MPI rank (0 is guess)" },
     { key: "ntomp_pme", type: "number", description: "OpenMP threads per MPI rank for PME (0 is -ntomp)" },
     { key: "pin", type: "select", options: ["auto", "on", "off"], description: "Set thread affinities" },
     { key: "pinoffset", type: "number", description: "Lowest logical core for first thread pin" },
@@ -42,10 +40,8 @@ const MDRUN_ARGUMENTS = [
     { key: "rcon", type: "number", description: "Max distance for P-LINCS (nm), 0 estimates" },
     { key: "dlb", type: "select", options: ["auto", "no", "yes"], description: "Dynamic load balancing with DD" },
     { key: "dds", type: "number", description: "Fraction (0,1) to increase initial DD cell size for load balancing margin" },
-    { key: "nb", type: "select", options: ["auto", "cpu", "gpu"], description: "Calculate non-bonded interactions on" },
     { key: "nstlist", type: "number", description: "Set nstlist with Verlet buffer tolerance (0 is guess)" },
     { key: "tunepme", type: "boolean", description: "Optimize PME load between PP/PME ranks or GPU/CPU" },
-    { key: "pme", type: "select", options: ["auto", "cpu", "gpu"], description: "Perform PME calculations on" },
     { key: "pmefft", type: "select", options: ["auto", "cpu", "gpu"], description: "Perform PME FFT calculations on" },
     { key: "bonded", type: "select", options: ["auto", "cpu", "gpu"], description: "Perform bonded calculations on" },
     { key: "update", type: "select", options: ["auto", "cpu", "gpu"], description: "Perform update and constraints on" },
@@ -329,7 +325,7 @@ const RunView = (props: RunViewProps) => {
             )) || (
                 <Box sx={{ mt: 2 }}>
                     {(jobStatus && (
-                        <Stack spacing={2}>
+                        <Stack spacing={2} alignItems="flex-start">
                             <Typography variant="subtitle2" color="text.secondary">
                                 Status
                             </Typography>
@@ -400,6 +396,8 @@ const WizardRun = (props: WizardStepProps) => {
     };
 
     const newTpr = (newSelectedTpr: string) => {
+        if (!newSelectedTpr) return;
+
         const tprFile = newSelectedTpr.split("/").pop() || newSelectedTpr;
         setSelectedTpr(tprFile);
 
