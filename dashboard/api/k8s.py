@@ -32,6 +32,34 @@ def create_notebook_pod(image, ns, id, prefix, token):
                     'type': 'RuntimeDefault'
                 }
             },
+            'initContainers': [
+                {
+                    'securityContext': {
+                        'runAsNonRoot' : True,
+                        'runAsUser': 1000,
+                        'allowPrivilegeEscalation': False,
+                        'capabilities':  {
+                            'drop': [ 'ALL' ]
+                        }
+                    },
+                    'name' : 'init-workdir',
+                    'image': image,
+                    'command' : ['sh', '-c', f'''
+for n in /home/jovyan/*.ipynb; do 
+    b=$(basename "$n")
+    if [ -f "/mddash/{id}/$b" ]; then
+        cp "$n" "/mddash/{id}/$b.new"
+    else
+        cp "$n" "/mddash/{id}/$b"
+    fi
+done
+'''
+                    ],
+                    'volumeMounts' : [
+                        { 'mountPath': '/mddash', 'name' : 'data-volume' }
+                    ]
+                }
+             ],
             'containers': [
                 {
                     'securityContext': {
@@ -50,6 +78,9 @@ def create_notebook_pod(image, ns, id, prefix, token):
                         'limits' : { 'cpu': 2, 'memory' : '8Gi' }
                     },
                     'workdir': f'/mddash/{id}',
+                    'env': [
+                        { 'name' : 'WORKDIR', 'value' : f'/mddash/{id}' },
+                    ],
                     'args': [
                         'start-notebook.sh',
                         f'--NotebookApp.base_url={prefix}',

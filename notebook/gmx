@@ -1,3 +1,8 @@
 #!/bin/bash
 
-kubectl exec -i -c gmx $HOSTNAME -- bash -c "cd $JUPYTER_SERVER_ROOT && gmx $@"
+cmd="cd $WORKDIR && gmx"
+for a in "$@"; do
+        cmd="$cmd \"$a\""
+done
+
+kubectl exec -i -c gmx $HOSTNAME -- bash -c "$cmd"

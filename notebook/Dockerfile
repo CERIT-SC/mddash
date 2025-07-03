@@ -8,9 +8,7 @@ RUN curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/s
 COPY --chown=jovyan gmx /usr/local/bin/gmx
 
 USER 1000
-RUN pip3 install GromacsWrapper
+COPY requirements.txt /tmp
+RUN pip3 install -r /tmp/requirements.txt
 
-
-
-
-
+COPY *.ipynb /home/jovyan/
