@@ -33,6 +33,13 @@ class Experiment:
     mdrepo_id: str | None = None
 
 
+    def __post_init__(self):
+        """Convert dictionary values to GromacsJob instances if needed"""
+        for key, value in self.gromacs_jobs.items():
+            if isinstance(value, dict):
+                self.gromacs_jobs[key] = GromacsJob(**value)
+
+
     @classmethod
     def prepare_env(cls) -> str:
         id = get_unique_id()
