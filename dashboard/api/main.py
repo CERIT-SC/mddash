@@ -12,6 +12,7 @@ from utils import get_files_with_extension
 import mdrepo_client
 import caddy_client
 import tuner_client
+from k8s_status import JobStatus
 
 from k8s import (
     create_notebook_pod,
@@ -118,7 +119,7 @@ def start_notebook(experiment_id):
             return ApiResponse.error('Failed to create connection to notebook.')
 
         return ApiResponse.success({
-            'up': True,
+            'status': str(JobStatus.PENDING),
             'path': f'{PREFIX}/notebook/{experiment_id}/?token={token}'
         })
     except Exception as e:

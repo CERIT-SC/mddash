@@ -19,9 +19,9 @@ const WizardSetup = (props: WizardStepProps) => {
     };
 
     const spawnNotebook = async () => {
-        const { error } = await spawn_notebook(experiment.id);
+        const { error, data } = await spawn_notebook(experiment.id);
         setErrorMessage(error || "");
-        fetchStatus();
+        setNotebookStatus(data || { status: "UNKNOWN", path: "" });
     };
 
     const deleteNotebook = async () => {
@@ -33,7 +33,7 @@ const WizardSetup = (props: WizardStepProps) => {
     const respawnNotebook = async () => {
         await deleteNotebook();
         await spawnNotebook();
-    }
+    };
 
     useEffect(() => {
         setLoading(true);
@@ -43,9 +43,7 @@ const WizardSetup = (props: WizardStepProps) => {
 
         // actively poll the notebook status if it's pending or terminating
         if (notebookStatus.status === "PENDING" || notebookStatus.status === "TERMINATING") {
-            intervalId = window.setInterval(() => {
-                fetchStatus();
-            }, 1000);
+            intervalId = window.setInterval(fetchStatus, 1000);
         } else if (intervalId !== null) {
             console.log("Clearing tuner status interval as notebook is not pending.");
             window.clearInterval(intervalId);
@@ -73,13 +71,10 @@ const WizardSetup = (props: WizardStepProps) => {
                 <Stack spacing={2} direction="column">
                     {notebookStatus.status === "RUNNING" && (
                         <>
-                            <Typography variant="h5" color="success.main">Notebook running 🚀</Typography>
-                            <Button
-                                variant="contained"
-                                color="success"
-                                href={notebookStatus.path}
-                                target="_blank"
-                            >
+                            <Typography variant="h5" color="success.main">
+                                Notebook running 🚀
+                            </Typography>
+                            <Button variant="contained" color="success" href={notebookStatus.path} target="_blank">
                                 Open Jupyter Notebook
                             </Button>
                             <Button variant="contained" color="error" onClick={deleteNotebook}>
@@ -87,33 +82,39 @@ const WizardSetup = (props: WizardStepProps) => {
                             </Button>
                         </>
                     )}
-                    
+
                     {(notebookStatus.status === "PENDING" || notebookStatus.status === "TERMINATING") && (
                         <>
                             <Typography variant="h5" color="warning.main">
-                                {notebookStatus.status === "PENDING" ? "Notebook starting ⏳" : "Notebook terminating ⏳"}
+                                {notebookStatus.status === "PENDING"
+                                    ? "Notebook starting ⏳"
+                                    : "Notebook terminating ⏳"}
                             </Typography>
                             <CircularProgress size={40} />
                             <Typography variant="body2" color="text.secondary">
-                                {notebookStatus.status === "PENDING" 
+                                {notebookStatus.status === "PENDING"
                                     ? "Please wait while the notebook is being prepared..."
-                                    : "Please wait while the notebook is being terminated..."
-                                }
+                                    : "Please wait while the notebook is being terminated..."}
                             </Typography>
                         </>
                     )}
-                    
+
                     {(notebookStatus.status === "TERMINATED" || notebookStatus.status === "ERROR") && (
                         <>
-                            <Typography variant="h5" color={notebookStatus.status === "ERROR" ? "error.main" : "text.secondary"}>
-                                {notebookStatus.status === "TERMINATED" ? "Notebook terminated 🛑" : "Notebook error ❌"}
+                            <Typography
+                                variant="h5"
+                                color={notebookStatus.status === "ERROR" ? "error.main" : "text.secondary"}
+                            >
+                                {notebookStatus.status === "TERMINATED"
+                                    ? "Notebook terminated 🛑"
+                                    : "Notebook error ❌"}
                             </Typography>
                             <Button variant="contained" color="primary" onClick={respawnNotebook}>
                                 Restart Jupyter Notebook
                             </Button>
                         </>
                     )}
-                    
+
                     {(notebookStatus.status === "DOWN" || notebookStatus.status === "UNKNOWN") && (
                         <>
                             <Typography variant="h5" color="text.secondary">
