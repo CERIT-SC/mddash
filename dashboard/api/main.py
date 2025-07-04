@@ -12,7 +12,7 @@ from utils import get_files_with_extension
 import mdrepo_client
 import caddy_client
 import tuner_client
-from k8s_status import JobStatus
+from k8s_status import PodStatus
 
 from k8s import (
     create_notebook_pod,
@@ -111,13 +111,13 @@ def start_notebook(experiment_id):
         try:
             create_notebook_pod(NOTEBOOK_IMAGE, NAMESPACE, experiment_id, f'{PREFIX}/notebook/{experiment_id}', token)
         except Exception as e:
-            print(e)
+            print('Failed to create notebook pod:', e)
             return ApiResponse.error(f'Failed to create notebook pod: {str(e)}')
         
         try:
             create_notebook_service(NAMESPACE, experiment_id)
         except Exception as e:
-            print(e)
+            print('Failed to create notebook service:', e)
             delete_notebook_pod(NAMESPACE, experiment_id)
             return ApiResponse.error(f'Failed to create notebook service: {str(e)}')
 
@@ -133,7 +133,7 @@ def start_notebook(experiment_id):
             return ApiResponse.error('Failed to create connection to notebook.')
 
         return ApiResponse.success({
-            'status': str(JobStatus.PENDING),
+            'status': str(PodStatus.PENDING),
             'path': f'{PREFIX}/notebook/{experiment_id}/?token={token}'
         })
     except Exception as e:
@@ -143,8 +143,15 @@ def start_notebook(experiment_id):
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['DELETE'])
 def delete_notebook(experiment_id):
     try:
-        delete_notebook_pod(NAMESPACE, experiment_id)
-        delete_notebook_service(NAMESPACE, experiment_id)
+        try:
+            delete_notebook_pod(NAMESPACE, experiment_id)
+        except Exception as e:
+            print(f'Failed to delete notebook pod:', e)
+        
+        try:
+            delete_notebook_service(NAMESPACE, experiment_id)
+        except Exception as e:
+            print(f'Failed to delete notebook service:', e)
 
         if not caddy_client.remove_route(f'route-{experiment_id}-notebook'):
             print('Failed to remove route from Caddy.')
@@ -158,7 +165,11 @@ def delete_notebook(experiment_id):
 def get_notebook(experiment_id):
     try:
         token = experiments.get(experiment_id).token
-        status = get_pod_status(NAMESPACE, f'jupyter-{experiment_id}')
+        try:
+            status = get_pod_status(NAMESPACE, f'jupyter-{experiment_id}')
+        except Exception as e:
+            print(f'Failed to get notebook pod status:', e)
+            status = PodStatus.UNKNOWN
         return ApiResponse.success({
             'status': str(status),
             'path': f'{PREFIX}/notebook/{experiment_id}/?token={token}'
