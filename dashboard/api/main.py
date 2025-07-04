@@ -18,7 +18,7 @@ from k8s import (
     create_notebook_service,
     delete_notebook_pod,
     delete_notebook_service,
-    ping_resource, 
+    get_pod_status,
     get_namespace_resource_allocation
 )
 
@@ -143,9 +143,9 @@ def delete_notebook(experiment_id):
 def get_notebook(experiment_id):
     try:
         token = experiments.get(experiment_id).token
-        is_up = ping_resource('svc', f'svc-{experiment_id}', NAMESPACE)
+        status = get_pod_status(NAMESPACE, f'jupyter-{experiment_id}')
         return ApiResponse.success({
-            'up': is_up,
+            'status': str(status),
             'path': f'{PREFIX}/notebook/{experiment_id}/?token={token}'
         })
     except Exception as e:
