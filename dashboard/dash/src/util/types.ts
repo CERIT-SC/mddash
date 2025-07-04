@@ -22,8 +22,10 @@ export interface FileOption {
     size: number;
 }
 
+export type PodStatus = "RUNNING" | "PENDING" | "TERMINATED" | "ERROR" | "TERMINATING" | "DOWN" | "UNKNOWN";
+
 export interface NotebookStatus {
-    up: boolean;
+    status: PodStatus;
     path: string;
 }
 
@@ -39,9 +41,11 @@ export interface TunerStatus {
     trials: TunerTrial[];
 }
 
+export type JobStatus = "RUNNING" | "PENDING" | "TERMINATED" | "ERROR";
+
 export interface TunerTrial {
     id: string;
-    status: "RUNNING" | "PENDING" | "TERMINATED" | "ERROR";
+    status: JobStatus;
     np: number;
     ntomp: number;
     pme: "cpu" | "gpu" | "auto";
@@ -52,7 +56,7 @@ export interface TunerTrial {
 // NOTE: work in progress (could extend TunerTrial)
 export interface GromacsJob {
     id: string;
-    status: "RUNNING" | "PENDING" | "TERMINATED" | "ERROR";
+    status: JobStatus;
     np: number;
     ntomp: number;
     pme: "cpu" | "gpu" | "auto";
