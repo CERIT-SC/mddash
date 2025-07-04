@@ -107,8 +107,19 @@ def delete_experiment(experiment_id):
 def start_notebook(experiment_id):
     try:
         token = experiments.get(experiment_id).token
-        create_notebook_pod(NOTEBOOK_IMAGE, NAMESPACE, experiment_id, f'{PREFIX}/notebook/{experiment_id}', token)
-        create_notebook_service(NAMESPACE, experiment_id)
+
+        try:
+            create_notebook_pod(NOTEBOOK_IMAGE, NAMESPACE, experiment_id, f'{PREFIX}/notebook/{experiment_id}', token)
+        except Exception as e:
+            print(e)
+            return ApiResponse.error(f'Failed to create notebook pod: {str(e)}')
+        
+        try:
+            create_notebook_service(NAMESPACE, experiment_id)
+        except Exception as e:
+            print(e)
+            delete_notebook_pod(NAMESPACE, experiment_id)
+            return ApiResponse.error(f'Failed to create notebook service: {str(e)}')
 
         route_id = caddy_client.add_proxy_route(
             path=f'/notebook/{experiment_id}/*',
@@ -116,6 +127,9 @@ def start_notebook(experiment_id):
             route_id=f'route-{experiment_id}-notebook',
         )
         if route_id is None:
+            print('Failed to add route to Caddy.')
+            delete_notebook_pod(NAMESPACE, experiment_id)
+            delete_notebook_service(NAMESPACE, experiment_id)
             return ApiResponse.error('Failed to create connection to notebook.')
 
         return ApiResponse.success({
