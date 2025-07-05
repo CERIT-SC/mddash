@@ -24,7 +24,6 @@ clean:
 	rm -f ${j2s}
 
 start:
-	(cd ../dashboard/api/ && tar cf - . ) | kubectl exec -i ${pod} -- bash -c "cd /opt/api && tar xvf -"
 	kubectl -n ${ns} exec -ti pod/${pod} -- /start.sh
 
 log:
@@ -38,3 +37,6 @@ diff:
 
 patch:
 	kubectl -n ${ns} exec pod/${pod} -- bash -c "cd /home/jovyan/mddash && git diff" | (cd .. && patch -p1)
+
+copy-api:
+	(cd ../dashboard/api/ && tar cf - . ) | kubectl exec -i ${pod} -- bash -c "cd /opt/api && tar xvf -"
