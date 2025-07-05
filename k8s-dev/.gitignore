@@ -1,0 +1,4 @@
+deployment.yaml
+ingress.yaml
+pvc-data.yaml
+rolebinding.yaml
