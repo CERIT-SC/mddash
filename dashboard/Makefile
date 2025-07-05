@@ -1,5 +1,6 @@
-image=$(shell yq .dashboard.image ../config.yaml)
-devImage=$(shell yq .dashboard.devImage ../config.yaml)
+config?=../config.yaml
+image=$(shell yq .dashboard.image ${config})
+devImage=$(shell yq .dashboard.devImage ${config})
 
 platform=--platform linux/amd64
 

@@ -1,12 +1,14 @@
 
+config?=../config.yaml
+
 j2s=pvc-data.yaml deployment.yaml ingress.yaml rolebinding.yaml
 yamls=service.yaml pvc-home.yaml role.yaml ${j2s}
 
-ns=$(shell yq .devNamespace ../config.yaml)
+ns=$(shell yq .devNamespace ${config})
 pod=$(shell kubectl -n ${ns} get pods | grep ^mddash-dev | awk '{print $$1}')
 
-${j2s}: %.yaml: %.yaml.j2 ../config.yaml
-	jinja2 $< ../config.yaml -o $@
+${j2s}: %.yaml: %.yaml.j2 ${config}
+	jinja2 $< ${config} -o $@
 
 
 install: ${yamls}
@@ -35,3 +37,6 @@ diff:
 
 patch:
 	kubectl -n ${ns} exec pod/${pod} -- bash -c "cd /home/jovyan/mddash && git diff" | (cd .. && patch -p1)
+
+copy-api:
+	(cd ../dashboard/api/ && tar cf - . ) | kubectl exec -i ${pod} -- bash -c "cd /opt/api && tar xvf -"
