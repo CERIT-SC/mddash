@@ -4,68 +4,58 @@ import { Stack, Button, Typography, CircularProgress } from "@mui/material";
 import { WizardStepProps } from "./Stepper";
 import { get_notebook, spawn_notebook, delete_notebook } from "../../util/api";
 import ConfirmDialog from "../ConfirmDialog";
+import { NotebookStatus } from "../../util/types";
 
 const WizardSetup = (props: WizardStepProps) => {
     const { experiment, setErrorMessage, nextStep } = props;
     const [loading, setLoading] = useState(false);
-    const [notebookUp, setNotebookUp] = useState(false);
-    const [notebookLoading, setNotebookLoading] = useState(false);
-    const [notebookPath, setNotebookPath] = useState("");
+    const [notebookStatus, setNotebookStatus] = useState<NotebookStatus>({ status: "UNKNOWN", path: "" });
     const [nextStepDialog, setNextStepDialog] = useState(false);
 
-    const getNotebook = async () => {
-        setLoading(true);
+    const fetchStatus = async () => {
         const { data, error } = await get_notebook(experiment.id);
-        setErrorMessage(error || "");
-        setNotebookUp(data?.up || false);
-        setNotebookPath(data?.path || "");
-        setLoading(false);
+        if (error) setErrorMessage(error);
+        setNotebookStatus(data || { status: "UNKNOWN", path: "" });
     };
 
     const spawnNotebook = async () => {
-        const { error } = await spawn_notebook(experiment.id);
+        const { error, data } = await spawn_notebook(experiment.id);
         setErrorMessage(error || "");
-        getNotebook();
-
-        if (!error) pollNotebookReady();
+        setNotebookStatus(data || { status: "UNKNOWN", path: "" });
     };
 
     const deleteNotebook = async () => {
         const { error } = await delete_notebook(experiment.id);
         setErrorMessage(error || "");
-        getNotebook();
+        fetchStatus();
     };
 
-    const pollNotebookReady = async () => {
-        const maxRetries = 30;
-        const retryInterval = 500; // ms
-        let attempts = 0;
-
-        const poll = async () => {
-            try {
-                const response = await fetch(notebookPath);
-                if (!response.ok) throw new Error("Notebook is not ready yet");
-                setNotebookLoading(false);
-            } catch (error) {
-                attempts++;
-                if (attempts < maxRetries) {
-                    setTimeout(poll, retryInterval);
-                } else {
-                    deleteNotebook();
-                    setErrorMessage("Notebook startup timed out. Please try again.");
-                    setNotebookLoading(false);
-                    setNotebookUp(false);
-                }
-            }
-        };
-
-        setNotebookLoading(true);
-        poll();
+    const respawnNotebook = async () => {
+        await deleteNotebook();
+        await spawnNotebook();
     };
 
     useEffect(() => {
-        getNotebook();
-    }, []);
+        setLoading(true);
+        fetchStatus().finally(() => setLoading(false));
+
+        let intervalId: number | null = null;
+
+        // actively poll the notebook status if it's pending or terminating
+        if (notebookStatus.status === "PENDING" || notebookStatus.status === "TERMINATING") {
+            intervalId = window.setInterval(fetchStatus, 1000);
+        } else if (intervalId !== null) {
+            console.log("Clearing tuner status interval as notebook is not pending.");
+            window.clearInterval(intervalId);
+        }
+
+        return () => {
+            if (intervalId !== null) {
+                console.log("Clearing tuner status interval.");
+                window.clearInterval(intervalId);
+            }
+        };
+    }, [notebookStatus.status]);
 
     return (
         <Stack direction="column" alignItems="center" spacing={5}>
@@ -79,25 +69,57 @@ const WizardSetup = (props: WizardStepProps) => {
             </Stack>
             {(loading && <CircularProgress />) || (
                 <Stack spacing={2} direction="column">
-                    {(notebookUp && (
+                    {notebookStatus.status === "RUNNING" && (
                         <>
-                            <Typography variant="h5">Notebook running 🚀</Typography>
-                            <Button
-                                variant="contained"
-                                color="success"
-                                href={notebookPath}
-                                target="_blank"
-                                loading={notebookLoading}
-                            >
+                            <Typography variant="h5" color="success.main">
+                                Notebook running 🚀
+                            </Typography>
+                            <Button variant="contained" color="success" href={notebookStatus.path} target="_blank">
                                 Open Jupyter Notebook
                             </Button>
                             <Button variant="contained" color="error" onClick={deleteNotebook}>
                                 Delete Jupyter Notebook
                             </Button>
                         </>
-                    )) || (
+                    )}
+
+                    {(notebookStatus.status === "PENDING" || notebookStatus.status === "TERMINATING") && (
                         <>
-                            <Typography variant="h5">Notebook down 💔</Typography>
+                            <Typography variant="h5" color="warning.main">
+                                {notebookStatus.status === "PENDING"
+                                    ? "Notebook starting ⏳"
+                                    : "Notebook terminating ⏳"}
+                            </Typography>
+                            <CircularProgress size={40} />
+                            <Typography variant="body2" color="text.secondary">
+                                {notebookStatus.status === "PENDING"
+                                    ? "Please wait while the notebook is being prepared..."
+                                    : "Please wait while the notebook is being terminated..."}
+                            </Typography>
+                        </>
+                    )}
+
+                    {(notebookStatus.status === "TERMINATED" || notebookStatus.status === "ERROR") && (
+                        <>
+                            <Typography
+                                variant="h5"
+                                color={notebookStatus.status === "ERROR" ? "error.main" : "text.secondary"}
+                            >
+                                {notebookStatus.status === "TERMINATED"
+                                    ? "Notebook terminated 🛑"
+                                    : "Notebook error ❌"}
+                            </Typography>
+                            <Button variant="contained" color="primary" onClick={respawnNotebook}>
+                                Restart Jupyter Notebook
+                            </Button>
+                        </>
+                    )}
+
+                    {(notebookStatus.status === "DOWN" || notebookStatus.status === "UNKNOWN") && (
+                        <>
+                            <Typography variant="h5" color="text.secondary">
+                                {notebookStatus.status === "DOWN" ? "Notebook down 💔" : "Notebook status unknown ❓"}
+                            </Typography>
                             <Button variant="contained" color="primary" onClick={spawnNotebook}>
                                 Spawn Jupyter Notebook
                             </Button>

@@ -1,6 +1,8 @@
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
 
+from k8s_status import JobStatus, PodStatus
+
 # TODO
 #  Ensure your pod has a corresponding label, such as spec.template.metadata.labels.app: example-pod.
 
@@ -349,26 +351,59 @@ def delete_gromacs_job(ns: str, name: str):
     )
 
 
-def get_job_status(ns: str, name: str) -> str:
-    config.load_incluster_config()
-    batch_v1 = client.BatchV1Api()
+def get_job_status(ns: str, name: str) -> JobStatus:
+    try:
+        config.load_incluster_config()
+        batch_v1 = client.BatchV1Api()
+        job = batch_v1.read_namespaced_job(name=name, namespace=ns)
 
-    job = batch_v1.read_namespaced_job(name=name, namespace=ns)
+        # Check for completion conditions first
+        if job.status.conditions:
+            for condition in job.status.conditions:
+                if condition.type == "Complete" and condition.status == "True":
+                    return JobStatus.TERMINATED
+                elif condition.type == "Failed" and condition.status == "True":
+                    return JobStatus.ERROR
 
-    # Check for completion conditions first
-    if job.status.conditions:
-        for condition in job.status.conditions:
-            if condition.type == "Complete" and condition.status == "True":
-                return "TERMINATED"
-            elif condition.type == "Failed" and condition.status == "True":
-                return "ERROR"
+        # Check numeric status fields
+        if job.status.succeeded and job.status.succeeded > 0:
+            return JobStatus.TERMINATED
+        elif job.status.failed and job.status.failed > 0:
+            return JobStatus.ERROR
+        elif job.status.active and job.status.active > 0:
+            return JobStatus.RUNNING
+        else:
+            return JobStatus.PENDING
 
-    # Check numeric status fields
-    if job.status.succeeded and job.status.succeeded > 0:
-        return "TERMINATED"
-    elif job.status.failed and job.status.failed > 0:
-        return "ERROR"
-    elif job.status.active and job.status.active > 0:
-        return "RUNNING"
-    else:
-        return "PENDING"
+    except ApiException as e:
+        return JobStatus.ERROR
+
+
+def get_pod_status(ns: str, name: str) -> PodStatus:    
+    try:
+        config.load_incluster_config()
+        v1 = client.CoreV1Api()
+        pod = v1.read_namespaced_pod(name=name, namespace=ns)
+
+        if pod.metadata.deletion_timestamp:
+            return PodStatus.TERMINATING
+
+        phase = pod.status.phase
+        
+        if phase == "Running":
+            # Check if all containers are ready
+            if pod.status.container_statuses:
+                all_ready = all(container.ready for container in pod.status.container_statuses)
+                return PodStatus.RUNNING if all_ready else PodStatus.PENDING
+            return PodStatus.RUNNING
+        elif phase == "Succeeded":
+            return PodStatus.TERMINATED
+        elif phase == "Failed":
+            return PodStatus.ERROR
+        elif phase == "Pending":
+            return PodStatus.PENDING
+        else:
+            return PodStatus.UNKNOWN
+
+    except ApiException as e:
+        return PodStatus.DOWN if e.status == 404 else PodStatus.ERROR
