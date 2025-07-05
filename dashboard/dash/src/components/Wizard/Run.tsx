@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 
 import {
     Box,
@@ -20,7 +20,8 @@ import {
 import { WizardStepProps } from "./Stepper";
 import FileSelector from "../FileSelector";
 import { GromacsJob } from "../../util/types";
-import { submit_gmx, delete_gmx, gmx_status, gmx_statuses } from "../../util/api";
+import { submit_gmx, delete_gmx, gmx_status, gmx_statuses, gmx_logs } from "../../util/api";
+import LogsView from "../LogsView";
 
 const MDRUN_ARGUMENTS = [
     { key: "xvg", type: "select", options: ["xmgrace", "xmgr", "none"], description: "xvg plot formatting" },
@@ -32,29 +33,50 @@ const MDRUN_ARGUMENTS = [
     { key: "ntomp_pme", type: "number", description: "OpenMP threads per MPI rank for PME (0 is -ntomp)" },
     { key: "pin", type: "select", options: ["auto", "on", "off"], description: "Set thread affinities" },
     { key: "pinoffset", type: "number", description: "Lowest logical core for first thread pin" },
-    { key: "pinstride", type: "number", description: "Pinning distance in logical cores, 0 minimizes threads per physical core" },
+    {
+        key: "pinstride",
+        type: "number",
+        description: "Pinning distance in logical cores, 0 minimizes threads per physical core",
+    },
     { key: "gpu_id", type: "text", description: "List of unique GPU device IDs" },
     { key: "gputasks", type: "text", description: "GPU device IDs mapping tasks to devices (PP and PME)" },
     { key: "ddcheck", type: "boolean", description: "Check all bonded interactions with DD" },
     { key: "rdd", type: "number", description: "Max distance for bonded interactions with DD (nm), 0 auto-determines" },
     { key: "rcon", type: "number", description: "Max distance for P-LINCS (nm), 0 estimates" },
     { key: "dlb", type: "select", options: ["auto", "no", "yes"], description: "Dynamic load balancing with DD" },
-    { key: "dds", type: "number", description: "Fraction (0,1) to increase initial DD cell size for load balancing margin" },
+    {
+        key: "dds",
+        type: "number",
+        description: "Fraction (0,1) to increase initial DD cell size for load balancing margin",
+    },
     { key: "nstlist", type: "number", description: "Set nstlist with Verlet buffer tolerance (0 is guess)" },
     { key: "tunepme", type: "boolean", description: "Optimize PME load between PP/PME ranks or GPU/CPU" },
     { key: "pmefft", type: "select", options: ["auto", "cpu", "gpu"], description: "Perform PME FFT calculations on" },
     { key: "bonded", type: "select", options: ["auto", "cpu", "gpu"], description: "Perform bonded calculations on" },
-    { key: "update", type: "select", options: ["auto", "cpu", "gpu"], description: "Perform update and constraints on" },
+    {
+        key: "update",
+        type: "select",
+        options: ["auto", "cpu", "gpu"],
+        description: "Perform update and constraints on",
+    },
     { key: "v", type: "boolean", description: "Verbose output" },
     { key: "pforce", type: "number", description: "Print forces larger than this (kJ/mol nm)" },
-    { key: "reprod", type: "boolean", description: "Avoid optimizations affecting binary reproducibility (reduces performance)" },
+    {
+        key: "reprod",
+        type: "boolean",
+        description: "Avoid optimizations affecting binary reproducibility (reduces performance)",
+    },
     { key: "cpt", type: "number", description: "Checkpoint interval (minutes)" },
     { key: "cpnum", type: "boolean", description: "Keep and number checkpoint files" },
     { key: "append", type: "boolean", description: "Append to previous output files when continuing from checkpoint" },
     { key: "nsteps", type: "number", description: "Run this many steps (-1 infinite, -2 use mdp option)" },
     { key: "maxh", type: "number", description: "Terminate after 0.99 × this time (hours)" },
     { key: "replex", type: "number", description: "Replica exchange period (steps)" },
-    { key: "nex", type: "number", description: "Random exchanges per interval (N^3 suggested), 0 for neighbor exchange" },
+    {
+        key: "nex",
+        type: "number",
+        description: "Random exchanges per interval (N^3 suggested), 0 for neighbor exchange",
+    },
     { key: "reseed", type: "number", description: "Replica exchange seed, -1 generates seed" },
 ];
 
@@ -113,7 +135,7 @@ const ManualStartForm = (props: ManualStartFormProps) => {
             setErrorMessage(error);
             return;
         }
-    }
+    };
 
     const handleDeleteArgument = (keyToDelete: string) => {
         setAddedArguments((prev) => prev.filter((arg) => arg.key !== keyToDelete));
@@ -125,7 +147,7 @@ const ManualStartForm = (props: ManualStartFormProps) => {
                 Manually start simulation
             </Typography>
 
-            <Grid container spacing={2} ref={formRef} component="form" onSubmit={handleSubmit} >
+            <Grid container spacing={2} ref={formRef} component="form" onSubmit={handleSubmit}>
                 <Grid size={6}>
                     <TextField name="np" type="number" label="Number of MPI processes (np)" required fullWidth />
                 </Grid>
@@ -143,7 +165,11 @@ const ManualStartForm = (props: ManualStartFormProps) => {
                 <Grid size={6}>
                     <FormControl fullWidth required>
                         <InputLabel id="nb-device-selector">Device type for non-bonded interactions (-nb)</InputLabel>
-                        <Select name="nb" labelId="nb-device-selector" label={"Device type for non-bonded interactions (-nb)"}>
+                        <Select
+                            name="nb"
+                            labelId="nb-device-selector"
+                            label={"Device type for non-bonded interactions (-nb)"}
+                        >
                             <MenuItem value="cpu">CPU</MenuItem>
                             <MenuItem value="gpu">GPU</MenuItem>
                             <MenuItem value="auto">Auto</MenuItem>
@@ -154,7 +180,11 @@ const ManualStartForm = (props: ManualStartFormProps) => {
                 <Grid size={6}>
                     <FormControl fullWidth required>
                         <InputLabel id="pme-device-selector">Device type for PME calculations (-pme)</InputLabel>
-                        <Select name="pme" labelId="pme-device-selector" label={"Device type for PME calculations (-pme)"}>
+                        <Select
+                            name="pme"
+                            labelId="pme-device-selector"
+                            label={"Device type for PME calculations (-pme)"}
+                        >
                             <MenuItem value="cpu">CPU</MenuItem>
                             <MenuItem value="gpu">GPU</MenuItem>
                             <MenuItem value="auto">Auto</MenuItem>
@@ -195,15 +225,21 @@ const ManualStartForm = (props: ManualStartFormProps) => {
                                         value={argumentValue}
                                         onChange={(e) => setArgumentValue(e.target.value)}
                                     >
-                                        {MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument)?.options?.map((option) => (
-                                            <MenuItem key={option} value={option}>
-                                                {option}
-                                            </MenuItem>
-                                        ))}
+                                        {MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument)?.options?.map(
+                                            (option) => (
+                                                <MenuItem key={option} value={option}>
+                                                    {option}
+                                                </MenuItem>
+                                            )
+                                        )}
                                     </Select>
                                 </FormControl>
                             ) : MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument)?.type === "boolean" ? (
-                                <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1, alignSelf: "center" }}>
+                                <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                    sx={{ flexGrow: 1, alignSelf: "center" }}
+                                >
                                     Boolean flag (no value required)
                                 </Typography>
                             ) : (
@@ -220,7 +256,11 @@ const ManualStartForm = (props: ManualStartFormProps) => {
                             <Button
                                 variant="contained"
                                 onClick={handleAddArgument}
-                                disabled={!selectedArgument || (MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument)?.type !== "boolean" && !argumentValue.trim())}
+                                disabled={
+                                    !selectedArgument ||
+                                    (MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument)?.type !== "boolean" &&
+                                        !argumentValue.trim())
+                                }
                             >
                                 Add
                             </Button>
@@ -272,6 +312,7 @@ const RunView = (props: RunViewProps) => {
     const [loading, setLoading] = useState(false);
     const [jobRunning, setJobRunning] = useState(false);
     const [jobStatus, setJobStatus] = useState<GromacsJob | null>(null);
+    const [logType, setLogType] = useState<"gmx" | "stdout" | "stderr" | null>(null);
 
     const fetchStatus = async (showError: boolean) => {
         const { data, error } = await gmx_status(experiment.id, tprName);
@@ -280,14 +321,18 @@ const RunView = (props: RunViewProps) => {
         setJobRunning(!!data);
     };
 
+    // initial fetch
     useEffect(() => {
         setLoading(true);
+        setLogType(null);
         fetchStatus(false).finally(() => setLoading(false));
+    }, [tprName, experiment.id]);
 
+    // polling for job status
+    useEffect(() => {
         let intervalId: number | null = null;
 
-        // refresh tuner status every 5 seconds if the tuner is up
-        if (jobRunning) {
+        if (jobStatus?.status === "PENDING" || jobStatus?.status === "RUNNING") {
             intervalId = window.setInterval(() => {
                 fetchStatus(true);
             }, 5000);
@@ -295,11 +340,10 @@ const RunView = (props: RunViewProps) => {
 
         return () => {
             if (intervalId !== null) {
-                console.log("Clearing tuner status interval.");
-                window.clearInterval(intervalId);
+                clearInterval(intervalId);
             }
         };
-    }, [tprName, experiment.id, jobRunning]);
+    }, [jobStatus?.status]);
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -316,6 +360,63 @@ const RunView = (props: RunViewProps) => {
         }
     };
 
+    const getLogs = useCallback(async () => {
+        if (!logType) return "No log type selected";
+
+        const { data, error } = await gmx_logs(experiment.id, tprName, logType, 100);
+        setErrorMessage(error || "");
+        return data || "Failed to fetch logs";
+    }, [experiment.id, tprName, logType, setErrorMessage]);
+
+    const statusDisplay = useMemo(() => {
+        if (!jobStatus) return null;
+
+        return (
+            <Stack spacing={2} alignItems="flex-start">
+                <Typography variant="subtitle2" color="text.secondary">
+                    Status
+                </Typography>
+                <Chip label={jobStatus.status} color={getStatusColor(jobStatus.status)} />
+
+                {jobStatus.performance && (
+                    <>
+                        <Typography variant="subtitle2" color="text.secondary">
+                            Performance
+                        </Typography>
+                        <Typography variant="body2">{`${jobStatus.performance.toFixed(2)} ns/day`}</Typography>
+                    </>
+                )}
+
+                <Typography variant="subtitle2" color="text.secondary">
+                    Processes
+                </Typography>
+                <Typography variant="body2">
+                    {jobStatus.np} × {jobStatus.ntomp} threads
+                </Typography>
+
+                <Typography variant="subtitle2" color="text.secondary">
+                    PME / NB
+                </Typography>
+                <Typography variant="body2">
+                    {jobStatus.pme} / {jobStatus.nb}
+                </Typography>
+
+                <Typography variant="subtitle2" color="text.secondary">
+                    Extra Arguments
+                </Typography>
+                <Typography variant="body2">{jobStatus.extra_args || "None"}</Typography>
+            </Stack>
+        );
+    }, [
+        jobStatus?.status,
+        jobStatus?.performance,
+        jobStatus?.np,
+        jobStatus?.ntomp,
+        jobStatus?.pme,
+        jobStatus?.nb,
+        jobStatus?.extra_args,
+    ]);
+
     return (
         <>
             {(loading && (
@@ -324,44 +425,9 @@ const RunView = (props: RunViewProps) => {
                 </Box>
             )) || (
                 <Box sx={{ mt: 2 }}>
-                    {(jobStatus && (
+                    {jobRunning ? (
                         <Stack spacing={2} alignItems="flex-start">
-                            <Typography variant="subtitle2" color="text.secondary">
-                                Status
-                            </Typography>
-                            <Chip label={jobStatus.status} color={getStatusColor(jobStatus.status)} />
-
-                            <Typography variant="subtitle2" color="text.secondary">
-                                Performance
-                            </Typography>
-                            <Typography variant="body2">
-                                {jobStatus.performance ? `${jobStatus.performance.toFixed(2)} ns/day` : "N/A"}
-                            </Typography>
-
-                            <Typography variant="subtitle2" color="text.secondary">
-                                Processes
-                            </Typography>
-                            <Typography variant="body2">
-                                {jobStatus.np} × {jobStatus.ntomp} threads
-                            </Typography>
-
-                            <Typography variant="subtitle2" color="text.secondary">
-                                PME / NB
-                            </Typography>
-                            <Typography variant="body2">
-                                {jobStatus.pme} / {jobStatus.nb}
-                            </Typography>
-
-                            <Typography variant="subtitle2" color="text.secondary">
-                                Extra Arguments
-                            </Typography>
-                            <Typography variant="body2">
-                                {jobStatus.extra_args || "None"}
-                            </Typography>
-
-                            <Typography variant="subtitle2" color="text.secondary">
-                                Actions
-                            </Typography>
+                            {statusDisplay}
 
                             <Button
                                 variant="contained"
@@ -370,10 +436,46 @@ const RunView = (props: RunViewProps) => {
                                     deleteJob(tprName);
                                 }}
                             >
-                                {jobStatus.status === "RUNNING" ? "Stop" : "Delete"}
+                                Delete Job
                             </Button>
+
+                            <Typography variant="subtitle2" color="text.secondary">
+                                Logs
+                            </Typography>
+
+                            <FormControl sx={{ minWidth: 200 }}>
+                                <InputLabel id="log-type-selector">Log Type</InputLabel>
+                                <Select
+                                    labelId="log-type-selector"
+                                    label="Log Type"
+                                    value={logType || ""}
+                                    onChange={(e) =>
+                                        setLogType((e.target.value as "gmx" | "stdout" | "stderr" | null) || null)
+                                    }
+                                >
+                                    <MenuItem value="">
+                                        <em>None</em>
+                                    </MenuItem>
+                                    <MenuItem value="gmx">GMX Log</MenuItem>
+                                    <MenuItem value="stdout">Standard Output</MenuItem>
+                                    <MenuItem value="stderr">Standard Error</MenuItem>
+                                </Select>
+                            </FormControl>
+
+                            {logType && (
+                                <LogsView
+                                    getLogs={getLogs}
+                                    refreshInterval={
+                                        jobStatus?.status == "PENDING" || jobStatus?.status == "RUNNING"
+                                            ? 5000
+                                            : undefined
+                                    }
+                                />
+                            )}
                         </Stack>
-                    )) || <ManualStartForm fetchStatus={fetchStatus} {...props} />}
+                    ) : (
+                        <ManualStartForm fetchStatus={fetchStatus} {...props} />
+                    )}
                 </Box>
             )}
         </>
@@ -429,9 +531,9 @@ const WizardRun = (props: WizardStepProps) => {
     return (
         <>
             <Stack direction="row" spacing={2} alignItems="center">
-                <Tabs value={selectedTpr} onChange={handleChange} variant="scrollable" scrollButtons="auto">
+                <Tabs value={selectedTpr || false} onChange={handleChange} variant="scrollable" scrollButtons="auto">
                     {Object.keys(gromacsJobs).map((tprFile) => (
-                        <Tab label={tprFile} value={tprFile} />
+                        <Tab label={tprFile} key={tprFile} value={tprFile} />
                     ))}
                 </Tabs>
 

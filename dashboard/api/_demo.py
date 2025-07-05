@@ -238,6 +238,46 @@ def delete_gmx(experiment_id, tpr_name):
         return ApiResponse.error('Gromacs job not found.')
 
 
+demo_log = """
+      R E A L   C Y C L E   A N D   T I M E   A C C O U N T I N G
+
+On 1 MPI rank
+
+ Activity:              Num   Num      Call    Wall time         Giga-Cycles
+                        Ranks Threads  Count      (s)         total sum    %
+--------------------------------------------------------------------------------
+ Domain decomp.            1    1       1000       1.989          5.345   0.4
+ Neighbor search           1    1       1001      23.295         62.614   4.6
+ Force                     1    1      50001     400.675       1076.964  78.7
+ PME mesh                  1    1      50001      66.779        179.495  13.1
+ NB X/F buffer ops.        1    1      99001       4.309         11.581   0.8
+ Write traj.               1    1         11       0.026          0.071   0.0
+ Update                    1    1      50001       3.775         10.148   0.7
+ Constraints               1    1      50001       5.400         14.514   1.1
+ Rest                                              2.702          7.263   0.5
+--------------------------------------------------------------------------------
+ Total                                           508.950       1367.994 100.0
+--------------------------------------------------------------------------------
+ Breakdown of PME mesh activities
+--------------------------------------------------------------------------------
+ PME spread                1    1      50001      29.078         78.158   5.7
+ PME gather                1    1      50001      17.936         48.210   3.5
+ PME 3D-FFT                1    1     100002      16.920         45.479   3.3
+ PME solve Elec            1    1      50001       2.442          6.563   0.5
+--------------------------------------------------------------------------------
+
+               Core t (s)   Wall t (s)        (%)
+       Time:      508.950      508.950      100.0
+                 (ns/day)    (hour/ns)
+Performance:       16.976        1.414
+Finished mdrun on rank 0 Sat Jul  5 16:26:40 2025
+"""
+
+@bp.route('/api/experiments/<experiment_id>/gmx/<tpr_name>/log', methods=['GET'])
+def get_gmx_log(experiment_id, tpr_name):
+    return ApiResponse.success(demo_log)
+
+
 # ----- PUBLISHING -----
 
 demo_experiment = {"id": "xej9e-x3720", "created": "2025-05-11T14:24:31.964333+00:00", "updated": "2025-05-11T14:24:32.188250+00:00", "links": {"applicable-requests": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft/requests/applicable", "communities": {"b53d8a89-d370-475c-be34-67b698e088b1": {"self": "https://mdrepo.eu/api/communities/b53d8a89-d370-475c-be34-67b698e088b1", "self_html": "https://mdrepo.eu/communities/ceitec/records"}}, "draft": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft", "edit_html": "https://mdrepo.eu/experiments/xej9e-x3720/edit", "files": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft/files", "latest": "https://mdrepo.eu/api/experiments/xej9e-x3720/versions/latest", "latest_html": "https://mdrepo.eu/experiments/xej9e-x3720/latest", "publish": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft/actions/publish", "requests": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft/requests", "self": "https://mdrepo.eu/api/experiments/xej9e-x3720/draft", "self_html": "https://mdrepo.eu/experiments/xej9e-x3720/preview", "versions": "https://mdrepo.eu/api/experiments/xej9e-x3720/versions"}, "revision_id": 3, "$schema": "local://experiments-1.0.0.json", "metadata": {"simulations": [{"_dump_sw_version": "127", "_exit_code": 0, "_gromacs_version": "5.1.4", "_metadata_date": "2024-10-24T08:25:13.824043", "_metadump_version": "1.0.0", "_protein_sequences": ["LRIPCCPVNLKRLLVVVVVVVLVVVVIVGALLMGL", "LRIPCCPVNLKRLLVVVVVVVLVVVVIVGALLMGL"], "_tpx_version": "103", "_uniprot_id": "P15785", "detailed_information": {"comm_mode": "linear", "constraint_algorithm": "lincs", "electrostatic_interactions": {"coulomb_modifier": "potential-shift", "coulombtype": "pme", "epsilon_r": 1.0, "epsilon_rf": -1.0, "rcoulomb": 1.2}, "fourierspacing": 0.12, "lincs_iter": 1, "lincs_order": 4, "neighbour_list": {"cutoff_scheme": "verlet", "nstlist": 20, "pbc": "xyz", "rlist": 1.2}, "nstcomm": 1000, "thermostat": {"nsttcouple": 20, "tau_t": [1.0, 1.0, 1.0], "tc_grps": {

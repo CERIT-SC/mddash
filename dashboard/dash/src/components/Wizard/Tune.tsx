@@ -292,9 +292,9 @@ const WizardTune = (props: WizardStepProps) => {
     return (
         <>
             <Stack direction="row" spacing={2} alignItems="center">
-                <Tabs value={selectedTpr} onChange={handleChange} variant="scrollable" scrollButtons="auto">
+                <Tabs value={selectedTpr || false} onChange={handleChange} variant="scrollable" scrollButtons="auto">
                     {Object.keys(tunerJobs).map((tprFile) => (
-                        <Tab label={tprFile} value={tprFile} />
+                        <Tab label={tprFile} key={tprFile} value={tprFile} />
                     ))}
                 </Tabs>
 
