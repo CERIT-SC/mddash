@@ -6,6 +6,7 @@ from uuid import uuid4
 from k8s import create_gromacs_job, delete_gromacs_job, get_job_status
 from k8s_status import JobStatus
 from config import NAMESPACE, DATA_DIR
+from utils import tail
 
 
 class DeviceType(str, Enum):
@@ -94,3 +95,28 @@ class GromacsJob:
         # TODO
         # - get progress from log
         # - get performance (after job completion)
+
+    def get_log(self, tpr_name: str, type: str = 'gmx', tail_lines: int = 100) -> str:
+        """
+        Get the log of the job.
+
+        :param tpr_name: Name of the TPR file
+        :param type: Type of log to retrieve (default is 'gmx')
+        :param tail_lines: Number of lines to retrieve from the end of the log file
+        :return: Log content as a string
+        :raises ValueError: If the log type is invalid
+        :raises FileNotFoundError: If the log file does not exist
+        """
+        deffnm = tpr_name.strip('.tpr')
+
+        match type:
+            case 'gmx':
+                log_file = DATA_DIR / f'{deffnm}.log'
+            case 'stdout':
+                log_file = DATA_DIR / f'{self.job_name}.out'
+            case 'stderr':
+                log_file = DATA_DIR / f'{self.job_name}.err'
+            case _:
+                raise ValueError(f"Invalid log type: {type}")
+
+        return tail(log_file, tail_lines)

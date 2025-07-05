@@ -150,12 +150,23 @@ export const delete_gmx = async (id: string, tprName: string): Promise<ApiData<n
     )
 }
 
+export const gmx_logs = async (id: string, tprName: string, type: 'gmx' | 'stdout' | 'stderr', tail: number): Promise<ApiData<string>> => {
+    return await handle_request(
+        axios.get(`${API_BASE}/experiments/${id}/gmx/${tprName}/log`, {
+            params: { type, tail }
+        }),
+        'Failed to fetch Gromacs logs.'
+    )
+}
+
 
 // ----- Files -----
 
 export const find_files = async (id: string, extension: string): Promise<ApiData<FileOption[]>> => {
     return await handle_request(
-        axios.get(`${API_BASE}/experiments/${id}/files?ext=${extension}`),
+        axios.get(`${API_BASE}/experiments/${id}/files`, {
+            params: { ext: extension }
+        }),
         'Failed to find files.'
     )
 }

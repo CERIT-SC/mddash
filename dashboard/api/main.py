@@ -353,6 +353,31 @@ def delete_gmx(experiment_id, tpr_name):
         return ApiResponse.error(str(e))
 
 
+@bp.route('/api/experiments/<experiment_id>/gmx/<tpr_name>/log', methods=['GET'])
+def get_gmx_log(experiment_id, tpr_name):
+    try:
+        experiment = experiments.get(experiment_id)
+        job = experiment.gromacs_jobs.get(tpr_name)
+
+        if not job:
+            return ApiResponse.error(f"Gromacs job for '{tpr_name}' not found.")
+        
+        log_type = request.args.get('type', 'gmx').lower()
+        tail_lines = request.args.get('tail', '100')
+
+        if log_type not in ['gmx', 'stdout', 'stderr']:
+            return ApiResponse.error("Invalid log type. Use 'gmx', 'stdout', or 'stderr'.")
+
+        if not tail_lines.isdigit():
+            return ApiResponse.error("Tail lines must be a positive integer.")
+
+        job.get_log(log_type, int(tail_lines))
+
+
+    except Exception as e:
+        return ApiResponse.error(str(e))
+
+
 # ----- PUBLISHING -----
 
 @bp.route('/api/experiments/<experiment_id>/publish', methods=['GET'])
