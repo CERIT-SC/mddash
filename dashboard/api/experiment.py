@@ -42,11 +42,8 @@ class Experiment:
 
     @classmethod
     def prepare_env(cls) -> str:
-        id = get_unique_id()
+        id = get_unique_id(DATA_DIR)
         (DATA_DIR / id).mkdir(parents=True, exist_ok=True)
-
-        # TODO: copy jupyter notebook
-
         return id
 
 
