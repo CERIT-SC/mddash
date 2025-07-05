@@ -4,6 +4,7 @@ from kubernetes.client.rest import ApiException
 # TODO
 #  Ensure your pod has a corresponding label, such as spec.template.metadata.labels.app: example-pod.
 
+# XXX: hardcoded gromacs image
 
 def create_notebook_pod(image, ns, id, prefix, token):
     # Load in-cluster config
@@ -31,22 +32,55 @@ def create_notebook_pod(image, ns, id, prefix, token):
                     'type': 'RuntimeDefault'
                 }
             },
+            'initContainers': [
+                {
+                    'securityContext': {
+                        'runAsNonRoot' : True,
+                        'runAsUser': 1000,
+                        'allowPrivilegeEscalation': False,
+                        'capabilities':  {
+                            'drop': [ 'ALL' ]
+                        }
+                    },
+                    'name' : 'init-workdir',
+                    'image': image,
+                    'command' : ['sh', '-c', f'''
+for n in /home/jovyan/*.ipynb; do 
+    b=$(basename "$n")
+    if [ -f "/mddash/{id}/$b" ]; then
+        cp "$n" "/mddash/{id}/$b.new"
+    else
+        cp "$n" "/mddash/{id}/$b"
+    fi
+done
+'''
+                    ],
+                    'volumeMounts' : [
+                        { 'mountPath': '/mddash', 'name' : 'data-volume' }
+                    ]
+                }
+             ],
             'containers': [
                 {
                     'securityContext': {
-                        'runAsNonRoot': True,
+                        'runAsNonRoot' : True,
+                        'runAsUser': 1000,
                         'allowPrivilegeEscalation': False,
                         'capabilities':  {
                             'drop': ['ALL']
                         }
                     },
-                    'name': f'jupyter-{id}',
+                    'name': f'jupyter',
                     'image': image,
                     'imagePullPolicy': 'Always',
                     'resources': {
                         'requests': {'cpu': .1, 'memory': '2Gi'},
                         'limits': {'cpu': 2, 'memory': '8Gi'}
                     },
+                    'workdir': f'/mddash/{id}',
+                    'env': [
+                        { 'name' : 'WORKDIR', 'value' : f'/mddash/{id}' },
+                    ],
                     'args': [
                         'start-notebook.sh',
                         f'--NotebookApp.base_url={prefix}',
@@ -55,6 +89,31 @@ def create_notebook_pod(image, ns, id, prefix, token):
                     ],
                     'volumeMounts': [
                         {'mountPath': '/mddash', 'name': 'data-volume'}
+                    ]
+                },
+                {
+                    'securityContext': {
+                        'runAsNonRoot' : True,
+                        'runAsUser': 1000,
+                        'allowPrivilegeEscalation': False,
+                        'capabilities':  {
+                            'drop': [ 'ALL' ]
+                        }
+                    },
+                    'name': f'gmx',
+                    'image': 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2',
+                    'imagePullPolicy': 'Always',
+                    'resources': {
+                        'requests' : { 'cpu': .1, 'memory': '2Gi' }, 
+                        'limits' : { 'cpu': 2, 'memory' : '8Gi' }
+                    },
+                    'workdir': f'/mddash/{id}',
+                    'args': [
+                        'sleep',
+                        '365d'
+                    ],
+                    'volumeMounts' : [
+                        { 'mountPath': '/mddash', 'name' : 'data-volume' }
                     ]
                 }
             ],
