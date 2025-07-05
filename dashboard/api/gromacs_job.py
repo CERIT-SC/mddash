@@ -4,6 +4,7 @@ from enum import Enum
 from uuid import uuid4
 
 from k8s import create_gromacs_job, delete_gromacs_job, get_job_status
+from k8s_status import JobStatus
 from config import NAMESPACE, DATA_DIR
 
 
@@ -18,20 +19,6 @@ class DeviceType(str, Enum):
     @classmethod
     def from_string(cls, value: str) -> 'DeviceType':
         return cls(value.lower())
-
-
-class JobStatus(str, Enum):
-    PENDING = "PENDING"
-    RUNNING = "RUNNING"
-    TERMINATED = "TERMINATED"
-    ERROR = "ERROR"
-
-    def __str__(self):
-        return self.value
-    
-    @classmethod
-    def from_string(cls, value: str) -> 'JobStatus':
-        return cls(value.upper())
 
 
 @dataclass
@@ -99,7 +86,7 @@ class GromacsJob:
         Poll the status of the job.
         """
         try:
-            self.status = JobStatus.from_string(get_job_status(ns=NAMESPACE, name=self.job_name))
+            self.status = get_job_status(ns=NAMESPACE, name=self.job_name)
         except Exception as e:
             print(f"Failed to get Gromacs job status: {e}")
             self.status = JobStatus.ERROR

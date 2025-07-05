@@ -78,7 +78,10 @@ notebook_running = False
 def create_notebook(experiment_id):
     global notebook_running
     notebook_running = True
-    return ApiResponse.success()
+    return ApiResponse.success({
+        'status': 'PENDING',
+        'path': '/__BASE_PATH__/notebook/' + experiment_id
+    })
 
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['DELETE'])
@@ -90,7 +93,10 @@ def delete_notebook(experiment_id):
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['GET'])
 def get_notebook(experiment_id):
-    return ApiResponse.success({'up': notebook_running, 'path': '/__BASE_PATH__/notebook/' + experiment_id})
+    return ApiResponse.success({
+        'status': 'RUNNING' if notebook_running else 'DOWN',
+        'path': '/__BASE_PATH__/notebook/' + experiment_id
+    })
 
 
 # ----- TUNER -----
