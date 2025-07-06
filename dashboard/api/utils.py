@@ -28,7 +28,7 @@ def get_unique_id(id_dir: Path) -> str:
     return id
 
 
-def get_files_with_extension(dir: Path, ext: str) -> list[dict[str, object]]:
+def get_files_with_extension(dir: Path, ext: str | list[str]) -> list[dict[str, object]]:
     '''
     Get all files in a directory with a specific extension.
 
@@ -36,20 +36,22 @@ def get_files_with_extension(dir: Path, ext: str) -> list[dict[str, object]]:
     :param ext: File extension to filter by (e.g., 'txt', 'tpr').
     :return: List of dictionaries with file name, and size.
     '''
-    ext = ext.lower()
+    ext = [e.lower() for e in ext] if isinstance(ext, list) else [ext.lower()]
     files = []
 
     if not dir.is_dir():
         raise ValueError(f'{dir} is not a directory')
 
     for file_path in dir.iterdir():
-        if not file_path.is_file() or ext and not file_path.name.lower().endswith(f'.{ext}'):
+        if not file_path.is_file():
             continue
 
-        files.append({
-            'name': file_path.name,
-            'size': file_path.stat().st_size
-        })
+        for e in ext:
+            if file_path.suffix.lower() == f'.{e}':
+                files.append({
+                    'name': file_path.name,
+                    'size': file_path.stat().st_size
+                })
 
     return files
 

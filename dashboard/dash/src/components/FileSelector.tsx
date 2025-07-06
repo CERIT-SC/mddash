@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { FormControl, InputLabel, Select, MenuItem, SelectChangeEvent } from "@mui/material";
 
 import { find_files } from "../util/api";
 import { FileOption } from "../util/types";
-
 
 const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 B";
@@ -15,28 +14,36 @@ const formatFileSize = (bytes: number): string => {
 
 export interface FileSelectorProps {
     experimentId: string;
-    extension: string;
+    ext: string | string[];
+    title: string;
     onFileSelected: (filePath: string) => void;
     setErrorMessage?: (message: string) => void;
-    disabled?: boolean;
     width?: React.CSSProperties["width"];
-    height?: React.CSSProperties["height"];
 }
 
 const FileSelector = (props: FileSelectorProps) => {
-    const { experimentId, extension, onFileSelected, setErrorMessage, disabled, width } = props;
+    const { experimentId, ext, onFileSelected, setErrorMessage, title, width = "100%" } = props;
     const [availableFiles, setAvailableFiles] = useState<FileOption[]>([]);
     const [selectedFile, setSelectedFile] = useState<string>("");
 
-    const fetchFiles = async () => {
-        const { data, error } = await find_files(experimentId, extension);
-        setErrorMessage?.(error || "");
+    const fetchFiles = useCallback(async () => {
+        const { data, error } = await find_files(experimentId, ext);
+        if (error && setErrorMessage) setErrorMessage(error);
         setAvailableFiles(data || []);
-    };
+    }, [experimentId, ext, setErrorMessage]);
 
     useEffect(() => {
         fetchFiles();
-    }, [experimentId, extension]);
+    }, [fetchFiles]);
+
+    const menuItems = useMemo(() => 
+        availableFiles.map((file) => (
+            <MenuItem key={file.name} value={file.url}>
+                {file.name} ({formatFileSize(file.size)})
+            </MenuItem>
+        )),
+        [availableFiles]
+    );
 
     const handleFileChange = (event: SelectChangeEvent) => {
         const selectedUrl = event.target.value;
@@ -45,22 +52,13 @@ const FileSelector = (props: FileSelectorProps) => {
     };
 
     return (
-        <FormControl disabled={disabled} style={{ width: width || "100%" }}>
-            <InputLabel id="file-selector-label">Select {extension.toUpperCase()} file</InputLabel>
-            <Select
-                labelId="file-selector-label"
-                value={selectedFile}
-                label={`Select ${extension.toUpperCase()} file`}
-                onChange={handleFileChange}
-            >
+        <FormControl style={{ width }}>
+            <InputLabel id="file-selector-label">{title}</InputLabel>
+            <Select labelId="file-selector-label" value={selectedFile} label={title} onChange={handleFileChange}>
                 <MenuItem value="">
                     <em>None</em>
                 </MenuItem>
-                {availableFiles.map((file) => (
-                    <MenuItem key={file.name} value={file.url}>
-                        {file.name} ({formatFileSize(file.size)})
-                    </MenuItem>
-                ))}
+                {menuItems}
             </Select>
         </FormControl>
     );

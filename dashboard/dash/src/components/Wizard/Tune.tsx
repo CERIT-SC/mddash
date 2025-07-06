@@ -298,7 +298,13 @@ const WizardTune = (props: WizardStepProps) => {
                     ))}
                 </Tabs>
 
-                <FileSelector experimentId={experiment.id} extension="tpr" onFileSelected={newTpr} width={300} />
+                <FileSelector
+                    experimentId={experiment.id}
+                    ext="tpr"
+                    title="Select TPR file"
+                    onFileSelected={newTpr}
+                    width={300}
+                />
             </Stack>
 
             {selectedTpr && (

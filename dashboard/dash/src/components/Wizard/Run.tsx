@@ -365,7 +365,7 @@ const RunView = (props: RunViewProps) => {
 
         const { data, error } = await gmx_logs(experiment.id, tprName, logType, 100);
         setErrorMessage(error || "");
-        return data || "Failed to fetch logs";
+        return data || "";
     }, [experiment.id, tprName, logType, setErrorMessage]);
 
     const statusDisplay = useMemo(() => {
@@ -537,7 +537,13 @@ const WizardRun = (props: WizardStepProps) => {
                     ))}
                 </Tabs>
 
-                <FileSelector experimentId={experiment.id} extension="tpr" onFileSelected={newTpr} width={300} />
+                <FileSelector
+                    experimentId={experiment.id}
+                    ext="tpr"
+                    title="Select TPR file"
+                    onFileSelected={newTpr}
+                    width={300}
+                />
             </Stack>
 
             {selectedTpr && (

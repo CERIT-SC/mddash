@@ -162,10 +162,10 @@ export const gmx_logs = async (id: string, tprName: string, type: 'gmx' | 'stdou
 
 // ----- Files -----
 
-export const find_files = async (id: string, extension: string): Promise<ApiData<FileOption[]>> => {
+export const find_files = async (id: string, extension: string | string[]): Promise<ApiData<FileOption[]>> => {
     return await handle_request(
         axios.get(`${API_BASE}/experiments/${id}/files`, {
-            params: { ext: extension }
+            params: { ext: extension instanceof Array ? extension.join(',') : extension }
         }),
         'Failed to find files.'
     )
