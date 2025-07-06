@@ -282,13 +282,15 @@ def submit_gmx(experiment_id, tpr_name):
 
         # Submit the TPR file to Gromacs
         job = GromacsJob(
+            experiment_id=experiment_id,
+            tpr_name=tpr_name,
             pme=DeviceType.from_string(request.form['pme']),
             nb=DeviceType.from_string(request.form['nb']),
             np=int(request.form['np']),
             ntomp=int(request.form['ntomp']),
             extra_args=request.form['extra_args'],
         )
-        job.start(experiment_id, tpr_name)
+        job.start()
 
         experiment.gromacs_jobs[tpr_name] = job
         experiments.save(STATE_FILE)
@@ -343,7 +345,7 @@ def delete_gmx(experiment_id, tpr_name):
         if not job:
             return ApiResponse.error(f"Gromacs job for '{tpr_name}' not found.")
 
-        job.stop()
+        job.delete()
         experiments.save(STATE_FILE)
 
         return ApiResponse.success()
@@ -362,7 +364,7 @@ def get_gmx_log(experiment_id, tpr_name):
             return ApiResponse.error(f"Gromacs job for '{tpr_name}' not found.")
         
         log_type = request.args.get('type', 'gmx').lower()
-        tail_lines = request.args.get('tail', '100')
+        tail_lines = request.args.get('tail', '10000')
 
         if log_type not in ['gmx', 'stdout', 'stderr']:
             return ApiResponse.error("Invalid log type. Use 'gmx', 'stdout', or 'stderr'.")
@@ -370,7 +372,7 @@ def get_gmx_log(experiment_id, tpr_name):
         if not tail_lines.isdigit():
             return ApiResponse.error("Tail lines must be a positive integer.")
 
-        log = job.get_log(experiment_id, tpr_name, log_type, int(tail_lines))
+        log = job.get_log(log_type, int(tail_lines))
         return ApiResponse.success(log)
 
     except Exception as e:
