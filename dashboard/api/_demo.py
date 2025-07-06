@@ -302,8 +302,9 @@ demo_files = [
 
 @bp.route('/api/experiments/<experiment_id>/files', methods=['GET'])
 def list_experiment_files(experiment_id):
-    ext = request.args.get('ext', '').lower()
-    files = list(filter(lambda f: f['name'].endswith(ext), demo_files)) if ext else demo_files
+    ext_param = request.args.get('ext', '').lower()
+    extensions = [ext.strip() for ext in ext_param.split(',') if ext.strip()]
+    files = list(filter(lambda f: f['name'].split('.').pop() in extensions, demo_files))
     return ApiResponse.success(files)
 
 

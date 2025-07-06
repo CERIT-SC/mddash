@@ -8,6 +8,8 @@ import { DefaultPluginUISpec, PluginUISpec } from "molstar/lib/mol-plugin-ui/spe
 import { PluginUIContext } from "molstar/lib/mol-plugin-ui/context";
 import { Plugin } from "molstar/lib/mol-plugin-ui/plugin";
 import { TrajectoryFromModelAndCoordinates } from "molstar/lib/mol-plugin-state/transforms/model";
+import { BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory";
+import { BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates";
 
 export const initViewerUI = async (element: string | HTMLDivElement, options?: { spec?: PluginUISpec }) => {
     const parent = typeof element === "string" ? (document.getElementById(element)! as HTMLDivElement) : element;
@@ -39,70 +41,57 @@ export const loadStructure = async (
 
 interface LoadTrajectoryParams {
     plugin: PluginUIContext;
-    structureUrl: string;
-    trajectoryUrl: string;
-    structureFormat?: string;
-    trajectoryFormat?: string;
-    structureIsBinary?: boolean;
-    trajectoryIsBinary?: boolean;
-    structureLabel?: string;
-    trajectoryLabel?: string;
+    modelUrl: string;
+    modelFormat?: BuiltInTrajectoryFormat;
+    modelIsBinary?: boolean;
+    modelLabel?: string;
+    coordsUrl: string;
+    coordsFormat?: BuiltInCoordinatesFormat;
+    coordsIsBinary?: boolean;
+    coordsLabel?: string;
     preset?: "default" | "all-models";
 }
 
 export const loadTrajectory = async (params: LoadTrajectoryParams) => {
     const {
         plugin,
-        structureUrl,
-        trajectoryUrl,
-        structureFormat = "gro",
-        trajectoryFormat = "xtc",
-        structureIsBinary = false,
-        trajectoryIsBinary = true,
-        structureLabel,
-        trajectoryLabel,
+        modelUrl,
+        modelFormat = "gro",
+        modelIsBinary = false,
+        modelLabel,
+        coordsUrl,
+        coordsFormat = "xtc",
+        coordsIsBinary = true,
+        coordsLabel,
         preset = "default",
     } = params;
 
-    let model;
-
     // Load topology/structure data
-    const structureData = await plugin.builders.data.download({
-        url: structureUrl,
-        isBinary: structureIsBinary,
-        label: structureLabel,
+    const modelData = await plugin.builders.data.download({
+        url: modelUrl,
+        isBinary: modelIsBinary,
+        label: modelLabel,
     });
 
-    // Check if we should parse as trajectory or use topology provider
-    if (structureFormat === "pdb" || structureFormat === "mmcif" || structureFormat === "cif") {
-        // Parse as trajectory for standard formats
-        const trajectory = await plugin.builders.structure.parseTrajectory(structureData, structureFormat as any);
-        model = await plugin.builders.structure.createModel(trajectory);
-    } else {
-        // Use data format provider for topology formats like GRO
-        const provider = plugin.dataFormats.get(structureFormat);
-        if (!provider) {
-            throw new Error(`Unknown structure format: ${structureFormat}`);
-        }
-        const parsed = await provider.parse(plugin, structureData);
-        model = parsed.topology;
-    }
+    // Parse as trajectory for standard formats
+    const modelTrajectory = await plugin.builders.structure.parseTrajectory(modelData, modelFormat as any);
+    let model = await plugin.builders.structure.createModel(modelTrajectory);
 
     // Load coordinate trajectory data
-    const trajectoryData = await plugin.builders.data.download({
-        url: trajectoryUrl,
-        isBinary: trajectoryIsBinary,
-        label: trajectoryLabel,
+    const coordData = await plugin.builders.data.download({
+        url: coordsUrl,
+        isBinary: coordsIsBinary,
+        label: coordsLabel,
     });
 
-    const coordProvider = plugin.dataFormats.get(trajectoryFormat);
+    const coordProvider = plugin.dataFormats.get(coordsFormat);
     if (!coordProvider) {
-        throw new Error(`Unknown trajectory format: ${trajectoryFormat}`);
+        throw new Error(`Unknown coordinates format: ${coordsFormat}`);
     }
-    const coords = await coordProvider.parse(plugin, trajectoryData);
+    const coords = await coordProvider.parse(plugin, coordData);
 
     // Create trajectory from model and coordinates
-    const trajectory = await plugin
+    const coordsTrajectory = await plugin
         .build()
         .toRoot()
         .apply(
@@ -116,9 +105,9 @@ export const loadTrajectory = async (params: LoadTrajectoryParams) => {
         .commit();
 
     // Apply default preset to create hierarchy
-    const presetResult = await plugin.builders.structure.hierarchy.applyPreset(trajectory, preset);
+    const presetResult = await plugin.builders.structure.hierarchy.applyPreset(coordsTrajectory, preset);
 
-    return { model, coords, trajectory, preset: presetResult };
+    return { model, coords, coordsTrajectory, preset: presetResult };
 };
 
 interface MolStarProps {
@@ -126,9 +115,9 @@ interface MolStarProps {
     height?: React.CSSProperties["height"];
     pdbId?: string;
     structureUrl?: string;
-    structureFormat?: "gro" | "pdb" | "cif" | "mmcif" | "bcif" | "sfd" | "mol" | "mol2";
-    trajectoryUrl?: string;
-    trajectoryFormat?: "xtc" | "trr" | "dcd";
+    structureFormat?: BuiltInTrajectoryFormat;
+    coordsUrl?: string;
+    coordsFormat?: BuiltInCoordinatesFormat;
     setErrorMessage?: (message: string) => void;
 }
 
@@ -139,8 +128,8 @@ export default function MolStar(props: MolStarProps) {
         pdbId,
         structureUrl,
         structureFormat,
-        trajectoryUrl,
-        trajectoryFormat,
+        coordsUrl,
+        coordsFormat,
         setErrorMessage,
     } = props;
 
@@ -188,14 +177,14 @@ export default function MolStar(props: MolStarProps) {
             rootRef.current = root;
 
             // Add validation for URLs
-            if (trajectoryUrl && structureUrl) {
+            if (coordsUrl && structureUrl) {
                 await loadTrajectory({
                     plugin,
-                    structureUrl,
-                    trajectoryUrl,
-                    structureFormat,
-                    trajectoryFormat,
-                    structureIsBinary: structureFormat !== "pdb",
+                    modelUrl: structureUrl,
+                    coordsUrl: coordsUrl,
+                    modelFormat: structureFormat,
+                    coordsFormat: coordsFormat,
+                    modelIsBinary: structureFormat !== "pdb",
                 });
             } else if (structureUrl) {
                 await loadStructure(plugin, structureUrl, {
@@ -209,9 +198,7 @@ export default function MolStar(props: MolStarProps) {
             }
         } catch (error) {
             console.error("Error initializing Mol* viewer:", error);
-            if (setErrorMessage) {
-                setErrorMessage(`Error initializing Mol* viewer: ${error}`);
-            }
+            setErrorMessage?.(`Error initializing Mol* viewer: ${error}`);
         } finally {
             setLoading(false);
         }
@@ -222,7 +209,7 @@ export default function MolStar(props: MolStarProps) {
 
         // Cleanup on unmount
         return cleanup;
-    }, [structureUrl, trajectoryUrl, pdbId]);
+    }, [structureUrl, coordsUrl, pdbId]);
 
     return (
         <div style={{ width, height, position: "relative", zIndex: 10 }}>

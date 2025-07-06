@@ -96,7 +96,7 @@ class GromacsJob:
         # - get progress from log
         # - get performance (after job completion)
 
-    def get_log(self, tpr_name: str, type: str = 'gmx', tail_lines: int = 100) -> str:
+    def get_log(self, experiment_id: str, tpr_name: str, type: str = 'gmx', tail_lines: int = 100) -> str:
         """
         Get the log of the job.
 
@@ -111,11 +111,11 @@ class GromacsJob:
 
         match type:
             case 'gmx':
-                log_file = DATA_DIR / f'{deffnm}.log'
+                log_file = DATA_DIR / experiment_id / f'{deffnm}.log'
             case 'stdout':
-                log_file = DATA_DIR / f'{self.job_name}.out'
+                log_file = DATA_DIR / experiment_id / f'{self.job_name}.out'
             case 'stderr':
-                log_file = DATA_DIR / f'{self.job_name}.err'
+                log_file = DATA_DIR / experiment_id / f'{self.job_name}.err'
             case _:
                 raise ValueError(f"Invalid log type: {type}")
 

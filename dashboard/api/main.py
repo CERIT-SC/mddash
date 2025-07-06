@@ -2,7 +2,6 @@ import os
 from flask import Flask, Blueprint, request, send_file, abort
 from dataclasses import asdict
 
-
 from config import STATE_FILE, PREFIX, NAMESPACE, NOTEBOOK_IMAGE, DATA_DIR
 from experiment import Experiment
 from state import Experiments
@@ -371,8 +370,8 @@ def get_gmx_log(experiment_id, tpr_name):
         if not tail_lines.isdigit():
             return ApiResponse.error("Tail lines must be a positive integer.")
 
-        job.get_log(log_type, int(tail_lines))
-
+        log = job.get_log(experiment_id, tpr_name, log_type, int(tail_lines))
+        return ApiResponse.success(log)
 
     except Exception as e:
         return ApiResponse.error(str(e))
@@ -415,9 +414,9 @@ def publish_experiment(experiment_id):
 @bp.route('/api/experiments/<experiment_id>/files', methods=['GET'])
 def list_experiment_files(experiment_id):
     try:
-        extension = request.args.get('ext', '').lower()
-
-        files = get_files_with_extension(DATA_DIR / experiment_id, extension)
+        ext_param = request.args.get('ext', '').lower()
+        extensions = [ext.strip() for ext in ext_param.split(',') if ext.strip()]
+        files = get_files_with_extension(DATA_DIR / experiment_id, extensions)
         # add URLs to file list
         for f in files:
             f['url'] = f'{PREFIX}/api/experiments/{experiment_id}/files/{f["name"]}'
