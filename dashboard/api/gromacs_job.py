@@ -24,6 +24,10 @@ class DeviceType(str, Enum):
 
 @dataclass
 class GromacsJob:
+    # ID of the parent experiment
+    experiment_id: str
+    # Name of the TPR file
+    tpr_name: str
     # Device type for PME calculations
     pme: DeviceType
     # Device type for non-bonded interactions
@@ -40,28 +44,29 @@ class GromacsJob:
     status: JobStatus = JobStatus.PENDING
     # Performance (ns/day)
     performance: float | None = None
+    # Total steps of the job
+    nsteps: int | None = None
+    # Steps completed so far
+    nsteps_done: int | None = None
 
-    def start(self, experiment_id: str, tpr_name: str) -> None:
+    def start(self) -> None:
         """
         Start the job with the specified parameters.
-
-        :param experiment_id: ID of the experiment
-        :param tpr_name: Name of the TPR file
         """
         try:
-            deffnm = tpr_name.strip('.tpr')
+            deffnm = self.tpr_name.strip('.tpr')
             result_extensions = ['edr', 'gro', 'log', 'trr', 'xtc', 'cpt']
 
             # delete files from previous runs
             for ext in result_extensions:
-                file = DATA_DIR / experiment_id / f'{deffnm}.{ext}'
+                file = DATA_DIR / self.experiment_id / f'{deffnm}.{ext}'
                 file.unlink(missing_ok=True)
 
             create_gromacs_job(
                 ns=NAMESPACE,
                 name=self.job_name,
-                experiment_id=experiment_id,
-                tpr_name=tpr_name,
+                experiment_id=self.experiment_id,
+                tpr_name=self.tpr_name,
                 nb=self.nb,
                 pme=self.pme,
                 np=self.np,
@@ -72,12 +77,17 @@ class GromacsJob:
             print(f"Failed to start Gromacs job: {e}")
             self.status = JobStatus.ERROR
 
-    def stop(self) -> None:
+    def delete(self) -> None:
         """
-        Stop the job.
+        Delete the job and its associated resources.
         """
         try:
+            # Delete the job from Kubernetes
             delete_gromacs_job(ns=NAMESPACE, name=self.job_name)
+            
+            # Delete log files
+            (DATA_DIR / self.experiment_id / f'{self.job_name}.out').unlink(missing_ok=True)
+            (DATA_DIR / self.experiment_id / f'{self.job_name}.err').unlink(missing_ok=True)
         except Exception as e:
             print(f"Failed to stop Gromacs job: {e}")
             self.status = JobStatus.ERROR
@@ -96,26 +106,25 @@ class GromacsJob:
         # - get progress from log
         # - get performance (after job completion)
 
-    def get_log(self, experiment_id: str, tpr_name: str, type: str = 'gmx', tail_lines: int = 100) -> str:
+    def get_log(self, type: str = 'gmx', tail_lines: int = 100) -> str:
         """
         Get the log of the job.
 
-        :param tpr_name: Name of the TPR file
         :param type: Type of log to retrieve (default is 'gmx')
         :param tail_lines: Number of lines to retrieve from the end of the log file
         :return: Log content as a string
         :raises ValueError: If the log type is invalid
         :raises FileNotFoundError: If the log file does not exist
         """
-        deffnm = tpr_name.strip('.tpr')
+        deffnm = self.tpr_name.strip('.tpr')
 
         match type:
             case 'gmx':
-                log_file = DATA_DIR / experiment_id / f'{deffnm}.log'
+                log_file = DATA_DIR / self.experiment_id / f'{deffnm}.log'
             case 'stdout':
-                log_file = DATA_DIR / experiment_id / f'{self.job_name}.out'
+                log_file = DATA_DIR / self.experiment_id / f'{self.job_name}.out'
             case 'stderr':
-                log_file = DATA_DIR / experiment_id / f'{self.job_name}.err'
+                log_file = DATA_DIR / self.experiment_id / f'{self.job_name}.err'
             case _:
                 raise ValueError(f"Invalid log type: {type}")
 

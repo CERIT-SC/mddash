@@ -27,7 +27,7 @@ const steps = [
     { label: "Publish", icon: <Publish />, child: WizardPublish },
 ];
 
-const ColorlibConnector = styled(StepConnector)(({ theme }) => ({
+const ColorLibConnector = styled(StepConnector)(({ theme }) => ({
     [`&.${stepConnectorClasses.alternativeLabel}`]: {
         top: 22,
     },
@@ -52,7 +52,7 @@ const ColorlibConnector = styled(StepConnector)(({ theme }) => ({
     },
 }));
 
-const ColorlibStepIconRoot = styled("div")<{ ownerState: { completed?: boolean; active?: boolean } }>(
+const ColorLibStepIconRoot = styled("div")<{ ownerState: { completed?: boolean; active?: boolean } }>(
     ({ theme, ownerState }) => ({
         backgroundColor: "#ccc",
         zIndex: 1,
@@ -113,19 +113,19 @@ const WizardStepper = (props: WizardStepperProps) => {
         changeStep: changeStep,
     };
 
-    const ColorlibStepIcon = (props: StepIconProps) => {
+    const ColorLibStepIcon = (props: StepIconProps) => {
         const { active, completed, className, icon } = props;
         const idx = Number(icon) - 1;
         const step = steps[idx];
 
         return (
-            <ColorlibStepIconRoot
+            <ColorLibStepIconRoot
                 ownerState={{ completed, active }}
                 className={className}
                 onClick={() => changeStep(idx)}
             >
                 {step.icon}
-            </ColorlibStepIconRoot>
+            </ColorLibStepIconRoot>
         );
     };
 
@@ -135,10 +135,10 @@ const WizardStepper = (props: WizardStepperProps) => {
                 DEBUG: next step
             </Button>
 
-            <Stepper alternativeLabel activeStep={activeStep} connector={<ColorlibConnector />}>
+            <Stepper alternativeLabel activeStep={activeStep} connector={<ColorLibConnector />}>
                 {steps.map((step, idx) => (
                     <Step key={step.label} completed={idx < experiment.step}>
-                        <StepLabel StepIconComponent={ColorlibStepIcon}>{step.label}</StepLabel>
+                        <StepLabel StepIconComponent={ColorLibStepIcon}>{step.label}</StepLabel>
                     </Step>
                 ))}
             </Stepper>

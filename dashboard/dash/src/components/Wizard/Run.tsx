@@ -22,6 +22,7 @@ import FileSelector from "../FileSelector";
 import { GromacsJob } from "../../util/types";
 import { submit_gmx, delete_gmx, gmx_status, gmx_statuses, gmx_logs } from "../../util/api";
 import LogsView from "../LogsView";
+import ConfirmDialog from "../ConfirmDialog";
 
 const MDRUN_ARGUMENTS = [
     { key: "xvg", type: "select", options: ["xmgrace", "xmgr", "none"], description: "xvg plot formatting" },
@@ -149,7 +150,19 @@ const ManualStartForm = (props: ManualStartFormProps) => {
 
             <Grid container spacing={2} ref={formRef} component="form" onSubmit={handleSubmit}>
                 <Grid size={6}>
-                    <TextField name="np" type="number" label="Number of MPI processes (np)" required fullWidth />
+                    <TextField
+                        name="np"
+                        type="number"
+                        label="Number of MPI processes (np)"
+                        slotProps={{
+                            htmlInput: {
+                                min: 1,
+                                step: 1,
+                            },
+                        }}
+                        required
+                        fullWidth
+                    />
                 </Grid>
 
                 <Grid size={6}>
@@ -157,6 +170,12 @@ const ManualStartForm = (props: ManualStartFormProps) => {
                         name="ntomp"
                         type="number"
                         label="Number of OpenMP threads per MPI rank to start (-ntomp)"
+                        slotProps={{
+                            htmlInput: {
+                                min: 0, // 0 makes mdrun guess the value
+                                step: 1,
+                            },
+                        }}
                         required
                         fullWidth
                     />
@@ -313,6 +332,7 @@ const RunView = (props: RunViewProps) => {
     const [jobRunning, setJobRunning] = useState(false);
     const [jobStatus, setJobStatus] = useState<GromacsJob | null>(null);
     const [logType, setLogType] = useState<"gmx" | "stdout" | "stderr" | null>(null);
+    const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
 
     const fetchStatus = async (showError: boolean) => {
         const { data, error } = await gmx_status(experiment.id, tprName);
@@ -401,10 +421,14 @@ const RunView = (props: RunViewProps) => {
                     {jobStatus.pme} / {jobStatus.nb}
                 </Typography>
 
-                <Typography variant="subtitle2" color="text.secondary">
-                    Extra Arguments
-                </Typography>
-                <Typography variant="body2">{jobStatus.extra_args || "None"}</Typography>
+                {jobStatus.extra_args && (
+                    <>
+                        <Typography variant="subtitle2" color="text.secondary">
+                            Extra Arguments
+                        </Typography>
+                        <Typography variant="body2">{jobStatus.extra_args}</Typography>
+                    </>
+                )}
             </Stack>
         );
     }, [
@@ -433,7 +457,7 @@ const RunView = (props: RunViewProps) => {
                                 variant="contained"
                                 color="error"
                                 onClick={() => {
-                                    deleteJob(tprName);
+                                    setConfirmDeleteDialog(true);
                                 }}
                             >
                                 Delete Job
@@ -456,7 +480,7 @@ const RunView = (props: RunViewProps) => {
                                     <MenuItem value="">
                                         <em>None</em>
                                     </MenuItem>
-                                    <MenuItem value="gmx">GMX Log</MenuItem>
+                                    <MenuItem value="gmx">Gromacs Log</MenuItem>
                                     <MenuItem value="stdout">Standard Output</MenuItem>
                                     <MenuItem value="stderr">Standard Error</MenuItem>
                                 </Select>
@@ -478,6 +502,12 @@ const RunView = (props: RunViewProps) => {
                     )}
                 </Box>
             )}
+            <ConfirmDialog
+                open={confirmDeleteDialog}
+                setOpen={setConfirmDeleteDialog}
+                onConfirm={() => deleteJob(tprName)}
+                message="Are you sure you want to delete this Gromacs job? The data will be lost."
+            />
         </>
     );
 };
