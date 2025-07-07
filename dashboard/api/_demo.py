@@ -177,26 +177,34 @@ def delete_tuner(experiment_id, tpr_name):
 # ----- GROMACS -----
 
 gromacs_demo_job = {
-    'id': 'e5167_00001',
-    'status': 'RUNNING',
+    'experiment_id': 'abcde',
+    'tpr_name': 'LSD.tpr',
     'np': 2,
     'ntomp': 8,
-    'nb': 'cpu',
     'pme': 'cpu',
+    'nb': 'cpu',
     'extra_args': '',
+    'job_name': 'gromacs-6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
+    'status': 'RUNNING',
+    'nsteps': 100000,
+    'nsteps_done': 76543,
     'performance': None
 }
 
 gromacs_demo_jobs = {
     'LSD.tpr': gromacs_demo_job,
     'MDMA.tpr': {
-        'id': 'e5167_00002',
-        'status': 'TERMINATED',
+        'experiment_id': 'abcde',
+        'tpr_name': 'MDMA.tpr',
         'np': 8,
         'ntomp': 1,
         'nb': 'gpu',
         'pme': 'cpu',
         'extra_args': '-v  -nt 8 -ddorder pp_pme',
+        'job_name': 'gromacs-6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
+        'status': 'TERMINATED',
+        'nsteps': 100000,
+        'nsteps_done': 100000,
         'performance': 70.158
     }
 }

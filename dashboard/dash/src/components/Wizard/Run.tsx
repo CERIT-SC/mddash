@@ -15,6 +15,7 @@ import {
     InputLabel,
     Select,
     TextField,
+    LinearProgress,
 } from "@mui/material";
 
 import { WizardStepProps } from "./Stepper";
@@ -398,6 +399,32 @@ const RunView = (props: RunViewProps) => {
                 </Typography>
                 <Chip label={jobStatus.status} color={getStatusColor(jobStatus.status)} />
 
+                {jobStatus.status === "RUNNING" && jobStatus.nsteps !== null && jobStatus.nsteps_done !== null && (
+                    <>
+                        <Typography variant="subtitle2" color="text.secondary">
+                            Progress
+                        </Typography>
+                        <Box sx={{ width: "100%", minWidth: 300 }}>
+                            <Box sx={{ display: "flex", alignItems: "center" }}>
+                                <Box sx={{ width: "100%", mr: 1 }}>
+                                    <LinearProgress
+                                        variant="determinate"
+                                        value={(jobStatus.nsteps_done / jobStatus.nsteps) * 100}
+                                    />
+                                </Box>
+                                <Box sx={{ minWidth: 35 }}>
+                                    <Typography variant="body2" color="text.secondary">
+                                        {`${((jobStatus.nsteps_done / jobStatus.nsteps) * 100).toFixed(1)}%`}
+                                    </Typography>
+                                </Box>
+                            </Box>
+                            <Typography variant="caption" color="text.secondary">
+                                {`${jobStatus.nsteps_done.toLocaleString()} / ${jobStatus.nsteps.toLocaleString()} steps`}
+                            </Typography>
+                        </Box>
+                    </>
+                )}
+
                 {jobStatus.performance && (
                     <>
                         <Typography variant="subtitle2" color="text.secondary">
@@ -433,12 +460,14 @@ const RunView = (props: RunViewProps) => {
         );
     }, [
         jobStatus?.status,
-        jobStatus?.performance,
         jobStatus?.np,
         jobStatus?.ntomp,
         jobStatus?.pme,
         jobStatus?.nb,
         jobStatus?.extra_args,
+        jobStatus?.nsteps,
+        jobStatus?.nsteps_done,
+        jobStatus?.performance,
     ]);
 
     return (
