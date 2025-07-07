@@ -53,14 +53,17 @@ export interface TunerTrial {
     performance: number | null;
 }
 
-// NOTE: work in progress (could extend TunerTrial)
 export interface GromacsJob {
-    id: string;
-    status: JobStatus;
+    experiment_id: string;
+    tpr_name: string;
     np: number;
     ntomp: number;
     pme: "cpu" | "gpu" | "auto";
     nb: "cpu" | "gpu" | "auto";
     extra_args: string;
+    job_name: string;
+    status: JobStatus;
+    nsteps: number;
+    nsteps_done: number;
     performance: number | null;
 }

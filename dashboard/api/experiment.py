@@ -1,7 +1,7 @@
 import io
 import requests
-import uuid
 import zipfile
+from uuid import uuid4
 from dataclasses import dataclass, field
 from shutil import rmtree
 from werkzeug.datastructures import FileStorage
@@ -24,7 +24,7 @@ class Experiment:
     # status message shown in the UI
     status: str
     # token for accessing jupyter notebook
-    token: str = str(uuid.uuid4())
+    token: str = field(default_factory=lambda: str(uuid4()))
     # Tuner jobs of the experiment, key is a TPR file name
     tuner_jobs: dict[str, dict] = field(default_factory=dict)
     # GROMACS jobs of the experiment, key is a TPR file name

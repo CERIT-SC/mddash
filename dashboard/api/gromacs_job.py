@@ -1,7 +1,8 @@
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from enum import Enum
-
 from uuid import uuid4
+from pathlib import Path
 
 from k8s import create_gromacs_job, delete_gromacs_job, get_job_status
 from k8s_status import JobStatus
@@ -28,38 +29,53 @@ class GromacsJob:
     experiment_id: str
     # Name of the TPR file
     tpr_name: str
-    # Device type for PME calculations
-    pme: DeviceType
-    # Device type for non-bonded interactions
-    nb: DeviceType
     # Number of MPI processes
     np: int
     # Number of OpenMP threads per MPI rank to start (0 is guess)
     ntomp: int
+    # Device type for PME calculations
+    pme: DeviceType
+    # Device type for non-bonded interactions
+    nb: DeviceType
     # Extra arguments for the job
     extra_args: str
     # Unique job name
-    job_name: str = f'gromacs-{uuid4()}'
+    job_name: str = field(default_factory=lambda: f'gromacs-{uuid4()}')
     # Status of the job
     status: JobStatus = JobStatus.PENDING
-    # Performance (ns/day)
-    performance: float | None = None
     # Total steps of the job
     nsteps: int | None = None
     # Steps completed so far
     nsteps_done: int | None = None
+    # Performance (ns/day)
+    performance: float | None = None
+
+    @property
+    def _deffnm(self) -> str:
+        return self.tpr_name.rstrip('.tpr')
+
+    @property
+    def _gmx_log(self) -> Path:
+        return DATA_DIR / self.experiment_id / f'{self._deffnm}.log'
+
+    @property
+    def _stdout_log(self) -> Path:
+        return DATA_DIR / self.experiment_id / f'{self.job_name}.out'
+
+    @property
+    def _stderr_log(self) -> Path:
+        return DATA_DIR / self.experiment_id / f'{self.job_name}.err'
 
     def start(self) -> None:
         """
         Start the job with the specified parameters.
         """
         try:
-            deffnm = self.tpr_name.strip('.tpr')
             result_extensions = ['edr', 'gro', 'log', 'trr', 'xtc', 'cpt']
 
             # delete files from previous runs
             for ext in result_extensions:
-                file = DATA_DIR / self.experiment_id / f'{deffnm}.{ext}'
+                file = DATA_DIR / self.experiment_id / f'{self._deffnm}.{ext}'
                 file.unlink(missing_ok=True)
 
             create_gromacs_job(
@@ -86,8 +102,8 @@ class GromacsJob:
             delete_gromacs_job(ns=NAMESPACE, name=self.job_name)
             
             # Delete log files
-            (DATA_DIR / self.experiment_id / f'{self.job_name}.out').unlink(missing_ok=True)
-            (DATA_DIR / self.experiment_id / f'{self.job_name}.err').unlink(missing_ok=True)
+            self._stdout_log.unlink(missing_ok=True)
+            self._stderr_log.unlink(missing_ok=True)
         except Exception as e:
             print(f"Failed to stop Gromacs job: {e}")
             self.status = JobStatus.ERROR
@@ -98,15 +114,14 @@ class GromacsJob:
         """
         try:
             self.status = get_job_status(ns=NAMESPACE, name=self.job_name)
+            self.get_nsteps()
+            self.get_nsteps_done()
+            self.get_performance()
         except Exception as e:
             print(f"Failed to get Gromacs job status: {e}")
             self.status = JobStatus.ERROR
 
-        # TODO
-        # - get progress from log
-        # - get performance (after job completion)
-
-    def get_log(self, type: str = 'gmx', tail_lines: int = 100) -> str:
+    def get_log(self, type: str = 'gmx', tail_lines: int | None = None) -> str:
         """
         Get the log of the job.
 
@@ -116,16 +131,98 @@ class GromacsJob:
         :raises ValueError: If the log type is invalid
         :raises FileNotFoundError: If the log file does not exist
         """
-        deffnm = self.tpr_name.strip('.tpr')
-
         match type:
             case 'gmx':
-                log_file = DATA_DIR / self.experiment_id / f'{deffnm}.log'
+                log_file = self._gmx_log
             case 'stdout':
-                log_file = DATA_DIR / self.experiment_id / f'{self.job_name}.out'
+                log_file = self._stdout_log
             case 'stderr':
-                log_file = DATA_DIR / self.experiment_id / f'{self.job_name}.err'
+                log_file = self._stderr_log
             case _:
                 raise ValueError(f"Invalid log type: {type}")
 
-        return tail(log_file, tail_lines)
+        if tail_lines:
+            return tail(log_file, tail_lines)
+        else:
+            with open(log_file, 'r') as f:
+                return f.read()
+
+    def get_nsteps(self) -> int | None:
+        """
+        Get the total number of steps for the job.
+
+        :return: Total number of steps or None if not available
+        """
+        if self.nsteps is not None:
+            return self.nsteps
+
+        try:
+            with open(self._gmx_log, 'r') as f:
+                for line in f:
+                    if 'nsteps' not in line:
+                        continue
+
+                    parts = line.split('=')
+                    self.nsteps = int(parts[-1].strip())
+                    return self.nsteps
+
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Error reading nsteps from log file:", e)
+            return None
+
+        return None
+
+    def get_nsteps_done(self) -> int | None:
+        """
+        Get the number of steps completed so far.
+
+        :return: Number of steps completed or None if not available
+        """
+        try:
+            log = tail(self._gmx_log, 20)
+            pattern = r'^\s*\d+\s+\d+\.\d+\s*'
+            for line in reversed(log.splitlines()):
+                # if the simulation has finished, return the total steps
+                if 'Finished mdrun' in line:
+                    self.nsteps_done = self.get_nsteps()
+                    return self.nsteps_done
+
+                if not re.match(pattern, line):
+                    continue
+
+                parts = line.split()
+                self.nsteps_done = int(parts[0])
+                return self.nsteps_done
+
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Error reading nsteps done from log file:", e)
+            return None
+
+        return None
+
+    def get_performance(self) -> float | None:
+        """
+        Get the performance of the job in ns/day.
+
+        :return: Performance in ns/day or None if not available
+        """
+        if self.performance is not None:
+            return self.performance
+
+        if self.status != JobStatus.TERMINATED:
+            return None
+
+        try:
+            log = tail(self._gmx_log, 20)
+            for line in reversed(log.splitlines()):
+                if 'Performance:' not in line:
+                    continue
+
+                parts = line.split()
+                self.performance = float(parts[-2])
+
+        except (FileNotFoundError, ValueError) as e:
+            print(f"Error reading performance from log file:", e)
+            return None
+
+        return None
