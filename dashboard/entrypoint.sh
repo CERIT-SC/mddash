@@ -22,8 +22,8 @@ if [ -n "$JUPYTERHUB_API_TOKEN" ] || [ -n "$JUPYTERHUB_SERVICE_PREFIX" ]; then
     
     # inject base path for dashboard
     echo "$(date): Injecting base path"
-    BASE_PATH="${JUPYTERHUB_SERVICE_PREFIX}/dash"
-    API_PATH="${JUPYTERHUB_SERVICE_PREFIX}/dash/api"
+    BASE_PATH="${JUPYTERHUB_SERVICE_PREFIX}dash"
+    API_PATH="${JUPYTERHUB_SERVICE_PREFIX}dash/api"
 
     echo "$(date): Base path: ${BASE_PATH}"
     echo "$(date): API path: ${API_PATH}"
