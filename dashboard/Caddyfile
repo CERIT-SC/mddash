@@ -23,32 +23,42 @@ http://:8888 {
         format console
     }
 
-    # Handle JupyterHub prefix
-    handle_path {$CADDY_ROUTE_PREFIX}/* {
+    # Handle your API routes - forward full path unchanged
+    @api_routes {
+        path_regexp ^/user/[^/]+/dash/api.*$
+    }
+    handle @api_routes {
+        reverse_proxy localhost:5000
+    }
 
-        # API proxy
-        route /api/* {
-            reverse_proxy localhost:5000
+    # Handle exact /dash path (redirect to /dash/)
+    @dash_redirect {
+        path_regexp ^(/user/[^/]+)/dash$
+    }
+    redir @dash_redirect {re.1}/dash/ 308
+
+    # Handle all dashboard routes starting with /dash/
+    handle_path /user/*/dash/* {
+        root * /var/tmp
+        
+        # Strip the user prefix and serve files from /dash/
+        @is_asset {
+            path_regexp ^/user/[^/]+/dash/(.*)$
         }
-
-        # add trailing slash for /dash
-        @dash_needs_slash {
-            path /dash
+        rewrite @is_asset /dash/{re.1}
+        
+        @not_a_file {
+            not file {path}
         }
-        redir @dash_needs_slash {$CADDY_ROUTE_PREFIX}/dash/ 308
+        rewrite @not_a_file /dash/index.html
+        
+        file_server
+        encode zstd gzip
+    }
 
-        # dashboard website
-        route /dash/* {
-            root * /var/tmp
-
-            @not_a_file {
-                not file {path}
-            }
-            rewrite @not_a_file /dash/index.html
-
-            file_server
-            encode zstd gzip
-        }
+    # JupyterHub - everything else
+    handle /user/* {
+        reverse_proxy localhost:8889
     }
 
     # Fallback response
