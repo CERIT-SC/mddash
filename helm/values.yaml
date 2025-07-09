@@ -6,15 +6,48 @@ jupyterhub:
         authenticator_class: dummy
       DummyAuthenticator:
         password: "admin"
-    
+
   singleuser:
+    # Your custom MD Dashboard image
     image:
-      name: jupyter/base-notebook
-      tag: "latest"
-    defaultUrl: "/lab"
-    
+      name: mddash
+      tag: "dev"
+      pullPolicy: Never # TEMPORARY (delete when the image is in a registry)
+
+    # Default URL to your dashboard
+    defaultUrl: "/dash"
+
+    # Security context from your deployment
+    uid: 1000
+    fsGid: 1000
+    allowPrivilegeEscalation: false
+
+    # Resource limits from your deployment
+    memory:
+      guarantee: 4G
+      limit: 4G
+    cpu:
+      guarantee: 0.2
+      limit: 1
+
+    # Mount user home to /mddash instead of default /home/jovyan
+    storage:
+      capacity: 10Gi
+      homeMountPath: /mddash
+
+    extraEnv:
+      POD_NAMESPACE: "{{ .Release.Namespace }}"
+
+    # Increased timeout for custom image startup
+    startTimeout: 600
+
   proxy:
     secretToken: "your-secret-token-here-change-me"
-    
+
+  # TEMPORARY Disable image pre-puller since we're using local images
+  prePuller:
+    continuous:
+      enabled: false
+
   ingress:
     enabled: false

@@ -25,7 +25,8 @@ from k8s import (
 
 experiments = Experiments.load(STATE_FILE)
 
-bp = Blueprint('dash', __name__)
+# Create blueprint with URL prefix
+bp = Blueprint('dash', __name__, url_prefix=f'{PREFIX}/dash')
 
 
 # ----- HEALTH CHECK -----

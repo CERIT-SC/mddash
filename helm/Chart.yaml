@@ -6,6 +6,6 @@ version: 0.1.0
 appVersion: "1.0"
 
 dependencies:
-- name: jupyterhub
-  version: "3.3.7"
-  repository: "https://hub.jupyter.org/helm-chart/"
+  - name: jupyterhub
+    version: "3.3.7"
+    repository: "https://hub.jupyter.org/helm-chart/"
