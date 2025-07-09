@@ -1,15 +1,27 @@
-ns=$(shell yq .prodNamespace ../config.yaml)
-dashboard_image=$(shell yq .dashboard.image ../config.yaml)
+ns = fida-ns
+package = mddash
 
 
 install:
-	helm install mddash -n ${ns} jupyterhub/jupyterhub -f values.yaml \
-		--set hub.config.GenericOAuthenticator.client_secret=${shell cat client_secret} \
-		--set hub.config.notebookImage=${dashboard_image} \
-		--set-file hub.extraConfig.form-0=form-0.py \
-		--set-file hub.extraConfig.pre-spawn-hook=pre-spawn-hook.py
+	helm install $(package) . --namespace $(ns) --create-namespace
+
+upgrade:
+	helm dependency update .
+	helm upgrade $(package) . --namespace $(ns)
 
 uninstall:
-	helm uninstall mddash -n ${ns}
+	helm uninstall $(package) --namespace $(ns)
 
+test:
+	helm template $(package) . --debug --namespace $(ns)
 
+status:
+	@echo "=== Helm Release Status ==="
+	helm status $(package) --namespace $(ns)
+	@echo "\n=== Pod Status ==="
+	kubectl get pods -n $(ns)
+	@echo "\n=== Service Status ==="
+	kubectl get svc -n $(ns)
+
+logs:
+	kubectl logs -f deployment/hub -n $(ns)
