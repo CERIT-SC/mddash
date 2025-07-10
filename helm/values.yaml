@@ -22,6 +22,9 @@ jupyterhub:
     fsGid: 1000
     allowPrivilegeEscalation: false
 
+    # ServiceAccount with Kubernetes API access
+    serviceAccountName: "mddash-user"
+
     # Resource limits from your deployment
     memory:
       guarantee: 4G
