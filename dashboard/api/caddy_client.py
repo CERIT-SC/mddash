@@ -11,16 +11,20 @@ CADDY_ADMIN_API_URL = "http://localhost:2019"
 
 def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> str | None:
     """
-    Adds a new WebSocket proxy route inside the first handle_path block of the first HTTP server in Caddy.
-    Assigns a unique ID to the route for easier deletion.
+    Adds a new proxy route for notebook access in the current Caddy configuration.
+    Inserts the route before the general dash routes to avoid conflicts with React Router.
 
-    :param relative_path_match: The path to match for the WebSocket route.
-    :param upstream_address: The address of the WebSocket server to proxy to.
+    :param path: The path to match for the route (e.g., "/user/admin/dash/notebook/experiment1")
+    :param upstream: The address of the server to proxy to (e.g., "localhost:8081")
     :param route_id: Optional. A specific ID for the route. If None, a UUID will be generated.
     :return: The ID of the added route if successful, None otherwise.
     """
     if route_id is None:
-        route_id = f"route-{uuid.uuid4()}" # Generate a unique ID
+        route_id = f"route-{uuid.uuid4()}"
+
+    # Ensure the path has /* at the end to catch all subpaths
+    if not path.endswith("/*"):
+        path = path.rstrip("/") + "/*"
 
     new_route_config = {
         "@id": route_id,
@@ -29,35 +33,21 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
         ],
         "handle": [
             {
-                "handler": "subroute",
-                "routes": [
-                    {
-                        "handle": [
-                            # prepend the striped prefix to the request URI
-                            {
-                                "handler": "rewrite",
-                                "uri": f"{PREFIX}{{http.request.uri}}"
-                            },
-                            # proxy the request to the upstream server
-                            {
-                                "handler": "reverse_proxy",
-                                "upstreams": [
-                                    {"dial": upstream}
-                                ]
-                            }
-                        ]
-                    }
+                "handler": "rewrite",
+                "uri": f"{PREFIX}{{http.request.uri}}"
+            },
+            {
+                "handler": "reverse_proxy",
+                "upstreams": [
+                    {"dial": upstream}
                 ]
             }
         ]
     }
 
-    # NOTE: This kinda relies on the Caddyfile config
-    # Assumes:
-    # - srv0 is the first server
-    # - The handle_path block is the first route in srv0 (index 0)
-    # - The handle_path's internal subroute handler is the first handler (index 0)
-    url = f"{CADDY_ADMIN_API_URL}/config/apps/http/servers/srv0/routes/0/handle/0/routes/"
+    # Insert the route at position 2 (after API routes and dash redirect, before general dash routes)
+    # This ensures notebook routes are matched before React Router catches them
+    url = f"{CADDY_ADMIN_API_URL}/config/apps/http/servers/srv0/routes/@2"
     
     headers = {"Content-Type": "application/json"}
 
@@ -96,7 +86,7 @@ def remove_route(route_id: str) -> bool:
 if __name__ == "__main__":
 
     success = add_proxy_route(
-        path="/my_endpoint/*",
+        path="/user/admin/dash/notebook/experiment1",
         upstream="localhost:8081"
     )
 
