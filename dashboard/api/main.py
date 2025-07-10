@@ -124,8 +124,8 @@ def start_notebook(experiment_id):
             return ApiResponse.error(f'Failed to create notebook service: {str(e)}')
 
         route_id = caddy_client.add_proxy_route(
-            path=f'/notebook/{experiment_id}/*',
-            upstream=f'svc-{experiment_id}.{NAMESPACE}.svc.cluster.local:80',
+            path=f'{PREFIX}/notebook/{experiment_id}',
+            upstream=f'{svc_name}.{NAMESPACE}.svc.cluster.local:80',
             route_id=f'route-{experiment_id}-notebook',
         )
         if route_id is None:
