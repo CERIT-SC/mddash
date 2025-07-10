@@ -28,7 +28,7 @@ jupyterhub:
     # Resource limits from your deployment
     memory:
       guarantee: 4G
-      limit: 4G
+      limit: 16G
     cpu:
       guarantee: 0.2
       limit: 1
@@ -39,7 +39,12 @@ jupyterhub:
       homeMountPath: /mddash
 
     extraEnv:
-      POD_NAMESPACE: "{{ .Release.Namespace }}"
+      POD_NAMESPACE:
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+      NOTEBOOK_IMAGE:
+        value: "cerit.io/ljocha/mddash-notebook"
 
     # Increased timeout for custom image startup
     startTimeout: 600

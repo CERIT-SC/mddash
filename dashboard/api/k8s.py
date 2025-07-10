@@ -8,7 +8,11 @@ from k8s_status import JobStatus, PodStatus
 
 # XXX: hardcoded gromacs image
 
-def create_notebook_pod(image, ns, id, prefix, token):
+def create_notebook_pod(image, ns, pvc, name, experiment_id, prefix, token):
+    if ping_resource('pod', name, ns):
+        print(f"Pod {name} already exists in namespace {ns}. Skipping creation.")
+        return
+
     # Load in-cluster config
     config.load_incluster_config()
 
@@ -20,10 +24,10 @@ def create_notebook_pod(image, ns, id, prefix, token):
         'apiVersion': 'v1',
         'kind': 'Pod',
         'metadata': {
-            'name': f'jupyter-{id}',
+            'name': name,
             'namespace': ns,
             'labels': {
-                'app': f'jupyter-{id}'
+                'app': name
             }
         },
         'spec': {
@@ -47,14 +51,20 @@ def create_notebook_pod(image, ns, id, prefix, token):
                     'name' : 'init-workdir',
                     'image': image,
                     'command' : ['sh', '-c', f'''
-for n in /home/jovyan/*.ipynb; do 
-    b=$(basename "$n")
-    if [ -f "/mddash/{id}/$b" ]; then
-        cp "$n" "/mddash/{id}/$b.new"
-    else
-        cp "$n" "/mddash/{id}/$b"
-    fi
-done
+mkdir -p "/mddash/{experiment_id}"
+# Check if any .ipynb files exist before trying to copy them
+if ls /home/jovyan/*.ipynb 1> /dev/null 2>&1; then
+    for n in /home/jovyan/*.ipynb; do 
+        b=$(basename "$n")
+        if [ -f "/mddash/{experiment_id}/$b" ]; then
+            cp "$n" "/mddash/{experiment_id}/$b.new"
+        else
+            cp "$n" "/mddash/{experiment_id}/$b"
+        fi
+    done
+else
+    echo "No .ipynb files found in /home/jovyan/, skipping copy"
+fi
 '''
                     ],
                     'volumeMounts' : [
@@ -79,14 +89,14 @@ done
                         'requests': {'cpu': .1, 'memory': '2Gi'},
                         'limits': {'cpu': 2, 'memory': '8Gi'}
                     },
-                    'workdir': f'/mddash/{id}',
+                    'workdir': f'/mddash/{experiment_id}',
                     'env': [
-                        { 'name' : 'WORKDIR', 'value' : f'/mddash/{id}' },
+                        { 'name' : 'WORKDIR', 'value' : f'/mddash/{experiment_id}' },
                     ],
                     'args': [
                         'start-notebook.sh',
                         f'--NotebookApp.base_url={prefix}',
-                        f'--NotebookApp.notebook_dir=/mddash/{id}',
+                        f'--NotebookApp.notebook_dir=/mddash/{experiment_id}',
                         f'--NotebookApp.token="{token}"',
                     ],
                     'volumeMounts': [
@@ -109,7 +119,7 @@ done
                         'requests' : { 'cpu': .1, 'memory': '2Gi' }, 
                         'limits' : { 'cpu': 2, 'memory' : '8Gi' }
                     },
-                    'workdir': f'/mddash/{id}',
+                    'workdir': f'/mddash/{experiment_id}',
                     'args': [
                         'sleep',
                         '365d'
@@ -122,7 +132,7 @@ done
             'volumes': [
                 {
                     'name': 'data-volume',
-                    'persistentVolumeClaim': {'claimName': 'mddash-data'}
+                    'persistentVolumeClaim': {'claimName': pvc}
                 }
             ]
         }
@@ -159,34 +169,38 @@ def ping_resource(resource_type, name, ns):
         return False
 
 
-def delete_notebook_pod(ns, id):
-    if not ping_resource('pod', f'jupyter-{id}', ns):
+def delete_pod(ns, name):
+    if not ping_resource('pod', name, ns):
         return
 
     config.load_incluster_config()
     api = client.CoreV1Api()
-    api.delete_namespaced_pod(name='jupyter-'+id, namespace=ns)
+    api.delete_namespaced_pod(name=name, namespace=ns)
 
 
-def delete_notebook_service(ns, id):
-    if not ping_resource('svc', f'svc-{id}', ns):
+def delete_service(ns, name):
+    if not ping_resource('svc', name, ns):
         return
 
     config.load_incluster_config()
     api = client.CoreV1Api()
-    api.delete_namespaced_service(name='svc-'+id, namespace=ns)
+    api.delete_namespaced_service(name=name, namespace=ns)
 
 
-def create_notebook_service(ns, id):
+def create_service(ns, name, target_name):
+    if ping_resource('svc', name, ns):
+        print(f"Service {name} already exists in namespace {ns}. Skipping creation.")
+        return
+
     config.load_incluster_config()
 
     service = client.V1Service(
         metadata=client.V1ObjectMeta(
-            name=f'svc-{id}',
+            name=name,
             namespace=ns
         ),
         spec=client.V1ServiceSpec(
-            selector={"app": f"jupyter-{id}"},
+            selector={"app": target_name},
             ports=[client.V1ServicePort(
                 protocol="TCP",
                 port=80,
@@ -245,7 +259,11 @@ def get_namespace_resource_allocation(ns):
         return {'cpu': 0, 'memory': 0, 'gpu': 0}
 
 
-def create_gromacs_job(ns: str, name: str, experiment_id: str, tpr_name: str, np: int, ntomp: int, nb: str, pme: str, extra_args: str):
+def create_gromacs_job(ns: str, pvc: str, name: str, experiment_id: str, tpr_name: str, np: int, ntomp: int, nb: str, pme: str, extra_args: str):
+    if ping_resource('job', name, ns):
+        print(f"Job {name} already exists in namespace {ns}. Skipping creation.")
+        return
+    
     config.load_incluster_config()
     batch_v1 = client.BatchV1Api()
 
@@ -326,7 +344,7 @@ def create_gromacs_job(ns: str, name: str, experiment_id: str, tpr_name: str, np
                         {
                             'name': 'vol-1',
                             'persistentVolumeClaim': {
-                                'claimName': 'mddash-data'
+                                'claimName': pvc
                             }
                         }
                     ]
@@ -338,7 +356,11 @@ def create_gromacs_job(ns: str, name: str, experiment_id: str, tpr_name: str, np
     batch_v1.create_namespaced_job(namespace=ns, body=job_manifest)
 
 
-def delete_gromacs_job(ns: str, name: str):
+def delete_job(ns: str, name: str):
+    if not ping_resource('job', name, ns):
+        print(f"Job {name} does not exist in namespace {ns}. Skipping deletion.")
+        return
+
     config.load_incluster_config()
     batch_v1 = client.BatchV1Api()
     batch_v1.delete_namespaced_job(
