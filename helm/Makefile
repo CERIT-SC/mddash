@@ -1,8 +1,10 @@
 ns = fida-ns
 package = mddash
 
-
 install:
+	helm repo add kuberay https://ray-project.github.io/kuberay-helm/ || true
+	helm install kuberay-operator kuberay/kuberay-operator || true
+	helm dependency update .
 	helm install $(package) . --namespace $(ns) --create-namespace
 
 upgrade:
