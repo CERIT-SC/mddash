@@ -59,3 +59,23 @@ jupyterhub:
 
   ingress:
     enabled: false
+
+gromacs-tuner:
+  image:
+    repository: cerit.io/xkrasa/gromacs-tuner-api
+    tag: "1.2"
+    pullPolicy: Never  # TEMPORARY (delete when the image is in a registry)
+
+  ray:
+    version: "2.42.1"
+    image: "cerit.io/adamondrejka/gmx-cuda-ray-2-42-1-with-user"
+
+  auth:
+    user: "admin"
+    password: "strong-secret-here"
+
+  storage:
+    storageClassName: "standard"
+
+  ingress:
+    enabled: false
