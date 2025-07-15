@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # This script serves as the entrypoint for both JupyterHub single-user server
 # and standalone dashboard modes
@@ -7,7 +7,7 @@
 mkdir -p /mddash/logs
 
 # Log all output for debugging
-exec > >(tee -a /mddash/logs/entrypoint.log) 2>&1
+exec >> /mddash/logs/entrypoint.log 2>&1
 
 echo "$(date): Entrypoint started with args: $@"
 echo "$(date): Environment variables:"

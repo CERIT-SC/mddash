@@ -4,7 +4,13 @@ FROM ${IMAGE}
 
 USER root
 
-RUN apk add sudo bash vim git openssh-client-default
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    sudo \
+    bash \
+    vim \
+    git \
+    openssh-client \
+    && rm -rf /var/lib/apt/lists/*
 
 # RUN rm -rf /opt/api
 
