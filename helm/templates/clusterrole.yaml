@@ -1,0 +1,17 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-hub-clusterrole
+rules:
+# Required for enable_user_namespaces
+- apiGroups: [""]
+  resources: ["namespaces"]
+  verbs: ["create", "delete", "get", "list", "watch"]
+# Required for managing pods across namespaces
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "services", "persistentvolumeclaims", "events"]
+  verbs: ["create", "delete", "get", "list", "watch", "update", "patch"]
+# Required for batch jobs if you use them
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
