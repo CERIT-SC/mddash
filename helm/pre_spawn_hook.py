@@ -1,6 +1,6 @@
 import os
-from kubernetes_asyncio import client, config
-from kubernetes_asyncio.client.rest import ApiException
+from kubernetes_asyncio import client, config  # type: ignore
+from kubernetes_asyncio.client.rest import ApiException  # type: ignore
 
 
 SERVICE_ACCOUNT_NAME = "mddash-user"
