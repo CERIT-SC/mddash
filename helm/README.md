@@ -143,7 +143,11 @@ jupyterhub:
   ingress:
     enabled: true
     hosts:
-      - your-domain.com
+      - host: mddash.dyn.cloud.e-infra.cz
+    tls:
+      - hosts:
+          - mddash.dyn.cloud.e-infra.cz
+        secretName: mddash-dyn-cloud-e-infra-cz-tls
 ```
 
 **Change authentication:**
@@ -152,11 +156,21 @@ jupyterhub:
   hub:
     config:
       JupyterHub:
-        authenticator_class: oauthenticator.GitHubOAuthenticator
-      GitHubOAuthenticator:
-        oauth_callback_url: "https://your-domain.com/hub/oauth_callback"
-        client_id: "your-client-id"
-        client_secret: "your-client-secret"
+        authenticator_class: generic-oauth
+      GenericOAuthenticator:
+        authorize_url: https://login.e-infra.cz/oidc/authorize
+        token_url: https://login.e-infra.cz/oidc/token
+        userdata_url: https://login.e-infra.cz/oidc/userinfo
+        oauth_callback_url: https://mddash.dyn.cloud.e-infra.cz/hub/oauth_callback
+        client_id: <your-client-id>
+        client_secret: <your-client-secret>
+        userdata_params:
+          state: state
+        scope:
+          - openid
+          - profile
+          - email
+        username_key: preferred_username
 ```
 
 ## Cleanup
