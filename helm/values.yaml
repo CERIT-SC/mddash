@@ -1,9 +1,4 @@
 jupyterhub:
-  # Disable all NetworkPolicies globally
-  global:
-    networkPolicy:
-      enabled: false
-
   hub:
     config:
       JupyterHub:
@@ -14,35 +9,18 @@ jupyterhub:
       KubeSpawner:
         enable_user_namespaces: true
         user_namespace_template: "user-{username}"
-        # Configure explicit service-based communication
         services_enabled: true
-        # Use internal cluster IPs and let Kubernetes handle service discovery
-        internal_ssl: false
-
-    # Disable NetworkPolicy to allow cross-namespace communication
-    networkPolicy:
-      enabled: false
 
   singleuser:
-    # Your custom MD Dashboard image
     image:
       name: mddash
       tag: "dev"
       pullPolicy: Never # TEMPORARY (delete when the image is in a registry)
 
-    # Default URL to your dashboard
+    # Default URL to redirect after spawn
     defaultUrl: "/dash"
 
-    # Security context from your deployment
-    uid: 1000
-    fsGid: 1000
-    allowPrivilegeEscalation: false
-
-    # Disable NetworkPolicy to allow cross-namespace communication
-    networkPolicy:
-      enabled: false
-
-    # Resource limits from your deployment
+    # Resource limits
     memory:
       guarantee: 4G
       limit: 16G
@@ -50,7 +28,7 @@ jupyterhub:
       guarantee: 0.2
       limit: 1
 
-    # Mount user home to /mddash instead of default /home/jovyan
+    # User PVC configuration
     storage:
       capacity: 10Gi
       homeMountPath: /mddash
@@ -62,8 +40,6 @@ jupyterhub:
             fieldPath: metadata.namespace
       NOTEBOOK_IMAGE:
         value: "cerit.io/ljocha/mddash-notebook"
-      JUPYTERHUB_API_URL: "http://hub.fida-ns.svc.cluster.local:8081/hub/api"
-      JUPYTERHUB_ACTIVITY_URL: "http://hub.fida-ns.svc.cluster.local:8081/hub/api/users/admin/activity"
 
     # Increased timeout for custom image startup
     startTimeout: 600
