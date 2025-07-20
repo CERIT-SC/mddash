@@ -1,4 +1,9 @@
 jupyterhub:
+  # Disable all NetworkPolicies globally
+  global:
+    networkPolicy:
+      enabled: false
+
   hub:
     config:
       JupyterHub:
@@ -6,6 +11,17 @@ jupyterhub:
         authenticator_class: dummy
       DummyAuthenticator:
         password: "admin"
+      KubeSpawner:
+        enable_user_namespaces: true
+        user_namespace_template: "user-{username}"
+        # Configure explicit service-based communication
+        services_enabled: true
+        # Use internal cluster IPs and let Kubernetes handle service discovery
+        internal_ssl: false
+
+    # Disable NetworkPolicy to allow cross-namespace communication
+    networkPolicy:
+      enabled: false
 
   singleuser:
     # Your custom MD Dashboard image
@@ -22,8 +38,9 @@ jupyterhub:
     fsGid: 1000
     allowPrivilegeEscalation: false
 
-    # ServiceAccount with Kubernetes API access
-    serviceAccountName: "mddash-user"
+    # Disable NetworkPolicy to allow cross-namespace communication
+    networkPolicy:
+      enabled: false
 
     # Resource limits from your deployment
     memory:
@@ -45,6 +62,8 @@ jupyterhub:
             fieldPath: metadata.namespace
       NOTEBOOK_IMAGE:
         value: "cerit.io/ljocha/mddash-notebook"
+      JUPYTERHUB_API_URL: "http://hub.fida-ns.svc.cluster.local:8081/hub/api"
+      JUPYTERHUB_ACTIVITY_URL: "http://hub.fida-ns.svc.cluster.local:8081/hub/api/users/admin/activity"
 
     # Increased timeout for custom image startup
     startTimeout: 600
