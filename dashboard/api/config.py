@@ -18,10 +18,9 @@ FRONTEND_DIR = Path("/var/tmp/dash")
 NOTEBOOK_IMAGE=os.environ.get('NOTEBOOK_IMAGE', 'quay.io/jupyter/base-notebook')
 
 
-NAMESPACE = os.environ.get('POD_NAMESPACE')
+NAMESPACE = os.environ.get('POD_NAMESPACE', 'default')
 
-if not NAMESPACE:
-    print("⚠️ POD_NAMESPACE environment variable is not set. Defaulting to 'default'.")
-    NAMESPACE = "default"
+if NAMESPACE == "default":
+    print("⚠️ Warning: Using default namespace. Is the POD_NAMESPACE environment variable set correctly?")
 
 PVC_NAME = f"claim-{JUPYTER_USER}{JUPYTER_SERVER_NAME}"
