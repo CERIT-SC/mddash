@@ -8,6 +8,7 @@ import Layout from './Layout'
 import Home from './pages/Home'
 import New from './pages/New'
 import Wizard from './pages/Wizard'
+import NotFound from './pages/error/404'
 
 
 createRoot(document.getElementById('root')!).render(
@@ -18,6 +19,7 @@ createRoot(document.getElementById('root')!).render(
                     <Route index element={<Home />} />
                     <Route path="/__BASE_PATH__/new" element={<New />} />
                     <Route path="/__BASE_PATH__/:id/wizard" element={<Wizard />} />
+                    <Route path="*" element={<NotFound />} />
                 </Route>
             </Routes>
         </BrowserRouter>
