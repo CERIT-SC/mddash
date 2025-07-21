@@ -38,8 +38,11 @@ def index():
 
 @bp.route('/api/metrics', methods=['GET'])
 def get_metrics():
-    metrics = get_namespace_resource_allocation(NAMESPACE)
-    return ApiResponse.success(metrics)
+    try:
+        metrics = get_namespace_resource_allocation(NAMESPACE)
+        return ApiResponse.success(metrics)
+    except Exception as e:
+        return ApiResponse.error(str(e))
 
 
 # ----- EXPERIMENTS -----

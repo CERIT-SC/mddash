@@ -3,6 +3,9 @@ from kubernetes.client.rest import ApiException
 
 from k8s_status import JobStatus, PodStatus
 
+GPU_TYPE = 'nvidia.com/mig-1g.10gb'
+
+
 # TODO
 #  Ensure your pod has a corresponding label, such as spec.template.metadata.labels.app: example-pod.
 
@@ -224,39 +227,43 @@ def get_namespace_resource_allocation(ns):
     '''
     config.load_incluster_config()
     api = client.CoreV1Api()
+    pods = api.list_namespaced_pod(namespace=ns)
+    total_cpu_requests = 0
+    total_memory_requests = 0
+    total_gpu_requests = 0
 
-    try:
-        pods = api.list_namespaced_pod(namespace=ns)
-        total_cpu_requests = 0
-        total_memory_requests = 0
+    for pod in pods.items:
+        for container in pod.spec.containers:
+            requests = getattr(getattr(container, 'resources', None), 'requests', None)
+            if not requests:
+                continue
 
-        for pod in pods.items:
-            for container in pod.spec.containers:
-                if container.resources and container.resources.requests:
-                    # Parse CPU requests
-                    if 'cpu' in container.resources.requests:
-                        cpu_str = container.resources.requests['cpu']
-                        if cpu_str.endswith('m'):
-                            total_cpu_requests += int(cpu_str[:-1]) / 1000
-                        else:
-                            total_cpu_requests += float(cpu_str)
+            # Parse CPU requests
+            if cpu_str := requests.get('cpu'):
+                if str(cpu_str).endswith('m'):
+                    total_cpu_requests += int(str(cpu_str)[:-1]) / 1000
+                else:
+                    total_cpu_requests += float(cpu_str)
 
-                    # Parse memory requests
-                    if 'memory' in container.resources.requests:
-                        mem_str = container.resources.requests['memory']
-                        if mem_str.endswith('Gi'):
-                            total_memory_requests += float(mem_str[:-2])
-                        elif mem_str.endswith('Mi'):
-                            total_memory_requests += float(mem_str[:-2]) / 1024
+            # Parse memory requests
+            if mem_str := requests.get('memory'):
+                if str(mem_str).endswith('Gi'):
+                    total_memory_requests += float(str(mem_str)[:-2])
+                elif str(mem_str).endswith('Mi'):
+                    total_memory_requests += float(str(mem_str)[:-2]) / 1024
 
-        return {
-            'cpu': round(total_cpu_requests, 3),
-            'memory': round(total_memory_requests, 2),
-            'gpu': 0
-        }
-    except Exception as e:
-        print(f"Error: {e}")
-        return {'cpu': 0, 'memory': 0, 'gpu': 0}
+            # Parse GPU requests
+            if gpu_str := requests.get(GPU_TYPE):
+                try:
+                    total_gpu_requests += float(gpu_str)
+                except Exception:
+                    pass
+
+    return {
+        'cpu': round(total_cpu_requests, 2),
+        'memory': round(total_memory_requests, 2),
+        'gpu': int(total_gpu_requests)
+    }
 
 
 def create_gromacs_job(ns: str, pvc: str, name: str, experiment_id: str, tpr_name: str, np: int, ntomp: int, nb: str, pme: str, extra_args: str):
@@ -324,12 +331,12 @@ def create_gromacs_job(ns: str, pvc: str, name: str, experiment_id: str, tpr_nam
                                 'requests': {
                                     'cpu': str(np * ntomp),
                                     'memory': f'{4 * np}Gi',
-                                    'nvidia.com/mig-1g.10gb': '1' if nb == 'gpu' or pme == 'gpu' else '0'
+                                    GPU_TYPE: '1' if nb == 'gpu' or pme == 'gpu' else '0'
                                 },
                                 'limits': {
                                     'cpu': str(np * ntomp),
                                     'memory': f'{4 * np}Gi',
-                                    'nvidia.com/mig-1g.10gb': '1' if nb == 'gpu' or pme == 'gpu' else '0'
+                                    GPU_TYPE: '1' if nb == 'gpu' or pme == 'gpu' else '0'
                                 }
                             },
                             'volumeMounts': [
