@@ -284,7 +284,7 @@ def create_gromacs_job(
     pvc: str,
     name: str,
     experiment_id: str,
-    tpr_name: str,
+    deffnm: str,
     np: int,
     ntomp: int,
     nb: str,
@@ -294,7 +294,7 @@ def create_gromacs_job(
     if ping_resource('job', name, ns):
         print(f"Job {name} already exists in namespace {ns}. Skipping creation.")
         return
-    
+
     config.load_incluster_config()
     batch_v1 = client.BatchV1Api()
 
@@ -305,7 +305,7 @@ def create_gromacs_job(
 
     image = 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2'
 
-    command = f"mpirun -np {np} gmx mdrun -ntomp {ntomp} -nb {nb} -pme {pme} -deffnm {tpr_name.strip('.tpr')} {extra_args} >{name}.out 2>{name}.err"
+    command = f"mpirun -np {np} gmx mdrun -ntomp {ntomp} -nb {nb} -pme {pme} -deffnm {deffnm} {extra_args} >{name}.out 2>{name}.err"
 
     job_manifest = {
         'apiVersion': 'batch/v1',

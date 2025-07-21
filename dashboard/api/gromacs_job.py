@@ -52,7 +52,7 @@ class GromacsJob:
 
     @property
     def _deffnm(self) -> str:
-        return self.tpr_name.rstrip('.tpr')
+        return self.tpr_name.removesuffix('.tpr')
 
     @property
     def _gmx_log(self) -> Path:
@@ -83,7 +83,7 @@ class GromacsJob:
                 pvc=PVC_NAME,
                 name=self.job_name,
                 experiment_id=self.experiment_id,
-                tpr_name=self.tpr_name,
+                deffnm=self._deffnm,
                 nb=self.nb,
                 pme=self.pme,
                 np=self.np,
