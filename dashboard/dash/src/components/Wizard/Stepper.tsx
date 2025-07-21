@@ -18,6 +18,7 @@ import WizardRun from "./Run";
 import WizardAnalyze from "./Analyze";
 import WizardPublish from "./Publish";
 import { Experiment } from "../../util/types";
+import { DEBUG } from "../../util/const";
 
 const steps = [
     { label: "Setup", icon: <BlurOn />, child: WizardSetup },
@@ -131,9 +132,11 @@ const WizardStepper = (props: WizardStepperProps) => {
 
     return (
         <>
-            <Button variant="contained" onClick={() => nextStep()}>
-                DEBUG: next step
-            </Button>
+            {DEBUG && (
+                <Button variant="contained" onClick={() => nextStep()}>
+                    DEBUG: next step
+                </Button>
+            )}
 
             <Stepper alternativeLabel activeStep={activeStep} connector={<ColorLibConnector />}>
                 {steps.map((step, idx) => (
