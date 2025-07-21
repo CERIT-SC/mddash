@@ -3,7 +3,7 @@ import requests
 MDREPO_URL = 'https://mdrepo.eu/api'
 
 
-def login(email, password) -> str:
+def login(email: str, password: str) -> str:
     '''
     Login to the MDRepo server and return the token.
     

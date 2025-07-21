@@ -11,7 +11,15 @@ GPU_TYPE = 'nvidia.com/mig-1g.10gb'
 
 # XXX: hardcoded gromacs image
 
-def create_notebook_pod(image, ns, pvc, name, experiment_id, prefix, token):
+def create_notebook_pod(
+    image: str,
+    ns: str,
+    pvc: str,
+    name: str,
+    experiment_id: str,
+    prefix: str,
+    token: str
+) -> None:
     if ping_resource('pod', name, ns):
         print(f"Pod {name} already exists in namespace {ns}. Skipping creation.")
         return
@@ -145,7 +153,7 @@ fi
     # except ApiException as e:
 
 
-def ping_resource(resource_type, name, ns):
+def ping_resource(resource_type: str, name: str, ns: str) -> bool:
     config.load_incluster_config()
     api = client.CoreV1Api()
 
@@ -172,7 +180,7 @@ def ping_resource(resource_type, name, ns):
         return False
 
 
-def delete_pod(ns, name):
+def delete_pod(ns: str, name: str) -> None:
     if not ping_resource('pod', name, ns):
         return
 
@@ -181,7 +189,7 @@ def delete_pod(ns, name):
     api.delete_namespaced_pod(name=name, namespace=ns)
 
 
-def delete_service(ns, name):
+def delete_service(ns: str, name: str) -> None:
     if not ping_resource('svc', name, ns):
         return
 
@@ -190,7 +198,7 @@ def delete_service(ns, name):
     api.delete_namespaced_service(name=name, namespace=ns)
 
 
-def create_service(ns, name, target_name):
+def create_service(ns: str, name: str, target_name: str) -> None:
     if ping_resource('svc', name, ns):
         print(f"Service {name} already exists in namespace {ns}. Skipping creation.")
         return
@@ -219,7 +227,7 @@ def create_service(ns, name, target_name):
     )
 
 
-def get_namespace_resource_allocation(ns):
+def get_namespace_resource_allocation(ns: str) -> dict:
     '''
     Get resource requests/limits for all pods in namespace
 
@@ -228,9 +236,9 @@ def get_namespace_resource_allocation(ns):
     config.load_incluster_config()
     api = client.CoreV1Api()
     pods = api.list_namespaced_pod(namespace=ns)
-    total_cpu_requests = 0
-    total_memory_requests = 0
-    total_gpu_requests = 0
+    total_cpu_requests = 0.0
+    total_memory_requests = 0.0
+    total_gpu_requests = 0.0
 
     for pod in pods.items:
         for container in pod.spec.containers:
@@ -247,10 +255,15 @@ def get_namespace_resource_allocation(ns):
 
             # Parse memory requests
             if mem_str := requests.get('memory'):
-                if str(mem_str).endswith('Gi'):
-                    total_memory_requests += float(str(mem_str)[:-2])
-                elif str(mem_str).endswith('Mi'):
-                    total_memory_requests += float(str(mem_str)[:-2]) / 1024
+                mem_str = str(mem_str)
+                if mem_str.endswith('Gi'):
+                    total_memory_requests += float(mem_str[:-2])
+                elif mem_str.endswith('G'):
+                    total_memory_requests += float(mem_str[:-1])
+                elif mem_str.endswith('Mi'):
+                    total_memory_requests += float(mem_str[:-2]) / 1024
+                elif mem_str.endswith('M'):
+                    total_memory_requests += float(mem_str[:-1]) / 1024
 
             # Parse GPU requests
             if gpu_str := requests.get(GPU_TYPE):
@@ -262,11 +275,22 @@ def get_namespace_resource_allocation(ns):
     return {
         'cpu': round(total_cpu_requests, 2),
         'memory': round(total_memory_requests, 2),
-        'gpu': int(total_gpu_requests)
+        'gpu': round(total_gpu_requests, 2)
     }
 
 
-def create_gromacs_job(ns: str, pvc: str, name: str, experiment_id: str, tpr_name: str, np: int, ntomp: int, nb: str, pme: str, extra_args: str):
+def create_gromacs_job(
+    ns: str,
+    pvc: str,
+    name: str,
+    experiment_id: str,
+    tpr_name: str,
+    np: int,
+    ntomp: int,
+    nb: str,
+    pme: str,
+    extra_args: str
+) -> None:
     if ping_resource('job', name, ns):
         print(f"Job {name} already exists in namespace {ns}. Skipping creation.")
         return
@@ -363,7 +387,7 @@ def create_gromacs_job(ns: str, pvc: str, name: str, experiment_id: str, tpr_nam
     batch_v1.create_namespaced_job(namespace=ns, body=job_manifest)
 
 
-def delete_job(ns: str, name: str):
+def delete_job(ns: str, name: str) -> None:
     if not ping_resource('job', name, ns):
         print(f"Job {name} does not exist in namespace {ns}. Skipping deletion.")
         return
