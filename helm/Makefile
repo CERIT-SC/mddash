@@ -1,15 +1,33 @@
-ns=$(shell yq .prodNamespace ../config.yaml)
-dashboard_image=$(shell yq .dashboard.image ../config.yaml)
-
+ns = fida-ns
+package = mddash
 
 install:
-	helm install mddash -n ${ns} jupyterhub/jupyterhub -f values.yaml \
-		--set hub.config.GenericOAuthenticator.client_secret=${shell cat client_secret} \
-		--set hub.config.notebookImage=${dashboard_image} \
-		--set-file hub.extraConfig.form-0=form-0.py \
-		--set-file hub.extraConfig.pre-spawn-hook=pre-spawn-hook.py
+	helm repo add kuberay https://ray-project.github.io/kuberay-helm/ || true
+	helm install kuberay-operator kuberay/kuberay-operator || true
+	helm dependency update .
+	helm install $(package) . --namespace $(ns) --create-namespace \
+		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=pre_spawn_hook.py
+
+upgrade:
+	helm upgrade $(package) . --namespace $(ns) \
+		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=pre_spawn_hook.py
+
+update:
+	helm dependency update .
 
 uninstall:
-	helm uninstall mddash -n ${ns}
+	helm uninstall $(package) --namespace $(ns)
 
+test:
+	helm template $(package) . --debug --namespace $(ns)
 
+status:
+	@echo "=== Helm Release Status ==="
+	helm status $(package) --namespace $(ns)
+	@echo "\n=== Pod Status ==="
+	kubectl get pods -n $(ns)
+	@echo "\n=== Service Status ==="
+	kubectl get svc -n $(ns)
+
+logs:
+	kubectl logs -f deployment/hub -n $(ns)
