@@ -1,5 +1,5 @@
-from kubernetes import client, config
-from kubernetes.client.rest import ApiException
+from kubernetes import client, config  # type: ignore
+from kubernetes.client.rest import ApiException  # type: ignore
 
 from k8s_status import JobStatus, PodStatus
 
