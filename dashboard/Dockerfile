@@ -1,53 +1,41 @@
 FROM node:24-slim AS build-stage
-
 WORKDIR /usr/src/app
 COPY ./dash .
-
-RUN npm install --force
-RUN npm run build
-
+RUN npm install --force && npm run build
 
 FROM caddy:2.10-alpine AS caddy-stage
 
+FROM quay.io/jupyterhub/singleuser:5
 
-FROM alpine:3.21
+USER root
 
-# Install runtime dependencies for Flask, Kubernetes client, and Caddy
-RUN apk add --no-cache \
-    py3-flask \
-    py3-kubernetes \
-    ca-certificates \
-    mailcap \
-    tzdata
+# api requirements
+COPY ./api/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
+RUN mkdir -p /mddash/logs /caddy/data /caddy/config \
+    && chown -R jovyan:users /mddash /caddy
 
-RUN adduser --disabled-password --uid 1000 jovyan
+COPY --from=caddy-stage --chown=jovyan:users /usr/bin/caddy /usr/bin/caddy
+COPY --from=build-stage --chown=jovyan:users /usr/src/app/dist /opt/dash
+COPY --chown=jovyan:users ./api /opt/api
+COPY --chown=jovyan:users ./Caddyfile /caddy/
+COPY --chown=jovyan:users ./start.sh /start.sh
+COPY --chown=jovyan:users ./entrypoint.sh /entrypoint.sh
 
+RUN chmod +x /start.sh /entrypoint.sh
 
-# Copy Caddy binary from caddy-stage
-COPY --from=caddy-stage --chown=jovyan:jovyan /usr/bin/caddy /usr/bin/caddy
-
-# Create Caddy files and set permissions for jovyan user
-RUN mkdir -p /caddy/data /caddy/config
-COPY ./Caddyfile /caddy
-RUN chown -R jovyan:jovyan /caddy
-RUN chmod 644 /caddy/Caddyfile
-
+# caddy environment variables
 ENV XDG_DATA_HOME=/caddy/data
 ENV XDG_CONFIG_HOME=/caddy/config
-
-# Copy the API code and start script
-COPY --chown=jovyan:jovyan ./api /opt/api
-COPY --chown=jovyan:jovyan ./start.sh /start.sh
-RUN chmod +x /start.sh
-
-# Dash frontend app
-COPY --from=build-stage --chown=jovyan:jovyan /usr/src/app/dist /opt/dash
 
 
 USER jovyan
 
 EXPOSE 8888
+
+# Set the new entrypoint that handles both JupyterHub and standalone modes
+ENTRYPOINT ["/entrypoint.sh"]
 
 CMD ["/start.sh"]
 

@@ -4,9 +4,9 @@ from enum import Enum
 from uuid import uuid4
 from pathlib import Path
 
-from k8s import create_gromacs_job, delete_gromacs_job, get_job_status
+from k8s import create_gromacs_job, delete_job, get_job_status
 from k8s_status import JobStatus
-from config import NAMESPACE, DATA_DIR
+from config import NAMESPACE, DATA_DIR, PVC_NAME
 from utils import tail
 
 
@@ -80,6 +80,7 @@ class GromacsJob:
 
             create_gromacs_job(
                 ns=NAMESPACE,
+                pvc=PVC_NAME,
                 name=self.job_name,
                 experiment_id=self.experiment_id,
                 tpr_name=self.tpr_name,
@@ -99,7 +100,7 @@ class GromacsJob:
         """
         try:
             # Delete the job from Kubernetes
-            delete_gromacs_job(ns=NAMESPACE, name=self.job_name)
+            delete_job(ns=NAMESPACE, name=self.job_name)
             
             # Delete log files
             self._stdout_log.unlink(missing_ok=True)

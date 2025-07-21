@@ -23,32 +23,49 @@ http://:8888 {
         format console
     }
 
-    # Handle JupyterHub prefix
-    handle_path {$CADDY_ROUTE_PREFIX}/* {
+    # Handle your API routes - using CADDY_ROUTE_PREFIX with trailing slash
+    @api_routes {
+        path_regexp ^{$CADDY_ROUTE_PREFIX}dash/api.*$
+    }
+    handle @api_routes {
+        reverse_proxy localhost:5000
+    }
 
-        # API proxy
-        route /api/* {
-            reverse_proxy localhost:5000
+    # Handle exact /dash path (redirect to /dash/)
+    @dash_redirect {
+        path {$CADDY_ROUTE_PREFIX}dash
+    }
+    redir @dash_redirect {$CADDY_ROUTE_PREFIX}dash/ 308
+
+    # Handle all dashboard routes starting with /dash/
+    @dash_routes {
+        path_regexp ^{$CADDY_ROUTE_PREFIX}dash/.*$
+    }
+    handle @dash_routes {
+        root * /var/tmp
+        
+        # Strip the prefix and serve files from /dash/
+        @is_asset {
+            path_regexp ^{$CADDY_ROUTE_PREFIX}dash/(.*)$
         }
-
-        # add trailing slash for /dash
-        @dash_needs_slash {
-            path /dash
+        rewrite @is_asset /dash/{re.1}
+        
+        # For React Router: serve index.html for any path that doesn't match a file
+        @not_a_file {
+            not file {path}
         }
-        redir @dash_needs_slash {$CADDY_ROUTE_PREFIX}/dash/ 308
+        rewrite @not_a_file /dash/index.html
+        
+        # Always try to serve files, fallback to index.html
+        try_files {path} /dash/index.html
+        
+        file_server
+        encode zstd gzip
+    }
 
-        # dashboard website
-        route /dash/* {
-            root * /var/tmp
-
-            @not_a_file {
-                not file {path}
-            }
-            rewrite @not_a_file /dash/index.html
-
-            file_server
-            encode zstd gzip
-        }
+    # JupyterHub - everything else
+    handle {$CADDY_ROUTE_PREFIX}* {
+        reverse_proxy localhost:8889
     }
 
     # Fallback response

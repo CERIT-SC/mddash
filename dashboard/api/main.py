@@ -2,7 +2,7 @@ import os
 from flask import Flask, Blueprint, request, send_file, abort
 from dataclasses import asdict
 
-from config import STATE_FILE, PREFIX, NAMESPACE, NOTEBOOK_IMAGE, DATA_DIR
+from config import STATE_FILE, PREFIX, NAMESPACE, NOTEBOOK_IMAGE, DATA_DIR, PVC_NAME
 from experiment import Experiment
 from state import Experiments
 from gromacs_job import GromacsJob, DeviceType
@@ -15,9 +15,9 @@ from k8s_status import PodStatus
 
 from k8s import (
     create_notebook_pod,
-    create_notebook_service,
-    delete_notebook_pod,
-    delete_notebook_service,
+    create_service,
+    delete_pod,
+    delete_service,
     get_pod_status,
     get_namespace_resource_allocation
 )
@@ -25,7 +25,8 @@ from k8s import (
 
 experiments = Experiments.load(STATE_FILE)
 
-bp = Blueprint('dash', __name__)
+# Create blueprint with URL prefix
+bp = Blueprint('dash', __name__, url_prefix=PREFIX)
 
 
 # ----- HEALTH CHECK -----
@@ -106,29 +107,31 @@ def delete_experiment(experiment_id):
 def start_notebook(experiment_id):
     try:
         token = experiments.get(experiment_id).token
+        pod_name = f'notebook-{experiment_id}'
+        svc_name = f'svc-{experiment_id}'
 
         try:
-            create_notebook_pod(NOTEBOOK_IMAGE, NAMESPACE, experiment_id, f'{PREFIX}/notebook/{experiment_id}', token)
+            create_notebook_pod(NOTEBOOK_IMAGE, NAMESPACE, PVC_NAME, pod_name, experiment_id, f'{PREFIX}/notebook/{experiment_id}', token)
         except Exception as e:
             print('Failed to create notebook pod:', e)
             return ApiResponse.error(f'Failed to create notebook pod: {str(e)}')
         
         try:
-            create_notebook_service(NAMESPACE, experiment_id)
+            create_service(NAMESPACE, svc_name, pod_name)
         except Exception as e:
             print('Failed to create notebook service:', e)
-            delete_notebook_pod(NAMESPACE, experiment_id)
+            delete_pod(NAMESPACE, pod_name)
             return ApiResponse.error(f'Failed to create notebook service: {str(e)}')
 
         route_id = caddy_client.add_proxy_route(
-            path=f'/notebook/{experiment_id}/*',
-            upstream=f'svc-{experiment_id}.{NAMESPACE}.svc.cluster.local:80',
+            path=f'{PREFIX}/notebook/{experiment_id}',
+            upstream=f'{svc_name}.{NAMESPACE}.svc.cluster.local:80',
             route_id=f'route-{experiment_id}-notebook',
         )
         if route_id is None:
             print('Failed to add route to Caddy.')
-            delete_notebook_pod(NAMESPACE, experiment_id)
-            delete_notebook_service(NAMESPACE, experiment_id)
+            delete_pod(NAMESPACE, pod_name)
+            delete_service(NAMESPACE, svc_name)
             return ApiResponse.error('Failed to create connection to notebook.')
 
         return ApiResponse.success({
@@ -142,17 +145,21 @@ def start_notebook(experiment_id):
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['DELETE'])
 def delete_notebook(experiment_id):
     try:
+        pod_name = f'notebook-{experiment_id}'
+        svc_name = f'svc-{experiment_id}'
+        route_id = f'route-{experiment_id}-notebook'
+
         try:
-            delete_notebook_pod(NAMESPACE, experiment_id)
+            delete_pod(NAMESPACE, pod_name)
         except Exception as e:
             print(f'Failed to delete notebook pod:', e)
         
         try:
-            delete_notebook_service(NAMESPACE, experiment_id)
+            delete_service(NAMESPACE, svc_name)
         except Exception as e:
             print(f'Failed to delete notebook service:', e)
 
-        if not caddy_client.remove_route(f'route-{experiment_id}-notebook'):
+        if not caddy_client.remove_route(route_id):
             print('Failed to remove route from Caddy.')
 
         return ApiResponse.success()
@@ -164,8 +171,10 @@ def delete_notebook(experiment_id):
 def get_notebook(experiment_id):
     try:
         token = experiments.get(experiment_id).token
+        pod_name = f'notebook-{experiment_id}'
+
         try:
-            status = get_pod_status(NAMESPACE, f'jupyter-{experiment_id}')
+            status = get_pod_status(NAMESPACE, pod_name)
         except Exception as e:
             print(f'Failed to get notebook pod status:', e)
             status = PodStatus.UNKNOWN
