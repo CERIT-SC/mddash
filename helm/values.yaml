@@ -19,6 +19,8 @@ jupyterhub:
       - name: kubeconfig
         mountPath: /home/jovyan/.kube
         readOnly: true
+    networkPolicy:
+      enabled: false
 
   singleuser:
     image:
@@ -46,6 +48,9 @@ jupyterhub:
       homeMountPath: /mddash
       static:
         pvcName: claim-{username}
+
+    networkPolicy:
+      enabled: false
 
     uid: 1000
     fsGid: 100
@@ -89,6 +94,12 @@ jupyterhub:
       - hosts:
           - mddash.dyn.cloud.e-infra.cz
         secretName: mddash-dyn-cloud-e-infra-cz-tls
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 
 # gromacs-tuner:
 #   image:
