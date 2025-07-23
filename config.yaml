@@ -4,12 +4,12 @@ prodNamespace: gmxhub-ns
 dashboard:
   hostname: mddash.k8s.local
   user: fida
-  image: cerit.io/ljocha/mddash
-  devImage: mddash:dev
+  image: cerit.io/xkrasa/mddash
+  devImage: cerit.io/xkrasa/mddash:dev
   devel: true
 
 data:
   size: 10Gi
 
 notebook:
-  image: cerit.io/ljocha/mddash-notebook
+  image: cerit.io/xkrasa/mddash-notebook

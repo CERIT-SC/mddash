@@ -19,3 +19,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # RUN chown -R jovyan /opt/mddash
 
+USER 1000

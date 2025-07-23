@@ -9,6 +9,6 @@ dependencies:
   - name: jupyterhub
     version: "4.2.0"
     repository: "https://hub.jupyter.org/helm-chart/"
-  # - name: gromacs-tuner
-  #   version: "0.1.1"
-  #   repository: "oci://cerit.io/xkrasa"
+  - name: gromacs-tuner
+    version: "0.1.1"
+    repository: "oci://cerit.io/xkrasa"
