@@ -5,6 +5,9 @@ RUN npm install --force && npm run build
 
 FROM caddy:2.10-alpine AS caddy-stage
 
+# remove cap_net_bind_service because caddy will not be binding privileged ports
+RUN apk add --no-cache libcap && setcap -r /usr/bin/caddy
+
 FROM quay.io/jupyterhub/singleuser:5
 
 USER root
@@ -14,14 +17,14 @@ COPY ./api/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 RUN mkdir -p /mddash/logs /caddy/data /caddy/config \
-    && chown -R jovyan:users /mddash /caddy
+    && chown -R 1000:100 /mddash /caddy
 
-COPY --from=caddy-stage --chown=jovyan:users /usr/bin/caddy /usr/bin/caddy
-COPY --from=build-stage --chown=jovyan:users /usr/src/app/dist /opt/dash
-COPY --chown=jovyan:users ./api /opt/api
-COPY --chown=jovyan:users ./Caddyfile /caddy/
-COPY --chown=jovyan:users ./start.sh /start.sh
-COPY --chown=jovyan:users ./entrypoint.sh /entrypoint.sh
+COPY --from=caddy-stage --chown=1000:100 /usr/bin/caddy /usr/bin/caddy
+COPY --from=build-stage --chown=1000:100 /usr/src/app/dist /opt/dash
+COPY --chown=1000:100 ./api /opt/api
+COPY --chown=1000:100 ./Caddyfile /caddy/
+COPY --chown=1000:100 ./start.sh /start.sh
+COPY --chown=1000:100 ./entrypoint.sh /entrypoint.sh
 
 RUN chmod +x /start.sh /entrypoint.sh
 
@@ -30,7 +33,7 @@ ENV XDG_DATA_HOME=/caddy/data
 ENV XDG_CONFIG_HOME=/caddy/config
 
 
-USER jovyan
+USER 1000
 
 EXPOSE 8888
 
