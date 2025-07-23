@@ -24,6 +24,7 @@ jupyterhub:
     image:
       name: "cerit.io/xkrasa/mddash"
       tag: "dev"
+      pullPolicy: Always  # TODO: change to `ifNotPresent` once the image is stable
 
     # Default URL to redirect after spawn
     defaultUrl: "/dash"
