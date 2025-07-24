@@ -2,15 +2,39 @@ jupyterhub:
   hub:
     config:
       JupyterHub:
-        admin_access: true
-        authenticator_class: dummy
-      DummyAuthenticator:
-        password: "admin"
+        authenticator_class: generic-oauth
+      GenericOAuthenticator:
+        authorize_url: https://login.e-infra.cz/oidc/authorize
+        token_url: https://login.e-infra.cz/oidc/token
+        userdata_url: https://login.e-infra.cz/oidc/userinfo
+        oauth_callback_url: https://mddash.dyn.cloud.e-infra.cz/hub/oauth_callback
+        client_id: null  # gets imported from env OAUTH_CLIENT_ID
+        client_secret: null  # gets imported from env OAUTH_CLIENT_SECRET
+        userdata_params:
+          state: state
+        scope:
+          - openid
+          - profile
+          - email
+        username_key: preferred_username
+        allow_all: true  # TODO: maybe change in production idk
       KubeSpawner:
         services_enabled: true
+
     extraEnv:
       RANCHER_PROJECT_ID:
         value: "c-m-qvndqhf6:p-hshk2"  # Set the Rancher project ID for namespace annotation
+      OAUTH_CLIENT_ID:
+        valueFrom:
+          secretKeyRef:
+            name: oidc-credentials
+            key: client_id
+      OAUTH_CLIENT_SECRET:
+        valueFrom:
+          secretKeyRef:
+            name: oidc-credentials
+            key: client_secret
+
     extraVolumes:
       - name: kubeconfig
         secret:
@@ -19,6 +43,13 @@ jupyterhub:
       - name: kubeconfig
         mountPath: /home/jovyan/.kube
         readOnly: true
+
+    extraConfig:
+      oauth-client-secret: |
+        import os
+        c.GenericOAuthenticator.client_id = os.environ.get("OAUTH_CLIENT_ID")
+        c.GenericOAuthenticator.client_secret = os.environ.get("OAUTH_CLIENT_SECRET")
+
     networkPolicy:
       enabled: false
 

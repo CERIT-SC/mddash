@@ -10,12 +10,10 @@ This Helm chart deploys JupyterHub with minimal configuration suitable for devel
 
 ## Quick Start
 
-1. **Test the chart (optional):**
+1. **Get the kubeconfig from rancher and install it as a secret:**
    ```bash
-   make test
+   make kubeconfig
    ```
-
-   This will validate the chart templates without installing.
 
 2. **Deploy JupyterHub:**
    ```bash

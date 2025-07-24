@@ -156,7 +156,7 @@ async def pre_spawn_hook(spawner):
     rbac_api = RbacAuthorizationV1Api()
 
     username = spawner.user.name
-    ns = f"user-{username}"
+    ns = f"mddash-user-{username}-ns"
     rancher_project_id = os.environ.get("RANCHER_PROJECT_ID", "")
     role_name = "mddash-user-role"
     role_binding_name = "mddash-user-binding"
