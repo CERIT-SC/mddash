@@ -143,6 +143,13 @@ def set_pod_env(spawner):
     spawner.environment["JUPYTERHUB_ACTIVITY_URL"] = f"http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api/users/admin/activity"
 
 
+def remove_volume_subpath(spawner):
+    # static storage works with subPath, so we need to remove it from volume mounts
+    for vol_mount in spawner.volume_mounts:
+        if 'subPath' in vol_mount:
+            del vol_mount['subPath']
+
+
 async def pre_spawn_hook(spawner):
     await config.load_kube_config(config_file="/home/jovyan/.kube/config")
     core_api = CoreV1Api()
@@ -180,6 +187,7 @@ async def pre_spawn_hook(spawner):
     spawner.pvc_name = pvc_name
 
     set_pod_env(spawner)
+    remove_volume_subpath(spawner)
 
 
 c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore
