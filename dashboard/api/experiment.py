@@ -8,6 +8,7 @@ from werkzeug.datastructures import FileStorage
 
 from config import DATA_DIR
 from gromacs_job import GromacsJob
+from k8s_status import PodStatus, JobStatus
 from utils import get_unique_id, get_files_with_extension
 
 
@@ -21,8 +22,10 @@ class Experiment:
     source_message: str
     # current step in the experiment
     step: int
-    # status message shown in the UI
+    # status message of the experiment shown in the UI
     status: str
+    # status of the Jupyter notebook pod
+    notebook_status: PodStatus = PodStatus.UNKNOWN
     # token for accessing jupyter notebook
     token: str = field(default_factory=lambda: str(uuid4()))
     # Tuner jobs of the experiment, key is a TPR file name
@@ -125,21 +128,29 @@ class Experiment:
             self.status = 'published'
             return
 
-        # Step 4: Analyzing (directory contains XTC file)
-        if get_files_with_extension(DATA_DIR / self.id, 'xtc'):
+        # Step 4: Analyzing (experiment has terminated GROMACS job)
+        if any(map(lambda j: j.status == JobStatus.TERMINATED, self.gromacs_jobs.values())):
             self.step = 4
             self.status = 'analyzing'
             return
 
-        # Step 3: Running simulation (experiment has GROMACS jobs)
-        if self.gromacs_jobs:
-            self.step = 3
+        # NOTE: Step 3 is skipped because no action is required to progress from the Analyze step to the Publish step
+
+        # Step 2: Running simulation (experiment has running GROMACS job)
+        if any(map(lambda j: j.status == JobStatus.RUNNING, self.gromacs_jobs.values())):
+            self.step = 2
             self.status = 'simulating'
             return
 
-        # Step 2: Running Tuner (experiment has Tuner jobs)
-        if self.tuner_jobs:
+        # Step 2: Tuning (experiment has terminated tuner job)
+        if any(map(lambda j: j.get('summary', {}).get('TERMINATED', 0) > 0, self.tuner_jobs.values())):
             self.step = 2
+            self.status = 'tuning'
+            return
+
+        # Step 1: Tuning (experiment has running tuner job)
+        if any(map(lambda j: j.get('summary', {}).get('RUNNING', 0) > 0, self.tuner_jobs.values())):
+            self.step = 1
             self.status = 'tuning'
             return
 

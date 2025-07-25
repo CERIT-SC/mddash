@@ -13,14 +13,85 @@ bp = Blueprint('dash', __name__)
 CORS(bp)
 
 
-# ----- HEALTH CHECK -----
+gromacs_demo_job = {
+    'experiment_id': 'abcde',
+    'tpr_name': 'LSD.tpr',
+    'np': 2,
+    'ntomp': 8,
+    'pme': 'cpu',
+    'nb': 'cpu',
+    'extra_args': '',
+    'job_name': 'gromacs-6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
+    'status': 'RUNNING',
+    'nsteps': 100000,
+    'nsteps_done': 76543,
+    'performance': None
+}
 
-@bp.route('/api/metrics', methods=['GET'])
-def get_metrics():
-    return ApiResponse.success({'cpu': 20, 'memory': 64, 'gpu': 4})
+gromacs_demo_jobs = {
+    'LSD.tpr': gromacs_demo_job,
+    'MDMA.tpr': {
+        'experiment_id': 'abcde',
+        'tpr_name': 'MDMA.tpr',
+        'np': 8,
+        'ntomp': 1,
+        'nb': 'gpu',
+        'pme': 'cpu',
+        'extra_args': '-v  -nt 8 -ddorder pp_pme',
+        'job_name': 'gromacs-6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
+        'status': 'TERMINATED',
+        'nsteps': 100000,
+        'nsteps_done': 100000,
+        'performance': 70.158
+    }
+}
 
 
-# ----- EXPERIMENTS -----
+tuner_demo_status = {
+    'tuner_run_id': '6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
+    'summary': {
+        'RUNNING': 2,
+        'PENDING': 0,
+        'TERMINATED': 1,
+        'ERROR': 0
+    },
+    'trials': [
+        {
+            'id': 'e5167_00000',
+            'status': 'RUNNING',
+            'np': 2,
+            'ntomp': 2,
+            'nb': 'cpu',
+            'pme': 'cpu',
+            'performance': None
+        },
+        {
+            'id': 'e5167_00002',
+            'status': 'TERMINATED',
+            'np': 8,
+            'ntomp': 1,
+            'nb': 'gpu',
+            'pme': 'cpu',
+            'performance': 70.158
+        },
+        {
+            'id': 'e5167_00001',
+            'status': 'RUNNING',
+            'np': 2,
+            'ntomp': 8,
+            'nb': 'cpu',
+            'pme': 'cpu',
+            'performance': None
+        }
+    ],
+    'cluster_resources': '32/32 CPUs, 0/1 GPUs used'
+}
+
+tuner_demo_statuses = {
+    "LSD.tpr": tuner_demo_status,
+    "MDMA.tpr": tuner_demo_status,
+}
+
 
 demo_experiments = [
     {
@@ -29,7 +100,10 @@ demo_experiments = [
         'source_message': "Created by uploading TPR file 'cancer_cure.tpr''.",
         'step': 0,
         'status': 'setup',
+        'notebook_status': 'UNKNOWN',
         'token': '2f2be97e-15db-4cb4-8ef7-905efe5a4968',
+        'tuner_jobs': {},
+        'gromacs_jobs': {},
     },
     {
         'id': 'bbbbb',
@@ -37,7 +111,10 @@ demo_experiments = [
         'source_message': "Created by downloading repository from 'https://zenodo.org/records/7261108'.",
         'step': 3,
         'status': 'simulating',
+        'notebook_status': 'RUNNING',
         'token': '191eb452-5505-4328-9004-99eb1b0d570a',
+        'tuner_jobs': tuner_demo_statuses,
+        'gromacs_jobs': gromacs_demo_jobs,
     },
     {
         'id': 'ccccc',
@@ -45,10 +122,22 @@ demo_experiments = [
         'source_message': "Created by uploading TPR file 'my_first_experiment.tpr'.",
         'step': 5,
         'status': 'published',
+        'notebook_status': 'DOWN',
         'token': '2578b922-7b12-49d0-8962-b2d79afda1dc',
+        'tuner_jobs': {},
+        'gromacs_jobs': gromacs_demo_jobs,
     },
 ]
 
+
+# ----- HEALTH CHECK -----
+
+@bp.route('/api/metrics', methods=['GET'])
+def get_metrics():
+    return ApiResponse.success({'cpu': 20, 'memory': 64, 'gpu': 4})
+
+
+# ----- EXPERIMENTS -----
 
 @bp.route('/api/experiments', methods=['GET'])
 def list_experiments():
@@ -101,52 +190,6 @@ def get_notebook(experiment_id):
 
 # ----- TUNER -----
 
-tuner_demo_status = {
-    'tuner_run_id': '6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
-    'summary': {
-        'RUNNING': 2,
-        'PENDING': 0,
-        'TERMINATED': 1,
-        'ERROR': 0
-    },
-    'trials': [
-        {
-            'id': 'e5167_00000',
-            'status': 'RUNNING',
-            'np': 2,
-            'ntomp': 2,
-            'nb': 'cpu',
-            'pme': 'cpu',
-            'performance': None
-        },
-        {
-            'id': 'e5167_00002',
-            'status': 'TERMINATED',
-            'np': 8,
-            'ntomp': 1,
-            'nb': 'gpu',
-            'pme': 'cpu',
-            'performance': 70.158
-        },
-        {
-            'id': 'e5167_00001',
-            'status': 'RUNNING',
-            'np': 2,
-            'ntomp': 8,
-            'nb': 'cpu',
-            'pme': 'cpu',
-            'performance': None
-        }
-    ],
-    'cluster_resources': '32/32 CPUs, 0/1 GPUs used'
-}
-
-tuner_demo_statuses = {
-    "LSD.tpr": tuner_demo_status,
-    "MDMA.tpr": tuner_demo_status,
-}
-
-
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['POST'])
 def submit_tuner(experiment_id, tpr_name):
     tuner_demo_statuses[tpr_name] = tuner_demo_status
@@ -175,39 +218,6 @@ def delete_tuner(experiment_id, tpr_name):
 
 
 # ----- GROMACS -----
-
-gromacs_demo_job = {
-    'experiment_id': 'abcde',
-    'tpr_name': 'LSD.tpr',
-    'np': 2,
-    'ntomp': 8,
-    'pme': 'cpu',
-    'nb': 'cpu',
-    'extra_args': '',
-    'job_name': 'gromacs-6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
-    'status': 'RUNNING',
-    'nsteps': 100000,
-    'nsteps_done': 76543,
-    'performance': None
-}
-
-gromacs_demo_jobs = {
-    'LSD.tpr': gromacs_demo_job,
-    'MDMA.tpr': {
-        'experiment_id': 'abcde',
-        'tpr_name': 'MDMA.tpr',
-        'np': 8,
-        'ntomp': 1,
-        'nb': 'gpu',
-        'pme': 'cpu',
-        'extra_args': '-v  -nt 8 -ddorder pp_pme',
-        'job_name': 'gromacs-6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
-        'status': 'TERMINATED',
-        'nsteps': 100000,
-        'nsteps_done': 100000,
-        'performance': 70.158
-    }
-}
 
 @bp.route('/api/experiments/<experiment_id>/gmx/<tpr_name>', methods=['POST'])
 def submit_gmx(experiment_id, tpr_name):
