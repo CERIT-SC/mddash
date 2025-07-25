@@ -1,9 +1,11 @@
 import json
 import uuid
 import requests
+import logging
 from requests.exceptions import RequestException
 
 
+logger = logging.getLogger(__name__)
 CADDY_ADMIN_API_URL = "http://localhost:2019"
 
 
@@ -84,12 +86,10 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
         # Load the updated config
         headers = {"Content-Type": "application/json"}
         load_response = requests.post(f"{CADDY_ADMIN_API_URL}/load", headers=headers, data=json.dumps(config))
-        print(f"Caddy API Response Status (Add Route {route_id}): {load_response.status_code}")
-        print(f"Caddy API Response Body (Add Route {route_id}): {load_response.text}")
         load_response.raise_for_status()
         return route_id
     except RequestException as e:
-        print(f"Error when adding route to Caddy", e)
+        logger.error(f"Error when adding route '{route_id}' to Caddy:", exc_info=True)
         return None
 
 
@@ -104,10 +104,8 @@ def remove_route(route_id: str) -> bool:
 
     try:
         response = requests.delete(url)
-        print(f"Caddy API Response Status (Remove Route {route_id}): {response.status_code}")
-        print(f"Caddy API Response Body (Remove Route {route_id}): {response.text}")
         response.raise_for_status()
         return True
     except RequestException as e:
-        print(f"Error when removing route '{route_id}' from Caddy", e)
+        logger.error(f"Error when removing route '{route_id}' from Caddy:", exc_info=True)
         return False

@@ -143,6 +143,8 @@ const TunerView = (props: TunerViewProps) => {
         formData.append("ntomp", selectedTrial.ntomp.toString());
         formData.append("pme", selectedTrial.pme);
         formData.append("nb", selectedTrial.nb);
+        // TODO: Add input fields for extra args
+        formData.append("extra_args", "");
 
         // Submit to gmx API
         const { error } = await submit_gmx(experiment.id, tprName, formData);

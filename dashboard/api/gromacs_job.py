@@ -1,4 +1,5 @@
 import re
+import logging
 from dataclasses import dataclass, field
 from enum import Enum
 from uuid import uuid4
@@ -8,6 +9,9 @@ from k8s import create_gromacs_job, delete_job, get_job_status
 from k8s_status import JobStatus
 from config import NAMESPACE, DATA_DIR, PVC_NAME
 from utils import tail
+
+
+logger = logging.getLogger(__name__)
 
 
 class DeviceType(str, Enum):
@@ -91,7 +95,7 @@ class GromacsJob:
                 extra_args=self.extra_args
             )
         except Exception as e:
-            print(f"Failed to start Gromacs job: {e}")
+            logger.error(f"Failed to start Gromacs job:", exc_info=True)
             self.status = JobStatus.ERROR
 
     def delete(self) -> None:
@@ -106,7 +110,7 @@ class GromacsJob:
             self._stdout_log.unlink(missing_ok=True)
             self._stderr_log.unlink(missing_ok=True)
         except Exception as e:
-            print(f"Failed to stop Gromacs job: {e}")
+            logger.error(f"Failed to delete Gromacs job:", exc_info=True)
             self.status = JobStatus.ERROR
 
     def poll_status(self) -> None:
@@ -119,7 +123,7 @@ class GromacsJob:
             self.get_nsteps_done()
             self.get_performance()
         except Exception as e:
-            print(f"Failed to get Gromacs job status: {e}")
+            logger.error(f"Failed to poll Gromacs job status:", exc_info=True)
             self.status = JobStatus.ERROR
 
     def get_log(self, type: str = 'gmx', tail_lines: int | None = None) -> str:
@@ -168,7 +172,7 @@ class GromacsJob:
                     return self.nsteps
 
         except (FileNotFoundError, ValueError) as e:
-            print(f"Error reading nsteps from log file:", e)
+            logger.error(f"Error reading nsteps from log file:", exc_info=True)
             return None
 
         return None
@@ -196,7 +200,7 @@ class GromacsJob:
                 return self.nsteps_done
 
         except (FileNotFoundError, ValueError) as e:
-            print(f"Error reading nsteps done from log file:", e)
+            logger.error(f"Error reading nsteps_done from log file:", exc_info=True)
             return None
 
         return None
@@ -223,7 +227,7 @@ class GromacsJob:
                 self.performance = float(parts[-2])
 
         except (FileNotFoundError, ValueError) as e:
-            print(f"Error reading performance from log file:", e)
+            logger.error(f"Error reading performance from log file:", exc_info=True)
             return None
 
         return None
