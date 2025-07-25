@@ -4,7 +4,8 @@ from requests.auth import HTTPBasicAuth
 from pathlib import Path
 
 
-TUNER_URL = 'https://gromacs-tuner.dyn.cloud.e-infra.cz/api'
+# TUNER_URL = 'https://gromacs-tuner.dyn.cloud.e-infra.cz/api'
+TUNER_URL = 'http://gromacs-tuner-api-svc.gromacs-tuner-ns.svc.cluster.local:8000/api'
 TUNER_USERNAME = 'admin'
 TUNER_PASSWORD = 'strong-secret-here'
 AUTH = HTTPBasicAuth(TUNER_USERNAME, TUNER_PASSWORD)
@@ -22,7 +23,7 @@ def get_tuner_response_data(response: Response) -> dict:
     response.raise_for_status()
     data = response.json()
 
-    if data['success'] is not True:
+    if data['success'] != True:
         raise HTTPError(data['message'], request=None, response=response)
 
     return data['data']

@@ -1,4 +1,5 @@
 import os
+import logging
 from flask import Flask, Blueprint, request, send_file, abort
 from dataclasses import asdict
 
@@ -12,7 +13,6 @@ import mdrepo_client
 import caddy_client
 import tuner_client
 from k8s_status import PodStatus
-
 from k8s import (
     create_notebook_pod,
     create_service,
@@ -23,6 +23,7 @@ from k8s import (
 )
 
 
+logger = logging.getLogger(__name__)
 experiments = Experiments.load(STATE_FILE)
 
 # Create blueprint with URL prefix
@@ -42,7 +43,7 @@ def get_metrics():
         metrics = get_namespace_resource_allocation(NAMESPACE)
         return ApiResponse.success(metrics)
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 # ----- EXPERIMENTS -----
@@ -52,7 +53,7 @@ def list_experiments():
     try:
         return ApiResponse.success(experiments.get_all())
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments/<experiment_id>', methods=['GET'])
@@ -60,7 +61,7 @@ def get_experiment(experiment_id):
     try:
         return ApiResponse.success(experiments.get(experiment_id))
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments', methods=['POST'])
@@ -89,7 +90,7 @@ def create_experiment():
         return ApiResponse.success(asdict(experiment))
 
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments/<experiment_id>', methods=['DELETE'])
@@ -100,7 +101,7 @@ def delete_experiment(experiment_id):
         delete_notebook(experiment_id)
         return ApiResponse.success()
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 # ----- NOTEBOOK -----
@@ -116,15 +117,13 @@ def start_notebook(experiment_id):
         try:
             create_notebook_pod(NOTEBOOK_IMAGE, NAMESPACE, PVC_NAME, pod_name, experiment_id, f'{PREFIX}/notebook/{experiment_id}', token)
         except Exception as e:
-            print('Failed to create notebook pod:', e)
-            return ApiResponse.error(f'Failed to create notebook pod: {str(e)}')
+            return ApiResponse.error(f'Failed to create notebook pod: {str(e)}', exc_info=True)
         
         try:
             create_service(NAMESPACE, svc_name, pod_name)
         except Exception as e:
-            print('Failed to create notebook service:', e)
             delete_pod(NAMESPACE, pod_name)
-            return ApiResponse.error(f'Failed to create notebook service: {str(e)}')
+            return ApiResponse.error(f'Failed to create notebook service: {str(e)}', exc_info=True)
 
         route_id = caddy_client.add_proxy_route(
             path=f'{PREFIX}/notebook/{experiment_id}',
@@ -132,17 +131,16 @@ def start_notebook(experiment_id):
             route_id=f'route-{experiment_id}-notebook',
         )
         if route_id is None:
-            print('Failed to add route to Caddy.')
             delete_pod(NAMESPACE, pod_name)
             delete_service(NAMESPACE, svc_name)
-            return ApiResponse.error('Failed to create connection to notebook.')
+            return ApiResponse.error('Failed to create proxy connection to notebook.')
 
         return ApiResponse.success({
             'status': str(PodStatus.PENDING),
             'path': f'{PREFIX}/notebook/{experiment_id}/?token={token}'
         })
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['DELETE'])
@@ -155,19 +153,19 @@ def delete_notebook(experiment_id):
         try:
             delete_pod(NAMESPACE, pod_name)
         except Exception as e:
-            print(f'Failed to delete notebook pod:', e)
-        
+            logger.error(f'Failed to delete notebook pod:', exc_info=True)
+
         try:
             delete_service(NAMESPACE, svc_name)
         except Exception as e:
-            print(f'Failed to delete notebook service:', e)
+            logger.error(f'Failed to delete notebook service:', exc_info=True)
 
         if not caddy_client.remove_route(route_id):
-            print('Failed to remove route from Caddy.')
+            logger.error('Failed to remove route from Caddy.')
 
         return ApiResponse.success()
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['GET'])
@@ -179,14 +177,14 @@ def get_notebook(experiment_id):
         try:
             status = get_pod_status(NAMESPACE, pod_name)
         except Exception as e:
-            print(f'Failed to get notebook pod status:', e)
+            logger.error(f'Failed to get notebook pod status:', exc_info=True)
             status = PodStatus.UNKNOWN
         return ApiResponse.success({
             'status': str(status),
             'path': f'{PREFIX}/notebook/{experiment_id}/?token={token}'
         })
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 # ----- TUNER -----
@@ -215,7 +213,7 @@ def submit_tuner(experiment_id, tpr_name):
         return ApiResponse.success(data)
 
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner', methods=['GET'])
@@ -234,7 +232,7 @@ def get_tuner_statuses(experiment_id):
         return ApiResponse.success(tuner_statuses)
 
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['GET'])
@@ -253,7 +251,7 @@ def get_tuner_status(experiment_id, tpr_name):
         return ApiResponse.success(status)
 
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['DELETE'])
@@ -271,7 +269,7 @@ def delete_tuner(experiment_id, tpr_name):
         return ApiResponse.success()
 
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 # ----- GROMACS -----
@@ -300,7 +298,7 @@ def submit_gmx(experiment_id, tpr_name):
             nb=DeviceType.from_string(request.form['nb']),
             np=int(request.form['np']),
             ntomp=int(request.form['ntomp']),
-            extra_args=request.form['extra_args'],
+            extra_args=request.form.get('extra_args', ''),
         )
         job.start()
 
@@ -309,7 +307,7 @@ def submit_gmx(experiment_id, tpr_name):
 
         return ApiResponse.success(job)
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments/<experiment_id>/gmx', methods=['GET'])
@@ -327,7 +325,7 @@ def get_gmx_statuses(experiment_id):
         return ApiResponse.success(gmx_statuses)
 
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments/<experiment_id>/gmx/<tpr_name>', methods=['GET'])
@@ -345,7 +343,7 @@ def get_gmx_status(experiment_id, tpr_name):
         return ApiResponse.success(asdict(job))
 
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments/<experiment_id>/gmx/<tpr_name>', methods=['DELETE'])
@@ -363,7 +361,7 @@ def delete_gmx(experiment_id, tpr_name):
         return ApiResponse.success()
 
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments/<experiment_id>/gmx/<tpr_name>/log', methods=['GET'])
@@ -388,7 +386,7 @@ def get_gmx_log(experiment_id, tpr_name):
         return ApiResponse.success(log)
 
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 # ----- PUBLISHING -----
@@ -420,7 +418,7 @@ def publish_experiment(experiment_id):
         return ApiResponse.success(mdrepo_experiment)
 
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 # ----- FILES -----
@@ -438,7 +436,7 @@ def list_experiment_files(experiment_id):
         return ApiResponse.success(files)
 
     except Exception as e:
-        return ApiResponse.error(str(e))
+        return ApiResponse.error(str(e), exc_info=True)
 
 
 @bp.route('/api/experiments/<experiment_id>/files/<path:path>', methods=['GET'])

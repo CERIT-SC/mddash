@@ -1,8 +1,11 @@
+import logging
 from kubernetes import client, config  # type: ignore
 from kubernetes.client.rest import ApiException  # type: ignore
 
 from k8s_status import JobStatus, PodStatus
 
+
+logger = logging.getLogger(__name__)
 GPU_TYPE = 'nvidia.com/mig-1g.10gb'
 
 
@@ -21,7 +24,7 @@ def create_notebook_pod(
     token: str
 ) -> None:
     if ping_resource('pod', name, ns):
-        print(f"Pod {name} already exists in namespace {ns}. Skipping creation.")
+        logger.warning(f"Pod {name} already exists in namespace {ns}. Skipping creation.")
         return
 
     # Load in-cluster config
@@ -200,7 +203,7 @@ def delete_service(ns: str, name: str) -> None:
 
 def create_service(ns: str, name: str, target_name: str) -> None:
     if ping_resource('svc', name, ns):
-        print(f"Service {name} already exists in namespace {ns}. Skipping creation.")
+        logger.warning(f"Service {name} already exists in namespace {ns}. Skipping creation.")
         return
 
     config.load_incluster_config()
@@ -292,7 +295,7 @@ def create_gromacs_job(
     extra_args: str
 ) -> None:
     if ping_resource('job', name, ns):
-        print(f"Job {name} already exists in namespace {ns}. Skipping creation.")
+        logger.warning(f"Job {name} already exists in namespace {ns}. Skipping creation.")
         return
 
     config.load_incluster_config()
@@ -389,7 +392,7 @@ def create_gromacs_job(
 
 def delete_job(ns: str, name: str) -> None:
     if not ping_resource('job', name, ns):
-        print(f"Job {name} does not exist in namespace {ns}. Skipping deletion.")
+        logger.warning(f"Job {name} does not exist in namespace {ns}. Skipping deletion.")
         return
 
     config.load_incluster_config()
