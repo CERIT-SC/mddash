@@ -171,16 +171,20 @@ def delete_notebook(experiment_id):
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['GET'])
 def get_notebook(experiment_id):
     try:
-        token = experiments.get(experiment_id).token
+        experiment = experiments.get(experiment_id)
+        token = experiment.token
         pod_name = f'notebook-{experiment_id}'
 
         try:
-            status = get_pod_status(NAMESPACE, pod_name)
+            experiment.notebook_status = get_pod_status(NAMESPACE, pod_name)
         except Exception as e:
             logger.error(f'Failed to get notebook pod status:', exc_info=True)
-            status = PodStatus.UNKNOWN
+            experiment.notebook_status = PodStatus.UNKNOWN
+
+        experiments.save(STATE_FILE)
+
         return ApiResponse.success({
-            'status': str(status),
+            'status': str(experiment.notebook_status),
             'path': f'{PREFIX}/notebook/{experiment_id}/?token={token}'
         })
     except Exception as e:

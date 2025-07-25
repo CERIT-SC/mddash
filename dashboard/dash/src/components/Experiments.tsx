@@ -1,29 +1,37 @@
-import { useState, useEffect } from 'react'
-import { Typography, Card, CardActionArea, CardActions, Grid2 as Grid, Stack, CardContent, Button } from '@mui/material'
-import { Add } from '@mui/icons-material'
-import { BASE_PATH } from '../util/const'
+import { useState, useEffect } from "react";
+import {
+    Typography,
+    Card,
+    CardActionArea,
+    CardActions,
+    Grid2 as Grid,
+    Stack,
+    CardContent,
+    Button,
+} from "@mui/material";
+import { Add } from "@mui/icons-material";
+import { BASE_PATH } from "../util/const";
 
-import { Experiment } from '../util/types'
-import { delete_experiment, get_experiments } from '../util/api'
-import ErrorMessage from './ErrorMessage'
+import { Experiment } from "../util/types";
+import { delete_experiment, get_experiments } from "../util/api";
+import ErrorMessage from "./ErrorMessage";
 
 const Experiments = () => {
-    const [experiments, setExperiments] = useState<Experiment[]>([])
-    const [errorMessage, setErrorMessage] = useState<string>('')
+    const [experiments, setExperiments] = useState<Experiment[]>([]);
+    const [errorMessage, setErrorMessage] = useState<string>("");
 
     const getExperiments = async () => {
-        const { data, error } = await get_experiments()
-        setErrorMessage(error || '')
-        setExperiments(data || [])
-    }
+        const { data, error } = await get_experiments();
+        setErrorMessage(error || "");
+        setExperiments(data || []);
+    };
 
     const deleteExperiment = async (id: string) => {
-        const { error } = await delete_experiment(id)
-        setErrorMessage(error || '')
+        const { error } = await delete_experiment(id);
+        setErrorMessage(error || "");
 
-        if (!error)
-            getExperiments();
-    }
+        if (!error) getExperiments();
+    };
 
     useEffect(() => {
         getExperiments();
@@ -31,31 +39,69 @@ const Experiments = () => {
 
     return (
         <Stack spacing={2} p={4}>
-
-            <Grid container spacing={2} p={4} >
-
-                {experiments.map(experiment => (
-                    <Grid size={3} key={experiment.id} sx={{ display: 'flex' }}>
-                        <Card sx={{ padding: 2, flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <Grid container spacing={2} p={4}>
+                {experiments.map((experiment) => (
+                    <Grid size={3} key={experiment.id} sx={{ display: "flex" }}>
+                        <Card
+                            sx={{
+                                padding: 2,
+                                flexGrow: 1,
+                                display: "flex",
+                                flexDirection: "column",
+                                justifyContent: "space-between",
+                            }}
+                        >
                             <CardContent>
                                 <Typography variant="h4">{experiment.name}</Typography>
-                                <Typography variant="body1">Status: {experiment.status}</Typography>
                                 <Typography variant="body1">Step: {experiment.step}</Typography>
+                                <Typography variant="body1">Status: {experiment.status}</Typography>
+                                <Typography variant="body1">Notebook status: {experiment.notebook_status}</Typography>
+                                <Typography variant="body1">
+                                    Tuner jobs running:{" "}
+                                    {
+                                        Object.values(experiment.tuner_jobs).filter(
+                                            (j) => j.summary && j.summary.RUNNING > 0
+                                        ).length
+                                    }
+                                </Typography>
+                                <Typography variant="body1">
+                                    Gromacs jobs running:{" "}
+                                    {
+                                        Object.values(experiment.gromacs_jobs).filter((j) => j.status === "RUNNING")
+                                            .length
+                                    }
+                                </Typography>
                             </CardContent>
-                            <CardActions sx={{ alignSelf: 'flex-end', width: '100%', justifyContent: 'center' }}>
-                                <Button size="small" variant='contained' href={`${BASE_PATH}/${experiment.id}/wizard`}>Wizard</Button>
-                                <Button size="small" variant='outlined' color="error" onClick={() => {deleteExperiment(experiment.id)}}>Delete</Button>
+                            <CardActions sx={{ alignSelf: "flex-end", width: "100%", justifyContent: "center" }}>
+                                <Button size="small" variant="contained" href={`${BASE_PATH}/${experiment.id}/wizard`}>
+                                    Wizard
+                                </Button>
+                                <Button
+                                    size="small"
+                                    variant="outlined"
+                                    color="error"
+                                    onClick={() => {
+                                        deleteExperiment(experiment.id);
+                                    }}
+                                >
+                                    Delete
+                                </Button>
                             </CardActions>
                         </Card>
                     </Grid>
                 ))}
 
-                <Grid size={3} sx={{ display: 'flex' }}>
-                    <Card sx={{ flexGrow: 1 }}>
-                        <CardActionArea href={`${BASE_PATH}/new`}>
-                            <Stack alignItems="center" justifyContent="center" spacing={2} p={4}>
+                <Grid size={3} sx={{ display: "flex" }}>
+                    <Card sx={{ flexGrow: 1, height: "100%", display: "flex" }}>
+                        <CardActionArea
+                            href={`${BASE_PATH}/new`}
+                            sx={{ height: "100%", display: "flex", flexDirection: "column" }}
+                        >
+                            <Stack alignItems="center" justifyContent="center" spacing={2} p={4} sx={{ flexGrow: 1 }}>
                                 <Add sx={{ width: 75, height: 75 }} />
-                                <Typography variant="h4" textAlign="center">New Experiment</Typography>
+                                <Typography variant="h4" textAlign="center">
+                                    New Experiment
+                                </Typography>
                             </Stack>
                         </CardActionArea>
                     </Card>
@@ -64,7 +110,7 @@ const Experiments = () => {
 
             {errorMessage && <ErrorMessage message={errorMessage} />}
         </Stack>
-    )
-}
+    );
+};
 
-export default Experiments
+export default Experiments;

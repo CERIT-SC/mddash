@@ -5,8 +5,9 @@ export interface Experiment {
     status: string;
     step: number;
     token: string;
+    notebook_status: PodStatus;
     tuner_jobs: { [key: string]: TunerStatus };
-    gromacs_jobs: { [key: string]: any };
+    gromacs_jobs: { [key: string]: GromacsJob };
     mdrepo_id: string | null;
 }
 
