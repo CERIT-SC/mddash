@@ -85,10 +85,14 @@ const MDRUN_ARGUMENTS = [
 interface ManualStartFormProps extends WizardStepProps {
     tprName: string;
     fetchStatus: (showError: boolean) => Promise<void>;
+    np?: number;
+    ntomp?: number;
+    pme?: "cpu" | "gpu" | "auto";
+    nb?: "cpu" | "gpu" | "auto";
 }
 
-const ManualStartForm = (props: ManualStartFormProps) => {
-    const { experiment, tprName, setErrorMessage, fetchStatus } = props;
+export const StartForm = (props: ManualStartFormProps) => {
+    const { experiment, tprName, setErrorMessage, fetchStatus, np, ntomp, nb, pme } = props;
 
     const [selectedArgument, setSelectedArgument] = useState("");
     const [argumentValue, setArgumentValue] = useState("");
@@ -146,10 +150,16 @@ const ManualStartForm = (props: ManualStartFormProps) => {
     return (
         <Box>
             <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
-                Manually start simulation
+                Start simulation
             </Typography>
 
             <Grid container spacing={2} ref={formRef} component="form" onSubmit={handleSubmit}>
+                {/* Hidden inputs for disabled fields to ensure their values are included in FormData */}
+                {!!np && <input type="hidden" name="np" value={np} />}
+                {!!ntomp && <input type="hidden" name="ntomp" value={ntomp} />}
+                {!!nb && <input type="hidden" name="nb" value={nb} />}
+                {!!pme && <input type="hidden" name="pme" value={pme} />}
+
                 <Grid size={6}>
                     <TextField
                         name="np"
@@ -163,6 +173,8 @@ const ManualStartForm = (props: ManualStartFormProps) => {
                         }}
                         required
                         fullWidth
+                        defaultValue={np || ""}
+                        disabled={!!np}
                     />
                 </Grid>
 
@@ -179,6 +191,8 @@ const ManualStartForm = (props: ManualStartFormProps) => {
                         }}
                         required
                         fullWidth
+                        defaultValue={ntomp || ""}
+                        disabled={!!ntomp}
                     />
                 </Grid>
 
@@ -189,6 +203,8 @@ const ManualStartForm = (props: ManualStartFormProps) => {
                             name="nb"
                             labelId="nb-device-selector"
                             label={"Device type for non-bonded interactions (-nb)"}
+                            defaultValue={nb || ""}
+                            disabled={!!nb}
                         >
                             <MenuItem value="cpu">CPU</MenuItem>
                             <MenuItem value="gpu">GPU</MenuItem>
@@ -204,6 +220,8 @@ const ManualStartForm = (props: ManualStartFormProps) => {
                             name="pme"
                             labelId="pme-device-selector"
                             label={"Device type for PME calculations (-pme)"}
+                            defaultValue={pme || ""}
+                            disabled={!!pme}
                         >
                             <MenuItem value="cpu">CPU</MenuItem>
                             <MenuItem value="gpu">GPU</MenuItem>
@@ -527,7 +545,7 @@ const RunView = (props: RunViewProps) => {
                             )}
                         </Stack>
                     ) : (
-                        <ManualStartForm fetchStatus={fetchStatus} {...props} />
+                        <StartForm fetchStatus={fetchStatus} {...props} />
                     )}
                 </Box>
             )}
