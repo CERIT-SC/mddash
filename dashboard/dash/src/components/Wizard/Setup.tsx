@@ -96,6 +96,11 @@ const WizardSetup = (props: WizardStepProps) => {
                                     ? "Please wait while the notebook is being prepared..."
                                     : "Please wait while the notebook is being terminated..."}
                             </Typography>
+                            {notebookStatus.status === "PENDING" && (
+                                <Button variant="contained" color="error" onClick={deleteNotebook}>
+                                    Delete Jupyter Notebook
+                                </Button>
+                            )}
                         </>
                     )}
 

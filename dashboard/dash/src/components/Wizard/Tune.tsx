@@ -21,7 +21,7 @@ import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
 
 import { WizardStepProps } from "./Stepper";
-import { tuner_status, tuner_statuses, run_tuner, delete_tuner, submit_gmx } from "../../util/api";
+import { tuner_status, tuner_statuses, run_tuner, delete_tuner } from "../../util/api";
 import { TunerStatus, TunerTrial } from "../../util/types";
 import FileSelector from "../FileSelector";
 import ConfirmDialog from "../ConfirmDialog";
