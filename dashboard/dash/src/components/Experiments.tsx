@@ -100,7 +100,8 @@ const Experiments = () => {
                 <Grid size={3} sx={{ display: "flex" }}>
                     <Card sx={{ flexGrow: 1, height: "100%", display: "flex" }}>
                         <CardActionArea
-                            href={`${BASE_PATH}/new`}
+                            component={Link}
+                            to={`${BASE_PATH}/new`}
                             sx={{ height: "100%", display: "flex", flexDirection: "column" }}
                         >
                             <Stack alignItems="center" justifyContent="center" spacing={2} p={4} sx={{ flexGrow: 1 }}>
