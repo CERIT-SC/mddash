@@ -25,6 +25,7 @@ import { tuner_status, tuner_statuses, run_tuner, delete_tuner, submit_gmx } fro
 import { TunerStatus, TunerTrial } from "../../util/types";
 import FileSelector from "../FileSelector";
 import ConfirmDialog from "../ConfirmDialog";
+import { StartForm } from "./Run";
 
 const StyledTableCell = styled(TableCell)(({ theme }) => ({
     [`&.${tableCellClasses.head}`]: {
@@ -120,7 +121,6 @@ const TunerView = (props: TunerViewProps) => {
     const [selectedTrial, setSelectedTrial] = useState<TunerTrial | null>(null);
 
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
-    const [confirmRunDialog, setConfirmRunDialog] = useState(false);
 
     const fetchStatus = async (showError: boolean) => {
         const { data, error } = await tuner_status(experiment.id, tprName);
@@ -135,31 +135,13 @@ const TunerView = (props: TunerViewProps) => {
         fetchStatus(true);
     };
 
-    const runSimulation = async () => {
-        if (!selectedTrial) return;
-
-        const formData = new FormData();
-        formData.append("np", selectedTrial.np.toString());
-        formData.append("ntomp", selectedTrial.ntomp.toString());
-        formData.append("pme", selectedTrial.pme);
-        formData.append("nb", selectedTrial.nb);
-        // TODO: Add input fields for extra args
-        formData.append("extra_args", "");
-
-        // Submit to gmx API
-        const { error } = await submit_gmx(experiment.id, tprName, formData);
-        if (error) {
-            setErrorMessage(error);
-            return;
-        }
-
-        // go to run step in wizard
+    const goToRunStep = async (_: boolean) => {
         if (experiment.step < 2) {
             nextStep();
         } else {
             changeStep(2);
         }
-    };
+    }
 
     useEffect(() => {
         setLoading(true);
@@ -198,17 +180,20 @@ const TunerView = (props: TunerViewProps) => {
                                 setSelectedTrial={setSelectedTrial}
                             />
 
-                            <Stack direction="row" spacing={2} justifyContent="space-between">
+                            <Stack direction="row" spacing={2} justifyContent="flex-end">
                                 <Button variant="contained" color="error" onClick={() => setConfirmDeleteDialog(true)}>
                                     Delete tune job 🗑️
                                 </Button>
-
-                                {selectedTrial && (
-                                    <Button variant="contained" onClick={() => setConfirmRunDialog(true)}>
-                                        Run simulation with selected parameters ▶️
-                                    </Button>
-                                )}
                             </Stack>
+
+                            {selectedTrial && (<StartForm
+                                fetchStatus={goToRunStep}
+                                np={selectedTrial.np}
+                                ntomp={selectedTrial.ntomp}
+                                nb={selectedTrial.nb}
+                                pme={selectedTrial.pme}
+                                {...props}
+                            />)}
                         </>
                     )) || (
                         <>
@@ -226,14 +211,6 @@ const TunerView = (props: TunerViewProps) => {
                 setOpen={setConfirmDeleteDialog}
                 onConfirm={() => deleteJob(tprName)}
                 message="Are you sure you want to delete this tuning job? The data will be lost."
-            />
-
-            <ConfirmDialog
-                open={confirmRunDialog}
-                setOpen={setConfirmRunDialog}
-                onConfirm={runSimulation}
-                message="Are you sure you want to run simulation with these parameters?"
-                confirmColor="primary"
             />
         </>
     );
