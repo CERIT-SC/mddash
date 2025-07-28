@@ -1,21 +1,19 @@
-import { Outlet } from 'react-router-dom'
-import { ThemeProvider } from '@mui/material/styles'
+import { Outlet } from "react-router-dom";
 
-import Header from './components/Header'
-import Footer from './components/Footer'
-import { theme } from './Theme'
-
+import Header from "./components/Header";
+import Footer from "./components/Footer";
+import { ThemeProvider } from "./Theme";
 
 const Layout = () => {
     return (
-        <ThemeProvider theme={theme}>
+        <ThemeProvider>
             <Header />
             <main>
                 <Outlet />
             </main>
             <Footer />
         </ThemeProvider>
-    )
-}
+    );
+};
 
-export default Layout
+export default Layout;
