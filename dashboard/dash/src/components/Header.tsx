@@ -1,12 +1,15 @@
+import { useContext } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Typography, IconButton, Toolbar, AppBar, Stack } from "@mui/material";
-import { HubTwoTone, DashboardTwoTone } from "@mui/icons-material";
+import { Typography, IconButton, Toolbar, AppBar, Stack, Tooltip } from "@mui/material";
+import { HubTwoTone, DashboardTwoTone, Brightness4, Brightness7 } from "@mui/icons-material";
 
+import { ThemeContext } from "../Theme";
 import { BASE_PATH } from "../util/const";
 
 const Header = () => {
     const location = useLocation();
     const notHome = location.pathname !== BASE_PATH && location.pathname !== BASE_PATH + "/";
+    const { toggleTheme, mode } = useContext(ThemeContext);
 
     return (
         <AppBar position="static" color="primary" elevation={0}>
@@ -34,8 +37,14 @@ const Header = () => {
                             <Typography variant="h1">FAIR MD Dash</Typography>
                         </Link>
                     </div>
-                    {/* Fixed-width right spacer to match left */}
-                    <Stack sx={{ width: 96 }} />
+                    {/* Fixed-width right spacer to match left, with theme switch */}
+                    <Stack direction="row" alignItems="center" justifyContent="flex-end" sx={{ width: 96 }}>
+                        <Tooltip title={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
+                            <IconButton size="large" sx={{ color: "white" }} onClick={toggleTheme}>
+                                {mode === "dark" ? <Brightness7 /> : <Brightness4 />}
+                            </IconButton>
+                        </Tooltip>
+                    </Stack>
                 </Stack>
             </Toolbar>
         </AppBar>

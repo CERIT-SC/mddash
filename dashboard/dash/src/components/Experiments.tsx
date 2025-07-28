@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
     Typography,
     Card,
@@ -73,7 +74,12 @@ const Experiments = () => {
                                 </Typography>
                             </CardContent>
                             <CardActions sx={{ alignSelf: "flex-end", width: "100%", justifyContent: "center" }}>
-                                <Button size="small" variant="contained" href={`${BASE_PATH}/${experiment.id}/wizard`}>
+                                <Button
+                                    size="small"
+                                    variant="contained"
+                                    component={Link}
+                                    to={`${BASE_PATH}/${experiment.id}/wizard`}
+                                >
                                     Wizard
                                 </Button>
                                 <Button
