@@ -21,6 +21,7 @@ jupyterhub:
         allow_all: true
       KubeSpawner:
         services_enabled: true
+        http_timeout: 60
 
     extraEnv:
       RANCHER_PROJECT_ID:

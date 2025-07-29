@@ -23,15 +23,12 @@ def get_namespace_manifest(namespace, rancher_project_id, cpu_limit, mem_limit, 
         }
     }
 
-def get_role_manifest(role_name, rancher_project_id):
+def get_role_manifest(role_name):
     return {
         "apiVersion": "rbac.authorization.k8s.io/v1",
         "kind": "Role",
         "metadata": {
             "name": role_name,
-            "annotations": {
-                "field.cattle.io.projectId": rancher_project_id
-            }
         },
         "rules": [
             {
@@ -52,15 +49,12 @@ def get_role_manifest(role_name, rancher_project_id):
         ],
     }
 
-def get_hub_role_manifest(role_name, rancher_project_id):
+def get_hub_role_manifest(role_name):
     return {
         "apiVersion": "rbac.authorization.k8s.io/v1",
         "kind": "Role",
         "metadata": {
             "name": role_name,
-            "annotations": {
-                "field.cattle.io.projectId": rancher_project_id
-            }
         },
         "rules": [
             {
@@ -81,7 +75,7 @@ def get_hub_role_manifest(role_name, rancher_project_id):
         ],
     }
 
-def get_role_binding_manifest(role_binding_name, service_account_name, role_name, rancher_project_id, namespace=None):
+def get_role_binding_manifest(role_binding_name, service_account_name, role_name, namespace=None):
     """
     Returns a RoleBinding manifest. If namespace is provided, the subject will include it (for cross-namespace binding, e.g. hub).
     """
@@ -96,9 +90,6 @@ def get_role_binding_manifest(role_binding_name, service_account_name, role_name
         "kind": "RoleBinding",
         "metadata": {
             "name": role_binding_name,
-            "annotations": {
-                "field.cattle.io.projectId": rancher_project_id
-            }
         },
         "subjects": [subject],
         "roleRef": {
@@ -108,15 +99,12 @@ def get_role_binding_manifest(role_binding_name, service_account_name, role_name
         },
     }
 
-def get_pvc_manifest(pvc_name, rancher_project_id, storage_class=None, storage_size="10Gi"):
+def get_pvc_manifest(pvc_name, storage_class=None, storage_size="10Gi"):
     manifest = {
         "apiVersion": "v1",
         "kind": "PersistentVolumeClaim",
         "metadata": {
             "name": pvc_name,
-            "annotations": {
-                "field.cattle.io/projectId": rancher_project_id
-            }
         },
         "spec": {
             "accessModes": ["ReadWriteMany"],
@@ -179,11 +167,11 @@ async def pre_spawn_hook(spawner):
         cpu_request=os.environ.get("NS_REQUESTS_CPU", "1000m"),
         mem_request=os.environ.get("NS_REQUESTS_MEMORY", "4Gi")
     )
-    role_manifest = get_role_manifest(role_name, rancher_project_id)
-    role_binding_manifest = get_role_binding_manifest(role_binding_name, service_account_name, role_name, rancher_project_id)
-    hub_role_manifest = get_hub_role_manifest(hub_role_name, rancher_project_id)
-    hub_role_binding_manifest = get_role_binding_manifest(hub_role_binding_name, hub_service_account, hub_role_name, rancher_project_id, namespace=hub_namespace)
-    pvc_manifest = get_pvc_manifest(pvc_name, rancher_project_id, storage_class="nfs-csi", storage_size="10Gi")
+    role_manifest = get_role_manifest(role_name)
+    role_binding_manifest = get_role_binding_manifest(role_binding_name, service_account_name, role_name)
+    hub_role_manifest = get_hub_role_manifest(hub_role_name)
+    hub_role_binding_manifest = get_role_binding_manifest(hub_role_binding_name, hub_service_account, hub_role_name, namespace=hub_namespace)
+    pvc_manifest = get_pvc_manifest(pvc_name, storage_class="nfs-csi", storage_size="10Gi")
 
     await ensure_resource(core_api.create_namespace, body=namespace_manifest)
     await asyncio.sleep(1)
