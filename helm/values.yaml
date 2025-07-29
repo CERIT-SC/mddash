@@ -4,6 +4,7 @@ jupyterhub:
       JupyterHub:
         authenticator_class: generic-oauth
       GenericOAuthenticator:
+        login_service: "e-INFRA CZ"  # button label
         authorize_url: https://login.e-infra.cz/oidc/authorize
         token_url: https://login.e-infra.cz/oidc/token
         userdata_url: https://login.e-infra.cz/oidc/userinfo
@@ -17,7 +18,7 @@ jupyterhub:
           - profile
           - email
         username_key: preferred_username
-        allow_all: true  # TODO: maybe change in production idk
+        allow_all: true
       KubeSpawner:
         services_enabled: true
 
@@ -34,6 +35,15 @@ jupyterhub:
           secretKeyRef:
             name: oidc-credentials
             key: client_secret
+      # User namespace resource quota
+      NS_REQUESTS_CPU:
+        value: "1000m"
+      NS_REQUESTS_MEMORY:
+        value: "4Gi"
+      NS_LIMITS_CPU:
+        value: "64000m"
+      NS_LIMITS_MEMORY:
+        value: "256Gi"
 
     extraVolumes:
       - name: kubeconfig
@@ -54,6 +64,7 @@ jupyterhub:
       enabled: false
 
   singleuser:
+    podNameTemplate: "mddash-{username}"
     image:
       name: "cerit.io/xkrasa/mddash"
       tag: "dev"
@@ -64,8 +75,8 @@ jupyterhub:
 
     # Resource limits
     memory:
-      guarantee: 4G
-      limit: 16G
+      guarantee: 512M
+      limit: 4G
     cpu:
       guarantee: 0.2
       limit: 1

@@ -64,6 +64,10 @@ def create_notebook_pod(
                     },
                     'name' : 'init-workdir',
                     'image': image,
+                    'resources': {
+                        'requests': { 'cpu': '100m', 'memory': '256Mi' },
+                        'limits':   { 'cpu': '500m', 'memory': '512Mi' }
+                    },
                     'command' : ['sh', '-c', f'''
 mkdir -p "/mddash/{experiment_id}"
 # Check if any .ipynb files exist before trying to copy them
@@ -100,8 +104,8 @@ fi
                     'image': image,
                     'imagePullPolicy': 'Always',
                     'resources': {
-                        'requests': {'cpu': .1, 'memory': '2Gi'},
-                        'limits': {'cpu': 2, 'memory': '8Gi'}
+                        'requests': {'cpu': '100m', 'memory': '512Mi'},
+                        'limits': {'cpu': '2000m', 'memory': '8Gi'}
                     },
                     'workdir': f'/mddash/{experiment_id}',
                     'env': [
@@ -130,8 +134,8 @@ fi
                     'image': 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2',
                     'imagePullPolicy': 'Always',
                     'resources': {
-                        'requests' : { 'cpu': .1, 'memory': '2Gi' }, 
-                        'limits' : { 'cpu': 2, 'memory' : '8Gi' }
+                        'requests' : { 'cpu': '100m', 'memory': '512Mi' }, 
+                        'limits' : { 'cpu': '2000m', 'memory' : '8Gi' }
                     },
                     'workdir': f'/mddash/{experiment_id}',
                     'args': [

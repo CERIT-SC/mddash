@@ -5,14 +5,20 @@ from kubernetes_asyncio.client import CoreV1Api, RbacAuthorizationV1Api, V1Secur
 from kubernetes_asyncio.client.rest import ApiException  # type: ignore
 
 
-def get_namespace_manifest(namespace, rancher_project_id):
+def get_namespace_manifest(namespace, rancher_project_id, cpu_limit, mem_limit, cpu_request, mem_request):
     return {
         "apiVersion": "v1",
         "kind": "Namespace",
         "metadata": {
             "name": namespace,
             "annotations": {
-                "field.cattle.io/projectId": rancher_project_id
+                "field.cattle.io/projectId": rancher_project_id,
+                "field.cattle.io/resourceQuota": "{\"limit\":{" +
+                    f"\"limitsCpu\":\"{cpu_limit}\"," +
+                    f"\"limitsMemory\":\"{mem_limit}\"," +
+                    f"\"requestsCpu\":\"{cpu_request}\"," +
+                    f"\"requestsMemory\":\"{mem_request}\"" +
+                "}}"
             }
         }
     }
@@ -167,7 +173,12 @@ async def pre_spawn_hook(spawner):
     hub_namespace = os.environ.get("POD_NAMESPACE", "default")
     pvc_name = f"claim-{username}"
 
-    namespace_manifest = get_namespace_manifest(ns, rancher_project_id)
+    namespace_manifest = get_namespace_manifest(ns, rancher_project_id,
+        cpu_limit=os.environ.get("NS_LIMITS_CPU", "64000m"),
+        mem_limit=os.environ.get("NS_LIMITS_MEMORY", "256Gi"),
+        cpu_request=os.environ.get("NS_REQUESTS_CPU", "1000m"),
+        mem_request=os.environ.get("NS_REQUESTS_MEMORY", "4Gi")
+    )
     role_manifest = get_role_manifest(role_name, rancher_project_id)
     role_binding_manifest = get_role_binding_manifest(role_binding_name, service_account_name, role_name, rancher_project_id)
     hub_role_manifest = get_hub_role_manifest(hub_role_name, rancher_project_id)
