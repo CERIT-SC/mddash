@@ -129,7 +129,7 @@ async def ensure_resource(method, **kwargs):
 
 
 def set_pod_env(spawner):
-    if not hasattr(spawner, 'environment'):
+    if not hasattr(spawner, "environment"):
         spawner.environment = {}
     hub_namespace = os.environ.get("POD_NAMESPACE", "default")
     spawner.environment["HUB_NAMESPACE"] = hub_namespace
@@ -140,8 +140,8 @@ def set_pod_env(spawner):
 def remove_volume_subpath(spawner):
     # static storage works with subPath, so we need to remove it from volume mounts
     for vol_mount in spawner.volume_mounts:
-        if 'subPath' in vol_mount:
-            del vol_mount['subPath']
+        if "subPath" in vol_mount:
+            del vol_mount["subPath"]
 
 
 async def pre_spawn_hook(spawner):
@@ -175,6 +175,8 @@ async def pre_spawn_hook(spawner):
 
     await ensure_resource(core_api.create_namespace, body=namespace_manifest)
     await asyncio.sleep(1)
+    # Ensure the namespace is patched with correct resource quotas
+    await core_api.patch_namespace(name=ns, body=namespace_manifest)
     await ensure_resource(rbac_api.create_namespaced_role, namespace=ns, body=role_manifest)
     await ensure_resource(rbac_api.create_namespaced_role_binding, namespace=ns, body=role_binding_manifest)
     await ensure_resource(rbac_api.create_namespaced_role, namespace=ns, body=hub_role_manifest)
@@ -193,6 +195,9 @@ c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore
 
 
 def modify_pod_hook(spawner, pod):
+    """
+    Drop all capabilities from the pod and disable privilege escalation. (e-INFRA security stuff)
+    """
     for container in pod.spec.containers:
         if container.name == "notebook":
             sc = container.security_context
@@ -207,3 +212,20 @@ def modify_pod_hook(spawner, pod):
     return pod
 
 c.KubeSpawner.modify_pod_hook = modify_pod_hook  # type: ignore
+
+
+async def post_stop_hook(spawner, **kwargs):
+    """
+    Set the namespace quota to 0 after the user pod is stopped.
+    """
+    await config.load_kube_config(config_file="/home/jovyan/.kube/config")
+    core_api = CoreV1Api()
+
+    username = spawner.user.name
+    ns = f"mddash-user-{username}-ns"
+    rancher_project_id = os.environ.get("RANCHER_PROJECT_ID", "")
+    ns_manifest = get_namespace_manifest(ns, rancher_project_id, "0", "0", "0", "0")
+
+    await core_api.patch_namespace(name=ns, body=ns_manifest)
+
+c.KubeSpawner.post_stop_hook = post_stop_hook  # type: ignore
