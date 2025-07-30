@@ -1,15 +1,22 @@
 import io
 import requests
 import zipfile
+import logging
 from uuid import uuid4
 from dataclasses import dataclass, field
 from shutil import rmtree
 from werkzeug.datastructures import FileStorage
 
-from config import DATA_DIR
+from config import DATA_DIR, NAMESPACE
 from gromacs_job import GromacsJob
+from k8s import delete_pod, delete_service, delete_job
 from k8s_status import PodStatus, JobStatus
 from utils import get_unique_id, get_files_with_extension
+import caddy_client
+import tuner_client
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -117,6 +124,45 @@ class Experiment:
 
 
     def delete(self) -> None:
+        """
+        Delete the experiment and all its related resources
+        """
+        # TODO: duplicated code here, use smarter resource management
+
+        # Delete notebook pod if it exists
+        if self.notebook_status == PodStatus.RUNNING:
+            pod_name = f'notebook-{self.id}'
+            svc_name = f'svc-{self.id}'
+            route_id = f'route-{self.id}-notebook'
+
+            try:
+                delete_pod(NAMESPACE, pod_name)
+            except Exception:
+                logger.error(f'Failed to delete notebook pod:', exc_info=True)
+
+            try:
+                delete_service(NAMESPACE, svc_name)
+            except Exception as e:
+                logger.error(f'Failed to delete notebook service:', exc_info=True)
+
+            if not caddy_client.remove_route(route_id):
+                logger.error('Failed to remove route from Caddy.')
+
+        # Delete tuner jobs
+        for tuner_job in self.tuner_jobs.values():
+            try:
+                tuner_client.delete_job(tuner_job['tuner_run_id'])
+            except Exception:
+                logger.error(f'Failed to delete tuner job {tuner_job["tuner_run_id"]}:', exc_info=True)
+
+        # Delete GROMACS jobs
+        for gmx_job in self.gromacs_jobs.values():
+            try:
+                gmx_job.delete()
+            except Exception:
+                logger.error(f'Failed to delete GROMACS job {gmx_job.job_name}:', exc_info=True)
+
+        # Delete all files in the experiment directory
         rmtree(DATA_DIR / self.id)
 
 
