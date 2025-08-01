@@ -25,6 +25,29 @@ import { submit_gmx, delete_gmx, gmx_status, gmx_statuses, gmx_logs } from "../.
 import LogsView from "../LogsView";
 import ConfirmDialog from "../ConfirmDialog";
 
+function formatDuration(seconds: number): string {
+    if (seconds == null || isNaN(seconds)) return "?";
+    const units = [
+        { label: "month", secs: 2592000 },
+        { label: "day", secs: 86400 },
+        { label: "hour", secs: 3600 },
+        { label: "minute", secs: 60 },
+        { label: "second", secs: 1 },
+    ];
+    let remaining = Math.max(0, Math.floor(seconds));
+    const parts: string[] = [];
+    for (const { label, secs } of units) {
+        if (remaining >= secs) {
+            const value = Math.floor(remaining / secs);
+            parts.push(`${value} ${label}${value !== 1 ? "s" : ""}`);
+            remaining -= value * secs;
+        }
+        // Only show up to 2 largest units for brevity
+        if (parts.length === 2) break;
+    }
+    return parts.length ? parts.join(", ") : "0 seconds";
+}
+
 const MDRUN_ARGUMENTS = [
     { key: "xvg", type: "select", options: ["xmgrace", "xmgr", "none"], description: "xvg plot formatting" },
     { key: "dd", type: "text", description: "Domain decomposition grid, 0 is optimize" },
@@ -439,6 +462,11 @@ const RunView = (props: RunViewProps) => {
                             <Typography variant="caption" color="text.secondary">
                                 {`${jobStatus.nsteps_done.toLocaleString()} / ${jobStatus.nsteps.toLocaleString()} steps`}
                             </Typography>
+                            {jobStatus.estimated_time != null && (
+                                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                                    Estimated time remaining: {formatDuration(jobStatus.estimated_time)}
+                                </Typography>
+                            )}
                         </Box>
                     </>
                 )}
@@ -485,6 +513,7 @@ const RunView = (props: RunViewProps) => {
         jobStatus?.extra_args,
         jobStatus?.nsteps,
         jobStatus?.nsteps_done,
+        jobStatus?.estimated_time,
         jobStatus?.performance,
     ]);
 

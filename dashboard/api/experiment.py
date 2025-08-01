@@ -9,7 +9,7 @@ from werkzeug.datastructures import FileStorage
 
 from config import DATA_DIR, NAMESPACE
 from gromacs_job import GromacsJob
-from k8s import delete_pod, delete_service, delete_job
+from k8s import delete_pod, delete_service
 from k8s_status import PodStatus, JobStatus
 from utils import get_unique_id, get_files_with_extension
 import caddy_client
