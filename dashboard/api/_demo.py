@@ -23,10 +23,13 @@ gromacs_demo_job = {
     'extra_args': '',
     'job_name': 'gromacs-6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
     'status': 'RUNNING',
+    'start_timestamp': 1754047422,
+    'estimated_time': 408,
     'nsteps': 100000,
     'nsteps_done': 76543,
     'performance': None
 }
+
 
 gromacs_demo_jobs = {
     'LSD.tpr': gromacs_demo_job,
@@ -40,6 +43,8 @@ gromacs_demo_jobs = {
         'extra_args': '-v  -nt 8 -ddorder pp_pme',
         'job_name': 'gromacs-6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
         'status': 'TERMINATED',
+        'start_timestamp': 1754047422,
+        'estimated_time': 0,
         'nsteps': 100000,
         'nsteps_done': 100000,
         'performance': 70.158

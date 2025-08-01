@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from uuid import uuid4
 from pathlib import Path
+from datetime import datetime
 
 from k8s import create_gromacs_job, delete_job, get_job_status
 from k8s_status import JobStatus
@@ -47,6 +48,10 @@ class GromacsJob:
     job_name: str = field(default_factory=lambda: f'gromacs-{uuid4()}')
     # Status of the job
     status: JobStatus = JobStatus.PENDING
+    # Unix timestamp when the job started
+    start_timestamp: int | None = None
+    # Estimated time until completion in seconds
+    estimated_time: int | None = None
     # Total steps of the job
     nsteps: int | None = None
     # Steps completed so far
@@ -115,13 +120,21 @@ class GromacsJob:
 
     def poll_status(self) -> None:
         """
-        Poll the status of the job.
+        Update the fields of the job by polling its status and logs.
         """
         try:
+            prev_nsteps_done = self.nsteps_done
+
             self.status = get_job_status(ns=NAMESPACE, name=self.job_name)
             self.get_nsteps()
             self.get_nsteps_done()
+            self.get_start_timestamp()
             self.get_performance()
+
+            # Only update estimated time if nsteps_done has changed
+            if self.nsteps_done != prev_nsteps_done:
+                self.get_estimated_time()
+
         except Exception as e:
             logger.error(f"Failed to poll Gromacs job status:", exc_info=True)
             self.status = JobStatus.ERROR
@@ -173,7 +186,6 @@ class GromacsJob:
 
         except (FileNotFoundError, ValueError) as e:
             logger.error(f"Error reading nsteps from log file:", exc_info=True)
-            return None
 
         return None
 
@@ -201,9 +213,52 @@ class GromacsJob:
 
         except (FileNotFoundError, ValueError) as e:
             logger.error(f"Error reading nsteps_done from log file:", exc_info=True)
-            return None
 
         return None
+
+    def get_start_timestamp(self) -> int | None:
+        """
+        Get the start timestamp of the job.
+
+        :return: Start timestamp or None if not available
+        """
+        if self.start_timestamp is not None:
+            return self.start_timestamp
+
+        try:
+            with open(self._gmx_log, 'r') as f:
+                for line in f:
+                    if 'Started mdrun' not in line:
+                        continue
+
+                    parts = line.split()
+                    date_str = ' '.join(parts[-5:])
+                    dt = datetime.strptime(date_str, "%a %b %d %H:%M:%S %Y")
+                    self.start_timestamp = int(dt.timestamp())
+                    return self.start_timestamp
+
+        except (FileNotFoundError, ValueError) as e:
+            logger.error(f"Error reading start time from log file:", exc_info=True)
+
+        return None
+
+    def get_estimated_time(self) -> int | None:
+        """
+        Get the estimated time until completion in seconds.
+        
+        :return: Estimated time in seconds or None if not available
+        """
+        if self.start_timestamp is None or \
+           self.nsteps is None or \
+           self.nsteps_done is None or \
+           self.nsteps_done == 0:
+            return None
+
+        remaining_steps = self.nsteps - self.nsteps_done
+        now = int(datetime.now().timestamp())
+        time_per_step = (now - self.start_timestamp) / self.nsteps_done
+        self.estimated_time = int(remaining_steps * time_per_step) if remaining_steps > 0 else 0
+        return self.estimated_time
 
     def get_performance(self) -> float | None:
         """

@@ -64,7 +64,9 @@ export interface GromacsJob {
     extra_args: string;
     job_name: string;
     status: JobStatus;
-    nsteps: number;
-    nsteps_done: number;
+    start_timestamp: number | null;
+    estimated_time: number | null;
+    nsteps: number | null;
+    nsteps_done: number | null;
     performance: number | null;
 }
