@@ -16,10 +16,13 @@ import { BASE_PATH } from "../util/const";
 import { Experiment } from "../util/types";
 import { delete_experiment, get_experiments } from "../util/api";
 import ErrorMessage from "./ErrorMessage";
+import ConfirmDialog from "./ConfirmDialog";
 
 const Experiments = () => {
     const [experiments, setExperiments] = useState<Experiment[]>([]);
     const [errorMessage, setErrorMessage] = useState<string>("");
+    const [experimentToDelete, setExperimentToDelete] = useState<Experiment | null>(null);
+    const [confirmDeleteDialog, setConfirmDeleteDialog] = useState<boolean>(false);
 
     const getExperiments = async () => {
         const { data, error } = await get_experiments();
@@ -87,7 +90,8 @@ const Experiments = () => {
                                     variant="outlined"
                                     color="error"
                                     onClick={() => {
-                                        deleteExperiment(experiment.id);
+                                        setExperimentToDelete(experiment);
+                                        setConfirmDeleteDialog(true);
                                     }}
                                 >
                                     Delete
@@ -116,6 +120,16 @@ const Experiments = () => {
             </Grid>
 
             {errorMessage && <ErrorMessage message={errorMessage} />}
+
+            <ConfirmDialog
+                open={confirmDeleteDialog}
+                setOpen={setConfirmDeleteDialog}
+                onConfirm={() => {
+                    deleteExperiment(experimentToDelete!.id);
+                    setExperimentToDelete(null);
+                }}
+                message="Are you sure you want to delete this experiment? All data will be lost."
+            />
         </Stack>
     );
 };
