@@ -36,12 +36,13 @@ const FileSelector = (props: FileSelectorProps) => {
         fetchFiles();
     }, [fetchFiles]);
 
-    const menuItems = useMemo(() => 
-        availableFiles.map((file) => (
-            <MenuItem key={file.name} value={file.url}>
-                {file.name} ({formatFileSize(file.size)})
-            </MenuItem>
-        )),
+    const menuItems = useMemo(
+        () =>
+            availableFiles.map((file) => (
+                <MenuItem key={file.name} value={file.url}>
+                    {file.name} ({formatFileSize(file.size)})
+                </MenuItem>
+            )),
         [availableFiles]
     );
 

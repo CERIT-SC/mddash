@@ -1,9 +1,9 @@
 import { AppBar, Toolbar, Typography } from "@mui/material";
 
 const Footer = () => (
-    <AppBar position="static" color="primary" sx={{ top: "auto", bottom: 0, width: "100%" }}>
+    <AppBar position="static" color="primary">
         <Toolbar>
-            <Typography variant="caption" color="inherit" sx={{ flexGrow: 1, textAlign: "center" }}>
+            <Typography variant="body1" sx={{ flexGrow: 1, textAlign: "center" }}>
                 TODO
             </Typography>
         </Toolbar>

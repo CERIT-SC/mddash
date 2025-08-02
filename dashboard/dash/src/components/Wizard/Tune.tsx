@@ -17,6 +17,7 @@ import {
     Tab,
     Radio,
 } from "@mui/material";
+import { Delete, PlayArrow } from "@mui/icons-material";
 import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
 
@@ -47,7 +48,7 @@ const TunerTable = (props: TunerTableProps) => {
     const { rows, selectedTrial, setSelectedTrial } = props;
 
     if (!rows || rows.length === 0) {
-        return <Typography>No tuning trials available yet...</Typography>;
+        return <Typography variant="body1">No tuning trials available yet...</Typography>;
     }
 
     return (
@@ -141,7 +142,7 @@ const TunerView = (props: TunerViewProps) => {
         } else {
             changeStep(2);
         }
-    }
+    };
 
     useEffect(() => {
         setLoading(true);
@@ -171,9 +172,9 @@ const TunerView = (props: TunerViewProps) => {
                     <CircularProgress />
                 </Box>
             )) || (
-                <Stack spacing={2} direction="column">
+                <>
                     {(tunerRunning && (
-                        <>
+                        <Stack direction="column" spacing={2}>
                             <TunerTable
                                 rows={tunerStatus?.trials || []}
                                 selectedTrial={selectedTrial}
@@ -181,29 +182,36 @@ const TunerView = (props: TunerViewProps) => {
                             />
 
                             <Stack direction="row" spacing={2} justifyContent="flex-end">
-                                <Button variant="contained" color="error" onClick={() => setConfirmDeleteDialog(true)}>
-                                    Delete tune job 🗑️
+                                <Button
+                                    variant="contained"
+                                    color="error"
+                                    startIcon={<Delete />}
+                                    onClick={() => setConfirmDeleteDialog(true)}
+                                >
+                                    Delete tune job
                                 </Button>
                             </Stack>
 
-                            {selectedTrial && (<StartForm
-                                fetchStatus={goToRunStep}
-                                np={selectedTrial.np}
-                                ntomp={selectedTrial.ntomp}
-                                nb={selectedTrial.nb}
-                                pme={selectedTrial.pme}
-                                {...props}
-                            />)}
-                        </>
+                            {selectedTrial && (
+                                <StartForm
+                                    fetchStatus={goToRunStep}
+                                    np={selectedTrial.np}
+                                    ntomp={selectedTrial.ntomp}
+                                    nb={selectedTrial.nb}
+                                    pme={selectedTrial.pme}
+                                    {...props}
+                                />
+                            )}
+                        </Stack>
                     )) || (
-                        <>
-                            <Typography variant="h5">Tuner isn't running 💔</Typography>
-                            <Button variant="contained" color="primary" onClick={runTuner}>
-                                Start tune job 🏃
+                        <Stack direction="column" spacing={1} alignItems="center">
+                            <Typography variant="h4">Tuner not running.</Typography>
+                            <Button variant="contained" color="primary" startIcon={<PlayArrow />} onClick={runTuner}>
+                                Start tune job
                             </Button>
-                        </>
+                        </Stack>
                     )}
-                </Stack>
+                </>
             )}
 
             <ConfirmDialog

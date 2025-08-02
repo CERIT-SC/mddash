@@ -6,6 +6,31 @@ import {
     ThemeProvider as MuiThemeProvider,
     CssBaseline,
 } from "@mui/material";
+import { TypographyOptions } from "@mui/material/styles/createTypography";
+
+const typography: TypographyOptions = {
+    fontFamily: "Verdana",
+    // Large (32px) - For main headings and titles
+    h1: { fontSize: "32px", fontWeight: "bold", padding: "12px 0px" },
+    h2: { fontSize: "32px", fontWeight: "normal", padding: "8px 0px" },
+
+    // Medium (20px) - For section headings
+    h3: { fontSize: "20px", fontWeight: "bold", padding: "8px 0px" },
+    h4: { fontSize: "20px", fontWeight: "normal", padding: "4px 0px" },
+    h5: { fontSize: "20px", fontWeight: "normal", padding: "4px 0px" },
+    h6: { fontSize: "20px", fontWeight: "normal", padding: "4px 0px" },
+
+    // Regular (16px) - For body text and most content
+    body1: { fontSize: "16px", fontWeight: "normal" },
+    subtitle1: { fontSize: "16px", fontWeight: "bold" },
+    button: { fontSize: "16px", fontWeight: "normal", textTransform: "none" },
+
+    // Small (12px) - For captions, labels, secondary info
+    body2: { fontSize: "12px", fontWeight: "normal" },
+    subtitle2: { fontSize: "12px", fontWeight: "bold" },
+    caption: { fontSize: "12px", fontWeight: "normal" },
+    overline: { fontSize: "12px", fontWeight: "bold", textTransform: "uppercase" },
+};
 
 const lightThemeOptions: ThemeOptions = {
     palette: {
@@ -17,13 +42,7 @@ const lightThemeOptions: ThemeOptions = {
         info: { main: "#2196f3" },
         success: { main: "#4caf50" },
     },
-    typography: {
-        fontFamily: "Verdana",
-        h1: { fontSize: "40px", fontWeight: "bold", padding: "25px 0px" },
-        h2: { fontSize: "36px", fontWeight: "bold", padding: "10px 0px" },
-        h3: { fontSize: "30px", fontWeight: "bold", padding: "10px 0px" },
-        h4: { fontSize: "24px", fontWeight: "bold", padding: "10px 0px" },
-    },
+    typography,
 };
 
 const darkThemeOptions: ThemeOptions = {
@@ -37,13 +56,7 @@ const darkThemeOptions: ThemeOptions = {
         success: { main: "#4caf50" },
         background: { default: "#212529", paper: "#2b3035" },
     },
-    typography: {
-        fontFamily: "Verdana",
-        h1: { fontSize: "40px", fontWeight: "bold", padding: "25px 0px" },
-        h2: { fontSize: "36px", fontWeight: "bold", padding: "10px 0px" },
-        h3: { fontSize: "30px", fontWeight: "bold", padding: "10px 0px" },
-        h4: { fontSize: "24px", fontWeight: "bold", padding: "10px 0px" },
-    },
+    typography,
 };
 
 export const ThemeContext = createContext({

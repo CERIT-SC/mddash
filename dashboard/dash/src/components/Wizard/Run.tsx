@@ -20,7 +20,7 @@ import {
 
 import { WizardStepProps } from "./Stepper";
 import FileSelector from "../FileSelector";
-import { GromacsJob } from "../../util/types";
+import { GromacsJob, JobStatus } from "../../util/types";
 import { submit_gmx, delete_gmx, gmx_status, gmx_statuses, gmx_logs } from "../../util/api";
 import LogsView from "../LogsView";
 import ConfirmDialog from "../ConfirmDialog";
@@ -407,21 +407,6 @@ const RunView = (props: RunViewProps) => {
         };
     }, [jobStatus?.status]);
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case "RUNNING":
-                return "success";
-            case "PENDING":
-                return "warning";
-            case "TERMINATED":
-                return "info";
-            case "ERROR":
-                return "error";
-            default:
-                return "primary";
-        }
-    };
-
     const getLogs = useCallback(async () => {
         if (!logType) return "No log type selected";
 
@@ -435,14 +420,14 @@ const RunView = (props: RunViewProps) => {
 
         return (
             <Stack spacing={2} alignItems="flex-start">
-                <Typography variant="subtitle2" color="text.secondary">
+                <Typography variant="subtitle1" color="text.secondary">
                     Status
                 </Typography>
-                <Chip label={jobStatus.status} color={getStatusColor(jobStatus.status)} />
+                <Chip label={jobStatus.status} color={JobStatus.getColor(jobStatus.status)} />
 
                 {jobStatus.status === "RUNNING" && jobStatus.nsteps !== null && jobStatus.nsteps_done !== null && (
                     <>
-                        <Typography variant="subtitle2" color="text.secondary">
+                        <Typography variant="subtitle1" color="text.secondary">
                             Progress
                         </Typography>
                         <Box sx={{ width: "100%", minWidth: 300 }}>
@@ -459,11 +444,11 @@ const RunView = (props: RunViewProps) => {
                                     </Typography>
                                 </Box>
                             </Box>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="body2" color="text.secondary">
                                 {`${jobStatus.nsteps_done.toLocaleString()} / ${jobStatus.nsteps.toLocaleString()} steps`}
                             </Typography>
                             {jobStatus.estimated_time != null && (
-                                <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
                                     Estimated time remaining: {formatDuration(jobStatus.estimated_time)}
                                 </Typography>
                             )}
@@ -473,33 +458,33 @@ const RunView = (props: RunViewProps) => {
 
                 {jobStatus.performance && (
                     <>
-                        <Typography variant="subtitle2" color="text.secondary">
+                        <Typography variant="subtitle1" color="text.secondary">
                             Performance
                         </Typography>
-                        <Typography variant="body2">{`${jobStatus.performance.toFixed(2)} ns/day`}</Typography>
+                        <Typography variant="body1">{`${jobStatus.performance.toFixed(2)} ns/day`}</Typography>
                     </>
                 )}
 
-                <Typography variant="subtitle2" color="text.secondary">
+                <Typography variant="subtitle1" color="text.secondary">
                     Processes
                 </Typography>
-                <Typography variant="body2">
+                <Typography variant="body1">
                     {jobStatus.np} × {jobStatus.ntomp} threads
                 </Typography>
 
-                <Typography variant="subtitle2" color="text.secondary">
+                <Typography variant="subtitle1" color="text.secondary">
                     PME / NB
                 </Typography>
-                <Typography variant="body2">
+                <Typography variant="body1">
                     {jobStatus.pme} / {jobStatus.nb}
                 </Typography>
 
                 {jobStatus.extra_args && (
                     <>
-                        <Typography variant="subtitle2" color="text.secondary">
+                        <Typography variant="subtitle1" color="text.secondary">
                             Extra Arguments
                         </Typography>
-                        <Typography variant="body2">{jobStatus.extra_args}</Typography>
+                        <Typography variant="body1">{jobStatus.extra_args}</Typography>
                     </>
                 )}
             </Stack>
@@ -539,7 +524,7 @@ const RunView = (props: RunViewProps) => {
                                 Delete Job
                             </Button>
 
-                            <Typography variant="subtitle2" color="text.secondary">
+                            <Typography variant="subtitle1" color="text.secondary">
                                 Logs
                             </Typography>
 

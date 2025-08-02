@@ -1,5 +1,4 @@
-import { Paper, Typography, useTheme, alpha } from '@mui/material';
-
+import { Paper, Typography, useTheme, alpha } from "@mui/material";
 
 interface ErrorMessageProps {
     message: string;
@@ -13,11 +12,9 @@ const ErrorMessage = (props: ErrorMessageProps) => {
 
     return (
         <Paper elevation={2} sx={{ p: 2, backgroundColor: transparentError }}>
-            <Typography variant="body1">
-                {message}
-            </Typography>
+            <Typography variant="body1">{message}</Typography>
         </Paper>
-    )
-}
+    );
+};
 
 export default ErrorMessage;

@@ -34,7 +34,9 @@ const ConfirmDialog = (props: ConfirmDialogProps) => {
 
     return (
         <Dialog open={open} onClose={handleCancel} aria-labelledby="confirm-dialog-title">
-            <DialogTitle id="confirm-dialog-title">{title}</DialogTitle>
+            <DialogTitle variant="h4" id="confirm-dialog-title">
+                {title}
+            </DialogTitle>
             <DialogContent>
                 <DialogContentText>{message}</DialogContentText>
             </DialogContent>

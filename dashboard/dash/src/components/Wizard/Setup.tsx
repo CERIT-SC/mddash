@@ -4,7 +4,7 @@ import { Stack, Button, Typography, CircularProgress } from "@mui/material";
 import { WizardStepProps } from "./Stepper";
 import { get_notebook, spawn_notebook, delete_notebook } from "../../util/api";
 import ConfirmDialog from "../ConfirmDialog";
-import { NotebookStatus } from "../../util/types";
+import { NotebookStatus, PodStatus } from "../../util/types";
 
 const WizardSetup = (props: WizardStepProps) => {
     const { experiment, setErrorMessage, nextStep } = props;
@@ -60,7 +60,7 @@ const WizardSetup = (props: WizardStepProps) => {
     return (
         <Stack direction="column" alignItems="center" spacing={5}>
             <Stack direction="row" justifyContent="space-between" width="100%">
-                <Typography variant="h6">{experiment.source_message}</Typography>
+                <Typography variant="h4">{experiment.source_message}</Typography>
                 {experiment.step === 0 && (
                     <Button variant="contained" color="error" onClick={() => setNextStepDialog(true)}>
                         Complete Setup
@@ -71,7 +71,7 @@ const WizardSetup = (props: WizardStepProps) => {
                 <Stack spacing={2} direction="column">
                     {notebookStatus.status === "RUNNING" && (
                         <>
-                            <Typography variant="h5" color="success.main">
+                            <Typography variant="h4" color={PodStatus.getColor(notebookStatus.status)}>
                                 Notebook running 🚀
                             </Typography>
                             <Button variant="contained" color="success" href={notebookStatus.path} target="_blank">
@@ -85,13 +85,13 @@ const WizardSetup = (props: WizardStepProps) => {
 
                     {(notebookStatus.status === "PENDING" || notebookStatus.status === "TERMINATING") && (
                         <>
-                            <Typography variant="h5" color="warning.main">
+                            <Typography variant="h4" color={PodStatus.getColor(notebookStatus.status)}>
                                 {notebookStatus.status === "PENDING"
                                     ? "Notebook starting ⏳"
                                     : "Notebook terminating ⏳"}
                             </Typography>
                             <CircularProgress size={40} />
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body1" color={PodStatus.getColor(notebookStatus.status)}>
                                 {notebookStatus.status === "PENDING"
                                     ? "Please wait while the notebook is being prepared..."
                                     : "Please wait while the notebook is being terminated..."}
@@ -106,10 +106,7 @@ const WizardSetup = (props: WizardStepProps) => {
 
                     {(notebookStatus.status === "TERMINATED" || notebookStatus.status === "ERROR") && (
                         <>
-                            <Typography
-                                variant="h5"
-                                color={notebookStatus.status === "ERROR" ? "error.main" : "text.secondary"}
-                            >
+                            <Typography variant="h4" color={PodStatus.getColor(notebookStatus.status)}>
                                 {notebookStatus.status === "TERMINATED"
                                     ? "Notebook terminated 🛑"
                                     : "Notebook error ❌"}
@@ -122,7 +119,7 @@ const WizardSetup = (props: WizardStepProps) => {
 
                     {(notebookStatus.status === "DOWN" || notebookStatus.status === "UNKNOWN") && (
                         <>
-                            <Typography variant="h5" color="text.secondary">
+                            <Typography variant="h4" color={PodStatus.getColor(notebookStatus.status)}>
                                 {notebookStatus.status === "DOWN" ? "Notebook down 💔" : "Notebook status unknown ❓"}
                             </Typography>
                             <Button variant="contained" color="primary" onClick={spawnNotebook}>
