@@ -1,67 +1,24 @@
-import { useState, useEffect } from "react";
-import { Typography, Card, Grid2 as Grid, CardContent } from "@mui/material";
+import { Typography } from "@mui/material";
 
 import Experiments from "../components/Experiments";
-import { USER } from "../util/const";
-import { get_metrics } from "../util/api";
-import { ResourceUsage } from "../util/types";
+import Metrics from "../components/Metrics";
 
 const Home = () => {
-    const [metrics, setMetrics] = useState<ResourceUsage>({ cpu: 0, gpu: 0, memory: 0 });
-
-    const fetchMetrics = async () => {
-        const { data, error } = await get_metrics();
-        if (error) {
-            console.error(error);
-            return;
-        }
-        setMetrics(data || { cpu: 0, gpu: 0, memory: 0 });
-    };
-
-    useEffect(() => {
-        fetchMetrics();
-    }, []);
-
     return (
         <>
-            <Typography variant="h2">Welcome to your dashboard, {USER}!</Typography>
-
-            <Typography variant="h3">My Experiments</Typography>
+            <Typography variant="h1">My Experiments</Typography>
 
             <Experiments />
 
-            <Typography variant="h3">Service Utilization</Typography>
+            <Typography variant="h1">Service Utilization</Typography>
 
-            <Grid container spacing={2} p={4}>
-                <Grid size={3}>
-                    <Card>
-                        <CardContent>
-                            <Typography variant="h4">CPU</Typography>
-                            <Typography variant="h6">{metrics.cpu} cores</Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-                <Grid size={3}>
-                    <Card>
-                        <CardContent>
-                            <Typography variant="h4">GPU</Typography>
-                            <Typography variant="h6">{metrics.gpu} cores</Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-                <Grid size={3}>
-                    <Card>
-                        <CardContent>
-                            <Typography variant="h4">Memory</Typography>
-                            <Typography variant="h6">{metrics.memory} GB</Typography>
-                        </CardContent>
-                    </Card>
-                </Grid>
-            </Grid>
+            <Metrics />
 
-            <Typography variant="h3">Documentation</Typography>
+            <Typography variant="h1">Documentation</Typography>
 
-            <Typography variant="body1">There is no documentation yet :P</Typography>
+            <Typography variant="body1" p={4}>
+                There is no documentation yet :P
+            </Typography>
         </>
     );
 };

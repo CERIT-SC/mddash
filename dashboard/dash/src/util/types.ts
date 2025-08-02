@@ -23,7 +23,35 @@ export interface FileOption {
     size: number;
 }
 
+export type MuiColor = "primary" | "secondary" | "success" | "warning" | "error" | "info";
+
 export type PodStatus = "RUNNING" | "PENDING" | "TERMINATED" | "ERROR" | "TERMINATING" | "DOWN" | "UNKNOWN";
+
+export namespace PodStatus {
+    /**
+     * Get the color associated with a pod status
+     * @param status The pod status
+     * @returns Color name suitable for Material-UI components
+     */
+    export function getColor(status: PodStatus): MuiColor {
+        switch (status) {
+            case "RUNNING":
+                return "success";
+            case "PENDING":
+                return "warning";
+            case "TERMINATED":
+                return "info";
+            case "ERROR":
+                return "error";
+            case "TERMINATING":
+                return "warning";
+            case "DOWN":
+                return "error";
+            case "UNKNOWN":
+                return "secondary";
+        }
+    }
+}
 
 export interface NotebookStatus {
     status: PodStatus;
@@ -44,13 +72,35 @@ export interface TunerStatus {
 
 export type JobStatus = "RUNNING" | "PENDING" | "TERMINATED" | "ERROR";
 
+export namespace JobStatus {
+    /**
+     * Get the color associated with a job status
+     * @param status The job status
+     * @returns Color name suitable for Material-UI components
+     */
+    export function getColor(status: JobStatus): MuiColor {
+        switch (status) {
+            case "RUNNING":
+                return "success";
+            case "PENDING":
+                return "warning";
+            case "TERMINATED":
+                return "info";
+            case "ERROR":
+                return "error";
+        }
+    }
+}
+
+export type DeviceType = "cpu" | "gpu" | "auto";
+
 export interface TunerTrial {
     id: string;
     status: JobStatus;
     np: number;
     ntomp: number;
-    pme: "cpu" | "gpu" | "auto";
-    nb: "cpu" | "gpu" | "auto";
+    pme: DeviceType;
+    nb: DeviceType;
     performance: number | null;
 }
 
@@ -59,8 +109,8 @@ export interface GromacsJob {
     tpr_name: string;
     np: number;
     ntomp: number;
-    pme: "cpu" | "gpu" | "auto";
-    nb: "cpu" | "gpu" | "auto";
+    pme: DeviceType;
+    nb: DeviceType;
     extra_args: string;
     job_name: string;
     status: JobStatus;

@@ -1,10 +1,20 @@
-import { useState } from 'react';
-import { useDropzone, DropzoneOptions, FileRejection, DropEvent, Accept } from 'react-dropzone';
-import { Typography, Paper, alpha, useTheme, Stack, List, ListItem, ListItemAvatar, ListItemText, SxProps } from '@mui/material';
-import { Check } from '@mui/icons-material';
+import { useState } from "react";
+import { useDropzone, DropzoneOptions, FileRejection, DropEvent, Accept } from "react-dropzone";
+import {
+    Typography,
+    Paper,
+    alpha,
+    useTheme,
+    Stack,
+    List,
+    ListItem,
+    ListItemAvatar,
+    ListItemText,
+    SxProps,
+} from "@mui/material";
+import { Check } from "@mui/icons-material";
 
-import ErrorMessage from './ErrorMessage';
-
+import ErrorMessage from "./ErrorMessage";
 
 const getAcceptedExtensions = (acceptedTypes: Accept) => {
     const extensions: string[] = [];
@@ -15,7 +25,6 @@ const getAcceptedExtensions = (acceptedTypes: Accept) => {
     }
     return extensions;
 };
-
 
 interface DropzoneProps extends DropzoneOptions {
     inputName: string;
@@ -44,18 +53,24 @@ const Dropzone = (props: DropzoneProps) => {
             onDrop(acceptedFiles, fileRejections, event);
         }
     };
-    
+
     const handleError = (err: Error) => {
         setError(err);
 
         if (onError) {
             onError(err);
         }
-    }
+    };
 
-    const { getRootProps, getInputProps, isDragActive } = useDropzone({ onDrop: handleDrop, onError: handleError, ...dropzoneOptions });
+    const { getRootProps, getInputProps, isDragActive } = useDropzone({
+        onDrop: handleDrop,
+        onError: handleError,
+        ...dropzoneOptions,
+    });
 
-    const acceptedExtensions = getAcceptedExtensions(dropzoneOptions.accept || {}).map(ext => `*${ext}`).join(', ');
+    const acceptedExtensions = getAcceptedExtensions(dropzoneOptions.accept || {})
+        .map((ext) => `*${ext}`)
+        .join(", ");
 
     const formatFileSize = (size: number) => {
         if (size < 1024) {
@@ -67,7 +82,7 @@ const Dropzone = (props: DropzoneProps) => {
         } else {
             return `${(size / 1024 / 1024 / 1024).toFixed(2)} GB`;
         }
-    }
+    };
 
     return (
         <Stack spacing={4} sx={sx}>
@@ -75,19 +90,19 @@ const Dropzone = (props: DropzoneProps) => {
                 {...getRootProps()}
                 sx={{
                     p: 2,
-                    textAlign: 'center',
-                    color: 'text.secondary',
-                    border: '2px dashed',
-                    borderColor: isDragActive ? 'primary.main' : 'text.secondary',
-                    backgroundColor: isDragActive ? transparentPrimary : 'background.paper',
-                    cursor: 'pointer',
+                    textAlign: "center",
+                    color: "text.secondary",
+                    border: "2px dashed",
+                    borderColor: isDragActive ? "primary.main" : "text.secondary",
+                    backgroundColor: isDragActive ? transparentPrimary : "background.paper",
+                    cursor: "pointer",
                 }}
             >
                 <input name={inputName} {...getInputProps()} />
                 {isDragActive ? (
-                    <Typography variant="h6">Drop the files here...</Typography>
+                    <Typography variant="h4">Drop the files here...</Typography>
                 ) : (
-                    <Typography variant="h6">Drop files here or click.</Typography>
+                    <Typography variant="h4">Drop files here or click.</Typography>
                 )}
                 {acceptedExtensions && (
                     <Typography variant="body2">Accepted file types: {acceptedExtensions}</Typography>

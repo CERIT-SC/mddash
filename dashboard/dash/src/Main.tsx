@@ -1,17 +1,16 @@
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { Routes, Route, BrowserRouter } from 'react-router-dom'
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { Routes, Route, BrowserRouter } from "react-router-dom";
 
-import './Main.css'
+import "./Main.css";
 
-import Layout from './Layout'
-import Home from './pages/Home'
-import New from './pages/New'
-import Wizard from './pages/Wizard'
-import NotFound from './pages/error/404'
+import Layout from "./Layout";
+import Home from "./pages/Home";
+import New from "./pages/New";
+import Wizard from "./pages/Wizard";
+import NotFound from "./pages/error/404";
 
-
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
     <StrictMode>
         <BrowserRouter>
             <Routes>
@@ -24,4 +23,4 @@ createRoot(document.getElementById('root')!).render(
             </Routes>
         </BrowserRouter>
     </StrictMode>
-)
+);

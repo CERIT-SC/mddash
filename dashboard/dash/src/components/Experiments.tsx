@@ -10,10 +10,10 @@ import {
     CardContent,
     Button,
 } from "@mui/material";
-import { Add } from "@mui/icons-material";
+import { AddCircleOutline } from "@mui/icons-material";
 import { BASE_PATH } from "../util/const";
 
-import { Experiment } from "../util/types";
+import { Experiment, PodStatus } from "../util/types";
 import { delete_experiment, get_experiments } from "../util/api";
 import ErrorMessage from "./ErrorMessage";
 import ConfirmDialog from "./ConfirmDialog";
@@ -43,7 +43,7 @@ const Experiments = () => {
 
     return (
         <Stack spacing={2} p={4}>
-            <Grid container spacing={2} p={4}>
+            <Grid container spacing={2}>
                 {experiments.map((experiment) => (
                     <Grid size={3} key={experiment.id} sx={{ display: "flex" }}>
                         <Card
@@ -56,25 +56,40 @@ const Experiments = () => {
                             }}
                         >
                             <CardContent>
-                                <Typography variant="h4">{experiment.name}</Typography>
-                                <Typography variant="body1">Step: {experiment.step}</Typography>
-                                <Typography variant="body1">Status: {experiment.status}</Typography>
-                                <Typography variant="body1">Notebook status: {experiment.notebook_status}</Typography>
-                                <Typography variant="body1">
-                                    Tuner jobs running:{" "}
-                                    {
-                                        Object.values(experiment.tuner_jobs).filter(
-                                            (j) => j.summary && j.summary.RUNNING > 0
-                                        ).length
-                                    }
-                                </Typography>
-                                <Typography variant="body1">
-                                    Gromacs jobs running:{" "}
-                                    {
-                                        Object.values(experiment.gromacs_jobs).filter((j) => j.status === "RUNNING")
-                                            .length
-                                    }
-                                </Typography>
+                                <Typography variant="h3">{experiment.name}</Typography>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    <Typography variant="subtitle2">Step:</Typography>
+                                    <Typography variant="body2">{experiment.step}</Typography>
+                                </Stack>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    <Typography variant="subtitle2">Status:</Typography>
+                                    <Typography variant="body2">{experiment.status}</Typography>
+                                </Stack>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    <Typography variant="subtitle2">Notebook:</Typography>
+                                    <Typography variant="body2" color={PodStatus.getColor(experiment.notebook_status)}>
+                                        {experiment.notebook_status}
+                                    </Typography>
+                                </Stack>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    <Typography variant="subtitle2">Tuner jobs:</Typography>
+                                    <Typography variant="body2">
+                                        {
+                                            Object.values(experiment.tuner_jobs).filter(
+                                                (j) => j.summary && j.summary.RUNNING > 0
+                                            ).length
+                                        }
+                                    </Typography>
+                                </Stack>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                    <Typography variant="subtitle2">Gromacs jobs:</Typography>
+                                    <Typography variant="body2">
+                                        {
+                                            Object.values(experiment.gromacs_jobs).filter((j) => j.status === "RUNNING")
+                                                .length
+                                        }
+                                    </Typography>
+                                </Stack>
                             </CardContent>
                             <CardActions sx={{ alignSelf: "flex-end", width: "100%", justifyContent: "center" }}>
                                 <Button
@@ -102,16 +117,24 @@ const Experiments = () => {
                 ))}
 
                 <Grid size={3} sx={{ display: "flex" }}>
-                    <Card sx={{ flexGrow: 1, height: "100%", display: "flex" }}>
+                    <Card
+                        sx={{
+                            flexGrow: 1,
+                            height: "100%",
+                            display: "flex",
+                            color: "text.secondary",
+                            border: "4px dashed",
+                        }}
+                    >
                         <CardActionArea
                             component={Link}
                             to={`${BASE_PATH}/new`}
                             sx={{ height: "100%", display: "flex", flexDirection: "column" }}
                         >
                             <Stack alignItems="center" justifyContent="center" spacing={2} p={4} sx={{ flexGrow: 1 }}>
-                                <Add sx={{ width: 75, height: 75 }} />
-                                <Typography variant="h4" textAlign="center">
-                                    New Experiment
+                                <AddCircleOutline sx={{ width: 75, height: 75 }} />
+                                <Typography variant="h3" textAlign="center">
+                                    New
                                 </Typography>
                             </Stack>
                         </CardActionArea>
