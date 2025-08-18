@@ -33,7 +33,7 @@ def get_role_manifest(role_name):
         "rules": [
             {
                 "apiGroups": [""],
-                "resources": ["pods", "services", "events"],
+                "resources": ["pods", "pods/exec", "services", "events"],
                 "verbs": ["create", "delete", "get", "list", "watch"]
             },
             {
@@ -59,7 +59,7 @@ def get_hub_role_manifest(role_name):
         "rules": [
             {
                 "apiGroups": [""],
-                "resources": ["pods", "services", "persistentvolumeclaims", "events"],
+                "resources": ["pods", "pods/exec", "services", "persistentvolumeclaims", "events"],
                 "verbs": ["create", "delete", "get", "list", "watch"]
             },
             {
