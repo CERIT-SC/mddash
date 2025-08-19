@@ -22,6 +22,8 @@ class TunerJob(db.Model):  # type: ignore
 
     # ID of the tune job
     tuner_run_id: Mapped[str] = mapped_column(db.String(36), primary_key=True, nullable=False)
+    # ID of the experiment this job belongs to
+    experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey('experiments.id'))
     # name of the TPR file being tuned
     tpr_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # creation time

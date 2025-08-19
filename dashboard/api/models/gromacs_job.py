@@ -13,9 +13,9 @@ from enums import DeviceType, JobStatus
 from clients import k8s
 from utils import tail
 
-
 if TYPE_CHECKING:
     from .experiment import Experiment
+
 
 db = SQLAlchemy()
 logger = logging.getLogger(__name__)
@@ -35,6 +35,8 @@ class GromacsJob(db.Model):  # type: ignore
 
     # ID of the job inside the database
     id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
+    # ID of the experiment this job belongs to
+    experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey('experiments.id'))
     # creation time
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
     # Name of the TPR file
@@ -69,7 +71,7 @@ class GromacsJob(db.Model):  # type: ignore
     def _init_paths(self) -> None:
         """Initialize computed file paths."""
         self._deffnm = self.tpr_name.removesuffix('.tpr')
-        base_dir = DATA_DIR / self.experiment.id
+        base_dir = DATA_DIR / self.experiment_id
         self._gmx_log = base_dir / f'{self._deffnm}.log'
         self._stdout_log = base_dir / f'{self.job_name}.out'
         self._stderr_log = base_dir / f'{self.job_name}.err'
@@ -235,7 +237,7 @@ class GromacsJob(db.Model):  # type: ignore
         Deletes files with extensions defined in RESULT_EXTENSIONS.
         """
         for ext in self.RESULT_EXTENSIONS:
-            file = DATA_DIR / self.experiment.id / f'{self._deffnm}.{ext}'
+            file = DATA_DIR / self.experiment_id / f'{self._deffnm}.{ext}'
             if file.exists():
                 file.unlink()
                 logger.info(f"Deleted previous result file: {file}")

@@ -10,14 +10,18 @@ from clients import caddy, k8s
 if TYPE_CHECKING:
     from .experiment import Experiment
 
+
 db = SQLAlchemy()
 logger = logging.getLogger(__name__)
+
 
 class Notebook(db.Model):
     __tablename__ = 'notebooks'
     
     # ID of the notebook inside the database
     id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
+    # ID of the experiment this notebook belongs to
+    experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey('experiments.id'))
     # token for accessing jupyter notebook
     token: Mapped[str] = mapped_column(db.String(36), nullable=False)
 
@@ -27,12 +31,12 @@ class Notebook(db.Model):
     @property
     def path(self) -> str:
         '''Path to access the notebook via Caddy.'''
-        return f'{PREFIX}/notebook/{self.experiment.id}/?token={self.token}'
+        return f'{PREFIX}/notebook/{self.experiment_id}/?token={self.token}'
 
     @property
     def status(self) -> PodStatus:
         '''Get the status of the notebook pod.'''
-        pod_name = f'notebook-{self.experiment.id}'
+        pod_name = f'notebook-{self.experiment_id}'
         try:
             return k8s.get_pod_status(NAMESPACE, pod_name)
         except:
@@ -41,16 +45,16 @@ class Notebook(db.Model):
 
     def start(self) -> None:
         '''Start the notebook pod and service, and create a route in Caddy.'''
-        pod_name = f'notebook-{self.experiment.id}'
-        svc_name = f'svc-{self.experiment.id}'
+        pod_name = f'notebook-{self.experiment_id}'
+        svc_name = f'svc-{self.experiment_id}'
 
         k8s.create_notebook_pod(
             NOTEBOOK_IMAGE,
             NAMESPACE,
             PVC_NAME,
             pod_name,
-            self.experiment.id,
-            f'{PREFIX}/notebook/{self.experiment.id}',
+            self.experiment_id,
+            f'{PREFIX}/notebook/{self.experiment_id}',
             self.token
         )
 
@@ -61,9 +65,9 @@ class Notebook(db.Model):
             raise
 
         route_id = caddy.add_proxy_route(
-            path=f'{PREFIX}/notebook/{self.experiment.id}',
+            path=f'{PREFIX}/notebook/{self.experiment_id}',
             upstream=f'{svc_name}.{NAMESPACE}.svc.cluster.local:80',
-            route_id=f'route-{self.experiment.id}-notebook',
+            route_id=f'route-{self.experiment_id}-notebook',
         )
         
         if route_id is None:
@@ -73,9 +77,9 @@ class Notebook(db.Model):
 
     def stop(self) -> None:
         '''Stop the notebook pod and service, and remove the route from Caddy.'''
-        pod_name = f'notebook-{self.experiment.id}'
-        svc_name = f'svc-{self.experiment.id}'
-        route_id = f'route-{self.experiment.id}-notebook'
+        pod_name = f'notebook-{self.experiment_id}'
+        svc_name = f'svc-{self.experiment_id}'
+        route_id = f'route-{self.experiment_id}-notebook'
 
         try:
             k8s.delete_pod(NAMESPACE, pod_name)
