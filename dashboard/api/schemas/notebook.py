@@ -1,9 +1,6 @@
 from flask_marshmallow import Marshmallow
-
 from models import Notebook
-
-
-ma: Marshmallow = Marshmallow()
+from extensions import ma
 
 
 class NotebookSchema(ma.SQLAlchemyAutoSchema):  # type: ignore

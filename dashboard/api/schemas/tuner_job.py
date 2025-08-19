@@ -1,9 +1,6 @@
 from flask_marshmallow import Marshmallow
-
 from models import TunerJob
-
-
-ma = Marshmallow()
+from extensions import ma
 
 
 class TunerJobSchema(ma.SQLAlchemyAutoSchema):  # type: ignore

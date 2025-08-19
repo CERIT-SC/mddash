@@ -4,12 +4,12 @@ from uuid import uuid4
 from datetime import datetime
 from typing import TYPE_CHECKING
 from cachetools import cached, TTLCache
-from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from config import NAMESPACE, DATA_DIR, PVC_NAME
 from clients import k8s
 from utils import tail
+from extensions import db
 
 if TYPE_CHECKING:
     from enums import DeviceType, JobStatus
@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from .experiment import Experiment
 
 
-db = SQLAlchemy()
 logger = logging.getLogger(__name__)
 
 start_timestamp_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)  # 500ms

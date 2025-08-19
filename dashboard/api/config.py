@@ -17,9 +17,10 @@ PREFIX = os.environ.get('JUPYTERHUB_SERVICE_PREFIX', "")
 if PREFIX:
     PREFIX += "dash"
 
+API_PREFIX = f"{PREFIX}/api"
+
 DATA_DIR = Path("/mddash")
-STATE_FILE = DATA_DIR / "experiments.json"
-API_DIR = Path(__file__).resolve().parent
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 NOTEBOOK_IMAGE=os.environ.get('NOTEBOOK_IMAGE', 'quay.io/jupyter/base-notebook')
 

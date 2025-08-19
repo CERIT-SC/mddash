@@ -1,9 +1,6 @@
 from flask_marshmallow import Marshmallow
-
 from models import GromacsJob
-
-
-ma = Marshmallow()
+from extensions import ma
 
 
 class GromacsJobSchema(ma.SQLAlchemyAutoSchema):  # type: ignore
