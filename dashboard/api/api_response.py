@@ -2,21 +2,22 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+Response = tuple[dict, int]
 
 class ApiResponse:
 
     @staticmethod
-    def success(data = None) -> dict:
+    def success(data = None, code: int = 200) -> Response:
         '''
         Returns a success response with the given data.
 
         :param data: The data to return in the response
         :return: A dictionary containing the success response
         '''
-        return {'success': True, 'data': data}
+        return {'success': True, 'data': data}, code
 
     @staticmethod
-    def error(message: str, exc_info: bool = False) -> dict:
+    def error(message: str, code: int = 500, exc_info: bool = False) -> Response:
         '''
         Returns an error response with the given message. Also logs the error.
 
@@ -25,4 +26,4 @@ class ApiResponse:
         :return: A dictionary containing the error response
         '''
         logger.error(message, exc_info=exc_info)
-        return {'success': False, 'message': message}
+        return {'success': False, 'message': message}, code
