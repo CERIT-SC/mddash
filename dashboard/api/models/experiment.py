@@ -1,5 +1,5 @@
-import logging
 import io
+import logging
 import requests
 import zipfile
 from uuid import uuid4
@@ -7,7 +7,6 @@ from shutil import rmtree
 from datetime import datetime
 from typing import TYPE_CHECKING
 from cachetools import TTLCache, cached
-from werkzeug.datastructures import FileStorage
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +15,7 @@ from utils import get_files_with_extension, get_unique_id
 from config import DATA_DIR
 
 if TYPE_CHECKING:
+    from werkzeug.datastructures import FileStorage
     from .notebook import Notebook
     from .tuner_job import TunerJob
     from .gromacs_job import GromacsJob
