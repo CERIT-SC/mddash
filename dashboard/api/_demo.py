@@ -6,7 +6,7 @@ I mainly use it to develop the frontend.
 
 from flask import Flask, Blueprint, request, send_file
 from flask_cors import CORS
-from api_response import ApiResponse
+from dashboard.api.api_response import ApiResponse
 
 
 bp = Blueprint('dash', __name__)
