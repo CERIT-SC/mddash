@@ -1,19 +1,19 @@
 import re
 import logging
 from uuid import uuid4
-from pathlib import Path
 from datetime import datetime
-from cachetools import cached, TTLCache
 from typing import TYPE_CHECKING
+from cachetools import cached, TTLCache
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from config import NAMESPACE, DATA_DIR, PVC_NAME
-from enums import DeviceType, JobStatus
 from clients import k8s
 from utils import tail
 
 if TYPE_CHECKING:
+    from enums import DeviceType, JobStatus
+    from pathlib import Path
     from .experiment import Experiment
 
 

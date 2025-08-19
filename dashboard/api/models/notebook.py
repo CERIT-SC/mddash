@@ -4,10 +4,10 @@ from flask_sqlalchemy import SQLAlchemy
 from typing import TYPE_CHECKING
 
 from config import NAMESPACE, PREFIX, NOTEBOOK_IMAGE, PVC_NAME
-from enums.pod_status import PodStatus
 from clients import caddy, k8s
 
 if TYPE_CHECKING:
+    from enums import PodStatus
     from .experiment import Experiment
 
 
@@ -37,11 +37,7 @@ class Notebook(db.Model):
     def status(self) -> PodStatus:
         '''Get the status of the notebook pod.'''
         pod_name = f'notebook-{self.experiment_id}'
-        try:
-            return k8s.get_pod_status(NAMESPACE, pod_name)
-        except:
-            logger.error(f'Failed to get notebook pod status:', exc_info=True)
-            return PodStatus.UNKNOWN
+        return k8s.get_pod_status(NAMESPACE, pod_name)
 
     def start(self) -> None:
         '''Start the notebook pod and service, and create a route in Caddy.'''
