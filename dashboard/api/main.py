@@ -7,13 +7,13 @@ from config import STATE_FILE, PREFIX, NAMESPACE, NOTEBOOK_IMAGE, DATA_DIR, PVC_
 from experiment import Experiment
 from state import Experiments
 from gromacs_job import GromacsJob, DeviceType
-from api_response import ApiResponse
+from dashboard.api.api_response import ApiResponse
 from utils import get_files_with_extension
-import mdrepo_client
-import caddy_client
-import tuner_client
-from k8s_status import PodStatus
-from k8s import (
+import dashboard.api.clients.mdrepo as mdrepo
+import dashboard.api.clients.caddy as caddy
+import dashboard.api.clients.tuner as tuner_client
+from enums.pod_status import PodStatus
+from dashboard.api.clients.k8s import (
     create_notebook_pod,
     create_service,
     delete_pod,
@@ -125,7 +125,7 @@ def start_notebook(experiment_id):
             delete_pod(NAMESPACE, pod_name)
             return ApiResponse.error(f'Failed to create notebook service: {str(e)}', exc_info=True)
 
-        route_id = caddy_client.add_proxy_route(
+        route_id = caddy.add_proxy_route(
             path=f'{PREFIX}/notebook/{experiment_id}',
             upstream=f'{svc_name}.{NAMESPACE}.svc.cluster.local:80',
             route_id=f'route-{experiment_id}-notebook',
@@ -160,7 +160,7 @@ def delete_notebook(experiment_id):
         except Exception as e:
             logger.error(f'Failed to delete notebook service:', exc_info=True)
 
-        if not caddy_client.remove_route(route_id):
+        if not caddy.remove_route(route_id):
             logger.error('Failed to remove route from Caddy.')
 
         return ApiResponse.success()
@@ -403,21 +403,21 @@ def publish_experiment(experiment_id):
 
     try:
         experiment = experiments.get(experiment_id)
-        session = mdrepo_client.login('test@test.com', '123456')  # TODO: once mdrepo supports our auth, use its token here
+        session = mdrepo.login('test@test.com', '123456')  # TODO: once mdrepo supports our auth, use its token here
 
         metadata = {
             "simulations:": [],
         }
 
         # create experiment in MDRepo
-        mdrepo_experiment = mdrepo_client.create_experiment(session, community, metadata)
+        mdrepo_experiment = mdrepo.create_experiment(session, community, metadata)
         experiment.mdrepo_id = mdrepo_experiment['id']
         experiments.save(STATE_FILE)
 
         # upload files to MDRepo
         for file in os.listdir(DATA_DIR / experiment_id):
             file_path = os.path.join(DATA_DIR / experiment_id, file)
-            mdrepo_client.upload_file(session, experiment.mdrepo_id, file_path)
+            mdrepo.upload_file(session, experiment.mdrepo_id, file_path)
 
         return ApiResponse.success(mdrepo_experiment)
 
