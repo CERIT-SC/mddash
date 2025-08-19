@@ -1,21 +1,21 @@
 import logging
+from uuid import uuid4
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from flask_sqlalchemy import SQLAlchemy
 from typing import TYPE_CHECKING
 
 from config import NAMESPACE, PREFIX, NOTEBOOK_IMAGE, PVC_NAME
 from clients import caddy, k8s
+from extensions import db
 
 if TYPE_CHECKING:
     from enums import PodStatus
     from .experiment import Experiment
 
 
-db = SQLAlchemy()
 logger = logging.getLogger(__name__)
 
 
-class Notebook(db.Model):
+class Notebook(db.Model):  # type: ignore
     __tablename__ = 'notebooks'
     
     # ID of the notebook inside the database
@@ -23,10 +23,10 @@ class Notebook(db.Model):
     # ID of the experiment this notebook belongs to
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey('experiments.id'))
     # token for accessing jupyter notebook
-    token: Mapped[str] = mapped_column(db.String(36), nullable=False)
+    token: Mapped[str] = mapped_column(db.String(36), nullable=False, default=lambda: str(uuid4()))
 
     # back-reference to the parent experiment
-    experiment: Mapped['Experiment'] = relationship('Experiment', back_populates='notebooks')
+    experiment: Mapped['Experiment'] = relationship('Experiment', back_populates='notebook')
 
     @property
     def path(self) -> str:
@@ -72,7 +72,13 @@ class Notebook(db.Model):
             raise Exception('Failed to create proxy connection to notebook.')
 
     def stop(self) -> None:
-        '''Stop the notebook pod and service, and remove the route from Caddy.'''
+        '''
+        Stop the notebook pod and service, and remove the route from Caddy.
+        '''
+        if self.status != PodStatus.RUNNING and self.status != PodStatus.PENDING:
+            logger.warning(f'Notebook {self.experiment_id} is not running. No action taken.')
+            return
+
         pod_name = f'notebook-{self.experiment_id}'
         svc_name = f'svc-{self.experiment_id}'
         route_id = f'route-{self.experiment_id}-notebook'

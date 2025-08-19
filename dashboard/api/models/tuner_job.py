@@ -2,17 +2,16 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 from cachetools import TTLCache, cached
-from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from clients import tuner
+from extensions import db
 
 if TYPE_CHECKING:
     from pathlib import Path
     from .experiment import Experiment
 
 
-db = SQLAlchemy()
 logger = logging.getLogger(__name__)
 status_cache: TTLCache = TTLCache(maxsize=100, ttl=0.2)  # 200ms
 

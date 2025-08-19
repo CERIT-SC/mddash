@@ -1,9 +1,6 @@
 from flask_marshmallow import Marshmallow
-
 from models import Experiment
-
-
-ma: Marshmallow = Marshmallow()
+from extensions import ma
 
 
 class ExperimentSchema(ma.SQLAlchemyAutoSchema):  # type: ignore

@@ -2,17 +2,16 @@ import io
 import logging
 import requests
 import zipfile
-from uuid import uuid4
 from shutil import rmtree
 from datetime import datetime
 from typing import TYPE_CHECKING
 from cachetools import TTLCache, cached
-from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from enums import PodStatus, JobStatus
 from utils import get_files_with_extension, get_unique_id
 from config import DATA_DIR
+from extensions import db
 
 if TYPE_CHECKING:
     from werkzeug.datastructures import FileStorage
@@ -21,7 +20,6 @@ if TYPE_CHECKING:
     from .gromacs_job import GromacsJob
 
 
-db = SQLAlchemy()
 logger = logging.getLogger(__name__)
 step_status_cache: TTLCache = TTLCache(maxsize=100, ttl=0.1)  # 100ms
 
@@ -35,17 +33,16 @@ class Experiment(db.Model):  # type: ignore
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
     # last modification time
     updated_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
     # name of the experiment
     name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # message for user to understand the source of the experiment
-    source_message: Mapped[str | None] = mapped_column(db.Text, nullable=True)
-    # token for accessing jupyter notebook
-    token: Mapped[str] = mapped_column(db.String(36), nullable=False)
+    source_message: Mapped[str | None] = mapped_column(db.Text, nullable=False)
     # ID of the experiment in MDRepo
     mdrepo_id: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
 
     # Setup notebook status
-    notebook: Mapped['Notebook'] = relationship('Notebook', back_populates='experiment', cascade='all, delete-orphan', uselist=False) 
+    notebook: Mapped['Notebook | None'] = relationship('Notebook', back_populates='experiment', cascade='all, delete-orphan', uselist=False) 
     # Tuner jobs of the experiment
     tuner_jobs: Mapped[list['TunerJob']] = relationship('TunerJob', back_populates='experiment', cascade='all, delete-orphan')
     # GROMACS jobs of the experiment
@@ -100,8 +97,7 @@ class Experiment(db.Model):  # type: ignore
             experiment = cls(
                 id=experiment_id,
                 name=name,
-                source_message=message,
-                token=str(uuid4())
+                source_message=message
             )
 
             # Save to database
@@ -154,8 +150,7 @@ class Experiment(db.Model):  # type: ignore
             experiment = cls(
                 id=experiment_id,
                 name=name,
-                source_message=message,
-                token=str(uuid4())
+                source_message=message
             )
 
             # Save to database
@@ -165,7 +160,7 @@ class Experiment(db.Model):  # type: ignore
             logger.info(f"Created experiment {experiment_id} from repository {repo_link}")
             return experiment
 
-        except Exception as e:
+        except Exception:
             # Cleanup on failure
             rmtree(DATA_DIR / experiment_id, ignore_errors=True)
             db.session.rollback()
@@ -195,8 +190,7 @@ class Experiment(db.Model):  # type: ignore
             experiment = cls(
                 id=experiment_id,
                 name=name,
-                source_message=message,
-                token=str(uuid4())
+                source_message=message
             )
 
             # Save to database
@@ -245,13 +239,13 @@ class Experiment(db.Model):  # type: ignore
 
         return 0, 'setup'
 
-    def delete_resources(self) -> None:
+    def delete(self) -> None:
         """
         Delete the experiment and all its related resources.
         """
 
         # Delete notebook pod if it exists
-        if self.notebook.status == PodStatus.RUNNING:
+        if self.notebook and self.notebook.status == PodStatus.RUNNING:
             self.notebook.stop()            
 
         # Delete tuner jobs

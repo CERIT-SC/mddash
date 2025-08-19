@@ -70,7 +70,7 @@ def create_experiment():
 
     try:
         name = form['experiment-name']
-        pdb_id = form.get('pdb-id', 'XXX:fake')
+        pdb_id = form.get('pdb-id')
         repo_url = form.get('repo-url')
         simulation_file = request.files.get('simulation-file')
 
