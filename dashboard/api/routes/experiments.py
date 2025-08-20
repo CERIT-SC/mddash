@@ -17,9 +17,12 @@ experiments_bp = Blueprint(
 
 @experiments_bp.route('/', methods=['GET'])
 def list_experiments() -> Response:
-    experiments: list[Experiment] = Experiment.query.all()
-    schema = ExperimentSchema(many=True)
-    return ApiResponse.success(schema.dump(experiments))
+    try:
+        experiments: list[Experiment] = Experiment.query.all()
+        schema = ExperimentSchema(many=True)
+        return ApiResponse.success(schema.dump(experiments))
+    except Exception as e:
+        return ApiResponse.error(e)
 
 
 @experiments_bp.route('/', methods=['POST'])
@@ -49,20 +52,27 @@ def create_experiment() -> Response:
 
     except Exception as e:
         db.session.rollback()
-        return ApiResponse.error(str(e), exc_info=True)
+        return ApiResponse.error(e)
 
 
 @experiments_bp.route('/<experiment_id>', methods=['GET'])
 def get_experiment(experiment_id: str) -> Response:
-    experiment: Experiment = Experiment.query.get_or_404(experiment_id)
-    schema = ExperimentSchema()
-    return ApiResponse.success(schema.dump(experiment))
+    try:
+        experiment: Experiment = Experiment.query.get_or_404(experiment_id)
+        schema = ExperimentSchema()
+        return ApiResponse.success(schema.dump(experiment))
+    except Exception as e:
+        return ApiResponse.error(e)
 
 
 @experiments_bp.route('/<experiment_id>', methods=['DELETE'])
 def delete_experiment(experiment_id: str) -> Response:
-    experiment: Experiment = Experiment.query.get_or_404(experiment_id)
-    experiment.delete()
-    db.session.delete(experiment)
-    db.session.commit()
-    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+    try:
+        experiment: Experiment = Experiment.query.get_or_404(experiment_id)
+        experiment.delete()
+        db.session.delete(experiment)
+        db.session.commit()
+        return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+    except Exception as e:
+        db.session.rollback()
+        return ApiResponse.error(e)

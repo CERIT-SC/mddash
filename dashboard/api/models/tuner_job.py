@@ -82,6 +82,6 @@ class TunerJob(db.Model):  # type: ignore
         '''
         Delete the tuner job.
 
-        :raises HTTPError: If the tuner api request fails.
+        :raise HTTPError: If the tuner api request fails.
         '''
         tuner.delete_job(self.tuner_run_id)
