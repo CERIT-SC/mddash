@@ -58,7 +58,7 @@ def create_experiment() -> Response:
 @experiments_bp.route('/<experiment_id>', methods=['GET'])
 def get_experiment(experiment_id: str) -> Response:
     try:
-        experiment: Experiment = Experiment.query.get_or_404(experiment_id)
+        experiment: Experiment = Experiment.query.get_or_404(experiment_id, description=f'Experiment {experiment_id} not found')
         schema = ExperimentSchema()
         return ApiResponse.success(schema.dump(experiment))
     except Exception as e:
@@ -68,7 +68,7 @@ def get_experiment(experiment_id: str) -> Response:
 @experiments_bp.route('/<experiment_id>', methods=['DELETE'])
 def delete_experiment(experiment_id: str) -> Response:
     try:
-        experiment: Experiment = Experiment.query.get_or_404(experiment_id)
+        experiment: Experiment = Experiment.query.get_or_404(experiment_id, description=f'Experiment {experiment_id} not found')
         experiment.delete()
         db.session.delete(experiment)
         db.session.commit()
@@ -82,7 +82,7 @@ def delete_experiment(experiment_id: str) -> Response:
 def publish_experiment(experiment_id: str) -> Response:
 
     try:
-        experiment: Experiment = Experiment.query.get_or_404(experiment_id)
+        experiment: Experiment = Experiment.query.get_or_404(experiment_id, description=f'Experiment {experiment_id} not found')
 
         # TODO: all these fields need to be fetched form the hub or user somehow
         mdrepo_experiment = experiment.publish(

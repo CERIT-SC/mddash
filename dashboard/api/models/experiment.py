@@ -15,10 +15,10 @@ from config import DATA_DIR
 from enums import PodStatus, JobStatus
 from utils import get_files_with_extension, get_unique_id
 from clients import mdrepo
+from .notebook import Notebook
 from extensions import db
 
 if TYPE_CHECKING:
-    from .notebook import Notebook
     from .tuner_job import TunerJob
     from .gromacs_job import GromacsJob
 
@@ -45,7 +45,7 @@ class Experiment(db.Model):  # type: ignore
     mdrepo_id: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
 
     # Setup notebook status
-    notebook: Mapped['Notebook | None'] = relationship('Notebook', back_populates='experiment', cascade='all, delete-orphan', uselist=False) 
+    notebook: Mapped['Notebook'] = relationship('Notebook', back_populates='experiment', cascade='all, delete-orphan', uselist=False) 
     # Tuner jobs of the experiment
     tuner_jobs: Mapped[list['TunerJob']] = relationship('TunerJob', back_populates='experiment', cascade='all, delete-orphan')
     # GROMACS jobs of the experiment
@@ -67,6 +67,25 @@ class Experiment(db.Model):  # type: ignore
         experiment_id: str = get_unique_id(DATA_DIR)
         (DATA_DIR / experiment_id).mkdir(parents=True, exist_ok=True)
         return experiment_id
+
+    @classmethod
+    def _create_with_notebook(cls, experiment: 'Experiment') -> 'Experiment':
+        """
+        Helper method to create experiment with auto-generated notebook.
+        
+        :param experiment: The Experiment instance to create.
+        :return: The created Experiment instance with an associated Notebook.
+        :raises Exception: If there is an error during creation.
+        """
+        db.session.add(experiment)
+        db.session.flush()
+
+        notebook = Notebook(experiment_id=experiment.id)
+        db.session.add(notebook)
+        db.session.commit()
+        
+        logger.info(f"Created experiment {experiment.id}")
+        return experiment
 
     @classmethod
     def from_pdb(cls, name: str, pdb_id: str) -> 'Experiment':
@@ -94,7 +113,6 @@ class Experiment(db.Model):  # type: ignore
             with open(DATA_DIR / experiment_id / 'input.pdb', 'wb') as f:
                 f.write(response.content)
 
-            # Create experiment instance
             message: str = f"Created by downloading '{pdb_id}' from RCSB PDB."
             experiment = cls(
                 id=experiment_id,
@@ -102,12 +120,7 @@ class Experiment(db.Model):  # type: ignore
                 source_message=message
             )
 
-            # Save to database
-            db.session.add(experiment)
-            db.session.commit()
-
-            logger.info(f"Created experiment {experiment_id} from PDB {pdb_id}")
-            return experiment
+            return cls._create_with_notebook(experiment)
 
         except Exception:
             # Cleanup on failure
@@ -154,12 +167,7 @@ class Experiment(db.Model):  # type: ignore
                 source_message=message
             )
 
-            # Save to database
-            db.session.add(experiment)
-            db.session.commit()
-            
-            logger.info(f"Created experiment {experiment_id} from repository {repo_link}")
-            return experiment
+            return cls._create_with_notebook(experiment)
 
         except Exception:
             # Cleanup on failure
@@ -194,12 +202,8 @@ class Experiment(db.Model):  # type: ignore
                 source_message=message
             )
 
-            # Save to database
-            db.session.add(experiment)
-            db.session.commit()
-            
-            logger.info(f"Created experiment {experiment_id} from TPR file {tpr.filename}")
-            return experiment
+            # Create experiment with notebook
+            return cls._create_with_notebook(experiment)
 
         except Exception:
             # Cleanup on failure

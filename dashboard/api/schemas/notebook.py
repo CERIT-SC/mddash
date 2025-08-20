@@ -1,8 +1,8 @@
 from models import Notebook
-from extensions import ma
+from .base import BaseAutoSchema
 
 
-class NotebookSchema(ma.SQLAlchemyAutoSchema):  # type: ignore
+class NotebookSchema(BaseAutoSchema):
     class Meta:
         model = Notebook
         load_instance = True

@@ -23,7 +23,7 @@ import { styled } from "@mui/material/styles";
 
 import { WizardStepProps } from "./Stepper";
 import { tuner_status, tuner_statuses, run_tuner, delete_tuner } from "../../util/api";
-import { TunerStatus, TunerTrial } from "../../util/types";
+import { TunerJob, TunerTrial } from "../../util/types";
 import FileSelector from "../FileSelector";
 import ConfirmDialog from "../ConfirmDialog";
 import { StartForm } from "./Run";
@@ -118,7 +118,7 @@ const TunerView = (props: TunerViewProps) => {
 
     const [loading, setLoading] = useState(false);
     const [tunerRunning, setTunerRunning] = useState(false);
-    const [tunerStatus, setTunerStatus] = useState<TunerStatus | null>(null);
+    const [tuner, setTuner] = useState<TunerJob | null>(null);
     const [selectedTrial, setSelectedTrial] = useState<TunerTrial | null>(null);
 
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
@@ -126,7 +126,7 @@ const TunerView = (props: TunerViewProps) => {
     const fetchStatus = async (showError: boolean) => {
         const { data, error } = await tuner_status(experiment.id, tprName);
         if (showError && error) setErrorMessage(error);
-        setTunerStatus(data || null);
+        setTuner(data || null);
         setTunerRunning(!!data?.trials);
     };
 
@@ -176,7 +176,7 @@ const TunerView = (props: TunerViewProps) => {
                     {(tunerRunning && (
                         <Stack direction="column" spacing={2}>
                             <TunerTable
-                                rows={tunerStatus?.trials || []}
+                                rows={tuner?.trials || []}
                                 selectedTrial={selectedTrial}
                                 setSelectedTrial={setSelectedTrial}
                             />

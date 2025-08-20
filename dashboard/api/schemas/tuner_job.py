@@ -1,8 +1,8 @@
 from models import TunerJob
-from extensions import ma
+from .base import BaseAutoSchema
 
 
-class TunerJobSchema(ma.SQLAlchemyAutoSchema):  # type: ignore
+class TunerJobSchema(BaseAutoSchema):
     class Meta:
         model = TunerJob
         load_instance = True

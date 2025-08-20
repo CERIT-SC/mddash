@@ -4,24 +4,32 @@ import { Stack, Button, Typography, CircularProgress } from "@mui/material";
 import { WizardStepProps } from "./Stepper";
 import { get_notebook, spawn_notebook, delete_notebook } from "../../util/api";
 import ConfirmDialog from "../ConfirmDialog";
-import { NotebookStatus, PodStatus } from "../../util/types";
+import { Notebook, PodStatus } from "../../util/types";
+
+const unknownNotebook: Notebook = {
+    id: -1,
+    experiment_id: "",
+    token: "",
+    status: "UNKNOWN",
+    path: "",
+};
 
 const WizardSetup = (props: WizardStepProps) => {
     const { experiment, setErrorMessage, nextStep } = props;
     const [loading, setLoading] = useState(false);
-    const [notebookStatus, setNotebookStatus] = useState<NotebookStatus>({ status: "UNKNOWN", path: "" });
+    const [notebook, setNotebook] = useState<Notebook>(unknownNotebook);
     const [nextStepDialog, setNextStepDialog] = useState(false);
 
     const fetchStatus = async () => {
         const { data, error } = await get_notebook(experiment.id);
         if (error) setErrorMessage(error);
-        setNotebookStatus(data || { status: "UNKNOWN", path: "" });
+        setNotebook(data || unknownNotebook);
     };
 
     const spawnNotebook = async () => {
         const { error, data } = await spawn_notebook(experiment.id);
         setErrorMessage(error || "");
-        setNotebookStatus(data || { status: "UNKNOWN", path: "" });
+        setNotebook(data || unknownNotebook);
     };
 
     const deleteNotebook = async () => {
@@ -42,7 +50,7 @@ const WizardSetup = (props: WizardStepProps) => {
         let intervalId: number | null = null;
 
         // actively poll the notebook status if it's pending or terminating
-        if (notebookStatus.status === "PENDING" || notebookStatus.status === "TERMINATING") {
+        if (notebook.status === "PENDING" || notebook.status === "TERMINATING") {
             intervalId = window.setInterval(fetchStatus, 1000);
         } else if (intervalId !== null) {
             console.log("Clearing tuner status interval as notebook is not pending.");
@@ -55,7 +63,7 @@ const WizardSetup = (props: WizardStepProps) => {
                 window.clearInterval(intervalId);
             }
         };
-    }, [notebookStatus.status]);
+    }, [notebook.status]);
 
     return (
         <Stack direction="column" alignItems="center" spacing={5}>
@@ -69,12 +77,12 @@ const WizardSetup = (props: WizardStepProps) => {
             </Stack>
             {(loading && <CircularProgress />) || (
                 <Stack spacing={2} direction="column">
-                    {notebookStatus.status === "RUNNING" && (
+                    {notebook.status === "RUNNING" && (
                         <>
-                            <Typography variant="h4" color={PodStatus.getColor(notebookStatus.status)}>
+                            <Typography variant="h4" color={PodStatus.getColor(notebook.status)}>
                                 Notebook running 🚀
                             </Typography>
-                            <Button variant="contained" color="success" href={notebookStatus.path} target="_blank">
+                            <Button variant="contained" color="success" href={notebook.path} target="_blank">
                                 Open Jupyter Notebook
                             </Button>
                             <Button variant="contained" color="error" onClick={deleteNotebook}>
@@ -83,20 +91,18 @@ const WizardSetup = (props: WizardStepProps) => {
                         </>
                     )}
 
-                    {(notebookStatus.status === "PENDING" || notebookStatus.status === "TERMINATING") && (
+                    {(notebook.status === "PENDING" || notebook.status === "TERMINATING") && (
                         <>
-                            <Typography variant="h4" color={PodStatus.getColor(notebookStatus.status)}>
-                                {notebookStatus.status === "PENDING"
-                                    ? "Notebook starting ⏳"
-                                    : "Notebook terminating ⏳"}
+                            <Typography variant="h4" color={PodStatus.getColor(notebook.status)}>
+                                {notebook.status === "PENDING" ? "Notebook starting ⏳" : "Notebook terminating ⏳"}
                             </Typography>
                             <CircularProgress size={40} />
-                            <Typography variant="body1" color={PodStatus.getColor(notebookStatus.status)}>
-                                {notebookStatus.status === "PENDING"
+                            <Typography variant="body1" color={PodStatus.getColor(notebook.status)}>
+                                {notebook.status === "PENDING"
                                     ? "Please wait while the notebook is being prepared..."
                                     : "Please wait while the notebook is being terminated..."}
                             </Typography>
-                            {notebookStatus.status === "PENDING" && (
+                            {notebook.status === "PENDING" && (
                                 <Button variant="contained" color="error" onClick={deleteNotebook}>
                                     Delete Jupyter Notebook
                                 </Button>
@@ -104,12 +110,10 @@ const WizardSetup = (props: WizardStepProps) => {
                         </>
                     )}
 
-                    {(notebookStatus.status === "TERMINATED" || notebookStatus.status === "ERROR") && (
+                    {(notebook.status === "TERMINATED" || notebook.status === "ERROR") && (
                         <>
-                            <Typography variant="h4" color={PodStatus.getColor(notebookStatus.status)}>
-                                {notebookStatus.status === "TERMINATED"
-                                    ? "Notebook terminated 🛑"
-                                    : "Notebook error ❌"}
+                            <Typography variant="h4" color={PodStatus.getColor(notebook.status)}>
+                                {notebook.status === "TERMINATED" ? "Notebook terminated 🛑" : "Notebook error ❌"}
                             </Typography>
                             <Button variant="contained" color="primary" onClick={respawnNotebook}>
                                 Restart Jupyter Notebook
@@ -117,10 +121,10 @@ const WizardSetup = (props: WizardStepProps) => {
                         </>
                     )}
 
-                    {(notebookStatus.status === "DOWN" || notebookStatus.status === "UNKNOWN") && (
+                    {(notebook.status === "DOWN" || notebook.status === "UNKNOWN") && (
                         <>
-                            <Typography variant="h4" color={PodStatus.getColor(notebookStatus.status)}>
-                                {notebookStatus.status === "DOWN" ? "Notebook down 💔" : "Notebook status unknown ❓"}
+                            <Typography variant="h4" color={PodStatus.getColor(notebook.status)}>
+                                {notebook.status === "DOWN" ? "Notebook down 💔" : "Notebook status unknown ❓"}
                             </Typography>
                             <Button variant="contained" color="primary" onClick={spawnNotebook}>
                                 Spawn Jupyter Notebook

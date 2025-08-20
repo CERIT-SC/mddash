@@ -1,14 +1,38 @@
+export interface Notebook {
+    id: number;
+    experiment_id: string;
+    token: string;
+    path: string;
+    status: PodStatus;
+}
+
+export interface TunerJob {
+    tuner_run_id: string;
+    experiment_id: string;
+    tpr_name: string;
+    created_at: string;
+    summary: {
+        RUNNING: number;
+        PENDING: number;
+        TERMINATED: number;
+        ERROR: number;
+    };
+    trials: TunerTrial[];
+    cluster_resources: string;
+}
+
 export interface Experiment {
     id: string;
+    created_at: string;
+    updated_at: string;
     name: string;
-    source_message: string;
-    status: string;
-    step: number;
-    token: string;
-    notebook_status: PodStatus;
-    tuner_jobs: { [key: string]: TunerStatus };
-    gromacs_jobs: { [key: string]: GromacsJob };
+    source_message: string | null;
     mdrepo_id: string | null;
+    step: number;
+    status: string;
+    notebook: Notebook;
+    tuner_jobs: TunerJob[];
+    gromacs_jobs: GromacsJob[];
 }
 
 export interface ResourceUsage {
@@ -53,22 +77,6 @@ export namespace PodStatus {
     }
 }
 
-export interface NotebookStatus {
-    status: PodStatus;
-    path: string;
-}
-
-export interface TunerStatus {
-    tuner_run_id: string;
-    cluster_resources: string;
-    summary: {
-        RUNNING: number;
-        PENDING: number;
-        TERMINATED: number;
-        ERROR: number;
-    };
-    trials: TunerTrial[];
-}
 
 export type JobStatus = "RUNNING" | "PENDING" | "TERMINATED" | "ERROR";
 
@@ -92,7 +100,7 @@ export namespace JobStatus {
     }
 }
 
-export type DeviceType = "cpu" | "gpu" | "auto";
+export type DeviceType = "auto" | "cpu" | "gpu";
 
 export interface TunerTrial {
     id: string;
@@ -105,18 +113,20 @@ export interface TunerTrial {
 }
 
 export interface GromacsJob {
+    id: number;
     experiment_id: string;
+    created_at: string;
     tpr_name: string;
-    np: number;
-    ntomp: number;
+    job_name: string;
     pme: DeviceType;
     nb: DeviceType;
+    np: number;
+    ntomp: number;
     extra_args: string;
-    job_name: string;
     status: JobStatus;
     start_timestamp: number | null;
-    estimated_time: number | null;
     nsteps: number | null;
-    nsteps_done: number | null;
     performance: number | null;
+    nsteps_done: number | null;
+    estimated_time: number | null;
 }
