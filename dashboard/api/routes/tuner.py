@@ -1,9 +1,8 @@
 from http import HTTPStatus
-from flask import Blueprint
-from werkzeug.exceptions import HTTPException
+from flask import Blueprint, Response
 
 from config import API_PREFIX, DATA_DIR
-from api_response import ApiResponse, Response
+from api_response import ApiResponse
 from models import Experiment, TunerJob
 from schemas import TunerJobSchema
 from extensions import db
@@ -48,12 +47,12 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
         tpr_path = DATA_DIR / experiment_id / tpr_name
 
         if not tpr_path.exists():
-            return ApiResponse.error(f'TPR file {tpr_name} does not exist.', status=HTTPStatus.NOT_FOUND)
+            return ApiResponse.error(f'TPR file {tpr_name} does not exist.', HTTPStatus.NOT_FOUND)
 
         if not tuner_job:
             tuner_job = TunerJob.start(experiment, tpr_path)
 
-        return ApiResponse.success(schema.dump(tuner_job), status=HTTPStatus.CREATED)
+        return ApiResponse.success(schema.dump(tuner_job), HTTPStatus.CREATED)
     
     except Exception as e:
         db.session.rollback()
@@ -67,7 +66,7 @@ def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
         tuner_job.delete()
         db.session.delete(tuner_job)
         db.session.commit()
-        return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+        return ApiResponse.success(HTTPStatus.NO_CONTENT)
     except Exception as e:
         db.session.rollback()
         return ApiResponse.error(e)

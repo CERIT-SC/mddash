@@ -1,10 +1,11 @@
 import logging
 from http import HTTPStatus
+from flask import jsonify, Response
 from werkzeug.exceptions import HTTPException
+
 
 logger = logging.getLogger(__name__)
 
-Response = tuple[dict, int]
 
 class ApiResponse:
 
@@ -14,21 +15,25 @@ class ApiResponse:
         Returns a success response with the given data.
 
         :param data: The data to return in the response
-        :return: A dictionary containing the success response
+        :param status: The HTTP status code (defaults to 200 OK)
+        :return: A Flask Response object containing the success response
         '''
         if status is None:
             status = HTTPStatus.OK
 
-        return {'success': True, 'data': data}, int(status)
+        response_data = {'success': True, 'data': data}
+        response = jsonify(response_data)
+        response.status_code = int(status)
+        return response
 
     @staticmethod
     def error(error: Exception | str, status: HTTPStatus | int | None = None) -> Response:
         '''
         Returns an error response with the given message. Also logs the error.
 
-        :param message: The error message to return
-        :param exc_info: If True, includes exception information in the log (can be only used in except blocks)
-        :return: A dictionary containing the error response
+        :param error: The error message or exception to return
+        :param status: The HTTP status code (defaults to 500 Internal Server Error)
+        :return: A Flask Response object containing the error response
         '''
         exc_info = True
 
@@ -45,4 +50,8 @@ class ApiResponse:
             status = HTTPStatus.INTERNAL_SERVER_ERROR
 
         logger.error(message, exc_info=exc_info)
-        return {'success': False, 'message': message}, int(status)
+        
+        response_data = {'success': False, 'message': message}
+        response = jsonify(response_data)
+        response.status_code = int(status)
+        return response

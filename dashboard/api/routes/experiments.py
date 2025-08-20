@@ -1,8 +1,8 @@
 from http import HTTPStatus
-from flask import Blueprint, request
+from flask import Blueprint, Response, request
 
 from config import API_PREFIX
-from api_response import ApiResponse, Response
+from api_response import ApiResponse
 from models import Experiment
 from schemas import ExperimentSchema
 from extensions import db
@@ -44,11 +44,11 @@ def create_experiment() -> Response:
             case 'file' if simulation_file:
                 experiment = Experiment.from_tpr(name, simulation_file)
             case _:
-                return ApiResponse.error('Invalid experiment type or missing data.', status=HTTPStatus.BAD_REQUEST)
+                return ApiResponse.error('Invalid experiment type or missing data.', HTTPStatus.BAD_REQUEST)
 
         db.session.add(experiment)
         db.session.commit()
-        return ApiResponse.success(schema.dump(experiment), status=HTTPStatus.CREATED)
+        return ApiResponse.success(schema.dump(experiment), HTTPStatus.CREATED)
 
     except Exception as e:
         db.session.rollback()
@@ -72,7 +72,27 @@ def delete_experiment(experiment_id: str) -> Response:
         experiment.delete()
         db.session.delete(experiment)
         db.session.commit()
-        return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+        return ApiResponse.success(HTTPStatus.NO_CONTENT)
+    except Exception as e:
+        db.session.rollback()
+        return ApiResponse.error(e)
+
+
+@experiments_bp.route('/<experiment_id>/publish', methods=['POST'])
+def publish_experiment(experiment_id: str) -> Response:
+
+    try:
+        experiment: Experiment = Experiment.query.get_or_404(experiment_id)
+
+        # TODO: all these fields need to be fetched form the hub or user somehow
+        mdrepo_experiment = experiment.publish(
+            community='ceitec',
+            email='test@test.com',
+            password='123456'
+        )
+
+        return ApiResponse.success(mdrepo_experiment, HTTPStatus.CREATED)
+
     except Exception as e:
         db.session.rollback()
         return ApiResponse.error(e)

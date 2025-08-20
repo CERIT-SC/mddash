@@ -3,7 +3,7 @@ import logging
 from flask import Flask
 from flask_migrate import Migrate, upgrade
 
-from routes import experiments_bp
+from routes import *
 from config import DATA_DIR
 from extensions import db, ma
 logger = logging.getLogger(__name__)
@@ -22,6 +22,11 @@ def create_app() -> Flask:
     migrate = Migrate(app, db)
 
     app.register_blueprint(experiments_bp)
+    app.register_blueprint(notebook_bp)
+    app.register_blueprint(tuner_bp)
+    app.register_blueprint(gmx_bp)
+    app.register_blueprint(files_bp)
+    app.register_blueprint(misc_bp)
 
     # Initialize database (auto-migrate, fallback to create_all)
     with app.app_context():
