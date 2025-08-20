@@ -1,15 +1,12 @@
 import logging
+from pathlib import Path
 from datetime import datetime
-from typing import TYPE_CHECKING
 from cachetools import TTLCache, cached
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from clients import tuner
 from extensions import db
-
-if TYPE_CHECKING:
-    from pathlib import Path
-    from .experiment import Experiment
+from .experiment import Experiment
 
 
 logger = logging.getLogger(__name__)

@@ -1,4 +1,3 @@
-from flask_marshmallow import Marshmallow
 from models import Notebook
 from extensions import ma
 

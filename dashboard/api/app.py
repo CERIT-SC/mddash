@@ -1,12 +1,13 @@
-# app.py
 import logging
 from flask import Flask
-from flask_migrate import Migrate, upgrade
 
 from routes import *
 from config import DATA_DIR
 from extensions import db, ma
+
+
 logger = logging.getLogger(__name__)
+
 
 def create_app() -> Flask:
     app = Flask(__name__)
@@ -19,7 +20,6 @@ def create_app() -> Flask:
     # Initialize extensions
     db.init_app(app)
     ma.init_app(app)
-    migrate = Migrate(app, db)
 
     app.register_blueprint(experiments_bp)
     app.register_blueprint(notebook_bp)
@@ -28,17 +28,12 @@ def create_app() -> Flask:
     app.register_blueprint(files_bp)
     app.register_blueprint(misc_bp)
 
-    # Initialize database (auto-migrate, fallback to create_all)
     with app.app_context():
-        try:
-            upgrade()
-            logger.info("Database migrated successfully!")
-        except Exception:
-            logger.warning("Migration failed. Creating tables...", exc_info=True)
-            db.create_all()
-            logger.info("Database tables created!")
+        logger.info("Creating database tables...")
+        db.create_all()
 
     return app
+
 
 app = create_app()
 
