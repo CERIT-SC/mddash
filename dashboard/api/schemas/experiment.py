@@ -1,4 +1,3 @@
-from flask_marshmallow import Marshmallow
 from models import Experiment
 from extensions import ma
 

@@ -1,4 +1,3 @@
-from flask_marshmallow import Marshmallow
 from models import TunerJob
 from extensions import ma
 

@@ -8,6 +8,7 @@ from flask import abort
 from datetime import datetime
 from typing import TYPE_CHECKING
 from cachetools import TTLCache, cached
+from werkzeug.datastructures import FileStorage
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from config import DATA_DIR
@@ -17,7 +18,6 @@ from clients import mdrepo
 from extensions import db
 
 if TYPE_CHECKING:
-    from werkzeug.datastructures import FileStorage
     from .notebook import Notebook
     from .tuner_job import TunerJob
     from .gromacs_job import GromacsJob

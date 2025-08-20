@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING
 from config import NAMESPACE, PREFIX, NOTEBOOK_IMAGE, PVC_NAME
 from clients import caddy, k8s
 from extensions import db
+from enums import PodStatus
 
 if TYPE_CHECKING:
-    from enums import PodStatus
     from .experiment import Experiment
 
 

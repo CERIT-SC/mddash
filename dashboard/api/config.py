@@ -11,7 +11,7 @@ logger.setLevel(logging.INFO)
 
 JUPYTER_USER = os.environ.get('JUPYTERHUB_USER', "")
 JUPYTER_SERVER_NAME = os.environ.get('JUPYTERHUB_SERVER_NAME', "")
-PREFIX = os.environ.get('JUPYTERHUB_SERVICE_PREFIX', "")
+PREFIX = os.environ.get('JUPYTERHUB_SERVICE_PREFIX', "/")
 
 # everything related to mddash should be also prefixed with "dash"
 if PREFIX:
