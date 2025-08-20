@@ -1,3 +1,4 @@
+import os
 import io
 import logging
 import requests
@@ -9,9 +10,10 @@ from typing import TYPE_CHECKING
 from cachetools import TTLCache, cached
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from config import DATA_DIR
 from enums import PodStatus, JobStatus
 from utils import get_files_with_extension, get_unique_id
-from config import DATA_DIR
+from clients import mdrepo
 from extensions import db
 
 if TYPE_CHECKING:
@@ -263,3 +265,34 @@ class Experiment(db.Model):  # type: ignore
 
         # Delete all files in the experiment directory
         rmtree(DATA_DIR / self.id, ignore_errors=True)
+
+    def publish(self, community: str, email: str, password: str) -> dict:
+        """
+        Publish the experiment to MDRepo.
+
+        :param community: Community to publish the experiment to.
+        :param email: Email for MDRepo login.
+        :param password: Password for MDRepo login.
+        :return: Metadata of the published experiment.
+        :raises HTTPException: If the experiment cannot be published.
+        """
+        session = mdrepo.login(email, password)
+        metadata: dict = {
+            "simulations:": [],
+        }
+
+        # create experiment in MDRepo
+        mdrepo_experiment = mdrepo.create_experiment(session, community, metadata)
+        self.mdrepo_id = mdrepo_experiment['id']
+
+        if self.mdrepo_id is None:
+            abort(500, description='Failed to create experiment in MDRepo')
+
+        # upload files to MDRepo
+        for file in os.listdir(DATA_DIR / self.id):
+            file_path = os.path.join(DATA_DIR / self.id, file)
+            mdrepo.upload_file(session, self.mdrepo_id, file_path)
+
+        db.session.commit()
+        logger.info(f"Published experiment {self.id} to MDRepo with ID {self.mdrepo_id}")
+        return mdrepo_experiment
