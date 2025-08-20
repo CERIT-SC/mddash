@@ -1,8 +1,8 @@
 from models import GromacsJob
-from extensions import ma
+from .base import BaseAutoSchema
 
 
-class GromacsJobSchema(ma.SQLAlchemyAutoSchema):  # type: ignore
+class GromacsJobSchema(BaseAutoSchema):
     class Meta:
         model = GromacsJob
         load_instance = True

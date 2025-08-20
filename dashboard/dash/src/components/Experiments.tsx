@@ -67,8 +67,8 @@ const Experiments = () => {
                                 </Stack>
                                 <Stack direction="row" alignItems="center" spacing={1}>
                                     <Typography variant="subtitle2">Notebook:</Typography>
-                                    <Typography variant="body2" color={PodStatus.getColor(experiment.notebook_status)}>
-                                        {experiment.notebook_status}
+                                    <Typography variant="body2" color={PodStatus.getColor(experiment.notebook?.status || "UNKNOWN")}>
+                                        {experiment.notebook?.status || "UNKNOWN"}
                                     </Typography>
                                 </Stack>
                                 <Stack direction="row" alignItems="center" spacing={1}>

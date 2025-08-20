@@ -31,7 +31,7 @@ def get_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     schema = TunerJobSchema()
 
     try:
-        tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404()
+        tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'Tuner job for {tpr_name} not found')
         return ApiResponse.success(schema.dump(tuner_job))
     except Exception as e:
         return ApiResponse.error(e)
@@ -42,7 +42,7 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     schema = TunerJobSchema()
 
     try:
-        experiment: Experiment = Experiment.query.get_or_404(experiment_id)
+        experiment: Experiment = Experiment.query.get_or_404(experiment_id, description=f'Experiment {experiment_id} not found')
         tuner_job = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first()
         tpr_path = DATA_DIR / experiment_id / tpr_name
 
@@ -53,7 +53,7 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
             tuner_job = TunerJob.start(experiment, tpr_path)
 
         return ApiResponse.success(schema.dump(tuner_job), HTTPStatus.CREATED)
-    
+
     except Exception as e:
         db.session.rollback()
         return ApiResponse.error(e)
@@ -62,7 +62,7 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
 @tuner_bp.route('/<tpr_name>', methods=['DELETE'])
 def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     try:
-        tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404()
+        tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'Tuner job for {tpr_name} not found')
         tuner_job.delete()
         db.session.delete(tuner_job)
         db.session.commit()

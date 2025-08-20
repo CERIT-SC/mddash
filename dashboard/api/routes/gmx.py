@@ -32,7 +32,7 @@ def get_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     schema = GromacsJobSchema()
 
     try:
-        job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404()
+        job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'GROMACS job for {tpr_name} in experiment {experiment_id} not found')
         return ApiResponse.success(schema.dump(job))
     except Exception as e:
         return ApiResponse.error(e)
@@ -43,7 +43,7 @@ def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     schema = GromacsJobSchema()
 
     try:
-        experiment = Experiment.query.filter_by(id=experiment_id).first_or_404()
+        experiment = Experiment.query.filter_by(id=experiment_id).first_or_404(description=f'Experiment {experiment_id} not found')
         job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first()
         tpr_path = DATA_DIR / experiment_id / tpr_name
 
@@ -71,7 +71,7 @@ def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
 @gmx_bp.route('/<tpr_name>', methods=['DELETE'])
 def delete_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     try:
-        job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404()
+        job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'GROMACS job for {tpr_name} in experiment {experiment_id} not found')
         job.delete()
         db.session.delete(job)
         db.session.commit()
@@ -84,7 +84,7 @@ def delete_gmx_job(experiment_id: str, tpr_name: str) -> Response:
 @gmx_bp.route('/<tpr_name>/log', methods=['GET'])
 def get_gmx_job_log(experiment_id: str, tpr_name: str) -> Response:
     try:
-        job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404()
+        job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'GROMACS job for {tpr_name} in experiment {experiment_id} not found')
         
         log_type = request.args.get('type', 'gmx').lower()
         tail_lines = request.args.get('tail', '10000')
