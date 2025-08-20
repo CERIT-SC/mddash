@@ -1,6 +1,7 @@
 import re
 import logging
 from uuid import uuid4
+from flask import abort
 from datetime import datetime
 from typing import TYPE_CHECKING
 from cachetools import cached, TTLCache
@@ -222,7 +223,7 @@ class GromacsJob(db.Model):  # type: ignore
             case 'stderr':
                 log_file = self._stderr_log
             case _:
-                raise ValueError(f"Invalid log type: {type}")
+                abort(400, description=f"Invalid log type: {type}")
 
         if tail_lines:
             return tail(log_file, tail_lines)

@@ -3,6 +3,7 @@ import logging
 import requests
 import zipfile
 from shutil import rmtree
+from flask import abort
 from datetime import datetime
 from typing import TYPE_CHECKING
 from cachetools import TTLCache, cached
@@ -73,8 +74,7 @@ class Experiment(db.Model):  # type: ignore
         :param name: Name of the experiment.
         :param pdb_id: PDB ID to download (e.g., 1A2B).
         :return: The created Experiment instance.
-        :raises ValueError: If the PDB ID is invalid or not found.
-        :raises Exception: If the PDB file cannot be downloaded or processed.
+        :raises HTTPException: If the PDB ID is not found or download fails.
         """
         experiment_id: str = cls.prepare_env()
         pdb_id = pdb_id.strip().upper()
@@ -85,9 +85,9 @@ class Experiment(db.Model):  # type: ignore
             response = requests.get(url)
 
             if response.status_code == 404:
-                raise ValueError(f"PDB ID '{pdb_id}' not found.")
+                abort(404, description=f"PDB ID '{pdb_id}' not found.")
             elif response.status_code != 200:
-                raise ValueError(f"Failed to download PDB file: {response.status_code}")
+                abort(500, description=f"Failed to download PDB file: {response.status_code}")
 
             with open(DATA_DIR / experiment_id / 'input.pdb', 'wb') as f:
                 f.write(response.content)
@@ -121,8 +121,7 @@ class Experiment(db.Model):  # type: ignore
         :param name: Name of the experiment.
         :param repo_link: Zenodo repository link (e.g., https://zenodo.org/record/1234567).
         :return: The created Experiment instance.
-        :raises ValueError: If the repository link is invalid or not found.
-        :raises Exception: If the repository cannot be downloaded or processed.
+        :raises HTTPException: If the repository link is invalid or download fails.
         """
         experiment_id: str = cls.prepare_env()
 
@@ -130,16 +129,16 @@ class Experiment(db.Model):  # type: ignore
             # Validate and parse repository link
             repo_link_parts: list[str] = repo_link.strip().split('/')
             if len(repo_link_parts) < 4 or repo_link_parts[2] != 'zenodo.org':
-                raise ValueError('Invalid repository link (expected zenodo.org)')
+                abort(400, description='Invalid repository link (expected zenodo.org)')
 
             record_id: str = repo_link_parts[-1]
             url: str = f"https://zenodo.org/api/records/{record_id}/files-archive"
             response = requests.get(url)
 
             if response.status_code == 404:
-                raise ValueError(f"Repository '{repo_link}' not found.")
+                abort(404, description=f"Repository '{repo_link}' not found.")
             elif response.status_code != 200:
-                raise ValueError(f"Failed to download repository: {response.status_code}")
+                abort(500, description=f"Failed to download repository: {response.status_code}")
 
             # Extract zip file
             with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
@@ -174,10 +173,10 @@ class Experiment(db.Model):  # type: ignore
         :param name: Name of the experiment.
         :param tpr: Uploaded TPR file.
         :return: The created Experiment instance.
-        :raises ValueError: If the TPR file is invalid or cannot be processed.
+        :raises HTTPException: If the TPR file is invalid or cannot be processed.
         """
         if not tpr.filename or not tpr.filename.endswith('.tpr'):
-            raise ValueError('Invalid file format (expected .tpr)')
+            abort(400, description='Invalid file format (expected .tpr)')
 
         experiment_id: str = cls.prepare_env()
 

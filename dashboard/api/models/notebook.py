@@ -1,5 +1,6 @@
 import logging
 from uuid import uuid4
+from flask import abort
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING
 
@@ -40,7 +41,12 @@ class Notebook(db.Model):  # type: ignore
         return k8s.get_pod_status(NAMESPACE, pod_name)
 
     def start(self) -> None:
-        '''Start the notebook pod and service, and create a route in Caddy.'''
+        '''
+        Start the notebook pod and service, and create a route in Caddy.
+
+        :raises HTTPException: If the pod or service creation fails.
+        :raises Exception: If the route creation fails.
+        '''
         pod_name = f'notebook-{self.experiment_id}'
         svc_name = f'svc-{self.experiment_id}'
 
@@ -69,7 +75,7 @@ class Notebook(db.Model):  # type: ignore
         if route_id is None:
             k8s.delete_pod(NAMESPACE, pod_name)
             k8s.delete_service(NAMESPACE, svc_name)
-            raise Exception('Failed to create proxy connection to notebook.')
+            abort(500, description='Failed to create proxy connection to notebook.')
 
     def stop(self) -> None:
         '''
