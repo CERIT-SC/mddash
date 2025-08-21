@@ -1,9 +1,9 @@
 import logging
 from flask import Flask
 
-from routes import *
 from config import DATA_DIR
 from extensions import db, ma
+from routes import *
 
 
 logger = logging.getLogger(__name__)
