@@ -90,21 +90,21 @@ export interface WizardStepProps extends WizardStepperProps {
 
 const WizardStepper = (props: WizardStepperProps) => {
     const { experiment, setExperiment } = props;
-    const [activeStep, setActiveStep] = useState(Math.min(experiment.step, steps.length - 1));
+    const [activeStep, setActiveStep] = useState(Math.min(experiment.step || 0, steps.length - 1));
 
     const changeStep = async (step: number) => {
         if (step < 0 || step >= steps.length) return;
-        if (step > experiment.step) return;
+        if (step > (experiment.step || 0)) return;
 
         setActiveStep(step);
     };
 
     const nextStep = () => {
-        if (experiment.step >= steps.length - 1) return;
+        if ((experiment.step || 0) >= steps.length - 1) return;
 
-        setActiveStep(experiment.step + 1);
+        setActiveStep((experiment.step || 0) + 1);
         setExperiment((prev: Experiment) => {
-            return { ...prev, step: prev.step + 1 };
+            return { ...prev, step: (prev.step || 0) + 1 };
         });
     };
 
@@ -140,13 +140,15 @@ const WizardStepper = (props: WizardStepperProps) => {
 
             <Stepper alternativeLabel activeStep={activeStep} connector={<ColorLibConnector />}>
                 {steps.map((step, idx) => (
-                    <Step key={step.label} completed={idx < experiment.step}>
+                    <Step key={step.label} completed={idx < (experiment.step || 0)}>
                         <StepLabel StepIconComponent={ColorLibStepIcon}>{step.label}</StepLabel>
                     </Step>
                 ))}
             </Stepper>
 
-            <Box sx={{ mt: 4 }}>{React.createElement(steps[activeStep].child, childProps)}</Box>
+            <Box sx={{ mt: 4 }}>
+                {React.createElement(steps[activeStep].child, childProps)}
+            </Box>
         </>
     );
 };

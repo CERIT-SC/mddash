@@ -67,27 +67,23 @@ const Experiments = () => {
                                 </Stack>
                                 <Stack direction="row" alignItems="center" spacing={1}>
                                     <Typography variant="subtitle2">Notebook:</Typography>
-                                    <Typography variant="body2" color={PodStatus.getColor(experiment.notebook?.status || "UNKNOWN")}>
+                                    <Typography
+                                        variant="body2"
+                                        color={PodStatus.getColor(experiment.notebook?.status || "UNKNOWN")}
+                                    >
                                         {experiment.notebook?.status || "UNKNOWN"}
                                     </Typography>
                                 </Stack>
                                 <Stack direction="row" alignItems="center" spacing={1}>
                                     <Typography variant="subtitle2">Tuner jobs:</Typography>
                                     <Typography variant="body2">
-                                        {
-                                            Object.values(experiment.tuner_jobs).filter(
-                                                (j) => j.summary && j.summary.RUNNING > 0
-                                            ).length
-                                        }
+                                        {experiment.tuner_jobs.filter((j) => j.summary && j.summary.RUNNING > 0).length}
                                     </Typography>
                                 </Stack>
                                 <Stack direction="row" alignItems="center" spacing={1}>
                                     <Typography variant="subtitle2">Gromacs jobs:</Typography>
                                     <Typography variant="body2">
-                                        {
-                                            Object.values(experiment.gromacs_jobs).filter((j) => j.status === "RUNNING")
-                                                .length
-                                        }
+                                        {experiment.gromacs_jobs.filter((j) => j.status === "RUNNING").length}
                                     </Typography>
                                 </Stack>
                             </CardContent>

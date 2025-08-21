@@ -231,11 +231,11 @@ class Experiment(db.Model):  # type: ignore
             return 2, 'simulating'
 
         # Step 2: Tuning (experiment has terminated tuner job)
-        if any(j.status.get('summary', {}).get('TERMINATED', 0) > 0 for j in self.tuner_jobs):
+        if any(j.summary.get('TERMINATED', 0) > 0 for j in self.tuner_jobs):
             return 2, 'tuning'
 
         # Step 1: Tuning (experiment has running tuner job)
-        if any(j.status.get('summary', {}).get('RUNNING', 0) > 0 for j in self.tuner_jobs):
+        if any(j.summary.get('RUNNING', 0) > 0 for j in self.tuner_jobs):
             return 1, 'tuning'
 
         # Step 1: Setup complete (directory contains a TPR file)
