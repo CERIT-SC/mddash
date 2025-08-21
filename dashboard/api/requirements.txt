@@ -1,5 +1,9 @@
 flask
 flask-cors
+flask-sqlalchemy>=3.0
+flask-marshmallow
+marshmallow-sqlalchemy
+cachetools
 werkzeug
 requests
 kubernetes
