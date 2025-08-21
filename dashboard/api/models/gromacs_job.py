@@ -20,10 +20,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-start_timestamp_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)  # 500ms
-nsteps_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)  # 500ms
-performance_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)  # 500ms
-nsteps_done_cache: TTLCache = TTLCache(maxsize=100, ttl=1)  # 1s
+performance_cache: TTLCache = TTLCache(maxsize=100, ttl=1)  # 1s
+nsteps_done_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)  # 500ms
 estimated_time_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)  # 500ms
 
 
@@ -64,17 +62,25 @@ class GromacsJob(db.Model):  # type: ignore
     # back-reference to the parent experiment
     experiment: Mapped['Experiment'] = relationship('Experiment', back_populates='gromacs_jobs')
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._init_paths()
+    @property
+    def _deffnm(self) -> str:
+        """Default filename without extension."""
+        return self.tpr_name.removesuffix('.tpr')
 
-    def _init_paths(self) -> None:
-        """Initialize computed file paths."""
-        self._deffnm = self.tpr_name.removesuffix('.tpr')
-        base_dir = DATA_DIR / self.experiment_id
-        self._gmx_log = base_dir / f'{self._deffnm}.log'
-        self._stdout_log = base_dir / f'{self.job_name}.out'
-        self._stderr_log = base_dir / f'{self.job_name}.err'
+    @property
+    def _gmx_log(self) -> Path:
+        """Path to the GROMACS log file."""
+        return DATA_DIR / self.experiment_id / f'{self._deffnm}.log'
+
+    @property
+    def _stdout_log(self) -> Path:
+        """Path to the stdout log file."""
+        return DATA_DIR / self.experiment_id / f'{self.job_name}.out'
+
+    @property
+    def _stderr_log(self) -> Path:
+        """Path to the stderr log file."""
+        return DATA_DIR / self.experiment_id / f'{self.job_name}.err'
 
     @property
     def status(self) -> JobStatus:
@@ -82,7 +88,6 @@ class GromacsJob(db.Model):  # type: ignore
         return k8s.get_job_status(ns=NAMESPACE, name=self.job_name)
 
     @property
-    @cached(cache=nsteps_cache)
     def nsteps(self) -> int | None:
         """Total number of steps for the job."""
         if self._nsteps:
@@ -98,10 +103,14 @@ class GromacsJob(db.Model):  # type: ignore
     @cached(cache=nsteps_done_cache)
     def nsteps_done(self) -> int | None:
         """Number of steps completed so far."""
+
+        # If simulation has finished, return total steps
+        if self._performance:
+            return self._nsteps
+
         return self._parse_nsteps_done()
 
     @property
-    @cached(cache=start_timestamp_cache)
     def start_timestamp(self) -> int | None:
         """Unix timestamp when the job started."""
         if self._start_timestamp:
@@ -170,8 +179,10 @@ class GromacsJob(db.Model):  # type: ignore
             np=np,
             ntomp=ntomp,
             extra_args=extra_args,
-            experiment=experiment
+            experiment=experiment,
+            experiment_id=experiment.id
         )
+        db.session.add(job)
 
         job._cleanup_previous_results()
 
@@ -188,7 +199,6 @@ class GromacsJob(db.Model):  # type: ignore
             extra_args=extra_args
         )
 
-        db.session.add(job)
         db.session.commit()
         logger.info(f"Started GROMACS job {job_name} for experiment {experiment.id} with TPR {tpr_path.name}")
         
@@ -212,8 +222,7 @@ class GromacsJob(db.Model):  # type: ignore
         :param type: Type of log to retrieve (default is 'gmx')
         :param tail_lines: Number of lines to retrieve from the end of the log file
         :return: Log content as a string
-        :raises ValueError: If the log type is invalid
-        :raises FileNotFoundError: If the log file does not exist
+        :raises HTTPException: If the log type is invalid or the log file cannot be accessed
         """
         match type:
             case 'gmx':
@@ -225,11 +234,20 @@ class GromacsJob(db.Model):  # type: ignore
             case _:
                 abort(400, description=f"Invalid log type: {type}")
 
-        if tail_lines:
-            return tail(log_file, tail_lines)
-        else:
-            with open(log_file, 'r') as f:
-                return f.read()
+        try:
+            if tail_lines:
+                return tail(log_file, tail_lines)
+            else:
+                with open(log_file, 'r') as f:
+                    return f.read()
+        except FileNotFoundError:
+            abort(404, description=f"Log file not found: {log_file.name}")
+        except PermissionError:
+            abort(403, description=f"Permission denied accessing log file: {log_file.name}")
+        except UnicodeDecodeError:
+            abort(422, description=f"Unable to decode log file: {log_file.name}")
+        except OSError as e:
+            abort(500, description=f"System error reading log file: {e}")
 
     def _cleanup_previous_results(self) -> None:
         """
@@ -248,6 +266,9 @@ class GromacsJob(db.Model):  # type: ignore
 
         :return: Total number of steps or None if not available
         """
+        if not self._gmx_log.exists():
+            return None
+            
         try:
             with open(self._gmx_log, 'r') as f:
                 for line in f:
@@ -257,7 +278,7 @@ class GromacsJob(db.Model):  # type: ignore
                     parts = line.split('=')
                     return int(parts[-1].strip())
 
-        except (FileNotFoundError, ValueError):
+        except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
             logger.error(f"Error reading nsteps from log file.", exc_info=True)
 
         return None
@@ -268,6 +289,9 @@ class GromacsJob(db.Model):  # type: ignore
         
         :return: Number of steps completed or None if not available
         """
+        if not self._gmx_log.exists():
+            return None
+            
         try:
             log = tail(self._gmx_log, 20)
             pattern = r'^\s*\d+\s+\d+\.\d+\s*'
@@ -282,7 +306,7 @@ class GromacsJob(db.Model):  # type: ignore
                 parts = line.split()
                 return int(parts[0])
 
-        except (FileNotFoundError, ValueError):
+        except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
             logger.error(f"Error reading nsteps_done from log file.", exc_info=True)
 
         return None
@@ -293,6 +317,9 @@ class GromacsJob(db.Model):  # type: ignore
         
         :return: Start timestamp or None if not available
         """
+        if not self._gmx_log.exists():
+            return None
+            
         try:
             with open(self._gmx_log, 'r') as f:
                 for line in f:
@@ -304,7 +331,7 @@ class GromacsJob(db.Model):  # type: ignore
                     dt = datetime.strptime(date_str, "%a %b %d %H:%M:%S %Y")
                     return int(dt.timestamp())
 
-        except (FileNotFoundError, ValueError):
+        except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
             logger.error(f"Error reading start time from log file.", exc_info=True)
 
         return None
@@ -315,6 +342,9 @@ class GromacsJob(db.Model):  # type: ignore
         
         :return: Performance in ns/day or None if not available
         """
+        if not self._gmx_log.exists():
+            return None
+            
         try:
             log = tail(self._gmx_log, 20)
             for line in reversed(log.splitlines()):
@@ -324,7 +354,7 @@ class GromacsJob(db.Model):  # type: ignore
                 parts = line.split()
                 return float(parts[-2])
 
-        except (FileNotFoundError, ValueError):
+        except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
             logger.error(f"Error reading performance from log file.", exc_info=True)
             return None
 
