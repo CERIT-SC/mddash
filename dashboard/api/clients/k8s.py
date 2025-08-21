@@ -2,7 +2,7 @@ import logging
 from kubernetes import client, config  # type: ignore
 from kubernetes.client.rest import ApiException  # type: ignore
 
-from k8s_status import JobStatus, PodStatus
+from enums import PodStatus, JobStatus
 
 
 logger = logging.getLogger(__name__)

@@ -1,34 +1,34 @@
 import axios, { AxiosResponse } from 'axios';
 
 import { API_BASE } from './const';
-import { Experiment, FileOption, GromacsJob, NotebookStatus, ResourceUsage, TunerStatus } from './types'
+import { Experiment, FileOption, GromacsJob, Notebook, ResourceUsage, TunerJob } from './types'
 
 
-interface ApiData<T = any> {
+interface ApiData<T> {
     data: T | null;
     error: string | null;
 }
 
 
-/**
- * Handle response from axios request with error handling
- * 
- * @param request - axios request promise
- * @param fallbackMsg - message to return if request fails
- * @returns Object with data and error fields
- */
-const handle_request = async <T = any>(
+const parseResponse = <T>(response: AxiosResponse, fallbackMsg: string): ApiData<T> => {
+    const errMsg = response.data.success
+        ? null
+        : response.data.message || fallbackMsg;
+    const data = response.data.data || null;
+    return { data: data, error: errMsg };
+};
+
+const handle_request = async <T>(
     request: Promise<AxiosResponse>, 
     fallbackMsg: string
 ): Promise<ApiData<T>> => {
     try {
         const response = await request;
-        const errMsg = response.data.success
-            ? null
-            : response.data.message || fallbackMsg;
-        const data = response.data.data || null;
-        return { data: data, error: errMsg };
+        return parseResponse<T>(response, fallbackMsg);
     } catch (error) {
+        if (axios.isAxiosError(error) && error.response) {
+            return parseResponse<T>(error.response, fallbackMsg);
+        }
         return { data: null, error: fallbackMsg };
     }
 }
@@ -64,17 +64,24 @@ export const delete_experiment = async (id: string): Promise<ApiData<null>> => {
     )
 }
 
+export const publish_experiment = async (id: string): Promise<ApiData<any>> => {
+    return await handle_request(
+        axios.post(`${API_BASE}/experiments/${id}/publish`),
+        'Failed to publish experiment.'
+    )
+}
+
 
 // ----- Notebook -----
 
-export const get_notebook = async (id: string): Promise<ApiData<NotebookStatus>> => {
+export const get_notebook = async (id: string): Promise<ApiData<Notebook>> => {
     return await handle_request(
         axios.get(`${API_BASE}/experiments/${id}/notebook`),
         'Failed to fetch notebook.'
     )
 }
 
-export const spawn_notebook = async (id: string): Promise<ApiData<NotebookStatus>> => {
+export const spawn_notebook = async (id: string): Promise<ApiData<Notebook>> => {
     return await handle_request(
         axios.post(`${API_BASE}/experiments/${id}/notebook`),
         'Failed to spawn notebook.'
@@ -91,21 +98,21 @@ export const delete_notebook = async (id: string): Promise<ApiData<null>> => {
 
 // ----- Tuner -----
 
-export const tuner_statuses = async (id: string): Promise<ApiData<Record<string, TunerStatus>>> => {
+export const tuner_statuses = async (id: string): Promise<ApiData<TunerJob[]>> => {
     return await handle_request(
         axios.get(`${API_BASE}/experiments/${id}/tuner`),
         'Failed to fetch tuner statuses.'
     )
 }
 
-export const tuner_status = async (id: string, tprName: string): Promise<ApiData<TunerStatus>> => {
+export const tuner_status = async (id: string, tprName: string): Promise<ApiData<TunerJob>> => {
     return await handle_request(
         axios.get(`${API_BASE}/experiments/${id}/tuner/${tprName}`),
         'Failed to fetch tuner status.'
     )
 }
 
-export const run_tuner = async (id: string, tprName: string): Promise<ApiData<TunerStatus>> => {
+export const run_tuner = async (id: string, tprName: string): Promise<ApiData<TunerJob>> => {
     return await handle_request(
         axios.post(`${API_BASE}/experiments/${id}/tuner/${tprName}`),
         'Failed to run tuner.'
@@ -129,7 +136,7 @@ export const submit_gmx = async (id: string, tprName: string, formData: FormData
     )
 }
 
-export const gmx_statuses = async (id: string): Promise<ApiData<Record<string, GromacsJob>>> => {
+export const gmx_statuses = async (id: string): Promise<ApiData<GromacsJob[]>> => {
     return await handle_request(
         axios.get(`${API_BASE}/experiments/${id}/gmx`),
         'Failed to fetch Gromacs statuses.'
@@ -184,14 +191,7 @@ export const get_file = async (id: string, path: string): Promise<ApiData<File>>
 }
 
 
-// ----- Other -----
-
-export const publish_experiment = async (id: string): Promise<ApiData<any>> => {
-    return await handle_request(
-        axios.get(`${API_BASE}/experiments/${id}/publish`),
-        'Failed to publish experiment.'
-    )
-}
+// ----- Metrics -----
 
 export const get_metrics = async (): Promise<ApiData<ResourceUsage>> => {
     return await handle_request(

@@ -38,7 +38,7 @@ if [ -n "$JUPYTERHUB_API_TOKEN" ] || [ -n "$JUPYTERHUB_SERVICE_PREFIX" ]; then
     caddy start --config /caddy/Caddyfile --adapter caddyfile > /mddash/logs/caddy.log 2>&1
 
     echo "$(date): Starting API in background"
-    python /opt/api/main.py > /mddash/logs/api.log 2>&1 &
+    python /opt/api/app.py > /mddash/logs/api.log 2>&1 &
     API_PID=$!
     echo "$(date): API started with PID: $API_PID"
 

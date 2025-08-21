@@ -23,7 +23,7 @@ import { styled } from "@mui/material/styles";
 
 import { WizardStepProps } from "./Stepper";
 import { tuner_status, tuner_statuses, run_tuner, delete_tuner } from "../../util/api";
-import { TunerStatus, TunerTrial } from "../../util/types";
+import { TunerJob, TunerTrial } from "../../util/types";
 import FileSelector from "../FileSelector";
 import ConfirmDialog from "../ConfirmDialog";
 import { StartForm } from "./Run";
@@ -118,7 +118,7 @@ const TunerView = (props: TunerViewProps) => {
 
     const [loading, setLoading] = useState(false);
     const [tunerRunning, setTunerRunning] = useState(false);
-    const [tunerStatus, setTunerStatus] = useState<TunerStatus | null>(null);
+    const [tuner, setTuner] = useState<TunerJob | null>(null);
     const [selectedTrial, setSelectedTrial] = useState<TunerTrial | null>(null);
 
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
@@ -126,7 +126,7 @@ const TunerView = (props: TunerViewProps) => {
     const fetchStatus = async (showError: boolean) => {
         const { data, error } = await tuner_status(experiment.id, tprName);
         if (showError && error) setErrorMessage(error);
-        setTunerStatus(data || null);
+        setTuner(data || null);
         setTunerRunning(!!data?.trials);
     };
 
@@ -176,7 +176,7 @@ const TunerView = (props: TunerViewProps) => {
                     {(tunerRunning && (
                         <Stack direction="column" spacing={2}>
                             <TunerTable
-                                rows={tunerStatus?.trials || []}
+                                rows={tuner?.trials || []}
                                 selectedTrial={selectedTrial}
                                 setSelectedTrial={setSelectedTrial}
                             />
@@ -228,7 +228,7 @@ const WizardTune = (props: WizardStepProps) => {
     const { experiment, setErrorMessage } = props;
 
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
-    const [tunerJobs, setTunerJobs] = useState<Record<string, any>>({});
+    const [tprFiles, setTprFiles] = useState<string[]>([]);
 
     const handleChange = (_: React.SyntheticEvent, newValue: string) => {
         setSelectedTpr(newValue);
@@ -239,24 +239,21 @@ const WizardTune = (props: WizardStepProps) => {
 
         const tprFile = newSelectedTpr.split("/").pop() || newSelectedTpr;
         setSelectedTpr(tprFile);
-
-        if (tunerJobs[tprFile]) return; // If the TPR file is already getting tuned, do nothing
-
-        setTunerJobs((prev) => ({
-            ...prev,
-            [tprFile]: {},
-        }));
+        
+        if (!tprFiles.includes(tprFile)) {
+            setTprFiles(prev => [...prev, tprFile]);
+        }
     };
 
     const fetchTunerJobs = async () => {
         const { data, error } = await tuner_statuses(experiment.id);
         setErrorMessage(error || "");
-        const jobs = data || {};
+        const jobs = data || [];
 
-        console.log("Fetched tuner jobs:", jobs);
-
-        if (Object.keys(jobs).length === 0) setSelectedTpr(null);
-        setTunerJobs(jobs);
+        if (jobs.length === 0) setSelectedTpr(null);
+        
+        const jobTprNames = jobs.map(job => job.tpr_name);
+        setTprFiles(prev => [...new Set([...prev, ...jobTprNames])]);
     };
 
     const deleteJob = async (tprName: string) => {
@@ -270,8 +267,7 @@ const WizardTune = (props: WizardStepProps) => {
         fetchTunerJobs();
 
         return () => {
-            console.log("Cleaning up tuner jobs.");
-            setTunerJobs({});
+            setTprFiles([]);
             setSelectedTpr(null);
         };
     }, [experiment.id, setErrorMessage]);
@@ -280,8 +276,8 @@ const WizardTune = (props: WizardStepProps) => {
         <>
             <Stack direction="row" spacing={2} alignItems="center">
                 <Tabs value={selectedTpr || false} onChange={handleChange} variant="scrollable" scrollButtons="auto">
-                    {Object.keys(tunerJobs).map((tprFile) => (
-                        <Tab label={tprFile} key={tprFile} value={tprFile} />
+                    {tprFiles.map((tprFile) => (
+                        <Tab key={tprFile} value={tprFile} label={tprFile} />
                     ))}
                 </Tabs>
 

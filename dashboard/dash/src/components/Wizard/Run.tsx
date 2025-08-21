@@ -576,7 +576,7 @@ const RunView = (props: RunViewProps) => {
 const WizardRun = (props: WizardStepProps) => {
     const { experiment, setErrorMessage } = props;
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
-    const [gromacsJobs, setGromacsJobs] = useState<Record<string, GromacsJob | null>>({});
+    const [tprFiles, setTprFiles] = useState<string[]>([]);
 
     const handleChange = (_: React.SyntheticEvent, newValue: string) => {
         setSelectedTpr(newValue);
@@ -585,7 +585,10 @@ const WizardRun = (props: WizardStepProps) => {
     const fetchGromacsJobs = async () => {
         const { data, error } = await gmx_statuses(experiment.id);
         setErrorMessage(error || "");
-        setGromacsJobs(data || {});
+        const jobs = data || [];
+        
+        const jobTprNames = jobs.map(job => job.tpr_name);
+        setTprFiles(prev => [...new Set([...prev, ...jobTprNames])]);
     };
 
     const newTpr = (newSelectedTpr: string) => {
@@ -593,13 +596,10 @@ const WizardRun = (props: WizardStepProps) => {
 
         const tprFile = newSelectedTpr.split("/").pop() || newSelectedTpr;
         setSelectedTpr(tprFile);
-
-        if (gromacsJobs[tprFile]) return; // If the TPR file is already getting simulated, do nothing
-
-        setGromacsJobs((prev) => ({
-            ...prev,
-            [tprFile]: null,
-        }));
+        
+        if (!tprFiles.includes(tprFile)) {
+            setTprFiles(prev => [...prev, tprFile]);
+        }
     };
 
     const deleteJob = async (tprName: string) => {
@@ -613,8 +613,7 @@ const WizardRun = (props: WizardStepProps) => {
         fetchGromacsJobs();
 
         return () => {
-            console.log("Cleaning up tuner jobs.");
-            setGromacsJobs({});
+            setTprFiles([]);
             setSelectedTpr(null);
         };
     }, [experiment.id, setErrorMessage]);
@@ -623,8 +622,8 @@ const WizardRun = (props: WizardStepProps) => {
         <>
             <Stack direction="row" spacing={2} alignItems="center">
                 <Tabs value={selectedTpr || false} onChange={handleChange} variant="scrollable" scrollButtons="auto">
-                    {Object.keys(gromacsJobs).map((tprFile) => (
-                        <Tab label={tprFile} key={tprFile} value={tprFile} />
+                    {tprFiles.map((tprFile) => (
+                        <Tab key={tprFile} value={tprFile} label={tprFile} />
                     ))}
                 </Tabs>
 

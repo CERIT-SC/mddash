@@ -35,6 +35,7 @@ def run_submit(tpr_path: Path) -> dict:
 
     :param tpr_path: The .tpr file for the simulation to be tuned.
     :return: The response from the tuner.
+    :raise FileNotFoundError: If the TPR file does not exist.
     :raise HTTPError: If the request fails.
     '''
     with open(tpr_path, 'rb') as f:
