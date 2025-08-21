@@ -7,6 +7,7 @@ from models import Experiment, GromacsJob
 from schemas import GromacsJobSchema
 from extensions import db
 from enums import DeviceType
+from decorators import handle_exceptions
 
 
 gmx_bp = Blueprint(
@@ -17,86 +18,69 @@ gmx_bp = Blueprint(
 
 
 @gmx_bp.route('', methods=['GET'])
+@handle_exceptions()
 def get_gmx_jobs(experiment_id: str) -> Response:
     schema = GromacsJobSchema(many=True)
-
-    try:
-        jobs: list[GromacsJob] = GromacsJob.query.filter_by(experiment_id=experiment_id).all()
-        return ApiResponse.success(schema.dump(jobs))
-    except Exception as e:
-        return ApiResponse.error(e)
+    jobs: list[GromacsJob] = GromacsJob.query.filter_by(experiment_id=experiment_id).all()
+    return ApiResponse.success(schema.dump(jobs))
 
 
 @gmx_bp.route('/<tpr_name>', methods=['GET'])
+@handle_exceptions()
 def get_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     schema = GromacsJobSchema()
-
-    try:
-        job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'GROMACS job for {tpr_name} in experiment {experiment_id} not found')
-        return ApiResponse.success(schema.dump(job))
-    except Exception as e:
-        return ApiResponse.error(e)
+    job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'GROMACS job for {tpr_name} in experiment {experiment_id} not found')
+    return ApiResponse.success(schema.dump(job))
 
 
 @gmx_bp.route('/<tpr_name>', methods=['POST'])
+@handle_exceptions(rollback=True)
 def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     schema = GromacsJobSchema()
+    experiment = Experiment.query.filter_by(id=experiment_id).first_or_404(description=f'Experiment {experiment_id} not found')
+    job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first()
+    tpr_path = DATA_DIR / experiment_id / tpr_name
 
-    try:
-        experiment = Experiment.query.filter_by(id=experiment_id).first_or_404(description=f'Experiment {experiment_id} not found')
-        job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first()
-        tpr_path = DATA_DIR / experiment_id / tpr_name
+    if not tpr_path.exists():
+        return ApiResponse.error(f'TPR file {tpr_name} does not exist.', HTTPStatus.NOT_FOUND)
 
-        if not tpr_path.exists():
-            return ApiResponse.error(f'TPR file {tpr_name} does not exist.', HTTPStatus.NOT_FOUND)
+    if not job:
+        job = GromacsJob.start(
+            experiment=experiment,
+            tpr_path=tpr_path,
+            pme=DeviceType.from_string(request.form['pme']),
+            nb=DeviceType.from_string(request.form['nb']),
+            np=int(request.form['np']),
+            ntomp=int(request.form['ntomp']),
+            extra_args=request.form.get('extra_args', ''),
+        )
 
-        if not job:
-            job = GromacsJob.start(
-                experiment=experiment,
-                tpr_path=tpr_path,
-                pme=DeviceType.from_string(request.form['pme']),
-                nb=DeviceType.from_string(request.form['nb']),
-                np=int(request.form['np']),
-                ntomp=int(request.form['ntomp']),
-                extra_args=request.form.get('extra_args', ''),
-            )
-
-        return ApiResponse.success(schema.dump(job), HTTPStatus.CREATED)
-    
-    except Exception as e:
-        db.session.rollback()
-        return ApiResponse.error(e)
+    return ApiResponse.success(schema.dump(job), HTTPStatus.CREATED)
 
 
 @gmx_bp.route('/<tpr_name>', methods=['DELETE'])
+@handle_exceptions(rollback=True)
 def delete_gmx_job(experiment_id: str, tpr_name: str) -> Response:
-    try:
-        job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'GROMACS job for {tpr_name} in experiment {experiment_id} not found')
-        job.delete()
-        db.session.delete(job)
-        db.session.commit()
-        return ApiResponse.success(f'Gromacs job {tpr_name} deleted successfully.', HTTPStatus.NO_CONTENT)
-    except Exception as e:
-        db.session.rollback()
-        return ApiResponse.error(e)
+    job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'GROMACS job for {tpr_name} in experiment {experiment_id} not found')
+    job.delete()
+    db.session.delete(job)
+    db.session.commit()
+    return ApiResponse.success(f'Gromacs job {tpr_name} deleted successfully.', HTTPStatus.NO_CONTENT)
 
 
 @gmx_bp.route('/<tpr_name>/log', methods=['GET'])
+@handle_exceptions()
 def get_gmx_job_log(experiment_id: str, tpr_name: str) -> Response:
-    try:
-        job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'GROMACS job for {tpr_name} in experiment {experiment_id} not found')
-        
-        log_type = request.args.get('type', 'gmx').lower()
-        tail_lines = request.args.get('tail', '10000')
-
-        if log_type not in ['gmx', 'stdout', 'stderr']:
-            return ApiResponse.error("Invalid log type. Use 'gmx', 'stdout', or 'stderr'.", HTTPStatus.BAD_REQUEST)
-
-        if not tail_lines.isdigit():
-            return ApiResponse.error("Tail lines must be a positive integer.", HTTPStatus.BAD_REQUEST)
-
-        log = job.get_log(log_type, int(tail_lines))
-        return ApiResponse.success(log)
+    job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'GROMACS job for {tpr_name} in experiment {experiment_id} not found')
     
-    except Exception as e:
-        return ApiResponse.error(e)
+    log_type = request.args.get('type', 'gmx').lower()
+    tail_lines = request.args.get('tail', '10000')
+
+    if log_type not in ['gmx', 'stdout', 'stderr']:
+        return ApiResponse.error("Invalid log type. Use 'gmx', 'stdout', or 'stderr'.", HTTPStatus.BAD_REQUEST)
+
+    if not tail_lines.isdigit():
+        return ApiResponse.error("Tail lines must be a positive integer.", HTTPStatus.BAD_REQUEST)
+
+    log = job.get_log(log_type, int(tail_lines))
+    return ApiResponse.success(log)
