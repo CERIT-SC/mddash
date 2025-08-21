@@ -6,7 +6,8 @@ I mainly use it to develop the frontend.
 
 from flask import Flask, Blueprint, request, send_file
 from flask_cors import CORS
-from dashboard.api.api_response import ApiResponse
+from uuid import uuid4
+from api_response import ApiResponse
 
 
 bp = Blueprint('dash', __name__)
@@ -14,46 +15,50 @@ CORS(bp)
 
 
 gromacs_demo_job = {
+    'id': 1,
     'experiment_id': 'abcde',
+    'created_at': '2025-01-15T10:30:00',
     'tpr_name': 'LSD.tpr',
-    'np': 2,
-    'ntomp': 8,
+    'job_name': 'gromacs-6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
     'pme': 'cpu',
     'nb': 'cpu',
+    'np': 2,
+    'ntomp': 8,
     'extra_args': '',
-    'job_name': 'gromacs-6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
-    'status': 'RUNNING',
     'start_timestamp': 1754047422,
-    'estimated_time': 408,
     'nsteps': 100000,
+    'performance': None,
+    'status': 'RUNNING',
     'nsteps_done': 76543,
-    'performance': None
+    'estimated_time': 408
 }
 
 
-gromacs_demo_jobs = {
-    'LSD.tpr': gromacs_demo_job,
-    'MDMA.tpr': {
-        'experiment_id': 'abcde',
-        'tpr_name': 'MDMA.tpr',
-        'np': 8,
-        'ntomp': 1,
-        'nb': 'gpu',
-        'pme': 'cpu',
-        'extra_args': '-v  -nt 8 -ddorder pp_pme',
-        'job_name': 'gromacs-6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
-        'status': 'TERMINATED',
-        'start_timestamp': 1754047422,
-        'estimated_time': 0,
-        'nsteps': 100000,
-        'nsteps_done': 100000,
-        'performance': 70.158
-    }
-}
+gromacs_demo_jobs = [gromacs_demo_job, {
+    'id': 2,
+    'experiment_id': 'abcde',
+    'created_at': '2025-01-15T10:00:00',
+    'tpr_name': 'MDMA.tpr',
+    'job_name': 'gromacs-6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
+    'pme': 'cpu',
+    'nb': 'gpu',
+    'np': 8,
+    'ntomp': 1,
+    'extra_args': '-v  -nt 8 -ddorder pp_pme',
+    'start_timestamp': 1754047422,
+    'nsteps': 100000,
+    'performance': 70.158,
+    'status': 'TERMINATED',
+    'nsteps_done': 100000,
+    'estimated_time': 0
+}]
 
 
 tuner_demo_status = {
     'tuner_run_id': '6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
+    'experiment_id': 'abcde',
+    'tpr_name': 'LSD.tpr',
+    'created_at': '2025-01-15T09:30:00',
     'summary': {
         'RUNNING': 2,
         'PENDING': 0,
@@ -92,44 +97,141 @@ tuner_demo_status = {
     'cluster_resources': '32/32 CPUs, 0/1 GPUs used'
 }
 
-tuner_demo_statuses = {
-    "LSD.tpr": tuner_demo_status,
-    "MDMA.tpr": tuner_demo_status,
-}
+tuner_demo_statuses = [
+    {
+        'tuner_run_id': '6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
+        'experiment_id': 'abcde',
+        'tpr_name': 'LSD.tpr',
+        'created_at': '2025-01-15T09:30:00',
+        'summary': {
+            'RUNNING': 2,
+            'PENDING': 0,
+            'TERMINATED': 1,
+            'ERROR': 0
+        },
+        'trials': [
+            {
+                'id': 'e5167_00000',
+                'status': 'RUNNING',
+                'np': 2,
+                'ntomp': 2,
+                'nb': 'cpu',
+                'pme': 'cpu',
+                'performance': None
+            },
+            {
+                'id': 'e5167_00002',
+                'status': 'TERMINATED',
+                'np': 8,
+                'ntomp': 1,
+                'nb': 'gpu',
+                'pme': 'cpu',
+                'performance': 70.158
+            },
+            {
+                'id': 'e5167_00001',
+                'status': 'RUNNING',
+                'np': 2,
+                'ntomp': 8,
+                'nb': 'cpu',
+                'pme': 'cpu',
+                'performance': None
+            }
+        ],
+        'cluster_resources': '32/32 CPUs, 0/1 GPUs used'
+    },
+    {
+        'tuner_run_id': '7bec87ce-6f0c-4f8c-9572-426a1c62f44e',
+        'experiment_id': 'abcde',
+        'tpr_name': 'MDMA.tpr',
+        'created_at': '2025-01-15T09:45:00',
+        'summary': {
+            'RUNNING': 1,
+            'PENDING': 1,
+            'TERMINATED': 2,
+            'ERROR': 0
+        },
+        'trials': [
+            {
+                'id': 'e5168_00000',
+                'status': 'TERMINATED',
+                'np': 4,
+                'ntomp': 2,
+                'nb': 'gpu',
+                'pme': 'cpu',
+                'performance': 65.234
+            },
+            {
+                'id': 'e5168_00001',
+                'status': 'RUNNING',
+                'np': 8,
+                'ntomp': 1,
+                'nb': 'gpu',
+                'pme': 'gpu',
+                'performance': None
+            }
+        ],
+        'cluster_resources': '32/32 CPUs, 1/1 GPUs used'
+    }
+]
 
 
 demo_experiments = [
     {
         'id': 'aaaaa',
+        'created_at': '2025-01-15T08:00:00',
+        'updated_at': '2025-01-15T08:00:00',
         'name': 'Cancer cure',
-        'source_message': "Created by uploading TPR file 'cancer_cure.tpr''.",
+        'source_message': "Created by uploading TPR file 'cancer_cure.tpr'.",
+        'mdrepo_id': None,
         'step': 0,
         'status': 'setup',
-        'notebook_status': 'UNKNOWN',
-        'token': '2f2be97e-15db-4cb4-8ef7-905efe5a4968',
-        'tuner_jobs': {},
-        'gromacs_jobs': {},
+        'notebook': {
+            'id': 1,
+            'experiment_id': 'aaaaa',
+            'token': '2f2be97e-15db-4cb4-8ef7-905efe5a4968',
+            'status': 'UNKNOWN',
+            'path': '/__BASE_PATH__/notebook/aaaaa/?token=2f2be97e-15db-4cb4-8ef7-905efe5a4968'
+        },
+        'tuner_jobs': [],
+        'gromacs_jobs': [],
     },
     {
         'id': 'bbbbb',
+        'created_at': '2025-01-15T09:00:00',
+        'updated_at': '2025-01-15T10:30:00',
         'name': 'HIV protein behavior research for drug development',
         'source_message': "Created by downloading repository from 'https://zenodo.org/records/7261108'.",
+        'mdrepo_id': None,
         'step': 3,
         'status': 'simulating',
-        'notebook_status': 'RUNNING',
-        'token': '191eb452-5505-4328-9004-99eb1b0d570a',
+        'notebook': {
+            'id': 2,
+            'experiment_id': 'bbbbb',
+            'token': '191eb452-5505-4328-9004-99eb1b0d570a',
+            'status': 'RUNNING',
+            'path': '/__BASE_PATH__/notebook/bbbbb/?token=191eb452-5505-4328-9004-99eb1b0d570a'
+        },
         'tuner_jobs': tuner_demo_statuses,
         'gromacs_jobs': gromacs_demo_jobs,
     },
     {
         'id': 'ccccc',
+        'created_at': '2025-01-15T07:00:00',
+        'updated_at': '2025-01-15T12:00:00',
         'name': 'My first experiment',
         'source_message': "Created by uploading TPR file 'my_first_experiment.tpr'.",
+        'mdrepo_id': 'xej9e-x3720',
         'step': 5,
         'status': 'published',
-        'notebook_status': 'DOWN',
-        'token': '2578b922-7b12-49d0-8962-b2d79afda1dc',
-        'tuner_jobs': {},
+        'notebook': {
+            'id': 3,
+            'experiment_id': 'ccccc',
+            'token': '2578b922-7b12-49d0-8962-b2d79afda1dc',
+            'status': 'DOWN',
+            'path': '/__BASE_PATH__/notebook/ccccc/?token=2578b922-7b12-49d0-8962-b2d79afda1dc'
+        },
+        'tuner_jobs': [],
         'gromacs_jobs': gromacs_demo_jobs,
     },
 ]
@@ -139,7 +241,7 @@ demo_experiments = [
 
 @bp.route('/api/metrics', methods=['GET'])
 def get_metrics():
-    return ApiResponse.success({'cpu': 20, 'memory': 64, 'gpu': 4})
+    return ApiResponse.success({'cpu': 17.8, 'memory': 64, 'gpu': 4})
 
 
 # ----- EXPERIMENTS -----
@@ -172,51 +274,59 @@ notebook_running = False
 def create_notebook(experiment_id):
     global notebook_running
     notebook_running = True
-    return ApiResponse.success({
-        'status': 'PENDING',
-        'path': '/__BASE_PATH__/notebook/' + experiment_id
-    })
+    experiment = next(e for e in demo_experiments if e['id'] == experiment_id)
+    experiment['notebook']['status'] = 'RUNNING'
+    return ApiResponse.success(experiment['notebook'])
 
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['DELETE'])
 def delete_notebook(experiment_id):
     global notebook_running
     notebook_running = False
+    experiment = next(e for e in demo_experiments if e['id'] == experiment_id)
+    experiment['notebook']['status'] = 'DOWN'
     return ApiResponse.success()
 
 
 @bp.route('/api/experiments/<experiment_id>/notebook', methods=['GET'])
 def get_notebook(experiment_id):
-    return ApiResponse.success({
-        'status': 'RUNNING' if notebook_running else 'DOWN',
-        'path': '/__BASE_PATH__/notebook/' + experiment_id
-    })
+    experiment = next(e for e in demo_experiments if e['id'] == experiment_id)
+    return ApiResponse.success(experiment['notebook'])
 
 
 # ----- TUNER -----
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['POST'])
 def submit_tuner(experiment_id, tpr_name):
-    tuner_demo_statuses[tpr_name] = tuner_demo_status
-    return ApiResponse.success(tuner_demo_status)
+    new_tuner = tuner_demo_status.copy()
+    new_tuner['tuner_run_id'] = str(uuid4())
+    new_tuner['experiment_id'] = experiment_id
+    new_tuner['tpr_name'] = tpr_name
+    new_tuner['created_at'] = '2025-01-15T12:00:00'
+    tuner_demo_statuses.append(new_tuner)
+    return ApiResponse.success(new_tuner)
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner', methods=['GET'])
 def get_tuner_statuses(experiment_id):
-    return ApiResponse.success(tuner_demo_statuses)
+    experiment_tuners = [t for t in tuner_demo_statuses if t['experiment_id'] == experiment_id]
+    return ApiResponse.success(experiment_tuners)
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['GET'])
 def get_tuner_status(experiment_id, tpr_name):
-    if tpr_name in tuner_demo_statuses:
-        return ApiResponse.success(tuner_demo_statuses[tpr_name])
+    tuner = next((t for t in tuner_demo_statuses if t['experiment_id'] == experiment_id and t['tpr_name'] == tpr_name), None)
+    if tuner:
+        return ApiResponse.success(tuner)
     else:
         return ApiResponse.error(f"Tuner for '{tpr_name}' not found.")
 
 
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['DELETE'])
 def delete_tuner(experiment_id, tpr_name):
-    if tuner_demo_statuses.pop(tpr_name, None) is not None:
+    tuner = next((t for t in tuner_demo_statuses if t['experiment_id'] == experiment_id and t['tpr_name'] == tpr_name), None)
+    if tuner:
+        tuner_demo_statuses.remove(tuner)
         return ApiResponse.success()
     else:
         return ApiResponse.error('Tuner not found.')
@@ -226,36 +336,46 @@ def delete_tuner(experiment_id, tpr_name):
 
 @bp.route('/api/experiments/<experiment_id>/gmx/<tpr_name>', methods=['POST'])
 def submit_gmx(experiment_id, tpr_name):
-    if tpr_name in gromacs_demo_jobs:
+    existing_job = next((j for j in gromacs_demo_jobs if j['experiment_id'] == experiment_id and j['tpr_name'] == tpr_name), None)
+    if existing_job:
         return ApiResponse.error(f"Gromacs job for '{tpr_name}' already exists.")
 
     job = gromacs_demo_job.copy()
-    job['np'] = request.form['np']
-    job['ntomp'] = request.form['ntomp']
+    job['id'] = max([j['id'] for j in gromacs_demo_jobs]) + 1 if gromacs_demo_jobs else 1
+    job['experiment_id'] = experiment_id
+    job['tpr_name'] = tpr_name
+    job['np'] = int(request.form['np'])
+    job['ntomp'] = int(request.form['ntomp'])
     job['nb'] = request.form['nb']
     job['pme'] = request.form['pme']
     job['extra_args'] = request.form['extra_args']
+    job['created_at'] = '2025-01-15T12:00:00'
+    job['job_name'] = f'gromacs-{uuid4()}'
 
-    gromacs_demo_jobs[tpr_name] = job
+    gromacs_demo_jobs.append(job)
     return ApiResponse.success(job)
 
 
 @bp.route('/api/experiments/<experiment_id>/gmx', methods=['GET'])
 def get_gmx_statuses(experiment_id):
-    return ApiResponse.success(gromacs_demo_jobs)
+    experiment_jobs = [j for j in gromacs_demo_jobs if j['experiment_id'] == experiment_id]
+    return ApiResponse.success(experiment_jobs)
 
 
 @bp.route('/api/experiments/<experiment_id>/gmx/<tpr_name>', methods=['GET'])
 def get_gmx_status(experiment_id, tpr_name):
-    if tpr_name in gromacs_demo_jobs:
-        return ApiResponse.success(gromacs_demo_jobs[tpr_name])
+    job = next((j for j in gromacs_demo_jobs if j['experiment_id'] == experiment_id and j['tpr_name'] == tpr_name), None)
+    if job:
+        return ApiResponse.success(job)
     else:
         return ApiResponse.error(f"Gromacs job for '{tpr_name}' not found.")
 
 
 @bp.route('/api/experiments/<experiment_id>/gmx/<tpr_name>', methods=['DELETE'])
 def delete_gmx(experiment_id, tpr_name):
-    if gromacs_demo_jobs.pop(tpr_name, None) is not None:
+    job = next((j for j in gromacs_demo_jobs if j['experiment_id'] == experiment_id and j['tpr_name'] == tpr_name), None)
+    if job:
+        gromacs_demo_jobs.remove(job)
         return ApiResponse.success()
     else:
         return ApiResponse.error('Gromacs job not found.')
@@ -307,7 +427,7 @@ demo_experiment = {"id": "xej9e-x3720", "created": "2025-05-11T14:24:31.964333+0
     "name": "protein_cysp lipids water_and_ions", "nr": 3}, "tcoupl": "nose-hoover"}, "van_der_Waals_interactions": {"dispcorr": "enerpres", "rvdw": 1.2, "rvdw_switch": 1.0, "vdw_modifier": "force-switch", "vdw_type": "cut-off"}}, "file_identification": {"authors": ["6969-6969-6969-6969"], "description": "Test file.", "doi": "69", "name": "SPC.tpr", "simulation_year": "1984"}, "main_information": {"AWH_adaptive_biasing": False, "force_field": "probably has to be set by the user", "free_energy_calculation": "no", "molecules": [{"id": "molecule 1", "count": 2, "name": "spc", "residues": ["L", "R", "I", "P", "cysp", "cysp", "P", "V", "N", "L", "K", "R", "L", "L", "V", "V", "V", "V", "V", "V", "V", "L", "V", "V", "V", "V", "I", "V", "G", "A", "L", "L", "M", "G", "L"]}, {"id": "molecule 2", "count": 101, "name": "dppc", "residues": ["dppc"]}, {"id": "molecule 3", "count": 34, "name": "popc", "residues": ["popc"]}, {"id": "molecule 4", "count": 17, "name": "chl1", "residues": ["chl1"]}, {"id": "molecule 5", "count": 17, "name": "popg", "residues": ["popg"]}, {"id": "molecule 6", "count": 101, "name": "dppc", "residues": ["dppc"]}, {"id": "molecule 7", "count": 34, "name": "popc", "residues": ["popc"]}, {"id": "molecule 8", "count": 17, "name": "chl1", "residues": ["chl1"]}, {"id": "molecule 9", "count": 17, "name": "popg", "residues": ["popg"]}, {"id": "molecule 10", "count": 27040, "name": "sol", "residues": ["sol"]}, {"id": "molecule 11", "count": 67, "name": "na", "residues": ["na"]}, {"id": "molecule 12", "count": 39, "name": "cl", "residues": ["cl"]}], "reference_temperature": [310.0, 310.0, 310.0], "simulation_length": 100000.0, "simulation_time_step": 0.002, "simulation_type": "molecular dynamics", "statistical_ensamble": "NVT (canonical)", "umbrella_sampling": False}}]}, "state": "draft", "state_timestamp": "2025-05-11T14:24:32.008171+00:00", "parent": {"id": "kvq2y-02940", "workflow": "default", "communities": {"ids": ["b53d8a89-d370-475c-be34-67b698e088b1"], "default": "b53d8a89-d370-475c-be34-67b698e088b1"}}, "files": {"enabled": True}}
 
 
-@bp.route('/api/experiments/<experiment_id>/publish', methods=['GET'])
+@bp.route('/api/experiments/<experiment_id>/publish', methods=['POST'])
 def publish_experiment(experiment_id):
     return ApiResponse.success(demo_experiment)
 
