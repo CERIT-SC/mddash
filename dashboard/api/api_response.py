@@ -1,3 +1,4 @@
+import re
 import logging
 from http import HTTPStatus
 from flask import jsonify, Response
@@ -40,6 +41,7 @@ class ApiResponse:
         if isinstance(error, HTTPException):
             status = error.code or status
             message = error.get_description()
+            message = re.sub(r'<[^>]+>', '', message).strip()
         elif isinstance(error, Exception):
             message = str(error)
         else:

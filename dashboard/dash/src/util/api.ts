@@ -10,25 +10,25 @@ interface ApiData<T = any> {
 }
 
 
-/**
- * Handle response from axios request with error handling
- * 
- * @param request - axios request promise
- * @param fallbackMsg - message to return if request fails
- * @returns Object with data and error fields
- */
-const handle_request = async <T = any>(
+const parseResponse = <T>(response: AxiosResponse, fallbackMsg: string): ApiData<T> => {
+    const errMsg = response.data.success
+        ? null
+        : response.data.message || fallbackMsg;
+    const data = response.data.data || null;
+    return { data: data, error: errMsg };
+};
+
+const handle_request = async <T>(
     request: Promise<AxiosResponse>, 
     fallbackMsg: string
 ): Promise<ApiData<T>> => {
     try {
         const response = await request;
-        const errMsg = response.data.success
-            ? null
-            : response.data.message || fallbackMsg;
-        const data = response.data.data || null;
-        return { data: data, error: errMsg };
+        return parseResponse<T>(response, fallbackMsg);
     } catch (error) {
+        if (axios.isAxiosError(error) && error.response) {
+            return parseResponse<T>(error.response, fallbackMsg);
+        }
         return { data: null, error: fallbackMsg };
     }
 }
