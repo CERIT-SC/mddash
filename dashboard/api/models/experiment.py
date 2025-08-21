@@ -191,10 +191,8 @@ class Experiment(db.Model):  # type: ignore
         experiment_id: str = cls.prepare_env()
 
         try:
-            # Save TPR file
             tpr.save(DATA_DIR / experiment_id / 'input.tpr')
 
-            # Create experiment instance
             message: str = f"Created by uploading TPR file '{tpr.filename}'."
             experiment = cls(
                 id=experiment_id,
@@ -202,7 +200,6 @@ class Experiment(db.Model):  # type: ignore
                 source_message=message
             )
 
-            # Create experiment with notebook
             return cls._create_with_notebook(experiment)
 
         except Exception:
@@ -226,16 +223,16 @@ class Experiment(db.Model):  # type: ignore
 
         # NOTE: Step 3 is skipped because no action is required to progress from Analyze to Publish
 
-        # Step 2: Running simulation (experiment has running GROMACS job)
-        if any(j.status == JobStatus.RUNNING for j in self.gromacs_jobs):
+        # Step 2: Running simulation (experiment has a GROMACS job)
+        if self.gromacs_jobs:
             return 2, 'simulating'
 
         # Step 2: Tuning (experiment has terminated tuner job)
         if any(j.summary.get('TERMINATED', 0) > 0 for j in self.tuner_jobs):
             return 2, 'tuning'
 
-        # Step 1: Tuning (experiment has running tuner job)
-        if any(j.summary.get('RUNNING', 0) > 0 for j in self.tuner_jobs):
+        # Step 1: Tuning (experiment has a tuner job)
+        if self.tuner_jobs:
             return 1, 'tuning'
 
         # Step 1: Setup complete (directory contains a TPR file)
