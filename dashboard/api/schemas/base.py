@@ -1,5 +1,9 @@
+import logging
 from marshmallow import post_dump
 from extensions import ma
+
+
+logger = logging.getLogger(__name__)
 
 
 class BaseAutoSchema(ma.SQLAlchemyAutoSchema):  # type: ignore
@@ -23,7 +27,8 @@ class BaseAutoSchema(ma.SQLAlchemyAutoSchema):  # type: ignore
                     if isinstance(attr, property):
                         value = getattr(original_obj, attr_name)
                         data[attr_name] = value
+                
                 except Exception:
-                    # Skip properties that fail to compute
-                    pass
+                    logger.warning(f"Failed to compute property '{attr_name}' for {type(original_obj).__name__}", exc_info=True)
+
         return data

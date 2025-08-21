@@ -15,7 +15,7 @@ experiments_bp = Blueprint(
 )
 
 
-@experiments_bp.route('/', methods=['GET'])
+@experiments_bp.route('', methods=['GET'])
 def list_experiments() -> Response:
     try:
         experiments: list[Experiment] = Experiment.query.all()
@@ -25,7 +25,7 @@ def list_experiments() -> Response:
         return ApiResponse.error(e)
 
 
-@experiments_bp.route('/', methods=['POST'])
+@experiments_bp.route('', methods=['POST'])
 def create_experiment() -> Response:
     schema = ExperimentSchema()
     form = request.form

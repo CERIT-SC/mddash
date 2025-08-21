@@ -4,7 +4,7 @@ import { API_BASE } from './const';
 import { Experiment, FileOption, GromacsJob, Notebook, ResourceUsage, TunerJob } from './types'
 
 
-interface ApiData<T = any> {
+interface ApiData<T> {
     data: T | null;
     error: string | null;
 }
@@ -98,7 +98,7 @@ export const delete_notebook = async (id: string): Promise<ApiData<null>> => {
 
 // ----- Tuner -----
 
-export const tuner_statuses = async (id: string): Promise<ApiData<Record<string, TunerJob>>> => {
+export const tuner_statuses = async (id: string): Promise<ApiData<TunerJob[]>> => {
     return await handle_request(
         axios.get(`${API_BASE}/experiments/${id}/tuner`),
         'Failed to fetch tuner statuses.'
@@ -136,7 +136,7 @@ export const submit_gmx = async (id: string, tprName: string, formData: FormData
     )
 }
 
-export const gmx_statuses = async (id: string): Promise<ApiData<Record<string, GromacsJob>>> => {
+export const gmx_statuses = async (id: string): Promise<ApiData<GromacsJob[]>> => {
     return await handle_request(
         axios.get(`${API_BASE}/experiments/${id}/gmx`),
         'Failed to fetch Gromacs statuses.'

@@ -1,4 +1,3 @@
-import re
 import logging
 from http import HTTPStatus
 from flask import jsonify, Response
@@ -36,17 +35,16 @@ class ApiResponse:
         :param status: The HTTP status code (defaults to 500 Internal Server Error)
         :return: A Flask Response object containing the error response
         '''
-        exc_info = True
+        exc_info = False
 
         if isinstance(error, HTTPException):
             status = error.code or status
-            message = error.get_description()
-            message = re.sub(r'<[^>]+>', '', message).strip()
+            message = error.description or "Unknown error occurred."
         elif isinstance(error, Exception):
             message = str(error)
+            exc_info = True
         else:
             message = error
-            exc_info = False
 
         if status is None:
             status = HTTPStatus.INTERNAL_SERVER_ERROR

@@ -1,3 +1,17 @@
+export interface Experiment {
+    id: string;
+    created_at: string;
+    updated_at: string;
+    name: string;
+    source_message: string | null;
+    mdrepo_id: string | null;
+    step: number;
+    status: string;
+    notebook: Notebook;
+    tuner_jobs: TunerJob[];
+    gromacs_jobs: GromacsJob[];
+}
+
 export interface Notebook {
     id: number;
     experiment_id: string;
@@ -21,18 +35,35 @@ export interface TunerJob {
     cluster_resources: string;
 }
 
-export interface Experiment {
+export interface TunerTrial {
     id: string;
+    status: JobStatus;
+    np: number;
+    ntomp: number;
+    pme: DeviceType;
+    nb: DeviceType;
+    performance: number | null;
+}
+
+export type DeviceType = "auto" | "cpu" | "gpu";
+
+export interface GromacsJob {
+    id: number;
+    experiment_id: string;
     created_at: string;
-    updated_at: string;
-    name: string;
-    source_message: string | null;
-    mdrepo_id: string | null;
-    step: number;
-    status: string;
-    notebook: Notebook;
-    tuner_jobs: TunerJob[];
-    gromacs_jobs: GromacsJob[];
+    tpr_name: string;
+    job_name: string;
+    pme: DeviceType;
+    nb: DeviceType;
+    np: number;
+    ntomp: number;
+    extra_args: string;
+    status: JobStatus;
+    start_timestamp: number | null;
+    nsteps: number | null;
+    performance: number | null;
+    nsteps_done: number | null;
+    estimated_time: number | null;
 }
 
 export interface ResourceUsage {
@@ -77,7 +108,6 @@ export namespace PodStatus {
     }
 }
 
-
 export type JobStatus = "RUNNING" | "PENDING" | "TERMINATED" | "ERROR";
 
 export namespace JobStatus {
@@ -98,35 +128,4 @@ export namespace JobStatus {
                 return "error";
         }
     }
-}
-
-export type DeviceType = "auto" | "cpu" | "gpu";
-
-export interface TunerTrial {
-    id: string;
-    status: JobStatus;
-    np: number;
-    ntomp: number;
-    pme: DeviceType;
-    nb: DeviceType;
-    performance: number | null;
-}
-
-export interface GromacsJob {
-    id: number;
-    experiment_id: string;
-    created_at: string;
-    tpr_name: string;
-    job_name: string;
-    pme: DeviceType;
-    nb: DeviceType;
-    np: number;
-    ntomp: number;
-    extra_args: string;
-    status: JobStatus;
-    start_timestamp: number | null;
-    nsteps: number | null;
-    performance: number | null;
-    nsteps_done: number | null;
-    estimated_time: number | null;
 }
