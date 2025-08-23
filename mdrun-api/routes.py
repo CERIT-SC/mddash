@@ -37,6 +37,7 @@ def create_job():
     job = MdrunJob.create_and_start(
         experiment_id=data['experiment_id'],
         tpr_name=data['tpr_name'],
+        pvc_name=data['pvc_name'],
         pme=DeviceType.from_string(data['pme']),
         nb=DeviceType.from_string(data['nb']),
         np=data['np'],
