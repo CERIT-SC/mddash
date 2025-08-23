@@ -8,6 +8,37 @@ logger = logging.getLogger(__name__)
 GPU_TYPE = 'nvidia.com/mig-1g.10gb'
 
 
+def create_pvc(ns: str, pvc_name: str) -> None:
+    """Ensure PVC exists in the given namespace, create if it doesn't exist."""
+    if ping_resource('pvc', pvc_name, ns):
+        logger.info(f"PVC {pvc_name} already exists in namespace {ns}")
+        return
+    
+    config.load_incluster_config()
+    api = client.CoreV1Api()
+    
+    pvc_manifest = {
+        'apiVersion': 'v1',
+        'kind': 'PersistentVolumeClaim',
+        'metadata': {
+            'name': pvc_name,
+            'namespace': ns
+        },
+        'spec': {
+            'accessModes': ['ReadWriteMany'],
+            'storageClassName': 'nfs-csi',
+            'resources': {
+                'requests': {
+                    'storage': '10Gi'
+                }
+            }
+        }
+    }
+    
+    api.create_namespaced_persistent_volume_claim(namespace=ns, body=pvc_manifest)
+    logger.info(f"Created PVC {pvc_name} in namespace {ns}")
+
+
 def create_gromacs_job(
     ns: str,
     pvc: str,
