@@ -15,5 +15,9 @@ RUN mkdir -p /data
 # Expose port
 EXPOSE 5000
 
-# Run with uWSGI
-CMD ["uwsgi", "--http", "0.0.0.0:5000", "--module", "app:app", "--processes", "4", "--threads", "2"]
+# Default values for uWSGI
+ENV UWSGI_PROCESSES=4
+ENV UWSGI_THREADS=2
+
+# Run with uWSGI using environment variables and log to /data/api.log
+CMD ["sh", "-c", "uwsgi --http 0.0.0.0:5000 --module app:app --processes $UWSGI_PROCESSES --threads $UWSGI_THREADS > /data/api.log 2>&1"]

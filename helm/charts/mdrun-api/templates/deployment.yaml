@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mdrun-api
+  labels:
+    app: mdrun-api
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: mdrun-api
+  template:
+    metadata:
+      labels:
+        app: mdrun-api
+    spec:
+      containers:
+      - name: mdrun-api
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        ports:
+        - containerPort: {{ .Values.service.targetPort }}
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: PVC_NAME
+          value: "mdrun-api-data"
+        - name: UWSGI_PROCESSES
+          value: "{{ .Values.uwsgi.processes }}"
+        - name: UWSGI_THREADS
+          value: "{{ .Values.uwsgi.threads }}"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: mdrun-api-data
