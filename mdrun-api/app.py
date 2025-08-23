@@ -1,7 +1,7 @@
 from flask import Flask
 from flask_cors import CORS
 
-from config import DATABASE_URL
+from config import DB_URL
 from extensions import db, ma
 from routes import mdrun_bp
 
@@ -9,7 +9,7 @@ from routes import mdrun_bp
 def create_app() -> Flask:
     app = Flask(__name__)
     
-    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+    app.config['SQLALCHEMY_DATABASE_URI'] = DB_URL
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     CORS(app)
@@ -26,6 +26,7 @@ def create_app() -> Flask:
 
 
 app = create_app()
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

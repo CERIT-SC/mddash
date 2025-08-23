@@ -3,7 +3,7 @@ from uuid import uuid4
 from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column
 
-from config import NAMESPACE, DATA_DIR, PVC_NAME
+from config import NAMESPACE, DATA_DIR
 from enums import DeviceType, JobStatus
 from extensions import db
 import k8s_client
@@ -28,6 +28,7 @@ class MdrunJob(db.Model):  # type: ignore
         cls,
         experiment_id: str,
         tpr_name: str,
+        pvc_name: str,
         pme: DeviceType,
         nb: DeviceType,
         np: int,
@@ -46,7 +47,7 @@ class MdrunJob(db.Model):  # type: ignore
         deffnm = tpr_name.removesuffix('.tpr')
         k8s_client.create_gromacs_job(
             ns=NAMESPACE,
-            pvc=PVC_NAME,
+            pvc=pvc_name,
             name=job_name,
             experiment_id=experiment_id,
             deffnm=deffnm,
