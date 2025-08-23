@@ -4,7 +4,7 @@ TAG = latest
 build:
 	docker build -t $(IMAGE_NAME):$(TAG) .
 
-push:
+push: build
 	docker push $(IMAGE_NAME):$(TAG)
 
 clean:

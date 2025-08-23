@@ -3,7 +3,7 @@ from uuid import uuid4
 from datetime import datetime
 from sqlalchemy.orm import Mapped, mapped_column
 
-from config import NAMESPACE, DATA_DIR
+from config import NAMESPACE
 from enums import DeviceType, JobStatus
 from extensions import db
 import k8s_client
@@ -38,11 +38,6 @@ class MdrunJob(db.Model):  # type: ignore
         job_id = str(uuid4())
         job_name = f'mdrun-{job_id}'
 
-        # Check if TPR file exists in experiment directory
-        tpr_path = DATA_DIR / experiment_id / tpr_name
-        if not tpr_path.exists():
-            raise FileNotFoundError(f"TPR file {tpr_name} not found in experiment {experiment_id}")
-
         # Ensure PVC exists in admin namespace
         k8s_client.create_pvc(ns=NAMESPACE, pvc_name=pvc_name)
 
@@ -71,7 +66,7 @@ class MdrunJob(db.Model):  # type: ignore
         db.session.add(job)
         db.session.commit()
         logger.info(f"Started MDRun job {job_name} with ID {job_id} in experiment {experiment_id}")
-        
+
         return job
 
     def delete(self) -> None:

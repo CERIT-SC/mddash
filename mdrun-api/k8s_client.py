@@ -1,6 +1,6 @@
 import logging
-from kubernetes import client, config
-from kubernetes.client.rest import ApiException
+from kubernetes import client, config  # type: ignore
+from kubernetes.client.rest import ApiException  # type: ignore
 
 from enums import JobStatus
 
@@ -64,7 +64,7 @@ def create_gromacs_job(
     pme = pme.lower()
 
     image = 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2'
-    command = f"mpirun -np {np} gmx mdrun -ntomp {ntomp} -nb {nb} -pme {pme} -deffnm {deffnm} {extra_args} >{name}.out 2>{name}.err"
+    command = f"pwd && ls -la /data && ls -la /data/{experiment_id} && mpirun -np {np} gmx mdrun -ntomp {ntomp} -nb {nb} -pme {pme} -deffnm {deffnm} {extra_args} >{name}.out 2>{name}.err"
 
     job_manifest = {
         'apiVersion': 'batch/v1',
@@ -86,6 +86,9 @@ def create_gromacs_job(
                 },
                 'spec': {
                     'restartPolicy': 'Never',
+                    'securityContext': {
+                        'fsGroup': 1000
+                    },
                     'containers': [
                         {
                             'name': name,
@@ -147,24 +150,6 @@ def create_gromacs_job(
     logger.info(f"Created GROMACS job {name} in namespace {ns}")
 
 
-def ping_resource(resource_type: str, name: str, ns: str) -> bool:
-    config.load_incluster_config()
-    api = client.CoreV1Api()
-
-    try:
-        match resource_type:
-            case 'job':
-                batch_api = client.BatchV1Api()
-                batch_api.read_namespaced_job(name=name, namespace=ns)
-            case 'pod':
-                api.read_namespaced_pod(name=name, namespace=ns)
-            case _:
-                raise ValueError(f"Unsupported resource type: {resource_type}")
-        return True
-    except ApiException:
-        return False
-
-
 def delete_job(ns: str, name: str) -> None:
     if not ping_resource('job', name, ns):
         logger.warning(f"Job {name} does not exist in namespace {ns}. Skipping deletion.")
@@ -181,6 +166,32 @@ def delete_job(ns: str, name: str) -> None:
         )
     )
     logger.info(f"Deleted job {name} from namespace {ns}")
+
+
+def ping_resource(resource_type: str, name: str, ns: str) -> bool:
+    config.load_incluster_config()
+    api = client.CoreV1Api()
+
+    try:
+        match resource_type:
+            case 'svc':
+                api.read_namespaced_service(name=name, namespace=ns)
+            case 'pod':
+                api.read_namespaced_pod(name=name, namespace=ns)
+            case 'configmap':
+                api.read_namespaced_config_map(name=name, namespace=ns)
+            case 'secret':
+                api.read_namespaced_secret(name=name, namespace=ns)
+            case 'pvc':
+                api.read_namespaced_persistent_volume_claim(name=name, namespace=ns)
+            case 'job':
+                batch_api = client.BatchV1Api()
+                batch_api.read_namespaced_job(name=name, namespace=ns)
+            case _:
+                raise ValueError(f"Unsupported resource type: {resource_type}")
+        return True
+    except ApiException as e:
+        return False
 
 
 def get_job_status(ns: str, name: str) -> JobStatus:
