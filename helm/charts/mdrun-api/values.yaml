@@ -10,8 +10,8 @@ service:
   port: 80
   targetPort: 5000
 
-persistence:
-  size: 1Gi
+storage:
+  size: 5Gi
 
 uwsgi:
   processes: 4
@@ -20,7 +20,7 @@ uwsgi:
 resources:
   limits:
     cpu: 500m
-    memory: 512Mi
+    memory: 1024Mi
   requests:
-    cpu: 250m
+    cpu: 100m
     memory: 256Mi
