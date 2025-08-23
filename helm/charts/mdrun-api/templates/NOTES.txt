@@ -1,0 +1,1 @@
+MDRun API running at http://mdrun-api.{{ .Release.Namespace }}.svc.cluster.local/api
