@@ -3,7 +3,7 @@ from flask_cors import CORS
 
 from config import DB_URL
 from extensions import db, ma
-from routes import mdrun_bp
+from routes import mdrun_bp, health_bp
 
 
 def create_app() -> Flask:
@@ -18,6 +18,7 @@ def create_app() -> Flask:
     ma.init_app(app)
     
     app.register_blueprint(mdrun_bp)
+    app.register_blueprint(health_bp)
     
     with app.app_context():
         db.create_all()
