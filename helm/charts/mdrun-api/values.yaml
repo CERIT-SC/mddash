@@ -1,0 +1,25 @@
+# Default values for mdrun-api
+replicaCount: 1
+
+image:
+  repository: mdrun-api
+  tag: "latest"
+
+service:
+  port: 80
+  targetPort: 5000
+
+persistence:
+  size: 1Gi
+
+uwsgi:
+  processes: 4
+  threads: 2
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
