@@ -1,4 +1,4 @@
-IMAGE_NAME = mdrun-api
+IMAGE_NAME = cerit.io/xkrasa/mdrun-api
 TAG = latest
 
 build:
