@@ -37,11 +37,14 @@ class MdrunJob(db.Model):  # type: ignore
     ) -> 'MdrunJob':
         job_id = str(uuid4())
         job_name = f'mdrun-{job_id}'
-        
+
         # Check if TPR file exists in experiment directory
         tpr_path = DATA_DIR / experiment_id / tpr_name
         if not tpr_path.exists():
             raise FileNotFoundError(f"TPR file {tpr_name} not found in experiment {experiment_id}")
+
+        # Ensure PVC exists in admin namespace
+        k8s_client.create_pvc(ns=NAMESPACE, pvc_name=pvc_name)
 
         # Create Kubernetes job - this should fail if it can't be created
         deffnm = tpr_name.removesuffix('.tpr')
@@ -64,7 +67,7 @@ class MdrunJob(db.Model):  # type: ignore
             job_name=job_name,
             experiment_id=experiment_id
         )
-        
+
         db.session.add(job)
         db.session.commit()
         logger.info(f"Started MDRun job {job_name} with ID {job_id} in experiment {experiment_id}")
@@ -73,12 +76,4 @@ class MdrunJob(db.Model):  # type: ignore
 
     def delete(self) -> None:
         k8s_client.delete_job(ns=NAMESPACE, name=self.job_name)
-        
-        # Clean up output files in experiment directory
-        experiment_dir = DATA_DIR / self.experiment_id
-        stdout_log = experiment_dir / f"{self.job_name}.out"
-        stderr_log = experiment_dir / f"{self.job_name}.err"
-        stdout_log.unlink(missing_ok=True)
-        stderr_log.unlink(missing_ok=True)
-        
         logger.info(f"Deleted MDRun job {self.job_name} with ID {self.id}")
