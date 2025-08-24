@@ -23,4 +23,4 @@ EXPOSE 5000
 ENV UWSGI_PROCESSES=4
 ENV UWSGI_THREADS=2
 
-CMD ["sh", "-c", "uwsgi --http 0.0.0.0:5000 --module app:app --processes $UWSGI_PROCESSES --threads $UWSGI_THREADS > /data/api.log 2>&1"]
+CMD ["sh", "-c", "uwsgi --http 0.0.0.0:5000 --module app:app --processes $UWSGI_PROCESSES --threads $UWSGI_THREADS 2>&1 | tee /data/api.log"]
