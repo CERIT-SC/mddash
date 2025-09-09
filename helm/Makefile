@@ -1,20 +1,20 @@
 ns = md-dashboard-ns
 package = mddash
+chart_path = charts/mddash
 kubeconfig_path = ../private/kuba-cluster.yaml
 
-install:
+install: update
 # 	helm repo add kuberay https://ray-project.github.io/kuberay-helm/ || true
 # 	helm install kuberay-operator kuberay/kuberay-operator || true
-# 	helm dependency update .
-	helm install $(package) . --namespace $(ns) \
-		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=pre_spawn_hook.py
+	helm install $(package) $(chart_path) --namespace $(ns) \
+		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/pre_spawn_hook.py
 
 upgrade:
-	helm upgrade $(package) . --namespace $(ns) \
-		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=pre_spawn_hook.py
+	helm upgrade $(package) $(chart_path) --namespace $(ns) \
+		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/pre_spawn_hook.py
 
 update:
-	helm dependency update .
+	helm dependency update $(chart_path)
 
 uninstall:
 	helm uninstall $(package) --namespace $(ns)
@@ -28,7 +28,7 @@ port-forward:
 	kubectl port-forward svc/proxy-public 8000:80 -n $(ns)
 
 test:
-	helm template $(package) . --debug --namespace $(ns)
+	helm template $(package) $(chart_path) --debug --namespace $(ns)
 
 status:
 	@echo "=== Helm Release Status ==="
