@@ -119,7 +119,7 @@ const Experiments = () => {
                             height: "100%",
                             display: "flex",
                             color: "text.secondary",
-                            border: "4px dashed",
+                            border: "2px dashed",
                         }}
                     >
                         <CardActionArea
