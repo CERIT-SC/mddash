@@ -50,16 +50,23 @@ jupyterhub:
       - name: kubeconfig
         secret:
           secretName: mddash-kubeconfig-secret
+      - name: custom-templates
+        configMap:
+          name: mddash-custom-templates # created in Makefile
     extraVolumeMounts:
       - name: kubeconfig
         mountPath: /home/jovyan/.kube
         readOnly: true
+      - name: custom-templates
+        mountPath: /opt/jupyterhub/custom-templates
 
     extraConfig:
       oauth-client-secret: |
         import os
         c.GenericOAuthenticator.client_id = os.environ.get("OAUTH_CLIENT_ID")
         c.GenericOAuthenticator.client_secret = os.environ.get("OAUTH_CLIENT_SECRET")
+      customTemplates: |
+        c.JupyterHub.template_paths = ["/opt/jupyterhub/custom-templates"]
 
     networkPolicy:
       enabled: false
