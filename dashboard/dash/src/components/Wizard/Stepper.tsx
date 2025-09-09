@@ -156,7 +156,7 @@ const WizardStepper = (props: WizardStepperProps) => {
 
             <Stepper alternativeLabel activeStep={activeStep} connector={<ColorLibConnector />}>
                 {steps.map((step, idx) => (
-                    <Step key={step.label} completed={idx < experiment.step}>
+                    <Step key={step.label} completed={idx < experiment.step || idx < activeStep}>
                         <StepLabel StepIconComponent={ColorLibStepIcon}>{step.label}</StepLabel>
                     </Step>
                 ))}
