@@ -80,7 +80,7 @@ const ColorLibStepIconRoot = styled("div")<{ ownerState: { completed?: boolean; 
 
 export interface WizardStepperProps {
     experiment: Experiment;
-    setExperiment: React.Dispatch<React.SetStateAction<Experiment>>;
+    setExperiment: Function;
     setErrorMessage: (message: string) => void;
 }
 
