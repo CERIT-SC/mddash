@@ -1,7 +1,11 @@
 FROM node:24-slim AS build-stage
 WORKDIR /usr/src/app
+
+COPY ./dash/package*.json ./
+RUN npm install --force
+
 COPY ./dash .
-RUN npm install --force && npm run build
+RUN npm run build
 
 FROM caddy:2.10-alpine AS caddy-stage
 
@@ -16,8 +20,7 @@ USER root
 COPY ./api/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
-RUN mkdir -p /mddash/logs /caddy/data /caddy/config \
-    && chown -R 1000:100 /mddash /caddy
+RUN mkdir -p /mddash/logs /caddy/data /caddy/config
 
 COPY --from=caddy-stage --chown=1000:100 /usr/bin/caddy /usr/bin/caddy
 COPY --from=build-stage --chown=1000:100 /usr/src/app/dist /opt/dash
@@ -26,18 +29,16 @@ COPY --chown=1000:100 ./Caddyfile /caddy/
 COPY --chown=1000:100 ./start.sh /start.sh
 COPY --chown=1000:100 ./entrypoint.sh /entrypoint.sh
 
-RUN chmod +x /start.sh /entrypoint.sh
+RUN chown -R 1000:100 /mddash /caddy && \
+    chmod +x /start.sh /entrypoint.sh
 
-# caddy environment variables
 ENV XDG_DATA_HOME=/caddy/data
 ENV XDG_CONFIG_HOME=/caddy/config
-
 
 USER 1000
 
 EXPOSE 8888
 
-# Set the new entrypoint that handles both JupyterHub and standalone modes
 ENTRYPOINT ["/entrypoint.sh"]
 
 CMD ["/start.sh"]
