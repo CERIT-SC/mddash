@@ -3,13 +3,13 @@ package = mddash
 chart_path = charts/mddash
 kubeconfig_path = ../private/kuba-cluster.yaml
 
-install: update
+install: update hub-templates
 # 	helm repo add kuberay https://ray-project.github.io/kuberay-helm/ || true
 # 	helm install kuberay-operator kuberay/kuberay-operator || true
 	helm install $(package) $(chart_path) --namespace $(ns) \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/pre_spawn_hook.py
 
-upgrade:
+upgrade: hub-templates
 	helm upgrade $(package) $(chart_path) --namespace $(ns) \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/pre_spawn_hook.py
 
@@ -18,6 +18,11 @@ update:
 
 uninstall:
 	helm uninstall $(package) --namespace $(ns)
+
+hub-templates:
+	kubectl create configmap mddash-custom-templates \
+		--from-file=$(chart_path)/files/hub-templates \
+		-n $(ns) --dry-run=client -o yaml | kubectl apply -f -
 
 kubeconfig:
 	kubectl create secret generic mddash-kubeconfig-secret \
