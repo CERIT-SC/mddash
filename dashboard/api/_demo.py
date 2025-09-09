@@ -203,7 +203,7 @@ demo_experiments = [
         'name': 'HIV protein behavior research for drug development',
         'source_message': "Created by downloading repository from 'https://zenodo.org/records/7261108'.",
         'mdrepo_id': None,
-        'step': 3,
+        'step': 2,
         'status': 'simulating',
         'notebook': {
             'id': 2,
@@ -265,6 +265,10 @@ def create_experiment():
 def delete_experiment(experiment_id):
     return ApiResponse.success()
 
+@bp.route('/api/experiments/<experiment_id>/step', methods=['GET'])
+def get_experiment_step(experiment_id):
+    experiment = next(e for e in demo_experiments if e['id'] == experiment_id)
+    return ApiResponse.success(experiment['step'])
 
 # ----- NOTEBOOK -----
 

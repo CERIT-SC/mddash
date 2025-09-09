@@ -14,7 +14,7 @@ const parseResponse = <T>(response: AxiosResponse, fallbackMsg: string): ApiData
     const errMsg = response.data.success
         ? null
         : response.data.message || fallbackMsg;
-    const data = response.data.data || null;
+    const data = response.data.data;
     return { data: data, error: errMsg };
 };
 
@@ -68,6 +68,13 @@ export const publish_experiment = async (id: string): Promise<ApiData<any>> => {
     return await handle_request(
         axios.post(`${API_BASE}/experiments/${id}/publish`),
         'Failed to publish experiment.'
+    )
+}
+
+export const get_experiment_step = async (id: string): Promise<ApiData<number>> => {
+    return await handle_request(
+        axios.get(`${API_BASE}/experiments/${id}/step`),
+        'Failed to fetch experiment step.'
     )
 }
 
