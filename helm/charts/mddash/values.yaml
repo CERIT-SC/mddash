@@ -1,0 +1,176 @@
+jupyterhub:
+  hub:
+    config:
+      JupyterHub:
+        authenticator_class: generic-oauth
+      GenericOAuthenticator:
+        login_service: "e-INFRA CZ"  # button label
+        authorize_url: https://login.e-infra.cz/oidc/authorize
+        token_url: https://login.e-infra.cz/oidc/token
+        userdata_url: https://login.e-infra.cz/oidc/userinfo
+        oauth_callback_url: https://mddash.dyn.cloud.e-infra.cz/hub/oauth_callback
+        client_id: null  # gets imported from env OAUTH_CLIENT_ID
+        client_secret: null  # gets imported from env OAUTH_CLIENT_SECRET
+        userdata_params:
+          state: state
+        scope:
+          - openid
+          - profile
+          - email
+        username_key: preferred_username
+        allow_all: true
+      KubeSpawner:
+        services_enabled: true
+        http_timeout: 60
+
+    extraEnv:
+      RANCHER_PROJECT_ID:
+        value: "c-m-qvndqhf6:p-hshk2"  # Set the Rancher project ID for namespace annotation
+      OAUTH_CLIENT_ID:
+        valueFrom:
+          secretKeyRef:
+            name: oidc-credentials
+            key: client_id
+      OAUTH_CLIENT_SECRET:
+        valueFrom:
+          secretKeyRef:
+            name: oidc-credentials
+            key: client_secret
+      # User namespace resource quota
+      NS_REQUESTS_CPU:
+        value: "1000m"
+      NS_REQUESTS_MEMORY:
+        value: "4Gi"
+      NS_LIMITS_CPU:
+        value: "64000m"
+      NS_LIMITS_MEMORY:
+        value: "256Gi"
+
+    extraVolumes:
+      - name: kubeconfig
+        secret:
+          secretName: mddash-kubeconfig-secret
+    extraVolumeMounts:
+      - name: kubeconfig
+        mountPath: /home/jovyan/.kube
+        readOnly: true
+
+    extraConfig:
+      oauth-client-secret: |
+        import os
+        c.GenericOAuthenticator.client_id = os.environ.get("OAUTH_CLIENT_ID")
+        c.GenericOAuthenticator.client_secret = os.environ.get("OAUTH_CLIENT_SECRET")
+
+    networkPolicy:
+      enabled: false
+
+  singleuser:
+    podNameTemplate: "mddash-{username}"
+    image:
+      name: "cerit.io/xkrasa/mddash"
+      tag: "dev"
+      pullPolicy: Always  # TODO: change to `ifNotPresent` once the image is stable
+
+    # Default URL to redirect after spawn
+    defaultUrl: "/dash"
+
+    # Resource limits
+    memory:
+      guarantee: 512M
+      limit: 4G
+    cpu:
+      guarantee: 0.2
+      limit: 1
+
+    # Increased timeout for custom image startup
+    startTimeout: 600
+
+    # Use PVC created by pre_spawn_hook.py
+    storage:
+      type: static
+      homeMountPath: /mddash
+      static:
+        pvcName: claim-{username}
+
+    networkPolicy:
+      enabled: false
+
+    uid: 1000
+    fsGid: 100
+    extraEnv:
+      POD_NAMESPACE:
+        valueFrom:
+          fieldRef:
+            fieldPath: metadata.namespace
+      NOTEBOOK_IMAGE:
+        value: "cerit.io/xkrasa/mddash-notebook"
+
+    extraPodConfig:
+      securityContext:
+        fsGroupChangePolicy: OnRootMismatch
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+    cloudMetadata:
+      blockWithIptables: false
+
+  proxy:
+    secretToken: "your-secret-token-here-change-me"
+
+  # TODO: Requires cluster-wide permissions to be enabled
+  scheduling:
+    userScheduler:
+      enabled: false
+
+  prePuller:
+    continuous:
+      enabled: false
+    # disabled because it was exceeding resource limit and preventing the chart from installing
+    hook:
+      enabled: false
+
+  ingress:
+    enabled: true
+    hosts:
+      - mddash.dyn.cloud.e-infra.cz
+    tls:
+      - hosts:
+          - mddash.dyn.cloud.e-infra.cz
+        secretName: mddash-dyn-cloud-e-infra-cz-tls
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+
+# gromacs-tuner:
+#   image:
+#     repository: cerit.io/xkrasa/gromacs-tuner-api
+#     tag: "1.2"
+
+#   ray:
+#     version: "2.42.1"
+#     image: "cerit.io/adamondrejka/gmx-cuda-ray-2-42-1-with-user"
+
+#   auth:
+#     user: "admin"
+#     password: "strong-secret-here"
+
+#   storage:
+#     storageClassName: "standard"
+
+#   ingress:
+#     enabled: false
+
+mdrun-api:
+  image:
+    repository: cerit.io/xkrasa/mdrun-api
+    tag: "latest"
+    pullPolicy: Always
+  storage:
+    size: 5Gi
+  uwsgi:
+    processes: 2
+    threads: 4
+  replicaCount: 1
