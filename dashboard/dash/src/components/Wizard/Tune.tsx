@@ -17,7 +17,7 @@ import {
     Tab,
     Radio,
 } from "@mui/material";
-import { Delete, PlayArrow } from "@mui/icons-material";
+import { Delete, PlayArrow, Cancel } from "@mui/icons-material";
 import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
 
@@ -132,11 +132,12 @@ const TunerTable = (props: TunerTableProps) => {
 
 interface TunerViewProps extends WizardStepProps {
     tprName: string;
+    cancelJob: (tprName: string) => void;
     deleteJob: (tprName: string) => void;
 }
 
 const TunerView = (props: TunerViewProps) => {
-    const { experiment, tprName, setErrorMessage, deleteJob, nextStep, changeStep } = props;
+    const { experiment, tprName, setErrorMessage, deleteJob, cancelJob, nextStep, changeStep } = props;
 
     const [loading, setLoading] = useState(false);
     const [tunerRunning, setTunerRunning] = useState(false);
@@ -225,8 +226,23 @@ const TunerView = (props: TunerViewProps) => {
                     )) || (
                         <Stack direction="column" spacing={1} alignItems="center">
                             <Typography variant="h4">Tuner not running.</Typography>
-                            <Button variant="contained" color="primary" startIcon={<PlayArrow />} onClick={runTuner}>
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                startIcon={<PlayArrow />}
+                                onClick={runTuner}
+                                sx={{ width: 200 }}
+                            >
                                 Start tune job
+                            </Button>
+                            <Button
+                                variant="contained"
+                                color="error"
+                                startIcon={<Cancel />}
+                                onClick={() => cancelJob(tprName)}
+                                sx={{ width: 200 }}
+                            >
+                                Cancel
                             </Button>
                         </Stack>
                     )}
@@ -271,7 +287,12 @@ const WizardTune = (props: WizardStepProps) => {
         if (jobs.length === 0) setSelectedTpr(null);
 
         const jobTprNames = jobs.map((job) => job.tpr_name);
-        setTprFiles((prev) => [...new Set([...prev, ...jobTprNames])]);
+        setTprFiles(jobTprNames);
+    };
+
+    const cancelJob = async (tprName: string) => {
+        setSelectedTpr(null);
+        setTprFiles((prev) => prev.filter((tpr) => tpr !== tprName));
     };
 
     const deleteJob = async (tprName: string) => {
@@ -294,16 +315,18 @@ const WizardTune = (props: WizardStepProps) => {
         <>
             <Stack direction="row" alignItems="center" justifyContent="space-between">
                 <Stack direction="row" spacing={2} alignItems="center">
-                    <Tabs
-                        value={selectedTpr || false}
-                        onChange={handleChange}
-                        variant="scrollable"
-                        scrollButtons="auto"
-                    >
-                        {tprFiles.map((tprFile) => (
-                            <Tab key={tprFile} value={tprFile} label={tprFile} />
-                        ))}
-                    </Tabs>
+                    {tprFiles.length > 0 && (
+                        <Tabs
+                            value={selectedTpr || false}
+                            onChange={handleChange}
+                            variant="scrollable"
+                            scrollButtons="auto"
+                        >
+                            {tprFiles.map((tprFile) => (
+                                <Tab key={tprFile} value={tprFile} label={tprFile} />
+                            ))}
+                        </Tabs>
+                    )}
 
                     <FileSelector
                         experimentId={experiment.id}
@@ -323,7 +346,7 @@ const WizardTune = (props: WizardStepProps) => {
 
             {selectedTpr && (
                 <Box sx={{ mt: 2 }}>
-                    <TunerView tprName={selectedTpr} deleteJob={deleteJob} {...props} />
+                    <TunerView tprName={selectedTpr} cancelJob={cancelJob} deleteJob={deleteJob} {...props} />
                 </Box>
             )}
 
