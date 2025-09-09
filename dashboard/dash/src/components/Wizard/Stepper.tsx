@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     styled,
     Stepper,
@@ -19,6 +19,7 @@ import WizardAnalyze from "./Analyze";
 import WizardPublish from "./Publish";
 import { Experiment } from "../../util/types";
 import { DEBUG } from "../../util/const";
+import { get_experiment_step } from "../../util/api";
 
 const steps = [
     { label: "Setup", icon: <BlurOn />, child: WizardSetup },
@@ -79,7 +80,7 @@ const ColorLibStepIconRoot = styled("div")<{ ownerState: { completed?: boolean; 
 
 export interface WizardStepperProps {
     experiment: Experiment;
-    setExperiment: Function;
+    setExperiment: React.Dispatch<React.SetStateAction<Experiment>>;
     setErrorMessage: (message: string) => void;
 }
 
@@ -89,18 +90,23 @@ export interface WizardStepProps extends WizardStepperProps {
 }
 
 const WizardStepper = (props: WizardStepperProps) => {
-    const { experiment, setExperiment } = props;
+    const { experiment, setExperiment, setErrorMessage } = props;
     const [activeStep, setActiveStep] = useState(Math.min(experiment.step, steps.length - 1));
+
+    const fetchStep = async () => {
+        const { data, error } = await get_experiment_step(experiment.id);
+
+        if (error) setErrorMessage(error);
+        else if (data !== null && data !== experiment.step) {
+            setExperiment((prev: Experiment) => {
+                return { ...prev, step: data };
+            });
+        }
+    };
 
     const changeStep = async (step: number) => {
         if (step < 0 || step >= steps.length) return;
-
-        if (step > experiment.step) {
-            setExperiment((prev: Experiment) => {
-                return { ...prev, step: step };
-            });
-        }
-
+        if (step > experiment.step) return; // can only go forward using nextStep
         setActiveStep(step);
     };
 
@@ -112,6 +118,11 @@ const WizardStepper = (props: WizardStepperProps) => {
             return { ...prev, step: prev.step + 1 };
         });
     };
+
+    useEffect(() => {
+        const interval = setInterval(fetchStep, 5000);
+        return () => clearInterval(interval);
+    }, [experiment.id, experiment.step]);
 
     const childProps = {
         ...props,

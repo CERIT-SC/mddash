@@ -159,11 +159,8 @@ const TunerView = (props: TunerViewProps) => {
     };
 
     const goToRunStep = async (_: boolean) => {
-        if (experiment.step < 2) {
-            nextStep();
-        } else {
-            changeStep(2);
-        }
+        if (experiment.step < 2) nextStep();
+        else changeStep(2);
     };
 
     useEffect(() => {
@@ -247,7 +244,7 @@ const TunerView = (props: TunerViewProps) => {
 };
 
 const WizardTune = (props: WizardStepProps) => {
-    const { experiment, setErrorMessage, changeStep } = props;
+    const { experiment, setErrorMessage, nextStep, changeStep } = props;
 
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
     const [tprFiles, setTprFiles] = useState<string[]>([]);
@@ -263,9 +260,7 @@ const WizardTune = (props: WizardStepProps) => {
         const tprFile = newSelectedTpr.split("/").pop() || newSelectedTpr;
         setSelectedTpr(tprFile);
 
-        if (!tprFiles.includes(tprFile)) {
-            setTprFiles((prev) => [...prev, tprFile]);
-        }
+        if (!tprFiles.includes(tprFile)) setTprFiles((prev) => [...prev, tprFile]);
     };
 
     const fetchTunerJobs = async () => {
@@ -335,7 +330,10 @@ const WizardTune = (props: WizardStepProps) => {
             <ConfirmDialog
                 open={confirmSkipTuningDialog}
                 setOpen={setConfirmSkipTuningDialog}
-                onConfirm={() => changeStep(2)}
+                onConfirm={() => {
+                    if (experiment.step < 2) nextStep();
+                    else changeStep(2);
+                }}
                 message="Are you sure you want to skip the tuning step? You can always come back to it later."
             />
         </>
