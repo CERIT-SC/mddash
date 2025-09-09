@@ -3,7 +3,8 @@ import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, B
 interface ConfirmDialogProps {
     open: boolean;
     setOpen: (open: boolean) => void;
-    onConfirm: () => void;
+    onConfirm?: () => void;
+    onCancel?: () => void;
     title?: string;
     message?: string;
     confirmText?: string;
@@ -16,6 +17,7 @@ const ConfirmDialog = (props: ConfirmDialogProps) => {
         open,
         setOpen,
         onConfirm,
+        onCancel,
         title = "Confirm Action",
         message = "Are you sure you want to proceed? This action cannot be undone.",
         confirmText = "Confirm",
@@ -24,11 +26,12 @@ const ConfirmDialog = (props: ConfirmDialogProps) => {
     } = props;
 
     const handleConfirm = () => {
-        onConfirm();
+        onConfirm?.();
         setOpen(false);
     };
 
     const handleCancel = () => {
+        onCancel?.();
         setOpen(false);
     };
 

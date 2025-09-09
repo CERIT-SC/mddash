@@ -47,64 +47,86 @@ interface TunerTableProps {
 const TunerTable = (props: TunerTableProps) => {
     const { rows, selectedTrial, setSelectedTrial } = props;
 
+    const [confirmChoiceDialog, setConfirmChoiceDialog] = useState(false);
+
     if (!rows || rows.length === 0) {
         return <Typography variant="body1">No tuning trials available yet...</Typography>;
     }
 
     return (
-        <TableContainer component={Paper}>
-            <Table sx={{ minWidth: 650 }} aria-label="tuner trials table">
-                <TableHead sx={{ backgroundColor: "primary.main" }}>
-                    <TableRow>
-                        <StyledTableCell>Select</StyledTableCell>
-                        <StyledTableCell>Status</StyledTableCell>
-                        <Tooltip title="Measured performance (ns/day)">
-                            <StyledTableCell align="right">Performance</StyledTableCell>
-                        </Tooltip>
-                        <Tooltip title="Device type for PME calculations">
-                            <StyledTableCell align="right">PME</StyledTableCell>
-                        </Tooltip>
-                        <Tooltip title="Device type for non-bonded interactions">
-                            <StyledTableCell align="right">NB</StyledTableCell>
-                        </Tooltip>
-                        <Tooltip title="Number of MPI processes">
-                            <StyledTableCell align="right">NP</StyledTableCell>
-                        </Tooltip>
-                        <Tooltip title="Number of OpenMP threads per MPI rank to start">
-                            <StyledTableCell align="right">NTOMP</StyledTableCell>
-                        </Tooltip>
-                    </TableRow>
-                </TableHead>
-                <TableBody>
-                    {rows
-                        .sort((a, b) => {
-                            if (a.performance === null && b.performance === null) return 0;
-                            if (a.performance === null) return 1;
-                            if (b.performance === null) return -1;
-                            return b.performance - a.performance;
-                        })
-                        .map((row) => (
-                            <TableRow key={row.id} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
-                                <StyledTableCell>
-                                    <Radio
-                                        checked={selectedTrial?.id === row.id}
-                                        onChange={() => setSelectedTrial(selectedTrial?.id === row.id ? null : row)}
-                                        name="selectedTrial"
-                                    />
-                                </StyledTableCell>
-                                <StyledTableCell>{row.status}</StyledTableCell>
-                                <StyledTableCell align="right">
-                                    {row.performance !== null ? row.performance.toFixed(2) : "N/A"}
-                                </StyledTableCell>
-                                <StyledTableCell align="right">{row.pme}</StyledTableCell>
-                                <StyledTableCell align="right">{row.nb}</StyledTableCell>
-                                <StyledTableCell align="right">{row.np}</StyledTableCell>
-                                <StyledTableCell align="right">{row.ntomp}</StyledTableCell>
-                            </TableRow>
-                        ))}
-                </TableBody>
-            </Table>
-        </TableContainer>
+        <>
+            <TableContainer component={Paper}>
+                <Table sx={{ minWidth: 650 }} aria-label="tuner trials table">
+                    <TableHead sx={{ backgroundColor: "primary.main" }}>
+                        <TableRow>
+                            <StyledTableCell>Select</StyledTableCell>
+                            <StyledTableCell>Status</StyledTableCell>
+                            <Tooltip title="Measured performance (ns/day)">
+                                <StyledTableCell align="right">Performance</StyledTableCell>
+                            </Tooltip>
+                            <Tooltip title="Device type for PME calculations">
+                                <StyledTableCell align="right">PME</StyledTableCell>
+                            </Tooltip>
+                            <Tooltip title="Device type for non-bonded interactions">
+                                <StyledTableCell align="right">NB</StyledTableCell>
+                            </Tooltip>
+                            <Tooltip title="Number of MPI processes">
+                                <StyledTableCell align="right">NP</StyledTableCell>
+                            </Tooltip>
+                            <Tooltip title="Number of OpenMP threads per MPI rank to start">
+                                <StyledTableCell align="right">NTOMP</StyledTableCell>
+                            </Tooltip>
+                        </TableRow>
+                    </TableHead>
+                    <TableBody>
+                        {rows
+                            .sort((a, b) => {
+                                if (a.performance === null && b.performance === null) return 0;
+                                if (a.performance === null) return 1;
+                                if (b.performance === null) return -1;
+                                return b.performance - a.performance;
+                            })
+                            .map((row, idx) => (
+                                <TableRow key={row.id} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                                    <StyledTableCell>
+                                        <Radio
+                                            checked={selectedTrial?.id === row.id}
+                                            onChange={() => {
+                                                if (selectedTrial?.id === row.id) {
+                                                    setSelectedTrial(null);
+                                                    return;
+                                                }
+                                                if (idx !== 0 || row.performance === null) setConfirmChoiceDialog(true);
+                                                setSelectedTrial(row);
+                                            }}
+                                            name="selectedTrial"
+                                            sx={{
+                                                color:
+                                                    idx === 0 && row.performance !== null ? "primary.main" : "default",
+                                            }}
+                                        />
+                                    </StyledTableCell>
+                                    <StyledTableCell>{row.status}</StyledTableCell>
+                                    <StyledTableCell align="right">
+                                        {row.performance !== null ? row.performance.toFixed(2) : "N/A"}
+                                    </StyledTableCell>
+                                    <StyledTableCell align="right">{row.pme}</StyledTableCell>
+                                    <StyledTableCell align="right">{row.nb}</StyledTableCell>
+                                    <StyledTableCell align="right">{row.np}</StyledTableCell>
+                                    <StyledTableCell align="right">{row.ntomp}</StyledTableCell>
+                                </TableRow>
+                            ))}
+                    </TableBody>
+                </Table>
+            </TableContainer>
+            <ConfirmDialog
+                open={confirmChoiceDialog}
+                setOpen={setConfirmChoiceDialog}
+                onCancel={() => setSelectedTrial(null)}
+                message="The selected trial doesn't have the optimal performance. Are you sure you want to proceed with these parameters?"
+                confirmColor="warning"
+            />
+        </>
     );
 };
 
@@ -225,10 +247,11 @@ const TunerView = (props: TunerViewProps) => {
 };
 
 const WizardTune = (props: WizardStepProps) => {
-    const { experiment, setErrorMessage } = props;
+    const { experiment, setErrorMessage, changeStep } = props;
 
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
     const [tprFiles, setTprFiles] = useState<string[]>([]);
+    const [confirmSkipTuningDialog, setConfirmSkipTuningDialog] = useState(false);
 
     const handleChange = (_: React.SyntheticEvent, newValue: string) => {
         setSelectedTpr(newValue);
@@ -239,9 +262,9 @@ const WizardTune = (props: WizardStepProps) => {
 
         const tprFile = newSelectedTpr.split("/").pop() || newSelectedTpr;
         setSelectedTpr(tprFile);
-        
+
         if (!tprFiles.includes(tprFile)) {
-            setTprFiles(prev => [...prev, tprFile]);
+            setTprFiles((prev) => [...prev, tprFile]);
         }
     };
 
@@ -251,9 +274,9 @@ const WizardTune = (props: WizardStepProps) => {
         const jobs = data || [];
 
         if (jobs.length === 0) setSelectedTpr(null);
-        
-        const jobTprNames = jobs.map(job => job.tpr_name);
-        setTprFiles(prev => [...new Set([...prev, ...jobTprNames])]);
+
+        const jobTprNames = jobs.map((job) => job.tpr_name);
+        setTprFiles((prev) => [...new Set([...prev, ...jobTprNames])]);
     };
 
     const deleteJob = async (tprName: string) => {
@@ -274,20 +297,33 @@ const WizardTune = (props: WizardStepProps) => {
 
     return (
         <>
-            <Stack direction="row" spacing={2} alignItems="center">
-                <Tabs value={selectedTpr || false} onChange={handleChange} variant="scrollable" scrollButtons="auto">
-                    {tprFiles.map((tprFile) => (
-                        <Tab key={tprFile} value={tprFile} label={tprFile} />
-                    ))}
-                </Tabs>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Stack direction="row" spacing={2} alignItems="center">
+                    <Tabs
+                        value={selectedTpr || false}
+                        onChange={handleChange}
+                        variant="scrollable"
+                        scrollButtons="auto"
+                    >
+                        {tprFiles.map((tprFile) => (
+                            <Tab key={tprFile} value={tprFile} label={tprFile} />
+                        ))}
+                    </Tabs>
 
-                <FileSelector
-                    experimentId={experiment.id}
-                    ext="tpr"
-                    title="Select TPR file"
-                    onFileSelected={newTpr}
-                    width={300}
-                />
+                    <FileSelector
+                        experimentId={experiment.id}
+                        ext="tpr"
+                        title="Select TPR file"
+                        onFileSelected={newTpr}
+                        width={300}
+                    />
+                </Stack>
+
+                {tprFiles.length === 0 && experiment.step < 2 && (
+                    <Button variant="contained" color="error" onClick={() => setConfirmSkipTuningDialog(true)}>
+                        Skip tuning
+                    </Button>
+                )}
             </Stack>
 
             {selectedTpr && (
@@ -295,6 +331,13 @@ const WizardTune = (props: WizardStepProps) => {
                     <TunerView tprName={selectedTpr} deleteJob={deleteJob} {...props} />
                 </Box>
             )}
+
+            <ConfirmDialog
+                open={confirmSkipTuningDialog}
+                setOpen={setConfirmSkipTuningDialog}
+                onConfirm={() => changeStep(2)}
+                message="Are you sure you want to skip the tuning step? You can always come back to it later."
+            />
         </>
     );
 };
