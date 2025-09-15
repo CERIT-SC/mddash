@@ -26,11 +26,10 @@ COPY --from=caddy-stage --chown=1000:100 /usr/bin/caddy /usr/bin/caddy
 COPY --from=build-stage --chown=1000:100 /usr/src/app/dist /opt/dash
 COPY --chown=1000:100 ./api /opt/api
 COPY --chown=1000:100 ./Caddyfile /caddy/
-COPY --chown=1000:100 ./start.sh /start.sh
 COPY --chown=1000:100 ./entrypoint.sh /entrypoint.sh
 
 RUN chown -R 1000:100 /mddash /caddy && \
-    chmod +x /start.sh /entrypoint.sh
+    chmod +x /entrypoint.sh
 
 ENV XDG_DATA_HOME=/caddy/data
 ENV XDG_CONFIG_HOME=/caddy/config
@@ -40,7 +39,3 @@ USER 1000
 EXPOSE 8888
 
 ENTRYPOINT ["/entrypoint.sh"]
-
-CMD ["/start.sh"]
-
-# docker build -t cerit.io/ljocha/mddash . && docker push cerit.io/ljocha/mddash
