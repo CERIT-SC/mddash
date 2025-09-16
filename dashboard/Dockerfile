@@ -36,9 +36,11 @@ COPY --from=build-stage --chown=1000:100 /usr/src/app/dist /opt/dash
 COPY --chown=1000:100 ./api /opt/api
 COPY --chown=1000:100 ./Caddyfile /caddy/
 COPY --chown=1000:100 ./entrypoint.sh /entrypoint.sh
+COPY --chown=1000:100 ./scripts/ /scripts/
 
 RUN chown -R 1000:100 /mddash /caddy && \
-    chmod +x /entrypoint.sh
+    chmod +x /entrypoint.sh && \
+    chmod +x /scripts/*.sh
 
 ENV XDG_DATA_HOME=/caddy/data
 ENV XDG_CONFIG_HOME=/caddy/config
