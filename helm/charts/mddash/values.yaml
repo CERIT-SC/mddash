@@ -36,6 +36,13 @@ jupyterhub:
           secretKeyRef:
             name: oidc-credentials
             key: client_secret
+      S3_ENDPOINT:
+        value: "http://minio.md-dashboard-ns.svc.cluster.local:80"  # TODO: hardcoded namespace
+      S3_CREDENTIALS:
+        valueFrom:
+          secretKeyRef:
+            name: minio-creds-secret
+            key: config.env
       # User namespace resource quota
       NS_REQUESTS_CPU:
         value: "1000m"
@@ -92,12 +99,9 @@ jupyterhub:
     # Increased timeout for custom image startup
     startTimeout: 600
 
-    # Use PVC created by pre_spawn_hook.py
+    # Use S3 storage mounted at /mddash
     storage:
-      type: static
-      homeMountPath: /mddash
-      static:
-        pvcName: claim-{username}
+      type: none
 
     networkPolicy:
       enabled: false
@@ -165,7 +169,7 @@ jupyterhub:
 #     password: "strong-secret-here"
 
 #   storage:
-#     storageClassName: "standard"
+#     storageClassName: "nfs-csi"
 
 #   ingress:
 #     enabled: false
@@ -181,3 +185,65 @@ mdrun-api:
     processes: 2
     threads: 4
   replicaCount: 1
+
+tenant:
+  tenant:
+    name: minio
+    pools:
+      - servers: 2
+        name: pool-0
+        volumesPerServer: 2
+        size: 10Gi  # TODO: increase by a lot in prod!
+        storageClassName: nfs-csi
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          fsGroup: 1000
+          seccompProfile:
+            type: RuntimeDefault
+        containerSecurityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+    requestAutoCert: false
+    users:
+      - name: storage-user
+    buckets: []
+    certificate:
+      requestAutoCert: false
+    features:
+      bucketDNS: false
+    podManagementPolicy: Parallel
+    exposeServices:
+      minio: true
+    serviceMetadata:
+      minioServiceLabels:
+        service-type: "minio-api"
+    liveness:
+      httpGet:
+        path: /minio/health/live
+        port: 9000
+        scheme: HTTP
+      initialDelaySeconds: 10
+      periodSeconds: 1
+      timeoutSeconds: 1
+    readiness:
+      httpGet:
+        path: /minio/health/ready
+        port: 9000
+        scheme: HTTP
+      initialDelaySeconds: 10
+      periodSeconds: 1
+      timeoutSeconds: 1
+    configSecret:
+      name: minio-creds-secret
+      # TODO: change these in prod!
+      accessKey: minio
+      secretKey: minio123
