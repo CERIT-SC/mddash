@@ -16,6 +16,15 @@ FROM quay.io/jupyterhub/singleuser:5
 
 USER root
 
+# Install rclone for mounting S3 buckets and util-linux for mountpoint command
+RUN apt-get update && apt-get install -y curl unzip util-linux && \
+    curl -O https://downloads.rclone.org/rclone-current-linux-amd64.zip && \
+    unzip rclone-current-linux-amd64.zip && \
+    cp rclone-*/rclone /usr/bin/ && \
+    chmod 755 /usr/bin/rclone && \
+    rm -rf rclone-* && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # api requirements
 COPY ./api/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt

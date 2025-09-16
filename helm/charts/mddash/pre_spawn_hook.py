@@ -1,5 +1,6 @@
 import os
 import asyncio
+import aiohttp
 from kubernetes_asyncio import config  # type: ignore
 from kubernetes_asyncio.client import CoreV1Api, RbacAuthorizationV1Api, V1SecurityContext, V1Capabilities  # type: ignore
 from kubernetes_asyncio.client.rest import ApiException  # type: ignore
@@ -59,7 +60,7 @@ def get_hub_role_manifest(role_name):
         "rules": [
             {
                 "apiGroups": [""],
-                "resources": ["pods", "pods/exec", "services", "persistentvolumeclaims", "events"],
+                "resources": ["pods", "pods/exec", "services", "events"],
                 "verbs": ["create", "delete", "get", "list", "watch"]
             },
             {
@@ -99,25 +100,6 @@ def get_role_binding_manifest(role_binding_name, service_account_name, role_name
         },
     }
 
-def get_pvc_manifest(pvc_name, storage_size="10Gi"):
-    manifest = {
-        "apiVersion": "v1",
-        "kind": "PersistentVolumeClaim",
-        "metadata": {
-            "name": pvc_name,
-        },
-        "spec": {
-            "storageClassName": "nfs-csi",
-            "accessModes": ["ReadWriteMany"],
-            "resources": {
-                "requests": {
-                    "storage": storage_size
-                }
-            }
-        }
-    }
-    return manifest
-
 
 async def ensure_resource(method, **kwargs):
     try:
@@ -127,7 +109,45 @@ async def ensure_resource(method, **kwargs):
             raise
 
 
-def set_pod_env(spawner):
+def parse_s3_credentials():
+    """Parse S3 credentials from environment variables"""
+    s3_endpoint = os.environ.get("S3_ENDPOINT")
+    s3_credentials = os.environ.get("S3_CREDENTIALS", "")
+
+    # Extract credentials from format: export MINIO_ROOT_USER="value"
+    access_key = None
+    secret_key = None
+    for line in s3_credentials.split('\n'):
+        if 'MINIO_ROOT_USER=' in line:
+            access_key = line.split('"')[1]
+        elif 'MINIO_ROOT_PASSWORD=' in line:
+            secret_key = line.split('"')[1]
+
+    return s3_endpoint, access_key, secret_key
+
+
+async def create_s3_bucket(bucket_name):
+    """Create S3 bucket using HTTP API call"""
+    s3_endpoint, access_key, secret_key = parse_s3_credentials()
+
+    if not access_key or not secret_key:
+        raise ValueError("S3 credentials not found in environment variables")
+
+    url = f"{s3_endpoint}/{bucket_name}"
+    auth = aiohttp.BasicAuth(access_key, secret_key)
+
+    async with aiohttp.ClientSession(auth=auth) as session:
+        try:
+            async with session.put(url) as response:
+                if response.status in [200, 409]:  # 200 = created, 409 = already exists
+                    return
+                else:
+                    print(f"Failed to create bucket {bucket_name}: {response.status}")
+        except Exception as e:
+            print(f"Error creating bucket {bucket_name}: {e}")
+
+
+def set_pod_env(spawner, bucket_name):
     if not hasattr(spawner, "environment"):
         spawner.environment = {}
     hub_namespace = os.environ.get("POD_NAMESPACE", "default")
@@ -136,11 +156,26 @@ def set_pod_env(spawner):
     spawner.environment["JUPYTERHUB_ACTIVITY_URL"] = f"http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api/users/admin/activity"
 
 
-def remove_volume_subpath(spawner):
-    # static storage works with subPath, so we need to remove it from volume mounts
-    for vol_mount in spawner.volume_mounts:
-        if "subPath" in vol_mount:
-            del vol_mount["subPath"]
+def configure_s3_spawner(spawner, bucket_name):
+    """Configure spawner to mount S3 bucket as /mddash directory using s3fs"""
+    s3_endpoint, access_key, secret_key = parse_s3_credentials()
+
+    # Add s3fs environment variables to the spawner
+    if not hasattr(spawner, "environment"):
+        spawner.environment = {}
+    
+    spawner.environment.update({
+        "S3_ENDPOINT": s3_endpoint,
+        "S3_ACCESS_KEY": access_key,
+        "S3_SECRET_KEY": secret_key,
+        "S3_BUCKET": bucket_name,
+    })
+
+    # Remove any existing volume mounts since we're using S3 filesystem mounting
+    if hasattr(spawner, 'volume_mounts'):
+        spawner.volume_mounts = []
+    if hasattr(spawner, 'volumes'):
+        spawner.volumes = []
 
 
 async def pre_spawn_hook(spawner):
@@ -158,7 +193,7 @@ async def pre_spawn_hook(spawner):
     hub_role_binding_name = "mddash-hub-binding"
     hub_service_account = "hub"
     hub_namespace = os.environ.get("POD_NAMESPACE", "default")
-    pvc_name = f"claim-{username}"
+    bucket_name = f"mddash-user-{username}"
 
     namespace_manifest = get_namespace_manifest(ns, rancher_project_id,
         cpu_limit=os.environ.get("NS_LIMITS_CPU", "64000m"),
@@ -170,7 +205,6 @@ async def pre_spawn_hook(spawner):
     role_binding_manifest = get_role_binding_manifest(role_binding_name, service_account_name, role_name)
     hub_role_manifest = get_hub_role_manifest(hub_role_name)
     hub_role_binding_manifest = get_role_binding_manifest(hub_role_binding_name, hub_service_account, hub_role_name, namespace=hub_namespace)
-    pvc_manifest = get_pvc_manifest(pvc_name, storage_size="10Gi")
 
     await ensure_resource(core_api.create_namespace, body=namespace_manifest)
     await asyncio.sleep(1)
@@ -180,14 +214,14 @@ async def pre_spawn_hook(spawner):
     await ensure_resource(rbac_api.create_namespaced_role_binding, namespace=ns, body=role_binding_manifest)
     await ensure_resource(rbac_api.create_namespaced_role, namespace=ns, body=hub_role_manifest)
     await ensure_resource(rbac_api.create_namespaced_role_binding, namespace=ns, body=hub_role_binding_manifest)
-    await ensure_resource(core_api.create_namespaced_persistent_volume_claim, namespace=ns, body=pvc_manifest)
+
+    await create_s3_bucket(bucket_name)
 
     spawner.namespace = ns
     spawner.service_account = service_account_name
-    spawner.pvc_name = pvc_name
 
-    set_pod_env(spawner)
-    remove_volume_subpath(spawner)
+    set_pod_env(spawner, bucket_name)
+    configure_s3_spawner(spawner, bucket_name)
 
 
 c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore
