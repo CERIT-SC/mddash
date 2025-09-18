@@ -46,6 +46,9 @@ spec:
           value: "{{ .Values.uwsgi.processes }}"
         - name: UWSGI_THREADS
           value: "{{ .Values.uwsgi.threads }}"
+        {{- if .Values.env }}
+        {{- toYaml .Values.env | nindent 8 }}
+        {{- end }}
         volumeMounts:
         - name: data
           mountPath: /data

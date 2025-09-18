@@ -28,7 +28,7 @@ class MdrunJob(db.Model):  # type: ignore
         cls,
         experiment_id: str,
         tpr_name: str,
-        pvc_name: str,
+        bucket_name: str,
         pme: DeviceType,
         nb: DeviceType,
         np: int,
@@ -38,14 +38,14 @@ class MdrunJob(db.Model):  # type: ignore
         job_id = str(uuid4())
         job_name = f'mdrun-{job_id}'
 
-        # Ensure PVC exists in admin namespace
-        k8s_client.create_pvc(ns=NAMESPACE, pvc_name=pvc_name)
+        # Ensure S3 bucket is accessible (handled by sidecar)
+        k8s_client.ensure_s3_bucket(bucket_name=bucket_name)
 
         # Create Kubernetes job - this should fail if it can't be created
         deffnm = tpr_name.removesuffix('.tpr')
         k8s_client.create_gromacs_job(
             ns=NAMESPACE,
-            pvc=pvc_name,
+            bucket_name=bucket_name,
             name=job_name,
             experiment_id=experiment_id,
             deffnm=deffnm,

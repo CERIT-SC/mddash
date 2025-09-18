@@ -24,3 +24,6 @@ resources:
   requests:
     cpu: 100m
     memory: 256Mi
+
+# you should provide the S3_CREDENTIALS and S3_ENDPOINT via env
+env: []

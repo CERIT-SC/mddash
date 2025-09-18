@@ -185,6 +185,14 @@ mdrun-api:
     processes: 2
     threads: 4
   replicaCount: 1
+  env:
+    - name: S3_CREDENTIALS
+      valueFrom:
+        secretKeyRef:
+          name: minio-creds-secret
+          key: config.env
+    - name: S3_ENDPOINT
+      value: "http://minio.md-dashboard-ns.svc.cluster.local:80"  # TODO: hardcoded namespace
 
 tenant:
   tenant:
