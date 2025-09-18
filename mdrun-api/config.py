@@ -42,7 +42,7 @@ S3_ENDPOINT = os.environ.get('S3_ENDPOINT', None)
 
 try:
     S3_ACCESS_KEY, S3_SECRET_KEY = parse_s3_credentials()
-except ValueError as e:
+except (ValueError, IndexError) as e:
     logging.warning(f"S3 credentials parsing failed: {e}")
     S3_ACCESS_KEY = None
     S3_SECRET_KEY = None
