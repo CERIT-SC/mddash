@@ -50,7 +50,9 @@ def create_job():
         ntomp=data['ntomp'],
         extra_args=data.get('extra_args', '')
     )
-    
+
+    # TODO: add sanitization of user input
+
     return ApiResponse.success({'id': job.id, 'status': job.status.value}, HTTPStatus.CREATED)
 
 
