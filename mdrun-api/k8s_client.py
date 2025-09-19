@@ -8,6 +8,10 @@ from config import S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT
 logger = logging.getLogger(__name__)
 GPU_TYPE = 'nvidia.com/mig-1g.10gb'
 
+config.load_incluster_config()
+core_v1 = client.CoreV1Api()
+batch_v1 = client.BatchV1Api()
+
 
 def ensure_s3_bucket(bucket_name: str) -> None:
     """S3 bucket operations are handled by the sidecar container."""
@@ -29,9 +33,6 @@ def create_gromacs_job(
     if ping_resource('job', name, ns):
         logger.warning(f"Job {name} already exists in namespace {ns}. Skipping creation.")
         return
-
-    config.load_incluster_config()
-    batch_v1 = client.BatchV1Api()
 
     np = int(np)
     ntomp = int(ntomp)
@@ -262,8 +263,6 @@ def delete_job(ns: str, name: str) -> None:
         logger.warning(f"Job {name} does not exist in namespace {ns}. Skipping deletion.")
         return
 
-    config.load_incluster_config()
-    batch_v1 = client.BatchV1Api()
     batch_v1.delete_namespaced_job(
         name=name,
         namespace=ns,
@@ -276,24 +275,20 @@ def delete_job(ns: str, name: str) -> None:
 
 
 def ping_resource(resource_type: str, name: str, ns: str) -> bool:
-    config.load_incluster_config()
-    api = client.CoreV1Api()
-
     try:
         match resource_type:
             case 'svc':
-                api.read_namespaced_service(name=name, namespace=ns)
+                core_v1.read_namespaced_service(name=name, namespace=ns)
             case 'pod':
-                api.read_namespaced_pod(name=name, namespace=ns)
+                core_v1.read_namespaced_pod(name=name, namespace=ns)
             case 'configmap':
-                api.read_namespaced_config_map(name=name, namespace=ns)
+                core_v1.read_namespaced_config_map(name=name, namespace=ns)
             case 'secret':
-                api.read_namespaced_secret(name=name, namespace=ns)
+                core_v1.read_namespaced_secret(name=name, namespace=ns)
             case 'pvc':
-                api.read_namespaced_persistent_volume_claim(name=name, namespace=ns)
+                core_v1.read_namespaced_persistent_volume_claim(name=name, namespace=ns)
             case 'job':
-                batch_api = client.BatchV1Api()
-                batch_api.read_namespaced_job(name=name, namespace=ns)
+                batch_v1.read_namespaced_job(name=name, namespace=ns)
             case _:
                 raise ValueError(f"Unsupported resource type: {resource_type}")
         return True
@@ -303,8 +298,6 @@ def ping_resource(resource_type: str, name: str, ns: str) -> bool:
 
 def get_job_status(ns: str, name: str) -> JobStatus:
     try:
-        config.load_incluster_config()
-        batch_v1 = client.BatchV1Api()
         job = batch_v1.read_namespaced_job(name=name, namespace=ns)
 
         if job.status.conditions:
