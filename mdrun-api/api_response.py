@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class ApiResponse:
 
     @staticmethod
-    def success(data = None, status: HTTPStatus | int | None = None) -> Response:
+    def success(data=None, status: HTTPStatus | int | None = None) -> Response:
         '''
         Returns a success response with the given data.
 

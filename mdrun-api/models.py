@@ -15,7 +15,7 @@ class MdrunJob(db.Model):  # type: ignore
     __tablename__ = 'mdrun_jobs'
 
     id: Mapped[str] = mapped_column(db.String(36), primary_key=True, default=lambda: str(uuid4()))
-    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
+    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now())
     job_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     experiment_id: Mapped[str] = mapped_column(db.String(255), nullable=False)
 
