@@ -24,13 +24,13 @@ def health_check():
 @mdrun_bp.route('/<job_id>', methods=['GET'])
 @handle_exceptions()
 def get_job(job_id: str):
-    job = MdrunJob.query.get_or_404(job_id, description=f'Job {job_id} not found')
-    
+    job: MdrunJob = MdrunJob.query.get_or_404(job_id, description=f'Job {job_id} not found')
+
     status_data = {
         'id': job.id,
         'status': job.status.value
     }
-    
+
     return ApiResponse.success(status_data)
 
 
@@ -39,8 +39,8 @@ def get_job(job_id: str):
 def create_job():
     request_schema = JobCreateRequestSchema()
     data = request_schema.load(request.json)
-    
-    job = MdrunJob.create_and_start(
+
+    job: MdrunJob = MdrunJob.create_and_start(
         experiment_id=data['experiment_id'],
         tpr_name=data['tpr_name'],
         bucket_name=data['bucket_name'],
@@ -59,10 +59,10 @@ def create_job():
 @mdrun_bp.route('/<job_id>', methods=['DELETE'])
 @handle_exceptions(rollback=True)
 def delete_job(job_id: str):
-    job = MdrunJob.query.get_or_404(job_id, description=f'Job {job_id} not found')
-    
-    job.delete()
+    job: MdrunJob = MdrunJob.query.get_or_404(job_id, description=f'Job {job_id} not found')
+
     db.session.delete(job)
     db.session.commit()
-    
+    job.delete()
+
     return ApiResponse.success(f'Job {job_id} deleted successfully', HTTPStatus.NO_CONTENT)
