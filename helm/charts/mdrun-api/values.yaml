@@ -1,0 +1,29 @@
+# Default values for mdrun-api
+replicaCount: 1
+
+image:
+  repository: mdrun-api
+  tag: "latest"
+  pullPolicy: Never
+
+service:
+  port: 80
+  targetPort: 5000
+
+storage:
+  size: 5Gi
+
+uwsgi:
+  processes: 4
+  threads: 2
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 1024Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# you should provide the S3_CREDENTIALS and S3_ENDPOINT via env
+env: []
