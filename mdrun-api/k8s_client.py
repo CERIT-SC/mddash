@@ -39,34 +39,50 @@ def create_gromacs_job(
     pme = pme.lower()
 
     gromacs_image = 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2'
-    s3_sync_image = 'minio/mc:latest'  # TODO: lock version
+    s3_sync_image = 'rclone/rclone:latest'  # TODO: lock version
 
-    gromacs_command = f"mpirun -np {np} gmx mdrun -ntomp {ntomp} -nb {nb} -pme {pme} -deffnm {deffnm} {extra_args} >{name}.out 2>{name}.err && touch /data/job_completed"
-    
-    # S3 sync commands - download initially, then continuously sync with final sync on completion
+    gromacs_command = f"""
+        trap 'touch /data/job_completed' EXIT
+        mpirun -np {np} gmx mdrun -ntomp {ntomp} -nb {nb} -pme {pme} -deffnm {deffnm} {extra_args} > >(tee {name}.out) 2> >(tee {name}.err >&2)
+    """
+
+    # S3 sync commands using rclone - download initially, then continuously sync with final sync on completion
     s3_init_command = f"""
-        export MC_CONFIG_DIR=/tmp/.mc &&
-        echo "Setting up S3 alias..." &&
-        mc alias set s3 $S3_ENDPOINT $S3_ACCESS_KEY $S3_SECRET_KEY &&
-        echo "Downloading experiment data..." &&
+        mkdir -p /tmp/.config/rclone &&
+        cat > /tmp/.config/rclone/rclone.conf << EOF
+[s3remote]
+type = s3
+provider = Other
+access_key_id = $S3_ACCESS_KEY
+secret_access_key = $S3_SECRET_KEY
+endpoint = $S3_ENDPOINT
+EOF
+        echo "Downloading experiment data from s3remote:{bucket_name}/{experiment_id}..." &&
         mkdir -p /data/{experiment_id} &&
-        mc mirror s3/{bucket_name}/{experiment_id}/ /data/{experiment_id}/
+        rclone sync --config /tmp/.config/rclone/rclone.conf s3remote:{bucket_name}/{experiment_id}/ /data/{experiment_id}/ --progress || echo "No existing data found, starting with empty directory"
     """
 
     s3_sync_command = f"""
-        export MC_CONFIG_DIR=/tmp/.mc &&
-        mc alias set s3 $S3_ENDPOINT $S3_ACCESS_KEY $S3_SECRET_KEY &&
-        echo "Starting continuous sync process..." &&
+        mkdir -p /tmp/.config/rclone &&
+        cat > /tmp/.config/rclone/rclone.conf << EOF
+[s3remote]
+type = s3
+provider = Other
+access_key_id = $S3_ACCESS_KEY
+secret_access_key = $S3_SECRET_KEY
+endpoint = $S3_ENDPOINT
+EOF
+        echo "Starting continuous rclone sync process..." &&
         while true; do
             # Check if main job is done
             if [ -f /data/job_completed ]; then
                 echo "Job completed, performing final sync..." &&
-                mc mirror --overwrite /data/{experiment_id}/ s3/{bucket_name}/{experiment_id}/ &&
+                rclone sync --config /tmp/.config/rclone/rclone.conf /data/{experiment_id}/ s3remote:{bucket_name}/{experiment_id}/ --checksum --progress &&
                 echo "Final sync completed, exiting..." &&
                 break
             fi
-            # Regular sync every 10 seconds
-            mc mirror --overwrite /data/{experiment_id}/ s3/{bucket_name}/{experiment_id}/ 2>/dev/null || echo "Sync attempt failed, retrying..."
+            # Regular sync every 10 seconds - allow syncing of changing files
+            rclone sync --config /tmp/.config/rclone/rclone.conf /data/{experiment_id}/ s3remote:{bucket_name}/{experiment_id}/ --ignore-checksum --retries 1 --quiet || echo "Sync attempt failed, retrying..."
             sleep 10
         done
     """
@@ -228,7 +244,7 @@ def create_gromacs_job(
                         {
                             'name': 'shared-data',
                             'emptyDir': {
-                                'sizeLimit': '100Gi'  # Adjust based on your needs
+                                'sizeLimit': '100Gi'  # TODO: adjust based on our needs
                             }
                         }
                     ]
