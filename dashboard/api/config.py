@@ -31,3 +31,11 @@ if NAMESPACE == "default":
     logger.warning("Using default namespace. Is the POD_NAMESPACE environment variable set correctly?")
 
 PVC_NAME = f"claim-{JUPYTER_USER}{JUPYTER_SERVER_NAME}"
+
+S3_ENDPOINT = os.environ.get('S3_ENDPOINT')
+S3_BUCKET = os.environ.get('S3_BUCKET')
+S3_ACCESS_KEY = os.environ.get('S3_ACCESS_KEY')
+S3_SECRET_KEY = os.environ.get('S3_SECRET_KEY')
+
+if not all([S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY]):
+    logger.warning("One or more S3 configuration environment variables are not set. S3 functionality may be limited.")

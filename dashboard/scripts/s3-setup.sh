@@ -63,11 +63,10 @@ start_s3_sync_daemon() {
 
     log "Starting background S3 sync daemon"
     (
+        rclone bisync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --resync --log-level ERROR >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1
+        
         while true; do
-            # Sync local changes to S3 (upload)
-            rclone sync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --log-level ERROR >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1
-            # Sync S3 changes to local (download) 
-            rclone sync s3remote:${S3_BUCKET} /mddash --create-empty-src-dirs --log-level ERROR >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1
+            rclone bisync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --log-level ERROR >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1
             sleep 10
         done
     ) &

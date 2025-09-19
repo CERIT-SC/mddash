@@ -4,7 +4,7 @@ from flask import abort
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING
 
-from config import NAMESPACE, PREFIX, NOTEBOOK_IMAGE, PVC_NAME
+from config import NAMESPACE, PREFIX, NOTEBOOK_IMAGE
 from clients import caddy, k8s
 from extensions import db
 from enums import PodStatus
@@ -53,7 +53,6 @@ class Notebook(db.Model):  # type: ignore
         k8s.create_notebook_pod(
             NOTEBOOK_IMAGE,
             NAMESPACE,
-            PVC_NAME,
             pod_name,
             self.experiment_id,
             f'{PREFIX}/notebook/{self.experiment_id}',

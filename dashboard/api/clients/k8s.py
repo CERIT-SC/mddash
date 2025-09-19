@@ -3,6 +3,7 @@ from kubernetes import client, config  # type: ignore
 from kubernetes.client.rest import ApiException  # type: ignore
 
 from enums import PodStatus, JobStatus
+from config import S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT, S3_BUCKET
 
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,6 @@ GPU_TYPE = 'nvidia.com/mig-1g.10gb'
 def create_notebook_pod(
     image: str,
     ns: str,
-    pvc: str,
     name: str,
     experiment_id: str,
     prefix: str,
@@ -27,11 +27,73 @@ def create_notebook_pod(
         logger.warning(f"Pod {name} already exists in namespace {ns}. Skipping creation.")
         return
 
-    # Load in-cluster config
     config.load_incluster_config()
-
-    # Define API client
     v1 = client.CoreV1Api()
+
+    # S3 sync commands using rclone
+    s3_init_command = f"""
+        mkdir -p /tmp/.config/rclone &&
+        cat > /tmp/.config/rclone/rclone.conf << EOF
+[s3remote]
+type = s3
+provider = Other
+access_key_id = $S3_ACCESS_KEY
+secret_access_key = $S3_SECRET_KEY
+endpoint = $S3_ENDPOINT
+EOF
+        echo "Downloading experiment data from s3remote:{S3_BUCKET}/{experiment_id}..." &&
+        mkdir -p /mddash/{experiment_id} &&
+        rclone sync --config /tmp/.config/rclone/rclone.conf s3remote:{S3_BUCKET}/{experiment_id}/ /mddash/{experiment_id}/ --progress || echo "No existing data found, starting with empty directory"
+    """
+
+    workdir_init_command = f"""
+        echo "Initializing notebook templates..." &&
+        # Check if any .ipynb files exist before trying to copy them
+        if ls /home/jovyan/*.ipynb 1> /dev/null 2>&1; then
+            echo "Found notebook templates, copying to experiment directory..." &&
+            for n in /home/jovyan/*.ipynb; do 
+                b=$(basename "$n")
+                if [ -f "/mddash/{experiment_id}/$b" ]; then
+                    echo "Template $b already exists, creating .new version" &&
+                    cp "$n" "/mddash/{experiment_id}/$b.new"
+                else
+                    echo "Copying template: $b" &&
+                    cp "$n" "/mddash/{experiment_id}/$b"
+                fi
+            done
+        else
+            echo "No notebook templates found, skipping copy"
+        fi &&
+        echo "Notebook initialization complete"
+    """
+
+    s3_sync_command = f"""
+        export HOME=/tmp &&
+        mkdir -p /tmp/.config/rclone &&
+        mkdir -p /tmp/.cache/rclone &&
+        cat > /tmp/.config/rclone/rclone.conf << EOF
+[s3remote]
+type = s3
+provider = Other
+access_key_id = $S3_ACCESS_KEY
+secret_access_key = $S3_SECRET_KEY
+endpoint = $S3_ENDPOINT
+EOF
+        echo "Starting continuous rclone bisync process..." &&
+        rclone bisync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --create-empty-src-dirs --resync --log-level ERROR &&
+        while true; do
+            # Check if notebook container is still running
+            if ! pgrep -f "start-notebook.sh" > /dev/null; then
+                echo "Notebook container stopped, performing final bisync..." &&
+                rclone bisync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --create-empty-src-dirs --log-level ERROR &&
+                echo "Final bisync completed, exiting..." &&
+                break
+            fi
+            # Regular bisync every 10 seconds
+            rclone bisync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --create-empty-src-dirs --log-level ERROR || echo "Bisync failed, retrying..." &&
+            sleep 10
+        done
+    """
 
     # Define the pod specification
     pod_manifest = {
@@ -46,6 +108,7 @@ def create_notebook_pod(
         },
         'spec': {
             'securityContext': {
+                'fsGroup': 1000,
                 'runAsNonRoot': True,
                 'allowPrivilegeEscalation': False,
                 'seccompProfile': {
@@ -54,62 +117,84 @@ def create_notebook_pod(
             },
             'initContainers': [
                 {
+                    'name': 's3-init',
+                    'image': 'rclone/rclone:latest',
+                    'command': ['sh', '-c', s3_init_command],
                     'securityContext': {
-                        'runAsNonRoot' : True,
                         'runAsUser': 1000,
+                        'runAsGroup': 1000,
+                        'runAsNonRoot': True,
+                        'seccompProfile': {
+                            'type': 'RuntimeDefault'
+                        },
                         'allowPrivilegeEscalation': False,
-                        'capabilities':  {
-                            'drop': [ 'ALL' ]
-                        }
-                    },
-                    'name' : 'init-workdir',
-                    'image': image,
-                    'resources': {
-                        'requests': { 'cpu': '100m', 'memory': '256Mi' },
-                        'limits':   { 'cpu': '500m', 'memory': '512Mi' }
-                    },
-                    'command' : ['sh', '-c', f'''
-mkdir -p "/mddash/{experiment_id}"
-# Check if any .ipynb files exist before trying to copy them
-if ls /home/jovyan/*.ipynb 1> /dev/null 2>&1; then
-    for n in /home/jovyan/*.ipynb; do 
-        b=$(basename "$n")
-        if [ -f "/mddash/{experiment_id}/$b" ]; then
-            cp "$n" "/mddash/{experiment_id}/$b.new"
-        else
-            cp "$n" "/mddash/{experiment_id}/$b"
-        fi
-    done
-else
-    echo "No .ipynb files found in /home/jovyan/, skipping copy"
-fi
-'''
-                    ],
-                    'volumeMounts' : [
-                        { 'mountPath': '/mddash', 'name' : 'data-volume' }
-                    ]
-                }
-             ],
-            'containers': [
-                {
-                    'securityContext': {
-                        'runAsNonRoot' : True,
-                        'runAsUser': 1000,
-                        'allowPrivilegeEscalation': False,
-                        'capabilities':  {
+                        'capabilities': {
                             'drop': ['ALL']
                         }
                     },
-                    'name': f'jupyter',
+                    'env': [
+                        {
+                            'name': 'S3_ENDPOINT',
+                            'value': S3_ENDPOINT or ''
+                        },
+                        {
+                            'name': 'S3_ACCESS_KEY',
+                            'value': S3_ACCESS_KEY or ''
+                        },
+                        {
+                            'name': 'S3_SECRET_KEY',
+                            'value': S3_SECRET_KEY or ''
+                        }
+                    ],
+                    'resources': {
+                        'requests': {'cpu': '100m', 'memory': '256Mi'},
+                        'limits': {'cpu': '500m', 'memory': '512Mi'}
+                    },
+                    'volumeMounts': [
+                        {'mountPath': '/mddash', 'name': 'shared-data'}
+                    ]
+                },
+                {
+                    'securityContext': {
+                        'runAsNonRoot': True,
+                        'runAsUser': 1000,
+                        'allowPrivilegeEscalation': False,
+                        'capabilities': {
+                            'drop': ['ALL']
+                        }
+                    },
+                    'name': 'init-workdir',
+                    'image': image,
+                    'resources': {
+                        'requests': {'cpu': '100m', 'memory': '256Mi'},
+                        'limits': {'cpu': '500m', 'memory': '512Mi'}
+                    },
+                    'command': ['sh', '-c', workdir_init_command],
+                    'volumeMounts': [
+                        {'mountPath': '/mddash', 'name': 'shared-data'}
+                    ]
+                }
+            ],
+            'containers': [
+                {
+                    'securityContext': {
+                        'runAsNonRoot': True,
+                        'runAsUser': 1000,
+                        'allowPrivilegeEscalation': False,
+                        'capabilities': {
+                            'drop': ['ALL']
+                        }
+                    },
+                    'name': 'jupyter',
                     'image': image,
                     'imagePullPolicy': 'Always',
                     'resources': {
                         'requests': {'cpu': '100m', 'memory': '512Mi'},
                         'limits': {'cpu': '2000m', 'memory': '8Gi'}
                     },
-                    'workdir': f'/mddash/{experiment_id}',
+                    'workingDir': f'/mddash/{experiment_id}',
                     'env': [
-                        { 'name' : 'WORKDIR', 'value' : f'/mddash/{experiment_id}' },
+                        {'name': 'WORKDIR', 'value': f'/mddash/{experiment_id}'},
                     ],
                     'args': [
                         'start-notebook.sh',
@@ -118,46 +203,91 @@ fi
                         f'--NotebookApp.token="{token}"',
                     ],
                     'volumeMounts': [
-                        {'mountPath': '/mddash', 'name': 'data-volume'}
+                        {'mountPath': '/mddash', 'name': 'shared-data'}
                     ]
                 },
                 {
                     'securityContext': {
-                        'runAsNonRoot' : True,
+                        'runAsNonRoot': True,
                         'runAsUser': 1000,
                         'allowPrivilegeEscalation': False,
-                        'capabilities':  {
-                            'drop': [ 'ALL' ]
+                        'capabilities': {
+                            'drop': ['ALL']
                         }
                     },
-                    'name': f'gmx',
+                    'name': 'gmx',
                     'image': 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2',
                     'imagePullPolicy': 'Always',
                     'resources': {
-                        'requests' : { 'cpu': '100m', 'memory': '512Mi' }, 
-                        'limits' : { 'cpu': '2000m', 'memory' : '8Gi' }
+                        'requests': {'cpu': '100m', 'memory': '512Mi'},
+                        'limits': {'cpu': '2000m', 'memory': '8Gi'}
                     },
-                    'workdir': f'/mddash/{experiment_id}',
+                    'workingDir': f'/mddash/{experiment_id}',
                     'args': [
                         'sleep',
                         '365d'
                     ],
-                    'volumeMounts' : [
-                        { 'mountPath': '/mddash', 'name' : 'data-volume' }
+                    'volumeMounts': [
+                        {'mountPath': '/mddash', 'name': 'shared-data'}
+                    ]
+                },
+                {
+                    'name': 's3-sync',
+                    'image': 'rclone/rclone:latest',
+                    'command': ['sh', '-c', s3_sync_command],
+                    'securityContext': {
+                        'runAsUser': 1000,
+                        'runAsGroup': 1000,
+                        'runAsNonRoot': True,
+                        'seccompProfile': {
+                            'type': 'RuntimeDefault'
+                        },
+                        'allowPrivilegeEscalation': False,
+                        'capabilities': {
+                            'drop': ['ALL']
+                        }
+                    },
+                    'env': [
+                        {
+                            'name': 'S3_ENDPOINT',
+                            'value': S3_ENDPOINT or ''
+                        },
+                        {
+                            'name': 'S3_ACCESS_KEY',
+                            'value': S3_ACCESS_KEY or ''
+                        },
+                        {
+                            'name': 'S3_SECRET_KEY',
+                            'value': S3_SECRET_KEY or ''
+                        }
+                    ],
+                    'resources': {
+                        'requests': {
+                            'cpu': '100m',
+                            'memory': '128Mi'
+                        },
+                        'limits': {
+                            'cpu': '200m',
+                            'memory': '256Mi'
+                        }
+                    },
+                    'volumeMounts': [
+                        {'name': 'shared-data', 'mountPath': '/mddash'}
                     ]
                 }
             ],
             'volumes': [
                 {
-                    'name': 'data-volume',
-                    'persistentVolumeClaim': {'claimName': pvc}
+                    'name': 'shared-data',
+                    'emptyDir': {
+                        'sizeLimit': '50Gi'  # TODO: adjust size limit to our needs
+                    }
                 }
             ]
         }
     }
 
     v1.create_namespaced_pod(namespace=ns, body=pod_manifest)
-    # except ApiException as e:
 
 
 def ping_resource(resource_type: str, name: str, ns: str) -> bool:
