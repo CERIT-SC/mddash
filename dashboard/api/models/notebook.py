@@ -60,7 +60,7 @@ class Notebook(db.Model):  # type: ignore
         )
 
         try:
-           k8s. create_service(NAMESPACE, svc_name, pod_name)
+           k8s.create_service(NAMESPACE, svc_name, pod_name)
         except Exception:
             k8s.delete_pod(NAMESPACE, pod_name)
             raise

@@ -1,6 +1,7 @@
 from enum import Enum
 
 class JobStatus(str, Enum):
+    UNKNOWN = "UNKNOWN"
     PENDING = "PENDING"
     RUNNING = "RUNNING"
     TERMINATED = "TERMINATED"

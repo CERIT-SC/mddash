@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 from cachetools import cached, TTLCache
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from config import NAMESPACE, DATA_DIR, PVC_NAME
+from config import DATA_DIR, S3_BUCKET
 from enums import DeviceType, JobStatus
-from clients import k8s
+from clients import mdrun
 from utils import tail
 from extensions import db
 
@@ -32,15 +32,13 @@ class GromacsJob(db.Model):  # type: ignore
     RESULT_EXTENSIONS = ['edr', 'gro', 'log', 'trr', 'xtc', 'cpt']
 
     # ID of the job inside the database
-    id: Mapped[int] = mapped_column(db.Integer, primary_key=True)
+    id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
     # ID of the experiment this job belongs to
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey('experiments.id'))
     # creation time
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
     # Name of the TPR file
     tpr_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
-    # Unique name of the k8s job
-    job_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # Device type for PME calculations
     pme: Mapped['DeviceType'] = mapped_column(db.Enum(DeviceType), nullable=False)
     # Device type for non-bonded interactions
@@ -75,17 +73,21 @@ class GromacsJob(db.Model):  # type: ignore
     @property
     def _stdout_log(self) -> Path:
         """Path to the stdout log file."""
-        return DATA_DIR / self.experiment_id / f'{self.job_name}.out'
+        return DATA_DIR / self.experiment_id / f'mdrun-{self.id}.out'
 
     @property
     def _stderr_log(self) -> Path:
         """Path to the stderr log file."""
-        return DATA_DIR / self.experiment_id / f'{self.job_name}.err'
+        return DATA_DIR / self.experiment_id / f'mdrun-{self.id}.err'
 
     @property
     def status(self) -> JobStatus:
         """Current status of the k8s job."""
-        return k8s.get_job_status(ns=NAMESPACE, name=self.job_name)
+        try:
+            return JobStatus.from_string(mdrun.get_job(self.id)['status'])
+        except Exception as e:
+            logger.error(f"Error fetching job status for job {self.id}", exc_info=True)
+            return JobStatus.UNKNOWN
 
     @property
     def nsteps(self) -> int | None:
@@ -169,11 +171,20 @@ class GromacsJob(db.Model):  # type: ignore
         :return: The created GromacsJob instance.
         :raises Exception: If the job cannot be started.
         """
-        job_name = f'gromacs-{uuid4()}'
+        mdrun_job = mdrun.create_job(
+            experiment_id=experiment.id,
+            tpr_name=tpr_path.name,
+            bucket_name=S3_BUCKET,
+            pme=pme.value,
+            nb=nb.value,
+            np=np,
+            ntomp=ntomp,
+            extra_args=extra_args
+        )
 
         job = cls(
+            id=mdrun_job['id'],
             tpr_name=tpr_path.name,
-            job_name=job_name,
             pme=pme,
             nb=nb,
             np=np,
@@ -186,22 +197,9 @@ class GromacsJob(db.Model):  # type: ignore
 
         job._cleanup_previous_results()
 
-        k8s.create_gromacs_job(
-            ns=NAMESPACE,
-            pvc=PVC_NAME,
-            name=job_name,
-            experiment_id=experiment.id,
-            deffnm=job._deffnm,
-            nb=nb,
-            pme=pme,
-            np=np,
-            ntomp=ntomp,
-            extra_args=extra_args
-        )
-
         db.session.commit()
-        logger.info(f"Started GROMACS job {job_name} for experiment {experiment.id} with TPR {tpr_path.name}")
-        
+        logger.info(f"Started GROMACS job {job.id} for experiment {experiment.id} with TPR {tpr_path.name}")
+    
         return job
 
     def delete(self) -> None:
@@ -210,7 +208,7 @@ class GromacsJob(db.Model):  # type: ignore
 
         :raises Exception: If the job cannot be deleted.
         """
-        k8s.delete_job(ns=NAMESPACE, name=self.job_name)
+        mdrun.delete_job(self.id)
         self._stdout_log.unlink(missing_ok=True)
         self._stderr_log.unlink(missing_ok=True)
         self._cleanup_previous_results()
