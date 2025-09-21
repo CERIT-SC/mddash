@@ -1,5 +1,7 @@
 import requests
 
+
+# TODO: Move to config.py and make it less static
 MDRUN_API_URL = 'http://mdrun-api.md-dashboard-ns.svc.cluster.local/api'
 
 
@@ -12,7 +14,6 @@ def get_mdrun_response_data(response: requests.Response) -> dict:
     :raise requests.HTTPError: If the request failed.
     :raise ValueError: If the response does not contain valid JSON.
     """
-    response.raise_for_status()
     data = response.json()
 
     if data['success'] != True:
@@ -72,7 +73,7 @@ def create_job(
     return get_mdrun_response_data(response)
 
 
-def delete_job(job_id: str) -> dict[str, object]:
+def delete_job(job_id: str) -> None:
     """
     Delete a job by job ID.
 
@@ -81,4 +82,10 @@ def delete_job(job_id: str) -> dict[str, object]:
     :raise requests.HTTPError: If the request fails
     """
     response = requests.delete(f'{MDRUN_API_URL}/jobs/{job_id}')
-    return get_mdrun_response_data(response)
+
+    # 404 = job already deleted or does not exist (success)
+    if response.status_code == 404:
+        return None
+
+    if not response.ok:
+        raise requests.HTTPError(response.json()['message'], request=None, response=response)

@@ -65,7 +65,7 @@ def delete_experiment(experiment_id: str) -> Response:
     experiment.delete()
     db.session.delete(experiment)
     db.session.commit()
-    return ApiResponse.success(HTTPStatus.NO_CONTENT)
+    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
 
 
 @experiments_bp.route('/<experiment_id>/publish', methods=['POST'])
