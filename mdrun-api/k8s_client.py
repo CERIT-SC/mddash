@@ -13,11 +13,6 @@ core_v1 = client.CoreV1Api()
 batch_v1 = client.BatchV1Api()
 
 
-def ensure_s3_bucket(bucket_name: str) -> None:
-    """S3 bucket operations are handled by the sidecar container."""
-    logger.info(f"S3 bucket {bucket_name} will be accessed by sidecar container")
-
-
 def create_gromacs_job(
     ns: str,
     bucket_name: str,
