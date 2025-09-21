@@ -65,7 +65,7 @@ def delete_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     job.delete()
     db.session.delete(job)
     db.session.commit()
-    return ApiResponse.success(f'Gromacs job {tpr_name} deleted successfully.', HTTPStatus.NO_CONTENT)
+    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
 
 
 @gmx_bp.route('/<tpr_name>/log', methods=['GET'])

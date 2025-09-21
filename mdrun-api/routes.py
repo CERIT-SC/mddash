@@ -65,4 +65,4 @@ def delete_job(job_id: str):
     db.session.commit()
     job.delete()
 
-    return ApiResponse.success(f'Job {job_id} deleted successfully', HTTPStatus.NO_CONTENT)
+    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)

@@ -56,4 +56,4 @@ def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     tuner_job.delete()
     db.session.delete(tuner_job)
     db.session.commit()
-    return ApiResponse.success(HTTPStatus.NO_CONTENT)
+    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)

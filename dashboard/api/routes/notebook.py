@@ -41,4 +41,4 @@ def stop_notebook(experiment_id: str) -> Response:
     experiment: Experiment = Experiment.query.get_or_404(experiment_id, description=f'Experiment {experiment_id} not found')
     notebook = experiment.notebook
     notebook.stop()
-    return ApiResponse.success(HTTPStatus.NO_CONTENT)
+    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)

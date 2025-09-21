@@ -4,7 +4,7 @@ from requests.auth import HTTPBasicAuth
 from pathlib import Path
 
 
-# TUNER_URL = 'https://gromacs-tuner.dyn.cloud.e-infra.cz/api'
+# TODO: Move to config.py and make it less static
 TUNER_URL = 'http://gromacs-tuner-api-svc.gromacs-tuner-ns.svc.cluster.local:8000/api'
 TUNER_USERNAME = 'admin'
 TUNER_PASSWORD = 'strong-secret-here'
@@ -70,7 +70,7 @@ def delete_job(job_id: str) -> dict:
 
 # DEMO
 if __name__ == '__main__':
-    tpr_path = Path('private/md.tpr')
+    tpr_path = Path(__file__).parent.parent / '_demo' / 'md.tpr'
 
     # Submit a job
     response = run_submit(tpr_path)
