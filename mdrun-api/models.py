@@ -38,9 +38,6 @@ class MdrunJob(db.Model):  # type: ignore
         job_id = str(uuid4())
         job_name = f'mdrun-{job_id}'
 
-        # Ensure S3 bucket is accessible (handled by sidecar)
-        k8s_client.ensure_s3_bucket(bucket_name=bucket_name)
-
         # Create Kubernetes job - this should fail if it can't be created
         deffnm = tpr_name.removesuffix('.tpr')
         k8s_client.create_gromacs_job(
