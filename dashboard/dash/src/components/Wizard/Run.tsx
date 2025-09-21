@@ -514,48 +514,50 @@ const RunView = (props: RunViewProps) => {
                         <Stack spacing={2} alignItems="flex-start">
                             {statusDisplay}
 
-                            <Button
-                                variant="contained"
-                                color="error"
-                                onClick={() => {
-                                    setConfirmDeleteDialog(true);
-                                }}
-                            >
-                                Delete Job
-                            </Button>
+                            {jobStatus?.status !== "PENDING" && (
+                                <>
+                                    <Button
+                                        variant="contained"
+                                        color="error"
+                                        onClick={() => {
+                                            setConfirmDeleteDialog(true);
+                                        }}
+                                    >
+                                        Delete Job
+                                    </Button>
 
-                            <Typography variant="subtitle1" color="text.secondary">
-                                Logs
-                            </Typography>
+                                    <Typography variant="subtitle1" color="text.secondary">
+                                        Logs
+                                    </Typography>
 
-                            <FormControl sx={{ minWidth: 200 }}>
-                                <InputLabel id="log-type-selector">Log Type</InputLabel>
-                                <Select
-                                    labelId="log-type-selector"
-                                    label="Log Type"
-                                    value={logType || ""}
-                                    onChange={(e) =>
-                                        setLogType((e.target.value as "gmx" | "stdout" | "stderr" | null) || null)
-                                    }
-                                >
-                                    <MenuItem value="">
-                                        <em>None</em>
-                                    </MenuItem>
-                                    <MenuItem value="gmx">Gromacs Log</MenuItem>
-                                    <MenuItem value="stdout">Standard Output</MenuItem>
-                                    <MenuItem value="stderr">Standard Error</MenuItem>
-                                </Select>
-                            </FormControl>
+                                    <FormControl sx={{ minWidth: 200 }}>
+                                        <InputLabel id="log-type-selector">Log Type</InputLabel>
+                                        <Select
+                                            labelId="log-type-selector"
+                                            label="Log Type"
+                                            value={logType || ""}
+                                            onChange={(e) =>
+                                                setLogType(
+                                                    (e.target.value as "gmx" | "stdout" | "stderr" | null) || null
+                                                )
+                                            }
+                                        >
+                                            <MenuItem value="">
+                                                <em>None</em>
+                                            </MenuItem>
+                                            <MenuItem value="gmx">Gromacs Log</MenuItem>
+                                            <MenuItem value="stdout">Standard Output</MenuItem>
+                                            <MenuItem value="stderr">Standard Error</MenuItem>
+                                        </Select>
+                                    </FormControl>
 
-                            {logType && (
-                                <LogsView
-                                    getLogs={getLogs}
-                                    refreshInterval={
-                                        jobStatus?.status == "PENDING" || jobStatus?.status == "RUNNING"
-                                            ? 5000
-                                            : undefined
-                                    }
-                                />
+                                    {logType && (
+                                        <LogsView
+                                            getLogs={getLogs}
+                                            refreshInterval={jobStatus?.status == "RUNNING" ? 5000 : undefined}
+                                        />
+                                    )}
+                                </>
                             )}
                         </Stack>
                     ) : (
@@ -586,9 +588,9 @@ const WizardRun = (props: WizardStepProps) => {
         const { data, error } = await gmx_statuses(experiment.id);
         setErrorMessage(error || "");
         const jobs = data || [];
-        
-        const jobTprNames = jobs.map(job => job.tpr_name);
-        setTprFiles(prev => [...new Set([...prev, ...jobTprNames])]);
+
+        const jobTprNames = jobs.map((job) => job.tpr_name);
+        setTprFiles((prev) => [...new Set([...prev, ...jobTprNames])]);
     };
 
     const newTpr = (newSelectedTpr: string) => {
@@ -596,9 +598,9 @@ const WizardRun = (props: WizardStepProps) => {
 
         const tprFile = newSelectedTpr.split("/").pop() || newSelectedTpr;
         setSelectedTpr(tprFile);
-        
+
         if (!tprFiles.includes(tprFile)) {
-            setTprFiles(prev => [...prev, tprFile]);
+            setTprFiles((prev) => [...prev, tprFile]);
         }
     };
 
