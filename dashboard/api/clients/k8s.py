@@ -2,12 +2,16 @@ import logging
 from kubernetes import client, config  # type: ignore
 from kubernetes.client.rest import ApiException  # type: ignore
 
-from enums import PodStatus, JobStatus
+from enums import PodStatus
 from config import S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT, S3_BUCKET
 
 
 logger = logging.getLogger(__name__)
 GPU_TYPE = 'nvidia.com/mig-1g.10gb'
+
+config.load_incluster_config()
+core_v1 = client.CoreV1Api()
+batch_v1 = client.BatchV1Api()
 
 
 # TODO
@@ -26,9 +30,6 @@ def create_notebook_pod(
     if ping_resource('pod', name, ns):
         logger.warning(f"Pod {name} already exists in namespace {ns}. Skipping creation.")
         return
-
-    config.load_incluster_config()
-    v1 = client.CoreV1Api()
 
     # S3 sync commands using rclone
     s3_init_command = f"""
@@ -85,12 +86,12 @@ EOF
             # Check if notebook container is still running
             if ! pgrep -f "start-notebook.sh" > /dev/null; then
                 echo "Notebook container stopped, performing final bisync..." &&
-                rclone bisync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --create-empty-src-dirs --log-level ERROR &&
+                rclone bisync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --create-empty-src-dirs --delete-during --log-level ERROR &&
                 echo "Final bisync completed, exiting..." &&
                 break
             fi
             # Regular bisync every 10 seconds
-            rclone bisync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --create-empty-src-dirs --log-level ERROR || echo "Bisync failed, retrying..." &&
+            rclone bisync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --create-empty-src-dirs --delete-during --log-level ERROR || echo "Bisync failed, retrying..." &&
             sleep 10
         done
     """
@@ -287,29 +288,25 @@ EOF
         }
     }
 
-    v1.create_namespaced_pod(namespace=ns, body=pod_manifest)
+    core_v1.create_namespaced_pod(namespace=ns, body=pod_manifest)
 
 
 def ping_resource(resource_type: str, name: str, ns: str) -> bool:
-    config.load_incluster_config()
-    api = client.CoreV1Api()
-
     try:
         match resource_type:
             case 'svc':
-                api.read_namespaced_service(name=name, namespace=ns)
+                core_v1.read_namespaced_service(name=name, namespace=ns)
             case 'pod':
-                api.read_namespaced_pod(name=name, namespace=ns)
+                core_v1.read_namespaced_pod(name=name, namespace=ns)
             case 'configmap':
-                api.read_namespaced_config_map(name=name, namespace=ns)
+                core_v1.read_namespaced_config_map(name=name, namespace=ns)
             case 'secret':
-                api.read_namespaced_secret(name=name, namespace=ns)
+                core_v1.read_namespaced_secret(name=name, namespace=ns)
             case 'pvc':
-                api.read_namespaced_persistent_volume_claim(
+                core_v1.read_namespaced_persistent_volume_claim(
                     name=name, namespace=ns)
             case 'job':
-                batch_api = client.BatchV1Api()
-                batch_api.read_namespaced_job(name=name, namespace=ns)
+                batch_v1.read_namespaced_job(name=name, namespace=ns)
             case _:
                 raise ValueError(f"Unsupported resource type: {resource_type}")
         return True
@@ -321,26 +318,20 @@ def delete_pod(ns: str, name: str) -> None:
     if not ping_resource('pod', name, ns):
         return
 
-    config.load_incluster_config()
-    api = client.CoreV1Api()
-    api.delete_namespaced_pod(name=name, namespace=ns)
+    core_v1.delete_namespaced_pod(name=name, namespace=ns)
 
 
 def delete_service(ns: str, name: str) -> None:
     if not ping_resource('svc', name, ns):
         return
 
-    config.load_incluster_config()
-    api = client.CoreV1Api()
-    api.delete_namespaced_service(name=name, namespace=ns)
+    core_v1.delete_namespaced_service(name=name, namespace=ns)
 
 
 def create_service(ns: str, name: str, target_name: str) -> None:
     if ping_resource('svc', name, ns):
         logger.warning(f"Service {name} already exists in namespace {ns}. Skipping creation.")
         return
-
-    config.load_incluster_config()
 
     service = client.V1Service(
         metadata=client.V1ObjectMeta(
@@ -357,8 +348,7 @@ def create_service(ns: str, name: str, target_name: str) -> None:
         )
     )
 
-    api = client.CoreV1Api()
-    api.create_namespaced_service(
+    core_v1.create_namespaced_service(
         namespace=ns,
         body=service
     )
@@ -370,9 +360,7 @@ def get_namespace_resource_allocation(ns: str) -> dict:
 
     NOTE: This is just a proof-of-concept version, later we will need some metrics server like Prometheus.
     '''
-    config.load_incluster_config()
-    api = client.CoreV1Api()
-    pods = api.list_namespaced_pod(namespace=ns)
+    pods = core_v1.list_namespaced_pod(namespace=ns)
     total_cpu_requests = 0.0
     total_memory_requests = 0.0
     total_gpu_requests = 0.0
@@ -416,170 +404,15 @@ def get_namespace_resource_allocation(ns: str) -> dict:
     }
 
 
-def create_gromacs_job(
-    ns: str,
-    pvc: str,
-    name: str,
-    experiment_id: str,
-    deffnm: str,
-    np: int,
-    ntomp: int,
-    nb: str,
-    pme: str,
-    extra_args: str
-) -> None:
-    if ping_resource('job', name, ns):
-        logger.warning(f"Job {name} already exists in namespace {ns}. Skipping creation.")
-        return
-
-    config.load_incluster_config()
-    batch_v1 = client.BatchV1Api()
-
-    np = int(np)
-    ntomp = int(ntomp)
-    nb = nb.lower()
-    pme = pme.lower()
-
-    image = 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2'
-
-    command = f"mpirun -np {np} gmx mdrun -ntomp {ntomp} -nb {nb} -pme {pme} -deffnm {deffnm} {extra_args} >{name}.out 2>{name}.err"
-
-    job_manifest = {
-        'apiVersion': 'batch/v1',
-        'kind': 'Job',
-        'metadata': {
-            'name': name,
-            'namespace': ns,
-            'labels': {
-                'app': name,
-            }
-        },
-        'spec': {
-            'backoffLimit': 0,
-            'template': {
-                'metadata': {
-                    'labels': {
-                        'job': name,
-                    }
-                },
-                'spec': {
-                    'restartPolicy': 'Never',
-                    'containers': [
-                        {
-                            'name': name,
-                            'image': image,
-                            'workingDir': f'/mddash/{experiment_id}',
-                            'command': ['bash', '-c', command],
-                            'securityContext': {
-                                'runAsUser': 1000,
-                                'runAsGroup': 1000,
-                                'runAsNonRoot': True,
-                                'seccompProfile': {
-                                    'type': 'RuntimeDefault'
-                                },
-                                'allowPrivilegeEscalation': False,
-                                'capabilities': {
-                                    'drop': ['ALL']
-                                }
-                            },
-                            'env': [
-                                {
-                                    'name': 'OMP_NUM_THREADS',
-                                    'value': str(ntomp)
-                                }
-                            ],
-                            'resources': {
-                                'requests': {
-                                    'cpu': str(np * ntomp),
-                                    'memory': f'{4 * np}Gi',
-                                    GPU_TYPE: '1' if nb == 'gpu' or pme == 'gpu' else '0'
-                                },
-                                'limits': {
-                                    'cpu': str(np * ntomp),
-                                    'memory': f'{4 * np}Gi',
-                                    GPU_TYPE: '1' if nb == 'gpu' or pme == 'gpu' else '0'
-                                }
-                            },
-                            'volumeMounts': [
-                                {
-                                    'name': 'vol-1',
-                                    'mountPath': '/mddash',
-                                }
-                            ]
-                        }
-                    ],
-                    'volumes': [
-                        {
-                            'name': 'vol-1',
-                            'persistentVolumeClaim': {
-                                'claimName': pvc
-                            }
-                        }
-                    ]
-                }
-            }
-        }
-    }
-
-    batch_v1.create_namespaced_job(namespace=ns, body=job_manifest)
-
-
-def delete_job(ns: str, name: str) -> None:
-    if not ping_resource('job', name, ns):
-        logger.warning(f"Job {name} does not exist in namespace {ns}. Skipping deletion.")
-        return
-
-    config.load_incluster_config()
-    batch_v1 = client.BatchV1Api()
-    batch_v1.delete_namespaced_job(
-        name=name,
-        namespace=ns,
-        body=client.V1DeleteOptions(
-            propagation_policy='Background',
-            grace_period_seconds=5,
-        )
-    )
-
-
-def get_job_status(ns: str, name: str) -> JobStatus:
-    try:
-        config.load_incluster_config()
-        batch_v1 = client.BatchV1Api()
-        job = batch_v1.read_namespaced_job(name=name, namespace=ns)
-
-        # Check for completion conditions first
-        if job.status.conditions:
-            for condition in job.status.conditions:
-                if condition.type == "Complete" and condition.status == "True":
-                    return JobStatus.TERMINATED
-                elif condition.type == "Failed" and condition.status == "True":
-                    return JobStatus.ERROR
-
-        # Check numeric status fields
-        if job.status.succeeded and job.status.succeeded > 0:
-            return JobStatus.TERMINATED
-        elif job.status.failed and job.status.failed > 0:
-            return JobStatus.ERROR
-        elif job.status.active and job.status.active > 0:
-            return JobStatus.RUNNING
-        else:
-            return JobStatus.PENDING
-
-    except ApiException as e:
-        return JobStatus.ERROR
-
-
 def get_pod_status(ns: str, name: str) -> PodStatus:    
     try:
-        config.load_incluster_config()
-        v1 = client.CoreV1Api()
-        pod = v1.read_namespaced_pod(name=name, namespace=ns)
+        pod = core_v1.read_namespaced_pod(name=name, namespace=ns)
 
         if pod.metadata.deletion_timestamp:
             return PodStatus.TERMINATING
 
         phase = pod.status.phase
-        
+
         if phase == "Running":
             # Check if all containers are ready
             if pod.status.container_statuses:
