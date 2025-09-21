@@ -514,18 +514,18 @@ const RunView = (props: RunViewProps) => {
                         <Stack spacing={2} alignItems="flex-start">
                             {statusDisplay}
 
+                            <Button
+                                variant="contained"
+                                color="error"
+                                onClick={() => {
+                                    setConfirmDeleteDialog(true);
+                                }}
+                            >
+                                Delete Job
+                            </Button>
+
                             {jobStatus?.status !== "PENDING" && (
                                 <>
-                                    <Button
-                                        variant="contained"
-                                        color="error"
-                                        onClick={() => {
-                                            setConfirmDeleteDialog(true);
-                                        }}
-                                    >
-                                        Delete Job
-                                    </Button>
-
                                     <Typography variant="subtitle1" color="text.secondary">
                                         Logs
                                     </Typography>

@@ -76,15 +76,11 @@ const Experiments = () => {
                                 </Stack>
                                 <Stack direction="row" alignItems="center" spacing={1}>
                                     <Typography variant="subtitle2">Tuner jobs:</Typography>
-                                    <Typography variant="body2">
-                                        {experiment.tuner_jobs.filter((j) => j.summary && j.summary.RUNNING > 0).length}
-                                    </Typography>
+                                    <Typography variant="body2">{experiment.tuner_jobs.length}</Typography>
                                 </Stack>
                                 <Stack direction="row" alignItems="center" spacing={1}>
                                     <Typography variant="subtitle2">Gromacs jobs:</Typography>
-                                    <Typography variant="body2">
-                                        {experiment.gromacs_jobs.filter((j) => j.status === "RUNNING").length}
-                                    </Typography>
+                                    <Typography variant="body2">{experiment.gromacs_jobs.length}</Typography>
                                 </Stack>
                             </CardContent>
                             <CardActions sx={{ alignSelf: "flex-end", width: "100%", justifyContent: "center" }}>
