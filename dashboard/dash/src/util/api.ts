@@ -126,6 +126,13 @@ export const run_tuner = async (id: string, tprName: string): Promise<ApiData<Tu
     )
 }
 
+export const stop_tuner = async (id: string, tprName: string): Promise<ApiData<null>> => {
+    return await handle_request(
+        axios.post(`${API_BASE}/experiments/${id}/tuner/${tprName}/stop`),
+        'Failed to stop tuner.'
+    )
+}
+
 export const delete_tuner = async (id: string, tprName: string): Promise<ApiData<null>> => {
     return await handle_request(
         axios.delete(`${API_BASE}/experiments/${id}/tuner/${tprName}`),
