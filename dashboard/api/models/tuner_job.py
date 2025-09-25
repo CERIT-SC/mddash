@@ -29,9 +29,9 @@ class TunerJob(db.Model):  # type: ignore
     # whether the job was stopped (preserves data but job is deleted from tuner)
     is_stopped: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
     # preserved status data when job is stopped
-    preserved_summary: Mapped[str] = mapped_column(Text, nullable=True)
-    preserved_trials: Mapped[str] = mapped_column(Text, nullable=True)
-    preserved_cluster_resources: Mapped[str] = mapped_column(db.String(255), nullable=True)
+    _preserved_summary: Mapped[str] = mapped_column('preserved_summary', Text, nullable=True)
+    _preserved_trials: Mapped[str] = mapped_column('preserved_trials', Text, nullable=True) 
+    _preserved_cluster_resources: Mapped[str] = mapped_column('preserved_cluster_resources', db.String(255), nullable=True)
 
     # back-reference to the parent experiment
     experiment: Mapped['Experiment'] = relationship('Experiment', back_populates='tuner_jobs')
@@ -39,22 +39,22 @@ class TunerJob(db.Model):  # type: ignore
     @property
     def summary(self) -> dict:
         '''Summary of the tuner trial statuses.'''
-        if self.is_stopped:
-            return json.loads(self.preserved_summary)
+        if self.is_stopped and self._preserved_summary:
+            return json.loads(self._preserved_summary)
         return self._status().get('summary', {})
 
     @property
     def trials(self) -> list[dict]:
         '''Trial jobs with their statuses.'''
-        if self.is_stopped:
-            return json.loads(self.preserved_trials)
+        if self.is_stopped and self._preserved_trials:
+            return json.loads(self._preserved_trials)
         return self._status().get('trials', [])
 
     @property
     def cluster_resources(self) -> str:
         '''Cluster resources used by the tuner jobs.'''
-        if self.is_stopped:
-            return self.preserved_cluster_resources
+        if self.is_stopped and self._preserved_cluster_resources:
+            return self._preserved_cluster_resources
         return self._status().get('cluster_resources', 'N/A')
 
     @cached(cache=status_cache)
@@ -115,9 +115,9 @@ class TunerJob(db.Model):  # type: ignore
         summary['TERMINATED'] = terminated_count
         summary['RUNNING'] = 0
 
-        self.preserved_summary = json.dumps(summary)
-        self.preserved_trials = json.dumps(trials)
-        self.preserved_cluster_resources = current_status.get('cluster_resources', 'N/A')
+        self._preserved_summary = json.dumps(summary)
+        self._preserved_trials = json.dumps(trials)
+        self._preserved_cluster_resources = current_status.get('cluster_resources', 'N/A')
         self.is_stopped = True
 
         tuner.delete_job(self.tuner_run_id)

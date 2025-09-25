@@ -2,6 +2,7 @@ flask
 flask-cors
 flask-sqlalchemy>=3.0
 flask-marshmallow
+flask-migrate
 marshmallow-sqlalchemy
 cachetools
 werkzeug
