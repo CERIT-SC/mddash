@@ -49,9 +49,18 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     return ApiResponse.success(schema.dump(tuner_job), HTTPStatus.CREATED)
 
 
-@tuner_bp.route('/<tpr_name>', methods=['DELETE'])
+@tuner_bp.route('/<tpr_name>/stop', methods=['POST'])
 @handle_exceptions(rollback=True)
 def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
+    tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'Tuner job for {tpr_name} not found')
+    tuner_job.stop()
+    db.session.commit()
+    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+
+
+@tuner_bp.route('/<tpr_name>', methods=['DELETE'])
+@handle_exceptions(rollback=True)
+def delete_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(description=f'Tuner job for {tpr_name} not found')
     tuner_job.delete()
     db.session.delete(tuner_job)

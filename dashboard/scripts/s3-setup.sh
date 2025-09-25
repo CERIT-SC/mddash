@@ -43,9 +43,9 @@ EOF
     log "Initial sync from S3 to /mddash"  
     rclone sync s3remote:${S3_BUCKET} /mddash --create-empty-src-dirs --log-level INFO --log-file "$LOG_DIR/rclone-sync.log"
     
-    # If both directories are empty, create a marker file to enable bisync
-    if [ ! "$(ls -A /mddash 2>/dev/null)" ]; then
-        log "Both S3 and local are empty, creating initial marker file"
+    # Create marker file if it doesn't exist to enable bisync
+    if [ ! -f "/mddash/.s3-init" ]; then
+        log "Creating S3 sync marker file"
         echo "There needs to be at least one file in this directory in order for S3 sync to work." > /mddash/.s3-init
         rclone copy /mddash/.s3-init s3remote:${S3_BUCKET}/ --log-level ERROR
     fi
@@ -70,10 +70,10 @@ start_s3_sync_daemon() {
 
     log "Starting background S3 sync daemon"
     (
-        rclone bisync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --resync --log-level ERROR >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1
+        rclone bisync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --resync --force --log-level ERROR >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1
         
         while true; do
-            rclone bisync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --delete-during --log-level ERROR >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1
+            rclone bisync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --delete-during --force --log-level ERROR >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1
             sleep 10
         done
     ) &
@@ -95,7 +95,7 @@ cleanup_s3() {
             # Final sync before shutdown
             if [ -n "$S3_BUCKET" ]; then
                 log "Final sync to S3..."
-                rclone sync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --delete-during >> "$LOG_DIR/rclone-final-sync.log" 2>&1 || true
+                rclone sync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --force --delete-during >> "$LOG_DIR/rclone-final-sync.log" 2>&1 || true
             fi
 
             rm -f "$LOG_DIR/rclone-sync.pid"

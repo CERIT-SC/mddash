@@ -1,8 +1,10 @@
+import json
 import logging
 from pathlib import Path
 from datetime import datetime
 from cachetools import TTLCache, cached
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Text
 
 from clients import tuner
 from extensions import db
@@ -24,6 +26,12 @@ class TunerJob(db.Model):  # type: ignore
     tpr_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # creation time
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
+    # whether the job was stopped (preserves data but job is deleted from tuner)
+    is_stopped: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
+    # preserved status data when job is stopped
+    preserved_summary: Mapped[str] = mapped_column(Text, nullable=True)
+    preserved_trials: Mapped[str] = mapped_column(Text, nullable=True)
+    preserved_cluster_resources: Mapped[str] = mapped_column(db.String(255), nullable=True)
 
     # back-reference to the parent experiment
     experiment: Mapped['Experiment'] = relationship('Experiment', back_populates='tuner_jobs')
@@ -31,20 +39,28 @@ class TunerJob(db.Model):  # type: ignore
     @property
     def summary(self) -> dict:
         '''Summary of the tuner trial statuses.'''
+        if self.is_stopped:
+            return json.loads(self.preserved_summary)
         return self._status().get('summary', {})
 
     @property
     def trials(self) -> list[dict]:
         '''Trial jobs with their statuses.'''
+        if self.is_stopped:
+            return json.loads(self.preserved_trials)
         return self._status().get('trials', [])
 
     @property
     def cluster_resources(self) -> str:
         '''Cluster resources used by the tuner jobs.'''
+        if self.is_stopped:
+            return self.preserved_cluster_resources
         return self._status().get('cluster_resources', 'N/A')
 
     @cached(cache=status_cache)
     def _status(self) -> dict:
+        if self.is_stopped:
+            return {}
         try:
             return tuner.poll_status(self.tuner_run_id)
         except Exception:
@@ -75,10 +91,45 @@ class TunerJob(db.Model):  # type: ignore
         
         return job
 
+    def stop(self) -> None:
+        '''
+        Stop the tuner job and preserve its current status.
+        The job gets deleted from the tuner but data is preserved in the database.
+        
+        :raise HTTPError: If the tuner api request fails.
+        '''
+        if self.is_stopped:
+            return
+
+        current_status = self._status()
+
+        # Convert RUNNING trials to TERMINATED
+        trials = current_status.get('trials', [])
+        for trial in trials:
+            if trial.get('status') == 'RUNNING':
+                trial['status'] = 'TERMINATED'
+
+        # Update summary counts
+        summary = current_status.get('summary', {})
+        terminated_count = summary.get('TERMINATED', 0) + summary.get('RUNNING', 0)
+        summary['TERMINATED'] = terminated_count
+        summary['RUNNING'] = 0
+
+        self.preserved_summary = json.dumps(summary)
+        self.preserved_trials = json.dumps(trials)
+        self.preserved_cluster_resources = current_status.get('cluster_resources', 'N/A')
+        self.is_stopped = True
+
+        tuner.delete_job(self.tuner_run_id)
+
+        status_cache.clear()
+        logger.info(f"Stopped tuner job {self.tuner_run_id}")
+
     def delete(self) -> None:
         '''
-        Delete the tuner job.
+        Delete the tuner job completely.
 
         :raise HTTPError: If the tuner api request fails.
         '''
-        tuner.delete_job(self.tuner_run_id)
+        if not self.is_stopped:
+            tuner.delete_job(self.tuner_run_id)

@@ -326,6 +326,26 @@ def get_tuner_status(experiment_id, tpr_name):
         return ApiResponse.error(f"Tuner for '{tpr_name}' not found.")
 
 
+@bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>/stop', methods=['POST'])
+def stop_tuner(experiment_id, tpr_name):
+    tuner = next((t for t in tuner_demo_statuses if t['experiment_id'] == experiment_id and t['tpr_name'] == tpr_name), None)
+    if tuner:
+        # Convert RUNNING trials to TERMINATED
+        for trial in tuner['trials']:
+            if trial['status'] == 'RUNNING':
+                trial['status'] = 'TERMINATED'
+        
+        # Update summary
+        if 'RUNNING' in tuner['summary']:
+            terminated_count = tuner['summary'].get('TERMINATED', 0) + tuner['summary'].get('RUNNING', 0)
+            tuner['summary']['TERMINATED'] = terminated_count
+            tuner['summary']['RUNNING'] = 0
+        
+        return ApiResponse.success()
+    else:
+        return ApiResponse.error('Tuner not found.')
+
+
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['DELETE'])
 def delete_tuner(experiment_id, tpr_name):
     tuner = next((t for t in tuner_demo_statuses if t['experiment_id'] == experiment_id and t['tpr_name'] == tpr_name), None)
