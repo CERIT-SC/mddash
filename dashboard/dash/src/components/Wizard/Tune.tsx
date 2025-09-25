@@ -106,7 +106,12 @@ const TunerTable = (props: TunerTableProps) => {
                                             }}
                                         />
                                     </StyledTableCell>
-                                    <StyledTableCell sx={{ color: (theme) => theme.palette[JobStatus.getColor(row.status as JobStatus)].main }}>
+                                    <StyledTableCell
+                                        sx={{
+                                            color: (theme) =>
+                                                theme.palette[JobStatus.getColor(row.status as JobStatus)].main,
+                                        }}
+                                    >
                                         {row.status}
                                     </StyledTableCell>
                                     <StyledTableCell align="right">
@@ -143,7 +148,8 @@ const TunerView = (props: TunerViewProps) => {
     const { experiment, tprName, setErrorMessage, stopJob, deleteJob, cancelJob, nextStep, changeStep } = props;
 
     const [loading, setLoading] = useState(false);
-    const [tunerRunning, setTunerRunning] = useState(false);
+    const [tunerStarted, setTunerStarted] = useState(false);
+    const [tunerStopped, setTunerStopped] = useState(false);
     const [tuner, setTuner] = useState<TunerJob | null>(null);
     const [selectedTrial, setSelectedTrial] = useState<TunerTrial | null>(null);
 
@@ -154,11 +160,12 @@ const TunerView = (props: TunerViewProps) => {
         const { data, error } = await tuner_status(experiment.id, tprName);
         if (showError && error) setErrorMessage(error);
         setTuner(data || null);
-        setTunerRunning(!!data?.trials);
-        
+        setTunerStarted(!!data?.trials);
+        setTunerStopped(data?.is_stopped || false);
+
         // Maintain selected trial after data refresh
         if (selectedTrial && data?.trials) {
-            const updatedSelectedTrial = data.trials.find(trial => trial.id === selectedTrial.id);
+            const updatedSelectedTrial = data.trials.find((trial) => trial.id === selectedTrial.id);
             if (updatedSelectedTrial) {
                 setSelectedTrial(updatedSelectedTrial);
             } else {
@@ -185,8 +192,8 @@ const TunerView = (props: TunerViewProps) => {
 
         let intervalId: number | null = null;
 
-        // refresh tuner status every 5 seconds if the tuner is up
-        if (tunerRunning) {
+        // refresh tuner status every 5 seconds if the tuner is up and running
+        if (tunerStarted && !tunerStopped) {
             intervalId = window.setInterval(() => {
                 fetchStatus(true);
             }, 5000);
@@ -198,7 +205,7 @@ const TunerView = (props: TunerViewProps) => {
                 window.clearInterval(intervalId);
             }
         };
-    }, [tprName, experiment.id, tunerRunning]);
+    }, [tprName, experiment.id, tunerStarted, tunerStopped]);
 
     return (
         <>
@@ -208,7 +215,7 @@ const TunerView = (props: TunerViewProps) => {
                 </Box>
             )) || (
                 <>
-                    {(tunerRunning && (
+                    {(tunerStarted && (
                         <Stack direction="column" spacing={2}>
                             <TunerTable
                                 rows={tuner?.trials || []}
@@ -217,14 +224,16 @@ const TunerView = (props: TunerViewProps) => {
                             />
 
                             <Stack direction="row" spacing={2} justifyContent="flex-end">
-                                <Button
-                                    variant="contained"
-                                    color="warning"
-                                    startIcon={<Pause />}
-                                    onClick={() => setConfirmStopDialog(true)}
-                                >
-                                    Stop
-                                </Button>
+                                {tunerStopped || (
+                                    <Button
+                                        variant="contained"
+                                        color="warning"
+                                        startIcon={<Pause />}
+                                        onClick={() => setConfirmStopDialog(true)}
+                                    >
+                                        Stop
+                                    </Button>
+                                )}
                                 <Button
                                     variant="contained"
                                     color="error"

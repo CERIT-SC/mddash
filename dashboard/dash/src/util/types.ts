@@ -25,6 +25,7 @@ export interface TunerJob {
     experiment_id: string;
     tpr_name: string;
     created_at: string;
+    is_stopped: boolean;
     summary: {
         RUNNING: number;
         PENDING: number;

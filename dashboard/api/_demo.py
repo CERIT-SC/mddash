@@ -59,6 +59,7 @@ tuner_demo_status = {
     'experiment_id': 'abcde',
     'tpr_name': 'LSD.tpr',
     'created_at': '2025-01-15T09:30:00',
+    'is_stopped': False,
     'summary': {
         'RUNNING': 2,
         'PENDING': 0,
@@ -103,6 +104,7 @@ tuner_demo_statuses = [
         'experiment_id': 'abcde',
         'tpr_name': 'LSD.tpr',
         'created_at': '2025-01-15T09:30:00',
+        'is_stopped': False,
         'summary': {
             'RUNNING': 2,
             'PENDING': 0,
@@ -145,6 +147,7 @@ tuner_demo_statuses = [
         'experiment_id': 'abcde',
         'tpr_name': 'MDMA.tpr',
         'created_at': '2025-01-15T09:45:00',
+        'is_stopped': True,
         'summary': {
             'RUNNING': 1,
             'PENDING': 1,
@@ -163,7 +166,7 @@ tuner_demo_statuses = [
             },
             {
                 'id': 'e5168_00001',
-                'status': 'RUNNING',
+                'status': 'TERMINATED',
                 'np': 8,
                 'ntomp': 1,
                 'nb': 'gpu',
@@ -171,7 +174,7 @@ tuner_demo_statuses = [
                 'performance': None
             }
         ],
-        'cluster_resources': '32/32 CPUs, 1/1 GPUs used'
+        'cluster_resources': '0/32 CPUs, 0/1 GPUs used'
     }
 ]
 
@@ -334,13 +337,15 @@ def stop_tuner(experiment_id, tpr_name):
         for trial in tuner['trials']:
             if trial['status'] == 'RUNNING':
                 trial['status'] = 'TERMINATED'
-        
+
         # Update summary
         if 'RUNNING' in tuner['summary']:
             terminated_count = tuner['summary'].get('TERMINATED', 0) + tuner['summary'].get('RUNNING', 0)
             tuner['summary']['TERMINATED'] = terminated_count
             tuner['summary']['RUNNING'] = 0
-        
+
+        tuner['is_stopped'] = True
+
         return ApiResponse.success()
     else:
         return ApiResponse.error('Tuner not found.')
