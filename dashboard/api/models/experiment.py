@@ -287,12 +287,18 @@ class Experiment(db.Model):  # type: ignore
         self.mdrepo_id = mdrepo_experiment['id']
 
         if self.mdrepo_id is None:
-            abort(500, description='Failed to create experiment in MDRepo')
+            abort(500, description='Failed to create experiment in MDRepo.')
 
         # upload files to MDRepo
-        for file in os.listdir(DATA_DIR / self.id):
-            file_path = os.path.join(DATA_DIR / self.id, file)
-            mdrepo.upload_file(session, self.mdrepo_id, file_path)
+        for file in (DATA_DIR / self.id).iterdir():
+            if not file.is_file():
+                continue
+
+            try:
+                mdrepo.upload_file(session, self.mdrepo_id, file)
+            except ValueError:
+                # Don't fail the whole publishing if one file fails, only log the error
+                logger.error(f"Failed to upload file {file.name} to MDRepo.", exc_info=True)
 
         db.session.commit()
         logger.info(f"Published experiment {self.id} to MDRepo with ID {self.mdrepo_id}")

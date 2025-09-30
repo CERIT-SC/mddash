@@ -1,4 +1,5 @@
 import requests
+from pathlib import Path
 
 MDREPO_URL = 'https://mdrepo.eu/api'
 
@@ -55,52 +56,48 @@ def create_experiment(session: str, community: str, metadata: dict) -> dict:
     return response.json()
 
 
-def upload_file(session: str, experiment_id: str, file_path: str) -> dict:
+def upload_file(session: str, experiment_id: str, file: Path) -> dict:
     '''
     Upload a file to an experiment in MDRepo.
     
     :param session: Session cookie from login
     :param experiment_id: Experiment ID in MDRepo
-    :param file_path: Path to the file to upload
+    :param file: Path to the file to upload
     :return: Server response
     :raise ValueError: If the file upload fails
     '''
-    file_name = file_path.split('/')[-1]
     cookies = {'session': session}
 
     # set file metadata
-    json = [{'key': file_name}]
+    json = [{'key': file.name}]
     response = requests.post(
         f'{MDREPO_URL}/experiments/{experiment_id}/draft/files',
         cookies=cookies,
         json=json,
     )
 
-    if response.status_code >= 400:
-        raise ValueError(
-            f"Failed to set file metadata: {response.status_code} - {response.text}")
+    if not response.ok:
+        raise ValueError(f"Failed to set file metadata: {response.status_code} - {response.text}")
 
     # upload the file
-    with open(file_path, 'rb') as f:
+    with open(file, 'rb') as f:
         response = requests.put(
-            f'{MDREPO_URL}/experiments/{experiment_id}/draft/files/{file_name}/content',
+            f'{MDREPO_URL}/experiments/{experiment_id}/draft/files/{file.name}/content',
             cookies=cookies,
             data=f,
             stream=True
         )
 
-    if response.status_code >= 400:
-        raise ValueError(
-            f"Failed to upload file: {response.status_code} - {response.text}")
+    if not response.ok:
+        raise ValueError(f"Failed to upload file: {response.status_code} - {response.text}")
 
     # commit the file
     response = requests.post(
-        f'{MDREPO_URL}/experiments/{experiment_id}/draft/files/{file_name}/commit',
+        f'{MDREPO_URL}/experiments/{experiment_id}/draft/files/{file.name}/commit',
         cookies=cookies
     )
 
-    if response.status_code >= 400:
-        raise ValueError(
-            f"Failed to commit file: {response.status_code} - {response.text}")
+    if not response.ok:
+        raise ValueError(f"Failed to commit file: {response.status_code} - {response.text}")
 
     return response.json()
