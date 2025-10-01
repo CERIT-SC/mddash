@@ -11,9 +11,10 @@ interface ApiData<T> {
 
 
 const parseResponse = <T>(response: AxiosResponse, fallbackMsg: string): ApiData<T> => {
-    const errMsg = response.data.success
-        ? null
-        : response.data.message || fallbackMsg;
+    const failed = response.status >= 400 || response.data.success === false;
+    const errMsg = failed
+        ? response.data.message || fallbackMsg
+        : null;
     const data = response.data.data;
     return { data: data, error: errMsg };
 };
