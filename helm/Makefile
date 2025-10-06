@@ -1,6 +1,11 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
+ns ?= md-dashboard-ns
+package = mddash
+chart_path = charts/mddash
+kubeconfig_path = ../private/kuba-cluster.yaml
+
 ENV ?= dev
 
 # IMAGE_TAG inherited from parent Makefile (exported), or computed here
@@ -69,6 +74,15 @@ port-forward: ## Forward port 8000 to proxy-public service
 .PHONY: test
 test: ## Test Helm template rendering
 	helm template $(package) $(chart_path) --debug --namespace $(namespace) $(values_file)
+
+# provide ID= and SECRET= on command line
+oidcsecret:
+	kubectl -n ${ns} create secret generic oidc-credentials \
+		--from-literal=client_id=${ID} \
+		--from-literal=client_secret=${SECRET}
+
+port-forward:
+	kubectl port-forward svc/proxy-public 8000:80 -n $(ns)
 
 .PHONY: status
 status: ## Show deployment status
