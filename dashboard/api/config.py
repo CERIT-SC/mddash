@@ -30,6 +30,9 @@ NAMESPACE = os.environ.get('POD_NAMESPACE', 'default')
 if NAMESPACE == "default":
     logger.warning("Using default namespace. Is the POD_NAMESPACE environment variable set correctly?")
 
+HUB_NAMESPACE = os.environ.get('HUB_NAMESPACE', NAMESPACE)
+
+MDRUN_API_URL = f'http://mdrun-api.{HUB_NAMESPACE}.svc.cluster.local/api'
 
 S3_ENDPOINT = os.environ.get('S3_ENDPOINT', '')
 S3_BUCKET = os.environ.get('S3_BUCKET', '')
