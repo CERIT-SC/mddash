@@ -1,5 +1,3 @@
-"""Decorators for Flask routes."""
-
 import functools
 from typing import Callable
 from flask import Response

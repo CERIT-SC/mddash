@@ -1,8 +1,5 @@
 import requests
-
-
-# TODO: Move to config.py and make it less static
-MDRUN_API_URL = 'http://mdrun-api.md-dashboard-ns.svc.cluster.local/api'
+from config import MDRUN_API_URL
 
 
 def get_mdrun_response_data(response: requests.Response) -> dict:

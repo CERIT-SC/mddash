@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from flask import Flask
 from flask_migrate import upgrade, init, migrate as flask_migrate
 
