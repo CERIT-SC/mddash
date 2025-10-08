@@ -7,7 +7,11 @@ from config import S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT, S3_BUCKET
 
 
 logger = logging.getLogger(__name__)
+
+# TODO: move to config.py and make configurable
 GPU_TYPE = 'nvidia.com/mig-1g.10gb'
+S3_CLIENT_IMAGE = 'rclone/rclone:latest'
+GMX_IMAGE = 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2'
 
 config.load_incluster_config()
 core_v1 = client.CoreV1Api()
@@ -17,8 +21,171 @@ batch_v1 = client.BatchV1Api()
 # TODO
 #  Ensure your pod has a corresponding label, such as spec.template.metadata.labels.app: example-pod.
 
-# XXX: hardcoded gromacs image
 
+def get_container(
+    name: str,
+    image: str,
+    experiment_id: str,
+    mddash_volume: str,
+    command: list[str],
+    env: list[dict] | None = None,
+    set_working_dir: bool = True,
+) -> dict:
+    """
+    Get a generic container mounted to `mddash_volume` and started in `/mddash/{experiment_id}`.
+
+    :param name: The name of the container.
+    :param image: The container image to use.
+    :param experiment_id: The ID of the experiment needed to set the working directory.
+    :param mddash_volume: The name of the volume /mddash is mounted to.
+    :param command: The command to run in the container.
+    :param env: Optional list of environment variables to set in the container.
+    :param set_working_dir: Whether to set the working directory to `/mddash/{experiment_id}`.
+    """
+
+    container = {
+        'securityContext': {
+            'runAsUser': 1000,
+            'runAsGroup': 1000,
+            'runAsNonRoot': True,
+            'seccompProfile': {
+                'type': 'RuntimeDefault'
+            },
+            'allowPrivilegeEscalation': False,
+            'capabilities': {
+                'drop': ['ALL']
+            }
+        },
+        'name': name,
+        'image': image,
+        'imagePullPolicy': 'Always',  # TODO. maybe IfNotPresent?
+        'resources': {
+            'requests': {'cpu': '100m', 'memory': '128Mi'},
+            'limits': {'cpu': '200m', 'memory': '256Mi'}
+        },
+        'command': command,
+        'volumeMounts': [
+            {'mountPath': '/mddash', 'name': mddash_volume}
+        ]
+    }
+
+    if set_working_dir:
+        container['workingDir'] = f'/mddash/{experiment_id}'
+
+    if env:
+        container['env'] = env
+
+    return container
+
+
+def get_s3_init_container(experiment_id: str, mddash_volume: str) -> dict:
+    """
+    Get container that initializes the /mddash volume by downloading existing data from S3.
+
+    :param experiment_id: The ID of the experiment needed to set the working directory.
+    :param mddash_volume: The name of the volume /mddash is mounted to.
+    """
+
+    s3_init_command = f"""
+        mkdir -p /tmp/.config/rclone &&
+        cat > /tmp/.config/rclone/rclone.conf << EOF
+[s3remote]
+type = s3
+provider = Other
+access_key_id = $S3_ACCESS_KEY
+secret_access_key = $S3_SECRET_KEY
+endpoint = $S3_ENDPOINT
+EOF
+    mkdir -p /mddash/{experiment_id} &&
+    echo "Syncing notebooks from s3remote:{S3_BUCKET}/{experiment_id}" &&
+    rclone sync --config /tmp/.config/rclone/rclone.conf s3remote:{S3_BUCKET}/{experiment_id}/ /mddash/{experiment_id}/ --progress || echo "No existing data found, starting with empty directory"
+    """
+
+    env = [
+        {
+            'name': 'S3_ENDPOINT',
+            'value': S3_ENDPOINT or ''
+        },
+        {
+            'name': 'S3_ACCESS_KEY',
+            'value': S3_ACCESS_KEY or ''
+        },
+        {
+            'name': 'S3_SECRET_KEY',
+            'value': S3_SECRET_KEY or ''
+        }
+    ]
+
+    # Create s3-init container that runs as user 1000, permissions handled by fsGroup
+    return get_container(
+        's3-init',
+        S3_CLIENT_IMAGE,
+        experiment_id,
+        mddash_volume,
+        ['sh', '-c', s3_init_command],
+        env,
+        set_working_dir=False
+    )
+
+
+def get_s3_sync_container(experiment_id: str, mddash_volume: str) -> dict:
+    """
+    Get container that continuously syncs /mddash volume to S3 and performs a final sync on termination.
+
+    NOTE: This container relies on the main container to create a file /mddash/.terminated after it has finished its work.
+
+    :param experiment_id: The ID of the experiment needed to set the working directory.
+    :param mddash_volume: The name of the volume /mddash is mounted to.
+    """
+
+    s3_sync_command = f"""
+        export HOME=/tmp &&
+        mkdir -p /tmp/.config/rclone &&
+        cat > /tmp/.config/rclone/rclone.conf << EOF
+[s3remote]
+type = s3
+provider = Other
+access_key_id = $S3_ACCESS_KEY
+secret_access_key = $S3_SECRET_KEY
+endpoint = $S3_ENDPOINT
+EOF
+        mkdir -p /mddash/{experiment_id} &&
+        # Initial sync from S3
+        rclone copy --config /tmp/.config/rclone/rclone.conf s3remote:{S3_BUCKET}/{experiment_id}/ /mddash/{experiment_id}/ --log-level ERROR --retries 3 || echo "No remote data found" &&
+        
+        while true; do
+            if [ -f "/mddash/.terminated" ]; then
+                sleep 2 &&
+                rclone copy --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --log-level ERROR --retries 5 &&
+                break
+            fi
+
+            # Bidirectional sync
+            rclone copy --config /tmp/.config/rclone/rclone.conf s3remote:{S3_BUCKET}/{experiment_id}/ /mddash/{experiment_id}/ --update --log-level ERROR --retries 2 || echo "Download sync failed" &&
+            rclone copy --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --update --exclude "*.tmp" --exclude "*.lock" --log-level ERROR --retries 2 || echo "Upload sync failed" &&
+            sleep 10
+        done
+    """
+
+    env = [
+        {
+            'name': 'S3_ENDPOINT',
+            'value': S3_ENDPOINT or ''
+        },
+        {
+            'name': 'S3_ACCESS_KEY',
+            'value': S3_ACCESS_KEY or ''
+        },
+        {
+            'name': 'S3_SECRET_KEY',
+            'value': S3_SECRET_KEY or ''
+        }
+    ]
+
+    return get_container('s3-sync', S3_CLIENT_IMAGE, experiment_id, mddash_volume, ['sh', '-c', s3_sync_command], env)
+
+
+# TODO: shouldn't notebook image be a global constant instead?
 def create_notebook_pod(
     image: str,
     ns: str,
@@ -31,72 +198,47 @@ def create_notebook_pod(
         logger.warning(f"Pod {name} already exists in namespace {ns}. Skipping creation.")
         return
 
-    # S3 sync commands using rclone
-    s3_init_command = f"""
-        mkdir -p /tmp/.config/rclone &&
-        cat > /tmp/.config/rclone/rclone.conf << EOF
-[s3remote]
-type = s3
-provider = Other
-access_key_id = $S3_ACCESS_KEY
-secret_access_key = $S3_SECRET_KEY
-endpoint = $S3_ENDPOINT
-EOF
-        echo "Downloading experiment data from s3remote:{S3_BUCKET}/{experiment_id}..." &&
-        mkdir -p /mddash/{experiment_id} &&
-        rclone sync --config /tmp/.config/rclone/rclone.conf s3remote:{S3_BUCKET}/{experiment_id}/ /mddash/{experiment_id}/ --progress || echo "No existing data found, starting with empty directory"
-    """
-
     workdir_init_command = f"""
-        echo "Initializing notebook templates..." &&
-        # Check if any .ipynb files exist before trying to copy them
+        if [ ! -d "/mddash/{experiment_id}" ]; then
+            mkdir -p /mddash/{experiment_id}
+        fi
+
+        if [ ! -w "/mddash/{experiment_id}" ]; then
+            echo "Notebook directory /mddash/{experiment_id} is not writable" >&2
+            exit 1
+        fi
+
         if ls /home/jovyan/*.ipynb 1> /dev/null 2>&1; then
-            echo "Found notebook templates, copying to experiment directory..." &&
+            echo "Preparing notebook templates in /mddash/{experiment_id}"
             for n in /home/jovyan/*.ipynb; do 
                 b=$(basename "$n")
                 if [ -f "/mddash/{experiment_id}/$b" ]; then
-                    echo "Template $b already exists, creating .new version" &&
+                    echo "Template $b exists, writing $b.new"
                     cp "$n" "/mddash/{experiment_id}/$b.new"
                 else
-                    echo "Copying template: $b" &&
+                    echo "Copying template $b"
                     cp "$n" "/mddash/{experiment_id}/$b"
                 fi
             done
+            echo "Notebook templates ready in /mddash/{experiment_id}"
         else
             echo "No notebook templates found, skipping copy"
-        fi &&
-        echo "Notebook initialization complete"
+        fi
     """
 
-    s3_sync_command = f"""
-        export HOME=/tmp &&
-        mkdir -p /tmp/.config/rclone &&
-        mkdir -p /tmp/.cache/rclone &&
-        cat > /tmp/.config/rclone/rclone.conf << EOF
-[s3remote]
-type = s3
-provider = Other
-access_key_id = $S3_ACCESS_KEY
-secret_access_key = $S3_SECRET_KEY
-endpoint = $S3_ENDPOINT
-EOF
-        echo "Starting continuous rclone bisync process..." &&
-        rclone bisync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --create-empty-src-dirs --resync --log-level ERROR &&
-        while true; do
-            # Check if notebook container is still running
-            if ! pgrep -f "start-notebook.sh" > /dev/null; then
-                echo "Notebook container stopped, performing final bisync..." &&
-                rclone bisync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --create-empty-src-dirs --delete-during --log-level ERROR &&
-                echo "Final bisync completed, exiting..." &&
-                break
-            fi
-            # Regular bisync every 10 seconds
-            rclone bisync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --create-empty-src-dirs --delete-during --log-level ERROR || echo "Bisync failed, retrying..." &&
-            sleep 10
-        done
-    """
+    mddash_volume = 'shared-data'
+    gmx_container = get_container('gmx', GMX_IMAGE, experiment_id, mddash_volume, ['sleep', '365d'])
+    workdir_init_container = get_container(
+        'workdir-init',
+        image,
+        experiment_id,
+        mddash_volume,
+        ['sh', '-c', workdir_init_command],
+        set_working_dir=False
+    )
+    s3_init_container = get_s3_init_container(experiment_id, mddash_volume)
+    s3_sync_container = get_s3_sync_container(experiment_id, mddash_volume)
 
-    # Define the pod specification
     pod_manifest = {
         'apiVersion': 'v1',
         'kind': 'Pod',
@@ -110,77 +252,26 @@ EOF
         'spec': {
             'securityContext': {
                 'fsGroup': 1000,
+                'fsGroupChangePolicy': 'Always',
+                'runAsUser': 1000,
+                'runAsGroup': 1000,
+                'supplementalGroups': [1000],
                 'runAsNonRoot': True,
                 'allowPrivilegeEscalation': False,
                 'seccompProfile': {
                     'type': 'RuntimeDefault'
                 }
             },
-            'initContainers': [
-                {
-                    'name': 's3-init',
-                    'image': 'rclone/rclone:latest',
-                    'command': ['sh', '-c', s3_init_command],
-                    'securityContext': {
-                        'runAsUser': 1000,
-                        'runAsGroup': 1000,
-                        'runAsNonRoot': True,
-                        'seccompProfile': {
-                            'type': 'RuntimeDefault'
-                        },
-                        'allowPrivilegeEscalation': False,
-                        'capabilities': {
-                            'drop': ['ALL']
-                        }
-                    },
-                    'env': [
-                        {
-                            'name': 'S3_ENDPOINT',
-                            'value': S3_ENDPOINT or ''
-                        },
-                        {
-                            'name': 'S3_ACCESS_KEY',
-                            'value': S3_ACCESS_KEY or ''
-                        },
-                        {
-                            'name': 'S3_SECRET_KEY',
-                            'value': S3_SECRET_KEY or ''
-                        }
+                    'initContainers': [
+                        s3_init_container,
+                        workdir_init_container
                     ],
-                    'resources': {
-                        'requests': {'cpu': '100m', 'memory': '256Mi'},
-                        'limits': {'cpu': '500m', 'memory': '512Mi'}
-                    },
-                    'volumeMounts': [
-                        {'mountPath': '/mddash', 'name': 'shared-data'}
-                    ]
-                },
-                {
-                    'securityContext': {
-                        'runAsNonRoot': True,
-                        'runAsUser': 1000,
-                        'allowPrivilegeEscalation': False,
-                        'capabilities': {
-                            'drop': ['ALL']
-                        }
-                    },
-                    'name': 'init-workdir',
-                    'image': image,
-                    'resources': {
-                        'requests': {'cpu': '100m', 'memory': '256Mi'},
-                        'limits': {'cpu': '500m', 'memory': '512Mi'}
-                    },
-                    'command': ['sh', '-c', workdir_init_command],
-                    'volumeMounts': [
-                        {'mountPath': '/mddash', 'name': 'shared-data'}
-                    ]
-                }
-            ],
             'containers': [
                 {
                     'securityContext': {
                         'runAsNonRoot': True,
                         'runAsUser': 1000,
+                        'runAsGroup': 1000,
                         'allowPrivilegeEscalation': False,
                         'capabilities': {
                             'drop': ['ALL']
@@ -197,89 +288,23 @@ EOF
                     'env': [
                         {'name': 'WORKDIR', 'value': f'/mddash/{experiment_id}'},
                     ],
-                    'args': [
-                        'start-notebook.sh',
-                        f'--NotebookApp.base_url={prefix}',
-                        f'--NotebookApp.notebook_dir=/mddash/{experiment_id}',
-                        f'--NotebookApp.token="{token}"',
+                    'command': ['sh', '-c',
+                        f'trap "echo \\"Container terminated at $(date)\\" > /mddash/.terminated" EXIT TERM INT; '
+                        f'start-notebook.sh '
+                        f'--NotebookApp.base_url={prefix} '
+                        f'--NotebookApp.notebook_dir=/mddash/{experiment_id} '
+                        f'--NotebookApp.token="{token}"'
                     ],
                     'volumeMounts': [
-                        {'mountPath': '/mddash', 'name': 'shared-data'}
+                        {'mountPath': '/mddash', 'name': mddash_volume}
                     ]
                 },
-                {
-                    'securityContext': {
-                        'runAsNonRoot': True,
-                        'runAsUser': 1000,
-                        'allowPrivilegeEscalation': False,
-                        'capabilities': {
-                            'drop': ['ALL']
-                        }
-                    },
-                    'name': 'gmx',
-                    'image': 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2',
-                    'imagePullPolicy': 'Always',
-                    'resources': {
-                        'requests': {'cpu': '100m', 'memory': '512Mi'},
-                        'limits': {'cpu': '2000m', 'memory': '8Gi'}
-                    },
-                    'workingDir': f'/mddash/{experiment_id}',
-                    'args': [
-                        'sleep',
-                        '365d'
-                    ],
-                    'volumeMounts': [
-                        {'mountPath': '/mddash', 'name': 'shared-data'}
-                    ]
-                },
-                {
-                    'name': 's3-sync',
-                    'image': 'rclone/rclone:latest',
-                    'command': ['sh', '-c', s3_sync_command],
-                    'securityContext': {
-                        'runAsUser': 1000,
-                        'runAsGroup': 1000,
-                        'runAsNonRoot': True,
-                        'seccompProfile': {
-                            'type': 'RuntimeDefault'
-                        },
-                        'allowPrivilegeEscalation': False,
-                        'capabilities': {
-                            'drop': ['ALL']
-                        }
-                    },
-                    'env': [
-                        {
-                            'name': 'S3_ENDPOINT',
-                            'value': S3_ENDPOINT or ''
-                        },
-                        {
-                            'name': 'S3_ACCESS_KEY',
-                            'value': S3_ACCESS_KEY or ''
-                        },
-                        {
-                            'name': 'S3_SECRET_KEY',
-                            'value': S3_SECRET_KEY or ''
-                        }
-                    ],
-                    'resources': {
-                        'requests': {
-                            'cpu': '100m',
-                            'memory': '128Mi'
-                        },
-                        'limits': {
-                            'cpu': '200m',
-                            'memory': '256Mi'
-                        }
-                    },
-                    'volumeMounts': [
-                        {'name': 'shared-data', 'mountPath': '/mddash'}
-                    ]
-                }
+                gmx_container,
+                s3_sync_container
             ],
             'volumes': [
                 {
-                    'name': 'shared-data',
+                    'name': mddash_volume,
                     'emptyDir': {
                         'sizeLimit': '50Gi'  # TODO: adjust size limit to our needs
                     }
@@ -291,7 +316,93 @@ EOF
     core_v1.create_namespaced_pod(namespace=ns, body=pod_manifest)
 
 
+def create_job(name: str, image: str, ns: str, experiment_id: str, command: str) -> None:
+    """
+    Create a job that runs a given command in the `/mddash/{experiment_id}` directory.
+    It is automatically synced to S3.
+
+    :param name: The name of the job.
+    :param image: The container image to use.
+    :param ns: The namespace to create the job in.
+    :param experiment_id: The ID of the experiment needed to set the working directory.
+    :param command: The command to run in the job. (wrapped inside `sh -c`)
+    """
+
+    if ping_resource('job', name, ns):
+        logger.warning(f"Job {name} already exists in namespace {ns}. Skipping creation.")
+        return
+
+    mddash_volume = 'shared-data'
+
+    # Wrap the command to create a /mddash/.terminated file on exit
+    trapped_command = ['sh', '-c',
+        f'trap "echo \\"Container terminated at $(date)\\" > /mddash/.terminated" EXIT TERM INT; {command}'
+    ]
+
+    job_container = get_container(name, image, experiment_id, mddash_volume, trapped_command)
+    s3_init_container = get_s3_init_container(experiment_id, mddash_volume)
+    s3_sync_container = get_s3_sync_container(experiment_id, mddash_volume)
+
+    job_manifest = {
+        'apiVersion': 'batch/v1',
+        'kind': 'Job',
+        'metadata': {
+            'name': name,
+            'namespace': ns,
+            'labels': {
+                'app': name
+            }
+        },
+        'spec': {
+            'backoffLimit': 0,
+            'template': {
+                'metadata': {
+                    'labels': {
+                        'job': name
+                    }
+                },
+                'spec': {
+                    'restartPolicy': 'Never',
+                    'securityContext': {
+                        'fsGroup': 1000,
+                        'runAsNonRoot': True,
+                        'allowPrivilegeEscalation': False,
+                        'seccompProfile': {
+                            'type': 'RuntimeDefault'
+                        }
+                    },
+                    'initContainers': [
+                        s3_init_container
+                    ],
+                    'containers': [
+                        job_container,
+                        s3_sync_container
+                    ],
+                    'volumes': [
+                        {
+                            'name': mddash_volume,
+                            'emptyDir': {
+                                'sizeLimit': '50Gi'  # TODO: adjust based on our needs
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    }
+
+    batch_v1.create_namespaced_job(namespace=ns, body=job_manifest)
+
+
 def ping_resource(resource_type: str, name: str, ns: str) -> bool:
+    """
+    Check if a given resource exists in the specified namespace.
+
+    :param resource_type: The type of the resource (e.g., 'svc', 'pod', 'configmap', 'secret', 'pvc', 'job').
+    :param name: The name of the resource.
+    :param ns: The namespace to check in.
+    """
+
     try:
         match resource_type:
             case 'svc':
@@ -319,6 +430,20 @@ def delete_pod(ns: str, name: str) -> None:
         return
 
     core_v1.delete_namespaced_pod(name=name, namespace=ns)
+
+
+def delete_job(ns: str, name: str) -> None:
+    if not ping_resource('job', name, ns):
+        return
+
+    batch_v1.delete_namespaced_job(
+        name=name,
+        namespace=ns,
+        body=client.V1DeleteOptions(
+            propagation_policy='Background',
+            grace_period_seconds=5,
+        )
+    )
 
 
 def delete_service(ns: str, name: str) -> None:
