@@ -2,9 +2,10 @@ import logging
 from flask import Flask
 from flask_migrate import upgrade, init, migrate as flask_migrate
 
-from config import DATA_DIR
+from config import DATA_DIR, LOG_FORMAT, LOG_LEVEL
 from extensions import db, ma, migrate
 from routes import *
+from logging_utils import configure_logging, enable_loggers
 
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,10 @@ def create_app() -> Flask:
             logger.warning("Migration failed, creating tables manually", exc_info=True)
             db.create_all()
 
+    # Alembic may tweak logging handlers; restore our configuration afterwards
+    configure_logging(LOG_FORMAT, LOG_LEVEL)
+    enable_loggers()
+
     return app
 
 
@@ -61,6 +66,7 @@ app = create_app()
 
 # DEVELOPMENT ONLY - when running directly with python app.py
 if __name__ == '__main__':
-    logging.basicConfig(level=logging.DEBUG)
+    configure_logging(LOG_FORMAT, LOG_LEVEL)
+    # logging.getLogger().setLevel(logging.DEBUG)
     logger.info("Starting Flask development server...")
     app.run(debug=True, host='0.0.0.0', port=5000)

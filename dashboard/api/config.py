@@ -2,11 +2,15 @@ import os
 import logging
 from pathlib import Path
 
+from logging_utils import configure_logging
+
 
 LOG_FORMAT = '[%(asctime)s] %(levelname)s\t%(name)s: %(message)s'
-logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
+LOG_LEVEL = logging.INFO
+
+configure_logging(LOG_FORMAT, LOG_LEVEL)
+
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
 
 
 JUPYTER_USER = os.environ.get('JUPYTERHUB_USER', "")
