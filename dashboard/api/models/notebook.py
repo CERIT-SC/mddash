@@ -51,7 +51,6 @@ class Notebook(db.Model):  # type: ignore
         svc_name = f'svc-{self.experiment_id}'
 
         k8s.create_notebook_pod(
-            NOTEBOOK_IMAGE,
             NAMESPACE,
             pod_name,
             self.experiment_id,
