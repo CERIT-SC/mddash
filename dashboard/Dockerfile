@@ -34,6 +34,7 @@ RUN mkdir -p /mddash/logs /caddy/data /caddy/config
 COPY --from=caddy-stage --chown=1000:100 /usr/bin/caddy /usr/bin/caddy
 COPY --from=build-stage --chown=1000:100 /usr/src/app/dist /opt/dash
 COPY --chown=1000:100 ./api /opt/api
+COPY --chown=1000:100 ./auth /opt/auth
 COPY --chown=1000:100 ./Caddyfile /caddy/
 COPY --chown=1000:100 ./entrypoint.sh /entrypoint.sh
 COPY --chown=1000:100 ./scripts/ /scripts/

@@ -28,6 +28,9 @@ http://:8888 {
         path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/api.*$
     }
     handle @api_routes {
+        forward_auth localhost:5001 {
+            uri /auth
+        }
         reverse_proxy localhost:5000
     }
 
@@ -42,6 +45,9 @@ http://:8888 {
         path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/.*$
     }
     handle @dash_routes {
+        forward_auth localhost:5001 {
+            uri /auth
+        }
         root * /var/tmp
         
         # Strip the prefix and serve files from /dash/

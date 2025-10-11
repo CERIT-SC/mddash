@@ -51,6 +51,15 @@ start_api() {
     return 0
 }
 
+start_forward_auth() {
+    log "Starting Forward Auth in background"
+    python /opt/auth/auth.py > "$LOG_DIR/forward-auth.log" 2>&1 &
+    local auth_pid=$!
+    echo "$auth_pid" > "$LOG_DIR/forward-auth.pid"
+    log "Forward Auth started with PID: $auth_pid"
+    return 0
+}
+
 start_jupyterhub() {
     log "Starting JupyterHub single-user server"
     exec jupyterhub-singleuser \
@@ -95,6 +104,7 @@ case "${1:-start-all}" in
         ;;
     "start-all")
         setup_path_injection
+        start_forward_auth
         start_caddy
         start_api
         start_jupyterhub
