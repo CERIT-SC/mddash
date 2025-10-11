@@ -3,23 +3,15 @@ from kubernetes import client, config  # type: ignore
 from kubernetes.client.rest import ApiException  # type: ignore
 
 from enums import PodStatus
-from config import S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT, S3_BUCKET
+from config import GPU_TYPE, NOTEBOOK_IMAGE, GMX_IMAGE, S3_CLIENT_IMAGE, S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT, S3_BUCKET
 
 
 logger = logging.getLogger(__name__)
 
-# TODO: move to config.py and make configurable
-GPU_TYPE = 'nvidia.com/mig-1g.10gb'
-S3_CLIENT_IMAGE = 'rclone/rclone:latest'
-GMX_IMAGE = 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2'
 
 config.load_incluster_config()
 core_v1 = client.CoreV1Api()
 batch_v1 = client.BatchV1Api()
-
-
-# TODO
-#  Ensure your pod has a corresponding label, such as spec.template.metadata.labels.app: example-pod.
 
 
 def get_container(
@@ -30,6 +22,7 @@ def get_container(
     command: list[str],
     env: list[dict] | None = None,
     set_working_dir: bool = True,
+    resources: dict | None = None,
 ) -> dict:
     """
     Get a generic container mounted to `mddash_volume` and started in `/mddash/{experiment_id}`.
@@ -41,6 +34,7 @@ def get_container(
     :param command: The command to run in the container.
     :param env: Optional list of environment variables to set in the container.
     :param set_working_dir: Whether to set the working directory to `/mddash/{experiment_id}`.
+    :param resources: Optional resource requests/limits. If None, uses default (100m CPU, 128Mi memory).
     """
 
     container = {
@@ -48,18 +42,18 @@ def get_container(
             'runAsUser': 1000,
             'runAsGroup': 1000,
             'runAsNonRoot': True,
-            'seccompProfile': {
-                'type': 'RuntimeDefault'
-            },
             'allowPrivilegeEscalation': False,
             'capabilities': {
                 'drop': ['ALL']
+            },
+            'seccompProfile': {
+                'type': 'RuntimeDefault'
             }
         },
         'name': name,
         'image': image,
         'imagePullPolicy': 'Always',  # TODO. maybe IfNotPresent?
-        'resources': {
+        'resources': resources or {
             'requests': {'cpu': '100m', 'memory': '128Mi'},
             'limits': {'cpu': '200m', 'memory': '256Mi'}
         },
@@ -185,15 +179,7 @@ EOF
     return get_container('s3-sync', S3_CLIENT_IMAGE, experiment_id, mddash_volume, ['sh', '-c', s3_sync_command], env)
 
 
-# TODO: shouldn't notebook image be a global constant instead?
-def create_notebook_pod(
-    image: str,
-    ns: str,
-    name: str,
-    experiment_id: str,
-    prefix: str,
-    token: str
-) -> None:
+def create_notebook_pod(ns: str, name: str, experiment_id: str, prefix: str, token: str) -> None:
     if ping_resource('pod', name, ns):
         logger.warning(f"Pod {name} already exists in namespace {ns}. Skipping creation.")
         return
@@ -227,17 +213,39 @@ def create_notebook_pod(
     """
 
     mddash_volume = 'shared-data'
-    gmx_container = get_container('gmx', GMX_IMAGE, experiment_id, mddash_volume, ['sleep', '365d'])
     workdir_init_container = get_container(
         'workdir-init',
-        image,
+        NOTEBOOK_IMAGE,
         experiment_id,
         mddash_volume,
         ['sh', '-c', workdir_init_command],
         set_working_dir=False
     )
+    gmx_container = get_container('gmx', GMX_IMAGE, experiment_id, mddash_volume, ['sleep', '365d'])
     s3_init_container = get_s3_init_container(experiment_id, mddash_volume)
     s3_sync_container = get_s3_sync_container(experiment_id, mddash_volume)
+    
+    jupyter_command = ['sh', '-c',
+        f'trap "echo \\"Container terminated at $(date)\\" > /mddash/.terminated" EXIT TERM INT; '
+        f'start-notebook.sh '
+        f'--NotebookApp.base_url={prefix} '
+        f'--NotebookApp.notebook_dir=/mddash/{experiment_id} '
+        f'--NotebookApp.token="{token}"'
+    ]
+    jupyter_env = [{'name': 'WORKDIR', 'value': f'/mddash/{experiment_id}'}]
+    jupyter_resources = {
+        'requests': {'cpu': '100m', 'memory': '512Mi'},
+        'limits': {'cpu': '2000m', 'memory': '8Gi'}
+    }
+    jupyter_container = get_container(
+        'jupyter',
+        NOTEBOOK_IMAGE,
+        experiment_id,
+        mddash_volume,
+        jupyter_command,
+        env=jupyter_env,
+        resources=jupyter_resources
+    )
 
     pod_manifest = {
         'apiVersion': 'v1',
@@ -253,52 +261,14 @@ def create_notebook_pod(
             'securityContext': {
                 'fsGroup': 1000,
                 'fsGroupChangePolicy': 'Always',
-                'runAsUser': 1000,
-                'runAsGroup': 1000,
-                'supplementalGroups': [1000],
-                'runAsNonRoot': True,
-                'allowPrivilegeEscalation': False,
-                'seccompProfile': {
-                    'type': 'RuntimeDefault'
-                }
+                'supplementalGroups': [1000]
             },
-                    'initContainers': [
-                        s3_init_container,
-                        workdir_init_container
-                    ],
+            'initContainers': [
+                s3_init_container,
+                workdir_init_container
+            ],
             'containers': [
-                {
-                    'securityContext': {
-                        'runAsNonRoot': True,
-                        'runAsUser': 1000,
-                        'runAsGroup': 1000,
-                        'allowPrivilegeEscalation': False,
-                        'capabilities': {
-                            'drop': ['ALL']
-                        }
-                    },
-                    'name': 'jupyter',
-                    'image': image,
-                    'imagePullPolicy': 'Always',
-                    'resources': {
-                        'requests': {'cpu': '100m', 'memory': '512Mi'},
-                        'limits': {'cpu': '2000m', 'memory': '8Gi'}
-                    },
-                    'workingDir': f'/mddash/{experiment_id}',
-                    'env': [
-                        {'name': 'WORKDIR', 'value': f'/mddash/{experiment_id}'},
-                    ],
-                    'command': ['sh', '-c',
-                        f'trap "echo \\"Container terminated at $(date)\\" > /mddash/.terminated" EXIT TERM INT; '
-                        f'start-notebook.sh '
-                        f'--NotebookApp.base_url={prefix} '
-                        f'--NotebookApp.notebook_dir=/mddash/{experiment_id} '
-                        f'--NotebookApp.token="{token}"'
-                    ],
-                    'volumeMounts': [
-                        {'mountPath': '/mddash', 'name': mddash_volume}
-                    ]
-                },
+                jupyter_container,
                 gmx_container,
                 s3_sync_container
             ],
@@ -364,12 +334,7 @@ def create_job(name: str, image: str, ns: str, experiment_id: str, command: str)
                 'spec': {
                     'restartPolicy': 'Never',
                     'securityContext': {
-                        'fsGroup': 1000,
-                        'runAsNonRoot': True,
-                        'allowPrivilegeEscalation': False,
-                        'seccompProfile': {
-                            'type': 'RuntimeDefault'
-                        }
+                        'fsGroup': 1000
                     },
                     'initContainers': [
                         s3_init_container
