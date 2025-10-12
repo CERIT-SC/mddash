@@ -21,16 +21,19 @@ export interface Notebook {
 }
 
 export interface TunerJob {
-    tuner_run_id: string;
+    id: number;
+    tuner_run_id: string | null;
     experiment_id: string;
     tpr_name: string;
+    is_pending: boolean;
+    error_message: string | null;
     created_at: string;
     is_stopped: boolean;
     summary: {
-        RUNNING: number;
-        PENDING: number;
-        TERMINATED: number;
-        ERROR: number;
+        RUNNING?: number;
+        PENDING?: number;
+        TERMINATED?: number;
+        ERROR?: number;
     };
     trials: TunerTrial[];
     cluster_resources: string;
