@@ -18,10 +18,18 @@ class MdrunJob(db.Model):  # type: ignore
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now())
     job_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     experiment_id: Mapped[str] = mapped_column(db.String(255), nullable=False)
+    last_status: Mapped[JobStatus] = mapped_column(db.Enum(JobStatus), default=JobStatus.PENDING, nullable=False)
 
     @property
     def status(self) -> JobStatus:
-        return k8s_client.get_job_status(ns=NAMESPACE, name=self.job_name)
+        job_status = k8s_client.get_job_status(ns=NAMESPACE, name=self.job_name)
+
+        if job_status != self.last_status and job_status != JobStatus.UNKNOWN:
+            self.handle_status_change(self.last_status, job_status)
+            self.last_status = job_status
+            db.session.commit()
+
+        return job_status
 
     @classmethod
     def create_and_start(
@@ -68,4 +76,11 @@ class MdrunJob(db.Model):  # type: ignore
 
     def delete(self) -> None:
         k8s_client.delete_job(ns=NAMESPACE, name=self.job_name)
-        logger.info(f"Deleted MDRun job {self.job_name} with ID {self.id}")
+
+    def handle_status_change(self, old: JobStatus, new: JobStatus) -> None:
+    
+        logger.info(f"MDRun job {self.job_name} status changed from {old} to {new}")
+
+        # Automatically delete finalized jobs (status is preserved in DB)
+        if new == JobStatus.TERMINATED or new == JobStatus.ERROR:
+            self.delete()

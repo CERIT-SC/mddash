@@ -4,6 +4,7 @@ from flask_cors import CORS
 from config import DB_URL
 from extensions import db, ma
 from routes import mdrun_bp, health_bp
+from polling import start_polling
 
 
 def create_app() -> Flask:
@@ -27,6 +28,9 @@ def create_app() -> Flask:
 
 
 app = create_app()
+
+# Start job status polling in background thread
+start_polling(app)
 
 
 if __name__ == '__main__':

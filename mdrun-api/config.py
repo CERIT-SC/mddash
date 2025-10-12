@@ -14,6 +14,8 @@ DB_URL = f'sqlite:///{DATA_DIR}/mdrun.db'
 NAMESPACE = os.environ.get('POD_NAMESPACE', 'default')
 PVC_NAME = os.environ.get('PVC_NAME', 'mdrun-api-pvc')
 
+GPU_TYPE = 'nvidia.com/mig-1g.10gb'
+
 # Parse S3 credentials from S3_CREDENTIALS environment variable
 def parse_s3_credentials():
     """Parse S3 credentials from environment variable containing export statements."""
