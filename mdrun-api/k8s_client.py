@@ -37,8 +37,14 @@ def create_gromacs_job(
     s3_sync_image = 'rclone/rclone:latest'  # TODO: lock version
 
     gromacs_command = f"""
-        trap 'touch /data/job_completed' EXIT
+        trap 'touch /data/job_completed' EXIT TERM INT
         mpirun -np {np} gmx mdrun -ntomp {ntomp} -nb {nb} -pme {pme} -deffnm {deffnm} {extra_args} > >(tee {name}.out) 2> >(tee {name}.err >&2)
+        echo "Processing trajectory for visualization..."
+        gmx select -s {deffnm}.gro -on {deffnm}.p.ndx -select Protein && \
+        gmx trjconv -s {deffnm}.gro -f {deffnm}.xtc -o {deffnm}.pbc.xtc -pbc nojump -n {deffnm}.p.ndx && \
+        gmx trjconv -s {deffnm}.gro -f {deffnm}.pbc.xtc -o {deffnm}.fit.xtc -fit rot+trans -n {deffnm}.p.ndx && \
+        rm -f {deffnm}.p.ndx {deffnm}.pbc.xtc && \
+        echo "Trajectory processing completed."
     """
 
     # S3 sync commands using rclone - download initially, then continuously sync with final sync on completion

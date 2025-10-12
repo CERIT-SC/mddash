@@ -1,6 +1,5 @@
 import re
 import logging
-from uuid import uuid4
 from flask import abort
 from pathlib import Path
 from datetime import datetime
@@ -20,6 +19,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)  # 1s
 performance_cache: TTLCache = TTLCache(maxsize=100, ttl=1)  # 1s
 nsteps_done_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)  # 500ms
 estimated_time_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)  # 500ms
@@ -29,7 +29,7 @@ class GromacsJob(db.Model):  # type: ignore
     __tablename__ = 'gromacs_jobs'
 
     # TODO: verify if files with these extensions should really be deleted
-    RESULT_EXTENSIONS = ['edr', 'gro', 'log', 'trr', 'xtc', 'cpt']
+    RESULT_EXTENSIONS = ['edr', 'gro', 'log', 'trr', 'xtc', 'cpt', 'fit.xtc']
 
     # ID of the job inside the database
     id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
@@ -81,11 +81,12 @@ class GromacsJob(db.Model):  # type: ignore
         return DATA_DIR / self.experiment_id / f'mdrun-{self.id}.err'
 
     @property
+    @cached(cache=status_cache)
     def status(self) -> JobStatus:
         """Current status of the k8s job."""
         try:
             return JobStatus.from_string(mdrun.get_job(self.id)['status'])
-        except Exception as e:
+        except Exception:
             logger.error(f"Error fetching job status for job {self.id}", exc_info=True)
             return JobStatus.UNKNOWN
 

@@ -306,7 +306,7 @@ def create_job(name: str, image: str, ns: str, experiment_id: str, command: str)
 
     # Wrap the command to create a /mddash/.terminated file on exit
     trapped_command = ['sh', '-c',
-        f'trap "echo \\"Container terminated at $(date)\\" > /mddash/.terminated" EXIT TERM INT; {command}'
+        f'trap "touch /mddash/.terminated" EXIT TERM INT; {command}'
     ]
 
     job_container = get_container(name, image, experiment_id, mddash_volume, trapped_command)
