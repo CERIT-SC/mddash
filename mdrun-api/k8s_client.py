@@ -3,10 +3,9 @@ from kubernetes import client, config  # type: ignore
 from kubernetes.client.rest import ApiException  # type: ignore
 
 from enums import JobStatus
-from config import S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT
+from config import GPU_TYPE, S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT
 
 logger = logging.getLogger(__name__)
-GPU_TYPE = 'nvidia.com/mig-1g.10gb'
 
 config.load_incluster_config()
 core_v1 = client.CoreV1Api()
@@ -95,6 +94,7 @@ EOF
         },
         'spec': {
             'backoffLimit': 0,
+            'ttlSecondsAfterFinished': 3600,  # 1 hour
             'template': {
                 'metadata': {
                     'labels': {
