@@ -15,13 +15,13 @@ POLL_INTERVAL_SECONDS = 15 * 60
 def _polling_worker(app: Flask) -> None:
     """Background worker that polls job statuses periodically."""
     logger.info(f"Starting job status polling worker (interval: {POLL_INTERVAL_SECONDS}s)")
-    
+
     while True:
         try:
             with app.app_context():
                 # Query all active jobs
                 active_statuses = [JobStatus.PENDING, JobStatus.UNKNOWN, JobStatus.RUNNING]
-                jobs = MdrunJob.query.filter(MdrunJob.last_status.in_(active_statuses)).all()
+                jobs: list[MdrunJob] = MdrunJob.query.filter(MdrunJob.last_status.in_(active_statuses)).all()
                 
                 logger.info(f"Polling {len(jobs)} active jobs")
                 
@@ -31,10 +31,10 @@ def _polling_worker(app: Flask) -> None:
                         _ = job.status
                     except Exception as e:
                         logger.error(f"Error polling job {job.job_name}: {e}", exc_info=True)
-                        
+
         except Exception as e:
             logger.error(f"Error in polling worker: {e}", exc_info=True)
-        
+
         # Wait for the next polling interval
         time.sleep(POLL_INTERVAL_SECONDS)
 
