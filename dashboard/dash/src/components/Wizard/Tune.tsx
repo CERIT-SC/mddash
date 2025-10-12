@@ -16,6 +16,8 @@ import {
     Tabs,
     Tab,
     Radio,
+    TextField,
+    Alert,
 } from "@mui/material";
 import { Delete, PlayArrow, Cancel, Pause } from "@mui/icons-material";
 import { tableCellClasses } from "@mui/material/TableCell";
@@ -152,6 +154,7 @@ const TunerView = (props: TunerViewProps) => {
     const [tunerStopped, setTunerStopped] = useState(false);
     const [tuner, setTuner] = useState<TunerJob | null>(null);
     const [selectedTrial, setSelectedTrial] = useState<TunerTrial | null>(null);
+    const [nsteps, setNsteps] = useState<number | "">(25000);
 
     const [confirmStopDialog, setConfirmStopDialog] = useState(false);
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
@@ -160,7 +163,7 @@ const TunerView = (props: TunerViewProps) => {
         const { data, error } = await tuner_status(experiment.id, tprName);
         if (showError && error) setErrorMessage(error);
         setTuner(data || null);
-        setTunerStarted(!!data?.trials);
+        setTunerStarted(!!data && !data.is_pending && !!data.trials && data.trials.length > 0);
         setTunerStopped(data?.is_stopped || false);
 
         // Maintain selected trial after data refresh
@@ -176,7 +179,8 @@ const TunerView = (props: TunerViewProps) => {
     };
 
     const runTuner = async () => {
-        const { error } = await run_tuner(experiment.id, tprName);
+        const actualNsteps = nsteps === "" ? 25000 : nsteps;
+        const { error } = await run_tuner(experiment.id, tprName, actualNsteps);
         setErrorMessage(error || "");
         fetchStatus(true);
     };
@@ -186,14 +190,21 @@ const TunerView = (props: TunerViewProps) => {
         else changeStep(2);
     };
 
+    // initial fetch
     useEffect(() => {
         setLoading(true);
         fetchStatus(false).finally(() => setLoading(false));
+    }, [tprName, experiment.id]);
 
+    // polling for tuner status
+    useEffect(() => {
         let intervalId: number | null = null;
 
-        // refresh tuner status every 5 seconds if the tuner is up and running
-        if (tunerStarted && !tunerStopped) {
+        // refresh tuner status every 5 seconds
+        const shouldPoll =
+            tuner?.is_pending || (tunerStarted && !tunerStopped) || (tuner?.tuner_run_id && !tunerStarted);
+
+        if (shouldPoll) {
             intervalId = window.setInterval(() => {
                 fetchStatus(true);
             }, 5000);
@@ -201,11 +212,10 @@ const TunerView = (props: TunerViewProps) => {
 
         return () => {
             if (intervalId !== null) {
-                console.log("Clearing tuner status interval.");
                 window.clearInterval(intervalId);
             }
         };
-    }, [tprName, experiment.id, tunerStarted, tunerStopped]);
+    }, [tuner?.is_pending, tuner?.tuner_run_id, tunerStarted, tunerStopped]);
 
     return (
         <>
@@ -256,26 +266,88 @@ const TunerView = (props: TunerViewProps) => {
                             )}
                         </Stack>
                     )) || (
-                        <Stack direction="column" spacing={1} alignItems="center">
-                            <Typography variant="h4">Tuner not running.</Typography>
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                startIcon={<PlayArrow />}
-                                onClick={runTuner}
-                                sx={{ width: 200 }}
-                            >
-                                Start tune job
-                            </Button>
-                            <Button
-                                variant="contained"
-                                color="error"
-                                startIcon={<Cancel />}
-                                onClick={() => cancelJob(tprName)}
-                                sx={{ width: 200 }}
-                            >
-                                Cancel
-                            </Button>
+                        <Stack direction="column" spacing={2} alignItems="center">
+                            {tuner?.error_message && (
+                                <Alert severity="error" sx={{ width: "100%" }}>
+                                    <strong>Error:</strong> {tuner.error_message}
+                                </Alert>
+                            )}
+                            {tuner?.is_pending && (
+                                <Alert severity="info" sx={{ width: "100%" }}>
+                                    Preparing tuner job (modifying TPR file)...
+                                </Alert>
+                            )}
+                            {!tuner?.is_pending && !tuner?.error_message && (
+                                <Typography variant="h4">Tuner not running.</Typography>
+                            )}
+
+                            {/* Show input and start button only when no job exists or job has error */}
+                            {(!tuner || tuner.error_message) && (
+                                <>
+                                    <TextField
+                                        label="Number of steps (nsteps)"
+                                        type="number"
+                                        value={nsteps}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (val === "") {
+                                                setNsteps("");
+                                            } else {
+                                                const num = parseInt(val);
+                                                if (!isNaN(num)) {
+                                                    setNsteps(num);
+                                                }
+                                            }
+                                        }}
+                                        sx={{ width: 300 }}
+                                        disabled={!!tuner?.error_message}
+                                    />
+                                    <Button
+                                        variant="contained"
+                                        color="primary"
+                                        startIcon={<PlayArrow />}
+                                        onClick={runTuner}
+                                        sx={{ width: 200 }}
+                                    >
+                                        Start tune job
+                                    </Button>
+                                </>
+                            )}
+
+                            {/* Show appropriate button based on state */}
+                            {tuner?.is_pending ? (
+                                <Button
+                                    variant="contained"
+                                    color="error"
+                                    startIcon={<Delete />}
+                                    onClick={() => setConfirmDeleteDialog(true)}
+                                    sx={{ width: 200 }}
+                                >
+                                    Delete
+                                </Button>
+                            ) : tuner?.error_message ? (
+                                <Button
+                                    variant="contained"
+                                    color="error"
+                                    startIcon={<Delete />}
+                                    onClick={() => setConfirmDeleteDialog(true)}
+                                    sx={{ width: 200 }}
+                                >
+                                    Delete
+                                </Button>
+                            ) : (
+                                !tuner && (
+                                    <Button
+                                        variant="contained"
+                                        color="error"
+                                        startIcon={<Cancel />}
+                                        onClick={() => cancelJob(tprName)}
+                                        sx={{ width: 200 }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                )
+                            )}
                         </Stack>
                     )}
                 </>
@@ -292,7 +364,11 @@ const TunerView = (props: TunerViewProps) => {
                 open={confirmDeleteDialog}
                 setOpen={setConfirmDeleteDialog}
                 onConfirm={() => deleteJob(tprName)}
-                message="Are you sure you want to delete this tuning job? The data will be lost."
+                message={
+                    tuner?.is_pending
+                        ? "Are you sure you want to delete this tuning job? The TPR modification will be cancelled."
+                        : "Are you sure you want to delete this tuning job? The data will be lost."
+                }
             />
         </>
     );

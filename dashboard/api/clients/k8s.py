@@ -1,8 +1,10 @@
 import logging
+import threading
+from typing import Callable
 from kubernetes import client, config  # type: ignore
 from kubernetes.client.rest import ApiException  # type: ignore
 
-from enums import PodStatus
+from enums import PodStatus, JobStatus
 from config import GPU_TYPE, NOTEBOOK_IMAGE, GMX_IMAGE, S3_CLIENT_IMAGE, S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT, S3_BUCKET
 
 
@@ -520,3 +522,61 @@ def get_pod_status(ns: str, name: str) -> PodStatus:
 
     except ApiException as e:
         return PodStatus.DOWN if e.status == 404 else PodStatus.ERROR
+
+
+def get_job_status(ns: str, name: str) -> JobStatus:
+    try:
+        job = batch_v1.read_namespaced_job(name=name, namespace=ns)
+
+        if job.status.conditions:
+            for condition in job.status.conditions:
+                if condition.type == "Complete" and condition.status == "True":
+                    return JobStatus.TERMINATED
+                elif condition.type == "Failed" and condition.status == "True":
+                    return JobStatus.ERROR
+
+        if job.status.succeeded and job.status.succeeded > 0:
+            return JobStatus.TERMINATED
+        elif job.status.failed and job.status.failed > 0:
+            return JobStatus.ERROR
+        elif job.status.active and job.status.active > 0:
+            return JobStatus.RUNNING
+        else:
+            return JobStatus.PENDING
+
+    except ApiException as e:
+        if e.status == 404:
+            return JobStatus.UNKNOWN
+        return JobStatus.ERROR
+
+
+def wait_for_job(ns: str, name: str, on_success: Callable[[], None], on_error: Callable[[Exception], None], timeout: int = 60) -> None:
+    """
+    Wait for a K8s job to complete in a background thread, then call the appropriate callback.
+    
+    :param ns: The namespace
+    :param name: Name of the job to wait for
+    :param on_success: Callback to call when the job completes successfully
+    :param on_error: Callback to call when the job fails or times out
+    :param timeout: Maximum time to wait in seconds
+    """
+    import time
+    
+    def wait_and_callback():
+        try:
+            start_time = time.time()
+            while time.time() - start_time < timeout:
+                status = get_job_status(ns, name)
+                if status == JobStatus.TERMINATED:
+                    on_success()
+                    return
+                elif status == JobStatus.ERROR:
+                    raise RuntimeError(f"Job {name} failed")
+                time.sleep(2)
+            
+            raise RuntimeError(f"Job {name} timed out after {timeout}s")
+        except Exception as e:
+            on_error(e)
+    
+    thread = threading.Thread(target=wait_and_callback, daemon=True)
+    thread.start()

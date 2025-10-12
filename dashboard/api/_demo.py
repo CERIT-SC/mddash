@@ -55,9 +55,12 @@ gromacs_demo_jobs = [gromacs_demo_job, {
 
 
 tuner_demo_status = {
+    'id': 1,
     'tuner_run_id': '6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
     'experiment_id': 'abcde',
     'tpr_name': 'LSD.tpr',
+    'is_pending': False,
+    'error_message': None,
     'created_at': '2025-01-15T09:30:00',
     'is_stopped': False,
     'summary': {
@@ -100,9 +103,12 @@ tuner_demo_status = {
 
 tuner_demo_statuses = [
     {
+        'id': 1,
         'tuner_run_id': '6bec87ce-6f0c-4f8c-9572-426a1c62f44d',
-        'experiment_id': 'abcde',
+        'experiment_id': 'bbbbb',
         'tpr_name': 'LSD.tpr',
+        'is_pending': False,
+        'error_message': None,
         'created_at': '2025-01-15T09:30:00',
         'is_stopped': False,
         'summary': {
@@ -143,9 +149,12 @@ tuner_demo_statuses = [
         'cluster_resources': '32/32 CPUs, 0/1 GPUs used'
     },
     {
+        'id': 2,
         'tuner_run_id': '7bec87ce-6f0c-4f8c-9572-426a1c62f44e',
-        'experiment_id': 'abcde',
+        'experiment_id': 'bbbbb',
         'tpr_name': 'MDMA.tpr',
+        'is_pending': False,
+        'error_message': None,
         'created_at': '2025-01-15T09:45:00',
         'is_stopped': True,
         'summary': {
@@ -175,6 +184,36 @@ tuner_demo_statuses = [
             }
         ],
         'cluster_resources': '0/32 CPUs, 0/1 GPUs used'
+    },
+    {
+        'id': 3,
+        'tuner_run_id': None,
+        'experiment_id': 'bbbbb',
+        'tpr_name': 'Pending.tpr',
+        'is_pending': True,
+        'error_message': None,
+        'created_at': '2025-01-15T10:00:00',
+        'is_stopped': False,
+        'summary': {
+            'PENDING': 1
+        },
+        'trials': [],
+        'cluster_resources': 'Pending'
+    },
+    {
+        'id': 4,
+        'tuner_run_id': None,
+        'experiment_id': 'bbbbb',
+        'tpr_name': 'Failed.tpr',
+        'is_pending': False,
+        'error_message': 'TPR modification failed: Job tpr-mod-abcde-1234567890 failed',
+        'created_at': '2025-01-15T10:15:00',
+        'is_stopped': False,
+        'summary': {
+            'ERROR': 1
+        },
+        'trials': [],
+        'cluster_resources': 'Error'
     }
 ]
 
@@ -306,9 +345,12 @@ def get_notebook(experiment_id):
 @bp.route('/api/experiments/<experiment_id>/tuner/<tpr_name>', methods=['POST'])
 def submit_tuner(experiment_id, tpr_name):
     new_tuner = tuner_demo_status.copy()
+    new_tuner['id'] = max([t['id'] for t in tuner_demo_statuses]) + 1 if tuner_demo_statuses else 1
     new_tuner['tuner_run_id'] = str(uuid4())
     new_tuner['experiment_id'] = experiment_id
     new_tuner['tpr_name'] = tpr_name
+    new_tuner['is_pending'] = False
+    new_tuner['error_message'] = None
     new_tuner['created_at'] = '2025-01-15T12:00:00'
     tuner_demo_statuses.append(new_tuner)
     return ApiResponse.success(new_tuner)
