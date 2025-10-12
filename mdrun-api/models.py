@@ -24,7 +24,10 @@ class MdrunJob(db.Model):  # type: ignore
     def status(self) -> JobStatus:
         job_status = k8s_client.get_job_status(ns=NAMESPACE, name=self.job_name)
 
-        if job_status != self.last_status and job_status != JobStatus.UNKNOWN:
+        if job_status == JobStatus.UNKNOWN:
+            return self.last_status
+
+        if job_status != self.last_status:
             self.handle_status_change(self.last_status, job_status)
             self.last_status = job_status
             db.session.commit()
