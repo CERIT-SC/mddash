@@ -42,16 +42,18 @@ def get_files_with_extension(dir: Path, ext: str | list[str]) -> list[dict[str, 
     if not dir.is_dir():
         raise ValueError(f'{dir} is not a directory')
 
-    for file_path in dir.iterdir():
-        if not file_path.is_file():
+    for file in dir.iterdir():
+        if not file.is_file():
             continue
 
+        file_lower = file.name.lower()
         for e in ext:
-            if file_path.suffix.lower() == f'.{e}':
+            if file_lower.endswith(f'.{e}'):
                 files.append({
-                    'name': file_path.name,
-                    'size': file_path.stat().st_size
+                    'name': file.name,
+                    'size': file.stat().st_size
                 })
+                break  # Avoid duplicate entries
 
     return files
 
