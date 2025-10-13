@@ -5,77 +5,92 @@
         format console
     }
 
-    # Enable the Admin API
     admin 0.0.0.0:2019
 
-    # Store Caddy's state (like certificates) in /caddy/data
     storage file_system {
         root /caddy/data
     }
 
-    # Disable automatic HTTPS because k8s handles certificates
     auto_https off
 }
 
 http://:8888 {
+    # NOTE: When changing something here, it can break the ./api/clients/caddy.py logic!
+
     log {
         output file /caddy/access.log
         format console
     }
 
-    # Handle your API routes - using CADDY_ROUTE_PREFIX
-    @api_routes {
-        path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/api.*$
+    # Define matchers
+    @oauth_callback {
+        path {$CADDY_ROUTE_PREFIX}/oauth_callback*
     }
-    handle @api_routes {
+
+    @protected {
+        not path {$CADDY_ROUTE_PREFIX}/oauth_callback*
+    }
+
+    # Apply forward_auth only for protected routes
+    handle @protected {
         forward_auth localhost:5001 {
             uri /auth
         }
-        reverse_proxy localhost:5000
-    }
 
-    # Handle exact /dash path (redirect to /dash/)
-    @dash_redirect {
-        path {$CADDY_ROUTE_PREFIX}/dash
-    }
-    redir @dash_redirect {$CADDY_ROUTE_PREFIX}/dash/ 308
+        # Define subroutes after auth check
+        route {
+            # API routes
+            @api_routes {
+                path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/api.*$
+            }
+            handle @api_routes {
+                reverse_proxy localhost:5000
+            }
 
-    # Handle all dashboard routes starting with /dash/
-    @dash_routes {
-        path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/.*$
-    }
-    handle @dash_routes {
-        forward_auth localhost:5001 {
-            uri /auth
+            # Redirect /dash to /dash/
+            @dash_redirect {
+                path {$CADDY_ROUTE_PREFIX}/dash
+            }
+            redir @dash_redirect {$CADDY_ROUTE_PREFIX}/dash/ 308
+
+            # Dashboard routes
+            @dash_routes {
+                path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/.*$
+            }
+            handle @dash_routes {
+                root * /var/tmp
+
+                @is_asset {
+                    path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/(.*)$
+                }
+                rewrite @is_asset /dash/{re.1}
+
+                @not_a_file {
+                    not file {path}
+                }
+                rewrite @not_a_file /dash/index.html
+
+                try_files {path} /dash/index.html
+
+                file_server
+                encode zstd gzip
+            }
+
+            # JupyterHub - everything else
+            handle {$CADDY_ROUTE_PREFIX}* {
+                reverse_proxy localhost:8889
+            }
+
+            # Fallback
+            route {
+                respond "Where the hell do you think you are going?" 404
+            }
         }
-        root * /var/tmp
-        
-        # Strip the prefix and serve files from /dash/
-        @is_asset {
-            path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/(.*)$
-        }
-        rewrite @is_asset /dash/{re.1}
-        
-        # For React Router: serve index.html for any path that doesn't match a file
-        @not_a_file {
-            not file {path}
-        }
-        rewrite @not_a_file /dash/index.html
-        
-        # Always try to serve files, fallback to index.html
-        try_files {path} /dash/index.html
-        
-        file_server
-        encode zstd gzip
     }
 
-    # JupyterHub - everything else
-    handle {$CADDY_ROUTE_PREFIX}* {
-        reverse_proxy localhost:8889
-    }
-
-    # Fallback response
-    route {
-      respond "Where the hell do you think you are going?" 404
+    # OAuth callback (no auth)
+    handle @oauth_callback {
+        uri strip_prefix {$CADDY_ROUTE_PREFIX}
+        reverse_proxy localhost:5001
     }
 }
