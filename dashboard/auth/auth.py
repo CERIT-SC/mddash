@@ -1,8 +1,10 @@
 import os
 import time
 import secrets
+import hmac
+import hashlib
 import requests
-from flask import Flask, Response, request, redirect, make_response
+from flask import Flask, request, redirect, make_response
 
 app = Flask(__name__)
 
@@ -23,28 +25,48 @@ if not all([USER, CLIENT_ID, API_TOKEN, API_URL, CALLBACK_URL]):
 COOKIE_NAME = 'mddash-auth'
 STATE_COOKIE = 'mddash-state'
 
+# Master secret key for state validation
+STATE_SECRET = secrets.token_bytes(32)
 
 # {token: (username, expiry_timestamp)}
 _sessions: dict[str, tuple[str, float]] = {}
 SESSION_LIFETIME = 3600  # 1 hour
+_last_cleanup = time.time()
+CLEANUP_INTERVAL = 300  # 5 minutes
 
 
 def remove_expired_sessions() -> None:
+    """Remove expired sessions from the in-memory store (throttled)."""
+    global _last_cleanup
     now = time.time()
+
+    if now - _last_cleanup < CLEANUP_INTERVAL:
+        return
+
+    _last_cleanup = now
+
     expired = [t for t, (_, exp) in _sessions.items() if exp < now]
     for t in expired:
         del _sessions[t]
 
 def is_valid_session(token: str, user: str) -> bool:
+    """Check if the session token is valid for the given user."""
+    if not token:
+        return False
     now = time.time()
     username, expiry = _sessions.get(token, (None, 0))
     return username == user and expiry > now
 
 def create_session(user: str) -> str:
+    """Create a new session for the user and return the token."""
     token = secrets.token_urlsafe(32)
     expiry = time.time() + SESSION_LIFETIME
     _sessions[token] = (user, expiry)
     return token
+
+def sign(data: str) -> str:
+    """Create HMAC signature for state."""
+    return hmac.new(STATE_SECRET, data.encode(), hashlib.sha256).hexdigest()
 
 
 @app.route('/auth')
@@ -56,6 +78,7 @@ def auth():
 
     # Not authenticated, start OAuth
     state = secrets.token_urlsafe(16)
+    signature = sign(state)
     params = {
         'client_id': CLIENT_ID,
         'redirect_uri': CALLBACK_URL,
@@ -64,7 +87,7 @@ def auth():
     }
     url = f"/hub/api/oauth2/authorize?" + '&'.join(f"{k}={v}" for k, v in params.items())
     resp = make_response(redirect(url))
-    resp.set_cookie(STATE_COOKIE, state, path=SERVICE_PREFIX, httponly=True)
+    resp.set_cookie(STATE_COOKIE, signature, path=SERVICE_PREFIX, httponly=True)
     return resp
 
 
@@ -72,7 +95,12 @@ def auth():
 def oauth_callback():
     code = request.args.get('code')
     state = request.args.get('state')
-    if not code or not state or state != request.cookies.get(STATE_COOKIE):
+    signed_state = request.cookies.get(STATE_COOKIE)
+
+    # Verify state by checking HMAC signature
+    if not code or not state or not signed_state:
+        return 'Invalid state', 400
+    if not hmac.compare_digest(signed_state, sign(state)):
         return 'Invalid state', 400
 
     # Exchange code for token
