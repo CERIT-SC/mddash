@@ -18,13 +18,18 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
     :param route_id: Optional. A specific ID for the route. If None, a UUID will be generated.
     :return: The ID of the added route if successful, None otherwise.
     """
-    if route_id is None:
-        route_id = f"route-{uuid.uuid4()}"
-
+    route_id = route_id or f"route-{uuid.uuid4()}"
     path = path.rstrip("/")
 
     new_route = {
         "@id": route_id,
+        "group": "group4",
+        "handle": [
+            {
+                "handler": "reverse_proxy",
+                "upstreams": [{"dial": upstream}]
+            }
+        ],
         "match": [
             {
                 "path_regexp": {
@@ -32,31 +37,35 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
                     "pattern": f"^{path}.*$"
                 }
             }
-        ],
-        "handle": [
-            {
-                "handler": "reverse_proxy",
-                "upstreams": [{"dial": upstream}]
-            }
         ]
     }
 
     try:
-        # Get current config
-        config = requests.get(f"{CADDY_ADMIN_API_URL}/config/").json()
+        # Load current config
+        resp = requests.get(f"{CADDY_ADMIN_API_URL}/config/")
+        resp.raise_for_status()
+        config = resp.json()
 
-        # XXX: This shit is as hardcoded as it can be, but hey it works (until you change the Caddyfile)
-        routes = config["apps"]["http"]["servers"]["srv0"]["routes"][0]["handle"][0]["routes"][0]["handle"][1]["routes"]
-        routes.insert(0, new_route)  # Insert at the beginning to give it higher priority
+        routes = config["apps"]["http"]["servers"]["srv0"]["routes"]
 
-        # Overwrite the config
+        # Find dash route index
+        dash_index = next(
+            (i for i, r in enumerate(routes)
+             if any(m.get("path_regexp", {}).get("name") == "dash_routes" for m in r.get("match", []))),
+            3
+        )
+
+        # Insert new route
+        routes.insert(dash_index, new_route)
+
+        # Update Caddy config
         headers = {"Content-Type": "application/json"}
-        requests.post(f"{CADDY_ADMIN_API_URL}/load", headers=headers, data=json.dumps(config)).raise_for_status()
-
+        load_resp = requests.post(f"{CADDY_ADMIN_API_URL}/load", headers=headers, data=json.dumps(config))
+        load_resp.raise_for_status()
         return route_id
 
-    except Exception:
-        logger.exception(f"Failed to add route {route_id}")
+    except requests.RequestException:
+        logger.exception(f"Error adding route '{route_id}' to Caddy")
         return None
 
 

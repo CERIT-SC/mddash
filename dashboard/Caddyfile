@@ -22,75 +22,67 @@ http://:8888 {
         format console
     }
 
-    # Define matchers
+    # OAuth callback route
     @oauth_callback {
         path {$CADDY_ROUTE_PREFIX}/oauth_callback*
     }
-
-    @protected {
-        not path {$CADDY_ROUTE_PREFIX}/oauth_callback*
+    handle @oauth_callback {
+        uri strip_prefix {$CADDY_ROUTE_PREFIX}
+        reverse_proxy localhost:5001
     }
 
-    # Apply forward_auth only for protected routes
-    handle @protected {
+    # API routes
+    @api_routes {
+        path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/api.*$
+    }
+    handle @api_routes {
         forward_auth localhost:5001 {
             uri /auth
         }
 
-        # Define subroutes after auth check
-        route {
-            # API routes
-            @api_routes {
-                path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/api.*$
-            }
-            handle @api_routes {
-                reverse_proxy localhost:5000
-            }
-
-            # Redirect /dash to /dash/
-            @dash_redirect {
-                path {$CADDY_ROUTE_PREFIX}/dash
-            }
-            redir @dash_redirect {$CADDY_ROUTE_PREFIX}/dash/ 308
-
-            # Dashboard routes
-            @dash_routes {
-                path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/.*$
-            }
-            handle @dash_routes {
-                root * /var/tmp
-
-                @is_asset {
-                    path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/(.*)$
-                }
-                rewrite @is_asset /dash/{re.1}
-
-                @not_a_file {
-                    not file {path}
-                }
-                rewrite @not_a_file /dash/index.html
-
-                try_files {path} /dash/index.html
-
-                file_server
-                encode zstd gzip
-            }
-
-            # JupyterHub - everything else
-            handle {$CADDY_ROUTE_PREFIX}* {
-                reverse_proxy localhost:8889
-            }
-
-            # Fallback
-            route {
-                respond "Where the hell do you think you are going?" 404
-            }
-        }
+        reverse_proxy localhost:5000
     }
 
-    # OAuth callback (no auth)
-    handle @oauth_callback {
-        uri strip_prefix {$CADDY_ROUTE_PREFIX}
-        reverse_proxy localhost:5001
+    # /dash -> /dash/
+    @dash_redirect {
+        path {$CADDY_ROUTE_PREFIX}/dash
+    }
+    redir @dash_redirect {$CADDY_ROUTE_PREFIX}/dash/ 308
+
+    # Dashboard routes
+    @dash_routes {
+        path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/.*$
+    }
+    handle @dash_routes {
+        forward_auth localhost:5001 {
+            uri /auth
+        }
+
+        root * /var/tmp
+
+        @is_asset {
+            path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/(.*)$
+        }
+        rewrite @is_asset /dash/{re.1}
+
+        @not_a_file {
+            not file {path}
+        }
+        rewrite @not_a_file /dash/index.html
+
+        try_files {path} /dash/index.html
+
+        file_server
+        encode zstd gzip
+    }
+
+    # JupyterHub - everything else
+    handle {$CADDY_ROUTE_PREFIX}* {
+        reverse_proxy localhost:8889
+    }
+
+    # Fallback
+    route {
+        respond "Where the hell do you think you are going?" 404
     }
 }
