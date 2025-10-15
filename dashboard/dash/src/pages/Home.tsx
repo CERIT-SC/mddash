@@ -1,7 +1,7 @@
 import { Typography } from "@mui/material";
 
-import Experiments from "../components/Experiments";
-import Metrics from "../components/Metrics";
+import Experiments from "@/components/Experiments";
+import Metrics from "@/components/Metrics";
 
 const Home = () => {
     return (

@@ -12,10 +12,10 @@ import {
     FormControlLabel,
 } from "@mui/material";
 
-import Dropzone from "../components/Dropzone";
-import ErrorMessage from "../components/ErrorMessage";
-import { BASE_PATH } from "../util/const";
-import { create_experiment } from "../util/api";
+import Dropzone from "@/components/Dropzone";
+import ErrorMessage from "@/components/ErrorMessage";
+import { BASE_PATH } from "@/util/const";
+import { create_experiment } from "@/util/api";
 
 const New = () => {
     const navigate = useNavigate();

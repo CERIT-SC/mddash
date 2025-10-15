@@ -1,17 +1,17 @@
 import { useState, useMemo } from "react";
 
 import { Stack } from "@mui/material";
-
-import { WizardStepProps } from "./Stepper";
-import MolStar from "../MolStar";
-import FileSelector from "../FileSelector";
 import { BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory";
 import { BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates";
+
+import { WizardStepProps } from "@/components/Wizard/Stepper";
+import MolStar from "@/components/MolStar";
+import FileSelector from "@/components/FileSelector";
 
 const STRUCTURE_FORMATS = ["pdb", "gro"];
 const COORDINATE_FORMATS = ["xtc", "trr"];
 
-const WizardAnalyze = (props: WizardStepProps) => {
+const AnalyzeStep = (props: WizardStepProps) => {
     const { experiment, setErrorMessage } = props;
 
     const [structureFile, setStructureFile] = useState<string>("");
@@ -55,4 +55,4 @@ const WizardAnalyze = (props: WizardStepProps) => {
     );
 };
 
-export default WizardAnalyze;
+export default AnalyzeStep;

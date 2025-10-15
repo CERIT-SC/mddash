@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+
 import {
     styled,
     Stepper,
@@ -12,21 +13,21 @@ import {
 } from "@mui/material";
 import { BlurOn, Tune, PlayArrow, Assessment, Publish } from "@mui/icons-material";
 
-import WizardSetup from "./Setup";
-import WizardTune from "./Tune";
-import WizardRun from "./Run";
-import WizardAnalyze from "./Analyze";
-import WizardPublish from "./Publish";
-import { Experiment } from "../../util/types";
-import { DEBUG } from "../../util/const";
-import { get_experiment_step } from "../../util/api";
+import { Experiment } from "@/util/types";
+import { DEBUG } from "@/util/const";
+import { get_experiment_step } from "@/util/api";
+import WizardSetup from "./SetupStep";
+import TuneStep from "./TuneStep";
+import RunStep from "./RunStep";
+import AnalyzeStep from "./AnalyzeStep";
+import PublishStep from "./PublishStep";
 
 const steps = [
     { label: "Setup", icon: <BlurOn />, child: WizardSetup },
-    { label: "Tune", icon: <Tune />, child: WizardTune },
-    { label: "Run", icon: <PlayArrow />, child: WizardRun },
-    { label: "Analyze", icon: <Assessment />, child: WizardAnalyze },
-    { label: "Publish", icon: <Publish />, child: WizardPublish },
+    { label: "Tune", icon: <Tune />, child: TuneStep },
+    { label: "Run", icon: <PlayArrow />, child: RunStep },
+    { label: "Analyze", icon: <Assessment />, child: AnalyzeStep },
+    { label: "Publish", icon: <Publish />, child: PublishStep },
 ];
 
 const ColorLibConnector = styled(StepConnector)(({ theme }) => ({

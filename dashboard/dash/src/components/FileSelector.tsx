@@ -1,16 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+
 import { FormControl, InputLabel, Select, MenuItem, SelectChangeEvent } from "@mui/material";
 
-import { find_files } from "../util/api";
-import { FileOption } from "../util/types";
-
-const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 B";
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    const k = 1024;
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${(bytes / Math.pow(k, i)).toFixed(1)} ${units[i]}`;
-};
+import { find_files } from "@/util/api";
+import { FileOption } from "@/util/types";
+import { formatFileSize } from "@/util/helpers";
 
 export interface FileSelectorProps {
     experimentId: string;

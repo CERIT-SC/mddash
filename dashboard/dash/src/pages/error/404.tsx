@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Box, Typography, Button, Paper } from "@mui/material";
 import SentimentVeryDissatisfiedIcon from "@mui/icons-material/SentimentVeryDissatisfied";
 
-import { BASE_PATH } from "../../util/const";
+import { BASE_PATH } from "@/util/const";
 
 const NotFound = () => {
     return (

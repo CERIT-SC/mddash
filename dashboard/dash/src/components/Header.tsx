@@ -1,10 +1,11 @@
 import { useContext } from "react";
+
 import { Link, useLocation } from "react-router-dom";
 import { Typography, IconButton, Toolbar, AppBar, Stack, Tooltip } from "@mui/material";
 import { HubTwoTone, DashboardTwoTone, Brightness4, Brightness7 } from "@mui/icons-material";
 
-import { ThemeContext } from "../Theme";
-import { BASE_PATH } from "../util/const";
+import { ThemeContext } from "@/Theme";
+import { BASE_PATH } from "@/util/const";
 
 const Header = () => {
     const location = useLocation();

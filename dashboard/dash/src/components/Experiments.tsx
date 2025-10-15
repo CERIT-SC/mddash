@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+
 import { Link } from "react-router-dom";
 import {
     Typography,
@@ -11,10 +12,10 @@ import {
     Button,
 } from "@mui/material";
 import { AddCircleOutline } from "@mui/icons-material";
-import { BASE_PATH } from "../util/const";
 
-import { Experiment, PodStatus } from "../util/types";
-import { delete_experiment, get_experiments } from "../util/api";
+import { BASE_PATH } from "@/util/const";
+import { Experiment, PodStatus } from "@/util/types";
+import { delete_experiment, get_experiments } from "@/util/api";
 import ErrorMessage from "./ErrorMessage";
 import ConfirmDialog from "./ConfirmDialog";
 
