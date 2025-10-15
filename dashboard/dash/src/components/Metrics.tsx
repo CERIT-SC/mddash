@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
+
 import { Typography, Card, Grid2 as Grid, CardContent, Stack } from "@mui/material";
 import { Memory, DeveloperBoard, RocketLaunch } from "@mui/icons-material";
 
-import { get_metrics } from "../util/api";
-import { ResourceUsage } from "../util/types";
+import { get_metrics } from "@/util/api";
+import { ResourceUsage } from "@/util/types";
 
 const Metrics = () => {
     const [metrics, setMetrics] = useState<ResourceUsage>({ cpu: 0, gpu: 0, memory: 0 });

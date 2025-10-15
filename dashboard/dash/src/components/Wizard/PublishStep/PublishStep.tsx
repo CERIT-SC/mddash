@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Box, Button } from "@mui/material";
 
-import { WizardStepProps } from "./Stepper";
-import { publish_experiment } from "../../util/api";
+import { WizardStepProps } from "../Stepper";
+import { publish_experiment } from "../../../util/api";
 
-const WizardPublish = (props: WizardStepProps) => {
+const PublishStep = (props: WizardStepProps) => {
     const { experiment, setErrorMessage } = props;
     const [loading, setLoading] = useState(false);
 
@@ -39,4 +39,4 @@ const WizardPublish = (props: WizardStepProps) => {
     );
 };
 
-export default WizardPublish;
+export default PublishStep;

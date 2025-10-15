@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Stack, Button, Typography, CircularProgress } from "@mui/material";
 
-import { WizardStepProps } from "./Stepper";
-import { get_notebook, spawn_notebook, delete_notebook } from "../../util/api";
-import ConfirmDialog from "../ConfirmDialog";
-import { Notebook, PodStatus } from "../../util/types";
+import { WizardStepProps } from "@/components/Wizard/Stepper";
+import { get_notebook, spawn_notebook, delete_notebook } from "@/util/api";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import { Notebook, PodStatus } from "@/util/types";
 
 const unknownNotebook: Notebook = {
     id: -1,
@@ -14,7 +14,7 @@ const unknownNotebook: Notebook = {
     path: "",
 };
 
-const WizardSetup = (props: WizardStepProps) => {
+const SetupStep = (props: WizardStepProps) => {
     const { experiment, setErrorMessage, nextStep } = props;
     const [loading, setLoading] = useState(false);
     const [notebook, setNotebook] = useState<Notebook>(unknownNotebook);
@@ -145,4 +145,4 @@ const WizardSetup = (props: WizardStepProps) => {
     );
 };
 
-export default WizardSetup;
+export default SetupStep;

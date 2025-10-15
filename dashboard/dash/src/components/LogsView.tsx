@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+
 import { Paper, Box } from "@mui/material";
 
 export interface LogsViewProps {
