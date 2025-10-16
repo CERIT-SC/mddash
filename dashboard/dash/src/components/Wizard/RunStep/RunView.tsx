@@ -22,6 +22,11 @@ import LogsView from "@/components/LogsView";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import StartForm from "./StartForm";
 
+const POLLING_INTERVAL_MS = 5000;
+const LOG_TAIL_LINES = 100;
+
+type LogType = "gmx" | "stdout" | "stderr";
+
 interface RunViewProps extends WizardStepProps {
     tprName: string;
     deleteJob: (tprName: string) => void;
@@ -33,50 +38,64 @@ const RunView = (props: RunViewProps) => {
     const [loading, setLoading] = useState(false);
     const [jobRunning, setJobRunning] = useState(false);
     const [jobStatus, setJobStatus] = useState<GromacsJob | null>(null);
-    const [logType, setLogType] = useState<"gmx" | "stdout" | "stderr" | null>(null);
+    const [logType, setLogType] = useState<LogType | null>(null);
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
 
-    const fetchStatus = async (showError: boolean) => {
-        const { data, error } = await gmx_status(experiment.id, tprName);
-        if (showError && error) setErrorMessage(error);
-        setJobStatus(data || null);
-        setJobRunning(!!data);
-    };
+    const fetchStatus = useCallback(
+        async (showError: boolean) => {
+            const { data, error } = await gmx_status(experiment.id, tprName);
+            if (showError && error) {
+                setErrorMessage(error);
+            }
+            setJobStatus(data || null);
+            setJobRunning(!!data);
+        },
+        [experiment.id, tprName, setErrorMessage]
+    );
 
-    // initial fetch
     useEffect(() => {
         setLoading(true);
         setLogType(null);
         fetchStatus(false).finally(() => setLoading(false));
-    }, [tprName, experiment.id]);
+    }, [fetchStatus]);
 
-    // polling for job status
     useEffect(() => {
-        let intervalId: number | null = null;
+        const isJobActive = jobStatus?.status === "PENDING" || jobStatus?.status === "RUNNING";
 
-        if (jobStatus?.status === "PENDING" || jobStatus?.status === "RUNNING") {
-            intervalId = window.setInterval(() => {
-                fetchStatus(true);
-            }, 5000);
+        if (!isJobActive) {
+            return;
         }
 
+        const intervalId = window.setInterval(() => {
+            fetchStatus(true);
+        }, POLLING_INTERVAL_MS);
+
         return () => {
-            if (intervalId !== null) {
-                clearInterval(intervalId);
-            }
+            clearInterval(intervalId);
         };
-    }, [jobStatus?.status]);
+    }, [jobStatus?.status, fetchStatus]);
 
     const getLogs = useCallback(async () => {
-        if (!logType) return "No log type selected";
+        if (!logType) {
+            return "No log type selected";
+        }
 
-        const { data, error } = await gmx_logs(experiment.id, tprName, logType, 100);
-        setErrorMessage(error || "");
+        const { data, error } = await gmx_logs(experiment.id, tprName, logType, LOG_TAIL_LINES);
+        if (error) {
+            setErrorMessage(error);
+        }
         return data || "";
     }, [experiment.id, tprName, logType, setErrorMessage]);
 
     const statusDisplay = useMemo(() => {
-        if (!jobStatus) return null;
+        if (!jobStatus) {
+            return null;
+        }
+
+        const isRunningWithProgress =
+            jobStatus.status === "RUNNING" && jobStatus.nsteps !== null && jobStatus.nsteps_done !== null;
+
+        const progressPercentage = isRunningWithProgress ? (jobStatus.nsteps_done! / jobStatus.nsteps!) * 100 : 0;
 
         return (
             <Stack spacing={2} alignItems="flex-start">
@@ -85,7 +104,7 @@ const RunView = (props: RunViewProps) => {
                 </Typography>
                 <Chip label={jobStatus.status} color={JobStatus.getColor(jobStatus.status)} />
 
-                {jobStatus.status === "RUNNING" && jobStatus.nsteps !== null && jobStatus.nsteps_done !== null && (
+                {isRunningWithProgress && (
                     <>
                         <Typography variant="subtitle1" color="text.secondary">
                             Progress
@@ -93,21 +112,18 @@ const RunView = (props: RunViewProps) => {
                         <Box sx={{ width: "100%", minWidth: 300 }}>
                             <Box sx={{ display: "flex", alignItems: "center" }}>
                                 <Box sx={{ width: "100%", mr: 1 }}>
-                                    <LinearProgress
-                                        variant="determinate"
-                                        value={(jobStatus.nsteps_done / jobStatus.nsteps) * 100}
-                                    />
+                                    <LinearProgress variant="determinate" value={progressPercentage} />
                                 </Box>
                                 <Box sx={{ minWidth: 35 }}>
                                     <Typography variant="body2" color="text.secondary">
-                                        {`${((jobStatus.nsteps_done / jobStatus.nsteps) * 100).toFixed(1)}%`}
+                                        {`${progressPercentage.toFixed(1)}%`}
                                     </Typography>
                                 </Box>
                             </Box>
                             <Typography variant="body2" color="text.secondary">
-                                {`${jobStatus.nsteps_done.toLocaleString()} / ${jobStatus.nsteps.toLocaleString()} steps`}
+                                {`${jobStatus.nsteps_done!.toLocaleString()} / ${jobStatus.nsteps!.toLocaleString()} steps`}
                             </Typography>
-                            {jobStatus.estimated_time != null && (
+                            {jobStatus.estimated_time !== null && (
                                 <Typography variant="body2" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
                                     Estimated time remaining: {formatDuration(jobStatus.estimated_time)}
                                 </Typography>
@@ -149,86 +165,82 @@ const RunView = (props: RunViewProps) => {
                 )}
             </Stack>
         );
-    }, [
-        jobStatus?.status,
-        jobStatus?.np,
-        jobStatus?.ntomp,
-        jobStatus?.pme,
-        jobStatus?.nb,
-        jobStatus?.extra_args,
-        jobStatus?.nsteps,
-        jobStatus?.nsteps_done,
-        jobStatus?.estimated_time,
-        jobStatus?.performance,
-    ]);
+    }, [jobStatus]);
+
+    const handleLogTypeChange = useCallback((value: string) => {
+        setLogType((value as LogType) || null);
+    }, []);
+
+    const handleDeleteClick = useCallback(() => {
+        setConfirmDeleteDialog(true);
+    }, []);
+
+    const handleConfirmDelete = useCallback(() => {
+        deleteJob(tprName);
+    }, [deleteJob, tprName]);
+
+    const logsAvailable = jobStatus?.nsteps !== null;
+    const shouldRefreshLogs = jobStatus?.status === "RUNNING";
+
+    if (loading) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" height="100%">
+                <CircularProgress />
+            </Box>
+        );
+    }
 
     return (
         <>
-            {(loading && (
-                <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-                    <CircularProgress />
-                </Box>
-            )) || (
-                <Box sx={{ mt: 2 }}>
-                    {jobRunning ? (
-                        <Stack spacing={2} alignItems="flex-start">
-                            {statusDisplay}
+            <Box sx={{ mt: 2 }}>
+                {jobRunning ? (
+                    <Stack spacing={2} alignItems="flex-start">
+                        {statusDisplay}
 
-                            <Button
-                                variant="contained"
-                                color="error"
-                                onClick={() => {
-                                    setConfirmDeleteDialog(true);
-                                }}
-                            >
-                                Delete Job
-                            </Button>
+                        <Button variant="contained" color="error" onClick={handleDeleteClick}>
+                            Delete Job
+                        </Button>
 
-                            {jobStatus?.status !== "PENDING" && (
-                                <>
-                                    <Typography variant="subtitle1" color="text.secondary">
-                                        Logs
-                                    </Typography>
+                        {logsAvailable && (
+                            <>
+                                <Typography variant="subtitle1" color="text.secondary">
+                                    Logs
+                                </Typography>
 
-                                    <FormControl sx={{ minWidth: 200 }}>
-                                        <InputLabel id="log-type-selector">Log Type</InputLabel>
-                                        <Select
-                                            labelId="log-type-selector"
-                                            label="Log Type"
-                                            value={logType || ""}
-                                            onChange={(e) =>
-                                                setLogType(
-                                                    (e.target.value as "gmx" | "stdout" | "stderr" | null) || null
-                                                )
-                                            }
-                                        >
-                                            <MenuItem value="">
-                                                <em>None</em>
-                                            </MenuItem>
-                                            <MenuItem value="gmx">Gromacs Log</MenuItem>
-                                            <MenuItem value="stdout">Standard Output</MenuItem>
-                                            <MenuItem value="stderr">Standard Error</MenuItem>
-                                        </Select>
-                                    </FormControl>
+                                <FormControl sx={{ minWidth: 200 }}>
+                                    <InputLabel id="log-type-selector">Log Type</InputLabel>
+                                    <Select
+                                        labelId="log-type-selector"
+                                        label="Log Type"
+                                        value={logType || ""}
+                                        onChange={(e) => handleLogTypeChange(e.target.value)}
+                                    >
+                                        <MenuItem value="">
+                                            <em>None</em>
+                                        </MenuItem>
+                                        <MenuItem value="gmx">Gromacs Log</MenuItem>
+                                        <MenuItem value="stdout">Standard Output</MenuItem>
+                                        <MenuItem value="stderr">Standard Error</MenuItem>
+                                    </Select>
+                                </FormControl>
 
-                                    {logType && (
-                                        <LogsView
-                                            getLogs={getLogs}
-                                            refreshInterval={jobStatus?.status == "RUNNING" ? 5000 : undefined}
-                                        />
-                                    )}
-                                </>
-                            )}
-                        </Stack>
-                    ) : (
-                        <StartForm fetchStatus={fetchStatus} {...props} />
-                    )}
-                </Box>
-            )}
+                                {logType && (
+                                    <LogsView
+                                        getLogs={getLogs}
+                                        refreshInterval={shouldRefreshLogs ? POLLING_INTERVAL_MS : undefined}
+                                    />
+                                )}
+                            </>
+                        )}
+                    </Stack>
+                ) : (
+                    <StartForm fetchStatus={fetchStatus} {...props} />
+                )}
+            </Box>
             <ConfirmDialog
                 open={confirmDeleteDialog}
                 setOpen={setConfirmDeleteDialog}
-                onConfirm={() => deleteJob(tprName)}
+                onConfirm={handleConfirmDelete}
                 message="Are you sure you want to delete this Gromacs job? The data will be lost."
             />
         </>
