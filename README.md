@@ -10,6 +10,8 @@ Molecular Dynamics simulation dashboard with JupyterHub integration.
    - `KUBECONFIG` - Your kubeconfig base64 encoded: `cat ~/.kube/config | base64 -w 0`
    - `OAUTH_CLIENT_ID` - OAuth client ID for authentication
    - `OAUTH_CLIENT_SECRET` - OAuth client secret
+   - `MINIO_ROOT_USER` - MinIO root username (default: `minio`)
+   - `MINIO_ROOT_PASSWORD` - MinIO root password (use a strong password in production!)
 
 2. **Push to deploy**:
    - Push to `dev` → deploys to dev environment

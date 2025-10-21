@@ -197,6 +197,8 @@ mdrun-api:
 tenant:
   tenant:
     name: minio
+    configuration:
+      name: minio-creds-secret
     pools:
       - servers: 2
         name: pool-0
@@ -252,6 +254,4 @@ tenant:
       timeoutSeconds: 1
     configSecret:
       name: minio-creds-secret
-      # TODO: change these in prod!
-      accessKey: minio
-      secretKey: minio123
+      existingSecret: true  # Secret should be created externally
