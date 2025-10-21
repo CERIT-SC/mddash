@@ -1,6 +1,9 @@
 ENV ?= prod
 IMAGE_TAG ?= latest
-IMAGE_NAME = cerit.io/xkrasa/mdrun-api
+config ?= ../config.yaml
+
+image = $(shell yq .mdrunApi.image ${config})
+platform = --platform $(shell yq .mdrunApi.platform ${config})
 
 ifeq ($(ENV),dev)
 	TAG = dev
@@ -8,13 +11,13 @@ else
 	TAG = $(IMAGE_TAG)
 endif
 
+.PHONY: build push clean
+
 build:
-	docker build -t $(IMAGE_NAME):$(TAG) .
+	docker build ${platform} -t ${image}:${TAG} .
 
 push: build
-	docker push $(IMAGE_NAME):$(TAG)
+	docker push ${image}:${TAG}
 
 clean:
-	docker rmi $(IMAGE_NAME):$(TAG) || true
-
-.PHONY: build push clean
+	docker rmi ${image}:${TAG} || true

@@ -1,17 +1,24 @@
 devNamespace: fida-ns
-prodNamespace: gmxhub-ns
+prodNamespace: md-dashboard-ns
 
 dashboard:
   hostname: mddash.k8s.local
   user: fida
   image: cerit.io/xkrasa/mddash
-  devel: false
+  platform: linux/amd64
 
 mdrunApi:
   image: cerit.io/xkrasa/mdrun-api
+  platform: linux/amd64
+
+notebook:
+  image: cerit.io/xkrasa/mddash-notebook
+  platform: linux/amd64
 
 data:
   size: 10Gi
 
-notebook:
-  image: cerit.io/xkrasa/mddash-notebook
+helm:
+  package: mddash
+  chartPath: charts/mddash
+  kubeconfigPath: ../private/kuba-cluster.yaml
