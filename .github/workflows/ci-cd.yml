@@ -143,6 +143,10 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v3
 
+      - name: Update Helm dependencies
+        run: |
+          make -C helm update ENV=${{ needs.setup.outputs.env }}
+
       - name: Setup namespace and secrets
         run: |
           NAMESPACE=$(yq '.${{ needs.setup.outputs.env }}Namespace' config.yaml)
