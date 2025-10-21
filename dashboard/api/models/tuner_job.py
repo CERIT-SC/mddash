@@ -10,7 +10,7 @@ from flask import current_app
 
 from clients import tuner, k8s
 from extensions import db
-from config import GMX_IMAGE, NAMESPACE
+from config import GMX_IMAGE
 from .experiment import Experiment
 
 
@@ -93,17 +93,17 @@ class TunerJob(db.Model):  # type: ignore
         command = f"gmx convert-tpr -s {input_tpr_name} -o {output_tpr_name} -nsteps {nsteps}"
 
         logger.info(f"Starting TPR modification for experiment {experiment_id} with nsteps={nsteps}")
-        k8s.create_job(job_name, GMX_IMAGE, NAMESPACE, experiment_id, command)
+        k8s.create_job(job_name, GMX_IMAGE, experiment_id, command)
 
         def success():
-            k8s.delete_job(NAMESPACE, job_name)
+            k8s.delete_job(job_name)
             on_success()
 
         def error(error: Exception):
-            k8s.delete_job(NAMESPACE, job_name)
+            k8s.delete_job(job_name)
             on_error(error)
 
-        k8s.wait_for_job(NAMESPACE, job_name, success, error, timeout=60)
+        k8s.wait_for_job(job_name, success, error, timeout=60)
 
     @classmethod
     def start(cls, experiment: Experiment, tpr_path: Path, nsteps: int = 25000) -> 'TunerJob':

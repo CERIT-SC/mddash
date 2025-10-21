@@ -5,7 +5,7 @@ from kubernetes import client, config  # type: ignore
 from kubernetes.client.rest import ApiException  # type: ignore
 
 from enums import PodStatus, JobStatus
-from config import GPU_TYPE, NOTEBOOK_IMAGE, GMX_IMAGE, S3_CLIENT_IMAGE, S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT, S3_BUCKET
+from config import GPU_TYPE, NOTEBOOK_IMAGE, GMX_IMAGE, S3_CLIENT_IMAGE, S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT, S3_BUCKET, NAMESPACE
 
 
 logger = logging.getLogger(__name__)
@@ -177,9 +177,9 @@ EOF
     return get_container('s3-sync', S3_CLIENT_IMAGE, experiment_id, mddash_volume, ['sh', '-c', s3_sync_command], env)
 
 
-def create_notebook_pod(ns: str, name: str, experiment_id: str, prefix: str, token: str) -> None:
-    if ping_resource('pod', name, ns):
-        logger.warning(f"Pod {name} already exists in namespace {ns}. Skipping creation.")
+def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) -> None:
+    if ping_resource('pod', name):
+        logger.warning(f"Pod {name} already exists in namespace {NAMESPACE}. Skipping creation.")
         return
 
     workdir_init_command = f"""
@@ -250,7 +250,7 @@ def create_notebook_pod(ns: str, name: str, experiment_id: str, prefix: str, tok
         'kind': 'Pod',
         'metadata': {
             'name': name,
-            'namespace': ns,
+            'namespace': NAMESPACE,
             'labels': {
                 'app': name
             }
@@ -281,23 +281,22 @@ def create_notebook_pod(ns: str, name: str, experiment_id: str, prefix: str, tok
         }
     }
 
-    core_v1.create_namespaced_pod(namespace=ns, body=pod_manifest)
+    core_v1.create_namespaced_pod(namespace=NAMESPACE, body=pod_manifest)
 
 
-def create_job(name: str, image: str, ns: str, experiment_id: str, command: str) -> None:
+def create_job(name: str, image: str, experiment_id: str, command: str) -> None:
     """
     Create a job that runs a given command in the `/mddash/{experiment_id}` directory.
     It is automatically synced to S3.
 
     :param name: The name of the job.
     :param image: The container image to use.
-    :param ns: The namespace to create the job in.
     :param experiment_id: The ID of the experiment needed to set the working directory.
     :param command: The command to run in the job. (wrapped inside `sh -c`)
     """
 
-    if ping_resource('job', name, ns):
-        logger.warning(f"Job {name} already exists in namespace {ns}. Skipping creation.")
+    if ping_resource('job', name):
+        logger.warning(f"Job {name} already exists in namespace {NAMESPACE}. Skipping creation.")
         return
 
     mddash_volume = 'shared-data'
@@ -316,7 +315,7 @@ def create_job(name: str, image: str, ns: str, experiment_id: str, command: str)
         'kind': 'Job',
         'metadata': {
             'name': name,
-            'namespace': ns,
+            'namespace': NAMESPACE,
             'labels': {
                 'app': name
             }
@@ -354,33 +353,32 @@ def create_job(name: str, image: str, ns: str, experiment_id: str, command: str)
         }
     }
 
-    batch_v1.create_namespaced_job(namespace=ns, body=job_manifest)
+    batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job_manifest)
 
 
-def ping_resource(resource_type: str, name: str, ns: str) -> bool:
+def ping_resource(resource_type: str, name: str) -> bool:
     """
-    Check if a given resource exists in the specified namespace.
+    Check if a given resource exists in the namespace.
 
     :param resource_type: The type of the resource (e.g., 'svc', 'pod', 'configmap', 'secret', 'pvc', 'job').
     :param name: The name of the resource.
-    :param ns: The namespace to check in.
     """
 
     try:
         match resource_type:
             case 'svc':
-                core_v1.read_namespaced_service(name=name, namespace=ns)
+                core_v1.read_namespaced_service(name=name, namespace=NAMESPACE)
             case 'pod':
-                core_v1.read_namespaced_pod(name=name, namespace=ns)
+                core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE)
             case 'configmap':
-                core_v1.read_namespaced_config_map(name=name, namespace=ns)
+                core_v1.read_namespaced_config_map(name=name, namespace=NAMESPACE)
             case 'secret':
-                core_v1.read_namespaced_secret(name=name, namespace=ns)
+                core_v1.read_namespaced_secret(name=name, namespace=NAMESPACE)
             case 'pvc':
                 core_v1.read_namespaced_persistent_volume_claim(
-                    name=name, namespace=ns)
+                    name=name, namespace=NAMESPACE)
             case 'job':
-                batch_v1.read_namespaced_job(name=name, namespace=ns)
+                batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE)
             case _:
                 raise ValueError(f"Unsupported resource type: {resource_type}")
         return True
@@ -388,20 +386,20 @@ def ping_resource(resource_type: str, name: str, ns: str) -> bool:
         return False
 
 
-def delete_pod(ns: str, name: str) -> None:
-    if not ping_resource('pod', name, ns):
+def delete_pod(name: str) -> None:
+    if not ping_resource('pod', name):
         return
 
-    core_v1.delete_namespaced_pod(name=name, namespace=ns)
+    core_v1.delete_namespaced_pod(name=name, namespace=NAMESPACE)
 
 
-def delete_job(ns: str, name: str) -> None:
-    if not ping_resource('job', name, ns):
+def delete_job(name: str) -> None:
+    if not ping_resource('job', name):
         return
 
     batch_v1.delete_namespaced_job(
         name=name,
-        namespace=ns,
+        namespace=NAMESPACE,
         body=client.V1DeleteOptions(
             propagation_policy='Background',
             grace_period_seconds=5,
@@ -409,22 +407,22 @@ def delete_job(ns: str, name: str) -> None:
     )
 
 
-def delete_service(ns: str, name: str) -> None:
-    if not ping_resource('svc', name, ns):
+def delete_service(name: str) -> None:
+    if not ping_resource('svc', name):
         return
 
-    core_v1.delete_namespaced_service(name=name, namespace=ns)
+    core_v1.delete_namespaced_service(name=name, namespace=NAMESPACE)
 
 
-def create_service(ns: str, name: str, target_name: str) -> None:
-    if ping_resource('svc', name, ns):
-        logger.warning(f"Service {name} already exists in namespace {ns}. Skipping creation.")
+def create_service(name: str, target_name: str) -> None:
+    if ping_resource('svc', name):
+        logger.warning(f"Service {name} already exists in namespace {NAMESPACE}. Skipping creation.")
         return
 
     service = client.V1Service(
         metadata=client.V1ObjectMeta(
             name=name,
-            namespace=ns
+            namespace=NAMESPACE
         ),
         spec=client.V1ServiceSpec(
             selector={"app": target_name},
@@ -437,18 +435,18 @@ def create_service(ns: str, name: str, target_name: str) -> None:
     )
 
     core_v1.create_namespaced_service(
-        namespace=ns,
+        namespace=NAMESPACE,
         body=service
     )
 
 
-def get_namespace_resource_allocation(ns: str) -> dict:
+def get_namespace_resource_allocation() -> dict:
     '''
     Get resource requests/limits for all pods in namespace
 
     NOTE: This is just a proof-of-concept version, later we will need some metrics server like Prometheus.
     '''
-    pods = core_v1.list_namespaced_pod(namespace=ns)
+    pods = core_v1.list_namespaced_pod(namespace=NAMESPACE)
     total_cpu_requests = 0.0
     total_memory_requests = 0.0
     total_gpu_requests = 0.0
@@ -492,9 +490,9 @@ def get_namespace_resource_allocation(ns: str) -> dict:
     }
 
 
-def get_pod_status(ns: str, name: str) -> PodStatus:    
+def get_pod_status(name: str) -> PodStatus:    
     try:
-        pod = core_v1.read_namespaced_pod(name=name, namespace=ns)
+        pod = core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE)
 
         if pod.metadata.deletion_timestamp:
             return PodStatus.TERMINATING
@@ -520,9 +518,9 @@ def get_pod_status(ns: str, name: str) -> PodStatus:
         return PodStatus.DOWN if e.status == 404 else PodStatus.ERROR
 
 
-def get_job_status(ns: str, name: str) -> JobStatus:
+def get_job_status(name: str) -> JobStatus:
     try:
-        job = batch_v1.read_namespaced_job(name=name, namespace=ns)
+        job = batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE)
 
         if job.status.conditions:
             for condition in job.status.conditions:
@@ -546,11 +544,10 @@ def get_job_status(ns: str, name: str) -> JobStatus:
         return JobStatus.ERROR
 
 
-def wait_for_job(ns: str, name: str, on_success: Callable[[], None], on_error: Callable[[Exception], None], timeout: int = 60) -> None:
+def wait_for_job(name: str, on_success: Callable[[], None], on_error: Callable[[Exception], None], timeout: int = 60) -> None:
     """
     Wait for a K8s job to complete in a background thread, then call the appropriate callback.
     
-    :param ns: The namespace
     :param name: Name of the job to wait for
     :param on_success: Callback to call when the job completes successfully
     :param on_error: Callback to call when the job fails or times out
@@ -562,7 +559,7 @@ def wait_for_job(ns: str, name: str, on_success: Callable[[], None], on_error: C
         try:
             start_time = time.time()
             while time.time() - start_time < timeout:
-                status = get_job_status(ns, name)
+                status = get_job_status(name)
                 if status == JobStatus.TERMINATED:
                     on_success()
                     return

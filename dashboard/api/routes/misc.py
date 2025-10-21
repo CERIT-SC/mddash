@@ -1,6 +1,6 @@
 from flask import Blueprint, Response
 
-from config import API_PREFIX, NAMESPACE
+from config import API_PREFIX
 from api_response import ApiResponse
 from clients import k8s
 from decorators import handle_exceptions
@@ -22,5 +22,5 @@ def index() -> Response:
 @misc_bp.route('/metrics', methods=['GET'])
 @handle_exceptions()
 def get_metrics() -> Response:
-    metrics = k8s.get_namespace_resource_allocation(NAMESPACE)
+    metrics = k8s.get_namespace_resource_allocation()
     return ApiResponse.success(metrics)
