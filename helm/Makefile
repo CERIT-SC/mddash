@@ -12,6 +12,9 @@ else
 	VALUES_FILE = -f $(chart_path)/values.yaml
 endif
 
+.PHONY: install upgrade deploy update uninstall hub-templates port-forward test status logs
+
+
 install: update hub-templates
 	helm install $(package) $(chart_path) --namespace $(NAMESPACE) \
 		$(VALUES_FILE) \
@@ -34,11 +37,6 @@ hub-templates:
 	kubectl create configmap mddash-custom-templates \
 		--from-file=$(chart_path)/files/hub-templates \
 		-n $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
-
-kubeconfig:
-	kubectl create secret generic mddash-kubeconfig-secret \
-		--from-file=config=$(kubeconfig_path) \
-		-n $(NAMESPACE)
 
 port-forward:
 	kubectl port-forward svc/proxy-public 8000:80 -n $(NAMESPACE)

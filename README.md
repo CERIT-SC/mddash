@@ -8,27 +8,18 @@ Molecular Dynamics simulation dashboard with JupyterHub integration.
    - `REGISTRY_USERNAME` - Container registry user
    - `REGISTRY_PASSWORD` - Container registry password  
    - `KUBECONFIG` - Your kubeconfig base64 encoded: `cat ~/.kube/config | base64 -w 0`
+   - `OAUTH_CLIENT_ID` - OAuth client ID for authentication
+   - `OAUTH_CLIENT_SECRET` - OAuth client secret
 
-2. **Create dev branch**:
-   ```bash
-   git checkout -b dev
-   git push origin dev
-   ```
-
-3. **Push to deploy**:
+2. **Push to deploy**:
    - Push to `dev` → deploys to dev environment
    - Push to `master` → deploys to production
 
+All secrets are automatically created in the namespace during deployment.
+
 ## Configuration
 
-Edit `config.yaml`:
-
-```yaml
-devNamespace: fida-ns
-prodNamespace: gmxhub-ns
-dashboard:
-  image: cerit.io/xkrasa/mddash
-```
+Edit `config.yaml`
 
 ## Local Commands
 
