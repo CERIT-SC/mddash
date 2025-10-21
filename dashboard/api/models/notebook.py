@@ -4,7 +4,7 @@ from flask import abort
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING
 
-from config import NAMESPACE, PREFIX, NOTEBOOK_IMAGE
+from config import NAMESPACE, PREFIX
 from clients import caddy, k8s
 from extensions import db
 from enums import PodStatus
@@ -38,7 +38,7 @@ class Notebook(db.Model):  # type: ignore
     def status(self) -> PodStatus:
         '''Get the status of the notebook pod.'''
         pod_name = f'notebook-{self.experiment_id}'
-        return k8s.get_pod_status(NAMESPACE, pod_name)
+        return k8s.get_pod_status(pod_name)
 
     def start(self) -> None:
         '''
@@ -51,7 +51,6 @@ class Notebook(db.Model):  # type: ignore
         svc_name = f'svc-{self.experiment_id}'
 
         k8s.create_notebook_pod(
-            NAMESPACE,
             pod_name,
             self.experiment_id,
             f'{PREFIX}/notebook/{self.experiment_id}',
@@ -59,9 +58,9 @@ class Notebook(db.Model):  # type: ignore
         )
 
         try:
-           k8s.create_service(NAMESPACE, svc_name, pod_name)
+           k8s.create_service(svc_name, pod_name)
         except Exception:
-            k8s.delete_pod(NAMESPACE, pod_name)
+            k8s.delete_pod(pod_name)
             raise
 
         route_id = caddy.add_proxy_route(
@@ -69,10 +68,10 @@ class Notebook(db.Model):  # type: ignore
             upstream=f'{svc_name}.{NAMESPACE}.svc.cluster.local:80',
             route_id=f'route-{self.experiment_id}-notebook',
         )
-        
+
         if route_id is None:
-            k8s.delete_pod(NAMESPACE, pod_name)
-            k8s.delete_service(NAMESPACE, svc_name)
+            k8s.delete_pod(pod_name)
+            k8s.delete_service(svc_name)
             abort(500, description='Failed to create proxy connection to notebook.')
 
     def stop(self) -> None:
@@ -88,12 +87,12 @@ class Notebook(db.Model):  # type: ignore
         route_id = f'route-{self.experiment_id}-notebook'
 
         try:
-            k8s.delete_pod(NAMESPACE, pod_name)
+            k8s.delete_pod(pod_name)
         except Exception:
             logger.error(f'Failed to delete notebook pod.', exc_info=True)
 
         try:
-            k8s.delete_service(NAMESPACE, svc_name)
+            k8s.delete_service(svc_name)
         except Exception:
             logger.error(f'Failed to delete notebook service.', exc_info=True)
 
