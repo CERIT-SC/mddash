@@ -249,7 +249,7 @@ c.KubeSpawner.modify_pod_hook = modify_pod_hook  # type: ignore
 
 async def post_stop_hook(spawner, **kwargs):
     """
-    Set the namespace quota to 0 after the user pod is stopped.
+    Set the namespace quota to 0 and delete all running pods after the user pod is stopped.
     """
     await config.load_kube_config(config_file="/home/jovyan/.kube/config")
     core_api = CoreV1Api()
@@ -260,5 +260,10 @@ async def post_stop_hook(spawner, **kwargs):
     ns_manifest = get_namespace_manifest(ns, rancher_project_id, "0", "0", "0", "0")
 
     await core_api.patch_namespace(name=ns, body=ns_manifest)
+    
+    try:
+        await core_api.delete_collection_namespaced_pod(namespace=ns)
+    except ApiException as e:
+        print(f"Error deleting pods in namespace {ns}: {e}")
 
 c.KubeSpawner.post_stop_hook = post_stop_hook  # type: ignore
