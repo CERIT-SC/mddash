@@ -145,20 +145,16 @@ access_key_id = $S3_ACCESS_KEY
 secret_access_key = $S3_SECRET_KEY
 endpoint = $S3_ENDPOINT
 EOF
-        mkdir -p /mddash/{experiment_id} &&
-        # Initial sync from S3
-        rclone copy --config /tmp/.config/rclone/rclone.conf s3remote:{S3_BUCKET}/{experiment_id}/ /mddash/{experiment_id}/ --log-level ERROR --retries 3 || echo "No remote data found" &&
-        
         while true; do
             if [ -f "/mddash/.terminated" ]; then
                 sleep 2 &&
-                rclone copy --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --log-level ERROR --retries 5 &&
+                # Final sync to S3
+                rclone sync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --exclude "*.tmp" --exclude "*.lock" --log-level ERROR --retries 5 &&
                 break
             fi
 
-            # Bidirectional sync
-            rclone copy --config /tmp/.config/rclone/rclone.conf s3remote:{S3_BUCKET}/{experiment_id}/ /mddash/{experiment_id}/ --update --log-level ERROR --retries 2 || echo "Download sync failed" &&
-            rclone copy --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --update --exclude "*.tmp" --exclude "*.lock" --log-level ERROR --retries 2 || echo "Upload sync failed" &&
+            # Periodic sync to S3 (make S3 match local, including deletions)
+            rclone sync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --exclude "*.tmp" --exclude "*.lock" --log-level ERROR --retries 2 || echo "Upload sync failed" &&
             sleep 10
         done
     """
