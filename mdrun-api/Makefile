@@ -1,5 +1,12 @@
+ENV ?= prod
+IMAGE_TAG ?= latest
 IMAGE_NAME = cerit.io/xkrasa/mdrun-api
-TAG = latest
+
+ifeq ($(ENV),dev)
+	TAG = dev
+else
+	TAG = $(IMAGE_TAG)
+endif
 
 build:
 	docker build -t $(IMAGE_NAME):$(TAG) .
@@ -10,4 +17,4 @@ push: build
 clean:
 	docker rmi $(IMAGE_NAME):$(TAG) || true
 
-.PHONY: build build-minikube push clean
+.PHONY: build push clean

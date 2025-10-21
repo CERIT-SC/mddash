@@ -1,17 +1,40 @@
-## Production deploymet
+# MDDash
 
-TODO: with helm in `helm/`
+Molecular Dynamics simulation dashboard with JupyterHub integration.
 
-## Testing deployment
+## CI/CD Setup
 
-Everything below the authentication layer, i.e. the dashboard itself, volumes and notebooks.
+1. **Add GitHub secrets** (Settings → Secrets):
+   - `REGISTRY_USERNAME` - Container registry user
+   - `REGISTRY_PASSWORD` - Container registry password  
+   - `KUBECONFIG` - Your kubeconfig base64 encoded: `cat ~/.kube/config | base64 -w 0`
 
-To set it up:
-1. edit `config.yaml`, provide your values for at least `devNamespace`, `dashboard.hostname`, `dashboard.user`
-2. optionally, define also `dashboard.devImage`, go to `dashboard/` and build your images:
-   - `make build-stage`
-   - `make push-dev`
-3. go to `k8s-dev` and run `make install`; it starts the dashboard container which runs just `sleep 365d`
-4. run `make start`; this runs `/start.sh` in the container in foreground to see all the logs
+2. **Create dev branch**:
+   ```bash
+   git checkout -b dev
+   git push origin dev
+   ```
 
-Now pointing a browser to https://YOUR_HOSTNAME/user/YOUR_USERNAME/dash/ yields the running dashboard.
+3. **Push to deploy**:
+   - Push to `dev` → deploys to dev environment
+   - Push to `master` → deploys to production
+
+## Configuration
+
+Edit `config.yaml`:
+
+```yaml
+devNamespace: fida-ns
+prodNamespace: gmxhub-ns
+dashboard:
+  image: cerit.io/xkrasa/mddash
+```
+
+## Local Commands
+
+```bash
+make build ENV=dev    # Build images
+make all ENV=dev      # Build, push, deploy
+make status ENV=dev   # Check status
+make help             # Show all commands
+```

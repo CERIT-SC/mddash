@@ -1,0 +1,121 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+      - dev
+      - master
+    paths:
+      - 'dashboard/**'
+      - 'notebook/**'
+      - 'mdrun-api/**'
+      - 'helm/**'
+      - 'config.yaml'
+      - 'Makefile'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate config.yaml
+        run: |
+          echo "Validating config.yaml..."
+          yq eval config.yaml > /dev/null
+          
+          # Check required fields
+          DEV_NS=$(yq '.devNamespace' config.yaml)
+          PROD_NS=$(yq '.prodNamespace' config.yaml)
+          DASHBOARD_IMG=$(yq '.dashboard.image' config.yaml)
+          
+          if [ -z "$DEV_NS" ] || [ -z "$PROD_NS" ] || [ -z "$DASHBOARD_IMG" ]; then
+            echo "Error: config.yaml missing required fields"
+            exit 1
+          fi
+          
+          echo "✅ config.yaml is valid"
+
+      - name: Validate Helm Charts
+        run: |
+          helm version
+          helm lint helm/charts/mddash
+          helm lint helm/charts/mdrun-api
+
+  build-test:
+    name: Test Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component:
+          - dashboard
+          - notebook
+          - mdrun-api
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Build ${{ matrix.component }} (test only)
+        run: |
+          make build-${{ matrix.component }} ENV=dev IMAGE_TAG=pr-${{ github.event.pull_request.number }}
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '✅ Build test passed for **${{ matrix.component }}**'
+            })
+
+  summary:
+    name: PR Summary
+    needs: [validate, build-test]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: PR Check Summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const validate_result = '${{ needs.validate.result }}';
+            const build_result = '${{ needs.build-test.result }}';
+            
+            let summary = '## PR Checks Summary\n\n';
+            summary += `- **Validation**: ${validate_result === 'success' ? '✅' : '❌'}\n`;
+            summary += `- **Build Test**: ${build_result === 'success' ? '✅' : '❌'}\n\n`;
+            
+            if (validate_result === 'success' && build_result === 'success') {
+              summary += '✅ All checks passed! Ready to merge.\n';
+            } else {
+              summary += '❌ Some checks failed. Please review the errors above.\n';
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            })

@@ -1,0 +1,27 @@
+# Dev environment overrides
+jupyterhub:
+  hub:
+    extraEnv:
+      MDDASH_ENV:
+        value: "development"
+      S3_ENDPOINT:
+        value: "http://minio.fida-ns.svc.cluster.local:80"
+      NS_REQUESTS_CPU:
+        value: "500m"
+      NS_REQUESTS_MEMORY:
+        value: "2Gi"
+
+  singleuser:
+    image:
+      tag: "dev"
+    cpu:
+      limit: 2
+      guarantee: 0.5
+    memory:
+      limit: 4G
+      guarantee: 1G
+    storage:
+      capacity: 5Gi
+
+  debug:
+    enabled: true

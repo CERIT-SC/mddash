@@ -1,0 +1,19 @@
+# Dev environment overrides
+image:
+  tag: "dev"
+  pullPolicy: Always
+
+storage:
+  size: 2Gi
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 512Mi
+  requests:
+    cpu: 50m
+    memory: 128Mi
+
+env:
+  - name: LOG_LEVEL
+    value: "DEBUG"

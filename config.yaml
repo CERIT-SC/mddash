@@ -5,8 +5,10 @@ dashboard:
   hostname: mddash.k8s.local
   user: fida
   image: cerit.io/xkrasa/mddash
-  devImage: cerit.io/xkrasa/mddash:dev
-  devel: true
+  devel: false
+
+mdrunApi:
+  image: cerit.io/xkrasa/mdrun-api
 
 data:
   size: 10Gi
