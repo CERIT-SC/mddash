@@ -1,3 +1,6 @@
 *.tgz
 Chart.lock
 tmpcharts-*
+
+# Generated from template
+charts/mddash/values.yaml

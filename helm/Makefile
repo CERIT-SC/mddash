@@ -1,26 +1,29 @@
 ENV ?= prod
-NAMESPACE ?= md-dashboard-ns
 config ?= ../config.yaml
 
 package = $(shell yq .helm.package ${config})
 chart_path = $(shell yq .helm.chartPath ${config})
+namespace = $(shell yq '.$(ENV)Namespace' ${config})
 
-ifeq ($(ENV),dev)
-	VALUES_FILE = -f $(chart_path)/values.yaml -f $(chart_path)/values.dev.yaml
-else
-	VALUES_FILE = -f $(chart_path)/values.yaml
-endif
+VALUES_FILE = -f $(chart_path)/values.yaml
 
-.PHONY: install upgrade deploy update uninstall hub-templates port-forward test status logs
+.PHONY: install upgrade deploy update uninstall hub-templates port-forward test status logs render
 
 
-install: update hub-templates
-	helm install $(package) $(chart_path) --namespace $(NAMESPACE) \
+render:
+	@echo "=== Rendering values for $(ENV) environment ==="
+	@ENV=$(ENV) gomplate -d config=$(config) \
+		-f $(chart_path)/values.yaml.tmpl \
+		-o $(chart_path)/values.yaml
+	@echo "✓ Rendered $(chart_path)/values.yaml"
+
+install: render update hub-templates
+	helm install $(package) $(chart_path) --namespace $(namespace) \
 		$(VALUES_FILE) \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/pre_spawn_hook.py
 
-upgrade: hub-templates
-	helm upgrade $(package) $(chart_path) --namespace $(NAMESPACE) \
+upgrade: render hub-templates
+	helm upgrade $(package) $(chart_path) --namespace $(namespace) \
 		$(VALUES_FILE) \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/pre_spawn_hook.py
 
