@@ -1,4 +1,3 @@
-# MDDash CI/CD - Single source of truth: config.yaml
 ENV ?= prod
 IMAGE_TAG ?= $(if $(filter dev,$(ENV)),dev,latest)
 CONFIG = config.yaml

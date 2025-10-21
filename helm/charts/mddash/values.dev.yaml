@@ -2,8 +2,6 @@
 jupyterhub:
   hub:
     extraEnv:
-      MDDASH_ENV:
-        value: "development"
       S3_ENDPOINT:
         value: "http://minio.fida-ns.svc.cluster.local:80"
       NS_REQUESTS_CPU:
