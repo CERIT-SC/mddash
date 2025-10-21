@@ -154,6 +154,11 @@ jobs:
           kubectl create secret generic mddash-kubeconfig-secret \
             --from-file=config=$HOME/.kube/config \
             -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          
+          kubectl create secret generic minio-creds-secret \
+            --from-literal=config.env="export MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
+          export MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}" \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
       - name: Deploy
         run: |

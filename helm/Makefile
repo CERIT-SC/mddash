@@ -4,7 +4,6 @@ config ?= ../config.yaml
 
 package = $(shell yq .helm.package ${config})
 chart_path = $(shell yq .helm.chartPath ${config})
-kubeconfig_path = $(shell yq .helm.kubeconfigPath ${config})
 
 ifeq ($(ENV),dev)
 	VALUES_FILE = -f $(chart_path)/values.yaml -f $(chart_path)/values.dev.yaml

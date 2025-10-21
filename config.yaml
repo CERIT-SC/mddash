@@ -2,8 +2,6 @@ devNamespace: krasa-ns
 prodNamespace: md-dashboard-ns
 
 dashboard:
-  hostname: mddash.k8s.local
-  user: fida
   image: cerit.io/xkrasa/mddash
   platform: linux/amd64
 
@@ -21,4 +19,3 @@ data:
 helm:
   package: mddash
   chartPath: charts/mddash
-  kubeconfigPath: ../private/kuba-cluster.yaml
