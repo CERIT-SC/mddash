@@ -42,10 +42,31 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Build and push
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Build and push dashboard
+        # if: contains(github.event.head_commit.modified, 'dashboard/') || contains(github.event.head_commit.added, 'dashboard/')
         run: |
-          make build ENV=${{ env.ENV }} IMAGE_TAG=${{ env.TAG }}
-          make push ENV=${{ env.ENV }} IMAGE_TAG=${{ env.TAG }}
+          make build-dashboard ENV=${{ env.ENV }} IMAGE_TAG=${{ env.TAG }}
+          make push-dashboard ENV=${{ env.ENV }} IMAGE_TAG=${{ env.TAG }}
+
+      - name: Build and push notebook
+        # if: contains(github.event.head_commit.modified, 'notebook/') || contains(github.event.head_commit.added, 'notebook/')
+        run: |
+          make build-notebook ENV=${{ env.ENV }} IMAGE_TAG=${{ env.TAG }}
+          make push-notebook ENV=${{ env.ENV }} IMAGE_TAG=${{ env.TAG }}
+
+      - name: Build and push mdrun-api
+        # if: contains(github.event.head_commit.modified, 'mdrun-api/') || contains(github.event.head_commit.added, 'mdrun-api/')
+        run: |
+          make build-mdrun-api ENV=${{ env.ENV }} IMAGE_TAG=${{ env.TAG }}
+          make push-mdrun-api ENV=${{ env.ENV }} IMAGE_TAG=${{ env.TAG }}
 
       - name: Configure kubectl
         run: |
@@ -55,9 +76,9 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v3
 
-      - name: Create secrets
+      - name: Setup namespace and secrets
         run: |
-          NAMESPACE=$(yq '.$(echo ${{ env.ENV }})Namespace' config.yaml)
+          NAMESPACE=$(yq '.${{ env.ENV }}Namespace' config.yaml)
           kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
           
           kubectl create secret generic oidc-credentials \
@@ -71,5 +92,10 @@ jobs:
 
       - name: Deploy
         run: |
-          NAMESPACE=$(yq '.$(echo ${{ env.ENV }})Namespace' config.yaml)
-          make deploy ENV=${{ env.ENV }} NAMESPACE=${NAMESPACE}
+          NAMESPACE=$(yq '.${{ env.ENV }}Namespace' config.yaml)
+          
+          if helm status mddash -n ${NAMESPACE} >/dev/null 2>&1; then
+            make -C helm upgrade ENV=${{ env.ENV }} NAMESPACE=${NAMESPACE}
+          else
+            make -C helm install ENV=${{ env.ENV }} NAMESPACE=${NAMESPACE}
+          fi
