@@ -73,15 +73,6 @@ jobs:
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
-      - name: Cache Docker layers
-        if: steps.changes.outputs.changed == 'true'
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache-${{ matrix.component.name }}
-          key: ${{ runner.os }}-buildx-${{ matrix.component.name }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-${{ matrix.component.name }}-
-
       - name: Build and push ${{ matrix.component.name }}
         if: steps.changes.outputs.changed == 'true'
         run: |
