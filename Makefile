@@ -70,3 +70,17 @@ status: ## Show deployment status
 .PHONY: logs
 logs: ## Show deployment logs
 	@$(MAKE) -C helm logs ENV=$(ENV)
+
+.PHONY: demo
+demo: ## Run local demo (Flask API + React dev server)
+	@echo "Starting Flask API..."; \
+	python3 dashboard/api/_demo.py & \
+	API_PID=$$!; \
+	echo "Flask API started (PID: $$API_PID)"; \
+	echo "Starting React dev server..."; \
+	cd dashboard/dash && npm run dev & \
+	VITE_PID=$$!; \
+	echo "React dev server started (PID: $$VITE_PID)"; \
+	echo "Demo running - Press Ctrl+C to stop"; \
+	trap "echo 'Stopping...'; kill $$API_PID $$VITE_PID 2>/dev/null; exit" INT TERM EXIT; \
+	wait || true
