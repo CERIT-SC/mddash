@@ -119,8 +119,7 @@ jobs:
       - name: Package and push mdrun-api chart
         if: steps.changes.outputs.changed == 'true'
         run: |
-          helm package helm/charts/mdrun-api --version ${{ needs.setup.outputs.tag }}
-          helm push mdrun-api-${{ needs.setup.outputs.tag }}.tgz oci://${{ env.REGISTRY }}/xkrasa
+          make push-mdrun-api-chart ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
 
   deploy:
     needs: [setup, build, push-mdrun-api-chart]

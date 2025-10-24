@@ -1,29 +1,36 @@
+SHELL := /bin/bash
+.DEFAULT_GOAL := help
+
 ENV ?= prod
 IMAGE_TAG ?= latest
 config ?= ../config.yaml
 
-image = $(shell yq .dashboard.image ${config})
-platform = --platform $(shell yq .dashboard.platform ${config})
+image := $(shell yq .dashboard.image ${config})
+platform := --platform $(shell yq .dashboard.platform ${config})
 
 ifeq ($(ENV),dev)
-	TAG = dev
+	TAG := dev
+	DOCKERFILE := Dockerfile.dev
+	BUILD_ARGS := --build-arg IMAGE=${image}:latest
 else
-	TAG = $(IMAGE_TAG)
+	TAG := $(IMAGE_TAG)
+	DOCKERFILE := Dockerfile
+	BUILD_ARGS :=
 endif
 
-.PHONY: build build-stage push build-dev push-dev
+.PHONY: help
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-build: build-stage
-	docker build ${platform} -t ${image}:${TAG} .
+.PHONY: build
+build: ## Build Docker image (ENV=dev for dev, ENV=prod for prod)
+	docker build ${platform} -f ${DOCKERFILE} ${BUILD_ARGS} -t ${image}:${TAG} .
 
-build-stage:
-	docker build ${platform} --target build-stage -t ${image}:build-stage .
-
-push: build
+.PHONY: push
+push: build ## Build and push Docker image
 	docker push ${image}:${TAG}
 
-build-dev: build
-	docker build ${platform} -f Dockerfile.dev --build-arg IMAGE=${image}:${TAG} -t ${image}:${TAG}-dev .
-
-push-dev: build-dev
-	docker push ${image}:${TAG}-dev
+.PHONY: clean
+clean: ## Remove Docker images
+	docker rmi ${image}:${TAG} || true
