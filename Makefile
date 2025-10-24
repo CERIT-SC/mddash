@@ -48,9 +48,10 @@ push-mdrun-api: ## Push mdrun-api image
 
 .PHONY: push-mdrun-api-chart
 push-mdrun-api-chart: ## Package and push mdrun-api Helm chart to OCI registry
-	helm package helm/charts/mdrun-api --version $(IMAGE_TAG)
-	helm push mdrun-api-$(IMAGE_TAG).tgz oci://$(chart_registry)/$(chart_repo)
-	rm -f mdrun-api-$(IMAGE_TAG).tgz
+	$(eval CHART_VERSION := $(shell yq '.version' helm/charts/mdrun-api/Chart.yaml))
+	helm package helm/charts/mdrun-api --version $(CHART_VERSION) --app-version $(IMAGE_TAG)
+	helm push mdrun-api-$(CHART_VERSION).tgz oci://$(chart_registry)/$(chart_repo)
+	rm -f mdrun-api-$(CHART_VERSION).tgz
 
 .PHONY: deploy
 deploy: ## Deploy via Helm
