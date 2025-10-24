@@ -1,15 +1,80 @@
-devNamespace: fida-ns
-prodNamespace: gmxhub-ns
+# Kubernetes namespaces
+devNamespace: krasa-ns
+prodNamespace: md-dashboard-ns
 
+# Rancher project IDs for user namespace annotation
+devRancherProjectId: "c-m-qvndqhf6:p-8rjpv"
+prodRancherProjectId: "c-m-qvndqhf6:p-hshk2"
+
+# Global storage class for all persistent volumes
+storageClassName: nfs-csi
+
+# Dashboard application (JupyterHub)
 dashboard:
-  hostname: mddash.k8s.local
-  user: fida
   image: cerit.io/xkrasa/mddash
-  devImage: cerit.io/xkrasa/mddash:dev
-  devel: true
+  platform: linux/amd64
+  devTag: dev
+  prodTag: latest
+  devHostname: mddash-dev.dyn.cloud.e-infra.cz
+  prodHostname: mddash.dyn.cloud.e-infra.cz
 
-data:
-  size: 10Gi
+# mdrun-api service
+mdrunApi:
+  image: cerit.io/xkrasa/mdrun-api
+  platform: linux/amd64
+  devTag: dev
+  prodTag: latest
+  storage:  # Persistent storage for mdrun-api pods
+    devSize: 5Gi
+    prodSize: 20Gi
 
+# mdrun-api Helm chart
+mdrunApiChart:
+  registry: cerit.io
+  repository: xkrasa
+
+# Notebook image (spawned by Dashboard pod)
 notebook:
   image: cerit.io/xkrasa/mddash-notebook
+  platform: linux/amd64
+  devTag: dev
+  prodTag: latest
+
+# MinIO object storage tenant
+minio:
+  servers: 2
+  volumesPerServer: 2
+  devPoolSize: 10Gi    # Storage pool size in dev
+  prodPoolSize: 100Gi  # Storage pool size in prod
+
+resources:
+  dev:
+    singleuser:
+      memory:
+        guarantee: 512M
+        limit: 4G
+      cpu:
+        guarantee: 0.2
+        limit: 1
+    namespaceQuota:
+      requestsCpu: "1000m"
+      requestsMemory: "4Gi"
+      limitsCpu: "64000m"
+      limitsMemory: "256Gi"
+  prod:
+    singleuser:
+      memory:
+        guarantee: 512M
+        limit: 4G
+      cpu:
+        guarantee: 0.2
+        limit: 1
+    namespaceQuota:
+      requestsCpu: "1000m"
+      requestsMemory: "4Gi"
+      limitsCpu: "64000m"
+      limitsMemory: "256Gi"
+
+helm:
+  package: mddash
+  chartPath: charts/mddash
