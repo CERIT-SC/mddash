@@ -1,5 +1,8 @@
 {{- $cfg := (datasource "config") -}}
 {{- $env := (getenv "ENV") -}}
+{{- if not (or (eq $env "dev") (eq $env "prod")) -}}
+  {{- fail "ENV must be 'dev' or 'prod'" -}}
+{{- end -}}
 {{- $namespace := (index $cfg (printf "%sNamespace" $env)) -}}
 jupyterhub:
   hub:
