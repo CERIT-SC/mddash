@@ -35,7 +35,7 @@ ENV UWSGI_PROCESSES=4
 ENV UWSGI_THREADS=2
 ENV UWSGI_ENABLE_THREADS=1
 
-# basically a curl, but using python to avoid extra dependencies
+# Using Python's urllib to avoid installing curl package
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()" || exit 1
 
