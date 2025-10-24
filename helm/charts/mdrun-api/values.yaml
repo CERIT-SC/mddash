@@ -1,4 +1,3 @@
-# Default values for mdrun-api
 replicaCount: 1
 
 image:

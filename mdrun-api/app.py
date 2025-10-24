@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 from flask_cors import CORS
 
@@ -10,8 +11,13 @@ from polling import start_polling
 def create_app() -> Flask:
     app = Flask(__name__)
 
+    app_env = os.getenv('APP_ENV', 'prod')
+    app.config['ENV'] = app_env
+    app.config['DEBUG'] = app_env == 'dev'
+    
     app.config['SQLALCHEMY_DATABASE_URI'] = DB_URL
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config['SQLALCHEMY_ECHO'] = app_env == 'dev'
 
     CORS(app)
 
@@ -34,4 +40,5 @@ start_polling(app)
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    debug_mode = os.getenv('APP_ENV', 'prod') == 'dev'
+    app.run(debug=debug_mode, host='0.0.0.0', port=5000)

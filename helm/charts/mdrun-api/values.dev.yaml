@@ -1,4 +1,3 @@
-# Dev environment overrides
 image:
   tag: "dev"
   pullPolicy: Always
@@ -13,7 +12,3 @@ resources:
   requests:
     cpu: 50m
     memory: 128Mi
-
-env:
-  - name: LOG_LEVEL
-    value: "DEBUG"
