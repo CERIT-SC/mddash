@@ -1,0 +1,230 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [dev, master]
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: cerit.io
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      env: ${{ steps.set-env.outputs.env }}
+      tag: ${{ steps.set-env.outputs.tag }}
+    steps:
+      - name: Set environment
+        id: set-env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
+            echo "env=prod" >> $GITHUB_OUTPUT
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          else
+            echo "env=dev" >> $GITHUB_OUTPUT
+            echo "tag=dev" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - name: dashboard
+            path: dashboard/
+            make-build: build-dashboard
+            make-push: push-dashboard
+          - name: notebook
+            path: notebook/
+            make-build: build-notebook
+            make-push: push-notebook
+          - name: mdrun-api
+            path: mdrun-api/
+            make-build: build-mdrun-api
+            make-push: push-mdrun-api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes
+        id: changes
+        run: |
+          BEFORE_SHA="${{ github.event.before }}"
+          AFTER_SHA="${{ github.sha }}"
+          
+          # Handle new branch or first commit (before SHA is all zeros)
+          if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            echo "New branch or invalid base SHA - building all components"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Compare changes between before and after
+          if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -q '^${{ matrix.component.path }}'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to registry
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push ${{ matrix.component.name }}
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          make ${{ matrix.component.make-build }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
+          make ${{ matrix.component.make-push }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
+
+  push-mdrun-api-chart:
+    needs: setup
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.changes.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes
+        id: changes
+        run: |
+          BEFORE_SHA="${{ github.event.before }}"
+          AFTER_SHA="${{ github.sha }}"
+          
+          # Handle new branch or first commit (before SHA is all zeros)
+          if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            echo "New branch or invalid base SHA - building mdrun-api chart"
+            echo "changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Compare changes between before and after
+          if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -q '^helm/charts/mdrun-api/'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Helm
+        if: steps.changes.outputs.changed == 'true'
+        uses: azure/setup-helm@v3
+
+      - name: Login to registry
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | helm registry login ${{ env.REGISTRY }} \
+            --username ${{ secrets.REGISTRY_USERNAME }} \
+            --password-stdin
+
+      - name: Package and push mdrun-api chart
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          make push-mdrun-api-chart ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
+
+  check-changes:
+    needs: [build, push-mdrun-api-chart]
+    runs-on: ubuntu-latest
+    outputs:
+      any_changes: ${{ steps.aggregate.outputs.any_changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Check for deployment-related changes
+        id: check-deploy
+        run: |
+          BEFORE_SHA="${{ github.event.before }}"
+          AFTER_SHA="${{ github.sha }}"
+          
+          if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            echo "deploy_changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check for helm templates, config, or component changes
+          if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -qE '^(helm/charts/mddash/|config.yaml|dashboard/|notebook/|mdrun-api/)'; then
+            echo "deploy_changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_changed=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Aggregate changes
+        id: aggregate
+        run: |
+          if [[ "${{ steps.check-deploy.outputs.deploy_changed }}" == "true" ]] || \
+             [[ "${{ needs.push-mdrun-api-chart.outputs.changed }}" == "true" ]]; then
+            echo "any_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "any_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+  deploy:
+    needs: [setup, check-changes]
+    if: needs.check-changes.outputs.any_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          sudo wget -qO /usr/local/bin/gomplate https://github.com/hairyhenderson/gomplate/releases/latest/download/gomplate_linux-amd64
+          sudo chmod +x /usr/local/bin/gomplate
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+
+      - name: Update Helm dependencies
+        run: |
+          make -C helm update ENV=${{ needs.setup.outputs.env }}
+
+      - name: Setup namespace and secrets
+        run: |
+          NAMESPACE=$(yq '.${{ needs.setup.outputs.env }}Namespace' config.yaml)
+          kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          
+          kubectl create secret generic oidc-credentials \
+            --from-literal=client_id="${{ secrets.OAUTH_CLIENT_ID }}" \
+            --from-literal=client_secret="${{ secrets.OAUTH_CLIENT_SECRET }}" \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          
+          kubectl create secret generic mddash-kubeconfig-secret \
+            --from-file=config=$HOME/.kube/config \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          
+          kubectl create secret generic minio-creds-secret \
+            --from-literal=config.env="export MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
+          export MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}" \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy
+        run: |
+          NAMESPACE=$(yq '.${{ needs.setup.outputs.env }}Namespace' config.yaml)
+          
+          if helm status mddash -n ${NAMESPACE} >/dev/null 2>&1; then
+            make -C helm upgrade ENV=${{ needs.setup.outputs.env }}
+          else
+            make -C helm install ENV=${{ needs.setup.outputs.env }}
+          fi

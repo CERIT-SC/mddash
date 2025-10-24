@@ -2,8 +2,12 @@ import os
 import logging
 from pathlib import Path
 
+APP_ENV = os.getenv('APP_ENV', 'prod')
+IS_DEV = APP_ENV == 'dev'
+
 LOG_FORMAT = '[%(asctime)s] %(levelname)s\t%(name)s: %(message)s'
-logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
+LOG_LEVEL = logging.DEBUG if IS_DEV else logging.INFO
+logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL)
 
 API_PREFIX = '/api'
 

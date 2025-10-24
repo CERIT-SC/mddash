@@ -4,4 +4,3 @@ Flask-Marshmallow
 Flask-CORS
 marshmallow-sqlalchemy
 kubernetes
-uWSGI

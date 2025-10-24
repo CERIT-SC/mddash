@@ -1,13 +1,39 @@
-IMAGE_NAME = cerit.io/xkrasa/mdrun-api
-TAG = latest
+SHELL := /bin/bash
+.DEFAULT_GOAL := help
 
-build:
-	docker build -t $(IMAGE_NAME):$(TAG) .
+ENV ?= prod
+IMAGE_TAG ?= latest
 
-push: build
-	docker push $(IMAGE_NAME):$(TAG)
+config := ../config.yaml
+image := $(shell yq .mdrunApi.image $(config))
+platform := --platform $(shell yq .mdrunApi.platform $(config))
 
-clean:
-	docker rmi $(IMAGE_NAME):$(TAG) || true
+ifeq ($(ENV),dev)
+	tag := dev
+	dockerfile := Dockerfile.dev
+else
+	tag := $(IMAGE_TAG)
+	dockerfile := Dockerfile
+endif
 
-.PHONY: build build-minikube push clean
+.PHONY: help
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+
+.PHONY: build
+build: ## Build Docker image (ENV=dev for dev, ENV=prod for prod)
+	docker build $(platform) -f $(dockerfile) -t $(image):$(tag) .
+
+.PHONY: push
+push: build ## Build and push Docker image
+	docker push $(image):$(tag)
+
+.PHONY: clean
+clean: ## Remove Docker image
+	docker rmi $(image):$(tag) || true
+
+.PHONY: clean-all
+clean-all: ## Remove both dev and prod images
+	docker rmi $(image):dev || true
+	docker rmi $(image):$(IMAGE_TAG) || true
