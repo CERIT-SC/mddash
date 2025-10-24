@@ -3,17 +3,17 @@ SHELL := /bin/bash
 
 ENV ?= prod
 IMAGE_TAG ?= latest
-config ?= ../config.yaml
 
-image := $(shell yq .mdrunApi.image ${config})
-platform := --platform $(shell yq .mdrunApi.platform ${config})
+config := ../config.yaml
+image := $(shell yq .mdrunApi.image $(config))
+platform := --platform $(shell yq .mdrunApi.platform $(config))
 
 ifeq ($(ENV),dev)
-	TAG := dev
-	DOCKERFILE := Dockerfile.dev
+	tag := dev
+	dockerfile := Dockerfile.dev
 else
-	TAG := $(IMAGE_TAG)
-	DOCKERFILE := Dockerfile
+	tag := $(IMAGE_TAG)
+	dockerfile := Dockerfile
 endif
 
 .PHONY: help
@@ -23,17 +23,17 @@ help: ## Show this help
 
 .PHONY: build
 build: ## Build Docker image (ENV=dev for dev, ENV=prod for prod)
-	docker build ${platform} -f ${DOCKERFILE} -t ${image}:${TAG} .
+	docker build $(platform) -f $(dockerfile) -t $(image):$(tag) .
 
 .PHONY: push
 push: build ## Build and push Docker image
-	docker push ${image}:${TAG}
+	docker push $(image):$(tag)
 
 .PHONY: clean
 clean: ## Remove Docker image
-	docker rmi ${image}:${TAG} || true
+	docker rmi $(image):$(tag) || true
 
 .PHONY: clean-all
 clean-all: ## Remove both dev and prod images
-	docker rmi ${image}:dev || true
-	docker rmi ${image}:${IMAGE_TAG} || true
+	docker rmi $(image):dev || true
+	docker rmi $(image):$(IMAGE_TAG) || true

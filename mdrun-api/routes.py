@@ -17,6 +17,7 @@ mdrun_bp = Blueprint('mdrun', __name__, url_prefix=f'{API_PREFIX}/jobs')
 
 
 @health_bp.route('', methods=['GET'])
+@health_bp.route('/health', methods=['GET'])
 def health_check():
     return ApiResponse.success('MDRun API is healthy', HTTPStatus.OK)
 

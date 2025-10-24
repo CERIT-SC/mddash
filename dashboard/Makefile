@@ -3,19 +3,19 @@ SHELL := /bin/bash
 
 ENV ?= prod
 IMAGE_TAG ?= latest
-config ?= ../config.yaml
 
-image := $(shell yq .dashboard.image ${config})
-platform := --platform $(shell yq .dashboard.platform ${config})
+config := ../config.yaml
+image := $(shell yq .dashboard.image $(config))
+platform := --platform $(shell yq .dashboard.platform $(config))
 
 ifeq ($(ENV),dev)
-	TAG := dev
-	DOCKERFILE := Dockerfile.dev
-	BUILD_ARGS := --build-arg IMAGE=${image}:latest
+	tag := dev
+	dockerfile := Dockerfile.dev
+	build_args := --build-arg IMAGE=$(image):latest
 else
-	TAG := $(IMAGE_TAG)
-	DOCKERFILE := Dockerfile
-	BUILD_ARGS :=
+	tag := $(IMAGE_TAG)
+	dockerfile := Dockerfile
+	build_args :=
 endif
 
 .PHONY: help
@@ -25,12 +25,12 @@ help: ## Show this help
 
 .PHONY: build
 build: ## Build Docker image (ENV=dev for dev, ENV=prod for prod)
-	docker build ${platform} -f ${DOCKERFILE} ${BUILD_ARGS} -t ${image}:${TAG} .
+	docker build $(platform) -f $(dockerfile) $(build_args) -t $(image):$(tag) .
 
 .PHONY: push
 push: build ## Build and push Docker image
-	docker push ${image}:${TAG}
+	docker push $(image):$(tag)
 
 .PHONY: clean
 clean: ## Remove Docker images
-	docker rmi ${image}:${TAG} || true
+	docker rmi $(image):$(tag) || true
