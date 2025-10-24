@@ -63,9 +63,11 @@ test: ## Test Helm template rendering
 status: ## Show deployment status
 	@echo "=== Helm Release Status ==="
 	helm status $(package) --namespace $(namespace)
-	@echo -e "\n=== Pod Status ==="
+	@echo ""
+	@echo "=== Pod Status ==="
 	kubectl get pods -n $(namespace)
-	@echo -e "\n=== Service Status ==="
+	@echo ""
+	@echo "=== Service Status ==="
 	kubectl get svc -n $(namespace)
 
 .PHONY: logs
