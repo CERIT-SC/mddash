@@ -75,7 +75,7 @@ jobs:
 
       - name: Cache Docker layers
         if: steps.changes.outputs.changed == 'true'
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache-${{ matrix.component.name }}
           key: ${{ runner.os }}-buildx-${{ matrix.component.name }}-${{ github.sha }}
@@ -161,9 +161,10 @@ jobs:
             -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
           
           cat > /tmp/minio-config.env <<EOF
-export MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
-export MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
-EOF
+          export MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
+          export MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
+          EOF
+
           kubectl create secret generic minio-creds-secret \
             --from-file=config.env=/tmp/minio-config.env \
             -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
@@ -174,7 +175,7 @@ EOF
           NAMESPACE=$(yq '.${{ needs.setup.outputs.env }}Namespace' config.yaml)
           
           if helm status mddash -n ${NAMESPACE} >/dev/null 2>&1; then
-            make -C helm upgrade ENV=${{ needs.setup.outputs.env }} NAMESPACE=${NAMESPACE}
+            make -C helm upgrade ENV=${{ needs.setup.outputs.env }}
           else
-            make -C helm install ENV=${{ needs.setup.outputs.env }} NAMESPACE=${NAMESPACE}
+            make -C helm install ENV=${{ needs.setup.outputs.env }}
           fi

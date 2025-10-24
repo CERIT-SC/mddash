@@ -3,15 +3,15 @@ SHELL := /bin/bash
 
 ENV ?= prod
 IMAGE_TAG ?= latest
-config ?= ../config.yaml
 
-image := $(shell yq .notebook.image ${config})
-platform := --platform $(shell yq .notebook.platform ${config})
+config := ../config.yaml
+image := $(shell yq .notebook.image $(config))
+platform := --platform $(shell yq .notebook.platform $(config))
 
 ifeq ($(ENV),dev)
-	TAG := dev
+	tag := dev
 else
-	TAG := $(IMAGE_TAG)
+	tag := $(IMAGE_TAG)
 endif
 
 .PHONY: help
@@ -21,12 +21,12 @@ help: ## Show this help
 
 .PHONY: build
 build: ## Build Docker image
-	docker build ${platform} -t ${image}:${TAG} .
+	docker build $(platform) -t $(image):$(tag) .
 
 .PHONY: push
 push: build ## Build and push Docker image
-	docker push ${image}:${TAG}
+	docker push $(image):$(tag)
 
 .PHONY: clean
 clean: ## Remove Docker image
-	docker rmi ${image}:${TAG} || true
+	docker rmi $(image):$(tag) || true
