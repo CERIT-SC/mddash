@@ -1,58 +1,74 @@
+SHELL := /bin/bash
+.DEFAULT_GOAL := help
+
 ENV ?= prod
 config ?= ../config.yaml
 
-package = $(shell yq .helm.package ${config})
-chart_path = $(shell yq .helm.chartPath ${config})
-namespace = $(shell yq '.$(ENV)Namespace' ${config})
+package := $(shell yq .helm.package ${config})
+chart_path := $(shell yq .helm.chartPath ${config})
+namespace := $(shell yq '.$(ENV)Namespace' ${config})
 
-VALUES_FILE = -f $(chart_path)/values.yaml
+VALUES_FILE := -f $(chart_path)/values.yaml
 
-.PHONY: install upgrade deploy update uninstall hub-templates port-forward test status logs render
+.PHONY: help
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-
-render:
+.PHONY: render
+render: ## Render Helm values template
 	@echo "=== Rendering values for $(ENV) environment ==="
 	@ENV=$(ENV) gomplate -d config=$(config) \
 		-f $(chart_path)/values.yaml.tmpl \
 		-o $(chart_path)/values.yaml
 	@echo "✓ Rendered $(chart_path)/values.yaml"
 
-install: render update hub-templates
+.PHONY: install
+install: render update hub-templates ## Install Helm chart
 	helm install $(package) $(chart_path) --namespace $(namespace) \
 		$(VALUES_FILE) \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/pre_spawn_hook.py
 
-upgrade: render hub-templates
+.PHONY: upgrade
+upgrade: render hub-templates ## Upgrade Helm release
 	helm upgrade $(package) $(chart_path) --namespace $(namespace) \
 		$(VALUES_FILE) \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/pre_spawn_hook.py
 
-deploy: upgrade
+.PHONY: deploy
+deploy: upgrade ## Deploy (alias for upgrade)
 
-update:
+.PHONY: update
+update: ## Update Helm dependencies
 	helm dependency update $(chart_path)
 
-uninstall:
+.PHONY: uninstall
+uninstall: ## Uninstall Helm release
 	helm uninstall $(package) --namespace $(NAMESPACE)
 
-hub-templates:
+.PHONY: hub-templates
+hub-templates: ## Create hub templates ConfigMap
 	kubectl create configmap mddash-custom-templates \
 		--from-file=$(chart_path)/files/hub-templates \
 		-n $(NAMESPACE) --dry-run=client -o yaml | kubectl apply -f -
 
-port-forward:
+.PHONY: port-forward
+port-forward: ## Forward port 8000 to proxy-public service
 	kubectl port-forward svc/proxy-public 8000:80 -n $(NAMESPACE)
 
-test:
+.PHONY: test
+test: ## Test Helm template rendering
 	helm template $(package) $(chart_path) --debug --namespace $(NAMESPACE) $(VALUES_FILE)
 
-status:
+.PHONY: status
+status: ## Show deployment status
 	@echo "=== Helm Release Status ==="
 	helm status $(package) --namespace $(NAMESPACE)
-	@echo "\n=== Pod Status ==="
+	@echo -e "\n=== Pod Status ==="
 	kubectl get pods -n $(NAMESPACE)
-	@echo "\n=== Service Status ==="
+	@echo -e "\n=== Service Status ==="
 	kubectl get svc -n $(NAMESPACE)
 
-logs:
+.PHONY: logs
+logs: ## Show hub deployment logs
 	kubectl logs -f deployment/hub -n $(NAMESPACE)

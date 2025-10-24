@@ -1,61 +1,71 @@
+SHELL := /bin/bash
+.DEFAULT_GOAL := help
+
 ENV ?= prod
 IMAGE_TAG ?= $(if $(filter dev,$(ENV)),dev,latest)
-CONFIG = config.yaml
-NAMESPACE = $(shell yq '.$(ENV)Namespace' $(CONFIG))
+CONFIG := config.yaml
+NAMESPACE := $(shell yq '.$(ENV)Namespace' $(CONFIG))
+CHART_REGISTRY := $(shell yq '.mdrunApiChart.registry' $(CONFIG))
+CHART_REPO := $(shell yq '.mdrunApiChart.repository' $(CONFIG))
 
-.PHONY: help build push deploy all clean status logs build-dashboard build-notebook build-mdrun-api push-dashboard push-notebook push-mdrun-api
-
-help:
-	@echo "Usage: make <target> ENV=dev|prod"
-	@echo ""
-	@echo "Targets:"
-	@echo "  build                - Build all images"
-	@echo "  build-dashboard      - Build dashboard only"
-	@echo "  build-notebook       - Build notebook only"
-	@echo "  build-mdrun-api      - Build mdrun-api only"
-	@echo "  push                 - Push all images"
-	@echo "  push-dashboard       - Push dashboard only"
-	@echo "  push-notebook        - Push notebook only"
-	@echo "  push-mdrun-api       - Push mdrun-api only"
-	@echo "  deploy               - Deploy via Helm"
-	@echo "  all                  - Build, push, deploy"
-	@echo "  status               - Show deployment status"
-	@echo "  logs                 - Show logs"
+.PHONY: help
+help: ## Show this help
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 	@echo "Current: ENV=$(ENV), TAG=$(IMAGE_TAG), NS=$(NAMESPACE)"
 
-build: build-dashboard build-notebook build-mdrun-api
+.PHONY: build
+build: build-dashboard build-notebook build-mdrun-api ## Build all images
 
-build-dashboard:
+.PHONY: build-dashboard
+build-dashboard: ## Build dashboard image
 	@$(MAKE) -C dashboard build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
-build-notebook:
+.PHONY: build-notebook
+build-notebook: ## Build notebook image
 	@$(MAKE) -C notebook build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
-build-mdrun-api:
+.PHONY: build-mdrun-api
+build-mdrun-api: ## Build mdrun-api image
 	@$(MAKE) -C mdrun-api build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
-push: push-dashboard push-notebook push-mdrun-api
+.PHONY: push
+push: push-dashboard push-notebook push-mdrun-api ## Push all images
 
-push-dashboard:
+.PHONY: push-dashboard
+push-dashboard: ## Push dashboard image
 	@$(MAKE) -C dashboard push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
-push-notebook:
+.PHONY: push-notebook
+push-notebook: ## Push notebook image
 	@$(MAKE) -C notebook push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
-push-mdrun-api:
+.PHONY: push-mdrun-api
+push-mdrun-api: ## Push mdrun-api image
 	@$(MAKE) -C mdrun-api push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
-deploy:
+.PHONY: push-mdrun-api-chart
+push-mdrun-api-chart: ## Package and push mdrun-api Helm chart to OCI registry
+	helm package helm/charts/mdrun-api --version $(IMAGE_TAG)
+	helm push mdrun-api-$(IMAGE_TAG).tgz oci://$(CHART_REGISTRY)/$(CHART_REPO)
+	rm -f mdrun-api-$(IMAGE_TAG).tgz
+
+.PHONY: deploy
+deploy: ## Deploy via Helm
 	@$(MAKE) -C helm deploy ENV=$(ENV) NAMESPACE=$(NAMESPACE)
 
-all: build push deploy
+.PHONY: all
+all: build push deploy ## Build, push, and deploy everything
 
-clean:
+.PHONY: clean
+clean: ## Uninstall Helm release
 	@$(MAKE) -C helm uninstall ENV=$(ENV) NAMESPACE=$(NAMESPACE)
 
-status:
+.PHONY: status
+status: ## Show deployment status
 	@$(MAKE) -C helm status ENV=$(ENV) NAMESPACE=$(NAMESPACE)
 
-logs:
+.PHONY: logs
+logs: ## Show deployment logs
 	@$(MAKE) -C helm logs ENV=$(ENV) NAMESPACE=$(NAMESPACE)

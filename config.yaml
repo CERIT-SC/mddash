@@ -28,6 +28,11 @@ mdrunApi:
     devSize: 5Gi
     prodSize: 20Gi
 
+# mdrun-api Helm chart
+mdrunApiChart:
+  registry: cerit.io
+  repository: xkrasa
+
 # Notebook image (spawned by Dashboard pod)
 notebook:
   image: cerit.io/xkrasa/mddash-notebook
