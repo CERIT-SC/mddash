@@ -160,10 +160,14 @@ jobs:
             --from-file=config=$HOME/.kube/config \
             -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
           
+          cat > /tmp/minio-config.env <<EOF
+export MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
+export MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}
+EOF
           kubectl create secret generic minio-creds-secret \
-            --from-literal=config.env="export MINIO_ROOT_USER=${{ secrets.MINIO_ROOT_USER }}
-          export MINIO_ROOT_PASSWORD=${{ secrets.MINIO_ROOT_PASSWORD }}" \
+            --from-file=config.env=/tmp/minio-config.env \
             -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          rm /tmp/minio-config.env
 
       - name: Deploy
         run: |
