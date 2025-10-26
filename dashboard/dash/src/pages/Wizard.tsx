@@ -1,10 +1,13 @@
 import { useParams } from "react-router-dom";
-import { Paper, Typography, CircularProgress } from "@mui/material";
+import { Paper, Typography, CircularProgress, TextField, IconButton } from "@mui/material";
+import EditIcon from '@mui/icons-material/Edit';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
 import { useEffect, useState } from "react";
 
 import WizardStepper from "@/components/Wizard/Stepper";
 import { Experiment } from "@/util/types";
-import { get_experiment } from "@/util/api";
+import { get_experiment, edit_experiment } from "@/util/api";
 import ErrorMessage from "@/components/ErrorMessage";
 
 const Wizard = () => {
@@ -12,6 +15,8 @@ const Wizard = () => {
 
     const [experiment, setExperiment] = useState<Experiment | null>(null);
     const [errorMessage, setErrorMessage] = useState<string>("");
+    const [editingName, setEditingName] = useState(false);
+    const [nameInput, setNameInput] = useState("");
 
     const getExperiment = async () => {
         if (!id) return;
@@ -25,13 +30,86 @@ const Wizard = () => {
         getExperiment();
     }, []);
 
+    const editExperimentName = async (newName: string) => {
+        if (!experiment || newName === experiment.name) return;
+        const { data, error } = await edit_experiment(experiment.id, { name: newName });
+        if (error) {
+            setErrorMessage(error);
+        } else if (data) {
+            setExperiment(data);
+        }
+    };
+
+    const handleEditClick = () => {
+        if (experiment) {
+            setNameInput(experiment.name);
+            setEditingName(true);
+        }
+    };
+
+    const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setNameInput(e.target.value);
+    };
+
+    const handleNameSave = async () => {
+        if (experiment && nameInput.trim() && nameInput !== experiment.name) {
+            await editExperimentName(nameInput.trim());
+        }
+        setEditingName(false);
+    };
+
+    const handleNameCancel = () => {
+        setEditingName(false);
+        setNameInput("");
+    };
+
+    const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") {
+            handleNameSave();
+        } else if (e.key === "Escape") {
+            handleNameCancel();
+        }
+    };
+
     return (
         <div>
             <Typography variant="h1">Wizard</Typography>
 
-            <Typography variant="h4" sx={{ textAlign: "center" }}>
-                {experiment ? experiment.name : "Loading..."}
-            </Typography>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 56 }}>
+                {experiment ? (
+                    editingName ? (
+                        <>
+                            <TextField
+                                value={nameInput}
+                                onChange={handleNameChange}
+                                onBlur={handleNameSave}
+                                onKeyDown={handleNameKeyDown}
+                                size="small"
+                                autoFocus
+                                variant="standard"
+                                sx={{ minWidth: "40vw", maxWidth: "80vw" }}
+                            />
+                            <IconButton aria-label="Save" onClick={handleNameSave} size="small">
+                                <CheckIcon fontSize="small" />
+                            </IconButton>
+                            <IconButton aria-label="Cancel" onClick={handleNameCancel} size="small">
+                                <CloseIcon fontSize="small" />
+                            </IconButton>
+                        </>
+                    ) : (
+                        <>
+                            <Typography variant="h4" sx={{ textAlign: "center", mr: 1 }}>
+                                {experiment.name}
+                            </Typography>
+                            <IconButton aria-label="Edit name" onClick={handleEditClick} size="small">
+                                <EditIcon fontSize="small" />
+                            </IconButton>
+                        </>
+                    )
+                ) : (
+                    <Typography variant="h4" sx={{ textAlign: "center" }}>Loading...</Typography>
+                )}
+            </div>
 
             {errorMessage && <ErrorMessage message={errorMessage} />}
 
