@@ -37,6 +37,6 @@ ENV UWSGI_ENABLE_THREADS=1
 
 # Using Python's urllib to avoid installing curl package
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health').read()" || exit 1
 
 CMD ["sh", "-c", "uwsgi --http 0.0.0.0:5000 --module app:app --processes $UWSGI_PROCESSES --threads $UWSGI_THREADS --enable-threads --master --die-on-term 2>&1 | tee /data/api.log"]

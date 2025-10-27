@@ -4,3 +4,5 @@ __pycahce__/
 dist/
 node_modules/
 Makefile
+api/_demo.py
+api/_demo/

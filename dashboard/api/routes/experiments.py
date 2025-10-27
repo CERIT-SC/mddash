@@ -68,6 +68,29 @@ def delete_experiment(experiment_id: str) -> Response:
     return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
 
 
+@experiments_bp.route('/<experiment_id>', methods=['PATCH'])
+@handle_exceptions(rollback=True)
+def edit_experiment(experiment_id: str) -> Response:
+    experiment: Experiment = Experiment.query.get_or_404(
+        experiment_id, description=f'Experiment {experiment_id} not found')
+    data = request.get_json()
+    if not data:
+        return ApiResponse.error('No data provided.', HTTPStatus.BAD_REQUEST)
+
+    updated = False
+    # Currently only name can be edited
+    if 'name' in data:
+        experiment.name = data['name']
+        updated = True
+
+    if not updated:
+        return ApiResponse.error('No valid fields to update.', HTTPStatus.BAD_REQUEST)
+
+    db.session.commit()
+    schema = ExperimentSchema()
+    return ApiResponse.success(schema.dump(experiment))
+
+
 @experiments_bp.route('/<experiment_id>/publish', methods=['POST'])
 @handle_exceptions(rollback=True)
 def publish_experiment(experiment_id: str) -> Response:
