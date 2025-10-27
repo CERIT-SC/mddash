@@ -32,18 +32,18 @@ build-mdrun-api: ## Build mdrun-api image
 	@$(MAKE) -C mdrun-api build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push
-push: push-dashboard push-notebook push-mdrun-api ## Push all images
+push: push-dashboard push-notebook push-mdrun-api ## Build and push all images
 
 .PHONY: push-dashboard
-push-dashboard: ## Push dashboard image
+push-dashboard: ## Build and push dashboard image
 	@$(MAKE) -C dashboard push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push-notebook
-push-notebook: ## Push notebook image
+push-notebook: ## Build and push notebook image
 	@$(MAKE) -C notebook push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push-mdrun-api
-push-mdrun-api: ## Push mdrun-api image
+push-mdrun-api: ## Build and push mdrun-api image
 	@$(MAKE) -C mdrun-api push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push-mdrun-api-chart

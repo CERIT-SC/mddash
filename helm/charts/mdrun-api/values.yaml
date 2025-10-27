@@ -24,5 +24,12 @@ resources:
     cpu: 100m
     memory: 256Mi
 
+livenessProbe:
+  initialDelaySeconds: 30
+  periodSeconds: 30
+readinessProbe:
+  initialDelaySeconds: 5
+  periodSeconds: 30
+
 # you should provide the S3_CREDENTIALS and S3_ENDPOINT via env
 env: []

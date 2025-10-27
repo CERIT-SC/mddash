@@ -65,6 +65,13 @@ export const delete_experiment = async (id: string): Promise<ApiData<null>> => {
     )
 }
 
+export const edit_experiment = async (id: string, data: object): Promise<ApiData<Experiment>> => {
+    return await handle_request(
+        axios.patch(`${API_BASE}/experiments/${id}`, data),
+        'Failed to edit experiment.'
+    )
+}
+
 export const publish_experiment = async (id: string): Promise<ApiData<any>> => {
     return await handle_request(
         axios.post(`${API_BASE}/experiments/${id}/publish`),
