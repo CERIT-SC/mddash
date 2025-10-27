@@ -13,16 +13,22 @@ API_PREFIX = '/api'
 
 DATA_DIR = Path('/data')
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-DB_URL = f'sqlite:///{DATA_DIR}/mdrun.db'
+DB_URL = f'sqlite:///{DATA_DIR}/mdrun.db?timeout=30'
 
 NAMESPACE = os.environ.get('POD_NAMESPACE', 'default')
 PVC_NAME = os.environ.get('PVC_NAME', 'mdrun-api-pvc')
 
 GPU_TYPE = 'nvidia.com/mig-1g.10gb'
 
-# Parse S3 credentials from S3_CREDENTIALS environment variable
 def parse_s3_credentials():
-    """Parse S3 credentials from environment variable containing export statements."""
+    """
+    Parse S3 credentials from environment variable containing export statements.
+    
+    Returns:
+        tuple: (access_key, secret_key)
+    Raises:
+        ValueError: If credentials cannot be parsed.
+    """
     s3_creds = os.environ.get('S3_CREDENTIALS', '')
     
     if not s3_creds:
@@ -45,10 +51,4 @@ def parse_s3_credentials():
 
 # Get S3 info
 S3_ENDPOINT = os.environ.get('S3_ENDPOINT', None)
-
-try:
-    S3_ACCESS_KEY, S3_SECRET_KEY = parse_s3_credentials()
-except (ValueError, IndexError) as e:
-    logging.warning(f"S3 credentials parsing failed: {e}")
-    S3_ACCESS_KEY = None
-    S3_SECRET_KEY = None
+S3_ACCESS_KEY, S3_SECRET_KEY = parse_s3_credentials()
