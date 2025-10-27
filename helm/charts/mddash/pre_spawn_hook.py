@@ -153,7 +153,6 @@ def set_pod_env(spawner, bucket_name):
     hub_namespace = os.environ.get("POD_NAMESPACE", "default")
     spawner.environment["HUB_NAMESPACE"] = hub_namespace
     spawner.environment["JUPYTERHUB_API_URL"] = f"http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api"
-    spawner.environment["JUPYTERHUB_ACTIVITY_URL"] = f"http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api/users/admin/activity"
 
 
 def configure_s3_spawner(spawner, bucket_name):

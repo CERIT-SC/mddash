@@ -24,8 +24,8 @@ mdrunApi:
   platform: linux/amd64
   devTag: dev
   prodTag: latest
-  storage:  # Persistent storage for mdrun-api pods
-    devSize: 5Gi
+  storage:  # Persistent storage for mdrun-api database
+    devSize: 2Gi
     prodSize: 20Gi
 
 # mdrun-api Helm chart

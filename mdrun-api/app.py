@@ -19,6 +19,11 @@ def create_app() -> Flask:
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['SQLALCHEMY_ECHO'] = app_env == 'dev'
 
+    # Allow SQLite to work across threads
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'connect_args': {'check_same_thread': False}
+    }
+
     CORS(app)
 
     db.init_app(app)
@@ -29,6 +34,11 @@ def create_app() -> Flask:
 
     with app.app_context():
         db.create_all()
+
+        # Enable WAL mode for concurrent reads/writes
+        from sqlalchemy import text
+        db.session.execute(text('PRAGMA journal_mode=WAL'))
+        db.session.commit()
 
     return app
 
