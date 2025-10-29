@@ -3,6 +3,7 @@ from uuid import uuid4
 from flask import abort
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING
+from kubernetes.client.rest import ApiException
 
 from config import NAMESPACE, PREFIX
 from clients import caddy, k8s
@@ -50,12 +51,21 @@ class Notebook(db.Model):  # type: ignore
         pod_name = f'notebook-{self.experiment_id}'
         svc_name = f'svc-{self.experiment_id}'
 
-        k8s.create_notebook_pod(
-            pod_name,
-            self.experiment_id,
-            f'{PREFIX}/notebook/{self.experiment_id}',
-            self.token
-        )
+        try:
+            k8s.create_notebook_pod(
+                pod_name,
+                self.experiment_id,
+                f'{PREFIX}/notebook/{self.experiment_id}',
+                self.token
+            )
+        except ApiException as e:
+            if e.status == 403:
+                abort(403, description='Resource quota exceeded. Please stop other notebooks.')
+            elif e.status == 409:
+                abort(409, description=f'Notebook pod already exists.')
+            else:
+                logger.error(f'Failed to create notebook pod.', exc_info=True)
+                abort(500, description=f'Failed to create notebook pod: {e.reason}')
 
         try:
            k8s.create_service(svc_name, pod_name)
