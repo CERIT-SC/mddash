@@ -1,7 +1,8 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-ENV ?= prod
+CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+ENV ?= $(if $(filter master,$(CURRENT_BRANCH)),prod,dev)
 IMAGE_TAG ?= $(if $(filter dev,$(ENV)),dev,latest)
 
 config := config.yaml
@@ -14,7 +15,7 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Current: ENV=$(ENV), TAG=$(IMAGE_TAG), NS=$(namespace)"
+	@echo "Current: BRANCH=$(CURRENT_BRANCH), ENV=$(ENV), TAG=$(IMAGE_TAG), NS=$(namespace)"
 
 .PHONY: build
 build: build-dashboard build-notebook build-mdrun-api ## Build all images

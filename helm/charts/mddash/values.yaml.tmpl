@@ -194,8 +194,9 @@ mdrun-api:
 tenant:
   tenant:
     name: minio
-    configuration:
+    configSecret:
       name: minio-root-config
+      existingSecret: true
     pools:
       - servers: {{ $cfg.minio.servers }}
         name: pool-0
