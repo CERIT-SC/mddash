@@ -42,6 +42,7 @@ update: ## Update Helm dependencies
 	helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ 2>/dev/null || true
 	helm repo add minio https://operator.min.io/ 2>/dev/null || true
 	helm repo update
+	rm -rf $(chart_path)/charts/*.tgz $(chart_path)/Chart.lock
 	helm dependency update $(chart_path)
 
 .PHONY: uninstall

@@ -9,6 +9,9 @@ prodRancherProjectId: "c-m-qvndqhf6:p-hshk2"
 # Global storage class for all persistent volumes
 storageClassName: nfs-csi
 
+# Container and helm chart registry
+registry: cerit.io/xkrasa
+
 # Dashboard application (JupyterHub)
 dashboard:
   image: cerit.io/xkrasa/mddash
@@ -27,11 +30,6 @@ mdrunApi:
   storage:  # Persistent storage for mdrun-api database
     devSize: 2Gi
     prodSize: 20Gi
-
-# mdrun-api Helm chart
-mdrunApiChart:
-  registry: cerit.io
-  repository: xkrasa
 
 # Notebook image (spawned by Dashboard pod)
 notebook:

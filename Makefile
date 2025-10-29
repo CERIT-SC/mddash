@@ -7,8 +7,7 @@ IMAGE_TAG ?= $(if $(filter dev,$(ENV)),dev,latest)
 
 config := config.yaml
 namespace := $(shell yq '.$(ENV)Namespace' $(config))
-chart_registry := $(shell yq '.mdrunApiChart.registry' $(config))
-chart_repo := $(shell yq '.mdrunApiChart.repository' $(config))
+registry := $(shell yq '.registry' $(config))
 
 .PHONY: help
 help: ## Show this help
@@ -51,7 +50,7 @@ push-mdrun-api: ## Build and push mdrun-api image
 push-mdrun-api-chart: ## Package and push mdrun-api Helm chart to OCI registry
 	$(eval CHART_VERSION := $(shell yq '.version' helm/charts/mdrun-api/Chart.yaml))
 	helm package helm/charts/mdrun-api --version $(CHART_VERSION) --app-version $(IMAGE_TAG)
-	helm push mdrun-api-$(CHART_VERSION).tgz oci://$(chart_registry)/$(chart_repo)
+	helm push mdrun-api-$(CHART_VERSION).tgz oci://$(registry)
 	rm -f mdrun-api-$(CHART_VERSION).tgz
 
 .PHONY: deploy
