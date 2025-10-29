@@ -12,7 +12,7 @@ const STRUCTURE_FORMATS = ["pdb", "gro"];
 const COORDINATE_FORMATS = ["xtc", "trr"];
 
 const AnalyzeStep = (props: WizardStepProps) => {
-    const { experiment, setErrorMessage } = props;
+    const { experiment } = props;
 
     const [structureFile, setStructureFile] = useState<string>("");
     const [coordsFile, setCoordsFile] = useState<string>("");
@@ -28,10 +28,9 @@ const AnalyzeStep = (props: WizardStepProps) => {
                 structureFormat={structureFile.split(".").pop() as BuiltInTrajectoryFormat}
                 coordsUrl={coordsFile}
                 coordsFormat={coordsFile.split(".").pop() as BuiltInCoordinatesFormat}
-                setErrorMessage={setErrorMessage}
             />
         );
-    }, [structureFile, coordsFile, setErrorMessage]);
+    }, [structureFile, coordsFile]);
 
     return (
         <Stack alignItems="center" spacing={2}>
@@ -40,14 +39,12 @@ const AnalyzeStep = (props: WizardStepProps) => {
                 ext={STRUCTURE_FORMATS}
                 title="Select structure file"
                 onFileSelected={setStructureFile}
-                setErrorMessage={setErrorMessage}
             />
             <FileSelector
                 experimentId={experiment.id}
                 ext={COORDINATE_FORMATS}
                 title="Select coordinates file"
                 onFileSelected={setCoordsFile}
-                setErrorMessage={setErrorMessage}
             />
 
             {molstarViewer}

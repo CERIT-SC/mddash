@@ -16,24 +16,24 @@ import { AddCircleOutline } from "@mui/icons-material";
 import { BASE_PATH } from "@/util/const";
 import { Experiment, PodStatus } from "@/util/types";
 import { delete_experiment, get_experiments } from "@/util/api";
-import ErrorMessage from "./ErrorMessage";
+import { useNotification } from "@/contexts/NotificationContext";
 import ConfirmDialog from "./ConfirmDialog";
 
 const Experiments = () => {
     const [experiments, setExperiments] = useState<Experiment[]>([]);
-    const [errorMessage, setErrorMessage] = useState<string>("");
+    const { showError } = useNotification();
     const [experimentToDelete, setExperimentToDelete] = useState<Experiment | null>(null);
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState<boolean>(false);
 
     const getExperiments = async () => {
         const { data, error } = await get_experiments();
-        setErrorMessage(error || "");
+        if (error) showError(error);
         setExperiments(data || []);
     };
 
     const deleteExperiment = async (id: string) => {
         const { error } = await delete_experiment(id);
-        setErrorMessage(error || "");
+        if (error) showError(error);
 
         if (!error) getExperiments();
     };
@@ -134,8 +134,6 @@ const Experiments = () => {
                     </Card>
                 </Grid>
             </Grid>
-
-            {errorMessage && <ErrorMessage message={errorMessage} />}
 
             <ConfirmDialog
                 open={confirmDeleteDialog}

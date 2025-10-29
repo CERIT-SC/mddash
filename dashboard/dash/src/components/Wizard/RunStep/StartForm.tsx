@@ -16,6 +16,7 @@ import {
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { submit_gmx } from "@/util/api";
+import { useNotification } from "@/contexts/NotificationContext";
 
 const MDRUN_ARGUMENTS = [
     { key: "xvg", type: "select", options: ["xmgrace", "xmgr", "none"], description: "xvg plot formatting" },
@@ -84,7 +85,8 @@ interface ManualStartFormProps extends WizardStepProps {
 }
 
 export const StartForm = (props: ManualStartFormProps) => {
-    const { experiment, tprName, setErrorMessage, fetchStatus, np, ntomp, nb, pme } = props;
+    const { experiment, tprName, fetchStatus, np, ntomp, nb, pme } = props;
+    const { showError, showWarning } = useNotification();
 
     const [selectedArgument, setSelectedArgument] = useState("");
     const [argumentValue, setArgumentValue] = useState("");
@@ -100,7 +102,7 @@ export const StartForm = (props: ManualStartFormProps) => {
 
         // Check if argument already exists
         if (addedArguments.some((arg) => arg.key === selectedArgument)) {
-            setErrorMessage("Argument already added");
+            showWarning("Argument already added");
             return;
         }
 
@@ -130,7 +132,7 @@ export const StartForm = (props: ManualStartFormProps) => {
     const runSimulation = async (formData: FormData) => {
         const { error } = await submit_gmx(experiment.id, tprName, formData);
         if (error) {
-            setErrorMessage(error);
+            showError(error);
             return;
         }
     };
