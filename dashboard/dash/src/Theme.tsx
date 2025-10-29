@@ -9,7 +9,7 @@ import {
 import { TypographyOptions } from "@mui/material/styles/createTypography";
 
 const typography: TypographyOptions = {
-    fontFamily: "Verdana",
+    fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
     // Large (32px) - For main headings and titles
     h1: { fontSize: "32px", fontWeight: "bold", padding: "12px 0px" },
     h2: { fontSize: "32px", fontWeight: "normal", padding: "8px 0px" },
