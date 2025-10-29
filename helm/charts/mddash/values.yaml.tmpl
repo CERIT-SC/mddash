@@ -44,11 +44,16 @@ jupyterhub:
             key: client_secret
       S3_ENDPOINT:
         value: "http://minio.{{ $namespace }}.svc.cluster.local:80"
-      S3_CREDENTIALS:
+      S3_ACCESS_KEY:
         valueFrom:
           secretKeyRef:
-            name: minio-creds-secret
-            key: config.env
+            name: mddash-s3-creds
+            key: S3_ACCESS_KEY
+      S3_SECRET_KEY:
+        valueFrom:
+          secretKeyRef:
+            name: mddash-s3-creds
+            key: S3_SECRET_KEY
       # User namespace resource quota
       NS_REQUESTS_CPU:
         value: "{{ index $cfg.resources $env "namespaceQuota" "requestsCpu" }}"
@@ -173,11 +178,16 @@ mdrun-api:
     threads: 4
   replicaCount: 1
   env:
-    - name: S3_CREDENTIALS
+    - name: S3_ACCESS_KEY
       valueFrom:
         secretKeyRef:
-          name: minio-creds-secret
-          key: config.env
+          name: mddash-s3-creds
+          key: S3_ACCESS_KEY
+    - name: S3_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: mddash-s3-creds
+          key: S3_SECRET_KEY
     - name: S3_ENDPOINT
       value: "http://minio.{{ $namespace }}.svc.cluster.local:80"
 
@@ -185,7 +195,7 @@ tenant:
   tenant:
     name: minio
     configuration:
-      name: minio-creds-secret
+      name: minio-root-config
     pools:
       - servers: {{ $cfg.minio.servers }}
         name: pool-0
@@ -210,8 +220,6 @@ tenant:
           seccompProfile:
             type: RuntimeDefault
     requestAutoCert: false
-    users:
-      - name: storage-user
     buckets: []
     certificate:
       requestAutoCert: false
@@ -239,6 +247,3 @@ tenant:
       initialDelaySeconds: 10
       periodSeconds: 1
       timeoutSeconds: 1
-    configSecret:
-      name: minio-creds-secret
-      existingSecret: true  # Secret should be created externally

@@ -59,8 +59,8 @@ resources:
     namespaceQuota:
       requestsCpu: "1000m"
       requestsMemory: "4Gi"
-      limitsCpu: "64000m"
-      limitsMemory: "256Gi"
+      limitsCpu: "4000m"
+      limitsMemory: "16Gi"
   prod:
     singleuser:
       memory:
