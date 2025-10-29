@@ -39,6 +39,9 @@ deploy: upgrade ## Deploy (alias for upgrade)
 
 .PHONY: update
 update: ## Update Helm dependencies
+	helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ 2>/dev/null || true
+	helm repo add minio https://operator.min.io/ 2>/dev/null || true
+	helm repo update
 	helm dependency update $(chart_path)
 
 .PHONY: uninstall
