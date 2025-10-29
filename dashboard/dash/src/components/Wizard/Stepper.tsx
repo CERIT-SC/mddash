@@ -16,6 +16,7 @@ import { BlurOn, Tune, PlayArrow, Assessment, Publish } from "@mui/icons-materia
 import { Experiment } from "@/util/types";
 import { DEBUG } from "@/util/const";
 import { get_experiment_step } from "@/util/api";
+import { useNotification } from "@/contexts/NotificationContext";
 import WizardSetup from "./SetupStep";
 import TuneStep from "./TuneStep";
 import RunStep from "./RunStep";
@@ -82,7 +83,6 @@ const ColorLibStepIconRoot = styled("div")<{ ownerState: { completed?: boolean; 
 export interface WizardStepperProps {
     experiment: Experiment;
     setExperiment: Function;
-    setErrorMessage: (message: string) => void;
 }
 
 export interface WizardStepProps extends WizardStepperProps {
@@ -91,13 +91,14 @@ export interface WizardStepProps extends WizardStepperProps {
 }
 
 const WizardStepper = (props: WizardStepperProps) => {
-    const { experiment, setExperiment, setErrorMessage } = props;
+    const { experiment, setExperiment } = props;
+    const { showError } = useNotification();
     const [activeStep, setActiveStep] = useState(Math.min(experiment.step, steps.length - 1));
 
     const fetchStep = async () => {
         const { data, error } = await get_experiment_step(experiment.id);
 
-        if (error) setErrorMessage(error);
+        if (error) showError(error);
         else if (data !== null && data !== experiment.step) {
             setExperiment((prev: Experiment) => {
                 return { ...prev, step: data };

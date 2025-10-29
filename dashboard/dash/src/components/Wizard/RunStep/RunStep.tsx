@@ -5,10 +5,12 @@ import { Box, Stack, Tabs, Tab } from "@mui/material";
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import FileSelector from "@/components/FileSelector";
 import { delete_gmx, gmx_statuses } from "@/util/api";
+import { useNotification } from "@/contexts/NotificationContext";
 import RunView from "./RunView";
 
 const RunStep = (props: WizardStepProps) => {
-    const { experiment, setErrorMessage } = props;
+    const { experiment } = props;
+    const { showError } = useNotification();
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
     const [tprFiles, setTprFiles] = useState<string[]>([]);
 
@@ -18,7 +20,7 @@ const RunStep = (props: WizardStepProps) => {
 
     const fetchGromacsJobs = async () => {
         const { data, error } = await gmx_statuses(experiment.id);
-        setErrorMessage(error || "");
+        if (error) showError(error);
         const jobs = data || [];
 
         const jobTprNames = jobs.map((job) => job.tpr_name);
@@ -38,7 +40,7 @@ const RunStep = (props: WizardStepProps) => {
 
     const deleteJob = async (tprName: string) => {
         const { error } = await delete_gmx(experiment.id, tprName);
-        setErrorMessage(error || "");
+        if (error) showError(error);
         setSelectedTpr(null);
         fetchGromacsJobs();
     };
@@ -50,7 +52,7 @@ const RunStep = (props: WizardStepProps) => {
             setTprFiles([]);
             setSelectedTpr(null);
         };
-    }, [experiment.id, setErrorMessage]);
+    }, [experiment.id]);
 
     return (
         <>

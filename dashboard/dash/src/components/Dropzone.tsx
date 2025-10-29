@@ -15,7 +15,8 @@ import {
 } from "@mui/material";
 import { Check } from "@mui/icons-material";
 
-import ErrorMessage from "./ErrorMessage";
+import { useNotification } from "@/contexts/NotificationContext";
+import { formatFileSize } from "@/util/helpers";
 
 const getAcceptedExtensions = (acceptedTypes: Accept) => {
     const extensions: string[] = [];
@@ -36,31 +37,23 @@ const Dropzone = (props: DropzoneProps) => {
     const { inputName, sx, onDrop, onError, ...dropzoneOptions } = props;
 
     const [files, setFiles] = useState<File[]>([]);
-    const [error, setError] = useState<Error>();
+    const { showError } = useNotification();
 
     const theme = useTheme();
     const transparentPrimary = alpha(theme.palette.primary.main, 0.4);
 
     const handleDrop = (acceptedFiles: File[], fileRejections: FileRejection[], event: DropEvent) => {
         if (fileRejections.length > 0) {
-            setError(new Error(fileRejections[0].errors[0].message));
-        } else {
-            setError(undefined);
+            showError(fileRejections[0].errors[0].message);
         }
 
         setFiles(acceptedFiles);
-
-        if (onDrop) {
-            onDrop(acceptedFiles, fileRejections, event);
-        }
+        onDrop?.(acceptedFiles, fileRejections, event);
     };
 
     const handleError = (err: Error) => {
-        setError(err);
-
-        if (onError) {
-            onError(err);
-        }
+        showError(err.message);
+        onError?.(err);
     };
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -72,18 +65,6 @@ const Dropzone = (props: DropzoneProps) => {
     const acceptedExtensions = getAcceptedExtensions(dropzoneOptions.accept || {})
         .map((ext) => `*${ext}`)
         .join(", ");
-
-    const formatFileSize = (size: number) => {
-        if (size < 1024) {
-            return `${size} B`;
-        } else if (size < 1024 * 1024) {
-            return `${(size / 1024).toFixed(2)} KB`;
-        } else if (size < 1024 * 1024 * 1024) {
-            return `${(size / 1024 / 1024).toFixed(2)} MB`;
-        } else {
-            return `${(size / 1024 / 1024 / 1024).toFixed(2)} GB`;
-        }
-    };
 
     return (
         <Stack spacing={4} sx={sx}>
@@ -109,8 +90,6 @@ const Dropzone = (props: DropzoneProps) => {
                     <Typography variant="body2">Accepted file types: {acceptedExtensions}</Typography>
                 )}
             </Paper>
-
-            {error && <ErrorMessage message={error.message} />}
 
             {files.length > 0 && (
                 <Paper elevation={2}>

@@ -1,20 +1,20 @@
 import { useParams } from "react-router-dom";
 import { Paper, Typography, CircularProgress, TextField, IconButton } from "@mui/material";
-import EditIcon from '@mui/icons-material/Edit';
-import CheckIcon from '@mui/icons-material/Check';
-import CloseIcon from '@mui/icons-material/Close';
+import EditIcon from "@mui/icons-material/Edit";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
 import { useEffect, useState } from "react";
 
 import WizardStepper from "@/components/Wizard/Stepper";
 import { Experiment } from "@/util/types";
 import { get_experiment, edit_experiment } from "@/util/api";
-import ErrorMessage from "@/components/ErrorMessage";
+import { useNotification } from "@/contexts/NotificationContext";
 
 const Wizard = () => {
     const { id } = useParams<{ id: string }>();
+    const { showError } = useNotification();
 
     const [experiment, setExperiment] = useState<Experiment | null>(null);
-    const [errorMessage, setErrorMessage] = useState<string>("");
     const [editingName, setEditingName] = useState(false);
     const [nameInput, setNameInput] = useState("");
 
@@ -22,7 +22,7 @@ const Wizard = () => {
         if (!id) return;
 
         const { data, error } = await get_experiment(id);
-        setErrorMessage(error || "");
+        if (error) showError(error);
         setExperiment(data || null);
     };
 
@@ -34,7 +34,7 @@ const Wizard = () => {
         if (!experiment || newName === experiment.name) return;
         const { data, error } = await edit_experiment(experiment.id, { name: newName });
         if (error) {
-            setErrorMessage(error);
+            showError(error);
         } else if (data) {
             setExperiment(data);
         }
@@ -107,19 +107,15 @@ const Wizard = () => {
                         </>
                     )
                 ) : (
-                    <Typography variant="h4" sx={{ textAlign: "center" }}>Loading...</Typography>
+                    <Typography variant="h4" sx={{ textAlign: "center" }}>
+                        Loading...
+                    </Typography>
                 )}
             </div>
 
-            {errorMessage && <ErrorMessage message={errorMessage} />}
-
             {(experiment && (
                 <Paper elevation={2} sx={{ p: 4, mt: 4 }}>
-                    <WizardStepper
-                        experiment={experiment}
-                        setExperiment={setExperiment}
-                        setErrorMessage={setErrorMessage}
-                    />
+                    <WizardStepper experiment={experiment} setExperiment={setExperiment} />
                 </Paper>
             )) || (
                 <div style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>

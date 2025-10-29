@@ -6,6 +6,7 @@ import { Delete, PlayArrow, Cancel, Pause } from "@mui/icons-material";
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { tuner_status, run_tuner } from "@/util/api";
 import { TunerJob, TunerTrial } from "@/util/types";
+import { useNotification } from "@/contexts/NotificationContext";
 import { StartForm } from "@/components/Wizard/RunStep";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import TunerTable from "./TunerTable";
@@ -18,7 +19,8 @@ interface TunerViewProps extends WizardStepProps {
 }
 
 const TunerView = (props: TunerViewProps) => {
-    const { experiment, tprName, setErrorMessage, stopJob, deleteJob, cancelJob, nextStep, changeStep } = props;
+    const { experiment, tprName, stopJob, deleteJob, cancelJob, nextStep, changeStep } = props;
+    const { showError } = useNotification();
 
     const [loading, setLoading] = useState(false);
     const [tunerStarted, setTunerStarted] = useState(false);
@@ -30,9 +32,9 @@ const TunerView = (props: TunerViewProps) => {
     const [confirmStopDialog, setConfirmStopDialog] = useState(false);
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
 
-    const fetchStatus = async (showError: boolean) => {
+    const fetchStatus = async (displayError: boolean) => {
         const { data, error } = await tuner_status(experiment.id, tprName);
-        if (showError && error) setErrorMessage(error);
+        if (displayError && error) showError(error);
         setTuner(data || null);
         setTunerStarted(!!data && !data.is_pending && !!data.trials && data.trials.length > 0);
         setTunerStopped(data?.is_stopped || false);
@@ -52,7 +54,7 @@ const TunerView = (props: TunerViewProps) => {
     const runTuner = async () => {
         const actualNsteps = nsteps === "" ? 25000 : nsteps;
         const { error } = await run_tuner(experiment.id, tprName, actualNsteps);
-        setErrorMessage(error || "");
+        if (error) showError(error);
         fetchStatus(true);
     };
 

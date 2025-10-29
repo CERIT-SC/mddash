@@ -3,6 +3,7 @@ import { Stack, Button, Typography, CircularProgress } from "@mui/material";
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { get_notebook, spawn_notebook, delete_notebook } from "@/util/api";
+import { useNotification } from "@/contexts/NotificationContext";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { Notebook, PodStatus } from "@/util/types";
 
@@ -15,26 +16,27 @@ const unknownNotebook: Notebook = {
 };
 
 const SetupStep = (props: WizardStepProps) => {
-    const { experiment, setErrorMessage, nextStep } = props;
+    const { experiment, nextStep } = props;
+    const { showError } = useNotification();
     const [loading, setLoading] = useState(false);
     const [notebook, setNotebook] = useState<Notebook>(unknownNotebook);
     const [nextStepDialog, setNextStepDialog] = useState(false);
 
     const fetchStatus = async () => {
         const { data, error } = await get_notebook(experiment.id);
-        if (error) setErrorMessage(error);
+        if (error) showError(error);
         setNotebook(data || unknownNotebook);
     };
 
     const spawnNotebook = async () => {
         const { error, data } = await spawn_notebook(experiment.id);
-        setErrorMessage(error || "");
+        if (error) showError(error);
         setNotebook(data || unknownNotebook);
     };
 
     const deleteNotebook = async () => {
         const { error } = await delete_notebook(experiment.id);
-        setErrorMessage(error || "");
+        if (error) showError(error);
         fetchStatus();
     };
 

@@ -10,6 +10,7 @@ import { Plugin } from "molstar/lib/mol-plugin-ui/plugin";
 import { TrajectoryFromModelAndCoordinates } from "molstar/lib/mol-plugin-state/transforms/model";
 import { BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory";
 import { BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates";
+import { useNotification } from "@/contexts/NotificationContext";
 
 export const initViewerUI = async (element: string | HTMLDivElement, options?: { spec?: PluginUISpec }) => {
     const parent = typeof element === "string" ? (document.getElementById(element)! as HTMLDivElement) : element;
@@ -118,21 +119,12 @@ interface MolStarProps {
     structureFormat?: BuiltInTrajectoryFormat;
     coordsUrl?: string;
     coordsFormat?: BuiltInCoordinatesFormat;
-    setErrorMessage?: (message: string) => void;
 }
 
 export default function MolStar(props: MolStarProps) {
-    const {
-        width = "500px",
-        height = "500px",
-        pdbId,
-        structureUrl,
-        structureFormat,
-        coordsUrl,
-        coordsFormat,
-        setErrorMessage,
-    } = props;
+    const { width = "500px", height = "500px", pdbId, structureUrl, structureFormat, coordsUrl, coordsFormat } = props;
 
+    const { showError } = useNotification();
     const [loading, setLoading] = useState(true);
     const pluginRef = useRef<PluginUIContext | null>(null);
     const rootRef = useRef<Root | null>(null);
@@ -155,7 +147,6 @@ export default function MolStar(props: MolStarProps) {
 
         try {
             setLoading(true);
-            setErrorMessage?.("");
 
             // Cleanup previous instance
             cleanup();
@@ -198,7 +189,7 @@ export default function MolStar(props: MolStarProps) {
             }
         } catch (error) {
             console.error("Error initializing Mol* viewer:", error);
-            setErrorMessage?.(`Error initializing Mol* viewer: ${error}`);
+            showError(`Error initializing Mol* viewer: ${error}`);
         } finally {
             setLoading(false);
         }

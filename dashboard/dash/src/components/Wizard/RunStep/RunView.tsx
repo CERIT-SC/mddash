@@ -18,6 +18,7 @@ import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { GromacsJob, JobStatus } from "@/util/types";
 import { formatDuration } from "@/util/helpers";
 import { gmx_status, gmx_logs } from "@/util/api";
+import { useNotification } from "@/contexts/NotificationContext";
 import LogsView from "@/components/LogsView";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import StartForm from "./StartForm";
@@ -33,7 +34,8 @@ interface RunViewProps extends WizardStepProps {
 }
 
 const RunView = (props: RunViewProps) => {
-    const { experiment, tprName, deleteJob, setErrorMessage } = props;
+    const { experiment, tprName, deleteJob } = props;
+    const { showError } = useNotification();
 
     const [loading, setLoading] = useState(false);
     const [jobRunning, setJobRunning] = useState(false);
@@ -42,15 +44,15 @@ const RunView = (props: RunViewProps) => {
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
 
     const fetchStatus = useCallback(
-        async (showError: boolean) => {
+        async (displayError: boolean) => {
             const { data, error } = await gmx_status(experiment.id, tprName);
-            if (showError && error) {
-                setErrorMessage(error);
+            if (displayError && error) {
+                showError(error);
             }
             setJobStatus(data || null);
             setJobRunning(!!data);
         },
-        [experiment.id, tprName, setErrorMessage]
+        [experiment.id, tprName, showError]
     );
 
     useEffect(() => {
@@ -82,10 +84,10 @@ const RunView = (props: RunViewProps) => {
 
         const { data, error } = await gmx_logs(experiment.id, tprName, logType, LOG_TAIL_LINES);
         if (error) {
-            setErrorMessage(error);
+            showError(error);
         }
         return data || "";
-    }, [experiment.id, tprName, logType, setErrorMessage]);
+    }, [experiment.id, tprName, logType, showError]);
 
     const statusDisplay = useMemo(() => {
         if (!jobStatus) {

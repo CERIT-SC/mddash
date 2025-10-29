@@ -4,12 +4,14 @@ import { Box, Stack, Button, Tabs, Tab } from "@mui/material";
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { tuner_statuses, stop_tuner, delete_tuner } from "@/util/api";
+import { useNotification } from "@/contexts/NotificationContext";
 import FileSelector from "@/components/FileSelector";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import TunerView from "./TunerView";
 
 const TuneStep = (props: WizardStepProps) => {
-    const { experiment, setErrorMessage, nextStep, changeStep } = props;
+    const { experiment, nextStep, changeStep } = props;
+    const { showError } = useNotification();
 
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
     const [tprFiles, setTprFiles] = useState<string[]>([]);
@@ -30,7 +32,7 @@ const TuneStep = (props: WizardStepProps) => {
 
     const fetchTunerJobs = async () => {
         const { data, error } = await tuner_statuses(experiment.id);
-        setErrorMessage(error || "");
+        if (error) showError(error);
         const jobs = data || [];
 
         if (jobs.length === 0) setSelectedTpr(null);
@@ -46,13 +48,13 @@ const TuneStep = (props: WizardStepProps) => {
 
     const stopJob = async (tprName: string) => {
         const { error } = await stop_tuner(experiment.id, tprName);
-        setErrorMessage(error || "");
+        if (error) showError(error);
         fetchTunerJobs();
     };
 
     const deleteJob = async (tprName: string) => {
         const { error } = await delete_tuner(experiment.id, tprName);
-        setErrorMessage(error || "");
+        if (error) showError(error);
         setSelectedTpr(null);
         fetchTunerJobs();
     };
@@ -64,7 +66,7 @@ const TuneStep = (props: WizardStepProps) => {
             setTprFiles([]);
             setSelectedTpr(null);
         };
-    }, [experiment.id, setErrorMessage]);
+    }, [experiment.id]);
 
     return (
         <>

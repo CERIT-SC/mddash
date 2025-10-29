@@ -13,12 +13,13 @@ import {
 } from "@mui/material";
 
 import Dropzone from "@/components/Dropzone";
-import ErrorMessage from "@/components/ErrorMessage";
 import { BASE_PATH } from "@/util/const";
 import { create_experiment } from "@/util/api";
+import { useNotification } from "@/contexts/NotificationContext";
 
 const New = () => {
     const navigate = useNavigate();
+    const { showError, showSuccess } = useNotification();
 
     const [name, setName] = useState("");
     const [type, setType] = useState("");
@@ -29,11 +30,8 @@ const New = () => {
     const [nameError, setNameError] = useState(false);
     const [typeError, setTypeError] = useState(false);
     const [typeAuxError, setTypeAuxError] = useState(false);
-    const [errorMessage, setErrorMessage] = useState("");
 
     const validateForm = () => {
-        setErrorMessage("");
-
         let typeAuxError = false;
 
         if ((type === "pdb" && !pdbId) || (type === "repo" && !repoUrl) || (type === "file" && !file))
@@ -45,7 +43,7 @@ const New = () => {
 
         if (name && type && !typeAuxError) return true;
 
-        setErrorMessage("Please fill in all required fields");
+        showError("Please fill in all required fields");
         return false;
     };
 
@@ -62,11 +60,15 @@ const New = () => {
         if (type === "file" && file) formData.append("simulation-file", file);
 
         const { data, error } = await create_experiment(formData);
-        setErrorMessage(error || "");
+
+        if (error) {
+            showError(error);
+            return;
+        }
 
         console.log("Experiment created:", data);
-
-        if (!error) navigate(`${BASE_PATH}/${data!.id}/wizard`);
+        showSuccess("Experiment created successfully!");
+        navigate(`${BASE_PATH}/${data!.id}/wizard`);
     };
 
     const handleTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,8 +135,6 @@ const New = () => {
                 <Button variant="contained" type="submit">
                     Create Experiment
                 </Button>
-
-                {errorMessage && <ErrorMessage message={errorMessage} />}
             </Stack>
         </>
     );
