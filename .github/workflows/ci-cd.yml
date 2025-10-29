@@ -131,8 +131,6 @@ jobs:
       - name: Install Helm
         if: steps.changes.outputs.changed == 'true'
         uses: azure/setup-helm@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to registry
         if: steps.changes.outputs.changed == 'true'
@@ -205,8 +203,6 @@ jobs:
 
       - name: Install Helm
         uses: azure/setup-helm@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update Helm dependencies
         run: |
