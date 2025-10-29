@@ -109,26 +109,11 @@ async def ensure_resource(method, **kwargs):
             raise
 
 
-def parse_s3_credentials():
-    """Parse S3 credentials from environment variables"""
-    s3_endpoint = os.environ.get("S3_ENDPOINT")
-    s3_credentials = os.environ.get("S3_CREDENTIALS", "")
-
-    # Extract credentials from format: export MINIO_ROOT_USER="value"
-    access_key = None
-    secret_key = None
-    for line in s3_credentials.split('\n'):
-        if 'MINIO_ROOT_USER=' in line:
-            access_key = line.split('"')[1]
-        elif 'MINIO_ROOT_PASSWORD=' in line:
-            secret_key = line.split('"')[1]
-
-    return s3_endpoint, access_key, secret_key
-
-
 async def create_s3_bucket(bucket_name):
     """Create S3 bucket using HTTP API call"""
-    s3_endpoint, access_key, secret_key = parse_s3_credentials()
+    s3_endpoint = os.environ.get("S3_ENDPOINT")
+    access_key = os.environ.get("S3_ACCESS_KEY")
+    secret_key = os.environ.get("S3_SECRET_KEY")
 
     if not access_key or not secret_key:
         raise ValueError("S3 credentials not found in environment variables")
@@ -142,7 +127,7 @@ async def create_s3_bucket(bucket_name):
                 if response.status in [200, 409]:  # 200 = created, 409 = already exists
                     return
                 else:
-                    print(f"Failed to create bucket {bucket_name}: {response.status}")
+                    print(f"Failed to create bucket {bucket_name}: {response.text}")
         except Exception as e:
             print(f"Error creating bucket {bucket_name}: {e}")
 
@@ -153,24 +138,14 @@ def set_pod_env(spawner, bucket_name):
     hub_namespace = os.environ.get("POD_NAMESPACE", "default")
     spawner.environment["HUB_NAMESPACE"] = hub_namespace
     spawner.environment["JUPYTERHUB_API_URL"] = f"http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api"
+    spawner.environment["S3_BUCKET"] = bucket_name
+    spawner.environment["S3_ENDPOINT"] = os.environ.get("S3_ENDPOINT", "")
+    spawner.environment["S3_ACCESS_KEY"] = os.environ.get("S3_ACCESS_KEY", "")
+    spawner.environment["S3_SECRET_KEY"] = os.environ.get("S3_SECRET_KEY", "")
 
 
-def configure_s3_spawner(spawner, bucket_name):
-    """Configure spawner to mount S3 bucket as /mddash directory using s3fs"""
-    s3_endpoint, access_key, secret_key = parse_s3_credentials()
-
-    # Add s3fs environment variables to the spawner
-    if not hasattr(spawner, "environment"):
-        spawner.environment = {}
-    
-    spawner.environment.update({
-        "S3_ENDPOINT": s3_endpoint,
-        "S3_ACCESS_KEY": access_key,
-        "S3_SECRET_KEY": secret_key,
-        "S3_BUCKET": bucket_name,
-    })
-
-    # Remove any existing volume mounts since we're using S3 filesystem mounting
+def remove_volumes(spawner):
+    """Remove any existing volume mounts since we're using S3 as the storage backend."""
     if hasattr(spawner, 'volume_mounts'):
         spawner.volume_mounts = []
     if hasattr(spawner, 'volumes'):
@@ -220,7 +195,7 @@ async def pre_spawn_hook(spawner):
     spawner.service_account = service_account_name
 
     set_pod_env(spawner, bucket_name)
-    configure_s3_spawner(spawner, bucket_name)
+    remove_volumes(spawner)
 
 
 c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore
