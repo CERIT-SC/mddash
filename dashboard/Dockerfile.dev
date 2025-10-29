@@ -12,11 +12,4 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-# RUN rm -rf /opt/api
-
-# assumes volume with API mounted on /home/jovyan
-# RUN ln -s /home/jovyan/mddash/dashboard/api /opt
-
-# RUN chown -R jovyan /opt/mddash
-
 USER 1000
