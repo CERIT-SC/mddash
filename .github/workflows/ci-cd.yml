@@ -7,19 +7,27 @@ on:
 permissions:
   contents: read
 
-env:
-  REGISTRY: cerit.io
-
 jobs:
   setup:
     runs-on: ubuntu-latest
     outputs:
       env: ${{ steps.set-env.outputs.env }}
       tag: ${{ steps.set-env.outputs.tag }}
+      registry: ${{ steps.set-env.outputs.registry }}
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      
       - name: Set environment
         id: set-env
         run: |
+          REGISTRY=$(yq '.registry' config.yaml | cut -d'/' -f1)
+          echo "registry=${REGISTRY}" >> $GITHUB_OUTPUT
+          
           if [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
             echo "env=prod" >> $GITHUB_OUTPUT
             echo "tag=latest" >> $GITHUB_OUTPUT
@@ -80,7 +88,7 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ${{ needs.setup.outputs.registry }}
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
@@ -127,7 +135,7 @@ jobs:
       - name: Login to registry
         if: steps.changes.outputs.changed == 'true'
         run: |
-          echo "${{ secrets.REGISTRY_PASSWORD }}" | helm registry login ${{ env.REGISTRY }} \
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | helm registry login ${{ needs.setup.outputs.registry }} \
             --username ${{ secrets.REGISTRY_USERNAME }} \
             --password-stdin
 
