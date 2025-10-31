@@ -1,0 +1,37 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/alpine
+{
+	"name": "MDDash Dev Alpine",
+
+	"build": {
+		"dockerfile": "./Dockerfile",
+		"context": "."
+	},
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	"features": {
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
+	},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// Use 'postCreateCommand' to run commands after the container is built.
+	"postCreateCommand": "/home/vscode/.venv/bin/pip install --upgrade pip && /home/vscode/.venv/bin/pip install -r dashboard/api/requirements.txt && /home/vscode/.venv/bin/pip install aiohttp kubernetes-asyncio",
+
+	// Configure tool-specific properties.
+	"customizations": {
+		"vscode": {
+			// Some VS Code extensions you probably want installed in the container.
+			"extensions": [
+				"docker.docker",
+				"ms-kubernetes-tools.vscode-kubernetes-tools",
+				"ms-python.python",
+				"redhat.vscode-yaml"
+			]
+		}
+	}
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
+}
