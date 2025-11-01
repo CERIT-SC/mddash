@@ -14,6 +14,7 @@ RUN apt-get update \
     make \
     yq \
  && rm -rf /var/lib/apt/lists/* \
+ # Docker is installed by the DiD feature in devcontainer.json
  # Install gomplate
  && GOMPLATE_VERSION=4.3.3 \
  && curl -fsSL -o /usr/local/bin/gomplate https://github.com/hairyhenderson/gomplate/releases/download/v${GOMPLATE_VERSION}/gomplate_linux-amd64 \
