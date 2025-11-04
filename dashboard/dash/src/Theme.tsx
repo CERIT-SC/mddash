@@ -35,7 +35,7 @@ const typography: TypographyOptions = {
 const lightThemeOptions: ThemeOptions = {
     palette: {
         mode: "light",
-        primary: { main: "#1E3A8A" },
+        primary: { main: "#1E40AF" },
         secondary: { main: "#f37726" },
         error: { main: "#f44336" },
         warning: { main: "#ff9800" },
@@ -48,7 +48,7 @@ const lightThemeOptions: ThemeOptions = {
 const darkThemeOptions: ThemeOptions = {
     palette: {
         mode: "dark",
-        primary: { main: "#2c7bb6" },
+        primary: { main: "#1E40AF" },
         secondary: { main: "#f37726" },
         error: { main: "#f44336" },
         warning: { main: "#ff9800" },

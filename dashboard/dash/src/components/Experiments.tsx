@@ -11,7 +11,7 @@ import {
     CardContent,
     Button,
 } from "@mui/material";
-import { AddCircleOutline } from "@mui/icons-material";
+import { AddCircleOutline, AutoFixHigh, Delete } from "@mui/icons-material";
 
 import { BASE_PATH } from "@/util/const";
 import { Experiment, PodStatus } from "@/util/types";
@@ -90,6 +90,7 @@ const Experiments = () => {
                                     variant="contained"
                                     component={Link}
                                     to={`${BASE_PATH}/${experiment.id}/wizard`}
+                                    startIcon={<AutoFixHigh />}
                                 >
                                     Wizard
                                 </Button>
@@ -101,6 +102,7 @@ const Experiments = () => {
                                         setExperimentToDelete(experiment);
                                         setConfirmDeleteDialog(true);
                                     }}
+                                    startIcon={<Delete />}
                                 >
                                     Delete
                                 </Button>
