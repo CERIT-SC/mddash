@@ -197,6 +197,9 @@ tenant:
     configSecret:
       name: minio-root-config
       existingSecret: true
+    # this is outdated, but CI/CD pipeline fails without it
+    configuration:
+      name: minio-root-config
     pools:
       - servers: {{ $cfg.minio.servers }}
         name: pool-0
