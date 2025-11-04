@@ -4,7 +4,7 @@ SHELL := /bin/bash
 ENV ?= prod
 IMAGE_TAG ?= latest
 
-config := ../config.yaml
+config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
 image := $(shell yq .mdrunApi.image $(config))
 platform := --platform $(shell yq .mdrunApi.platform $(config))
 

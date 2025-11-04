@@ -1,9 +1,5 @@
 {{- $cfg := (datasource "config") -}}
-{{- $env := (getenv "ENV") -}}
-{{- if not (or (eq $env "dev") (eq $env "prod")) -}}
-  {{- fail "ENV must be 'dev' or 'prod'" -}}
-{{- end -}}
-{{- $namespace := (index $cfg (printf "%sNamespace" $env)) -}}
+{{- $namespace := $cfg.namespace -}}
 jupyterhub:
   hub:
     config:
@@ -14,7 +10,7 @@ jupyterhub:
         authorize_url: https://login.e-infra.cz/oidc/authorize
         token_url: https://login.e-infra.cz/oidc/token
         userdata_url: https://login.e-infra.cz/oidc/userinfo
-        oauth_callback_url: https://{{ index $cfg.dashboard (printf "%sHostname" $env) }}/hub/oauth_callback
+        oauth_callback_url: https://{{ $cfg.dashboard.hostname }}/hub/oauth_callback
         client_id: null  # gets imported from env OAUTH_CLIENT_ID
         client_secret: null  # gets imported from env OAUTH_CLIENT_SECRET
         userdata_params:
@@ -31,7 +27,7 @@ jupyterhub:
 
     extraEnv:
       RANCHER_PROJECT_ID:
-        value: "{{ index $cfg (printf "%sRancherProjectId" $env) }}"  # Set the Rancher project ID for namespace annotation
+        value: "{{ $cfg.rancherProjectId }}"  # Set the Rancher project ID for namespace annotation
       OAUTH_CLIENT_ID:
         valueFrom:
           secretKeyRef:
@@ -56,13 +52,13 @@ jupyterhub:
             key: S3_SECRET_KEY
       # User namespace resource quota
       NS_REQUESTS_CPU:
-        value: "{{ index $cfg.resources $env "namespaceQuota" "requestsCpu" }}"
+        value: "{{ $cfg.resources.namespaceQuota.requestsCpu }}"
       NS_REQUESTS_MEMORY:
-        value: "{{ index $cfg.resources $env "namespaceQuota" "requestsMemory" }}"
+        value: "{{ $cfg.resources.namespaceQuota.requestsMemory }}"
       NS_LIMITS_CPU:
-        value: "{{ index $cfg.resources $env "namespaceQuota" "limitsCpu" }}"
+        value: "{{ $cfg.resources.namespaceQuota.limitsCpu }}"
       NS_LIMITS_MEMORY:
-        value: "{{ index $cfg.resources $env "namespaceQuota" "limitsMemory" }}"
+        value: "{{ $cfg.resources.namespaceQuota.limitsMemory }}"
 
     extraVolumes:
       - name: kubeconfig
@@ -93,7 +89,7 @@ jupyterhub:
     podNameTemplate: "mddash-{username}"
     image:
       name: "{{ $cfg.dashboard.image }}"
-      tag: "{{ index $cfg.dashboard (printf "%sTag" $env) }}"
+      tag: "{{ $cfg.dashboard.tag }}"
       pullPolicy: Always  # TODO: change to `ifNotPresent` once the image is stable
 
     # Default URL to redirect after spawn
@@ -101,11 +97,11 @@ jupyterhub:
 
     # Resource limits
     memory:
-      guarantee: {{ index $cfg.resources $env "singleuser" "memory" "guarantee" }}
-      limit: {{ index $cfg.resources $env "singleuser" "memory" "limit" }}
+      guarantee: {{ $cfg.resources.singleuser.memory.guarantee }}
+      limit: {{ $cfg.resources.singleuser.memory.limit }}
     cpu:
-      guarantee: {{ index $cfg.resources $env "singleuser" "cpu" "guarantee" }}
-      limit: {{ index $cfg.resources $env "singleuser" "cpu" "limit" }}
+      guarantee: {{ $cfg.resources.singleuser.cpu.guarantee }}
+      limit: {{ $cfg.resources.singleuser.cpu.limit }}
 
     # Increased timeout for custom image startup
     startTimeout: 600
@@ -125,7 +121,7 @@ jupyterhub:
           fieldRef:
             fieldPath: metadata.namespace
       NOTEBOOK_IMAGE:
-        value: "{{ $cfg.notebook.image }}:{{ index $cfg.notebook (printf "%sTag" $env) }}"
+        value: "{{ $cfg.notebook.image }}:{{ $cfg.notebook.tag }}"
 
     extraPodConfig:
       securityContext:
@@ -154,11 +150,11 @@ jupyterhub:
   ingress:
     enabled: true
     hosts:
-      - {{ index $cfg.dashboard (printf "%sHostname" $env) }}
+      - {{ $cfg.dashboard.hostname }}
     tls:
       - hosts:
-          - {{ index $cfg.dashboard (printf "%sHostname" $env) }}
-        secretName: {{ index $cfg.dashboard (printf "%sHostname" $env) | strings.ReplaceAll "." "-" }}-tls
+          - {{ $cfg.dashboard.hostname }}
+        secretName: {{ $cfg.dashboard.hostname | strings.ReplaceAll "." "-" }}-tls
     annotations:
       kubernetes.io/ingress.class: nginx
       cert-manager.io/cluster-issuer: letsencrypt-prod
@@ -169,10 +165,10 @@ jupyterhub:
 mdrun-api:
   image:
     repository: {{ $cfg.mdrunApi.image }}
-    tag: "{{ index $cfg.mdrunApi (printf "%sTag" $env) }}"
+    tag: "{{ $cfg.mdrunApi.tag }}"
     pullPolicy: Always
   storage:
-    size: {{ index $cfg.mdrunApi.storage (printf "%sSize" $env) }}
+    size: {{ $cfg.mdrunApi.storage.size }}
   uwsgi:
     processes: 2
     threads: 4
@@ -204,7 +200,7 @@ tenant:
       - servers: {{ $cfg.minio.servers }}
         name: pool-0
         volumesPerServer: {{ $cfg.minio.volumesPerServer }}
-        size: {{ index $cfg.minio (printf "%sPoolSize" $env) }}
+        size: {{ $cfg.minio.poolSize }}
         storageClassName: {{ $cfg.storageClassName }}
         securityContext:
           runAsNonRoot: true
