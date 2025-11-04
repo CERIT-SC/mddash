@@ -11,17 +11,17 @@ Three-service Kubernetes application built on JupyterHub:
 
 ## Development Workflow
 
-All builds/deploys use `config.yaml` as single source of truth. Control environment via `ENV` variable:
+Configuration split by environment: `config.dev.yaml` (dev), `config.yaml` (prod). Control via `ENV` variable:
 
 ```bash
-make build ENV=dev          # Build all images for dev
-make all ENV=prod           # Build, push, deploy to production
+make build ENV=dev          # Build all images for dev (uses config.dev.yaml)
+make all ENV=prod           # Build, push, deploy to production (uses config.yaml)
 make status ENV=dev         # Check deployment status
 ```
 
-**CI/CD**: Push to `dev` branch → dev env, `master` branch → prod env (see `.github/workflows/ci-cd.yml`)
+**CI/CD**: Push to `dev` branch → uses `config.dev.yaml`, `master` branch → uses `config.yaml` (see `.github/workflows/ci-cd.yml`)
 
-**Helm deployment**: Uses `gomplate` to render `helm/charts/mddash/values.yaml.tmpl` from `config.yaml` before installing
+**Helm deployment**: Uses `gomplate` to render `helm/charts/mddash/values.yaml.tmpl` from the appropriate config file before installing
 
 ## Core Patterns
 
@@ -96,7 +96,8 @@ dashboard/auth/         JupyterHub OAuth integration
 mdrun-api/              Independent Flask service for GROMACS job orchestration
 helm/charts/mddash/     JupyterHub Helm chart with custom config
 notebook/               Jupyter notebook image with GROMACS tools
-config.yaml             Single config file for all environments
+config.yaml             Production configuration
+config.dev.yaml         Development configuration
 ```
 
 ## Common Tasks
@@ -107,4 +108,4 @@ config.yaml             Single config file for all environments
 
 **Debug K8s resources**: JupyterHub spawner creates pods named `mddash-{username}`, mdrun-api creates jobs with generated IDs
 
-**Template rendering**: Run `ENV=dev gomplate -d config=config.yaml -f helm/charts/mddash/values.yaml.tmpl` to test Helm values generation
+**Template rendering**: Run `ENV=dev gomplate -d config=config.dev.yaml -f helm/charts/mddash/values.yaml.tmpl` to test Helm values generation
