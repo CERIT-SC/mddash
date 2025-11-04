@@ -3,10 +3,10 @@ SHELL := /bin/bash
 
 ENV ?= prod
 
-config := ../config.yaml
+config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
 package := $(shell yq .helm.package $(config))
 chart_path := $(shell yq .helm.chartPath $(config))
-namespace := $(shell yq '.$(ENV)Namespace' $(config))
+namespace := $(shell yq '.namespace' $(config))
 values_file := -f $(chart_path)/values.yaml
 
 .PHONY: help

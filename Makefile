@@ -5,8 +5,8 @@ CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "u
 ENV ?= $(if $(filter master,$(CURRENT_BRANCH)),prod,dev)
 IMAGE_TAG ?= $(if $(filter dev,$(ENV)),dev,latest)
 
-config := config.yaml
-namespace := $(shell yq '.$(ENV)Namespace' $(config))
+config := $(if $(filter dev,$(ENV)),config.dev.yaml,config.yaml)
+namespace := $(shell yq '.namespace' $(config))
 registry := $(shell yq '.registry' $(config))
 
 .PHONY: help
