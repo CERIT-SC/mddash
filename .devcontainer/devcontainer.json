@@ -23,6 +23,9 @@
 	// Use 'postCreateCommand' to run commands after the container is built.
 	"postCreateCommand": "/home/vscode/.venv/bin/pip install --upgrade pip && /home/vscode/.venv/bin/pip install -r dashboard/api/requirements.txt && /home/vscode/.venv/bin/pip install aiohttp kubernetes-asyncio && cd dashboard/dash && npm ci",
 
+	// Use 'updateContentCommand' to run commands on every container start.
+	"updateContentCommand": "git fetch --all --prune",
+
 	// Configure tool-specific properties.
 	"customizations": {
 		"vscode": {
