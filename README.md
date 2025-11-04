@@ -21,7 +21,14 @@ All secrets are automatically created in the namespace during deployment.
 
 ## Configuration
 
-Edit `config.yaml`
+- `config.yaml` - Production environment configuration
+- `config.dev.yaml` - Development environment configuration
+
+## Development Setup
+
+### Dev Container
+
+Install the *Dev Containers* extension in VSCode, then `F1` → *"Reopen in Container"*. Includes Docker-in-Docker, kubectl, and all dev tools.
 
 ## Local Commands
 
