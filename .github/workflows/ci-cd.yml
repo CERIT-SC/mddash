@@ -14,6 +14,7 @@ jobs:
       env: ${{ steps.set-env.outputs.env }}
       tag: ${{ steps.set-env.outputs.tag }}
       registry: ${{ steps.set-env.outputs.registry }}
+      config: ${{ steps.set-env.outputs.config }}
     steps:
       - uses: actions/checkout@v4
 
@@ -25,16 +26,19 @@ jobs:
       - name: Set environment
         id: set-env
         run: |
-          REGISTRY=$(yq '.registry' config.yaml | cut -d'/' -f1)
-          echo "registry=${REGISTRY}" >> $GITHUB_OUTPUT
-          
           if [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
+            CONFIG_FILE="config.yaml"
             echo "env=prod" >> $GITHUB_OUTPUT
             echo "tag=latest" >> $GITHUB_OUTPUT
           else
+            CONFIG_FILE="config.dev.yaml"
             echo "env=dev" >> $GITHUB_OUTPUT
             echo "tag=dev" >> $GITHUB_OUTPUT
           fi
+          
+          echo "config=${CONFIG_FILE}" >> $GITHUB_OUTPUT
+          REGISTRY=$(yq '.registry' ${CONFIG_FILE} | cut -d'/' -f1)
+          echo "registry=${REGISTRY}" >> $GITHUB_OUTPUT
 
   build:
     needs: setup
@@ -165,8 +169,8 @@ jobs:
             exit 0
           fi
           
-          # Check for helm templates, config, or component changes
-          if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -qE '^(helm/charts/mddash/|config.yaml|dashboard/|notebook/|mdrun-api/)'; then
+          # Check for helm templates, config files, or component changes
+          if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -qE '^(helm/charts/mddash/|config\.yaml|config\.dev\.yaml|dashboard/|notebook/|mdrun-api/)'; then
             echo "deploy_changed=true" >> $GITHUB_OUTPUT
           else
             echo "deploy_changed=false" >> $GITHUB_OUTPUT
@@ -210,7 +214,7 @@ jobs:
 
       - name: Setup namespace and secrets
         run: |
-          NAMESPACE=$(yq '.${{ needs.setup.outputs.env }}Namespace' config.yaml)
+          NAMESPACE=$(yq '.namespace' ${{ needs.setup.outputs.config }})
           kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
           
           kubectl create secret generic oidc-credentials \
@@ -235,7 +239,7 @@ jobs:
 
       - name: Deploy
         run: |
-          NAMESPACE=$(yq '.${{ needs.setup.outputs.env }}Namespace' config.yaml)
+          NAMESPACE=$(yq '.namespace' ${{ needs.setup.outputs.config }})
           
           if helm status mddash -n ${NAMESPACE} >/dev/null 2>&1; then
             make -C helm upgrade ENV=${{ needs.setup.outputs.env }}
