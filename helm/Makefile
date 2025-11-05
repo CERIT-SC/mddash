@@ -6,7 +6,7 @@ ENV ?= prod
 config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
 package := $(shell yq .helm.package $(config))
 namespace := $(shell yq '.namespace' $(config))
-chart_path := helm/mddash
+chart_path := charts/mddash
 values_file := -f $(chart_path)/values.yaml
 
 .PHONY: help
