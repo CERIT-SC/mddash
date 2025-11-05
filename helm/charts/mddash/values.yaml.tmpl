@@ -59,6 +59,8 @@ jupyterhub:
         value: "{{ $cfg.resources.namespaceQuota.limitsCpu }}"
       NS_LIMITS_MEMORY:
         value: "{{ $cfg.resources.namespaceQuota.limitsMemory }}"
+      PVC_STORAGE_SIZE:
+        value: "{{ $cfg.resources.pvcStorageSize }}"
 
     extraVolumes:
       - name: kubeconfig
@@ -106,9 +108,12 @@ jupyterhub:
     # Increased timeout for custom image startup
     startTimeout: 600
 
-    # Use S3 storage mounted at /mddash
+    # PVC is created inside pre_spawn_hook.py
     storage:
-      type: none
+      type: static
+      homeMountPath: /mddash
+      static:
+        pvcName: mddash-user-pvc
 
     networkPolicy:
       enabled: false

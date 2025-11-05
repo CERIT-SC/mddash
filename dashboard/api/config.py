@@ -41,6 +41,8 @@ HUB_NAMESPACE = os.environ.get('HUB_NAMESPACE', NAMESPACE)
 
 MDRUN_API_URL = f'http://mdrun-api.{HUB_NAMESPACE}.svc.cluster.local/api'
 
+PVC_NAME = os.environ.get('PVC_NAME', 'mddash-user-pvc')
+
 S3_ENDPOINT = os.environ.get('S3_ENDPOINT', '')
 S3_BUCKET = os.environ.get('S3_BUCKET', '')
 S3_ACCESS_KEY = os.environ.get('S3_ACCESS_KEY', '')
