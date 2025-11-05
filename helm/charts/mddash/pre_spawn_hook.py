@@ -60,7 +60,7 @@ def get_hub_role_manifest(role_name):
         "rules": [
             {
                 "apiGroups": [""],
-                "resources": ["pods", "pods/exec", "services", "events"],
+                "resources": ["pods", "pods/exec", "services", "persistentvolumeclaims", "events"],
                 "verbs": ["create", "delete", "get", "list", "watch"]
             },
             {
@@ -100,6 +100,25 @@ def get_role_binding_manifest(role_binding_name, service_account_name, role_name
         },
     }
 
+def get_pvc_manifest(pvc_name, storage_size="10Gi"):
+    manifest = {
+        "apiVersion": "v1",
+        "kind": "PersistentVolumeClaim",
+        "metadata": {
+            "name": pvc_name,
+        },
+        "spec": {
+            "storageClassName": "nfs-csi",
+            "accessModes": ["ReadWriteMany"],
+            "resources": {
+                "requests": {
+                    "storage": storage_size
+                }
+            }
+        }
+    }
+    return manifest
+
 
 async def ensure_resource(method, **kwargs):
     try:
@@ -132,24 +151,24 @@ async def create_s3_bucket(bucket_name):
             print(f"Error creating bucket {bucket_name}: {e}")
 
 
-def set_pod_env(spawner, bucket_name):
+def set_pod_env(spawner, bucket_name, pvc_name):
     if not hasattr(spawner, "environment"):
         spawner.environment = {}
     hub_namespace = os.environ.get("POD_NAMESPACE", "default")
     spawner.environment["HUB_NAMESPACE"] = hub_namespace
     spawner.environment["JUPYTERHUB_API_URL"] = f"http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api"
+    spawner.environment["PVC_NAME"] = pvc_name
     spawner.environment["S3_BUCKET"] = bucket_name
     spawner.environment["S3_ENDPOINT"] = os.environ.get("S3_ENDPOINT", "")
     spawner.environment["S3_ACCESS_KEY"] = os.environ.get("S3_ACCESS_KEY", "")
     spawner.environment["S3_SECRET_KEY"] = os.environ.get("S3_SECRET_KEY", "")
 
 
-def remove_volumes(spawner):
-    """Remove any existing volume mounts since we're using S3 as the storage backend."""
-    if hasattr(spawner, 'volume_mounts'):
-        spawner.volume_mounts = []
-    if hasattr(spawner, 'volumes'):
-        spawner.volumes = []
+def remove_volume_subpath(spawner):
+    # static storage works with subPath, so we need to remove it from volume mounts
+    for vol_mount in spawner.volume_mounts:
+        if "subPath" in vol_mount:
+            del vol_mount["subPath"]
 
 
 async def pre_spawn_hook(spawner):
@@ -168,6 +187,7 @@ async def pre_spawn_hook(spawner):
     hub_service_account = "hub"
     hub_namespace = os.environ.get("POD_NAMESPACE", "default")
     bucket_name = f"mddash-user-{username}"
+    pvc_name = "mddash-user-pvc"
 
     namespace_manifest = get_namespace_manifest(ns, rancher_project_id,
         cpu_limit=os.environ.get("NS_LIMITS_CPU", "64000m"),
@@ -179,6 +199,7 @@ async def pre_spawn_hook(spawner):
     role_binding_manifest = get_role_binding_manifest(role_binding_name, service_account_name, role_name)
     hub_role_manifest = get_hub_role_manifest(hub_role_name)
     hub_role_binding_manifest = get_role_binding_manifest(hub_role_binding_name, hub_service_account, hub_role_name, namespace=hub_namespace)
+    pvc_manifest = get_pvc_manifest(pvc_name, storage_size=os.environ.get("PVC_STORAGE_SIZE", "10Gi"))
 
     await ensure_resource(core_api.create_namespace, body=namespace_manifest)
     await asyncio.sleep(1)
@@ -188,14 +209,17 @@ async def pre_spawn_hook(spawner):
     await ensure_resource(rbac_api.create_namespaced_role_binding, namespace=ns, body=role_binding_manifest)
     await ensure_resource(rbac_api.create_namespaced_role, namespace=ns, body=hub_role_manifest)
     await ensure_resource(rbac_api.create_namespaced_role_binding, namespace=ns, body=hub_role_binding_manifest)
+    await ensure_resource(core_api.create_namespaced_persistent_volume_claim, namespace=ns, body=pvc_manifest)
 
     await create_s3_bucket(bucket_name)
+    
 
     spawner.namespace = ns
     spawner.service_account = service_account_name
+    spawner.pvc_name = pvc_name
 
-    set_pod_env(spawner, bucket_name)
-    remove_volumes(spawner)
+    remove_volume_subpath(spawner)
+    set_pod_env(spawner, bucket_name, pvc_name)
 
 
 c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore

@@ -5,7 +5,7 @@ from kubernetes import client, config  # type: ignore
 from kubernetes.client.rest import ApiException  # type: ignore
 
 from enums import PodStatus, JobStatus
-from config import GPU_TYPE, NOTEBOOK_IMAGE, GMX_IMAGE, S3_CLIENT_IMAGE, S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT, S3_BUCKET, NAMESPACE
+from config import GPU_TYPE, NOTEBOOK_IMAGE, GMX_IMAGE, NAMESPACE, PVC_NAME
 
 
 logger = logging.getLogger(__name__)
@@ -20,23 +20,28 @@ def get_container(
     name: str,
     image: str,
     experiment_id: str,
-    mddash_volume: str,
+    volume_name: str,
     command: list[str],
     env: list[dict] | None = None,
     set_working_dir: bool = True,
     resources: dict | None = None,
 ) -> dict:
-    """
-    Get a generic container mounted to `mddash_volume` and started in `/mddash/{experiment_id}`.
+    """Create a container specification with security context and volume mounts.
 
-    :param name: The name of the container.
-    :param image: The container image to use.
-    :param experiment_id: The ID of the experiment needed to set the working directory.
-    :param mddash_volume: The name of the volume /mddash is mounted to.
-    :param command: The command to run in the container.
-    :param env: Optional list of environment variables to set in the container.
-    :param set_working_dir: Whether to set the working directory to `/mddash/{experiment_id}`.
-    :param resources: Optional resource requests/limits. If None, uses default (100m CPU, 128Mi memory).
+    Generates a Kubernetes container spec with security best practices (non-root user,
+    dropped capabilities, seccomp profile) and mounts the shared volume at /mddash.
+
+    Args:
+        name: The name of the container.
+        image: The container image to use.
+        experiment_id: The ID of the experiment, used to set the working directory.
+        volume_name: The name of the volume to mount at /mddash.
+        command: The command to run in the container.
+        env: Optional list of environment variable dictionaries with 'name' and 'value' keys.
+        set_working_dir: Whether to set the working directory to /mddash/{experiment_id}.
+        resources: Optional resource requests/limits dict. Defaults to 100m CPU and 128Mi memory.
+    Returns:
+        dict: Container specification dictionary for Kubernetes pod/job manifest.
     """
 
     container = {
@@ -54,14 +59,14 @@ def get_container(
         },
         'name': name,
         'image': image,
-        'imagePullPolicy': 'Always',  # TODO. maybe IfNotPresent?
+        'imagePullPolicy': 'Always',  # TODO: maybe IfNotPresent?
         'resources': resources or {
             'requests': {'cpu': '100m', 'memory': '128Mi'},
             'limits': {'cpu': '200m', 'memory': '256Mi'}
         },
         'command': command,
         'volumeMounts': [
-            {'mountPath': '/mddash', 'name': mddash_volume}
+            {'mountPath': '/mddash', 'name': volume_name}
         ]
     }
 
@@ -74,110 +79,21 @@ def get_container(
     return container
 
 
-def get_s3_init_container(experiment_id: str, mddash_volume: str) -> dict:
-    """
-    Get container that initializes the /mddash volume by downloading existing data from S3.
-
-    :param experiment_id: The ID of the experiment needed to set the working directory.
-    :param mddash_volume: The name of the volume /mddash is mounted to.
-    """
-
-    s3_init_command = f"""
-        mkdir -p /tmp/.config/rclone &&
-        cat > /tmp/.config/rclone/rclone.conf << EOF
-[s3remote]
-type = s3
-provider = Other
-access_key_id = $S3_ACCESS_KEY
-secret_access_key = $S3_SECRET_KEY
-endpoint = $S3_ENDPOINT
-EOF
-    mkdir -p /mddash/{experiment_id} &&
-    echo "Syncing notebooks from s3remote:{S3_BUCKET}/{experiment_id}" &&
-    rclone sync --config /tmp/.config/rclone/rclone.conf s3remote:{S3_BUCKET}/{experiment_id}/ /mddash/{experiment_id}/ --progress || echo "No existing data found, starting with empty directory"
-    """
-
-    env = [
-        {
-            'name': 'S3_ENDPOINT',
-            'value': S3_ENDPOINT or ''
-        },
-        {
-            'name': 'S3_ACCESS_KEY',
-            'value': S3_ACCESS_KEY or ''
-        },
-        {
-            'name': 'S3_SECRET_KEY',
-            'value': S3_SECRET_KEY or ''
-        }
-    ]
-
-    # Create s3-init container that runs as user 1000, permissions handled by fsGroup
-    return get_container(
-        's3-init',
-        S3_CLIENT_IMAGE,
-        experiment_id,
-        mddash_volume,
-        ['sh', '-c', s3_init_command],
-        env,
-        set_working_dir=False
-    )
-
-
-def get_s3_sync_container(experiment_id: str, mddash_volume: str) -> dict:
-    """
-    Get container that continuously syncs /mddash volume to S3 and performs a final sync on termination.
-
-    NOTE: This container relies on the main container to create a file /mddash/.terminated after it has finished its work.
-
-    :param experiment_id: The ID of the experiment needed to set the working directory.
-    :param mddash_volume: The name of the volume /mddash is mounted to.
-    """
-
-    s3_sync_command = f"""
-        export HOME=/tmp &&
-        mkdir -p /tmp/.config/rclone &&
-        cat > /tmp/.config/rclone/rclone.conf << EOF
-[s3remote]
-type = s3
-provider = Other
-access_key_id = $S3_ACCESS_KEY
-secret_access_key = $S3_SECRET_KEY
-endpoint = $S3_ENDPOINT
-EOF
-        while true; do
-            if [ -f "/mddash/.terminated" ]; then
-                sleep 2 &&
-                # Final sync to S3
-                rclone sync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --exclude "*.tmp" --exclude "*.lock" --log-level ERROR --retries 5 &&
-                break
-            fi
-
-            # Periodic sync to S3 (make S3 match local, including deletions)
-            rclone sync --config /tmp/.config/rclone/rclone.conf /mddash/{experiment_id}/ s3remote:{S3_BUCKET}/{experiment_id}/ --exclude "*.tmp" --exclude "*.lock" --log-level ERROR --retries 2 || echo "Upload sync failed" &&
-            sleep 10
-        done
-    """
-
-    env = [
-        {
-            'name': 'S3_ENDPOINT',
-            'value': S3_ENDPOINT or ''
-        },
-        {
-            'name': 'S3_ACCESS_KEY',
-            'value': S3_ACCESS_KEY or ''
-        },
-        {
-            'name': 'S3_SECRET_KEY',
-            'value': S3_SECRET_KEY or ''
-        }
-    ]
-
-    return get_container('s3-sync', S3_CLIENT_IMAGE, experiment_id, mddash_volume, ['sh', '-c', s3_sync_command], env)
-
-
 def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) -> None:
+    """Create a JupyterLab notebook pod with GROMACS tools for experiment setup.
+
+    Creates a pod with three containers: a Jupyter notebook server, a GROMACS container,
+    and an init container that sets up the working directory. The pod uses a PVC for
+    persistent storage.
+
+    Args:
+        name: The name of the pod to create.
+        experiment_id: The ID of the experiment (used for directory path).
+        prefix: The base URL prefix for the notebook server.
+        token: Authentication token for accessing the notebook.
+    Raises:
+        ApiException: If an error occurs while creating the pod.
+    """
     if ping_resource('pod', name):
         logger.warning(f"Pod {name} already exists in namespace {NAMESPACE}. Skipping creation.")
         return
@@ -210,24 +126,21 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         fi
     """
 
-    mddash_volume = 'shared-data'
+    volume_name = 'shared-data'
     workdir_init_container = get_container(
         'workdir-init',
         NOTEBOOK_IMAGE,
         experiment_id,
-        mddash_volume,
+        volume_name,
         ['sh', '-c', workdir_init_command],
         set_working_dir=False
     )
-    gmx_container = get_container('gmx', GMX_IMAGE, experiment_id, mddash_volume, ['sleep', '365d'])
-    s3_init_container = get_s3_init_container(experiment_id, mddash_volume)
-    s3_sync_container = get_s3_sync_container(experiment_id, mddash_volume)
-    
-    jupyter_command = ['sh', '-c',
-        f'trap "echo \\"Container terminated at $(date)\\" > /mddash/.terminated" EXIT TERM INT; '
-        f'start-notebook.sh '
-        f'--NotebookApp.base_url={prefix} '
-        f'--NotebookApp.notebook_dir=/mddash/{experiment_id} '
+    gmx_container = get_container('gmx', GMX_IMAGE, experiment_id, volume_name, ['sleep', 'infinity'])
+
+    jupyter_command = [
+        'start-notebook.sh',
+        f'--NotebookApp.base_url={prefix}',
+        f'--NotebookApp.notebook_dir=/mddash/{experiment_id}',
         f'--NotebookApp.token="{token}"'
     ]
     jupyter_env = [{'name': 'WORKDIR', 'value': f'/mddash/{experiment_id}'}]
@@ -239,7 +152,7 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         'jupyter',
         NOTEBOOK_IMAGE,
         experiment_id,
-        mddash_volume,
+        volume_name,
         jupyter_command,
         env=jupyter_env,
         resources=jupyter_resources
@@ -262,19 +175,17 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
                 'supplementalGroups': [1000]
             },
             'initContainers': [
-                s3_init_container,
                 workdir_init_container
             ],
             'containers': [
                 jupyter_container,
-                gmx_container,
-                s3_sync_container
+                gmx_container
             ],
             'volumes': [
                 {
-                    'name': mddash_volume,
-                    'emptyDir': {
-                        'sizeLimit': '50Gi'  # TODO: adjust size limit to our needs
+                    'name': volume_name,
+                    'persistentVolumeClaim': {
+                        'claimName': PVC_NAME
                     }
                 }
             ]
@@ -285,30 +196,28 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
 
 
 def create_job(name: str, image: str, experiment_id: str, command: str) -> None:
-    """
-    Create a job that runs a given command in the `/mddash/{experiment_id}` directory.
-    It is automatically synced to S3.
+    """Create a Kubernetes job that runs a command in the experiment directory.
 
-    :param name: The name of the job.
-    :param image: The container image to use.
-    :param experiment_id: The ID of the experiment needed to set the working directory.
-    :param command: The command to run in the job. (wrapped inside `sh -c`)
+    Creates a batch job with a single container that executes the specified command
+    in /mddash/{experiment_id}. The job uses the shared PVC for persistent storage
+    and has backoffLimit set to 0 (no retries on failure).
+
+    Args:
+        name: The name of the job to create.
+        image: The container image to use for the job.
+        experiment_id: The ID of the experiment, used to set the working directory.
+        command: The shell command to run (will be wrapped in sh -c).
+    Raises:
+        ApiException: If an error occurs while creating the job.
     """
 
     if ping_resource('job', name):
         logger.warning(f"Job {name} already exists in namespace {NAMESPACE}. Skipping creation.")
         return
 
-    mddash_volume = 'shared-data'
+    volume_name = 'shared-data'
 
-    # Wrap the command to create a /mddash/.terminated file on exit
-    trapped_command = ['sh', '-c',
-        f'trap "touch /mddash/.terminated" EXIT TERM INT; {command}'
-    ]
-
-    job_container = get_container(name, image, experiment_id, mddash_volume, trapped_command)
-    s3_init_container = get_s3_init_container(experiment_id, mddash_volume)
-    s3_sync_container = get_s3_sync_container(experiment_id, mddash_volume)
+    job_container = get_container(name, image, experiment_id, volume_name, ['sh', '-c', command])
 
     job_manifest = {
         'apiVersion': 'batch/v1',
@@ -333,18 +242,14 @@ def create_job(name: str, image: str, experiment_id: str, command: str) -> None:
                     'securityContext': {
                         'fsGroup': 1000
                     },
-                    'initContainers': [
-                        s3_init_container
-                    ],
                     'containers': [
-                        job_container,
-                        s3_sync_container
+                        job_container
                     ],
                     'volumes': [
                         {
-                            'name': mddash_volume,
-                            'emptyDir': {
-                                'sizeLimit': '50Gi'  # TODO: adjust based on our needs
+                            'name': volume_name,
+                            'persistentVolumeClaim': {
+                                'claimName': PVC_NAME
                             }
                         }
                     ]
@@ -357,11 +262,13 @@ def create_job(name: str, image: str, experiment_id: str, command: str) -> None:
 
 
 def ping_resource(resource_type: str, name: str) -> bool:
-    """
-    Check if a given resource exists in the namespace.
+    """Check if a Kubernetes resource exists in the namespace.
 
-    :param resource_type: The type of the resource (e.g., 'svc', 'pod', 'configmap', 'secret', 'pvc', 'job').
-    :param name: The name of the resource.
+    Args:
+        resource_type: The type of resource ('svc', 'pod', 'configmap', 'secret', 'pvc', or 'job').
+        name: The name of the resource to check.
+    Returns:
+        bool: True if the resource exists, False if not found or on API error.
     """
 
     try:
@@ -387,6 +294,13 @@ def ping_resource(resource_type: str, name: str) -> bool:
 
 
 def delete_pod(name: str) -> None:
+    """Delete a pod from the namespace.
+
+    Args:
+        name: The name of the pod to delete.
+    Raises:
+        ApiException: If an error occurs while deleting the pod.
+    """
     if not ping_resource('pod', name):
         return
 
@@ -394,6 +308,13 @@ def delete_pod(name: str) -> None:
 
 
 def delete_job(name: str) -> None:
+    """Delete a job from the namespace with background propagation.
+
+    Args:
+        name: The name of the job to delete.
+    Raises:
+        ApiException: If an error occurs while deleting the job.
+    """
     if not ping_resource('job', name):
         return
 
@@ -408,6 +329,13 @@ def delete_job(name: str) -> None:
 
 
 def delete_service(name: str) -> None:
+    """Delete a service from the namespace.
+
+    Args:
+        name: The name of the service to delete.
+    Raises:
+        ApiException: If an error occurs while deleting the service.
+    """
     if not ping_resource('svc', name):
         return
 
@@ -415,6 +343,17 @@ def delete_service(name: str) -> None:
 
 
 def create_service(name: str, target_name: str) -> None:
+    """Create a Kubernetes service to expose a pod.
+
+    Creates a service that routes TCP traffic on port 80 to port 8888 of pods
+    matching the target app label.
+
+    Args:
+        name: The name of the service to create.
+        target_name: The app label value of pods to target.
+    Raises:
+        ApiException: If an error occurs while creating the service.
+    """
     if ping_resource('svc', name):
         logger.warning(f"Service {name} already exists in namespace {NAMESPACE}. Skipping creation.")
         return
@@ -441,11 +380,20 @@ def create_service(name: str, target_name: str) -> None:
 
 
 def get_namespace_resource_allocation() -> dict:
-    '''
-    Get resource requests/limits for all pods in namespace
+    """Calculate total resource requests for all pods in the namespace.
 
-    NOTE: This is just a proof-of-concept version, later we will need some metrics server like Prometheus.
-    '''
+    Iterates through all pods and sums up CPU, memory, and GPU resource requests.
+    Handles multiple unit formats (m for millicores, Mi/Gi for memory).
+
+    NOTE:
+        This is a proof-of-concept version. Production should use a metrics server like Prometheus
+        for accurate real-time resource metrics.
+    Returns:
+        dict: Dictionary with keys 'cpu' (cores), 'memory' (GiB), and 'gpu' (count),
+            each containing the total requested resources rounded to 2 decimal places.
+    Raises:
+        ApiException: If an error occurs while listing the pods.
+    """
     pods = core_v1.list_namespaced_pod(namespace=NAMESPACE)
     total_cpu_requests = 0.0
     total_memory_requests = 0.0
@@ -490,7 +438,14 @@ def get_namespace_resource_allocation() -> dict:
     }
 
 
-def get_pod_status(name: str) -> PodStatus:    
+def get_pod_status(name: str) -> PodStatus:
+    """Get the current status of a pod.
+
+    Args:
+        name: The name of the pod.
+    Returns:
+        PodStatus: The current status (RUNNING, PENDING, TERMINATED, ERROR, DOWN, TERMINATING, or UNKNOWN).
+    """
     try:
         pod = core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE)
 
@@ -519,6 +474,13 @@ def get_pod_status(name: str) -> PodStatus:
 
 
 def get_job_status(name: str) -> JobStatus:
+    """Get the current status of a job.
+
+    Args:
+        name: The name of the job.
+    Returns:
+        JobStatus: The current status (RUNNING, PENDING, TERMINATED, ERROR, or UNKNOWN).
+    """
     try:
         job = batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE)
 
@@ -545,13 +507,16 @@ def get_job_status(name: str) -> JobStatus:
 
 
 def wait_for_job(name: str, on_success: Callable[[], None], on_error: Callable[[Exception], None], timeout: int = 60) -> None:
-    """
-    Wait for a K8s job to complete in a background thread, then call the appropriate callback.
-    
-    :param name: Name of the job to wait for
-    :param on_success: Callback to call when the job completes successfully
-    :param on_error: Callback to call when the job fails or times out
-    :param timeout: Maximum time to wait in seconds
+    """Wait for a Kubernetes job to complete asynchronously and execute callbacks.
+
+    Spawns a daemon thread that polls the job status every 2 seconds until completion,
+    failure, or timeout. Executes the appropriate callback based on the outcome.
+
+    Args:
+        name: Name of the job to wait for.
+        on_success: Callback function to invoke when the job completes successfully.
+        on_error: Callback function to invoke with the exception when the job fails or times out.
+        timeout: Maximum time to wait in seconds (default: 60).
     """
     import time
     

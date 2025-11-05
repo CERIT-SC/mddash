@@ -52,6 +52,7 @@ resources:
     requestsMemory: "4Gi"
     limitsCpu: "4000m"
     limitsMemory: "16Gi"
+  pvcStorageSize: 10Gi
 
 helm:
   package: mddash
