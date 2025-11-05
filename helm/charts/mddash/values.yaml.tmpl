@@ -61,6 +61,8 @@ jupyterhub:
         value: "{{ $cfg.resources.namespaceQuota.limitsMemory }}"
       PVC_STORAGE_SIZE:
         value: "{{ $cfg.resources.pvcStorageSize }}"
+      PVC_STORAGE_CLASS:
+        value: "{{ $cfg.storageClassName }}"
 
     extraVolumes:
       - name: kubeconfig
