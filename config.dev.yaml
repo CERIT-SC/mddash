@@ -56,4 +56,3 @@ resources:
 
 helm:
   package: mddash
-  chartPath: charts/mddash

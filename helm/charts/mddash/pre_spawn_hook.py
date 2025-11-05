@@ -100,7 +100,7 @@ def get_role_binding_manifest(role_binding_name, service_account_name, role_name
         },
     }
 
-def get_pvc_manifest(pvc_name, storage_size="10Gi"):
+def get_pvc_manifest(pvc_name, storage_size="10Gi", storage_class="nfs-csi"):
     manifest = {
         "apiVersion": "v1",
         "kind": "PersistentVolumeClaim",
@@ -108,7 +108,7 @@ def get_pvc_manifest(pvc_name, storage_size="10Gi"):
             "name": pvc_name,
         },
         "spec": {
-            "storageClassName": "nfs-csi",
+            "storageClassName": storage_class,
             "accessModes": ["ReadWriteMany"],
             "resources": {
                 "requests": {
@@ -199,7 +199,10 @@ async def pre_spawn_hook(spawner):
     role_binding_manifest = get_role_binding_manifest(role_binding_name, service_account_name, role_name)
     hub_role_manifest = get_hub_role_manifest(hub_role_name)
     hub_role_binding_manifest = get_role_binding_manifest(hub_role_binding_name, hub_service_account, hub_role_name, namespace=hub_namespace)
-    pvc_manifest = get_pvc_manifest(pvc_name, storage_size=os.environ.get("PVC_STORAGE_SIZE", "10Gi"))
+    pvc_manifest = get_pvc_manifest(pvc_name,
+        storage_size=os.environ.get("PVC_STORAGE_SIZE", "10Gi"),
+        storage_class=os.environ.get("PVC_STORAGE_CLASS", "nfs-csi")
+    )
 
     await ensure_resource(core_api.create_namespace, body=namespace_manifest)
     await asyncio.sleep(1)
