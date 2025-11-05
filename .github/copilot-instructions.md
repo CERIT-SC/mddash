@@ -106,6 +106,6 @@ config.dev.yaml         Development configuration
 
 **Check logs**: `kubectl logs -f deployment/hub -n {namespace}` or `make logs ENV=dev`
 
-**Debug K8s resources**: JupyterHub spawner creates pods named `mddash-{username}`, mdrun-api creates jobs with generated IDs
+**Debug K8s resources**: JupyterHub spawner creates pods named `{helm.package}-{username}` (where helm.package comes from config), mdrun-api creates jobs with generated IDs
 
 **Template rendering**: Run `ENV=dev gomplate -d config=config.dev.yaml -f helm/charts/mddash/values.yaml.tmpl` to test Helm values generation

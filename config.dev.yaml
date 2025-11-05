@@ -55,4 +55,4 @@ resources:
   pvcStorageSize: 10Gi
 
 helm:
-  package: mddash
+  package: mddash-dev

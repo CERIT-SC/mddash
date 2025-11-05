@@ -177,17 +177,18 @@ async def pre_spawn_hook(spawner):
     rbac_api = RbacAuthorizationV1Api()
 
     username = spawner.user.name
-    ns = f"mddash-user-{username}-ns"
+    helm_package = os.environ.get("HELM_PACKAGE", "mddash")
+    ns = f"{helm_package}-user-{username}-ns"
+    hub_ns = os.environ.get("POD_NAMESPACE", "default")
     rancher_project_id = os.environ.get("RANCHER_PROJECT_ID", "")
-    role_name = "mddash-user-role"
-    role_binding_name = "mddash-user-binding"
+    role_name = f"{helm_package}-user-role"
+    role_binding_name = f"{helm_package}-user-binding"
     service_account_name = "default"  # use the default namespace service account
-    hub_role_name = "mddash-hub-role"
-    hub_role_binding_name = "mddash-hub-binding"
+    hub_role_name = f"{helm_package}-hub-role"
+    hub_role_binding_name = f"{helm_package}-hub-binding"
     hub_service_account = "hub"
-    hub_namespace = os.environ.get("POD_NAMESPACE", "default")
-    bucket_name = f"mddash-user-{username}"
-    pvc_name = "mddash-user-pvc"
+    bucket_name = f"{helm_package}-user-{username}"
+    pvc_name = f"{helm_package}-user-pvc"
 
     namespace_manifest = get_namespace_manifest(ns, rancher_project_id,
         cpu_limit=os.environ.get("NS_LIMITS_CPU", "64000m"),
@@ -198,7 +199,7 @@ async def pre_spawn_hook(spawner):
     role_manifest = get_role_manifest(role_name)
     role_binding_manifest = get_role_binding_manifest(role_binding_name, service_account_name, role_name)
     hub_role_manifest = get_hub_role_manifest(hub_role_name)
-    hub_role_binding_manifest = get_role_binding_manifest(hub_role_binding_name, hub_service_account, hub_role_name, namespace=hub_namespace)
+    hub_role_binding_manifest = get_role_binding_manifest(hub_role_binding_name, hub_service_account, hub_role_name, namespace=hub_ns)
     pvc_manifest = get_pvc_manifest(pvc_name,
         storage_size=os.environ.get("PVC_STORAGE_SIZE", "10Gi"),
         storage_class=os.environ.get("PVC_STORAGE_CLASS", "nfs-csi")
@@ -256,7 +257,8 @@ async def post_stop_hook(spawner, **kwargs):
     core_api = CoreV1Api()
 
     username = spawner.user.name
-    ns = f"mddash-user-{username}-ns"
+    helm_package = os.environ.get("HELM_PACKAGE", "mddash")
+    ns = f"{helm_package}-user-{username}-ns"
     rancher_project_id = os.environ.get("RANCHER_PROJECT_ID", "")
     ns_manifest = get_namespace_manifest(ns, rancher_project_id, "0", "0", "0", "0")
 
