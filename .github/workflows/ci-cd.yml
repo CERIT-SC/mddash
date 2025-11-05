@@ -215,6 +215,7 @@ jobs:
       - name: Setup namespace and secrets
         run: |
           NAMESPACE=$(yq '.namespace' ${{ needs.setup.outputs.config }})
+          PACKAGE=$(yq '.helm.package' ${{ needs.setup.outputs.config }})
           kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
           
           kubectl create secret generic oidc-credentials \
@@ -222,11 +223,11 @@ jobs:
             --from-literal=client_secret="${{ secrets.OAUTH_CLIENT_SECRET }}" \
             -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
           
-          kubectl create secret generic mddash-kubeconfig-secret \
+          kubectl create secret generic ${PACKAGE}-kubeconfig-secret \
             --from-file=config=$HOME/.kube/config \
             -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
           
-          kubectl create secret generic mddash-s3-creds \
+          kubectl create secret generic ${PACKAGE}-s3-creds \
             --from-literal=S3_ACCESS_KEY="${{ secrets.MINIO_ROOT_USER }}" \
             --from-literal=S3_SECRET_KEY="${{ secrets.MINIO_ROOT_PASSWORD }}" \
             -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
@@ -240,8 +241,9 @@ jobs:
       - name: Deploy
         run: |
           NAMESPACE=$(yq '.namespace' ${{ needs.setup.outputs.config }})
+          PACKAGE=$(yq '.helm.package' ${{ needs.setup.outputs.config }})
           
-          if helm status mddash -n ${NAMESPACE} >/dev/null 2>&1; then
+          if helm status ${PACKAGE} -n ${NAMESPACE} >/dev/null 2>&1; then
             make -C helm upgrade ENV=${{ needs.setup.outputs.env }}
           else
             make -C helm install ENV=${{ needs.setup.outputs.env }}

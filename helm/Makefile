@@ -51,7 +51,7 @@ uninstall: ## Uninstall Helm release
 
 .PHONY: hub-templates
 hub-templates: ## Create hub templates ConfigMap
-	kubectl create configmap mddash-custom-templates \
+	kubectl create configmap $(package)-custom-templates \
 		--from-file=$(chart_path)/files/hub-templates \
 		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
 

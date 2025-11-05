@@ -41,7 +41,10 @@ HUB_NAMESPACE = os.environ.get('HUB_NAMESPACE', NAMESPACE)
 
 MDRUN_API_URL = f'http://mdrun-api.{HUB_NAMESPACE}.svc.cluster.local/api'
 
-PVC_NAME = os.environ.get('PVC_NAME', 'mddash-user-pvc')
+PVC_NAME = os.environ.get('PVC_NAME', '')
+
+if not PVC_NAME:
+    logger.warning("PVC_NAME environment variable is not set. User storage functionality may be limited.")
 
 S3_ENDPOINT = os.environ.get('S3_ENDPOINT', '')
 S3_BUCKET = os.environ.get('S3_BUCKET', '')
