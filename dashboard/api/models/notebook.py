@@ -3,7 +3,7 @@ from uuid import uuid4
 from flask import abort
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING
-from kubernetes.client.rest import ApiException
+from kubernetes.client.rest import ApiException  # type: ignore
 
 from config import NAMESPACE, PREFIX
 from clients import caddy, k8s

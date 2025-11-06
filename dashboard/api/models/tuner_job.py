@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from typing import Callable
 from pathlib import Path
 from datetime import datetime
 from cachetools import TTLCache, cached
@@ -78,7 +79,7 @@ class TunerJob(db.Model):  # type: ignore
 
     @staticmethod
     def _modify_tpr_async(experiment_id: str, input_tpr_name: str, output_tpr_name: str, nsteps: int, 
-                          on_success: callable, on_error: callable) -> None:
+                          on_success: Callable, on_error: Callable) -> None:
         '''
         Modify a TPR file by running gmx convert-tpr in a K8s job (async with callbacks).
         
@@ -128,12 +129,9 @@ class TunerJob(db.Model):  # type: ignore
         tuning_tpr_name = f"{tpr_path.stem}_tuning_{job.id}.tpr"
         tuning_tpr_path = tpr_path.parent / tuning_tpr_name
 
-        # Capture the app context for use in background thread
-        app = current_app._get_current_object()
-
         def on_tpr_ready():
             '''Callback when TPR modification is complete - submit to tuner'''
-            with app.app_context():
+            with current_app.app_context():
                 fresh_job = db.session.get(TunerJob, job.id)
                 if not fresh_job:
                     logger.info(f"Tuner job {job.id} was deleted, skipping submission")
@@ -155,7 +153,7 @@ class TunerJob(db.Model):  # type: ignore
 
         def on_tpr_error(error: Exception):
             '''Callback when TPR modification fails'''
-            with app.app_context():
+            with current_app.app_context():
                 logger.error(f"TPR modification failed: {error}", exc_info=True)
                 fresh_job = db.session.get(TunerJob, job.id)
                 if fresh_job:
