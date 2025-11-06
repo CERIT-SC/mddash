@@ -75,7 +75,7 @@ logs: ## Show deployment logs
 .PHONY: demo
 demo: ## Run local demo (Flask API + React dev server)
 	@echo "Starting Flask API..."; \
-	python3 dashboard/api/_demo.py & \
+	python3 dashboard/api/_demo/app.py & \
 	API_PID=$$!; \
 	echo "Flask API started (PID: $$API_PID)"; \
 	echo "Starting React dev server..."; \
