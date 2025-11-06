@@ -129,9 +129,11 @@ class TunerJob(db.Model):  # type: ignore
         tuning_tpr_name = f"{tpr_path.stem}_tuning_{job.id}.tpr"
         tuning_tpr_path = tpr_path.parent / tuning_tpr_name
 
+        app = current_app._get_current_object()  # type: ignore
+
         def on_tpr_ready():
             '''Callback when TPR modification is complete - submit to tuner'''
-            with current_app.app_context():
+            with app.app_context():
                 fresh_job = db.session.get(TunerJob, job.id)
                 if not fresh_job:
                     logger.info(f"Tuner job {job.id} was deleted, skipping submission")
@@ -153,7 +155,7 @@ class TunerJob(db.Model):  # type: ignore
 
         def on_tpr_error(error: Exception):
             '''Callback when TPR modification fails'''
-            with current_app.app_context():
+            with app.app_context():
                 logger.error(f"TPR modification failed: {error}", exc_info=True)
                 fresh_job = db.session.get(TunerJob, job.id)
                 if fresh_job:
