@@ -68,10 +68,12 @@ hub-templates: ## Create hub templates ConfigMap
 		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
 
 # XXX: make cert, cf. ../jwt-auth
-jwt-cert:
+jwt-cert: venv
+	. venv/bin/activate && venv/bin/python3 get_cert.py $(shell yq '.keyCloak.base' $(config))
 	kubectl create configmap $(package)-jwt-cert \
 		--from-file=cert.pem \
 		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+
 
 .PHONY: port-forward
 port-forward: ## Forward port 8000 to proxy-public service
@@ -89,6 +91,20 @@ oidcsecret:
 
 port-forward:
 	kubectl port-forward svc/proxy-public 8000:80 -n $(ns)
+
+kubeconfig:
+	kubectl create secret generic ${package}-kubeconfig-secret \
+		--from-file=config=$(kubeconfig_path) \
+		-n $(ns)
+
+venv:
+	python3 -m venv venv
+	. venv/bin/activate && pip3 install -r requirements.txt
+
+
+.PHONY: test
+test: ## Test Helm template rendering
+	helm template $(package) $(chart_path) --debug --namespace $(namespace) $(values_file)
 
 .PHONY: status
 status: ## Show deployment status
