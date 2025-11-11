@@ -67,6 +67,12 @@ hub-templates: ## Create hub templates ConfigMap
 		--from-file=$(chart_path)/files/hub-templates \
 		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
 
+# XXX: make cert, cf. ../jwt-auth
+jwt-cert:
+	kubectl create configmap $(package)-jwt-cert \
+		--from-file=cert.pem \
+		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+
 .PHONY: port-forward
 port-forward: ## Forward port 8000 to proxy-public service
 	kubectl port-forward svc/proxy-public 8000:80 -n $(namespace)

@@ -163,12 +163,17 @@ jupyterhub:
       - name: custom-templates
         configMap:
           name: {{ $helmPackage }}-custom-templates  # created in Makefile
+      - name: jwt-cert
+        configMap:
+          name: {{ $helmPackage }}-jwt-cert # created in Makefile
     extraVolumeMounts:
       - name: kubeconfig
         mountPath: /home/jovyan/.kube
         readOnly: true
       - name: custom-templates
         mountPath: /opt/jupyterhub/custom-templates
+      - name: jwt-cert
+        mountPath: /opt/jupyterhub/jwt-cert
 
     extraConfig:
       oauth-client-secret: |
@@ -181,6 +186,11 @@ jupyterhub:
     networkPolicy:
       enabled: false
 
+    command:
+      - sh
+      - "-c"
+      - "pip3 install jupyterhub-jwtauthenticator && exec jupyterhub --config /usr/local/etc/jupyterhub/jupyterhub_config.py --upgrade-db"
+  
   singleuser:
     podNameTemplate: "{{ $helmPackage }}-{username}"
     # Use stock JupyterHub singleuser image - sidecars handle all custom functionality
