@@ -381,8 +381,8 @@ Finished mdrun on rank 0 Sat Jul  5 16:26:40 2025
 # ----- FILES -----
 
 demo_files = [
-    {'name': 'SPC.tpr', 'url': '/api/experiments/aaaaa/files/md.tpr', 'size': 514912},
-    {'name': 'ABC.tpr', 'url': '/api/experiments/aaaaa/files/md.tpr', 'size': 514912},
+    {'name': 'SPC.tpr', 'url': '/api/experiments/aaaaa/files/SPC.tpr', 'size': 514912},
+    {'name': 'ABC.tpr', 'url': '/api/experiments/aaaaa/files/ABC.tpr', 'size': 514912},
     {'name': 'md.tpr', 'url': '/api/experiments/aaaaa/files/md.tpr', 'size': 321654},
     {'name': 'trajectory.xtc', 'url': '/api/experiments/aaaaa/files/trajectory.xtc', 'size': 3038996},
     {'name': 'structure.pdb', 'url': '/api/experiments/aaaaa/files/structure.pdb', 'size': 630792},
