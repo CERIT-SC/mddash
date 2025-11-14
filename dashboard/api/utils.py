@@ -29,13 +29,16 @@ def get_unique_id(id_dir: Path) -> str:
 
 
 def get_files_with_extension(dir: Path, ext: str | list[str]) -> list[dict[str, object]]:
-    '''
-    Get all files in a directory with a specific extension.
+    """Get all files in a directory with a specific extension.
 
-    :param dir: Directory to search for files.
-    :param ext: File extension to filter by (e.g., 'txt', 'tpr').
-    :return: List of dictionaries with file name, and size.
-    '''
+    Args:
+        dir: Directory to search for files.
+        ext: File extension to filter by (e.g., 'txt', 'tpr').
+    Returns:
+        list[dict[str, object]]: List of dictionaries with file name and size.
+    Raises:
+        ValueError: If dir is not a directory.
+    """
     ext = [e.lower() for e in ext] if isinstance(ext, list) else [ext.lower()]
     files = []
 
@@ -59,14 +62,16 @@ def get_files_with_extension(dir: Path, ext: str | list[str]) -> list[dict[str, 
 
 
 def tail(file: Path | str, n: int = 10) -> str:
-    '''
-    Read last n lines of a file. It works efficiently for large files by reading chunks from the end.
+    """Read last n lines of a file efficiently by reading chunks from the end.
 
-    :param file: Path to the file.
-    :param n: Number of lines to read from the end of the file.
-    :return: Last n lines of the file as a string.
-    :raises FileNotFoundError: If the file does not exist.
-    '''
+    Args:
+        file: Path to the file.
+        n: Number of lines to read from the end of the file.
+    Returns:
+        str: Last n lines of the file as a string.
+    Raises:
+        FileNotFoundError: If the file does not exist.
+    """
 
     with open(file, 'rb') as f:
         f.seek(0, os.SEEK_END)
@@ -100,6 +105,33 @@ def tail(file: Path | str, n: int = 10) -> str:
         return b'\n'.join(result_lines).decode('utf-8', 'replace')
 
 
-if __name__ == '__main__':
-    file = Path(__file__).parent / '_demo.py'
-    print(tail(file, 10))
+def get_directory_size(path: Path | str) -> int:
+    """Calculate total size of a directory in bytes.
+
+    Walks the directory tree and sums up all file sizes. Uses os.scandir for fast iteration.
+
+    Args:
+        path: Path to the directory.
+    Returns:
+        int: Total size in bytes.
+    Raises:
+        FileNotFoundError: If the path does not exist.
+        NotADirectoryError: If the path is not a directory.
+    """
+    path = Path(path) if isinstance(path, str) else path
+
+    if not path.exists():
+        raise FileNotFoundError(f'{path} does not exist')
+
+    if not path.is_dir():
+        raise NotADirectoryError(f'{path} is not a directory')
+
+    total_size = 0
+
+    for entry in os.scandir(path):
+        if entry.is_file(follow_symlinks=False):
+            total_size += entry.stat(follow_symlinks=False).st_size
+        elif entry.is_dir(follow_symlinks=False):
+            total_size += get_directory_size(entry.path)
+
+    return total_size
