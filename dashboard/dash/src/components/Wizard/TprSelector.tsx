@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Stack, Paper, Typography, Button, IconButton } from "@mui/material";
+import { Stack, Box, Typography, Button, IconButton } from "@mui/material";
 import { Delete, Add } from "@mui/icons-material";
 
 import FileSelector from "@/components/FileSelector";
@@ -21,7 +21,7 @@ const TprSelector = (props: TprSelectorProps) => {
     const [fileSelectorTpr, setFileSelectorTpr] = useState<string>("");
 
     return (
-        <Paper elevation={2} style={{ padding: "16px", minWidth: "300px" }}>
+        <Box sx={{ padding: 4, border: 2, borderColor: 'divider', borderRadius: 1, minWidth: 300 }}>
             <Stack direction="column" spacing={2}>
                 <Typography variant="subtitle1">Select TPR file</Typography>
                 <FileSelector
@@ -92,7 +92,7 @@ const TprSelector = (props: TprSelectorProps) => {
                     ))}
                 </Stack>
             </Stack>
-        </Paper>
+        </Box>
     );
 };
 
