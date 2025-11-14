@@ -52,13 +52,13 @@ const Metrics = () => {
                 <Card>
                     <CardContent>
                         <Stack direction="row" alignItems="center" spacing={2} mb={2}>
-                            <DeveloperBoard color="info" fontSize="large" />
                             <Stack direction="column" flex={1}>
-                                <Typography variant="body1">CPU</Typography>
+                                <Typography variant="subtitle1">CPU</Typography>
                                 <Typography variant="h4">
                                     {formatMillicores(metrics.requests.cpu)} / {formatMillicores(metrics.limits.cpu)} cores
                                 </Typography>
                             </Stack>
+                            <DeveloperBoard color="info" fontSize="large" />
                         </Stack>
                         <Box>
                             <LinearProgress 
@@ -77,13 +77,13 @@ const Metrics = () => {
                 <Card>
                     <CardContent>
                         <Stack direction="row" alignItems="center" spacing={2} mb={2}>
-                            <Memory color="warning" fontSize="large" />
                             <Stack direction="column" flex={1}>
-                                <Typography variant="body1">Memory</Typography>
+                                <Typography variant="subtitle1">Memory</Typography>
                                 <Typography variant="h4">
                                     {formatBytes(metrics.requests.memory)} / {formatBytes(metrics.limits.memory)} GB
                                 </Typography>
                             </Stack>
+                            <Memory color="warning" fontSize="large" />
                         </Stack>
                         <Box>
                             <LinearProgress 
@@ -102,13 +102,13 @@ const Metrics = () => {
                 <Card>
                     <CardContent>
                         <Stack direction="row" alignItems="center" spacing={2} mb={2}>
-                            <Storage color="success" fontSize="large" />
                             <Stack direction="column" flex={1}>
-                                <Typography variant="body1">Storage</Typography>
+                                <Typography variant="subtitle1">Storage</Typography>
                                 <Typography variant="h4">
                                     {formatBytes(metrics.requests.storage)} / {formatBytes(metrics.limits.storage)} GB
                                 </Typography>
                             </Stack>
+                            <Storage color="success" fontSize="large" />
                         </Stack>
                         <Box>
                             <LinearProgress 
