@@ -46,10 +46,8 @@ def calculate_area(radius: float) -> float:
 
     Args:
         radius (float): The radius of the circle.
-
     Returns:
         float: The area of the circle, calculated as π * radius^2.
-    
     Raises:
         ValueError: If the radius is negative.
     """
