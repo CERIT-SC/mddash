@@ -1,140 +1,54 @@
-import { useEffect, useState } from "react";
-import { Stack, Button, Typography, CircularProgress } from "@mui/material";
+import { useState } from "react";
+
+import { Stack, Button, Typography } from "@mui/material";
+import { SkipNext } from "@mui/icons-material";
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
-import { get_notebook, spawn_notebook, delete_notebook } from "@/util/api";
-import { useNotification } from "@/contexts/NotificationContext";
+import { formatDateTime } from "@/util/helpers";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import { Notebook, PodStatus } from "@/util/types";
-
-const unknownNotebook: Notebook = {
-    id: -1,
-    experiment_id: "",
-    token: "",
-    status: "UNKNOWN",
-    path: "",
-};
+import NotebookController from "./NotebookController";
 
 const SetupStep = (props: WizardStepProps) => {
     const { experiment, nextStep } = props;
-    const { showError } = useNotification();
-    const [loading, setLoading] = useState(false);
-    const [notebook, setNotebook] = useState<Notebook>(unknownNotebook);
     const [nextStepDialog, setNextStepDialog] = useState(false);
-
-    const fetchStatus = async () => {
-        const { data, error } = await get_notebook(experiment.id);
-        if (error) showError(error);
-        setNotebook(data || unknownNotebook);
-    };
-
-    const spawnNotebook = async () => {
-        const { error, data } = await spawn_notebook(experiment.id);
-        if (error) showError(error);
-        setNotebook(data || unknownNotebook);
-    };
-
-    const deleteNotebook = async () => {
-        const { error } = await delete_notebook(experiment.id);
-        if (error) showError(error);
-        fetchStatus();
-    };
-
-    const respawnNotebook = async () => {
-        await deleteNotebook();
-        await spawnNotebook();
-    };
-
-    useEffect(() => {
-        setLoading(true);
-        fetchStatus().finally(() => setLoading(false));
-
-        let intervalId: number | null = null;
-
-        // actively poll the notebook status if it's pending or terminating
-        if (notebook.status === "PENDING" || notebook.status === "TERMINATING") {
-            intervalId = window.setInterval(fetchStatus, 1000);
-        } else if (intervalId !== null) {
-            console.log("Clearing tuner status interval as notebook is not pending.");
-            window.clearInterval(intervalId);
-        }
-
-        return () => {
-            if (intervalId !== null) {
-                console.log("Clearing tuner status interval.");
-                window.clearInterval(intervalId);
-            }
-        };
-    }, [notebook.status]);
 
     return (
         <Stack direction="column" alignItems="center" spacing={5}>
-            <Stack direction="row" justifyContent="space-between" width="100%">
-                <Typography variant="h4">{experiment.source_message}</Typography>
-                {experiment.step === 0 && (
-                    <Button variant="contained" color="error" onClick={() => setNextStepDialog(true)}>
-                        Complete Setup
-                    </Button>
-                )}
-            </Stack>
-            {(loading && <CircularProgress />) || (
-                <Stack spacing={2} direction="column">
-                    {notebook.status === "RUNNING" && (
-                        <>
-                            <Typography variant="h4" color={PodStatus.getColor(notebook.status)}>
-                                Notebook running 🚀
-                            </Typography>
-                            <Button variant="contained" color="success" href={notebook.path} target="_blank">
-                                Open Jupyter Notebook
-                            </Button>
-                            <Button variant="contained" color="error" onClick={deleteNotebook}>
-                                Delete Jupyter Notebook
-                            </Button>
-                        </>
-                    )}
-
-                    {(notebook.status === "PENDING" || notebook.status === "TERMINATING") && (
-                        <>
-                            <Typography variant="h4" color={PodStatus.getColor(notebook.status)}>
-                                {notebook.status === "PENDING" ? "Notebook starting ⏳" : "Notebook terminating ⏳"}
-                            </Typography>
-                            <CircularProgress size={40} />
-                            <Typography variant="body1" color={PodStatus.getColor(notebook.status)}>
-                                {notebook.status === "PENDING"
-                                    ? "Please wait while the notebook is being prepared..."
-                                    : "Please wait while the notebook is being terminated..."}
-                            </Typography>
-                            {notebook.status === "PENDING" && (
-                                <Button variant="contained" color="error" onClick={deleteNotebook}>
-                                    Delete Jupyter Notebook
-                                </Button>
-                            )}
-                        </>
-                    )}
-
-                    {(notebook.status === "TERMINATED" || notebook.status === "ERROR") && (
-                        <>
-                            <Typography variant="h4" color={PodStatus.getColor(notebook.status)}>
-                                {notebook.status === "TERMINATED" ? "Notebook terminated 🛑" : "Notebook error ❌"}
-                            </Typography>
-                            <Button variant="contained" color="primary" onClick={respawnNotebook}>
-                                Restart Jupyter Notebook
-                            </Button>
-                        </>
-                    )}
-
-                    {(notebook.status === "DOWN" || notebook.status === "UNKNOWN") && (
-                        <>
-                            <Typography variant="h4" color={PodStatus.getColor(notebook.status)}>
-                                {notebook.status === "DOWN" ? "Notebook down 💔" : "Notebook status unknown ❓"}
-                            </Typography>
-                            <Button variant="contained" color="primary" onClick={spawnNotebook}>
-                                Spawn Jupyter Notebook
-                            </Button>
-                        </>
+            <Stack direction="column" width="90%">
+                <Stack direction="row" justifyContent="space-between">
+                    <Typography variant="h3">Experiment Details</Typography>
+                    {experiment.step === 0 && (
+                        <Button
+                            variant="outlined"
+                            color="error"
+                            startIcon={<SkipNext />}
+                            onClick={() => setNextStepDialog(true)}
+                        >
+                            Skip Setup
+                        </Button>
                     )}
                 </Stack>
-            )}
+                <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="body1">Creation Method:</Typography>
+                    <Typography variant="body1" color="textDisabled">
+                        {experiment.source_message}
+                    </Typography>
+                </Stack>
+                <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="body1">Creation Date:</Typography>
+                    <Typography variant="body1" color="textDisabled">
+                        {formatDateTime(experiment.created_at)}
+                    </Typography>
+                </Stack>
+                <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="body1">Last Updated:</Typography>
+                    <Typography variant="body1" color="textDisabled">
+                        {formatDateTime(experiment.updated_at)}
+                    </Typography>
+                </Stack>
+            </Stack>
+
+            <NotebookController experimentId={experiment.id} />
 
             <ConfirmDialog
                 open={nextStepDialog}

@@ -35,7 +35,7 @@ const Header = () => {
                     </Stack>
                     <div style={{ flex: 1, textAlign: "center" }}>
                         <Link to={BASE_PATH} style={{ textDecoration: "none", color: "white" }}>
-                            <Typography variant="h1">FAIR MD Dash</Typography>
+                            <Typography variant="h1">MD Dash</Typography>
                         </Link>
                     </div>
                     {/* Fixed-width right spacer to match left, with theme switch */}
