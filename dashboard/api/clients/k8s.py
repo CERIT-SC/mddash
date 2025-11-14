@@ -1,3 +1,4 @@
+import json
 import logging
 import threading
 from typing import Callable
@@ -407,7 +408,10 @@ def _parse_memory(mem_str: str | None) -> int:
     if not mem_str:
         return 0
 
-    mem_str = str(mem_str)
+    mem_str = str(mem_str).strip()
+    if not mem_str:
+        return 0
+    
     if mem_str.endswith('Gi'):
         return int(float(mem_str[:-2]) * 1024**3)
     elif mem_str.endswith('G'):
@@ -420,7 +424,17 @@ def _parse_memory(mem_str: str | None) -> int:
         return int(float(mem_str[:-2]) * 1024)
     elif mem_str.endswith('K'):
         return int(float(mem_str[:-1]) * 1000)
-    return 0
+    elif mem_str.endswith('Ti'):
+        return int(float(mem_str[:-2]) * 1024**4)
+    elif mem_str.endswith('T'):
+        return int(float(mem_str[:-1]) * 1000**4)
+
+    # Try to parse as plain number (bytes)
+    try:
+        return int(float(mem_str))
+    except (ValueError, TypeError):
+        logger.warning(f"Unable to parse memory value: {mem_str}")
+        return 0
 
 
 def _sum_container_resources(containers: list, resource_type: str) -> dict:
@@ -436,12 +450,18 @@ def _sum_container_resources(containers: list, resource_type: str) -> dict:
     total_memory = 0
 
     for container in containers:
-        resources = getattr(getattr(container, 'resources', None), resource_type, None)
+        if not hasattr(container, 'resources') or container.resources is None:
+            continue
+            
+        resources = getattr(container.resources, resource_type, None)
         if not resources:
             continue
 
-        total_cpu += _parse_cpu(resources.get('cpu'))
-        total_memory += _parse_memory(resources.get('memory'))
+        cpu_value = resources.get('cpu') if isinstance(resources, dict) else None
+        memory_value = resources.get('memory') if isinstance(resources, dict) else None
+        
+        total_cpu += _parse_cpu(cpu_value)
+        total_memory += _parse_memory(memory_value)
 
     return {
         'cpu': total_cpu,
@@ -449,40 +469,27 @@ def _sum_container_resources(containers: list, resource_type: str) -> dict:
     }
 
 
-def get_namespace_resource_allocation() -> dict:
-    """Calculate total resource requests and limits for all pods in the namespace.
+def get_pod_resource_requests() -> dict:
+    """Calculate total resource requests for all pods in the namespace.
 
-    Iterates through all pods and sums up CPU and memory resource requests and limits.
+    Iterates through all pods and sums up CPU and memory resource requests.
     Handles multiple unit formats (m for millicores, Mi/Gi for memory).
 
-    NOTE:
-        This is a proof-of-concept version. Production should use a metrics server like Prometheus
-        for accurate real-time resource metrics.
     Returns:
-        dict: Dictionary with 'requests' and 'limits' keys, each containing 'cpu' (millicores)
-            and 'memory' (bytes).
+        dict: Dictionary with 'cpu' (millicores) and 'memory' (bytes).
     Raises:
         ApiException: If an error occurs while listing the pods.
     """
     pods = core_v1.list_namespaced_pod(namespace=NAMESPACE)
 
     requests_total = {'cpu': 0, 'memory': 0}
-    limits_total = {'cpu': 0, 'memory': 0}
 
     for pod in pods.items:
         requests = _sum_container_resources(pod.spec.containers, 'requests')
-        limits = _sum_container_resources(pod.spec.containers, 'limits')
-
         requests_total['cpu'] += requests['cpu']
         requests_total['memory'] += requests['memory']
 
-        limits_total['cpu'] += limits['cpu']
-        limits_total['memory'] += limits['memory']
-
-    return {
-        'requests': requests_total,
-        'limits': limits_total
-    }
+    return requests_total
 
 
 def get_pod_status(name: str) -> PodStatus:
@@ -585,26 +592,3 @@ def wait_for_job(name: str, on_success: Callable[[], None], on_error: Callable[[
     
     thread = threading.Thread(target=wait_and_callback, daemon=True)
     thread.start()
-
-
-def get_pvc_storage_capacity() -> int:
-    """Get the storage capacity of the PVC in bytes.
-
-    Returns:
-        int: PVC storage capacity in bytes, or 0 if not found.
-    Raises:
-        ApiException: If an error occurs while reading the PVC.
-    """
-    try:
-        pvc = core_v1.read_namespaced_persistent_volume_claim(
-            name=PVC_NAME,
-            namespace=NAMESPACE
-        )
-
-        if pvc.status.capacity and 'storage' in pvc.status.capacity:
-            capacity_str = pvc.status.capacity['storage']
-            return _parse_memory(capacity_str)
-
-        return 0
-    except ApiException:
-        return 0

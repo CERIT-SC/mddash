@@ -1,6 +1,6 @@
 from flask import Blueprint, Response
 
-from config import API_PREFIX, DATA_DIR
+from config import API_PREFIX, DATA_DIR, CPU_REQUEST_QUOTA, MEMORY_REQUEST_QUOTA, PVC_SIZE
 from api_response import ApiResponse
 from clients import k8s
 from decorators import handle_exceptions
@@ -24,10 +24,19 @@ def index() -> Response:
 @misc_bp.route('/metrics', methods=['GET'])
 @handle_exceptions()
 def get_metrics() -> Response:
-    metrics = k8s.get_namespace_resource_allocation()
+    # Get actual pod resource requests
+    requests = k8s.get_pod_resource_requests()
 
-    # Add storage usage and capacity
-    metrics['requests']['storage'] = get_directory_size(DATA_DIR)
-    metrics['limits']['storage'] = k8s.get_pvc_storage_capacity()
+    # Calculate storage used in DATA_DIR
+    requests['storage'] = get_directory_size(DATA_DIR)
 
-    return ApiResponse.success(metrics)
+    limits = {
+        'cpu': k8s._parse_cpu(CPU_REQUEST_QUOTA),
+        'memory': k8s._parse_memory(MEMORY_REQUEST_QUOTA),
+        'storage': k8s._parse_memory(PVC_SIZE)
+    }
+
+    return ApiResponse.success({
+        'requests': requests,
+        'limits': limits
+    })
