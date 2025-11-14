@@ -5,7 +5,7 @@ from kubernetes import client, config  # type: ignore
 from kubernetes.client.rest import ApiException  # type: ignore
 
 from enums import PodStatus, JobStatus
-from config import GPU_TYPE, NOTEBOOK_IMAGE, GMX_IMAGE, NAMESPACE, PVC_NAME
+from config import NOTEBOOK_IMAGE, GMX_IMAGE, NAMESPACE, PVC_NAME
 
 
 logger = logging.getLogger(__name__)
@@ -379,62 +379,109 @@ def create_service(name: str, target_name: str) -> None:
     )
 
 
-def get_namespace_resource_allocation() -> dict:
-    """Calculate total resource requests for all pods in the namespace.
+def _parse_cpu(cpu_str: str | None) -> int:
+    """Parse CPU value from Kubernetes format to millicores.
 
-    Iterates through all pods and sums up CPU, memory, and GPU resource requests.
+    Args:
+        cpu_str: CPU value (e.g., '100m', '1', '1.5').
+    Returns:
+        int: CPU value in millicores.
+    """
+    if not cpu_str:
+        return 0
+
+    cpu_str = str(cpu_str)
+    if cpu_str.endswith('m'):
+        return int(cpu_str[:-1])
+    return int(float(cpu_str) * 1000)
+
+
+def _parse_memory(mem_str: str | None) -> int:
+    """Parse memory value from Kubernetes format to bytes.
+
+    Args:
+        mem_str: Memory value (e.g., '128Mi', '1Gi', '1G').
+    Returns:
+        int: Memory value in bytes.
+    """
+    if not mem_str:
+        return 0
+
+    mem_str = str(mem_str)
+    if mem_str.endswith('Gi'):
+        return int(float(mem_str[:-2]) * 1024**3)
+    elif mem_str.endswith('G'):
+        return int(float(mem_str[:-1]) * 1000**3)
+    elif mem_str.endswith('Mi'):
+        return int(float(mem_str[:-2]) * 1024**2)
+    elif mem_str.endswith('M'):
+        return int(float(mem_str[:-1]) * 1000**2)
+    elif mem_str.endswith('Ki'):
+        return int(float(mem_str[:-2]) * 1024)
+    elif mem_str.endswith('K'):
+        return int(float(mem_str[:-1]) * 1000)
+    return 0
+
+
+def _sum_container_resources(containers: list, resource_type: str) -> dict:
+    """Sum CPU and memory resources for a list of containers.
+
+    Args:
+        containers: List of Kubernetes container objects.
+        resource_type: Either 'requests' or 'limits'.
+    Returns:
+        dict: Dictionary with 'cpu' (millicores) and 'memory' (bytes) totals.
+    """
+    total_cpu = 0
+    total_memory = 0
+
+    for container in containers:
+        resources = getattr(getattr(container, 'resources', None), resource_type, None)
+        if not resources:
+            continue
+
+        total_cpu += _parse_cpu(resources.get('cpu'))
+        total_memory += _parse_memory(resources.get('memory'))
+
+    return {
+        'cpu': total_cpu,
+        'memory': total_memory
+    }
+
+
+def get_namespace_resource_allocation() -> dict:
+    """Calculate total resource requests and limits for all pods in the namespace.
+
+    Iterates through all pods and sums up CPU and memory resource requests and limits.
     Handles multiple unit formats (m for millicores, Mi/Gi for memory).
 
     NOTE:
         This is a proof-of-concept version. Production should use a metrics server like Prometheus
         for accurate real-time resource metrics.
     Returns:
-        dict: Dictionary with keys 'cpu' (cores), 'memory' (GiB), and 'gpu' (count),
-            each containing the total requested resources rounded to 2 decimal places.
+        dict: Dictionary with 'requests' and 'limits' keys, each containing 'cpu' (millicores)
+            and 'memory' (bytes).
     Raises:
         ApiException: If an error occurs while listing the pods.
     """
     pods = core_v1.list_namespaced_pod(namespace=NAMESPACE)
-    total_cpu_requests = 0.0
-    total_memory_requests = 0.0
-    total_gpu_requests = 0.0
+
+    requests_total = {'cpu': 0, 'memory': 0}
+    limits_total = {'cpu': 0, 'memory': 0}
 
     for pod in pods.items:
-        for container in pod.spec.containers:
-            requests = getattr(getattr(container, 'resources', None), 'requests', None)
-            if not requests:
-                continue
+        requests = _sum_container_resources(pod.spec.containers, 'requests')
+        limits = _sum_container_resources(pod.spec.containers, 'limits')
 
-            # Parse CPU requests
-            if cpu_str := requests.get('cpu'):
-                if str(cpu_str).endswith('m'):
-                    total_cpu_requests += int(str(cpu_str)[:-1]) / 1000
-                else:
-                    total_cpu_requests += float(cpu_str)
+        requests_total['cpu'] += requests['cpu']
+        requests_total['memory'] += requests['memory']
 
-            # Parse memory requests
-            if mem_str := requests.get('memory'):
-                mem_str = str(mem_str)
-                if mem_str.endswith('Gi'):
-                    total_memory_requests += float(mem_str[:-2])
-                elif mem_str.endswith('G'):
-                    total_memory_requests += float(mem_str[:-1])
-                elif mem_str.endswith('Mi'):
-                    total_memory_requests += float(mem_str[:-2]) / 1024
-                elif mem_str.endswith('M'):
-                    total_memory_requests += float(mem_str[:-1]) / 1024
-
-            # Parse GPU requests
-            if gpu_str := requests.get(GPU_TYPE):
-                try:
-                    total_gpu_requests += float(gpu_str)
-                except Exception:
-                    pass
+        limits_total['cpu'] += limits['cpu']
+        limits_total['memory'] += limits['memory']
 
     return {
-        'cpu': round(total_cpu_requests, 2),
-        'memory': round(total_memory_requests, 2),
-        'gpu': round(total_gpu_requests, 2)
+        'requests': requests_total,
+        'limits': limits_total
     }
 
 
@@ -538,3 +585,26 @@ def wait_for_job(name: str, on_success: Callable[[], None], on_error: Callable[[
     
     thread = threading.Thread(target=wait_and_callback, daemon=True)
     thread.start()
+
+
+def get_pvc_storage_capacity() -> int:
+    """Get the storage capacity of the PVC in bytes.
+
+    Returns:
+        int: PVC storage capacity in bytes, or 0 if not found.
+    Raises:
+        ApiException: If an error occurs while reading the PVC.
+    """
+    try:
+        pvc = core_v1.read_namespaced_persistent_volume_claim(
+            name=PVC_NAME,
+            namespace=NAMESPACE
+        )
+
+        if pvc.status.capacity and 'storage' in pvc.status.capacity:
+            capacity_str = pvc.status.capacity['storage']
+            return _parse_memory(capacity_str)
+
+        return 0
+    except ApiException:
+        return 0

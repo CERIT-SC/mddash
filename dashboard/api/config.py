@@ -30,8 +30,6 @@ NOTEBOOK_IMAGE=os.environ.get('NOTEBOOK_IMAGE', 'quay.io/jupyter/base-notebook')
 GMX_IMAGE = 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2'
 S3_CLIENT_IMAGE = 'rclone/rclone:latest'
 
-GPU_TYPE = 'nvidia.com/mig-1g.10gb'
-
 NAMESPACE = os.environ.get('POD_NAMESPACE', 'default')
 
 if NAMESPACE == "default":

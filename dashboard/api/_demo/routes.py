@@ -22,7 +22,18 @@ bp = Blueprint('demo', __name__)
 @bp.route('/api/metrics', methods=['GET'])
 def get_metrics():
     """Get system metrics."""
-    return ApiResponse.success({'cpu': 17.8, 'memory': 64, 'gpu': 4})
+    return ApiResponse.success({
+        'requests': {
+            'cpu': 768,  # millicores
+            'memory': 7500000000,  # 7.5G
+            'storage': 12025908429  # 11.2Gi
+        },
+        'limits': {
+            'cpu': 2000,  # millicores
+            'memory': 8000000000,  # 8G
+            'storage': 107374182400  # 100Gi
+        }
+    })
 
 
 # ----- EXPERIMENTS -----

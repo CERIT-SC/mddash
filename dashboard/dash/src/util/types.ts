@@ -71,9 +71,16 @@ export interface GromacsJob {
 }
 
 export interface ResourceUsage {
-    cpu: number;
-    memory: number;
-    gpu: number;
+    requests: {
+        cpu: number;
+        memory: number;
+        storage: number;
+    };
+    limits: {
+        cpu: number;
+        memory: number;
+        storage: number;
+    };
 }
 
 export interface FileOption {

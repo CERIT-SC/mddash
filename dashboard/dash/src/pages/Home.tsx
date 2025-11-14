@@ -10,7 +10,7 @@ const Home = () => {
 
             <Experiments />
 
-            <Typography variant="h1">Service Utilization</Typography>
+            <Typography variant="h1">Resource Usage</Typography>
 
             <Metrics />
 
