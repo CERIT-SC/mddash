@@ -21,7 +21,7 @@ const TprSelector = (props: TprSelectorProps) => {
     const [fileSelectorTpr, setFileSelectorTpr] = useState<string>("");
 
     return (
-        <Box sx={{ padding: 4, border: 2, borderColor: 'divider', borderRadius: 1, minWidth: 300 }}>
+        <Box sx={{ padding: 4, border: 2, borderColor: "divider", borderRadius: 1, width: 400 }}>
             <Stack direction="column" spacing={2}>
                 <Typography variant="subtitle1">Select TPR file</Typography>
                 <FileSelector
@@ -56,7 +56,8 @@ const TprSelector = (props: TprSelectorProps) => {
                                 padding: "8px 12px",
                                 cursor: "pointer",
                                 borderRadius: 1,
-                                border: "1px solid",
+                                border: 1,
+                                borderColor: selectedTpr === tpr ? "text.primary" : "divider",
                                 backgroundColor: selectedTpr === tpr ? "primary.main" : "background.paper",
                                 "&:hover": {
                                     backgroundColor: selectedTpr === tpr ? "primary.main" : "action.hover",
@@ -71,7 +72,13 @@ const TprSelector = (props: TprSelectorProps) => {
                                     if (selectedTpr === tpr) onSelectTpr("");
                                     else onSelectTpr(tpr);
                                 }}
-                                sx={{ flexGrow: 1 }}
+                                title={tpr}
+                                sx={{
+                                    flexGrow: 1,
+                                    overflow: "hidden",
+                                    textOverflow: "ellipsis",
+                                    whiteSpace: "nowrap",
+                                }}
                             >
                                 {tpr}
                             </Typography>
