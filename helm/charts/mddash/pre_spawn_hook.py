@@ -158,6 +158,9 @@ def set_pod_env(spawner, bucket_name, pvc_name):
     spawner.environment["HUB_NAMESPACE"] = hub_namespace
     spawner.environment["JUPYTERHUB_API_URL"] = f"http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api"
     spawner.environment["PVC_NAME"] = pvc_name
+    spawner.environment["PVC_STORAGE_SIZE"] = os.environ.get("PVC_STORAGE_SIZE", "10Gi")
+    spawner.environment["NS_REQUESTS_CPU"] = os.environ.get("NS_REQUESTS_CPU", "1000m")
+    spawner.environment["NS_REQUESTS_MEMORY"] = os.environ.get("NS_REQUESTS_MEMORY", "4Gi")
     spawner.environment["S3_BUCKET"] = bucket_name
     spawner.environment["S3_ENDPOINT"] = os.environ.get("S3_ENDPOINT", "")
     spawner.environment["S3_ACCESS_KEY"] = os.environ.get("S3_ACCESS_KEY", "")

@@ -40,9 +40,16 @@ HUB_NAMESPACE = os.environ.get('HUB_NAMESPACE', NAMESPACE)
 MDRUN_API_URL = f'http://mdrun-api.{HUB_NAMESPACE}.svc.cluster.local/api'
 
 PVC_NAME = os.environ.get('PVC_NAME', '')
+PVC_SIZE = os.environ.get('PVC_STORAGE_SIZE', '')
 
-if not PVC_NAME:
-    logger.warning("PVC_NAME environment variable is not set. User storage functionality may be limited.")
+if not PVC_NAME or not PVC_SIZE:
+    logger.warning("PVC_NAME or PVC_STORAGE_SIZE environment variables are not set. Persistent storage may not be configured properly.")
+
+CPU_REQUEST_QUOTA = os.environ.get('NS_REQUESTS_CPU', '')
+MEMORY_REQUEST_QUOTA = os.environ.get('NS_REQUESTS_MEMORY', '')
+
+if not CPU_REQUEST_QUOTA or not MEMORY_REQUEST_QUOTA:
+    logger.warning("NS_REQUESTS_CPU or NS_REQUESTS_MEMORY environment variables are not set. Namespace resource requests may not be configured properly.")
 
 S3_ENDPOINT = os.environ.get('S3_ENDPOINT', '')
 S3_BUCKET = os.environ.get('S3_BUCKET', '')
