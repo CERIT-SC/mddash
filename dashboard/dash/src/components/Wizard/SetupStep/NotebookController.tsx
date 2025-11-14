@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Stack, Paper, Button, Typography, CircularProgress } from "@mui/material";
+import { Stack, Box, Button, Typography, CircularProgress } from "@mui/material";
 
 import { PowerSettingsNew, RocketLaunch, HelpOutline, Error, PlayArrow, Stop, Refresh, OpenInNew } from "@mui/icons-material";
 
@@ -113,14 +113,14 @@ const NotebookController = ({ experimentId }: NotebookControllerProps) => {
 
     if (loading) {
         return (
-            <Paper elevation={2} sx={{ padding: 4 }}>
+            <Box sx={{ padding: 4, border: 2, borderColor: 'divider', borderRadius: 1 }}>
                 <CircularProgress />
-            </Paper>
+            </Box>
         );
     }
 
     return (
-        <Paper elevation={2} sx={{ padding: 4 }}>
+        <Box sx={{ padding: 4, border: 2, borderColor: 'divider', borderRadius: 1 }}>
             <Stack spacing={2}>
                 <Stack direction="row" spacing={1} alignItems="center">
                     {isTransitioning ? (
@@ -166,7 +166,7 @@ const NotebookController = ({ experimentId }: NotebookControllerProps) => {
                     )}
                 </Stack>
             </Stack>
-        </Paper>
+        </Box>
     );
 };
 
