@@ -40,3 +40,20 @@ export const formatFileSize = (bytes: number): string => {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${(bytes / Math.pow(k, i)).toFixed(1)} ${units[i]}`;
 };
+
+/**
+ * Format ISO datetime string to human-readable format using user's locale.
+ *
+ * @param isoString ISO 8601 datetime string
+ * @returns formatted datetime string based on user's locale
+ */
+export const formatDateTime = (isoString: string): string => {
+    const date = new Date(isoString);
+    return new Intl.DateTimeFormat(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    }).format(date);
+};
