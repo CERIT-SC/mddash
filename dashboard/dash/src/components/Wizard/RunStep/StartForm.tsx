@@ -143,7 +143,7 @@ export const StartForm = (props: ManualStartFormProps) => {
 
     return (
         <Box>
-            <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography variant="h3" sx={{ mb: 2 }}>
                 Start simulation
             </Typography>
 
@@ -225,7 +225,7 @@ export const StartForm = (props: ManualStartFormProps) => {
                 </Grid>
 
                 <Grid size={12}>
-                    <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                    <Typography variant="subtitle1" sx={{ mb: 1 }}>
                         Additional mdrun arguments
                     </Typography>
 
@@ -300,7 +300,7 @@ export const StartForm = (props: ManualStartFormProps) => {
 
                         {/* List of added arguments */}
                         <Box>
-                            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
                                 Added arguments:
                             </Typography>
                             <Stack direction="row" spacing={1} flexWrap="wrap">

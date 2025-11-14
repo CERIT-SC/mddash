@@ -30,20 +30,14 @@ const SetupStep = (props: WizardStepProps) => {
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center">
                     <Typography variant="body1">Creation Method:</Typography>
-                    <Typography variant="body1" color="textDisabled">
+                    <Typography variant="body1" color="text.disabled">
                         {experiment.source_message}
                     </Typography>
                 </Stack>
                 <Stack direction="row" spacing={1} alignItems="center">
                     <Typography variant="body1">Creation Date:</Typography>
-                    <Typography variant="body1" color="textDisabled">
+                    <Typography variant="body1" color="text.disabled">
                         {formatDateTime(experiment.created_at)}
-                    </Typography>
-                </Stack>
-                <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="body1">Last Updated:</Typography>
-                    <Typography variant="body1" color="textDisabled">
-                        {formatDateTime(experiment.updated_at)}
                     </Typography>
                 </Stack>
             </Stack>

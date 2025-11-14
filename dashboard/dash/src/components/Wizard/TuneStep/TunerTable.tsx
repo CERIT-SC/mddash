@@ -101,7 +101,7 @@ const TunerTable = (props: TunerTableProps) => {
                                             checked={selectedTrial?.id === row.id}
                                             onClick={() => handleRadioClick(row, isOptimal)}
                                             name="selectedTrial"
-                                            sx={{ color: isOptimal ? "primary.main" : "default" }}
+                                            sx={{ color: isOptimal ? "text.primary" : "text.disabled" }}
                                         />
                                     </StyledTableCell>
                                     <StyledTableCell
