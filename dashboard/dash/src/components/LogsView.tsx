@@ -5,10 +5,11 @@ import { Paper, Box } from "@mui/material";
 export interface LogsViewProps {
     getLogs: () => Promise<string>;
     refreshInterval?: number;
+    sx?: object;
 }
 
 export default function LogsView(props: LogsViewProps) {
-    const { getLogs, refreshInterval } = props;
+    const { getLogs, refreshInterval, sx } = props;
 
     const [logs, setLogs] = useState<string>("");
 
@@ -26,17 +27,12 @@ export default function LogsView(props: LogsViewProps) {
     }, [getLogs, refreshInterval]);
 
     return (
-        <Paper variant="outlined" sx={{ height: 400, width: "100%", p: 2, boxSizing: "border-box" }}>
+        <Paper variant="outlined" sx={{ height: 400, width: "100%", p: 2, ...sx }}>
             <Box
                 ref={(el: HTMLElement) => el?.scrollTo(0, el.scrollHeight)}
-                sx={{
-                    height: "100%",
-                    fontFamily: "monospace",
-                    overflow: "auto",
-                    whiteSpace: "pre-wrap",
-                }}
+                sx={{ height: "100%", fontFamily: "monospace", overflow: "auto", whiteSpace: "pre-wrap" }}
             >
-                {logs || "Loading logs..."}
+                {logs || "Loading..."}
             </Box>
         </Paper>
     );
