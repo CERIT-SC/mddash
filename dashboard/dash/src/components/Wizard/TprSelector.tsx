@@ -7,6 +7,7 @@ import FileSelector from "@/components/FileSelector";
 
 interface TprSelectorProps {
     experimentId: string;
+    title: string;
     addTitle: string;
     tprFiles: string[];
     selectedTpr: string | null;
@@ -16,14 +17,14 @@ interface TprSelectorProps {
 }
 
 const TprSelector = (props: TprSelectorProps) => {
-    const { experimentId, addTitle, tprFiles, selectedTpr, onAddTpr, onDeleteTpr, onSelectTpr } = props;
+    const { experimentId, title, addTitle, tprFiles, selectedTpr, onAddTpr, onDeleteTpr, onSelectTpr } = props;
 
     const [fileSelectorTpr, setFileSelectorTpr] = useState<string>("");
 
     return (
         <Box sx={{ padding: 4, border: 2, borderColor: "divider", borderRadius: 1, width: 400 }}>
             <Stack direction="column" spacing={2}>
-                <Typography variant="subtitle1">Select TPR file</Typography>
+                <Typography variant="subtitle1">{title}</Typography>
                 <FileSelector
                     experimentId={experimentId}
                     ext="tpr"
