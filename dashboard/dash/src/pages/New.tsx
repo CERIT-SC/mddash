@@ -2,20 +2,39 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     Stack,
+    Paper,
     Button,
     TextField,
     Typography,
     FormControl,
-    Radio,
-    RadioGroup,
     FormLabel,
-    FormControlLabel,
+    Tabs,
+    Tab,
+    FormHelperText,
 } from "@mui/material";
 
 import Dropzone from "@/components/Dropzone";
 import { BASE_PATH } from "@/util/const";
 import { create_experiment } from "@/util/api";
 import { useNotification } from "@/contexts/NotificationContext";
+
+const tabStyles = {
+    textTransform: "none",
+    borderRadius: 1,
+    border: 1,
+    color: "text.secondary",
+    bgcolor: "background.paper",
+    borderColor: "divider",
+    "&.Mui-selected": {
+        color: "primary.contrastText",
+        bgcolor: "primary.main",
+        borderColor: "text.primary",
+    },
+    "&:not(.Mui-selected):hover": {
+        bgcolor: "action.hover",
+        color: "text.primary"
+    },
+} as const;
 
 const New = () => {
     const navigate = useNavigate();
@@ -71,8 +90,9 @@ const New = () => {
         navigate(`${BASE_PATH}/${data!.id}/wizard`);
     };
 
-    const handleTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setType(event.target.value);
+    const handleTypeChange = (_: React.SyntheticEvent, newType: string | false) => {
+        if (typeof newType !== "string") return;
+        setType(newType);
         setPdbId("");
         setRepoUrl("");
         setFile(null);
@@ -80,62 +100,74 @@ const New = () => {
 
     return (
         <>
-            <Typography variant="h1" gutterBottom>
+            <Typography variant="h1" gutterBottom align="center">
                 New Experiment
             </Typography>
 
-            <Stack component="form" autoComplete="off" onSubmit={handleSubmit} spacing={4} p={4}>
-                <TextField
-                    name="experiment-name"
-                    label="Experiment Name"
-                    variant="outlined"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    error={nameError}
-                />
-
-                <FormControl error={typeError}>
-                    <FormLabel>Initial Data</FormLabel>
-                    <RadioGroup name="type" value={type} onChange={handleTypeChange}>
-                        <FormControlLabel value="pdb" control={<Radio />} label="PDB ID" />
-                        <FormControlLabel value="repo" control={<Radio />} label="Repository URL" />
-                        <FormControlLabel value="file" control={<Radio />} label="TPR/XTC file" />
-                    </RadioGroup>
-                </FormControl>
-
-                {type === "pdb" && (
+            <Paper elevation={2} sx={{ maxWidth: 640, mx: "auto" }}>
+                <Stack component="form" autoComplete="off" onSubmit={handleSubmit} spacing={4} p={4} sx={{ width: 1 }}>
                     <TextField
-                        id="pdb-id"
-                        label="PDB ID"
+                        name="experiment-name"
+                        label="Name"
                         variant="outlined"
-                        value={pdbId}
-                        onChange={(e) => setPdbId(e.target.value)}
-                        error={typeAuxError}
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        error={nameError}
                     />
-                )}
-                {type === "repo" && (
-                    <TextField
-                        id="repo-url"
-                        label="Repository URL"
-                        variant="outlined"
-                        value={repoUrl}
-                        onChange={(e) => setRepoUrl(e.target.value)}
-                        error={typeAuxError}
-                    />
-                )}
-                {type === "file" && (
-                    <Dropzone
-                        inputName="simulation-file"
-                        accept={{ "application/octet-stream": [".tpr", ".xtc"] }}
-                        maxFiles={1}
-                        onDrop={(acceptedFiles) => setFile(acceptedFiles[0])}
-                    />
-                )}
 
-                <Button variant="contained" type="submit">
-                    Create Experiment
-                </Button>
-            </Stack>
+                    <FormControl error={typeError || typeAuxError}>
+                        <FormLabel>Initial Data</FormLabel>
+                        <Tabs
+                            value={type || false}
+                            onChange={handleTypeChange}
+                            aria-label="Initial data source"
+                            variant="fullWidth"
+                            TabIndicatorProps={{ style: { display: "none" } }}
+                            sx={{ mt: 1 }}
+                        >
+                            <Tab value="pdb" label="PDB ID" disableRipple sx={tabStyles} />
+                            <Tab value="repo" label="Repository URL" disableRipple sx={tabStyles} />
+                            <Tab value="file" label="TPR/XTC file" disableRipple sx={tabStyles} />
+                        </Tabs>
+                        {(typeError || typeAuxError) && (
+                            <FormHelperText>Select a source and fill its required details.</FormHelperText>
+                        )}
+                    </FormControl>
+
+                    {type === "pdb" && (
+                        <TextField
+                            id="pdb-id"
+                            label="PDB ID"
+                            variant="outlined"
+                            value={pdbId}
+                            onChange={(e) => setPdbId(e.target.value)}
+                            error={typeAuxError}
+                        />
+                    )}
+                    {type === "repo" && (
+                        <TextField
+                            id="repo-url"
+                            label="Repository URL"
+                            variant="outlined"
+                            value={repoUrl}
+                            onChange={(e) => setRepoUrl(e.target.value)}
+                            error={typeAuxError}
+                        />
+                    )}
+                    {type === "file" && (
+                        <Dropzone
+                            inputName="simulation-file"
+                            accept={{ "application/octet-stream": [".tpr", ".xtc"] }}
+                            maxFiles={1}
+                            onDrop={(acceptedFiles) => setFile(acceptedFiles[0])}
+                        />
+                    )}
+
+                    <Button variant="contained" type="submit" sx={{ alignSelf: "flex-start" }}>
+                        Create Experiment
+                    </Button>
+                </Stack>
+            </Paper>
         </>
     );
 };
