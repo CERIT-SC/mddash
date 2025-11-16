@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 import { Link } from "react-router-dom";
 import {
@@ -10,6 +10,8 @@ import {
     Stack,
     CardContent,
     Button,
+    CircularProgress,
+    Box,
 } from "@mui/material";
 import { AddCircleOutline, AutoFixHigh, Delete } from "@mui/icons-material";
 
@@ -21,26 +23,57 @@ import ConfirmDialog from "./ConfirmDialog";
 
 const Experiments = () => {
     const [experiments, setExperiments] = useState<Experiment[]>([]);
+    const [loading, setLoading] = useState(true);
     const { showError } = useNotification();
     const [experimentToDelete, setExperimentToDelete] = useState<Experiment | null>(null);
-    const [confirmDeleteDialog, setConfirmDeleteDialog] = useState<boolean>(false);
+    const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
 
-    const getExperiments = async () => {
+    const fetchExperiments = useCallback(async () => {
+        setLoading(true);
         const { data, error } = await get_experiments();
-        if (error) showError(error);
-        setExperiments(data || []);
-    };
+        if (error) {
+            showError(error);
+        } else {
+            setExperiments(data || []);
+        }
+        setLoading(false);
+    }, [showError]);
 
-    const deleteExperiment = async (id: string) => {
-        const { error } = await delete_experiment(id);
-        if (error) showError(error);
+    const handleDeleteExperiment = useCallback(
+        async (id: string) => {
+            const { error } = await delete_experiment(id);
+            if (error) {
+                showError(error);
+            } else {
+                fetchExperiments();
+            }
+        },
+        [showError, fetchExperiments]
+    );
 
-        if (!error) getExperiments();
-    };
+    const handleDeleteClick = useCallback((experiment: Experiment) => {
+        setExperimentToDelete(experiment);
+        setConfirmDeleteDialog(true);
+    }, []);
+
+    const handleConfirmDelete = useCallback(() => {
+        if (experimentToDelete) {
+            handleDeleteExperiment(experimentToDelete.id);
+            setExperimentToDelete(null);
+        }
+    }, [experimentToDelete, handleDeleteExperiment]);
 
     useEffect(() => {
-        getExperiments();
-    }, []);
+        fetchExperiments();
+    }, [fetchExperiments]);
+
+    if (loading) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="300px">
+                <CircularProgress size={60} />
+            </Box>
+        );
+    }
 
     return (
         <Stack spacing={2} p={4}>
@@ -98,10 +131,7 @@ const Experiments = () => {
                                     size="small"
                                     variant="outlined"
                                     color="error"
-                                    onClick={() => {
-                                        setExperimentToDelete(experiment);
-                                        setConfirmDeleteDialog(true);
-                                    }}
+                                    onClick={() => handleDeleteClick(experiment)}
                                     startIcon={<Delete />}
                                 >
                                     Delete
@@ -140,10 +170,7 @@ const Experiments = () => {
             <ConfirmDialog
                 open={confirmDeleteDialog}
                 setOpen={setConfirmDeleteDialog}
-                onConfirm={() => {
-                    deleteExperiment(experimentToDelete!.id);
-                    setExperimentToDelete(null);
-                }}
+                onConfirm={handleConfirmDelete}
                 message="Are you sure you want to delete this experiment? All data will be lost."
             />
         </Stack>
