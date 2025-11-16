@@ -75,6 +75,7 @@ const TuneStep = (props: WizardStepProps) => {
         <Stack direction="row" spacing={2}>
             <TprSelector
                 experimentId={experiment.id}
+                title="Tuner Jobs"
                 addTitle="Add Tuner Job"
                 tprFiles={tprFiles}
                 selectedTpr={selectedTpr}
