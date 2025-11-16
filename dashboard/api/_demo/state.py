@@ -6,7 +6,7 @@ Stores experiments with their notebooks, tuner jobs, and gromacs jobs.
 import time
 from datetime import datetime
 from uuid import uuid4
-from typing import Optional
+import random
 
 
 class DemoState:
@@ -56,7 +56,7 @@ class DemoState:
         exp3['has_tpr_files'] = True
 
     def create_experiment(self, exp_id: str, name: str, source_message: str,
-                         mdrepo_id: Optional[str] = None) -> dict:
+                         mdrepo_id: str | None = None) -> dict:
         """Create a new experiment with notebook."""
         now = datetime.now().isoformat()
         
@@ -86,7 +86,7 @@ class DemoState:
         return experiment
     
     def _create_tuner_job(self, exp_id: str, tpr_name: str, is_pending: bool = True,
-                         is_stopped: bool = False, error_message: Optional[str] = None) -> dict:
+                         is_stopped: bool = False, error_message: str | None = None) -> dict:
         """Create a tuner job dict."""
         tuner_run_id = None if is_pending or error_message else str(uuid4())
         
@@ -119,10 +119,10 @@ class DemoState:
             'trials': trials,
             'cluster_resources': cluster_resources,
         }
-    
+
     def _create_gromacs_job(self, exp_id: str, tpr_name: str, np: int, ntomp: int,
                            nb: str, pme: str, status: str = 'PENDING', nsteps: int = 100000,
-                           nsteps_done: int = 0, performance: Optional[float] = None,
+                           nsteps_done: int = 0, performance: float | None = None,
                            extra_args: str = '') -> dict:
         """Create a gromacs job dict."""
         return {
@@ -137,7 +137,7 @@ class DemoState:
             'ntomp': ntomp,
             'extra_args': extra_args,
             'start_timestamp': int(time.time()) + 5,
-            'finish_timestamp': int(time.time()) + 5997892,
+            'finish_timestamp': int(time.time()) + random.randint(10**4, 10**6),
             'nsteps': nsteps,
             'performance': performance,
             'status': status,
@@ -146,7 +146,7 @@ class DemoState:
             'start_time': time.time(),
         }
     
-    def get_experiment(self, exp_id: str) -> Optional[dict]:
+    def get_experiment(self, exp_id: str) -> dict | None:
         """Get experiment with formatted data."""
         exp = self.experiments.get(exp_id)
         if not exp:

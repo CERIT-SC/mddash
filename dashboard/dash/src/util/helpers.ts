@@ -7,7 +7,6 @@
 export function formatDuration(seconds: number): string {
     if (seconds == null || isNaN(seconds)) return "?";
     const units = [
-        { label: "month", secs: 2592000 },
         { label: "day", secs: 86400 },
         { label: "hour", secs: 3600 },
         { label: "minute", secs: 60 },
@@ -21,8 +20,8 @@ export function formatDuration(seconds: number): string {
             parts.push(`${value} ${label}${value !== 1 ? "s" : ""}`);
             remaining -= value * secs;
         }
-        // Only show up to 2 largest units for brevity
-        if (parts.length === 2) break;
+        // Only show up to 3 largest units for brevity
+        if (parts.length === 3) break;
     }
     return parts.length ? parts.join(", ") : "0 seconds";
 }
