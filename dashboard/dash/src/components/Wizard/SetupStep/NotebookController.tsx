@@ -1,7 +1,16 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Stack, Box, Button, Typography, CircularProgress } from "@mui/material";
+import { Stack, Paper, Button, Typography, CircularProgress, Chip } from "@mui/material";
 
-import { PowerSettingsNew, RocketLaunch, HelpOutline, Error, PlayArrow, Stop, Refresh, OpenInNew } from "@mui/icons-material";
+import {
+    PowerSettingsNew,
+    RocketLaunch,
+    HelpOutline,
+    Error,
+    PlayArrow,
+    Stop,
+    Refresh,
+    OpenInNew,
+} from "@mui/icons-material";
 
 import { get_notebook, spawn_notebook, delete_notebook } from "@/util/api";
 import { useNotification } from "@/contexts/NotificationContext";
@@ -39,7 +48,7 @@ const STATUS_CONFIG = {
     RUNNING: {
         icon: RocketLaunch,
         color: "success" as const,
-        message: "Your notebook is running. Click the button below to open it.",
+        message: "Your notebook is up. Click the button below to open it.",
     },
     ERROR: {
         icon: Error,
@@ -111,62 +120,76 @@ const NotebookController = ({ experimentId }: NotebookControllerProps) => {
     const StatusIcon = statusConfig.icon;
     const isTransitioning = notebook.status === "PENDING" || notebook.status === "TERMINATING";
 
-    if (loading) {
-        return (
-            <Box sx={{ padding: 4, border: 2, borderColor: 'divider', borderRadius: 1 }}>
-                <CircularProgress />
-            </Box>
-        );
-    }
-
     return (
-        <Box sx={{ padding: 4, border: 2, borderColor: 'divider', borderRadius: 1 }}>
-            <Stack spacing={2}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                    {isTransitioning ? (
-                        <CircularProgress size={20} />
-                    ) : StatusIcon ? (
-                        <StatusIcon color={statusConfig.color} />
-                    ) : null}
-                    <Typography variant="h4">Notebook Status:</Typography>
-                    <Typography variant="h4" color={PodStatus.getColor(notebook.status)}>
-                        {notebook.status}
-                    </Typography>
-                </Stack>
+        <Paper
+            variant="outlined"
+            sx={{
+                width: 400,
+                height: 200,
+                padding: 4,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+            }}
+        >
+            {loading ? (
+                <CircularProgress />
+            ) : (
+                <Stack spacing={2}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        {isTransitioning ? (
+                            <CircularProgress size={20} />
+                        ) : StatusIcon ? (
+                            <StatusIcon color={statusConfig.color} />
+                        ) : null}
+                        <Typography variant="h4">Notebook Status:</Typography>
+                        <Chip size="small" label={notebook.status} color={PodStatus.getColor(notebook.status)} />
+                    </Stack>
 
-                <Typography variant="body2">{statusConfig.message}</Typography>
+                    <Typography variant="body2">{statusConfig.message}</Typography>
 
-                <Stack direction="row" spacing={2} justifyContent="center">
-                    {(notebook.status === "DOWN" || notebook.status === "TERMINATED") && (
-                        <Button variant="contained" color="primary" onClick={spawnNotebook} startIcon={<PlayArrow />}>
-                            Start
-                        </Button>
-                    )}
-                    {notebook.status === "RUNNING" && (
-                        <Button
-                            variant="contained"
-                            color="primary"
-                            href={notebook.path}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            startIcon={<OpenInNew />}
-                        >
-                            Open
-                        </Button>
-                    )}
-                    {(notebook.status === "RUNNING" || notebook.status === "PENDING") && (
-                        <Button variant="outlined" color="error" onClick={stopNotebook} startIcon={<Stop />}>
-                            Stop
-                        </Button>
-                    )}
-                    {(notebook.status === "ERROR" || notebook.status === "UNKNOWN") && (
-                        <Button variant="contained" color="warning" onClick={respawnNotebook} startIcon={<Refresh />}>
-                            Respawn
-                        </Button>
-                    )}
+                    <Stack direction="row" spacing={2} justifyContent="center">
+                        {(notebook.status === "DOWN" || notebook.status === "TERMINATED") && (
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                onClick={spawnNotebook}
+                                startIcon={<PlayArrow />}
+                            >
+                                Start
+                            </Button>
+                        )}
+                        {notebook.status === "RUNNING" && (
+                            <Button
+                                variant="contained"
+                                color="primary"
+                                href={notebook.path}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                startIcon={<OpenInNew />}
+                            >
+                                Open
+                            </Button>
+                        )}
+                        {(notebook.status === "RUNNING" || notebook.status === "PENDING") && (
+                            <Button variant="outlined" color="error" onClick={stopNotebook} startIcon={<Stop />}>
+                                Stop
+                            </Button>
+                        )}
+                        {(notebook.status === "ERROR" || notebook.status === "UNKNOWN") && (
+                            <Button
+                                variant="contained"
+                                color="warning"
+                                onClick={respawnNotebook}
+                                startIcon={<Refresh />}
+                            >
+                                Respawn
+                            </Button>
+                        )}
+                    </Stack>
                 </Stack>
-            </Stack>
-        </Box>
+            )}
+        </Paper>
     );
 };
 

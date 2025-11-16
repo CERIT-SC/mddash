@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 
 import {
     Typography,
+    Chip,
     TableContainer,
     Table,
     TableHead,
@@ -104,13 +105,8 @@ const TunerTable = (props: TunerTableProps) => {
                                             sx={{ color: isOptimal ? "text.primary" : "text.disabled" }}
                                         />
                                     </StyledTableCell>
-                                    <StyledTableCell
-                                        sx={{
-                                            color: (theme) =>
-                                                theme.palette[JobStatus.getColor(row.status as JobStatus)].main,
-                                        }}
-                                    >
-                                        {row.status}
+                                    <StyledTableCell>
+                                        <Chip size="small" label={row.status} color={JobStatus.getColor(row.status as JobStatus)} />
                                     </StyledTableCell>
                                     <StyledTableCell align="right">
                                         {row.performance !== null ? row.performance.toFixed(2) : "N/A"}
