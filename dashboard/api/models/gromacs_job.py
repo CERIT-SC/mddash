@@ -52,6 +52,8 @@ class GromacsJob(db.Model):  # type: ignore
     
     # Unix timestamp when the job started
     _start_timestamp: Mapped[int | None] = mapped_column('start_timestamp', db.Integer, nullable=True)
+    # Unix timestamp when the job finished
+    _finish_timestamp: Mapped[int | None] = mapped_column('finish_timestamp', db.Integer, nullable=True)
     # Total steps of the job
     _nsteps: Mapped[int | None] = mapped_column('nsteps', db.Integer, nullable=True)
     # Performance (ns/day)
@@ -124,6 +126,21 @@ class GromacsJob(db.Model):  # type: ignore
             db.session.commit()
 
         return self._start_timestamp
+
+    @property
+    def finish_timestamp(self) -> int | None:
+        """Unix timestamp when the job finished."""
+        if self._finish_timestamp:
+            return self._finish_timestamp
+        
+        if self.status != JobStatus.TERMINATED:
+            return None
+
+        if val := self._parse_finish_timestamp():
+            self._finish_timestamp = val
+            db.session.commit()
+        
+        return self._finish_timestamp
 
     @property
     @cached(cache=estimated_time_cache)
@@ -332,6 +349,31 @@ class GromacsJob(db.Model):  # type: ignore
 
         except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
             logger.error(f"Error reading start time from log file.", exc_info=True)
+
+        return None
+
+    def _parse_finish_timestamp(self) -> int | None:
+        """
+        Get the finish timestamp of the job.
+        
+        :return: Finish timestamp or None if not available
+        """
+        if not self._gmx_log.exists():
+            return None
+            
+        try:
+            log = tail(self._gmx_log, 10)
+            for line in reversed(log.splitlines()):
+                if 'Finished mdrun' not in line:
+                    continue
+
+                parts = line.split()
+                date_str = ' '.join(parts[-5:])
+                dt = datetime.strptime(date_str, "%a %b %d %H:%M:%S %Y")
+                return int(dt.timestamp())
+
+        except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
+            logger.error(f"Error reading finish time from log file.", exc_info=True)
 
         return None
 
