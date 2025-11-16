@@ -3,6 +3,7 @@ import { useState, useMemo, useCallback } from "react";
 import {
     Box,
     Stack,
+    Paper,
     Typography,
     Chip,
     Grid2 as Grid,
@@ -17,6 +18,7 @@ import {
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { submit_gmx } from "@/util/api";
 import { useNotification } from "@/contexts/NotificationContext";
+import { Add, RocketLaunch } from "@mui/icons-material";
 
 const MDRUN_ARGUMENTS = [
     { key: "xvg", type: "select", options: ["xmgrace", "xmgr", "none"], description: "xvg plot formatting" },
@@ -160,7 +162,7 @@ export const StartForm = (props: ManualStartFormProps) => {
     );
 
     return (
-        <Box>
+        <Paper variant="outlined" sx={{ p: 3 }}>
             <Typography variant="h3" sx={{ mb: 2 }}>
                 Start simulation
             </Typography>
@@ -300,7 +302,12 @@ export const StartForm = (props: ManualStartFormProps) => {
                                 />
                             )}
 
-                            <Button variant="contained" onClick={handleAddArgument} disabled={isAddDisabled}>
+                            <Button
+                                variant="contained"
+                                onClick={handleAddArgument}
+                                disabled={isAddDisabled}
+                                startIcon={<Add />}
+                            >
                                 Add
                             </Button>
                         </Stack>
@@ -330,13 +337,13 @@ export const StartForm = (props: ManualStartFormProps) => {
                     </Stack>
                 </Grid>
 
-                <Grid size={12} sx={{ mt: 2 }}>
-                    <Button type="submit" variant="contained" color="primary">
-                        Submit
+                <Grid size={12} sx={{ mt: 2 }} justifyContent="flex-end" container>
+                    <Button type="submit" variant="contained" color="primary" startIcon={<RocketLaunch />}>
+                        Run
                     </Button>
                 </Grid>
             </Grid>
-        </Box>
+        </Paper>
     );
 };
 

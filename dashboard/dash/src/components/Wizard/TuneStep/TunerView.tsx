@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 
-import { Box, Stack, Button, Typography, CircularProgress, TextField, Alert } from "@mui/material";
+import { Box, Stack, Paper, Button, Typography, CircularProgress, TextField, Alert } from "@mui/material";
 import { PlayArrow, Pause } from "@mui/icons-material";
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
@@ -118,17 +118,13 @@ const TunerView = (props: TunerViewProps) => {
                     )}
                 </Stack>
             ) : (
-                <Stack direction="column" spacing={2} alignItems="center">
+                <Stack direction="column" spacing={2} alignItems="center" justifyContent="center" height="100%">
                     {tuner?.error_message && (
-                        <Alert severity="error" sx={{ width: "100%" }}>
+                        <Alert severity="error">
                             <strong>Error:</strong> {tuner.error_message}
                         </Alert>
                     )}
-                    {tuner?.is_pending && (
-                        <Alert severity="info" sx={{ width: "100%" }}>
-                            Preparing tuner job (modifying TPR file)...
-                        </Alert>
-                    )}
+                    {tuner?.is_pending && <Alert severity="info">Preparing tuner job (modifying TPR file)...</Alert>}
 
                     {!tuner?.is_pending && !tuner?.error_message && (
                         <Typography variant="h3">Configure tuning job for {tprName}</Typography>
@@ -136,28 +132,29 @@ const TunerView = (props: TunerViewProps) => {
 
                     {/* Show input and start button only when no job exists or job has error */}
                     {(!tuner || tuner.error_message) && (
-                        <>
-                            <TextField
-                                label="Number of steps (nsteps)"
-                                type="number"
-                                value={nsteps}
-                                onChange={(e) => {
-                                    const val = e.target.value;
-                                    setNsteps(val === "" ? "" : parseInt(val) || "");
-                                }}
-                                sx={{ width: 300 }}
-                                disabled={!!tuner?.error_message}
-                            />
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                startIcon={<PlayArrow />}
-                                onClick={runTuner}
-                                sx={{ width: 200 }}
-                            >
-                                Start tune job
-                            </Button>
-                        </>
+                        <Paper variant="outlined" sx={{ padding: 4 }}>
+                            <Stack direction="column" spacing={2} alignItems="center">
+                                <TextField
+                                    label="Number of steps (nsteps)"
+                                    type="number"
+                                    value={nsteps}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        setNsteps(val === "" ? "" : parseInt(val) || "");
+                                    }}
+                                    sx={{ width: 300 }}
+                                />
+                                <Button
+                                    variant="contained"
+                                    color="primary"
+                                    startIcon={<PlayArrow />}
+                                    onClick={runTuner}
+                                    sx={{ width: 200 }}
+                                >
+                                    Start tune job
+                                </Button>
+                            </Stack>
+                        </Paper>
                     )}
                 </Stack>
             )}
