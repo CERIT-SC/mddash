@@ -7,7 +7,7 @@ import FileSelector from "@/components/FileSelector";
 
 interface TprSelectorProps {
     experimentId: string;
-    title: string;
+    title?: string;
     addTitle: string;
     tprFiles: string[];
     selectedTpr: string | null;
@@ -24,7 +24,7 @@ const TprSelector = (props: TprSelectorProps) => {
     return (
         <Box sx={{ padding: 4, border: 2, borderColor: "divider", borderRadius: 1, width: 400 }}>
             <Stack direction="column" spacing={2}>
-                <Typography variant="subtitle1">{title}</Typography>
+                {title && <Typography variant="subtitle1">{title}</Typography>}
                 <FileSelector
                     experimentId={experimentId}
                     ext="tpr"
