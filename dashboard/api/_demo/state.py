@@ -136,13 +136,14 @@ class DemoState:
             'np': np,
             'ntomp': ntomp,
             'extra_args': extra_args,
-            'start_timestamp': int(time.time()) if status == 'RUNNING' else None,
+            'start_timestamp': int(time.time()) + 5,
+            'finish_timestamp': int(time.time()) + 5997892,
             'nsteps': nsteps,
             'performance': performance,
             'status': status,
             'nsteps_done': nsteps_done,
             'estimated_time': 0,
-            'start_time': time.time() if status == 'RUNNING' else None,
+            'start_time': time.time(),
         }
     
     def get_experiment(self, exp_id: str) -> Optional[dict]:
