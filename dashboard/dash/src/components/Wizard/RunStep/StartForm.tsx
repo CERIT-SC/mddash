@@ -77,7 +77,7 @@ const MDRUN_ARGUMENTS = [
 
 interface ManualStartFormProps extends WizardStepProps {
     tprName: string;
-    fetchStatus: (showError: boolean) => Promise<void>;
+    onStartJob: () => void;
     np?: number;
     ntomp?: number;
     pme?: "cpu" | "gpu" | "auto";
@@ -85,7 +85,7 @@ interface ManualStartFormProps extends WizardStepProps {
 }
 
 export const StartForm = (props: ManualStartFormProps) => {
-    const { experiment, tprName, fetchStatus, np, ntomp, nb, pme } = props;
+    const { experiment, tprName, onStartJob, np, ntomp, nb, pme } = props;
     const { showError, showWarning } = useNotification();
 
     const [selectedArgument, setSelectedArgument] = useState("");
@@ -154,9 +154,9 @@ export const StartForm = (props: ManualStartFormProps) => {
                 return;
             }
 
-            await fetchStatus(true);
+            onStartJob();
         },
-        [experiment.id, tprName, addedArguments, fetchStatus, showError]
+        [experiment.id, tprName, addedArguments, onStartJob, showError]
     );
 
     return (

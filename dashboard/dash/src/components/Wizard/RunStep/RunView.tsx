@@ -6,7 +6,6 @@ import {
     Typography,
     CircularProgress,
     Chip,
-    Button,
     FormControl,
     MenuItem,
     InputLabel,
@@ -20,7 +19,6 @@ import { formatDuration } from "@/util/helpers";
 import { gmx_status, gmx_logs } from "@/util/api";
 import { useNotification } from "@/contexts/NotificationContext";
 import LogsView from "@/components/LogsView";
-import ConfirmDialog from "@/components/ConfirmDialog";
 import StartForm from "./StartForm";
 
 const POLLING_INTERVAL_MS = 5000;
@@ -30,18 +28,17 @@ type LogType = "gmx" | "stdout" | "stderr";
 
 interface RunViewProps extends WizardStepProps {
     tprName: string;
-    deleteJob: (tprName: string) => void;
+    onStartJob: () => void;
 }
 
 const RunView = (props: RunViewProps) => {
-    const { experiment, tprName, deleteJob } = props;
+    const { experiment, tprName, onStartJob } = props;
     const { showError } = useNotification();
 
     const [loading, setLoading] = useState(false);
     const [jobRunning, setJobRunning] = useState(false);
     const [jobStatus, setJobStatus] = useState<GromacsJob | null>(null);
     const [logType, setLogType] = useState<LogType | null>(null);
-    const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
 
     const fetchStatus = useCallback(
         async (displayError: boolean) => {
@@ -77,6 +74,11 @@ const RunView = (props: RunViewProps) => {
         };
     }, [jobStatus?.status, fetchStatus]);
 
+    const handleJobStarted = useCallback(() => {
+        fetchStatus(true);
+        onStartJob();
+    }, [fetchStatus, onStartJob]);
+
     const getLogs = useCallback(async () => {
         if (!logType) {
             return "No log type selected";
@@ -100,7 +102,7 @@ const RunView = (props: RunViewProps) => {
         const progressPercentage = isRunningWithProgress ? (jobStatus.nsteps_done! / jobStatus.nsteps!) * 100 : 0;
 
         return (
-            <Stack spacing={2} alignItems="flex-start">
+            <Stack spacing={2}>
                 <Typography variant="subtitle1" color="text.secondary">
                     Status
                 </Typography>
@@ -173,14 +175,6 @@ const RunView = (props: RunViewProps) => {
         setLogType((value as LogType) || null);
     }, []);
 
-    const handleDeleteClick = useCallback(() => {
-        setConfirmDeleteDialog(true);
-    }, []);
-
-    const handleConfirmDelete = useCallback(() => {
-        deleteJob(tprName);
-    }, [deleteJob, tprName]);
-
     const logsAvailable = jobStatus?.nsteps !== null;
     const shouldRefreshLogs = jobStatus?.status === "RUNNING";
 
@@ -198,10 +192,6 @@ const RunView = (props: RunViewProps) => {
                 {jobRunning ? (
                     <Stack spacing={2} alignItems="flex-start">
                         {statusDisplay}
-
-                        <Button variant="contained" color="error" onClick={handleDeleteClick}>
-                            Delete Job
-                        </Button>
 
                         {logsAvailable && (
                             <>
@@ -236,15 +226,9 @@ const RunView = (props: RunViewProps) => {
                         )}
                     </Stack>
                 ) : (
-                    <StartForm fetchStatus={fetchStatus} {...props} />
+                    <StartForm {...props} onStartJob={handleJobStarted} />
                 )}
             </Box>
-            <ConfirmDialog
-                open={confirmDeleteDialog}
-                setOpen={setConfirmDeleteDialog}
-                onConfirm={handleConfirmDelete}
-                message="Are you sure you want to delete this Gromacs job? The data will be lost."
-            />
         </>
     );
 };

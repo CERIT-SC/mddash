@@ -77,7 +77,7 @@ const RunStep = (props: WizardStepProps) => {
 
             {selectedTpr && (
                 <Box flex={1}>
-                    <RunView tprName={selectedTpr} deleteJob={deleteJob} {...props} />
+                    <RunView tprName={selectedTpr} onStartJob={fetchGromacsJobs} {...props} />
                 </Box>
             )}
 

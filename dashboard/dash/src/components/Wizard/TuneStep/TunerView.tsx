@@ -108,7 +108,7 @@ const TunerView = (props: TunerViewProps) => {
 
                     {selectedTrial && (
                         <StartForm
-                            fetchStatus={goToRunStep}
+                            onStartJob={goToRunStep}
                             np={selectedTrial.np}
                             ntomp={selectedTrial.ntomp}
                             nb={selectedTrial.nb}
