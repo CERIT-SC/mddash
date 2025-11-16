@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useMemo, useCallback } from "react";
 
 import {
     Box,
@@ -73,7 +73,7 @@ const MDRUN_ARGUMENTS = [
         description: "Random exchanges per interval (N^3 suggested), 0 for neighbor exchange",
     },
     { key: "reseed", type: "number", description: "Replica exchange seed, -1 generates seed" },
-];
+] as const;
 
 interface ManualStartFormProps extends WizardStepProps {
     tprName: string;
@@ -90,17 +90,34 @@ export const StartForm = (props: ManualStartFormProps) => {
 
     const [selectedArgument, setSelectedArgument] = useState("");
     const [argumentValue, setArgumentValue] = useState("");
-    const [addedArguments, setAddedArguments] = useState<Array<{ key: string; value: any; description: string }>>([]);
+    const [addedArguments, setAddedArguments] = useState<Array<{ key: string; value: string; description: string }>>(
+        []
+    );
 
-    const formRef = useRef<HTMLFormElement>(null);
+    const selectedArgConfig = useMemo(
+        () => MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument),
+        [selectedArgument]
+    );
 
-    const handleAddArgument = () => {
-        if (!selectedArgument) return;
-        const selectedArgConfig = MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument);
-        if (!selectedArgConfig) return;
-        if (selectedArgConfig.type !== "boolean" && argumentValue.trim() === "") return;
+    const availableArguments = useMemo(
+        () => MDRUN_ARGUMENTS.filter((arg) => !addedArguments.some((added) => added.key === arg.key)),
+        [addedArguments]
+    );
 
-        // Check if argument already exists
+    const isAddDisabled = useMemo(() => {
+        if (!selectedArgument) return true;
+        if (selectedArgConfig?.type === "boolean") return false;
+        return !argumentValue.trim();
+    }, [selectedArgument, selectedArgConfig, argumentValue]);
+
+    const handleSelectArgument = useCallback((value: string) => {
+        setSelectedArgument(value);
+        setArgumentValue("");
+    }, []);
+
+    const handleAddArgument = useCallback(() => {
+        if (!selectedArgument || !selectedArgConfig) return;
+
         if (addedArguments.some((arg) => arg.key === selectedArgument)) {
             showWarning("Argument already added");
             return;
@@ -117,29 +134,30 @@ export const StartForm = (props: ManualStartFormProps) => {
 
         setSelectedArgument("");
         setArgumentValue("");
-    };
+    }, [selectedArgument, selectedArgConfig, argumentValue, addedArguments, showWarning]);
 
-    const handleSubmit = async (event: React.FormEvent) => {
-        event.preventDefault(); // Prevent page reload
-
-        const formData = new FormData(formRef.current!);
-        formData.append("extra_args", addedArguments.map((arg) => `-${arg.key} ${arg.value}`).join(" "));
-
-        await runSimulation(formData);
-        await fetchStatus(true);
-    };
-
-    const runSimulation = async (formData: FormData) => {
-        const { error } = await submit_gmx(experiment.id, tprName, formData);
-        if (error) {
-            showError(error);
-            return;
-        }
-    };
-
-    const handleDeleteArgument = (keyToDelete: string) => {
+    const handleDeleteArgument = useCallback((keyToDelete: string) => {
         setAddedArguments((prev) => prev.filter((arg) => arg.key !== keyToDelete));
-    };
+    }, []);
+
+    const handleSubmit = useCallback(
+        async (event: React.FormEvent<HTMLFormElement>) => {
+            event.preventDefault();
+
+            const formData = new FormData(event.currentTarget);
+            const extraArgs = addedArguments.map((arg) => `-${arg.key} ${arg.value}`).join(" ");
+            formData.append("extra_args", extraArgs);
+
+            const { error } = await submit_gmx(experiment.id, tprName, formData);
+            if (error) {
+                showError(error);
+                return;
+            }
+
+            await fetchStatus(true);
+        },
+        [experiment.id, tprName, addedArguments, fetchStatus, showError]
+    );
 
     return (
         <Box>
@@ -147,7 +165,7 @@ export const StartForm = (props: ManualStartFormProps) => {
                 Start simulation
             </Typography>
 
-            <Grid container spacing={2} ref={formRef} component="form" onSubmit={handleSubmit}>
+            <Grid container spacing={2} component="form" onSubmit={handleSubmit}>
                 {/* Hidden inputs for disabled fields to ensure their values are included in FormData */}
                 {!!np && <input type="hidden" name="np" value={np} />}
                 {!!ntomp && <input type="hidden" name="ntomp" value={ntomp} />}
@@ -237,11 +255,9 @@ export const StartForm = (props: ManualStartFormProps) => {
                                     labelId="mdrun-args-selector"
                                     label="Select argument"
                                     value={selectedArgument}
-                                    onChange={(e) => setSelectedArgument(e.target.value)}
+                                    onChange={(e) => handleSelectArgument(e.target.value)}
                                 >
-                                    {MDRUN_ARGUMENTS.filter(
-                                        (arg) => !addedArguments.some((added) => added.key === arg.key)
-                                    ).map((arg) => (
+                                    {availableArguments.map((arg) => (
                                         <MenuItem key={arg.key} value={arg.key}>
                                             -{arg.key} - {arg.description}
                                         </MenuItem>
@@ -249,7 +265,7 @@ export const StartForm = (props: ManualStartFormProps) => {
                                 </Select>
                             </FormControl>
 
-                            {MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument)?.type === "select" ? (
+                            {selectedArgConfig?.type === "select" ? (
                                 <FormControl sx={{ flexGrow: 1 }}>
                                     <InputLabel>Value</InputLabel>
                                     <Select
@@ -257,16 +273,15 @@ export const StartForm = (props: ManualStartFormProps) => {
                                         value={argumentValue}
                                         onChange={(e) => setArgumentValue(e.target.value)}
                                     >
-                                        {MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument)?.options?.map(
-                                            (option) => (
+                                        {"options" in selectedArgConfig &&
+                                            selectedArgConfig.options.map((option) => (
                                                 <MenuItem key={option} value={option}>
                                                     {option}
                                                 </MenuItem>
-                                            )
-                                        )}
+                                            ))}
                                     </Select>
                                 </FormControl>
-                            ) : MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument)?.type === "boolean" ? (
+                            ) : selectedArgConfig?.type === "boolean" ? (
                                 <Typography
                                     variant="body2"
                                     color="text.secondary"
@@ -279,21 +294,13 @@ export const StartForm = (props: ManualStartFormProps) => {
                                     label="Value"
                                     placeholder="Enter value"
                                     value={argumentValue}
-                                    type={MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument)?.type || "text"}
+                                    type={selectedArgConfig?.type === "number" ? "number" : "text"}
                                     onChange={(e) => setArgumentValue(e.target.value)}
                                     sx={{ flexGrow: 1 }}
                                 />
                             )}
 
-                            <Button
-                                variant="contained"
-                                onClick={handleAddArgument}
-                                disabled={
-                                    !selectedArgument ||
-                                    (MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument)?.type !== "boolean" &&
-                                        !argumentValue.trim())
-                                }
-                            >
+                            <Button variant="contained" onClick={handleAddArgument} disabled={isAddDisabled}>
                                 Add
                             </Button>
                         </Stack>
