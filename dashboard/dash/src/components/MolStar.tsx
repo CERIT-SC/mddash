@@ -1,115 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot, Root } from "react-dom/client";
 
-import { CircularProgress } from "@mui/material";
-
+import { CircularProgress, Box } from "@mui/material";
 import "molstar/lib/mol-plugin-ui/skin/light.scss";
 import { DefaultPluginUISpec, PluginUISpec } from "molstar/lib/mol-plugin-ui/spec";
 import { PluginUIContext } from "molstar/lib/mol-plugin-ui/context";
 import { Plugin } from "molstar/lib/mol-plugin-ui/plugin";
-import { TrajectoryFromModelAndCoordinates } from "molstar/lib/mol-plugin-state/transforms/model";
+import { StateTransforms } from "molstar/lib/mol-plugin-state/transforms";
 import { BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory";
 import { BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates";
+
 import { useNotification } from "@/contexts/NotificationContext";
-
-export const initViewerUI = async (element: string | HTMLDivElement, options?: { spec?: PluginUISpec }) => {
-    const parent = typeof element === "string" ? (document.getElementById(element)! as HTMLDivElement) : element;
-    const spec = { ...DefaultPluginUISpec(), ...options?.spec };
-    const plugin = new PluginUIContext(spec);
-    await plugin.init();
-
-    // Clear existing content first
-    parent.innerHTML = "";
-
-    const root = createRoot(parent);
-    root.render(<Plugin plugin={plugin} />);
-    return { plugin, root };
-};
-
-export const loadStructure = async (
-    plugin: PluginUIContext,
-    url: string,
-    options?: { format?: string; isBinary?: boolean }
-) => {
-    const data = await plugin.builders.data.download({
-        url,
-        isBinary: options?.isBinary ?? false,
-    });
-    const trajectory = await plugin.builders.structure.parseTrajectory(data, options?.format ?? ("mmcif" as any));
-    await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default");
-    return trajectory;
-};
-
-interface LoadTrajectoryParams {
-    plugin: PluginUIContext;
-    modelUrl: string;
-    modelFormat?: BuiltInTrajectoryFormat;
-    modelIsBinary?: boolean;
-    modelLabel?: string;
-    coordsUrl: string;
-    coordsFormat?: BuiltInCoordinatesFormat;
-    coordsIsBinary?: boolean;
-    coordsLabel?: string;
-    preset?: "default" | "all-models";
-}
-
-export const loadTrajectory = async (params: LoadTrajectoryParams) => {
-    const {
-        plugin,
-        modelUrl,
-        modelFormat = "gro",
-        modelIsBinary = false,
-        modelLabel,
-        coordsUrl,
-        coordsFormat = "xtc",
-        coordsIsBinary = true,
-        coordsLabel,
-        preset = "default",
-    } = params;
-
-    // Load topology/structure data
-    const modelData = await plugin.builders.data.download({
-        url: modelUrl,
-        isBinary: modelIsBinary,
-        label: modelLabel,
-    });
-
-    // Parse as trajectory for standard formats
-    const modelTrajectory = await plugin.builders.structure.parseTrajectory(modelData, modelFormat as any);
-    let model = await plugin.builders.structure.createModel(modelTrajectory);
-
-    // Load coordinate trajectory data
-    const coordData = await plugin.builders.data.download({
-        url: coordsUrl,
-        isBinary: coordsIsBinary,
-        label: coordsLabel,
-    });
-
-    const coordProvider = plugin.dataFormats.get(coordsFormat);
-    if (!coordProvider) {
-        throw new Error(`Unknown coordinates format: ${coordsFormat}`);
-    }
-    const coords = await coordProvider.parse(plugin, coordData);
-
-    // Create trajectory from model and coordinates
-    const coordsTrajectory = await plugin
-        .build()
-        .toRoot()
-        .apply(
-            TrajectoryFromModelAndCoordinates,
-            {
-                modelRef: model.ref,
-                coordinatesRef: coords.ref,
-            },
-            { dependsOn: [model.ref, coords.ref] }
-        )
-        .commit();
-
-    // Apply default preset to create hierarchy
-    const presetResult = await plugin.builders.structure.hierarchy.applyPreset(coordsTrajectory, preset);
-
-    return { model, coords, coordsTrajectory, preset: presetResult };
-};
 
 interface MolStarProps {
     width?: React.CSSProperties["width"];
@@ -129,30 +30,21 @@ export default function MolStar(props: MolStarProps) {
     const pluginRef = useRef<PluginUIContext | null>(null);
     const rootRef = useRef<Root | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const containerId = useRef(`molstar-container-${Math.random().toString(36).substr(2, 9)}`);
+    const isMountedRef = useRef(true);
 
-    const cleanup = () => {
-        if (pluginRef.current) {
-            pluginRef.current.dispose();
-            pluginRef.current = null;
-        }
-        if (rootRef.current) {
-            rootRef.current.unmount();
-            rootRef.current = null;
-        }
-    };
+    useEffect(() => {
+        isMountedRef.current = true;
+        let plugin: PluginUIContext | null = null;
+        let root: Root | null = null;
 
-    const init = async () => {
-        if (!containerRef.current) return;
+        const init = async () => {
+            if (!containerRef.current || !isMountedRef.current) return;
 
-        try {
-            setLoading(true);
+            try {
+                setLoading(true);
 
-            // Cleanup previous instance
-            cleanup();
-
-            const { plugin, root } = await initViewerUI(containerRef.current, {
-                spec: {
+                const spec: PluginUISpec = {
+                    ...DefaultPluginUISpec(),
                     layout: {
                         initial: {
                             isExpanded: false,
@@ -160,64 +52,209 @@ export default function MolStar(props: MolStarProps) {
                             controlsDisplay: "reactive",
                         },
                     },
-                    behaviors: [],
-                },
-            });
+                };
 
-            pluginRef.current = plugin;
-            rootRef.current = root;
+                plugin = new PluginUIContext(spec);
+                await plugin.init();
 
-            // Add validation for URLs
-            if (coordsUrl && structureUrl) {
-                await loadTrajectory({
-                    plugin,
-                    modelUrl: structureUrl,
-                    coordsUrl: coordsUrl,
-                    modelFormat: structureFormat,
-                    coordsFormat: coordsFormat,
-                    modelIsBinary: structureFormat !== "pdb",
-                });
-            } else if (structureUrl) {
-                await loadStructure(plugin, structureUrl, {
-                    format: structureFormat,
-                    isBinary: structureFormat !== "pdb",
-                });
-            } else if (pdbId) {
-                await loadStructure(plugin, `https://models.rcsb.org/${pdbId.toLowerCase()}.bcif`, {
-                    isBinary: true,
-                });
+                if (!isMountedRef.current) {
+                    plugin.dispose();
+                    return;
+                }
+
+                containerRef.current.innerHTML = "";
+                root = createRoot(containerRef.current);
+                root.render(<Plugin plugin={plugin} />);
+
+                pluginRef.current = plugin;
+                rootRef.current = root;
+
+                if (coordsUrl && structureUrl) {
+                    await loadTrajectoryWithCoordinates(plugin, {
+                        structureUrl,
+                        structureFormat: structureFormat || "gro",
+                        coordsUrl,
+                        coordsFormat: coordsFormat || "xtc",
+                    });
+                } else if (structureUrl) {
+                    await loadSingleStructure(plugin, {
+                        url: structureUrl,
+                        format: structureFormat || "pdb",
+                    });
+                } else if (pdbId) {
+                    await loadSingleStructure(plugin, {
+                        url: `https://models.rcsb.org/${pdbId.toLowerCase()}.bcif`,
+                        format: "mmcif",
+                        isBinary: true,
+                    });
+                } else {
+                    throw new Error("No structure source provided (pdbId, structureUrl, or coordsUrl+structureUrl)");
+                }
+            } catch (error) {
+                if (isMountedRef.current) {
+                    console.error("MolStar initialization error:", error);
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    showError(`Failed to load molecular structure: ${errorMessage}`);
+                }
+            } finally {
+                if (isMountedRef.current) {
+                    setLoading(false);
+                }
             }
-        } catch (error) {
-            console.error("Error initializing Mol* viewer:", error);
-            showError(`Error initializing Mol* viewer: ${error}`);
-        } finally {
-            setLoading(false);
-        }
-    };
+        };
 
-    useEffect(() => {
         init();
 
-        // Cleanup on unmount
-        return cleanup;
-    }, [structureUrl, coordsUrl, pdbId]);
+        return () => {
+            isMountedRef.current = false;
+            if (pluginRef.current) {
+                pluginRef.current.dispose();
+                pluginRef.current = null;
+            }
+            if (rootRef.current) {
+                rootRef.current.unmount();
+                rootRef.current = null;
+            }
+        };
+    }, [pdbId, structureUrl, structureFormat, coordsUrl, coordsFormat, showError]);
 
     return (
-        <div style={{ width, height, position: "relative", zIndex: 10 }}>
+        <Box sx={{ width, height, position: "relative", zIndex: 10 }}>
             {loading && (
-                <div
-                    style={{
+                <Box
+                    sx={{
                         position: "absolute",
                         top: "50%",
                         left: "50%",
                         transform: "translate(-50%, -50%)",
-                        zIndex: 10,
+                        zIndex: 11,
                     }}
                 >
                     <CircularProgress />
-                </div>
+                </Box>
             )}
-            <div ref={containerRef} id={containerId.current} style={{ width: "100%", height: "100%" }} />
-        </div>
+            <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+        </Box>
     );
+}
+
+async function loadSingleStructure(
+    plugin: PluginUIContext,
+    options: {
+        url: string;
+        format: BuiltInTrajectoryFormat | "mmcif";
+        isBinary?: boolean;
+    }
+) {
+    const { url, format, isBinary = format !== "pdb" && format !== "gro" } = options;
+
+    const data = await plugin.builders.data.download({ url, isBinary }, { state: { isGhost: true } });
+
+    if (!data || !data.isOk) {
+        throw new Error(`Failed to download structure from ${url}`);
+    }
+
+    const trajectory = await plugin.builders.structure.parseTrajectory(data, format);
+
+    if (!trajectory || !trajectory.isOk) {
+        throw new Error(`Failed to parse structure file as ${format}`);
+    }
+
+    await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default");
+}
+
+async function loadTrajectoryWithCoordinates(
+    plugin: PluginUIContext,
+    options: {
+        structureUrl: string;
+        structureFormat: BuiltInTrajectoryFormat;
+        coordsUrl: string;
+        coordsFormat: BuiltInCoordinatesFormat;
+    }
+) {
+    const { structureUrl, structureFormat, coordsUrl, coordsFormat } = options;
+    const state = plugin.state.data;
+
+    const structureIsBinary = structureFormat !== "pdb" && structureFormat !== "gro";
+    const coordsIsBinary = coordsFormat !== "lammpstrj";
+
+    const structureData = await plugin.builders.data.download(
+        { url: structureUrl, isBinary: structureIsBinary },
+        { state: { isGhost: true } }
+    );
+
+    if (!structureData || !structureData.isOk) {
+        throw new Error(`Failed to download topology file from ${structureUrl}`);
+    }
+
+    const structureTrajectory = await plugin.builders.structure.parseTrajectory(structureData, structureFormat);
+
+    if (!structureTrajectory || !structureTrajectory.isOk) {
+        throw new Error(`Failed to parse topology file as ${structureFormat}`);
+    }
+
+    const model = await plugin.builders.structure.createModel(structureTrajectory);
+
+    if (!model || !model.isOk) {
+        throw new Error("Failed to create model from topology");
+    }
+
+    const coordsData = await plugin.builders.data.download(
+        { url: coordsUrl, isBinary: coordsIsBinary },
+        { state: { isGhost: true } }
+    );
+
+    if (!coordsData || !coordsData.isOk) {
+        throw new Error(`Failed to download coordinates file from ${coordsUrl}`);
+    }
+
+    let coordsTransform;
+    switch (coordsFormat) {
+        case "xtc":
+            coordsTransform = StateTransforms.Model.CoordinatesFromXtc;
+            break;
+        case "dcd":
+            coordsTransform = StateTransforms.Model.CoordinatesFromDcd;
+            break;
+        case "trr":
+            coordsTransform = StateTransforms.Model.CoordinatesFromTrr;
+            break;
+        case "nctraj":
+            coordsTransform = StateTransforms.Model.CoordinatesFromNctraj;
+            break;
+        case "lammpstrj":
+            coordsTransform = StateTransforms.Model.CoordinatesFromLammpstraj;
+            break;
+        default:
+            throw new Error(`Unsupported coordinates format: ${coordsFormat}`);
+    }
+
+    const coords = await state
+        .build()
+        .to(coordsData)
+        .apply(coordsTransform, {}, { state: { isGhost: true } })
+        .commit({ revertOnError: true });
+
+    if (!coords || !coords.isOk) {
+        throw new Error(`Failed to parse coordinates file as ${coordsFormat}`);
+    }
+
+    const trajectory = await state
+        .build()
+        .toRoot()
+        .apply(
+            StateTransforms.Model.TrajectoryFromModelAndCoordinates,
+            {
+                modelRef: model.ref,
+                coordinatesRef: coords.ref,
+            },
+            { dependsOn: [model.ref, coords.ref] }
+        )
+        .commit({ revertOnError: true });
+
+    if (!trajectory || !trajectory.isOk) {
+        throw new Error("Failed to create trajectory from topology and coordinates");
+    }
+
+    await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default");
 }
