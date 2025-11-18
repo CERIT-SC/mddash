@@ -28,35 +28,43 @@ def get_unique_id(id_dir: Path) -> str:
     return id
 
 
-def get_files_with_extension(dir: Path, ext: str | list[str]) -> list[dict[str, object]]:
-    """Get all files in a directory with a specific extension.
+def get_files_with_extensions(dir: Path, ext: str | list[str] | None = None) -> list[dict[str, object]]:
+    """Get all files in a directory, optionally filtered by extension.
 
     Args:
         dir: Directory to search for files.
-        ext: File extension to filter by (e.g., 'txt', 'tpr').
+        ext: File extension(s) to filter by (e.g., 'txt', ['tpr', 'gro']). 
+             If None, returns all files.
     Returns:
         list[dict[str, object]]: List of dictionaries with file name and size.
     Raises:
         ValueError: If dir is not a directory.
     """
-    ext = [e.lower() for e in ext] if isinstance(ext, list) else [ext.lower()]
-    files = []
-
     if not dir.is_dir():
         raise ValueError(f'{dir} is not a directory')
+
+    extensions = None
+    if ext is not None:
+        extensions = [e.lower() for e in ext] if isinstance(ext, list) else [ext.lower()]
+
+    files = []
 
     for file in dir.iterdir():
         if not file.is_file():
             continue
 
-        file_lower = file.name.lower()
-        for e in ext:
-            if file_lower.endswith(f'.{e}'):
+        if extensions is None:
+            files.append({
+                'name': file.name,
+                'size': file.stat().st_size
+            })
+        else:
+            file_ext = file.suffix.lstrip('.').lower()
+            if file_ext in extensions:
                 files.append({
                     'name': file.name,
                     'size': file.stat().st_size
                 })
-                break  # Avoid duplicate entries
 
     return files
 
