@@ -239,27 +239,22 @@ async function loadTrajectoryWithCoordinates(
         throw new Error(`Failed to parse coordinates file as ${coordsFormat}`);
     }
 
-    try {
-        const trajectory = await state
-            .build()
-            .toRoot()
-            .apply(
-                StateTransforms.Model.TrajectoryFromModelAndCoordinates,
-                {
-                    modelRef: model.ref,
-                    coordinatesRef: coords.ref,
-                },
-                { dependsOn: [model.ref, coords.ref] }
-            )
-            .commit({ revertOnError: true });
+    const trajectory = await state
+        .build()
+        .toRoot()
+        .apply(
+            StateTransforms.Model.TrajectoryFromModelAndCoordinates,
+            {
+                modelRef: model.ref,
+                coordinatesRef: coords.ref,
+            },
+            { dependsOn: [model.ref, coords.ref] }
+        )
+        .commit({ revertOnError: true });
 
-        if (!trajectory || !trajectory.isOk) {
-            throw new Error("Failed to create trajectory from topology and coordinates");
-        }
-
-        await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default");
-    } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        throw new Error(errorMsg);
+    if (!trajectory || !trajectory.isOk) {
+        throw new Error("Failed to create trajectory from topology and coordinates");
     }
+
+    await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default");
 }
