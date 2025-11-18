@@ -3,7 +3,7 @@ from flask import Blueprint, Response, request, send_file
 
 from config import API_PREFIX, DATA_DIR
 from api_response import ApiResponse
-from utils import get_files_with_extension
+from utils import get_files_with_extensions
 from decorators import handle_exceptions
 
 
@@ -18,9 +18,10 @@ files_bp = Blueprint(
 @handle_exceptions()
 def get_files(experiment_id: str) -> Response:
     ext_param = request.args.get('ext', '').lower()
-    extensions = [ext.strip() for ext in ext_param.split(',') if ext.strip()]
-    files = get_files_with_extension(DATA_DIR / experiment_id, extensions)
-    # add URLs to file list
+    extensions = [ext.strip() for ext in ext_param.split(',') if ext.strip()] if ext_param else None
+
+    files = get_files_with_extensions(DATA_DIR / experiment_id, extensions)
+
     for f in files:
         f['url'] = f'{API_PREFIX}/experiments/{experiment_id}/files/{f["name"]}'
 
