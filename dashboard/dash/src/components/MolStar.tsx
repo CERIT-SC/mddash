@@ -94,7 +94,7 @@ export default function MolStar(props: MolStarProps) {
                 if (isMountedRef.current) {
                     console.error("MolStar initialization error:", error);
                     const errorMessage = error instanceof Error ? error.message : String(error);
-                    showError(`Failed to load molecular structure: ${errorMessage}`);
+                    showError(errorMessage);
                 }
             } finally {
                 if (isMountedRef.current) {
@@ -239,22 +239,27 @@ async function loadTrajectoryWithCoordinates(
         throw new Error(`Failed to parse coordinates file as ${coordsFormat}`);
     }
 
-    const trajectory = await state
-        .build()
-        .toRoot()
-        .apply(
-            StateTransforms.Model.TrajectoryFromModelAndCoordinates,
-            {
-                modelRef: model.ref,
-                coordinatesRef: coords.ref,
-            },
-            { dependsOn: [model.ref, coords.ref] }
-        )
-        .commit({ revertOnError: true });
+    try {
+        const trajectory = await state
+            .build()
+            .toRoot()
+            .apply(
+                StateTransforms.Model.TrajectoryFromModelAndCoordinates,
+                {
+                    modelRef: model.ref,
+                    coordinatesRef: coords.ref,
+                },
+                { dependsOn: [model.ref, coords.ref] }
+            )
+            .commit({ revertOnError: true });
 
-    if (!trajectory || !trajectory.isOk) {
-        throw new Error("Failed to create trajectory from topology and coordinates");
+        if (!trajectory || !trajectory.isOk) {
+            throw new Error("Failed to create trajectory from topology and coordinates");
+        }
+
+        await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default");
+    } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        throw new Error(errorMsg);
     }
-
-    await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default");
 }
