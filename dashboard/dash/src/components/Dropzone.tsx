@@ -12,21 +12,19 @@ import {
     ListItemAvatar,
     ListItemText,
     SxProps,
+    Avatar,
+    Divider,
 } from "@mui/material";
-import { Check } from "@mui/icons-material";
+import { Check, CloudUpload } from "@mui/icons-material";
 
 import { useNotification } from "@/contexts/NotificationContext";
 import { formatFileSize } from "@/util/helpers";
 
-const getAcceptedExtensions = (acceptedTypes: Accept) => {
-    const extensions: string[] = [];
-    for (const key in acceptedTypes) {
-        if (acceptedTypes.hasOwnProperty(key)) {
-            extensions.push(...acceptedTypes[key]);
-        }
-    }
-    return extensions;
-};
+const getAcceptedExtensions = (acceptedTypes: Accept): string =>
+    Object.values(acceptedTypes)
+        .flat()
+        .map((ext: string) => `*${ext}`)
+        .join(", ");
 
 interface DropzoneProps extends DropzoneOptions {
     inputName: string;
@@ -62,25 +60,30 @@ const Dropzone = (props: DropzoneProps) => {
         ...dropzoneOptions,
     });
 
-    const acceptedExtensions = getAcceptedExtensions(dropzoneOptions.accept || {})
-        .map((ext) => `*${ext}`)
-        .join(", ");
+    const acceptedExtensions = dropzoneOptions.accept ? getAcceptedExtensions(dropzoneOptions.accept) : "";
 
     return (
-        <Stack spacing={4} sx={sx}>
+        <Stack spacing={2} sx={sx}>
             <Paper
+                variant="outlined"
                 {...getRootProps()}
                 sx={{
-                    p: 2,
-                    textAlign: "center",
+                    p: 4,
                     color: "text.secondary",
+                    textAlign: "center",
                     border: "2px dashed",
-                    borderColor: isDragActive ? "primary.main" : "text.secondary",
-                    backgroundColor: isDragActive ? transparentPrimary : "background.paper",
+                    borderColor: isDragActive ? "primary.main" : undefined,
+                    bgcolor: isDragActive ? transparentPrimary : undefined,
                     cursor: "pointer",
+                    transition: "all 0.2s",
+                    "&:hover": {
+                        borderColor: "primary.main",
+                        bgcolor: transparentPrimary,
+                    },
                 }}
             >
                 <input name={inputName} {...getInputProps()} />
+                <CloudUpload sx={{ fontSize: 48, color: isDragActive ? "primary.main" : "text.secondary" }} />
                 {isDragActive ? (
                     <Typography variant="h4">Drop the files here...</Typography>
                 ) : (
@@ -92,15 +95,20 @@ const Dropzone = (props: DropzoneProps) => {
             </Paper>
 
             {files.length > 0 && (
-                <Paper elevation={2}>
-                    <List>
+                <Paper variant="outlined">
+                    <List disablePadding>
                         {files.map((file, index) => (
-                            <ListItem key={index}>
-                                <ListItemAvatar>
-                                    <Check />
-                                </ListItemAvatar>
-                                <ListItemText primary={file.name} secondary={formatFileSize(file.size)} />
-                            </ListItem>
+                            <>
+                                <ListItem key={index}>
+                                    <ListItemAvatar>
+                                        <Avatar sx={{ bgcolor: "success.main", width: 32, height: 32 }}>
+                                            <Check fontSize="small" />
+                                        </Avatar>
+                                    </ListItemAvatar>
+                                    <ListItemText primary={file.name} secondary={formatFileSize(file.size)} />
+                                </ListItem>
+                                {index < files.length - 1 && <Divider component="li" />}
+                            </>
                         ))}
                     </List>
                 </Paper>
