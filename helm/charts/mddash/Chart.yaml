@@ -12,9 +12,9 @@ dependencies:
   - name: mdrun-api
     version: "0.1.0"
     repository: "oci://cerit.io/xkrasa"
-  - name: tenant
-    version: "7.1.1"
-    repository: "https://operator.min.io/"
+#  - name: tenant
+#    version: "7.1.1"
+#    repository: "https://operator.min.io/"
   # - name: gromacs-tuner
   #   version: "0.1.1"
   #   repository: "oci://cerit.io/xkrasa"

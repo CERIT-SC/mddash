@@ -33,11 +33,9 @@ notebook:
   platform: linux/amd64
   tag: latest
 
-# MinIO object storage tenant
-minio:
-  servers: 2
-  volumesPerServer: 2
-  poolSize: 100Gi  # Storage pool size
+s3:
+  endpoint: "https://s3.cl4.du.cesnet.cz"
+
 
 resources:
   singleuser:

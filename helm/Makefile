@@ -3,11 +3,14 @@ SHELL := /bin/bash
 
 ENV ?= prod
 
+kubeconfig_path ?= ${HOME}/.kube/config
+
 config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
 package := $(shell yq .helm.package $(config))
 namespace := $(shell yq '.namespace' $(config))
 chart_path := charts/mddash
 values_file := -f $(chart_path)/values.yaml
+
 
 .PHONY: help
 help: ## Show this help
@@ -17,7 +20,7 @@ help: ## Show this help
 .PHONY: render
 render: ## Render Helm values template
 	@echo "=== Rendering values for $(ENV) environment ==="
-	@gomplate -d config=$(config) \
+	gomplate -d config=$(config) \
 		-f $(chart_path)/values.yaml.tmpl \
 		-o $(chart_path)/values.yaml
 	@echo "✓ Rendered $(chart_path)/values.yaml"
@@ -54,6 +57,22 @@ hub-templates: ## Create hub templates ConfigMap
 	kubectl create configmap $(package)-custom-templates \
 		--from-file=$(chart_path)/files/hub-templates \
 		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+
+# provide ID= and SECRET= on command line
+oidcsecret:
+	kubectl -n ${namespace} create secret generic ${package}-oidc-credentials \
+		--from-literal=client_id=${ID} \
+		--from-literal=client_secret=${SECRET}
+
+s3secret:
+	kubectl -n ${namespace} create secret generic ${package}-s3-creds \
+		--from-literal=S3_ACCESS_KEY=${S3_ACCESS_KEY} \
+		--from-literal=S3_SECRET_KEY=${S3_SECRET_KEY}
+
+kubeconfig:
+	kubectl create secret generic ${package}-kubeconfig-secret \
+		--from-file=config=$(kubeconfig_path) \
+		-n $(namespace)
 
 .PHONY: port-forward
 port-forward: ## Forward port 8000 to proxy-public service
