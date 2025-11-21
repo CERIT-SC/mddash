@@ -67,6 +67,12 @@ const ColorLibStepIconRoot = styled("div")<{ ownerState: { completed?: boolean; 
         borderRadius: "50%",
         justifyContent: "center",
         alignItems: "center",
+        cursor: "pointer",
+        transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
+        "&:hover": {
+            transform: "scale(1.1)",
+            boxShadow: "0 4px 12px 0 rgba(0,0,0,.3)",
+        },
         ...theme.applyStyles("dark", {
             backgroundColor: theme.palette.grey[700],
         }),
