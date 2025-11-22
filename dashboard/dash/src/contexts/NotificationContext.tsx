@@ -24,15 +24,19 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     const [notifications, setNotifications] = useState<Notification[]>([]);
 
     const addNotification = useCallback((message: string, severity: NotificationSeverity = "error") => {
-        const id = `${Date.now()}-${Math.random()}`;
-        const notification: Notification = { id, message, severity };
+        setNotifications((prev) => {
+            const exists = prev.some((n) => n.message === message && n.severity === severity);
+            if (exists) return prev;
 
-        setNotifications((prev) => [...prev, notification]);
+            const id = `${Date.now()}-${Math.random()}`;
+            const notification: Notification = { id, message, severity };
 
-        // Auto-dismiss after 5 seconds
-        setTimeout(() => {
-            removeNotification(id);
-        }, 5000);
+            setTimeout(() => {
+                removeNotification(id);
+            }, 5000);
+
+            return [...prev, notification];
+        });
     }, []);
 
     const removeNotification = useCallback((id: string) => {

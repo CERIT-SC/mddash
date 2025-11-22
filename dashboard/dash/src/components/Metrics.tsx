@@ -1,13 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 
-import { Typography, Card, Grid2 as Grid, CardContent, Stack, LinearProgress, Box } from "@mui/material";
+import {
+    Typography,
+    Card,
+    Grid2 as Grid,
+    CardContent,
+    Stack,
+    LinearProgress,
+    Box,
+    CircularProgress,
+} from "@mui/material";
 import { Memory, DeveloperBoard, Storage } from "@mui/icons-material";
 
 import { get_metrics } from "@/util/api";
 import { ResourceUsage } from "@/util/types";
+import { useNotification } from "@/contexts/NotificationContext";
 
 const formatBytes = (bytes: number): string => {
-    const gb = bytes / (1024 ** 3);
+    const gb = bytes / 1024 ** 3;
     return gb.toFixed(2);
 };
 
@@ -18,33 +28,47 @@ const formatMillicores = (millicores: number): string => {
 
 const Metrics = () => {
     const [metrics, setMetrics] = useState<ResourceUsage | null>(null);
+    const [loading, setLoading] = useState(true);
+    const { showError } = useNotification();
 
-    const fetchMetrics = async () => {
+    const fetchMetrics = useCallback(async () => {
+        setLoading(true);
         const { data, error } = await get_metrics();
         if (error) {
-            console.error(error);
-            return;
+            showError(error);
+        } else {
+            setMetrics(data);
         }
-        setMetrics(data);
-    };
+        setLoading(false);
+    }, [showError]);
 
     useEffect(() => {
         fetchMetrics();
-    }, []);
+    }, [fetchMetrics]);
 
-    if (!metrics) {
+    const usageStats = useMemo(() => {
+        if (!metrics) return null;
+
+        const cpuUsagePercent = (metrics.requests.cpu / metrics.limits.cpu) * 100;
+        const memoryUsagePercent = (metrics.requests.memory / metrics.limits.memory) * 100;
+        const storageUsagePercent = (metrics.requests.storage / metrics.limits.storage) * 100;
+
+        return { cpuUsagePercent, memoryUsagePercent, storageUsagePercent };
+    }, [metrics]);
+
+    if (loading) {
+        return (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+                <CircularProgress size={60} />
+            </Box>
+        );
+    }
+
+    if (!metrics || !usageStats) {
         return null;
     }
 
-    const cpuUsagePercent = metrics.limits.cpu > 0 
-        ? (metrics.requests.cpu / metrics.limits.cpu) * 100 
-        : 0;
-    const memoryUsagePercent = metrics.limits.memory > 0 
-        ? (metrics.requests.memory / metrics.limits.memory) * 100 
-        : 0;
-    const storageUsagePercent = metrics.limits.storage > 0 
-        ? (metrics.requests.storage / metrics.limits.storage) * 100 
-        : 0;
+    const { cpuUsagePercent, memoryUsagePercent, storageUsagePercent } = usageStats;
 
     return (
         <Grid container spacing={2} p={4}>
@@ -55,15 +79,16 @@ const Metrics = () => {
                             <Stack direction="column" flex={1}>
                                 <Typography variant="subtitle1">CPU</Typography>
                                 <Typography variant="h4">
-                                    {formatMillicores(metrics.requests.cpu)} / {formatMillicores(metrics.limits.cpu)} cores
+                                    {formatMillicores(metrics.requests.cpu)} / {formatMillicores(metrics.limits.cpu)}{" "}
+                                    cores
                                 </Typography>
                             </Stack>
                             <DeveloperBoard color="info" fontSize="large" />
                         </Stack>
                         <Box>
-                            <LinearProgress 
-                                variant="determinate" 
-                                value={Math.min(cpuUsagePercent, 100)} 
+                            <LinearProgress
+                                variant="determinate"
+                                value={Math.min(cpuUsagePercent, 100)}
                                 color={cpuUsagePercent > 80 ? "warning" : "info"}
                             />
                             <Typography variant="caption" color="text.secondary" mt={0.5}>
@@ -86,9 +111,9 @@ const Metrics = () => {
                             <Memory color="warning" fontSize="large" />
                         </Stack>
                         <Box>
-                            <LinearProgress 
-                                variant="determinate" 
-                                value={Math.min(memoryUsagePercent, 100)} 
+                            <LinearProgress
+                                variant="determinate"
+                                value={Math.min(memoryUsagePercent, 100)}
                                 color={memoryUsagePercent > 80 ? "error" : "warning"}
                             />
                             <Typography variant="caption" color="text.secondary" mt={0.5}>
@@ -111,9 +136,9 @@ const Metrics = () => {
                             <Storage color="success" fontSize="large" />
                         </Stack>
                         <Box>
-                            <LinearProgress 
-                                variant="determinate" 
-                                value={Math.min(storageUsagePercent, 100)} 
+                            <LinearProgress
+                                variant="determinate"
+                                value={Math.min(storageUsagePercent, 100)}
                                 color={storageUsagePercent > 80 ? "error" : "success"}
                             />
                             <Typography variant="caption" color="text.secondary" mt={0.5}>

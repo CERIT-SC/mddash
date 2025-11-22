@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 
 import {
     Typography,
+    Chip,
     TableContainer,
     Table,
     TableHead,
@@ -39,7 +40,30 @@ const TunerTable = (props: TunerTableProps) => {
 
     const [confirmChoiceDialog, setConfirmChoiceDialog] = useState(false);
 
-    if (!rows || rows.length === 0) {
+    const sortedRows = useMemo(
+        () =>
+            [...rows].sort((a, b) => {
+                if (a.performance === null && b.performance === null) return 0;
+                if (a.performance === null) return 1;
+                if (b.performance === null) return -1;
+                return b.performance - a.performance;
+            }),
+        [rows]
+    );
+
+    const handleRadioClick = useCallback(
+        (row: TunerTrial, isOptimal: boolean) => {
+            if (selectedTrial?.id === row.id) {
+                setSelectedTrial(null);
+                return;
+            }
+            if (!isOptimal) setConfirmChoiceDialog(true);
+            setSelectedTrial(row);
+        },
+        [selectedTrial, setSelectedTrial]
+    );
+
+    if (rows.length === 0) {
         return <Typography variant="body1">No tuning trials available yet...</Typography>;
     }
 
@@ -69,40 +93,20 @@ const TunerTable = (props: TunerTableProps) => {
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {rows
-                            .sort((a, b) => {
-                                if (a.performance === null && b.performance === null) return 0;
-                                if (a.performance === null) return 1;
-                                if (b.performance === null) return -1;
-                                return b.performance - a.performance;
-                            })
-                            .map((row, idx) => (
+                        {sortedRows.map((row, idx) => {
+                            const isOptimal = idx === 0 && row.performance !== null;
+                            return (
                                 <TableRow key={row.id} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
                                     <StyledTableCell>
                                         <Radio
                                             checked={selectedTrial?.id === row.id}
-                                            onClick={() => {
-                                                if (selectedTrial?.id === row.id) {
-                                                    setSelectedTrial(null);
-                                                    return;
-                                                }
-                                                if (idx !== 0 || row.performance === null) setConfirmChoiceDialog(true);
-                                                setSelectedTrial(row);
-                                            }}
+                                            onClick={() => handleRadioClick(row, isOptimal)}
                                             name="selectedTrial"
-                                            sx={{
-                                                color:
-                                                    idx === 0 && row.performance !== null ? "primary.main" : "default",
-                                            }}
+                                            sx={{ color: isOptimal ? "text.primary" : "text.disabled" }}
                                         />
                                     </StyledTableCell>
-                                    <StyledTableCell
-                                        sx={{
-                                            color: (theme) =>
-                                                theme.palette[JobStatus.getColor(row.status as JobStatus)].main,
-                                        }}
-                                    >
-                                        {row.status}
+                                    <StyledTableCell>
+                                        <Chip size="small" label={row.status} color={JobStatus.getColor(row.status as JobStatus)} />
                                     </StyledTableCell>
                                     <StyledTableCell align="right">
                                         {row.performance !== null ? row.performance.toFixed(2) : "N/A"}
@@ -112,7 +116,8 @@ const TunerTable = (props: TunerTableProps) => {
                                     <StyledTableCell align="right">{row.np}</StyledTableCell>
                                     <StyledTableCell align="right">{row.ntomp}</StyledTableCell>
                                 </TableRow>
-                            ))}
+                            );
+                        })}
                     </TableBody>
                 </Table>
             </TableContainer>

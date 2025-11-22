@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
-import { Stack } from "@mui/material";
+import { Stack, Paper, Box, Typography } from "@mui/material";
+import { Category, Timeline } from "@mui/icons-material";
 import { BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory";
 import { BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates";
 
@@ -17,6 +18,13 @@ const AnalyzeStep = (props: WizardStepProps) => {
     const [structureFile, setStructureFile] = useState<string>("");
     const [coordsFile, setCoordsFile] = useState<string>("");
 
+    useEffect(() => {
+        // also clear coords file when structure file is cleared
+        if (!structureFile) {
+            setCoordsFile("");
+        }
+    }, [structureFile]);
+
     const molstarViewer = useMemo(() => {
         if (!structureFile) return null;
 
@@ -26,28 +34,52 @@ const AnalyzeStep = (props: WizardStepProps) => {
                 height="600px"
                 structureUrl={structureFile}
                 structureFormat={structureFile.split(".").pop() as BuiltInTrajectoryFormat}
-                coordsUrl={coordsFile}
-                coordsFormat={coordsFile.split(".").pop() as BuiltInCoordinatesFormat}
+                coordsUrl={coordsFile || undefined}
+                coordsFormat={coordsFile ? (coordsFile.split(".").pop() as BuiltInCoordinatesFormat) : undefined}
             />
         );
     }, [structureFile, coordsFile]);
 
     return (
-        <Stack alignItems="center" spacing={2}>
-            <FileSelector
-                experimentId={experiment.id}
-                ext={STRUCTURE_FORMATS}
-                title="Select structure file"
-                onFileSelected={setStructureFile}
-            />
-            <FileSelector
-                experimentId={experiment.id}
-                ext={COORDINATE_FORMATS}
-                title="Select coordinates file"
-                onFileSelected={setCoordsFile}
-            />
+        <Stack direction="row" spacing={2}>
+            <Paper variant="outlined" sx={{ minWidth: 300, padding: 4 }}>
+                <Stack spacing={2}>
+                    <Typography variant="h3">Analyze Files</Typography>
 
-            {molstarViewer}
+                    <Stack direction="row" spacing={1} alignItems="center">
+                        <Category fontSize="small" color="action" />
+                        <Typography variant="subtitle1" color="text.secondary">
+                            Structure
+                        </Typography>
+                    </Stack>
+                    <FileSelector
+                        experimentId={experiment.id}
+                        ext={STRUCTURE_FORMATS}
+                        title="Select structure file"
+                        onFileSelected={setStructureFile}
+                    />
+                    {structureFile && (
+                        <>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <Timeline fontSize="small" color="action" />
+                                <Typography variant="subtitle1" color="text.secondary">
+                                    Coordinates
+                                </Typography>
+                            </Stack>
+                            <FileSelector
+                                experimentId={experiment.id}
+                                ext={COORDINATE_FORMATS}
+                                title="Select coordinates file"
+                                onFileSelected={setCoordsFile}
+                            />
+                        </>
+                    )}
+                </Stack>
+            </Paper>
+
+            <Box flexGrow={1} display="flex" justifyContent="center" alignItems="center">
+                {molstarViewer}
+            </Box>
         </Stack>
     );
 };

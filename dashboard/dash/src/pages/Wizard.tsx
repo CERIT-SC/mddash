@@ -72,40 +72,42 @@ const Wizard = () => {
     };
 
     return (
-        <div>
+        <>
             <Typography variant="h1">Wizard</Typography>
 
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 56 }}>
                 {experiment ? (
-                    editingName ? (
-                        <>
-                            <TextField
-                                value={nameInput}
-                                onChange={handleNameChange}
-                                onBlur={handleNameSave}
-                                onKeyDown={handleNameKeyDown}
-                                size="small"
-                                autoFocus
-                                variant="standard"
-                                sx={{ minWidth: "40vw", maxWidth: "80vw" }}
-                            />
-                            <IconButton aria-label="Save" onClick={handleNameSave} size="small">
-                                <CheckIcon fontSize="small" />
-                            </IconButton>
-                            <IconButton aria-label="Cancel" onClick={handleNameCancel} size="small">
-                                <CloseIcon fontSize="small" />
-                            </IconButton>
-                        </>
-                    ) : (
-                        <>
-                            <Typography variant="h4" sx={{ textAlign: "center", mr: 1 }}>
-                                {experiment.name}
-                            </Typography>
-                            <IconButton aria-label="Edit name" onClick={handleEditClick} size="small">
-                                <EditIcon fontSize="small" />
-                            </IconButton>
-                        </>
-                    )
+                    <Paper elevation={2} sx={{ display: "flex", alignItems: "center", px: 2, py: 1 }}>
+                        {editingName ? (
+                            <>
+                                <TextField
+                                    value={nameInput}
+                                    onChange={handleNameChange}
+                                    onBlur={handleNameSave}
+                                    onKeyDown={handleNameKeyDown}
+                                    size="small"
+                                    autoFocus
+                                    variant="outlined"
+                                    sx={{ minWidth: "40vw", maxWidth: "80vw" }}
+                                />
+                                <IconButton aria-label="Save" onClick={handleNameSave} size="small">
+                                    <CheckIcon fontSize="small" />
+                                </IconButton>
+                                <IconButton aria-label="Cancel" onClick={handleNameCancel} size="small">
+                                    <CloseIcon fontSize="small" />
+                                </IconButton>
+                            </>
+                        ) : (
+                            <>
+                                <Typography variant="h4" sx={{ textAlign: "center", mr: 1 }}>
+                                    {experiment.name}
+                                </Typography>
+                                <IconButton aria-label="Edit name" onClick={handleEditClick} size="small">
+                                    <EditIcon fontSize="small" />
+                                </IconButton>
+                            </>
+                        )}
+                    </Paper>
                 ) : (
                     <Typography variant="h4" sx={{ textAlign: "center" }}>
                         Loading...
@@ -114,7 +116,7 @@ const Wizard = () => {
             </div>
 
             {(experiment && (
-                <Paper elevation={2} sx={{ p: 4, mt: 4 }}>
+                <Paper elevation={2} sx={{ p: 4, mt: 2 }}>
                     <WizardStepper experiment={experiment} setExperiment={setExperiment} />
                 </Paper>
             )) || (
@@ -122,7 +124,7 @@ const Wizard = () => {
                     <CircularProgress />
                 </div>
             )}
-        </div>
+        </>
     );
 };
 
