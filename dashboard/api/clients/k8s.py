@@ -136,7 +136,10 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         ['sh', '-c', workdir_init_command],
         set_working_dir=False
     )
-    gmx_container = get_container('gmx', GMX_IMAGE, experiment_id, volume_name, ['sleep', 'infinity'])
+    gmx_container = get_container('gmx', GMX_IMAGE, experiment_id, volume_name, ['sleep', 'infinity'], resources={
+        'requests': {'cpu': '500m', 'memory': '1Gi'},
+        'limits': {'cpu': '1000m', 'memory': '2Gi'}
+    })
 
     jupyter_command = [
         'start-notebook.sh',
@@ -146,8 +149,8 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
     ]
     jupyter_env = [{'name': 'WORKDIR', 'value': f'/mddash/{experiment_id}'}]
     jupyter_resources = {
-        'requests': {'cpu': '100m', 'memory': '512Mi'},
-        'limits': {'cpu': '2000m', 'memory': '8Gi'}
+        'requests': {'cpu': '500m', 'memory': '1Gi'},
+        'limits': {'cpu': '1000m', 'memory': '2Gi'}
     }
     jupyter_container = get_container(
         'jupyter',
