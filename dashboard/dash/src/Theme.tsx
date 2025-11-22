@@ -6,6 +6,8 @@ import {
     ThemeProvider as MuiThemeProvider,
     CssBaseline,
 } from "@mui/material";
+import { alpha } from "@mui/material/styles";
+import type { CSSObject, Theme } from "@mui/material/styles";
 import { TypographyOptions } from "@mui/material/styles/createTypography";
 
 const typography: TypographyOptions = {
@@ -59,6 +61,45 @@ const darkThemeOptions: ThemeOptions = {
     typography,
 };
 
+const createScrollbarOverrides = (palette: Theme["palette"]): CSSObject => {
+    const thumbColor = palette.mode === "light" 
+        ? alpha(palette.grey[500], 0.4)
+        : alpha(palette.grey[400], 0.3);
+    const thumbHoverColor = palette.mode === "light"
+        ? alpha(palette.grey[700], 0.7)
+        : alpha(palette.grey[300], 0.6);
+    const trackHoverColor = palette.mode === "light"
+        ? alpha(palette.grey[300], 0.15)
+        : alpha(palette.grey[700], 0.15);
+
+    return {
+        "*::-webkit-scrollbar": {
+            width: "14px",
+            height: "14px",
+        },
+        "*::-webkit-scrollbar-track": {
+            background: "transparent",
+        },
+        "*::-webkit-scrollbar-track:hover": {
+            background: trackHoverColor,
+        },
+        "*::-webkit-scrollbar-thumb": {
+            background: thumbColor,
+            borderRadius: "7px",
+            border: "3px solid transparent",
+            backgroundClip: "padding-box",
+            transition: "background 0.2s ease",
+        },
+        "*::-webkit-scrollbar-thumb:hover": {
+            background: thumbHoverColor,
+        },
+        "*": {
+            scrollbarWidth: "thin",
+            scrollbarColor: `${thumbColor} transparent`,
+        },
+    };
+};
+
 export const ThemeContext = createContext({
     mode: "light",
     toggleTheme: () => {},
@@ -84,6 +125,14 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     const toggleTheme = useCallback(() => setMode((m) => (m === "light" ? "dark" : "light")), []);
     const theme = useMemo(() => {
         const base = createTheme(mode === "light" ? lightThemeOptions : darkThemeOptions);
+
+        base.components = {
+            ...base.components,
+            MuiCssBaseline: {
+                styleOverrides: createScrollbarOverrides(base.palette),
+            },
+        };
+
         return responsiveFontSizes(base);
     }, [mode]);
     return (

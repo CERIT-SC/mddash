@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from config import DATA_DIR
 from enums import PodStatus, JobStatus
-from utils import get_files_with_extension, get_unique_id
+from utils import get_files_with_extensions, get_unique_id
 from clients import mdrepo
 from .notebook import Notebook
 from extensions import db
@@ -235,7 +235,7 @@ class Experiment(db.Model):  # type: ignore
             return 1, 'tuning'
 
         # Step 1: Setup complete (directory contains a TPR file)
-        if get_files_with_extension(DATA_DIR / self.id, 'tpr'):
+        if get_files_with_extensions(DATA_DIR / self.id, 'tpr'):
             return 1, 'setup complete'
 
         return 0, 'setup'

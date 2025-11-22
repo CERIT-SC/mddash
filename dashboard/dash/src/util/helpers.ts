@@ -7,7 +7,6 @@
 export function formatDuration(seconds: number): string {
     if (seconds == null || isNaN(seconds)) return "?";
     const units = [
-        { label: "month", secs: 2592000 },
         { label: "day", secs: 86400 },
         { label: "hour", secs: 3600 },
         { label: "minute", secs: 60 },
@@ -21,8 +20,8 @@ export function formatDuration(seconds: number): string {
             parts.push(`${value} ${label}${value !== 1 ? "s" : ""}`);
             remaining -= value * secs;
         }
-        // Only show up to 2 largest units for brevity
-        if (parts.length === 2) break;
+        // Only show up to 3 largest units for brevity
+        if (parts.length === 3) break;
     }
     return parts.length ? parts.join(", ") : "0 seconds";
 }
@@ -39,4 +38,21 @@ export const formatFileSize = (bytes: number): string => {
     const k = 1024;
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${(bytes / Math.pow(k, i)).toFixed(1)} ${units[i]}`;
+};
+
+/**
+ * Format ISO datetime string to human-readable format using user's locale.
+ *
+ * @param isoString ISO 8601 datetime string
+ * @returns formatted datetime string based on user's locale
+ */
+export const formatDateTime = (isoString: string): string => {
+    const date = new Date(isoString);
+    return new Intl.DateTimeFormat(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+    }).format(date);
 };

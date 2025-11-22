@@ -13,10 +13,11 @@ export interface FileSelectorProps {
     title: string;
     onFileSelected: (filePath: string) => void;
     width?: React.CSSProperties["width"];
+    ignoreFiles?: string[];
 }
 
 const FileSelector = (props: FileSelectorProps) => {
-    const { experimentId, ext, onFileSelected, title, width = "100%" } = props;
+    const { experimentId, ext, onFileSelected, title, width = "100%", ignoreFiles = [] } = props;
     const { showError } = useNotification();
     const [availableFiles, setAvailableFiles] = useState<FileOption[]>([]);
     const [selectedFile, setSelectedFile] = useState<string>("");
@@ -31,30 +32,39 @@ const FileSelector = (props: FileSelectorProps) => {
         fetchFiles();
     }, [fetchFiles]);
 
-    const menuItems = useMemo(
-        () =>
-            availableFiles.map((file) => (
-                <MenuItem key={file.name} value={file.url}>
-                    {file.name} ({formatFileSize(file.size)})
-                </MenuItem>
-            )),
-        [availableFiles]
+    const filteredFiles = useMemo(
+        () => availableFiles.filter((file) => !ignoreFiles.includes(file.name)),
+        [availableFiles, ignoreFiles]
     );
 
-    const handleFileChange = (event: SelectChangeEvent) => {
-        const selectedUrl = event.target.value;
-        setSelectedFile(selectedUrl);
-        onFileSelected(selectedUrl);
-    };
+    useEffect(() => {
+        if (selectedFile && !filteredFiles.some((file) => file.url === selectedFile)) {
+            setSelectedFile("");
+            onFileSelected("");
+        }
+    }, [filteredFiles, selectedFile, onFileSelected]);
+
+    const handleFileChange = useCallback(
+        (event: SelectChangeEvent) => {
+            const selectedUrl = event.target.value;
+            setSelectedFile(selectedUrl);
+            onFileSelected(selectedUrl);
+        },
+        [onFileSelected]
+    );
 
     return (
-        <FormControl style={{ width }}>
+        <FormControl sx={{ width }}>
             <InputLabel id="file-selector-label">{title}</InputLabel>
             <Select labelId="file-selector-label" value={selectedFile} label={title} onChange={handleFileChange}>
                 <MenuItem value="">
                     <em>None</em>
                 </MenuItem>
-                {menuItems}
+                {filteredFiles.map((file) => (
+                    <MenuItem key={file.name} value={file.url}>
+                        {file.name} ({formatFileSize(file.size)})
+                    </MenuItem>
+                ))}
             </Select>
         </FormControl>
     );

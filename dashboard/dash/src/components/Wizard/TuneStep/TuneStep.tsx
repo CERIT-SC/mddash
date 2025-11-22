@@ -1,128 +1,102 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
-import { Box, Stack, Button, Tabs, Tab } from "@mui/material";
+import { Box, Stack } from "@mui/material";
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { tuner_statuses, stop_tuner, delete_tuner } from "@/util/api";
 import { useNotification } from "@/contexts/NotificationContext";
-import FileSelector from "@/components/FileSelector";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import TunerView from "./TunerView";
+import TprSelector from "@/components/Wizard/TprSelector";
 
 const TuneStep = (props: WizardStepProps) => {
-    const { experiment, nextStep, changeStep } = props;
+    const { experiment } = props;
     const { showError } = useNotification();
 
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
     const [tprFiles, setTprFiles] = useState<string[]>([]);
-    const [confirmSkipTuningDialog, setConfirmSkipTuningDialog] = useState(false);
+    const [successfulJobs, setSuccessfulJobList] = useState<string[]>([]);
+    const [deleteTpr, setDeleteTpr] = useState<string | null>(null);
+    const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
 
-    const handleChange = (_: React.SyntheticEvent, newValue: string) => {
-        setSelectedTpr(newValue);
-    };
-
-    const newTpr = (newSelectedTpr: string) => {
-        if (!newSelectedTpr) return;
-
-        const tprFile = newSelectedTpr.split("/").pop() || newSelectedTpr;
-        setSelectedTpr(tprFile);
-
-        if (!tprFiles.includes(tprFile)) setTprFiles((prev) => [...prev, tprFile]);
-    };
-
-    const fetchTunerJobs = async () => {
+    const fetchTunerJobs = useCallback(async () => {
         const { data, error } = await tuner_statuses(experiment.id);
         if (error) showError(error);
         const jobs = data || [];
 
         if (jobs.length === 0) setSelectedTpr(null);
 
-        const jobTprNames = jobs.map((job) => job.tpr_name);
-        setTprFiles(jobTprNames);
-    };
+        setTprFiles(jobs.map((job) => job.tpr_name));
+        setSuccessfulJobList(jobs.filter((job) => !job.error_message).map((job) => job.tpr_name));
+    }, [experiment.id, showError]);
 
-    const cancelJob = async (tprName: string) => {
-        setSelectedTpr(null);
-        setTprFiles((prev) => prev.filter((tpr) => tpr !== tprName));
-    };
+    const handleAddTpr = useCallback((tpr: string) => {
+        setTprFiles((prev) => [...prev, tpr]);
+        setSelectedTpr(tpr);
+    }, []);
 
-    const stopJob = async (tprName: string) => {
-        const { error } = await stop_tuner(experiment.id, tprName);
-        if (error) showError(error);
-        fetchTunerJobs();
-    };
+    const handleDeleteTpr = useCallback(
+        (tpr: string) => {
+            if (successfulJobs.includes(tpr)) {
+                setDeleteTpr(tpr);
+                setConfirmDeleteDialog(true);
+            } else {
+                setSelectedTpr(null);
+                setTprFiles((prev) => prev.filter((t) => t !== tpr));
+            }
+        },
+        [successfulJobs]
+    );
 
-    const deleteJob = async (tprName: string) => {
-        const { error } = await delete_tuner(experiment.id, tprName);
-        if (error) showError(error);
-        setSelectedTpr(null);
-        fetchTunerJobs();
-    };
+    const stopJob = useCallback(
+        async (tprName: string) => {
+            const { error } = await stop_tuner(experiment.id, tprName);
+            if (error) showError(error);
+            fetchTunerJobs();
+        },
+        [experiment.id, showError, fetchTunerJobs]
+    );
+
+    const deleteJob = useCallback(
+        async (tprName: string) => {
+            const { error } = await delete_tuner(experiment.id, tprName);
+            if (error) showError(error);
+            setSelectedTpr(null);
+            fetchTunerJobs();
+        },
+        [experiment.id, showError, fetchTunerJobs]
+    );
 
     useEffect(() => {
         fetchTunerJobs();
-
-        return () => {
-            setTprFiles([]);
-            setSelectedTpr(null);
-        };
-    }, [experiment.id]);
+    }, [fetchTunerJobs]);
 
     return (
-        <>
-            <Stack direction="row" alignItems="center" justifyContent="space-between">
-                <Stack direction="row" spacing={2} alignItems="center">
-                    {tprFiles.length > 0 && (
-                        <Tabs
-                            value={selectedTpr || false}
-                            onChange={handleChange}
-                            variant="scrollable"
-                            scrollButtons="auto"
-                        >
-                            {tprFiles.map((tprFile) => (
-                                <Tab key={tprFile} value={tprFile} label={tprFile} />
-                            ))}
-                        </Tabs>
-                    )}
-
-                    <FileSelector
-                        experimentId={experiment.id}
-                        ext="tpr"
-                        title="Select TPR file"
-                        onFileSelected={newTpr}
-                        width={300}
-                    />
-                </Stack>
-
-                {tprFiles.length === 0 && experiment.step < 2 && (
-                    <Button variant="contained" color="error" onClick={() => setConfirmSkipTuningDialog(true)}>
-                        Skip tuning
-                    </Button>
-                )}
-            </Stack>
+        <Stack direction="row" spacing={2}>
+            <TprSelector
+                experimentId={experiment.id}
+                title="Tuner Jobs"
+                addTitle="Add Tuner Job"
+                tprFiles={tprFiles}
+                selectedTpr={selectedTpr}
+                onAddTpr={handleAddTpr}
+                onDeleteTpr={handleDeleteTpr}
+                onSelectTpr={setSelectedTpr}
+            />
 
             {selectedTpr && (
-                <Box sx={{ mt: 2 }}>
-                    <TunerView
-                        tprName={selectedTpr}
-                        cancelJob={cancelJob}
-                        stopJob={stopJob}
-                        deleteJob={deleteJob}
-                        {...props}
-                    />
+                <Box flex={1}>
+                    <TunerView tprName={selectedTpr} stopJob={stopJob} onStartTuner={fetchTunerJobs} {...props} />
                 </Box>
             )}
 
             <ConfirmDialog
-                open={confirmSkipTuningDialog}
-                setOpen={setConfirmSkipTuningDialog}
-                onConfirm={() => {
-                    if (experiment.step < 2) nextStep();
-                    else changeStep(2);
-                }}
-                message="Are you sure you want to skip the tuning step? You can always come back to it later."
+                open={confirmDeleteDialog}
+                setOpen={setConfirmDeleteDialog}
+                onConfirm={() => deleteJob(deleteTpr!)}
+                message={"Are you sure you want to delete this tuning job? The data will be lost."}
             />
-        </>
+        </Stack>
     );
 };
 

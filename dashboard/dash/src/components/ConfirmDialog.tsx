@@ -1,4 +1,5 @@
 import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button } from "@mui/material";
+import { Check, Close } from "@mui/icons-material";
 
 interface ConfirmDialogProps {
     open: boolean;
@@ -44,10 +45,10 @@ const ConfirmDialog = (props: ConfirmDialogProps) => {
                 <DialogContentText>{message}</DialogContentText>
             </DialogContent>
             <DialogActions>
-                <Button onClick={handleCancel} color="primary">
+                <Button onClick={handleCancel} color="inherit" variant="outlined" startIcon={<Close />} autoFocus>
                     {cancelText}
                 </Button>
-                <Button onClick={handleConfirm} color={confirmColor} variant="contained">
+                <Button onClick={handleConfirm} color={confirmColor} variant="contained" startIcon={<Check />}>
                     {confirmText}
                 </Button>
             </DialogActions>
