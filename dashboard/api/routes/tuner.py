@@ -7,6 +7,7 @@ from models import Experiment, TunerJob
 from schemas import TunerJobSchema
 from extensions import db
 from decorators import handle_exceptions
+from utils import check_filename
 
 
 tuner_bp = Blueprint(
@@ -35,6 +36,7 @@ def get_tuner_job(experiment_id: str, tpr_name: str) -> Response:
 @tuner_bp.route('/<tpr_name>', methods=['POST'])
 @handle_exceptions(rollback=True)
 def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
+    check_filename(tpr_name, allowed_extensions=['tpr'])
     schema = TunerJobSchema()
     experiment: Experiment = Experiment.query.get_or_404(experiment_id, description=f'Experiment {experiment_id} not found')
     tuner_job = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first()

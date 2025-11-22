@@ -8,6 +8,7 @@ from schemas import GromacsJobSchema
 from extensions import db
 from enums import DeviceType
 from decorators import handle_exceptions
+from utils import check_filename, check_log_type, check_positive_int
 
 
 gmx_bp = Blueprint(
@@ -36,8 +37,9 @@ def get_gmx_job(experiment_id: str, tpr_name: str) -> Response:
 @gmx_bp.route('/<tpr_name>', methods=['POST'])
 @handle_exceptions(rollback=True)
 def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
+    check_filename(tpr_name, allowed_extensions=['tpr'])
     schema = GromacsJobSchema()
-    experiment = Experiment.query.filter_by(id=experiment_id).first_or_404(description=f'Experiment {experiment_id} not found')
+    experiment: Experiment = Experiment.query.get_or_404(experiment_id, description=f'Experiment {experiment_id} not found')
     job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first()
     tpr_path = DATA_DIR / experiment_id / tpr_name
 
@@ -76,11 +78,8 @@ def get_gmx_job_log(experiment_id: str, tpr_name: str) -> Response:
     log_type = request.args.get('type', 'gmx').lower()
     tail_lines = request.args.get('tail', '10000')
 
-    if log_type not in ['gmx', 'stdout', 'stderr']:
-        return ApiResponse.error("Invalid log type. Use 'gmx', 'stdout', or 'stderr'.", HTTPStatus.BAD_REQUEST)
-
-    if not tail_lines.isdigit():
-        return ApiResponse.error("Tail lines must be a positive integer.", HTTPStatus.BAD_REQUEST)
+    check_log_type(log_type)
+    check_positive_int(tail_lines, 'Tail lines', max_value=100000)
 
     log = job.get_log(log_type, int(tail_lines))
     return ApiResponse.success(log)
