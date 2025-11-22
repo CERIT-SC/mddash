@@ -1,13 +1,22 @@
 #!/bin/bash
-
-# S3 setup and sync management script
+set -euo pipefail
 
 LOG_DIR="/tmp/mddash-logs"
+
+ROBUST_FLAGS=(
+    "--force"  # Force operations even if there are minor issues
+    "--local-no-check-updated" # Upload file even if it changes during upload (good for logs/trajectories)
+    "--create-empty-src-dirs"  # Ensure empty directories are created
+    "--retries" "3"  # Retry failed transfers
+    "--retries-sleep" "2s"  # Wait between retries
+    "--ignore-errors"  # Continue syncing other files even if one fails
+)
 
 RCLONE_EXCLUDE_ARGS=(
     --exclude "#*#"
     --exclude "*.swp"
     --exclude "*.tmp"
+    --exclude ".nfs*"
     --exclude ".ipynb_checkpoints/**"
     --exclude "**/.ipynb_checkpoints/**"
     --exclude "__pycache__/**"
@@ -82,13 +91,51 @@ start_s3_sync_daemon() {
 
     log "Starting background S3 sync daemon"
     (
-        rclone bisync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --resync --force --log-level ERROR \
-            "${RCLONE_EXCLUDE_ARGS[@]}" >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1
-        
+        # Initial resync to ensure consistent state
+        log "Performing initial resync..."
+        if ! rclone bisync /mddash s3remote:${S3_BUCKET} --resync --log-level INFO \
+            "${RCLONE_EXCLUDE_ARGS[@]}" "${ROBUST_FLAGS[@]}" >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1; then
+            log "Initial resync failed. Continuing to loop, but state might be inconsistent."
+        fi
+
+        FAIL_COUNT=0
+        MAX_FAILURES=3
+
         while true; do
-            rclone bisync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --delete-during --force --log-level ERROR \
-                "${RCLONE_EXCLUDE_ARGS[@]}" >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1
-            sleep 10
+            # Run bisync
+            if rclone bisync /mddash s3remote:${S3_BUCKET} --delete-during --log-level ERROR \
+                "${RCLONE_EXCLUDE_ARGS[@]}" "${ROBUST_FLAGS[@]}" >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1; then
+                
+                # Success
+                if [ $FAIL_COUNT -gt 0 ]; then
+                    log "Sync recovered after $FAIL_COUNT failures."
+                fi
+                FAIL_COUNT=0
+                sleep 10
+            else
+                EXIT_CODE=$?
+                FAIL_COUNT=$((FAIL_COUNT + 1))
+                log "Sync failed (Attempt $FAIL_COUNT/$MAX_FAILURES). Exit code: $EXIT_CODE"
+                
+                # If we have too many failures, try to recover
+                if [ $FAIL_COUNT -ge $MAX_FAILURES ]; then
+                    log "Critical sync failure detected ($FAIL_COUNT consecutive failures). Attempting recovery with --resync..."
+                    
+                    # Force resync
+                    if rclone bisync /mddash s3remote:${S3_BUCKET} --resync --log-level INFO \
+                        "${RCLONE_EXCLUDE_ARGS[@]}" "${ROBUST_FLAGS[@]}" >> "$LOG_DIR/rclone-sync-daemon.log" 2>&1; then
+                        log "Recovery successful."
+                        FAIL_COUNT=0
+                    else
+                        log "Recovery failed. Will retry in next cycle."
+                        # Backoff longer if recovery fails
+                        sleep 60
+                    fi
+                else
+                    # Short backoff for transient errors
+                    sleep 10
+                fi
+            fi
         done
     ) &
 
