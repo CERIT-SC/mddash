@@ -1,7 +1,9 @@
 import os
+import re
 import random
 from collections import deque
 from pathlib import Path
+from werkzeug.exceptions import BadRequest, Forbidden
 
 
 LETTERS = 'abcdefghijklmnopqrstuvwxyz'
@@ -143,3 +145,61 @@ def get_directory_size(path: Path | str) -> int:
             total_size += get_directory_size(entry.path)
 
     return total_size
+
+
+def check_experiment_id(experiment_id: str) -> None:
+    if not experiment_id or not re.match(r'^[a-z]{5}$', experiment_id):
+        raise BadRequest('Invalid experiment ID format.')
+
+
+def check_filename(filename: str, allowed_extensions: list[str] | None = None) -> None:
+    if not filename:
+        raise BadRequest('Filename cannot be empty.')
+
+    if '..' in filename or '/' in filename or '\\' in filename:
+        raise BadRequest('Invalid filename: path traversal not allowed.')
+
+    if filename.startswith('.') or filename.startswith('~'):
+        raise BadRequest('Invalid filename: hidden files not allowed.')
+
+    if '\0' in filename:
+        raise BadRequest('Invalid filename: null bytes not allowed.')
+
+    if allowed_extensions:
+        file_ext = Path(filename).suffix.lstrip('.').lower()
+        if not file_ext or file_ext not in allowed_extensions:
+            raise BadRequest(f'Invalid file extension. Allowed: {", ".join(allowed_extensions)}')
+
+
+def check_path(path: str, base_dir: Path) -> None:
+    if not path:
+        raise BadRequest('Path cannot be empty.')
+
+    if '\0' in path:
+        raise BadRequest('Invalid path: null bytes not allowed.')
+
+    try:
+        full_path = (base_dir / path).resolve()
+        base_resolved = base_dir.resolve()
+        
+        if not str(full_path).startswith(str(base_resolved)):
+            raise Forbidden('Path traversal not allowed.')
+    except (ValueError, OSError):
+        raise BadRequest('Invalid path.')
+
+
+def check_log_type(log_type: str) -> None:
+    if log_type not in ['gmx', 'stdout', 'stderr']:
+        raise BadRequest("Invalid log type. Use 'gmx', 'stdout', or 'stderr'.")
+
+
+def check_positive_int(value: str, param_name: str = 'value', max_value: int | None = None) -> None:
+    if not value.isdigit():
+        raise BadRequest(f'{param_name} must be a positive integer.')
+
+    int_value = int(value)
+    if int_value <= 0:
+        raise BadRequest(f'{param_name} must be greater than 0.')
+
+    if max_value and int_value > max_value:
+        raise BadRequest(f'{param_name} must not exceed {max_value}.')

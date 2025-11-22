@@ -3,7 +3,7 @@ from flask import Blueprint, Response, request, send_file
 
 from config import API_PREFIX, DATA_DIR
 from api_response import ApiResponse
-from utils import get_files_with_extensions
+from utils import get_files_with_extensions, check_experiment_id, check_path
 from decorators import handle_exceptions
 
 
@@ -17,6 +17,7 @@ files_bp = Blueprint(
 @files_bp.route('', methods=['GET'])
 @handle_exceptions()
 def get_files(experiment_id: str) -> Response:
+    check_experiment_id(experiment_id)
     ext_param = request.args.get('ext', '').lower()
     extensions = [ext.strip() for ext in ext_param.split(',') if ext.strip()] if ext_param else None
 
@@ -31,11 +32,9 @@ def get_files(experiment_id: str) -> Response:
 @files_bp.route('/<path:path>', methods=['GET'])
 @handle_exceptions()
 def get_file(experiment_id: str, path: str) -> Response:
+    check_experiment_id(experiment_id)
+    check_path(path, DATA_DIR / experiment_id)
     file_path = DATA_DIR / experiment_id / path
-
-    # prevent path traversal
-    if not str(file_path.resolve()).startswith(str((DATA_DIR / experiment_id).resolve())):
-        return ApiResponse.error('Hacking is not allowed.', HTTPStatus.FORBIDDEN)
 
     if not file_path.exists():
         return ApiResponse.error(f'File {path} does not exist.', HTTPStatus.NOT_FOUND)
