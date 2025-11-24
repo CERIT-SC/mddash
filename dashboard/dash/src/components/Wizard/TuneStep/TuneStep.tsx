@@ -15,7 +15,7 @@ const TuneStep = (props: WizardStepProps) => {
 
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
     const [tprFiles, setTprFiles] = useState<string[]>([]);
-    const [successfulJobs, setSuccessfulJobList] = useState<string[]>([]);
+    const [existingJobs, setExistingJobs] = useState<string[]>([]);
     const [deleteTpr, setDeleteTpr] = useState<string | null>(null);
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
 
@@ -26,8 +26,9 @@ const TuneStep = (props: WizardStepProps) => {
 
         if (jobs.length === 0) setSelectedTpr(null);
 
-        setTprFiles(jobs.map((job) => job.tpr_name));
-        setSuccessfulJobList(jobs.filter((job) => !job.error_message).map((job) => job.tpr_name));
+        const jobNames = jobs.map((job) => job.tpr_name);
+        setTprFiles(jobNames);
+        setExistingJobs(jobNames);
     }, [experiment.id, showError]);
 
     const handleAddTpr = useCallback((tpr: string) => {
@@ -37,7 +38,7 @@ const TuneStep = (props: WizardStepProps) => {
 
     const handleDeleteTpr = useCallback(
         (tpr: string) => {
-            if (successfulJobs.includes(tpr)) {
+            if (existingJobs.includes(tpr)) {
                 setDeleteTpr(tpr);
                 setConfirmDeleteDialog(true);
             } else {
@@ -45,7 +46,7 @@ const TuneStep = (props: WizardStepProps) => {
                 setTprFiles((prev) => prev.filter((t) => t !== tpr));
             }
         },
-        [successfulJobs]
+        [existingJobs]
     );
 
     const stopJob = useCallback(
