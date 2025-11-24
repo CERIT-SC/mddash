@@ -48,8 +48,8 @@ resources:
       guarantee: 0.2
       limit: 1
   namespaceQuota:
-    requestsCpu: "1000m"
-    requestsMemory: "4Gi"
+    requestsCpu: "2000m"
+    requestsMemory: "8Gi"
     limitsCpu: "64000m"
     limitsMemory: "256Gi"
   pvcStorageSize: 100Gi
