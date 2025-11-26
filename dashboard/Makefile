@@ -34,7 +34,7 @@ help: ## Show this help
 
 # Build targets
 .PHONY: build
-build: build-ui build-proxy build-auth build-api build-s3sync ## Build all sidecar images
+build: build-proxy build-auth build-api build-s3sync ## Build all sidecar images
 
 .PHONY: build-ui
 build-ui: ## Build UI image (React static files)
