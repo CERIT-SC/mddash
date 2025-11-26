@@ -5,7 +5,7 @@
 Three-service Kubernetes application built on JupyterHub:
 - **Dashboard** (`dashboard/`): User pods with sidecar containers (proxy, auth, api, s3-sync) + stock JupyterHub singleuser
 - **mdrun-api** (`mdrun-api/`): Standalone Flask service managing GROMACS simulation jobs
-- **Notebook** (`notebook/`): Per-user JupyterHub spawned containers for experiment setup
+- **Notebook** (`notebook/`): Custom Jupyter image for experiment setup pods (spawned by dashboard API, not JupyterHub)
 
 ### Dashboard Sidecar Architecture
 
@@ -115,7 +115,7 @@ dashboard/
   s3-sync/          rclone S3 sync daemon
 mdrun-api/          Independent Flask service for GROMACS job orchestration
 helm/charts/mddash/ JupyterHub Helm chart with custom config
-notebook/           Jupyter notebook image with GROMACS tools
+notebook/           Experiment setup Jupyter image with gmx wrapper (requires gmx sidecar)
 config.yaml         Production configuration
 config.dev.yaml     Development configuration
 ```
