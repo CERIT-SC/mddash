@@ -166,12 +166,13 @@ def set_pod_env(spawner, bucket_name, pvc_name):
     spawner.environment["S3_ACCESS_KEY"] = os.environ.get("S3_ACCESS_KEY", "")
     spawner.environment["S3_SECRET_KEY"] = os.environ.get("S3_SECRET_KEY", "")
 
+    # Store bucket_name and pvc_name for extra containers (used in modify_pod_hook)
+    spawner._mddash_bucket_name = bucket_name
+    spawner._mddash_pvc_name = pvc_name
+
 
 def remove_volume_subpath(spawner):
-    # static storage works with subPath, so we need to remove it from volume mounts
-    for vol_mount in spawner.volume_mounts:
-        if "subPath" in vol_mount:
-            del vol_mount["subPath"]
+    pass
 
 
 async def pre_spawn_hook(spawner):
@@ -234,19 +235,48 @@ c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore
 
 def modify_pod_hook(spawner, pod):
     """
-    Drop all capabilities from the pod and disable privilege escalation. (e-INFRA security stuff)
+    Modify the pod spec to:
+    1. Drop all capabilities from containers and disable privilege escalation (e-INFRA security)
+    2. Inject dynamic environment variables into extra containers (S3_BUCKET)
     """
+    from kubernetes_asyncio.client import V1EnvVar
+
+    bucket_name = getattr(spawner, '_mddash_bucket_name', '')
+    pvc_name = getattr(spawner, '_mddash_pvc_name', '')
+    hub_namespace = os.environ.get("POD_NAMESPACE", "default")
+    notebook_image = os.environ.get("NOTEBOOK_IMAGE", "")
+    
+    env_vars_for_extra = {
+        'S3_BUCKET': bucket_name,
+        'HUB_NAMESPACE': hub_namespace,
+        'PVC_NAME': pvc_name,
+        'PVC_STORAGE_SIZE': os.environ.get("PVC_STORAGE_SIZE", "10Gi"),
+        'NS_REQUESTS_CPU': os.environ.get("NS_REQUESTS_CPU", "1000m"),
+        'NS_REQUESTS_MEMORY': os.environ.get("NS_REQUESTS_MEMORY", "4Gi"),
+        'NOTEBOOK_IMAGE': notebook_image,
+    }
+
     for container in pod.spec.containers:
-        if container.name == "notebook":
-            sc = container.security_context
-            if isinstance(sc, dict):
-                allowed = {k: v for k, v in sc.items() if k in V1SecurityContext.openapi_types}
-                sc = V1SecurityContext(**allowed)
-            if sc is None:
-                sc = V1SecurityContext()
-            sc.capabilities = V1Capabilities(drop=["ALL"])
-            sc.allow_privilege_escalation = False
-            container.security_context = sc
+        # Apply security context to all containers
+        sc = container.security_context
+        if isinstance(sc, dict):
+            allowed = {k: v for k, v in sc.items() if k in V1SecurityContext.openapi_types}
+            sc = V1SecurityContext(**allowed)
+        if sc is None:
+            sc = V1SecurityContext()
+        sc.capabilities = V1Capabilities(drop=["ALL"])
+        sc.allow_privilege_escalation = False
+        container.security_context = sc
+
+        # Inject environment variables into extra containers (api, s3-sync)
+        if container.name in ['api', 's3-sync']:
+            if container.env is None:
+                container.env = []
+            existing_env_names = {e.name for e in container.env if hasattr(e, 'name')}
+            for name, value in env_vars_for_extra.items():
+                if name not in existing_env_names and value:
+                    container.env.append(V1EnvVar(name=name, value=value))
+
     return pod
 
 c.KubeSpawner.modify_pod_hook = modify_pod_hook  # type: ignore

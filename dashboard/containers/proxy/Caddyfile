@@ -1,0 +1,86 @@
+{
+    log {
+        output stdout
+        level INFO
+        format console
+    }
+
+    admin 0.0.0.0:2019
+
+    storage file_system {
+        root /caddy/data
+    }
+
+    auto_https off
+}
+
+http://:8888 {
+    log {
+        output stdout
+        format console
+    }
+
+    # OAuth callback route - forward to api container
+    @oauth_callback {
+        path {$CADDY_ROUTE_PREFIX}/oauth_callback*
+    }
+    handle @oauth_callback {
+        uri strip_prefix {$CADDY_ROUTE_PREFIX}
+        reverse_proxy api:5001
+    }
+
+    # API routes - with forward auth
+    @api_routes {
+        path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/api.*$
+    }
+    handle @api_routes {
+        forward_auth api:5001 {
+            uri /auth
+        }
+
+        reverse_proxy api:5000
+    }
+
+    # /dash -> /dash/
+    @dash_redirect {
+        path {$CADDY_ROUTE_PREFIX}/dash
+    }
+    redir @dash_redirect {$CADDY_ROUTE_PREFIX}/dash/ 308
+
+    # Dashboard routes - serve static files with forward auth
+    @dash_routes {
+        path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/.*$
+    }
+    handle @dash_routes {
+        forward_auth api:5001 {
+            uri /auth
+        }
+
+        root * /var/tmp
+
+        @is_asset {
+            path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/(.*)$
+        }
+        rewrite @is_asset /dash/{re.1}
+
+        @not_a_file {
+            not file {path}
+        }
+        rewrite @not_a_file /dash/index.html
+
+        try_files {path} /dash/index.html
+
+        file_server
+        encode zstd gzip
+    }
+
+    # JupyterHub - everything else
+    handle {$CADDY_ROUTE_PREFIX}* {
+        reverse_proxy jupyter:8889
+    }
+
+    # Fallback
+    route {
+        respond "Where the hell do you think you are going?" 404
+    }
+}

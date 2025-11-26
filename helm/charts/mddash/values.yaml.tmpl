@@ -53,6 +53,8 @@ jupyterhub:
           secretKeyRef:
             name: {{ $helmPackage }}-s3-creds
             key: S3_SECRET_KEY
+      NOTEBOOK_IMAGE:
+        value: "{{ $cfg.notebook.image }}:{{ $cfg.notebook.tag }}"
       # User namespace resource quota
       NS_REQUESTS_CPU:
         value: "{{ $cfg.resources.namespaceQuota.requestsCpu }}"
@@ -94,31 +96,29 @@ jupyterhub:
 
   singleuser:
     podNameTemplate: "{{ $helmPackage }}-{username}"
+    # Main container is the proxy (receives traffic on 8888)
     image:
-      name: "{{ $cfg.dashboard.image }}"
-      tag: "{{ $cfg.dashboard.tag }}"
-      pullPolicy: Always  # TODO: change to `ifNotPresent` once the image is stable
+      name: "{{ $cfg.dashboard.containers.proxy.image }}"
+      tag: "{{ $cfg.dashboard.containers.proxy.tag }}"
+      pullPolicy: Always
 
     # Default URL to redirect after spawn
     defaultUrl: "/dash"
 
-    # Resource limits
+    # Resource limits for main proxy container
     memory:
-      guarantee: {{ $cfg.resources.singleuser.memory.guarantee }}
-      limit: {{ $cfg.resources.singleuser.memory.limit }}
+      guarantee: 128M
+      limit: 256M
     cpu:
-      guarantee: {{ $cfg.resources.singleuser.cpu.guarantee }}
-      limit: {{ $cfg.resources.singleuser.cpu.limit }}
+      guarantee: 0.05
+      limit: 0.2
 
     # Increased timeout for custom image startup
     startTimeout: 600
 
     # PVC is created inside pre_spawn_hook.py
     storage:
-      type: static
-      homeMountPath: /mddash
-      static:
-        pvcName: {{ $helmPackage }}-user-pvc
+      type: none
 
     networkPolicy:
       enabled: false
@@ -141,6 +141,121 @@ jupyterhub:
           type: RuntimeDefault
     cloudMetadata:
       blockWithIptables: false
+
+    # Extra containers for the singleuser pod
+    extraContainers:
+      # API container - handles backend API and auth
+      - name: api
+        image: "{{ $cfg.dashboard.containers.api.image }}:{{ $cfg.dashboard.containers.api.tag }}"
+        imagePullPolicy: Always
+        ports:
+          - containerPort: 5000
+            name: api
+          - containerPort: 5001
+            name: auth
+        env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: S3_ENDPOINT
+            value: "http://minio.{{ $namespace }}.svc.cluster.local:80"
+          - name: S3_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ $helmPackage }}-s3-creds
+                key: S3_ACCESS_KEY
+          - name: S3_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ $helmPackage }}-s3-creds
+                key: S3_SECRET_KEY
+        volumeMounts:
+          - name: mddash-data
+            mountPath: /mddash
+        resources:
+          limits:
+            cpu: "0.5"
+            memory: 512M
+          requests:
+            cpu: "0.1"
+            memory: 128M
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+
+      # Jupyter container - handles notebook interface
+      - name: jupyter
+        image: "{{ $cfg.dashboard.containers.jupyter.image }}:{{ $cfg.dashboard.containers.jupyter.tag }}"
+        imagePullPolicy: Always
+        ports:
+          - containerPort: 8889
+            name: jupyter
+        resources:
+          limits:
+            cpu: {{ $cfg.resources.singleuser.cpu.limit }}
+            memory: {{ $cfg.resources.singleuser.memory.limit }}
+          requests:
+            cpu: {{ $cfg.resources.singleuser.cpu.guarantee }}
+            memory: {{ $cfg.resources.singleuser.memory.guarantee }}
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+
+      # S3 sync sidecar - handles data synchronization
+      - name: s3-sync
+        image: "{{ $cfg.dashboard.containers.s3Sync.image }}:{{ $cfg.dashboard.containers.s3Sync.tag }}"
+        imagePullPolicy: Always
+        env:
+          - name: S3_ENDPOINT
+            value: "http://minio.{{ $namespace }}.svc.cluster.local:80"
+          - name: S3_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ $helmPackage }}-s3-creds
+                key: S3_ACCESS_KEY
+          - name: S3_SECRET_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ $helmPackage }}-s3-creds
+                key: S3_SECRET_KEY
+        volumeMounts:
+          - name: mddash-data
+            mountPath: /mddash
+        resources:
+          limits:
+            cpu: "0.2"
+            memory: 256M
+          requests:
+            cpu: "0.05"
+            memory: 64M
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+
+    # Shared volumes
+    extraVolumes:
+      - name: mddash-data
+        persistentVolumeClaim:
+          claimName: {{ $helmPackage }}-user-pvc
 
   proxy:
     secretToken: "your-secret-token-here-change-me"
