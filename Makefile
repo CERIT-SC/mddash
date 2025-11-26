@@ -20,7 +20,7 @@ help: ## Show this help
 build: build-dashboard build-notebook build-mdrun-api ## Build all images
 
 .PHONY: build-dashboard
-build-dashboard: ## Build dashboard image
+build-dashboard: ## Build dashboard sidecar images (ui, proxy, auth, api, s3sync)
 	@$(MAKE) -C dashboard build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: build-notebook
@@ -35,7 +35,7 @@ build-mdrun-api: ## Build mdrun-api image
 push: push-dashboard push-notebook push-mdrun-api ## Build and push all images
 
 .PHONY: push-dashboard
-push-dashboard: ## Build and push dashboard image
+push-dashboard: ## Build and push dashboard sidecar images
 	@$(MAKE) -C dashboard push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push-notebook
@@ -79,7 +79,7 @@ demo: ## Run local demo (Flask API + React dev server)
 	API_PID=$$!; \
 	echo "Flask API started (PID: $$API_PID)"; \
 	echo "Starting React dev server..."; \
-	cd dashboard/dash && npm run dev & \
+	cd dashboard/ui && npm run dev & \
 	VITE_PID=$$!; \
 	echo "React dev server started (PID: $$VITE_PID)"; \
 	echo "Demo running - Press Ctrl+C to stop"; \

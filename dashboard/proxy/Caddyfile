@@ -1,46 +1,47 @@
 {
     log {
-        output file /caddy/default.log
+        output stdout
         level INFO
         format console
     }
 
     admin 0.0.0.0:2019
 
-    storage file_system {
-        root /caddy/data
-    }
-
     auto_https off
 }
 
 http://:8888 {
-    # NOTE: When changing something here, it can break the ./api/clients/caddy.py logic!
+    # NOTE: When changing something here, it can break the dashboard api/clients/caddy.py logic!
 
     log {
-        output file /caddy/access.log
+        output stdout
         format console
     }
 
-    # OAuth callback route
+    # Health check endpoint
+    handle /health {
+        respond "OK" 200
+    }
+
+    # OAuth callback route - proxied to auth container
     @oauth_callback {
         path {$CADDY_ROUTE_PREFIX}/oauth_callback*
     }
     handle @oauth_callback {
         uri strip_prefix {$CADDY_ROUTE_PREFIX}
-        reverse_proxy localhost:5001
+        reverse_proxy {$AUTH_HOST}:5001
     }
 
-    # API routes
+    # API routes - authenticated via forward_auth to auth container
     @api_routes {
         path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/api.*$
     }
     handle @api_routes {
-        forward_auth localhost:5001 {
+        forward_auth {$AUTH_HOST}:5001 {
             uri /auth
         }
 
-        reverse_proxy localhost:5000
+        reverse_proxy {$API_HOST}:5000
     }
 
     # /dash -> /dash/
@@ -54,7 +55,7 @@ http://:8888 {
         path {$CADDY_ROUTE_PREFIX}/dash/config.js
     }
     handle @config_js {
-        forward_auth localhost:5001 {
+        forward_auth {$AUTH_HOST}:5001 {
             uri /auth
         }
         header Content-Type "application/javascript"
@@ -65,12 +66,12 @@ http://:8888 {
 };`
     }
 
-    # Dashboard routes
+    # Dashboard routes - static files with authentication
     @dash_routes {
         path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/.*$
     }
     handle @dash_routes {
-        forward_auth localhost:5001 {
+        forward_auth {$AUTH_HOST}:5001 {
             uri /auth
         }
 
@@ -92,9 +93,9 @@ http://:8888 {
         encode zstd gzip
     }
 
-    # JupyterHub - everything else
+    # JupyterHub - everything else proxied to notebook container
     handle {$CADDY_ROUTE_PREFIX}* {
-        reverse_proxy localhost:8889
+        reverse_proxy {$NOTEBOOK_HOST}:8889
     }
 
     # Fallback

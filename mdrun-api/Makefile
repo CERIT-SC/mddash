@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-ENV ?= prod
+ENV ?= dev
 IMAGE_TAG ?= latest
 
 config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)

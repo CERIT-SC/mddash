@@ -167,6 +167,140 @@ def set_pod_env(spawner, bucket_name, pvc_name):
     spawner.environment["S3_SECRET_KEY"] = os.environ.get("S3_SECRET_KEY", "")
 
 
+def get_security_context():
+    """Return security context for sidecar containers."""
+    return {
+        "allowPrivilegeEscalation": False,
+        "runAsNonRoot": True,
+        "capabilities": {"drop": ["ALL"]},
+        "seccompProfile": {"type": "RuntimeDefault"}
+    }
+
+
+def get_sidecar_containers(spawner, bucket_name, pvc_name):
+    """
+    Configure sidecar containers for the user pod.
+    These containers run alongside the notebook server to provide:
+    - proxy: Caddy reverse proxy serving the React UI
+    - auth: OAuth forward authentication service
+    - api: Flask API backend
+    - s3-sync: S3 bidirectional sync daemon
+    """
+    username = spawner.user.name
+    hub_namespace = os.environ.get("POD_NAMESPACE", "default")
+    s3_endpoint = os.environ.get("S3_ENDPOINT", "")
+    
+    # Get images from environment (set via extraEnv in values.yaml)
+    proxy_image = os.environ.get("PROXY_IMAGE", "")
+    auth_image = os.environ.get("AUTH_IMAGE", "")
+    api_image = os.environ.get("API_IMAGE", "")
+    s3_sync_image = os.environ.get("S3_SYNC_IMAGE", "")
+    notebook_image = os.environ.get("NOTEBOOK_IMAGE", "")
+    
+    # Service prefix for routing
+    service_prefix = f"/user/{username}"
+    
+    # JupyterHub OAuth variables - these come from the spawner
+    jupyterhub_env = spawner.get_env()
+    
+    security_context = get_security_context()
+    
+    containers = []
+    
+    # Proxy container (Caddy + React UI)
+    if proxy_image:
+        containers.append({
+            "name": "proxy",
+            "image": proxy_image,
+            "imagePullPolicy": "Always",
+            "ports": [{"containerPort": 8888, "name": "http"}],
+            "env": [
+                {"name": "CADDY_ROUTE_PREFIX", "value": service_prefix},
+                {"name": "JUPYTERHUB_USER", "value": username},
+                {"name": "AUTH_HOST", "value": "localhost"},
+                {"name": "API_HOST", "value": "localhost"},
+                {"name": "NOTEBOOK_HOST", "value": "localhost"},
+            ],
+            "resources": {
+                "requests": {"cpu": "50m", "memory": "64Mi"},
+                "limits": {"cpu": "200m", "memory": "128Mi"}
+            },
+            "securityContext": security_context
+        })
+    
+    # Auth container (OAuth forward auth)
+    if auth_image:
+        containers.append({
+            "name": "auth",
+            "image": auth_image,
+            "imagePullPolicy": "Always",
+            "ports": [{"containerPort": 5001, "name": "auth"}],
+            "env": [
+                {"name": "JUPYTERHUB_USER", "value": username},
+                {"name": "JUPYTERHUB_CLIENT_ID", "value": jupyterhub_env.get("JUPYTERHUB_CLIENT_ID", "")},
+                {"name": "JUPYTERHUB_API_TOKEN", "value": jupyterhub_env.get("JUPYTERHUB_API_TOKEN", "")},
+                {"name": "JUPYTERHUB_API_URL", "value": f"http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api"},
+                {"name": "JUPYTERHUB_OAUTH_CALLBACK_URL", "value": jupyterhub_env.get("JUPYTERHUB_OAUTH_CALLBACK_URL", "")},
+                {"name": "JUPYTERHUB_SERVICE_PREFIX", "value": service_prefix},
+                {"name": "JUPYTERHUB_DEFAULT_URL", "value": "/dash"},
+            ],
+            "resources": {
+                "requests": {"cpu": "50m", "memory": "64Mi"},
+                "limits": {"cpu": "200m", "memory": "128Mi"}
+            },
+            "securityContext": security_context
+        })
+    
+    # API container (Flask backend)
+    if api_image:
+        containers.append({
+            "name": "api",
+            "image": api_image,
+            "imagePullPolicy": "Always",
+            "ports": [{"containerPort": 5000, "name": "api"}],
+            "env": [
+                {"name": "JUPYTERHUB_USER", "value": username},
+                {"name": "NOTEBOOK_IMAGE", "value": notebook_image},
+                {"name": "S3_BUCKET", "value": bucket_name},
+                {"name": "S3_ENDPOINT", "value": s3_endpoint},
+                {"name": "S3_ACCESS_KEY", "value": os.environ.get("S3_ACCESS_KEY", "")},
+                {"name": "S3_SECRET_KEY", "value": os.environ.get("S3_SECRET_KEY", "")},
+                {"name": "PVC_NAME", "value": pvc_name},
+                {"name": "PVC_STORAGE_SIZE", "value": os.environ.get("PVC_STORAGE_SIZE", "10Gi")},
+                {"name": "NS_REQUESTS_CPU", "value": os.environ.get("NS_REQUESTS_CPU", "1000m")},
+                {"name": "NS_REQUESTS_MEMORY", "value": os.environ.get("NS_REQUESTS_MEMORY", "4Gi")},
+            ],
+            "volumeMounts": [{"name": "volume-{username}", "mountPath": "/mddash"}],
+            "resources": {
+                "requests": {"cpu": "100m", "memory": "256Mi"},
+                "limits": {"cpu": "500m", "memory": "512Mi"}
+            },
+            "securityContext": security_context
+        })
+    
+    # S3 sync container
+    if s3_sync_image:
+        containers.append({
+            "name": "s3-sync",
+            "image": s3_sync_image,
+            "imagePullPolicy": "Always",
+            "env": [
+                {"name": "S3_BUCKET", "value": bucket_name},
+                {"name": "S3_ENDPOINT", "value": s3_endpoint},
+                {"name": "S3_ACCESS_KEY", "value": os.environ.get("S3_ACCESS_KEY", "")},
+                {"name": "S3_SECRET_KEY", "value": os.environ.get("S3_SECRET_KEY", "")},
+            ],
+            "volumeMounts": [{"name": "volume-{username}", "mountPath": "/mddash"}],
+            "resources": {
+                "requests": {"cpu": "50m", "memory": "64Mi"},
+                "limits": {"cpu": "200m", "memory": "256Mi"}
+            },
+            "securityContext": security_context
+        })
+    
+    return containers
+
+
 def remove_volume_subpath(spawner):
     # static storage works with subPath, so we need to remove it from volume mounts
     for vol_mount in spawner.volume_mounts:
@@ -227,6 +361,11 @@ async def pre_spawn_hook(spawner):
 
     remove_volume_subpath(spawner)
     set_pod_env(spawner, bucket_name, pvc_name)
+    
+    # Configure sidecar containers
+    sidecar_containers = get_sidecar_containers(spawner, bucket_name, pvc_name)
+    if sidecar_containers:
+        spawner.extra_containers = sidecar_containers
 
 
 c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore

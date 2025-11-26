@@ -12,12 +12,24 @@ storageClassName: nfs-csi
 # Container and helm chart registry
 registry: cerit.io/xkrasa
 
-# Dashboard application (JupyterHub)
+# Dashboard hostname
 dashboard:
-  image: cerit.io/xkrasa/mddash
+  hostname: mddash-dev.dyn.cloud.e-infra.cz
+
+# Sidecar container images for user pod
+sidecars:
   platform: linux/amd64
   tag: dev
-  hostname: mddash-dev.dyn.cloud.e-infra.cz
+  ui:
+    image: cerit.io/xkrasa/mddash-ui
+  proxy:
+    image: cerit.io/xkrasa/mddash-proxy
+  auth:
+    image: cerit.io/xkrasa/mddash-auth
+  api:
+    image: cerit.io/xkrasa/mddash-api
+  s3sync:
+    image: cerit.io/xkrasa/mddash-s3sync
 
 # mdrun-api service
 mdrunApi:

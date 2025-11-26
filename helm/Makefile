@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-ENV ?= prod
+ENV ?= dev
 
 config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
 package := $(shell yq .helm.package $(config))
