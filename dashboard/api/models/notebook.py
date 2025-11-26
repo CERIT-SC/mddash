@@ -60,6 +60,7 @@ class Notebook(db.Model):  # type: ignore
             )
         except ApiException as e:
             if e.status == 403:
+                logger.debug(f'Quota exceeded when creating notebook pod.', exc_info=True)
                 abort(403, description='Resource quota exceeded. Please stop other notebooks.')
             elif e.status == 409:
                 abort(409, description=f'Notebook pod already exists.')

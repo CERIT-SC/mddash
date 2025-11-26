@@ -62,8 +62,8 @@ def get_container(
         'image': image,
         'imagePullPolicy': 'Always',  # TODO: maybe IfNotPresent?
         'resources': resources or {
-            'requests': {'cpu': '100m', 'memory': '128Mi'},
-            'limits': {'cpu': '200m', 'memory': '256Mi'}
+            'requests': {'cpu': '50m', 'memory': '64Mi'},
+            'limits': {'cpu': '500m', 'memory': '256Mi'}
         },
         'command': command,
         'volumeMounts': [
@@ -134,11 +134,15 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         experiment_id,
         volume_name,
         ['sh', '-c', workdir_init_command],
-        set_working_dir=False
+        set_working_dir=False,
+        resources={
+            'requests': {'cpu': '10m', 'memory': '32Mi'},
+            'limits': {'cpu': '100m', 'memory': '64Mi'}
+        }
     )
     gmx_container = get_container('gmx', GMX_IMAGE, experiment_id, volume_name, ['sleep', 'infinity'], resources={
-        'requests': {'cpu': '500m', 'memory': '1Gi'},
-        'limits': {'cpu': '1000m', 'memory': '2Gi'}
+        'requests': {'cpu': '100m', 'memory': '256Mi'},
+        'limits': {'cpu': '2000m', 'memory': '2Gi'}
     })
 
     jupyter_command = [
@@ -149,8 +153,8 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
     ]
     jupyter_env = [{'name': 'WORKDIR', 'value': f'/mddash/{experiment_id}'}]
     jupyter_resources = {
-        'requests': {'cpu': '500m', 'memory': '1Gi'},
-        'limits': {'cpu': '1000m', 'memory': '2Gi'}
+        'requests': {'cpu': '200m', 'memory': '512Mi'},
+        'limits': {'cpu': '2000m', 'memory': '4Gi'}
     }
     jupyter_container = get_container(
         'jupyter',

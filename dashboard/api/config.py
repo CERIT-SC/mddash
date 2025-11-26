@@ -6,7 +6,7 @@ from logging_utils import configure_logging
 
 
 LOG_FORMAT = '[%(asctime)s] %(levelname)s\t%(name)s: %(message)s'
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = getattr(logging, os.environ.get('LOG_LEVEL', 'INFO').upper(), logging.INFO)
 
 configure_logging(LOG_FORMAT, LOG_LEVEL)
 

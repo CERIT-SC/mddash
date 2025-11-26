@@ -66,7 +66,5 @@ app = create_app()
 
 # DEVELOPMENT ONLY - when running directly with python app.py
 if __name__ == '__main__':
-    configure_logging(LOG_FORMAT, LOG_LEVEL)
-    # logging.getLogger().setLevel(logging.DEBUG)
     logger.info("Starting Flask development server...")
     app.run(debug=True, host='0.0.0.0', port=5000)
