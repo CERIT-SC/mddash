@@ -9,20 +9,9 @@ log() {
     echo "$(date): [SERVICES] $1"
 }
 
-setup_path_injection() {
+setup_caddy_env() {
+    # Set up environment variables for Caddy's dynamic config.js
     local jh_prefix="${JUPYTERHUB_SERVICE_PREFIX%/}"
-    local base_path="${jh_prefix}/dash"
-    local api_path="${jh_prefix}/dash/api"
-
-    log "Injecting base path"
-    log "Base path: ${base_path}"
-    log "API path: ${api_path}"
-
-    for f in $(cd /opt && find dash -type f); do
-        mkdir -p $(dirname /var/tmp/$f)
-        sed "s|/__BASE_PATH__|${base_path}|g; s|/__API_PATH__|${api_path}|g" /opt/$f > /var/tmp/$f
-    done
-
     export CADDY_ROUTE_PREFIX="${jh_prefix}"
     log "Route prefix set to: ${CADDY_ROUTE_PREFIX}"
 }
@@ -90,8 +79,8 @@ stop_services() {
 
 # Main execution
 case "${1:-start-all}" in
-    "setup-paths")
-        setup_path_injection
+    "setup-env")
+        setup_caddy_env
         ;;
     "start-caddy")
         start_caddy
@@ -103,7 +92,7 @@ case "${1:-start-all}" in
         start_jupyterhub
         ;;
     "start-all")
-        setup_path_injection
+        setup_caddy_env
         start_forward_auth
         start_caddy
         start_api
@@ -113,7 +102,7 @@ case "${1:-start-all}" in
         stop_services
         ;;
     *)
-        log "Usage: $0 {setup-paths|start-caddy|start-api|start-jupyter|start-all|stop}"
+        log "Usage: $0 {setup-env|start-caddy|start-api|start-jupyter|start-all|stop}"
         exit 1
         ;;
 esac

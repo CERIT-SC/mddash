@@ -14,7 +14,6 @@ import {
 } from "@mui/material";
 
 import Dropzone from "@/components/Dropzone";
-import { BASE_PATH } from "@/util/const";
 import { create_experiment } from "@/util/api";
 import { useNotification } from "@/contexts/NotificationContext";
 
@@ -87,7 +86,7 @@ const New = () => {
 
         console.log("Experiment created:", data);
         showSuccess("Experiment created successfully!");
-        navigate(`${BASE_PATH}/${data!.id}/wizard`);
+        navigate(`/${data!.id}/wizard`);
     };
 
     const handleTypeChange = (_: React.SyntheticEvent, newType: string | false) => {

@@ -2,8 +2,6 @@ import { Link } from "react-router-dom";
 import { Box, Typography, Button, Paper } from "@mui/material";
 import SentimentVeryDissatisfiedIcon from "@mui/icons-material/SentimentVeryDissatisfied";
 
-import { BASE_PATH } from "@/util/const";
-
 const NotFound = () => {
     return (
         <Box
@@ -26,7 +24,7 @@ const NotFound = () => {
                     Looks like the page you're looking for got lost in cyberspace — maybe it's off chasing butterflies,
                     or just hiding from you!
                 </Typography>
-                <Button variant="contained" color="primary" component={Link} to={BASE_PATH}>
+                <Button variant="contained" color="primary" component={Link} to="/">
                     Take me home!
                 </Button>
             </Paper>

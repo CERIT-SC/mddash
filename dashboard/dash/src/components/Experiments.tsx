@@ -15,7 +15,6 @@ import {
 } from "@mui/material";
 import { AddCircleOutline, AutoFixHigh, Delete } from "@mui/icons-material";
 
-import { BASE_PATH } from "@/util/const";
 import { Experiment, PodStatus } from "@/util/types";
 import { delete_experiment, get_experiments } from "@/util/api";
 import { useNotification } from "@/contexts/NotificationContext";
@@ -122,7 +121,7 @@ const Experiments = () => {
                                     size="small"
                                     variant="contained"
                                     component={Link}
-                                    to={`${BASE_PATH}/${experiment.id}/wizard`}
+                                    to={`/${experiment.id}/wizard`}
                                     startIcon={<AutoFixHigh />}
                                 >
                                     Wizard
@@ -153,7 +152,7 @@ const Experiments = () => {
                     >
                         <CardActionArea
                             component={Link}
-                            to={`${BASE_PATH}/new`}
+                            to="/new"
                             sx={{ height: "100%", display: "flex", flexDirection: "column" }}
                         >
                             <Stack alignItems="center" justifyContent="center" spacing={2} p={4} sx={{ flexGrow: 1 }}>
