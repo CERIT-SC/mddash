@@ -69,6 +69,11 @@ def sign(data: str) -> str:
     return hmac.new(STATE_SECRET, data.encode(), hashlib.sha256).hexdigest()
 
 
+@app.route('/health')
+def health():
+    return 'OK', 200
+
+
 @app.route('/auth')
 def auth():
     remove_expired_sessions()

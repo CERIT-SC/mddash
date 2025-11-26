@@ -7,6 +7,9 @@ on:
 permissions:
   contents: read
 
+env:
+  DOCKER_BUILDKIT: 1
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -22,7 +25,7 @@ jobs:
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
-      
+
       - name: Set environment
         id: set-env
         run: |
@@ -35,30 +38,17 @@ jobs:
             echo "env=dev" >> $GITHUB_OUTPUT
             echo "tag=dev" >> $GITHUB_OUTPUT
           fi
-          
+
           echo "config=${CONFIG_FILE}" >> $GITHUB_OUTPUT
           REGISTRY=$(yq '.registry' ${CONFIG_FILE} | cut -d'/' -f1)
           echo "registry=${REGISTRY}" >> $GITHUB_OUTPUT
 
-  build:
+  # Build UI first (proxy depends on it)
+  build-ui:
     needs: setup
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        component:
-          - name: dashboard
-            path: dashboard/
-            make-build: build-dashboard
-            make-push: push-dashboard
-          - name: notebook
-            path: notebook/
-            make-build: build-notebook
-            make-push: push-notebook
-          - name: mdrun-api
-            path: mdrun-api/
-            make-build: build-mdrun-api
-            make-push: push-mdrun-api
+    outputs:
+      changed: ${{ steps.changes.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -69,16 +59,190 @@ jobs:
         run: |
           BEFORE_SHA="${{ github.event.before }}"
           AFTER_SHA="${{ github.sha }}"
-          
-          # Handle new branch or first commit (before SHA is all zeros)
+
           if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
-            echo "New branch or invalid base SHA - building all components"
             echo "changed=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
-          # Compare changes between before and after
-          if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -q '^${{ matrix.component.path }}'; then
+
+          if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -qE '^dashboard/ui/'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to registry
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ needs.setup.outputs.registry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push UI
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: dashboard/ui
+          file: dashboard/ui/Dockerfile
+          push: true
+          tags: ${{ needs.setup.outputs.registry }}/xkrasa/mddash-ui:${{ needs.setup.outputs.tag }}
+          cache-from: type=gha,scope=ui
+          cache-to: type=gha,mode=max,scope=ui
+
+  # Build proxy after UI (needs UI image)
+  build-proxy:
+    needs: [setup, build-ui]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes
+        id: changes
+        run: |
+          BEFORE_SHA="${{ github.event.before }}"
+          AFTER_SHA="${{ github.sha }}"
+
+          if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Rebuild proxy if UI or proxy changed
+          if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -qE '^dashboard/(ui|proxy)/'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to registry
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ needs.setup.outputs.registry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push proxy
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: dashboard/proxy
+          file: dashboard/proxy/Dockerfile
+          push: true
+          tags: ${{ needs.setup.outputs.registry }}/xkrasa/mddash-proxy:${{ needs.setup.outputs.tag }}
+          build-args: |
+            UI_IMAGE=${{ needs.setup.outputs.registry }}/xkrasa/mddash-ui:${{ needs.setup.outputs.tag }}
+          cache-from: type=gha,scope=proxy
+          cache-to: type=gha,mode=max,scope=proxy
+
+  # Build independent sidecars in parallel
+  build-sidecars:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sidecar:
+          - name: auth
+            path: dashboard/auth
+          - name: api
+            path: dashboard/api
+          - name: s3sync
+            path: dashboard/s3-sync
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes
+        id: changes
+        run: |
+          BEFORE_SHA="${{ github.event.before }}"
+          AFTER_SHA="${{ github.sha }}"
+
+          if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -q '^${{ matrix.sidecar.path }}/'; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine Dockerfile
+        id: dockerfile
+        run: |
+          if [[ "${{ needs.setup.outputs.env }}" == "dev" && "${{ matrix.sidecar.name }}" =~ ^(api|auth)$ ]]; then
+            echo "file=Dockerfile.dev" >> $GITHUB_OUTPUT
+          else
+            echo "file=Dockerfile" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to registry
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ needs.setup.outputs.registry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+
+      - name: Build and push ${{ matrix.sidecar.name }}
+        if: steps.changes.outputs.changed == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.sidecar.path }}
+          file: ${{ matrix.sidecar.path }}/${{ steps.dockerfile.outputs.file }}
+          push: true
+          tags: ${{ needs.setup.outputs.registry }}/xkrasa/mddash-${{ matrix.sidecar.name }}:${{ needs.setup.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.sidecar.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.sidecar.name }}
+
+  # Build other components in parallel
+  build-components:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - name: notebook
+            path: notebook
+          - name: mdrun-api
+            path: mdrun-api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for changes
+        id: changes
+        run: |
+          BEFORE_SHA="${{ github.event.before }}"
+          AFTER_SHA="${{ github.sha }}"
+
+          if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -q '^${{ matrix.component.path }}/'; then
             echo "changed=true" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT
@@ -99,8 +263,8 @@ jobs:
       - name: Build and push ${{ matrix.component.name }}
         if: steps.changes.outputs.changed == 'true'
         run: |
-          make ${{ matrix.component.make-build }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
-          make ${{ matrix.component.make-push }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
+          make build-${{ matrix.component.name }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
+          make push-${{ matrix.component.name }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
 
   push-mdrun-api-chart:
     needs: setup
@@ -117,15 +281,12 @@ jobs:
         run: |
           BEFORE_SHA="${{ github.event.before }}"
           AFTER_SHA="${{ github.sha }}"
-          
-          # Handle new branch or first commit (before SHA is all zeros)
+
           if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
-            echo "New branch or invalid base SHA - building mdrun-api chart"
             echo "changed=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
-          # Compare changes between before and after
+
           if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -q '^helm/charts/mdrun-api/'; then
             echo "changed=true" >> $GITHUB_OUTPUT
           else
@@ -149,7 +310,7 @@ jobs:
           make push-mdrun-api-chart ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
 
   check-changes:
-    needs: [build, push-mdrun-api-chart]
+    needs: [build-ui, build-proxy, build-sidecars, build-components, push-mdrun-api-chart]
     runs-on: ubuntu-latest
     outputs:
       any_changes: ${{ steps.aggregate.outputs.any_changes }}
@@ -157,25 +318,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - name: Check for deployment-related changes
         id: check-deploy
         run: |
           BEFORE_SHA="${{ github.event.before }}"
           AFTER_SHA="${{ github.sha }}"
-          
+
           if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA" 2>/dev/null; then
             echo "deploy_changed=true" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
-          # Check for helm templates, config files, or component changes
+
           if git diff --name-only "$BEFORE_SHA" "$AFTER_SHA" | grep -qE '^(helm/charts/mddash/|config\.yaml|config\.dev\.yaml|dashboard/|notebook/|mdrun-api/)'; then
             echo "deploy_changed=true" >> $GITHUB_OUTPUT
           else
             echo "deploy_changed=false" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Aggregate changes
         id: aggregate
         run: |
@@ -217,22 +377,21 @@ jobs:
           NAMESPACE=$(yq '.namespace' ${{ needs.setup.outputs.config }})
           PACKAGE=$(yq '.helm.package' ${{ needs.setup.outputs.config }})
           kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-          
+
           kubectl create secret generic oidc-credentials \
             --from-literal=client_id="${{ secrets.OAUTH_CLIENT_ID }}" \
             --from-literal=client_secret="${{ secrets.OAUTH_CLIENT_SECRET }}" \
             -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-          
+
           kubectl create secret generic ${PACKAGE}-kubeconfig-secret \
             --from-file=config=$HOME/.kube/config \
             -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-          
+
           kubectl create secret generic ${PACKAGE}-s3-creds \
             --from-literal=S3_ACCESS_KEY="${{ secrets.MINIO_ROOT_USER }}" \
             --from-literal=S3_SECRET_KEY="${{ secrets.MINIO_ROOT_PASSWORD }}" \
             -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-          
-          # this secret is only created due to MinUO tenant being fucking stupid and not being able to use the secret above
+
           kubectl create secret generic minio-root-config \
             --from-literal=config.env="export MINIO_ROOT_USER=\"${{ secrets.MINIO_ROOT_USER }}\"
           export MINIO_ROOT_PASSWORD=\"${{ secrets.MINIO_ROOT_PASSWORD }}\"" \
@@ -242,7 +401,7 @@ jobs:
         run: |
           NAMESPACE=$(yq '.namespace' ${{ needs.setup.outputs.config }})
           PACKAGE=$(yq '.helm.package' ${{ needs.setup.outputs.config }})
-          
+
           if helm status ${PACKAGE} -n ${NAMESPACE} >/dev/null 2>&1; then
             make -C helm upgrade ENV=${{ needs.setup.outputs.env }}
           else

@@ -94,15 +94,16 @@ jupyterhub:
 
   singleuser:
     podNameTemplate: "{{ $helmPackage }}-{username}"
+    # Use stock JupyterHub singleuser image - sidecars handle all custom functionality
     image:
-      name: "{{ $cfg.dashboard.image }}"
-      tag: "{{ $cfg.dashboard.tag }}"
-      pullPolicy: Always  # TODO: change to `ifNotPresent` once the image is stable
+      name: quay.io/jupyterhub/singleuser
+      tag: "5"
+      pullPolicy: IfNotPresent
 
     # Default URL to redirect after spawn
     defaultUrl: "/dash"
 
-    # Resource limits
+    # Resource limits for the notebook container
     memory:
       guarantee: {{ $cfg.resources.singleuser.memory.guarantee }}
       limit: {{ $cfg.resources.singleuser.memory.limit }}
@@ -110,13 +111,13 @@ jupyterhub:
       guarantee: {{ $cfg.resources.singleuser.cpu.guarantee }}
       limit: {{ $cfg.resources.singleuser.cpu.limit }}
 
-    # Increased timeout for custom image startup
+    # Increased timeout for sidecar startup
     startTimeout: 600
 
     # PVC is created inside pre_spawn_hook.py
     storage:
       type: static
-      homeMountPath: /mddash
+      homeMountPath: /home/jovyan
       static:
         pvcName: {{ $helmPackage }}-user-pvc
 
@@ -132,6 +133,18 @@ jupyterhub:
             fieldPath: metadata.namespace
       NOTEBOOK_IMAGE:
         value: "{{ $cfg.notebook.image }}:{{ $cfg.notebook.tag }}"
+      # Sidecar container images - used by pre_spawn_hook.py
+      PROXY_IMAGE:
+        value: "{{ $cfg.sidecars.proxy.image }}:{{ $cfg.sidecars.tag }}"
+      AUTH_IMAGE:
+        value: "{{ $cfg.sidecars.auth.image }}:{{ $cfg.sidecars.tag }}"
+      API_IMAGE:
+        value: "{{ $cfg.sidecars.api.image }}:{{ $cfg.sidecars.tag }}"
+      S3_SYNC_IMAGE:
+        value: "{{ $cfg.sidecars.s3sync.image }}:{{ $cfg.sidecars.tag }}"
+
+    # Sidecar containers are configured dynamically in pre_spawn_hook.py
+    # because they need access to JupyterHub environment variables (API_TOKEN, etc.)
 
     extraPodConfig:
       securityContext:

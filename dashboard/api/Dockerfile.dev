@@ -1,0 +1,30 @@
+# API container - Development version with hot reload and debug mode
+
+FROM python:3.12-alpine
+
+WORKDIR /app
+
+RUN addgroup -S app && adduser -S app -G app
+
+RUN apk add --no-cache curl
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt watchdog
+
+COPY --chown=app:app . .
+
+RUN mkdir -p /data && chown app:app /data
+
+USER app
+
+ENV DATA_DIR=/data
+ENV FLASK_DEBUG=1
+ENV FLASK_ENV=development
+
+EXPOSE 5000
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD curl --fail http://localhost:5000/health || exit 1
+
+# Use Flask dev server with auto-reload instead of gunicorn
+CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5000", "--reload"]
