@@ -9,15 +9,16 @@ import Home from "./pages/Home";
 import New from "./pages/New";
 import Wizard from "./pages/Wizard";
 import NotFound from "./pages/error/404";
+import { BASE_PATH } from "./util/const";
 
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
-        <BrowserRouter>
+        <BrowserRouter basename={BASE_PATH}>
             <Routes>
-                <Route path="/__BASE_PATH__/" element={<Layout />}>
+                <Route path="/" element={<Layout />}>
                     <Route index element={<Home />} />
-                    <Route path="/__BASE_PATH__/new" element={<New />} />
-                    <Route path="/__BASE_PATH__/:id/wizard" element={<Wizard />} />
+                    <Route path="/new" element={<New />} />
+                    <Route path="/:id/wizard" element={<Wizard />} />
                     <Route path="*" element={<NotFound />} />
                 </Route>
             </Routes>

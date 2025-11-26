@@ -49,6 +49,22 @@ http://:8888 {
     }
     redir @dash_redirect {$CADDY_ROUTE_PREFIX}/dash/ 308
 
+    # Dynamic config.js for React app - injects runtime configuration
+    @config_js {
+        path {$CADDY_ROUTE_PREFIX}/dash/config.js
+    }
+    handle @config_js {
+        forward_auth localhost:5001 {
+            uri /auth
+        }
+        header Content-Type "application/javascript"
+        respond `window.MDDASH_CONFIG = {
+    basePath: "{$CADDY_ROUTE_PREFIX}/dash",
+    apiPath: "{$CADDY_ROUTE_PREFIX}/dash/api",
+    user: "{$JUPYTERHUB_USER}"
+};`
+    }
+
     # Dashboard routes
     @dash_routes {
         path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/.*$
@@ -58,19 +74,19 @@ http://:8888 {
             uri /auth
         }
 
-        root * /var/tmp
+        root * /opt/dash
 
         @is_asset {
             path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/(.*)$
         }
-        rewrite @is_asset /dash/{re.1}
+        rewrite @is_asset /{re.1}
 
         @not_a_file {
             not file {path}
         }
-        rewrite @not_a_file /dash/index.html
+        rewrite @not_a_file /index.html
 
-        try_files {path} /dash/index.html
+        try_files {path} /index.html
 
         file_server
         encode zstd gzip

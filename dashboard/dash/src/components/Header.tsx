@@ -5,11 +5,10 @@ import { Typography, IconButton, Toolbar, AppBar, Stack, Tooltip } from "@mui/ma
 import { HubTwoTone, DashboardTwoTone, Brightness4, Brightness7 } from "@mui/icons-material";
 
 import { ThemeContext } from "@/Theme";
-import { BASE_PATH } from "@/util/const";
 
 const Header = () => {
     const location = useLocation();
-    const notHome = location.pathname !== BASE_PATH && location.pathname !== BASE_PATH + "/";
+    const notHome = location.pathname !== "/" && location.pathname !== "";
     const { toggleTheme, mode } = useContext(ThemeContext);
 
     return (
@@ -26,7 +25,7 @@ const Header = () => {
                                 size="large"
                                 sx={{ color: "white" }}
                                 component={Link}
-                                to={BASE_PATH}
+                                to="/"
                                 title="Back to Dashboard"
                             >
                                 <DashboardTwoTone />
@@ -34,7 +33,7 @@ const Header = () => {
                         )}
                     </Stack>
                     <div style={{ flex: 1, textAlign: "center" }}>
-                        <Link to={BASE_PATH} style={{ textDecoration: "none", color: "white" }}>
+                        <Link to="/" style={{ textDecoration: "none", color: "white" }}>
                             <Typography variant="h1">MD Dash</Typography>
                         </Link>
                     </div>
