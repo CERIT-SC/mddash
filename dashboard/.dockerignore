@@ -1,7 +1,0 @@
-Dockerfile
-__pycahce__/
-.venv/
-dist/
-node_modules/
-Makefile
-api/_demo/
