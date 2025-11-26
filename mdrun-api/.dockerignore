@@ -1,0 +1,6 @@
+__pycache__/
+*.py[cod]
+Dockerfile*
+.dockerignore
+Makefile
+README.md

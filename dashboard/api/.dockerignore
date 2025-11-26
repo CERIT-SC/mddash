@@ -1,0 +1,5 @@
+Dockerfile*
+__pycache__/
+*.py[cod]
+.venv/
+_demo/
