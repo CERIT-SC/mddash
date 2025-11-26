@@ -4,7 +4,7 @@ FROM alpine:3.20
 
 RUN apk add --no-cache rclone
 
-RUN addgroup -S app && adduser -S app -G app
+RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
 
 COPY --chown=app:app sync.sh /sync.sh
 RUN chmod +x /sync.sh
