@@ -107,11 +107,11 @@ jupyterhub:
 
     # Resource limits for main proxy container
     memory:
-      guarantee: 128M
-      limit: 256M
+      guarantee: {{ $cfg.resources.proxy.memory.guarantee }}
+      limit: {{ $cfg.resources.proxy.memory.limit }}
     cpu:
-      guarantee: 0.05
-      limit: 0.2
+      guarantee: {{ $cfg.resources.proxy.cpu.guarantee }}
+      limit: {{ $cfg.resources.proxy.cpu.limit }}
 
     # Increased timeout for custom image startup
     startTimeout: 600

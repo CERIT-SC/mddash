@@ -20,13 +20,13 @@ http://:8888 {
         format console
     }
 
-    # OAuth callback route - forward to api container
+    # OAuth callback route - forward to api container (same pod, use localhost)
     @oauth_callback {
         path {$CADDY_ROUTE_PREFIX}/oauth_callback*
     }
     handle @oauth_callback {
         uri strip_prefix {$CADDY_ROUTE_PREFIX}
-        reverse_proxy api:5001
+        reverse_proxy localhost:5001
     }
 
     # API routes - with forward auth
@@ -34,11 +34,11 @@ http://:8888 {
         path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/api.*$
     }
     handle @api_routes {
-        forward_auth api:5001 {
+        forward_auth localhost:5001 {
             uri /auth
         }
 
-        reverse_proxy api:5000
+        reverse_proxy localhost:5000
     }
 
     # /dash -> /dash/
@@ -52,7 +52,7 @@ http://:8888 {
         path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/.*$
     }
     handle @dash_routes {
-        forward_auth api:5001 {
+        forward_auth localhost:5001 {
             uri /auth
         }
 
@@ -76,11 +76,11 @@ http://:8888 {
 
     # JupyterHub - everything else
     handle {$CADDY_ROUTE_PREFIX}* {
-        reverse_proxy jupyter:8889
+        reverse_proxy localhost:8889
     }
 
     # Fallback
     route {
-        respond "Where the hell do you think you are going?" 404
+        respond "Not Found" 404
     }
 }

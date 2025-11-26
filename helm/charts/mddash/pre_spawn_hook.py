@@ -172,6 +172,7 @@ def set_pod_env(spawner, bucket_name, pvc_name):
 
 
 def remove_volume_subpath(spawner):
+    """No-op function kept for backwards compatibility."""
     pass
 
 
@@ -237,7 +238,7 @@ def modify_pod_hook(spawner, pod):
     """
     Modify the pod spec to:
     1. Drop all capabilities from containers and disable privilege escalation (e-INFRA security)
-    2. Inject dynamic environment variables into extra containers (S3_BUCKET)
+    2. Inject dynamic environment variables into extra containers (S3_BUCKET, JupyterHub vars)
     """
     from kubernetes_asyncio.client import V1EnvVar
 
@@ -246,7 +247,7 @@ def modify_pod_hook(spawner, pod):
     hub_namespace = os.environ.get("POD_NAMESPACE", "default")
     notebook_image = os.environ.get("NOTEBOOK_IMAGE", "")
     
-    env_vars_for_extra = {
+    env_vars_for_api_s3 = {
         'S3_BUCKET': bucket_name,
         'HUB_NAMESPACE': hub_namespace,
         'PVC_NAME': pvc_name,
@@ -255,6 +256,16 @@ def modify_pod_hook(spawner, pod):
         'NS_REQUESTS_MEMORY': os.environ.get("NS_REQUESTS_MEMORY", "4Gi"),
         'NOTEBOOK_IMAGE': notebook_image,
     }
+
+    main_container_env = {}
+    for container in pod.spec.containers:
+        if container.name == "notebook":
+            if container.env:
+                for env_var in container.env:
+                    if hasattr(env_var, 'name') and hasattr(env_var, 'value') and env_var.value is not None:
+                        main_container_env[env_var.name] = env_var.value
+
+    jupyterhub_env_vars = {k: v for k, v in main_container_env.items() if k.startswith('JUPYTERHUB_')}
 
     for container in pod.spec.containers:
         # Apply security context to all containers
@@ -268,12 +279,19 @@ def modify_pod_hook(spawner, pod):
         sc.allow_privilege_escalation = False
         container.security_context = sc
 
-        # Inject environment variables into extra containers (api, s3-sync)
+        if container.env is None:
+            container.env = []
+        existing_env_names = {e.name for e in container.env if hasattr(e, 'name')}
+
+        # Inject environment variables into api and s3-sync containers
         if container.name in ['api', 's3-sync']:
-            if container.env is None:
-                container.env = []
-            existing_env_names = {e.name for e in container.env if hasattr(e, 'name')}
-            for name, value in env_vars_for_extra.items():
+            for name, value in env_vars_for_api_s3.items():
+                if name not in existing_env_names and value:
+                    container.env.append(V1EnvVar(name=name, value=value))
+
+        # Inject JupyterHub env vars into jupyter and api containers (api needs them for auth.py)
+        if container.name in ['jupyter', 'api']:
+            for name, value in jupyterhub_env_vars.items():
                 if name not in existing_env_names and value:
                     container.env.append(V1EnvVar(name=name, value=value))
 

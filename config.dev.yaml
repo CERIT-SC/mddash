@@ -62,6 +62,13 @@ resources:
     cpu:
       guarantee: 0.2
       limit: 1
+  proxy:
+    memory:
+      guarantee: 128M
+      limit: 256M
+    cpu:
+      guarantee: 0.05
+      limit: 0.2
   namespaceQuota:
     requestsCpu: "2000m"
     requestsMemory: "4Gi"
