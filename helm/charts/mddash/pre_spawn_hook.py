@@ -172,12 +172,14 @@ def get_security_context():
     return {
         "allowPrivilegeEscalation": False,
         "runAsNonRoot": True,
+        "runAsUser": 1000,
+        "runAsGroup": 1000,
         "capabilities": {"drop": ["ALL"]},
         "seccompProfile": {"type": "RuntimeDefault"}
     }
 
 
-def get_sidecar_containers(spawner, bucket_name, pvc_name):
+def get_sidecar_containers(spawner, bucket_name, pvc_name, volume_name, user_namespace):
     """
     Configure sidecar containers for the user pod.
     These containers run alongside the notebook server to provide:
@@ -260,6 +262,9 @@ def get_sidecar_containers(spawner, bucket_name, pvc_name):
             "ports": [{"containerPort": 5000, "name": "api"}],
             "env": [
                 {"name": "JUPYTERHUB_USER", "value": username},
+                {"name": "JUPYTERHUB_SERVICE_PREFIX", "value": service_prefix},
+                {"name": "POD_NAMESPACE", "value": user_namespace},
+                {"name": "HUB_NAMESPACE", "value": hub_namespace},
                 {"name": "NOTEBOOK_IMAGE", "value": notebook_image},
                 {"name": "S3_BUCKET", "value": bucket_name},
                 {"name": "S3_ENDPOINT", "value": s3_endpoint},
@@ -270,7 +275,7 @@ def get_sidecar_containers(spawner, bucket_name, pvc_name):
                 {"name": "NS_REQUESTS_CPU", "value": os.environ.get("NS_REQUESTS_CPU", "1000m")},
                 {"name": "NS_REQUESTS_MEMORY", "value": os.environ.get("NS_REQUESTS_MEMORY", "4Gi")},
             ],
-            "volumeMounts": [{"name": "volume-{username}", "mountPath": "/mddash"}],
+            "volumeMounts": [{"name": volume_name, "mountPath": "/mddash"}],
             "resources": {
                 "requests": {"cpu": "100m", "memory": "256Mi"},
                 "limits": {"cpu": "500m", "memory": "512Mi"}
@@ -290,7 +295,7 @@ def get_sidecar_containers(spawner, bucket_name, pvc_name):
                 {"name": "S3_ACCESS_KEY", "value": os.environ.get("S3_ACCESS_KEY", "")},
                 {"name": "S3_SECRET_KEY", "value": os.environ.get("S3_SECRET_KEY", "")},
             ],
-            "volumeMounts": [{"name": "volume-{username}", "mountPath": "/mddash"}],
+            "volumeMounts": [{"name": volume_name, "mountPath": "/mddash"}],
             "resources": {
                 "requests": {"cpu": "50m", "memory": "64Mi"},
                 "limits": {"cpu": "200m", "memory": "256Mi"}
@@ -299,13 +304,6 @@ def get_sidecar_containers(spawner, bucket_name, pvc_name):
         })
     
     return containers
-
-
-def remove_volume_subpath(spawner):
-    # static storage works with subPath, so we need to remove it from volume mounts
-    for vol_mount in spawner.volume_mounts:
-        if "subPath" in vol_mount:
-            del vol_mount["subPath"]
 
 
 async def pre_spawn_hook(spawner):
@@ -357,13 +355,26 @@ async def pre_spawn_hook(spawner):
 
     spawner.namespace = ns
     spawner.service_account = service_account_name
-    spawner.pvc_name = pvc_name
 
-    remove_volume_subpath(spawner)
+    # Configure storage volume manually (not using JupyterHub's storage config)
+    volume_name = "mddash-volume"
+    spawner.volumes = [
+        {
+            "name": volume_name,
+            "persistentVolumeClaim": {"claimName": pvc_name}
+        }
+    ]
+    spawner.volume_mounts = [
+        {
+            "name": volume_name,
+            "mountPath": "/home/jovyan"
+        }
+    ]
+
     set_pod_env(spawner, bucket_name, pvc_name)
     
     # Configure sidecar containers
-    sidecar_containers = get_sidecar_containers(spawner, bucket_name, pvc_name)
+    sidecar_containers = get_sidecar_containers(spawner, bucket_name, pvc_name, volume_name, ns)
     if sidecar_containers:
         spawner.extra_containers = sidecar_containers
 

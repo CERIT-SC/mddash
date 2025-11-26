@@ -3,20 +3,36 @@
 ## Architecture Overview
 
 Three-service Kubernetes application built on JupyterHub:
-- **Dashboard** (`dashboard/`): JupyterHub + Flask API (`api/`) + React frontend (`dash/src/`)
+- **Dashboard** (`dashboard/`): User pods with sidecar containers (proxy, auth, api, s3-sync) + stock JupyterHub singleuser
 - **mdrun-api** (`mdrun-api/`): Standalone Flask service managing GROMACS simulation jobs
 - **Notebook** (`notebook/`): Per-user JupyterHub spawned containers for experiment setup
 
-**Data flow**: User → Dashboard UI → Flask API → K8s resources (notebooks/jobs) + mdrun-api → S3/MinIO storage
+### Dashboard Sidecar Architecture
+
+Each user pod runs 5 containers:
+| Container | Directory | Port | Purpose |
+|-----------|-----------|------|---------|
+| **proxy** | `dashboard/proxy/` | 8888 | Caddy reverse proxy + React UI static files |
+| **auth** | `dashboard/auth/` | 5001 | JupyterHub OAuth forward authentication |
+| **api** | `dashboard/api/` | 5000 | Flask backend API |
+| **s3-sync** | `dashboard/s3-sync/` | - | rclone bidirectional S3 sync daemon |
+| **notebook** | (stock image) | 8080 | JupyterHub singleuser |
+
+**Data flow**: User → Caddy proxy → Auth check → API/Notebook → K8s resources + mdrun-api → S3/MinIO storage
 
 ## Development Workflow
 
 Configuration split by environment: `config.dev.yaml` (dev), `config.yaml` (prod). Control via `ENV` variable:
 
 ```bash
-make build ENV=dev          # Build all images for dev (uses config.dev.yaml)
-make all ENV=prod           # Build, push, deploy to production (uses config.yaml)
-make status ENV=dev         # Check deployment status
+# Build all sidecar images
+cd dashboard && make build ENV=dev
+
+# Build and push all images (from root)
+make push ENV=dev
+
+# Deploy via Helm
+make deploy ENV=dev
 ```
 
 **CI/CD**: Push to `dev` branch → uses `config.dev.yaml`, `master` branch → uses `config.yaml` (see `.github/workflows/ci-cd.yml`)
@@ -47,7 +63,7 @@ Experiments use class methods for different creation flows:
 Each creates a 5-character unique ID and directory at `/mddash/{experiment_id}` (see `models/experiment.py`)
 
 ### Frontend API Pattern
-TypeScript API layer (`dashboard/dash/src/util/api.ts`) wraps axios with consistent error handling:
+TypeScript API layer (`dashboard/ui/src/util/api.ts`) wraps axios with consistent error handling:
 ```typescript
 export const get_experiment = async (id: string): Promise<ApiData<Experiment>> => {
     return await handle_request(
@@ -65,15 +81,16 @@ export const get_experiment = async (id: string): Promise<ApiData<Experiment>> =
 
 ### Kubernetes Resource Management
 - `dashboard/api/clients/k8s.py` manages pods/jobs using kubernetes-python client
-- `helm/charts/mddash/pre_spawn_hook.py` creates per-user namespaces with RBAC on JupyterHub spawn
+- `helm/charts/mddash/pre_spawn_hook.py` creates per-user namespaces with RBAC and configures sidecar containers on JupyterHub spawn
 
 ### Storage
 - MinIO (S3-compatible) for experiment persistence
 - SQLite databases for API state (`experiments.db` in dashboard, mdrun-api uses PostgreSQL in prod)
-- Init containers sync S3 data to `/mddash` volume (see `get_s3_init_container()` in k8s.py)
+- s3-sync sidecar handles bidirectional sync between S3 and `/mddash` volume
 
 ### Authentication
-OAuth2 via e-INFRA CZ (see `values.yaml.tmpl` GenericOAuthenticator config)
+- OAuth2 via e-INFRA CZ (see `values.yaml.tmpl` GenericOAuthenticator config)
+- Forward auth handled by `dashboard/auth/auth.py` sidecar, validates JupyterHub tokens
 
 ## Experiment Lifecycle
 
@@ -90,21 +107,30 @@ Status computed from associated notebook/job states (see `experiment._step_statu
 ## Directory Structure
 
 ```
-dashboard/api/          Flask API with blueprints (routes/), SQLAlchemy models, K8s clients
-dashboard/dash/         React + Vite + MUI frontend, TypeScript
-dashboard/auth/         JupyterHub OAuth integration
-mdrun-api/              Independent Flask service for GROMACS job orchestration
-helm/charts/mddash/     JupyterHub Helm chart with custom config
-notebook/               Jupyter notebook image with GROMACS tools
-config.yaml             Production configuration
-config.dev.yaml         Development configuration
+dashboard/
+  api/              Flask API with blueprints (routes/), SQLAlchemy models, K8s clients
+  ui/               React + Vite + MUI frontend, TypeScript
+  auth/             JupyterHub OAuth forward authentication service
+  proxy/            Caddy reverse proxy configuration
+  s3-sync/          rclone S3 sync daemon
+mdrun-api/          Independent Flask service for GROMACS job orchestration
+helm/charts/mddash/ JupyterHub Helm chart with custom config
+notebook/           Jupyter notebook image with GROMACS tools
+config.yaml         Production configuration
+config.dev.yaml     Development configuration
 ```
 
 ## Common Tasks
 
-**Local dev**: Dashboard uses `Dockerfile.dev` with hot-reload. Frontend: `cd dashboard/dash && npm run dev`
+**Local dev**: API and auth use `Dockerfile.dev` with Flask debug mode when `ENV=dev`. Frontend: `cd dashboard/ui && npm run dev`
 
-**Check logs**: `kubectl logs -f deployment/hub -n {namespace}` or `make logs ENV=dev`
+**Check logs**: Each sidecar has its own log stream:
+```bash
+kubectl logs -f <pod> -c proxy -n {namespace}
+kubectl logs -f <pod> -c api -n {namespace}
+kubectl logs -f <pod> -c auth -n {namespace}
+kubectl logs -f <pod> -c s3-sync -n {namespace}
+```
 
 **Debug K8s resources**: JupyterHub spawner creates pods named `{helm.package}-{username}` (where helm.package comes from config), mdrun-api creates jobs with generated IDs
 

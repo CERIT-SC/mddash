@@ -61,9 +61,9 @@ resources:
       limit: 1
   namespaceQuota:
     requestsCpu: "2000m"
-    requestsMemory: "4Gi"
+    requestsMemory: "8Gi"
     limitsCpu: "4000m"
-    limitsMemory: "8Gi"
+    limitsMemory: "16Gi"
   pvcStorageSize: 10Gi
 
 helm:

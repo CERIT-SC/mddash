@@ -66,6 +66,17 @@ jupyterhub:
         value: "{{ $cfg.resources.pvcStorageSize }}"
       PVC_STORAGE_CLASS:
         value: "{{ $cfg.storageClassName }}"
+      # Sidecar container images - used by pre_spawn_hook.py to configure extra_containers
+      PROXY_IMAGE:
+        value: "{{ $cfg.sidecars.proxy.image }}:{{ $cfg.sidecars.tag }}"
+      AUTH_IMAGE:
+        value: "{{ $cfg.sidecars.auth.image }}:{{ $cfg.sidecars.tag }}"
+      API_IMAGE:
+        value: "{{ $cfg.sidecars.api.image }}:{{ $cfg.sidecars.tag }}"
+      S3_SYNC_IMAGE:
+        value: "{{ $cfg.sidecars.s3sync.image }}:{{ $cfg.sidecars.tag }}"
+      NOTEBOOK_IMAGE:
+        value: "{{ $cfg.notebook.image }}:{{ $cfg.notebook.tag }}"
 
     extraVolumes:
       - name: kubeconfig
@@ -100,6 +111,12 @@ jupyterhub:
       tag: "5"
       pullPolicy: IfNotPresent
 
+    # Run notebook on port 8080 (proxy uses 8888)
+    extraEnv:
+      JUPYTERHUB_SINGLEUSER_APP:
+        value: "jupyter_server.serverapp.ServerApp"
+    cmd: ["jupyterhub-singleuser", "--port=8080"]
+
     # Default URL to redirect after spawn
     defaultUrl: "/dash"
 
@@ -114,12 +131,9 @@ jupyterhub:
     # Increased timeout for sidecar startup
     startTimeout: 600
 
-    # PVC is created inside pre_spawn_hook.py
+    # Storage is configured manually in pre_spawn_hook.py
     storage:
-      type: static
-      homeMountPath: /home/jovyan
-      static:
-        pvcName: {{ $helmPackage }}-user-pvc
+      type: none
 
     networkPolicy:
       enabled: false
@@ -131,20 +145,6 @@ jupyterhub:
         valueFrom:
           fieldRef:
             fieldPath: metadata.namespace
-      NOTEBOOK_IMAGE:
-        value: "{{ $cfg.notebook.image }}:{{ $cfg.notebook.tag }}"
-      # Sidecar container images - used by pre_spawn_hook.py
-      PROXY_IMAGE:
-        value: "{{ $cfg.sidecars.proxy.image }}:{{ $cfg.sidecars.tag }}"
-      AUTH_IMAGE:
-        value: "{{ $cfg.sidecars.auth.image }}:{{ $cfg.sidecars.tag }}"
-      API_IMAGE:
-        value: "{{ $cfg.sidecars.api.image }}:{{ $cfg.sidecars.tag }}"
-      S3_SYNC_IMAGE:
-        value: "{{ $cfg.sidecars.s3sync.image }}:{{ $cfg.sidecars.tag }}"
-
-    # Sidecar containers are configured dynamically in pre_spawn_hook.py
-    # because they need access to JupyterHub environment variables (API_TOKEN, etc.)
 
     extraPodConfig:
       securityContext:

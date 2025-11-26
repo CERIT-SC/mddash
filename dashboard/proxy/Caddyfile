@@ -11,7 +11,7 @@
 }
 
 http://:8888 {
-    # NOTE: When changing something here, it can break the dashboard api/clients/caddy.py logic!
+    # NOTE: When changing something here, it can break the dashboard/api/clients/caddy.py logic!
 
     log {
         output stdout
@@ -95,7 +95,7 @@ http://:8888 {
 
     # JupyterHub - everything else proxied to notebook container
     handle {$CADDY_ROUTE_PREFIX}* {
-        reverse_proxy {$NOTEBOOK_HOST}:8889
+        reverse_proxy {$NOTEBOOK_HOST}:8080
     }
 
     # Fallback
