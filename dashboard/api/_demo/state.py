@@ -14,6 +14,7 @@ class DemoState:
     
     def __init__(self) -> None:
         self.experiments: dict[str, dict] = {}
+        self.mdrepo_authenticated: bool = False
         self._init_demo_data()
     
     def _init_demo_data(self):

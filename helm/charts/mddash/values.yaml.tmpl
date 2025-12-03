@@ -27,6 +27,8 @@ jupyterhub:
         http_timeout: 60
 
     extraEnv:
+      HOSTNAME:
+        value: "{{ $cfg.dashboard.hostname }}"
       HELM_PACKAGE:
         value: "{{ $helmPackage }}"
       RANCHER_PROJECT_ID:
@@ -77,6 +79,19 @@ jupyterhub:
         value: "{{ $cfg.sidecars.s3sync.image }}:{{ $cfg.sidecars.tag }}"
       NOTEBOOK_IMAGE:
         value: "{{ $cfg.notebook.image }}:{{ $cfg.notebook.tag }}"
+      # MDRepo OAuth - TODO: register MDDash as OAuth app in MDRepo and create dedicated secret
+      MDREPO_URL:
+        value: "https://workflow-repo.test.du.cesnet.cz"
+      MDREPO_CLIENT_ID:
+        valueFrom:
+          secretKeyRef:
+            name: oidc-credentials
+            key: client_id
+      MDREPO_CLIENT_SECRET:
+        valueFrom:
+          secretKeyRef:
+            name: oidc-credentials
+            key: client_secret
 
     extraVolumes:
       - name: kubeconfig

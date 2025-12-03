@@ -13,6 +13,7 @@ configure_logging(LOG_FORMAT, LOG_LEVEL)
 logger = logging.getLogger(__name__)
 
 
+HOSTNAME = os.environ.get('HOSTNAME', 'localhost')
 JUPYTER_USER = os.environ.get('JUPYTERHUB_USER', "")
 JUPYTER_SERVER_NAME = os.environ.get('JUPYTERHUB_SERVER_NAME', "")
 PREFIX = os.environ.get('JUPYTERHUB_SERVICE_PREFIX', "/").rstrip('/')
@@ -57,3 +58,15 @@ S3_SECRET_KEY = os.environ.get('S3_SECRET_KEY', '')
 
 if not all([S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY]):
     logger.warning("One or more S3 configuration environment variables are not set. S3 functionality may be limited.")
+
+MDREPO_URL = os.environ.get('MDREPO_URL', 'https://workflow-repo.test.du.cesnet.cz')
+MDREPO_CLIENT_ID = os.environ.get('MDREPO_CLIENT_ID', '')
+MDREPO_CLIENT_SECRET = os.environ.get('MDREPO_CLIENT_SECRET', '')
+MDREPO_REDIRECT_URI = f"https://{HOSTNAME}/hub/user-redirect/dash/api/mdrepo/callback"
+
+# MDRepo OAuth endpoints (InvenioRDM standard endpoints)
+MDREPO_AUTHORIZE_URL = f'{MDREPO_URL}/oauth/authorize'
+MDREPO_TOKEN_URL = f'{MDREPO_URL}/oauth/token'
+
+if not all([MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET]):
+    logger.warning("MDRepo OAuth configuration incomplete. Publishing to MDRepo will require OAuth setup.")
