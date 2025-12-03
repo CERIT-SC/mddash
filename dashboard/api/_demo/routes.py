@@ -127,13 +127,21 @@ def publish_experiment(experiment_id: str):
     if not experiment:
         return ApiResponse.error(f'Experiment {experiment_id} not found', HTTPStatus.NOT_FOUND)
     
+    # Check if user is "authenticated" with MDRepo
+    if not state.mdrepo_authenticated:
+        return ApiResponse.error(
+            'Not authenticated with MDRepo. Please authenticate first.',
+            HTTPStatus.UNAUTHORIZED
+        )
+    
     # Simulate MDRepo response
     mdrepo_experiment = {
         "id": "xej9e-x3720",
         "created": "2025-05-11T14:24:31.964333+00:00",
         "updated": "2025-05-11T14:24:32.188250+00:00",
         "links": {
-            "self_html": "https://mdrepo.eu/experiments/xej9e-x3720/preview"
+            "self_html": "https://workflow-repo.test.du.cesnet.cz/datasets/records/8gahj-dh519",
+            "edit_html": "https://workflow-repo.test.du.cesnet.cz/datasets/uploads/8gahj-dh519"
         },
         "state": "draft"
     }
@@ -142,6 +150,37 @@ def publish_experiment(experiment_id: str):
     experiment['mdrepo_id'] = mdrepo_experiment['id']
     
     return ApiResponse.success(mdrepo_experiment, HTTPStatus.CREATED)
+
+
+# ----- MDREPO -----
+
+@bp.route('/api/mdrepo/status', methods=['GET'])
+def mdrepo_status():
+    """Check MDRepo authentication status."""
+    return ApiResponse.success({
+        'authenticated': state.mdrepo_authenticated,
+        'mdrepo_url': 'https://workflow-repo.test.du.cesnet.cz'
+    })
+
+
+@bp.route('/api/mdrepo/auth', methods=['GET'])
+def mdrepo_auth():
+    """Mock MDRepo OAuth - immediately set authenticated and redirect back."""
+    from flask import redirect
+    
+    return_url = request.args.get('return_url', '/')
+    
+    # Simulate successful OAuth
+    state.mdrepo_authenticated = True
+    
+    return redirect(f'{return_url}?mdrepo_auth=success')
+
+
+@bp.route('/api/mdrepo/logout', methods=['POST'])
+def mdrepo_logout():
+    """Remove MDRepo authentication."""
+    state.mdrepo_authenticated = False
+    return ApiResponse.success({'message': 'Logged out from MDRepo'})
 
 
 # ----- NOTEBOOK -----

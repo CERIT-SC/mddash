@@ -266,37 +266,39 @@ class Experiment(db.Model):  # type: ignore
         # Delete all files in the experiment directory
         rmtree(DATA_DIR / self.id, ignore_errors=True)
 
-    def publish(self, community: str, email: str, password: str) -> dict:
+    def publish(self, token: str, community: str) -> dict:
         """
         Publish the experiment to MDRepo.
 
-        :param community: Community to publish the experiment to.
-        :param email: Email for MDRepo login.
-        :param password: Password for MDRepo login.
-        :return: Metadata of the published experiment.
-        :raises HTTPException: If the experiment cannot be published.
+        Args:
+            token: OAuth2 access token for MDRepo API.
+            community: Community slug to publish the experiment to.
+
+        Returns:
+            Metadata of the published experiment from MDRepo.
+
+        Raises:
+            HTTPException: If the experiment cannot be published.
         """
-        session = mdrepo.login(email, password)
         metadata: dict = {
-            "simulations:": [],
+            "simulations": [],
         }
 
-        # create experiment in MDRepo
-        mdrepo_experiment = mdrepo.create_experiment(session, community, metadata)
-        self.mdrepo_id = mdrepo_experiment['id']
+        # Create experiment in MDRepo
+        mdrepo_experiment = mdrepo.create_experiment(token, community, metadata)
+        self.mdrepo_id = mdrepo_experiment.get('id')
 
         if self.mdrepo_id is None:
             abort(500, description='Failed to create experiment in MDRepo.')
 
-        # upload files to MDRepo
+        # Upload files to MDRepo
         for file in (DATA_DIR / self.id).iterdir():
             if not file.is_file():
                 continue
 
             try:
-                mdrepo.upload_file(session, self.mdrepo_id, file)
+                mdrepo.upload_file(token, self.mdrepo_id, file)
             except ValueError:
-                # Don't fail the whole publishing if one file fails, only log the error
                 logger.error(f"Failed to upload file {file.name} to MDRepo.", exc_info=True)
 
         db.session.commit()

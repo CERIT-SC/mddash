@@ -7,6 +7,7 @@ from models import Experiment
 from schemas import ExperimentSchema
 from extensions import db
 from decorators import handle_exceptions
+from routes.mdrepo import get_mdrepo_token
 
 
 experiments_bp = Blueprint(
@@ -93,13 +94,23 @@ def edit_experiment(experiment_id: str) -> Response:
 @experiments_bp.route('/<experiment_id>/publish', methods=['POST'])
 @handle_exceptions(rollback=True)
 def publish_experiment(experiment_id: str) -> Response:
-    experiment: Experiment = Experiment.query.get_or_404(experiment_id, description=f'Experiment {experiment_id} not found')
+    """Publish experiment to MDRepo. Requires MDRepo OAuth authentication."""
+    experiment: Experiment = Experiment.query.get_or_404(
+        experiment_id, 
+        description=f'Experiment {experiment_id} not found'
+    )
 
-    # TODO: all these fields need to be fetched form the hub or user somehow
+    token = get_mdrepo_token()
+    if not token:
+        return ApiResponse.error(
+            'Not authenticated with MDRepo. Please authenticate first.',
+            HTTPStatus.UNAUTHORIZED
+        )
+
+    # TODO: Allow user to select community
     mdrepo_experiment = experiment.publish(
-        community='ceitec',
-        email='test@test.com',
-        password='123456'
+        token=token,
+        community='ceitec'
     )
 
     return ApiResponse.success(mdrepo_experiment, HTTPStatus.CREATED)
