@@ -135,7 +135,7 @@ Shared infrastructure components that manage the platform and compute resources.
   - *Location*: Configured in `helm/charts/mddash/values.yaml.tmpl`
   - *Purpose*: Orchestrates the platform by managing user logins and spawning isolated environments for each user on demand.
 - **MDRun API**
-  - *Location*: `mdrun-api/` (Configured in `helm/charts/mddash/values.yaml.tmpl`)
+  - *Location*: `mdrun-api/`, `helm/charts/mdrun-api` (Configured in `helm/charts/mddash/values.yaml.tmpl`)
   - *Purpose*: Decouples simulation execution from user sessions, ensuring long-running GROMACS jobs continue even if the user logs out.
 - **MinIO S3**
   - *Location*: Configured in `helm/charts/mddash/values.yaml.tmpl`
