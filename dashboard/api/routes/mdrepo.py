@@ -23,6 +23,7 @@ from config import (
     MDREPO_REDIRECT_URI,
     MDREPO_AUTHORIZE_URL,
     MDREPO_TOKEN_URL,
+    MDREPO_SCOPES,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,7 +83,7 @@ def initiate_auth() -> Response | WerkzeugResponse:
         'redirect_uri': MDREPO_REDIRECT_URI,
         'response_type': 'code',
         'state': state,
-        'scope': 'user:email',  # Request basic user scope
+        'scope': MDREPO_SCOPES,
     }
     
     auth_url = f'{MDREPO_AUTHORIZE_URL}?{urlencode(params)}'

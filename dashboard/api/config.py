@@ -16,19 +16,14 @@ logger = logging.getLogger(__name__)
 HOSTNAME = os.environ.get('HOSTNAME', 'localhost')
 JUPYTER_USER = os.environ.get('JUPYTERHUB_USER', "")
 JUPYTER_SERVER_NAME = os.environ.get('JUPYTERHUB_SERVER_NAME', "")
-PREFIX = os.environ.get('JUPYTERHUB_SERVICE_PREFIX', "/").rstrip('/')
-
-# everything related to mddash should be also prefixed with "dash"
-PREFIX = f"{PREFIX}/dash"
-
+PREFIX = os.environ.get('JUPYTERHUB_SERVICE_PREFIX', "/").rstrip('/') + "/dash"
 API_PREFIX = f"{PREFIX}/api"
 
 DATA_DIR = Path("/mddash")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-NOTEBOOK_IMAGE=os.environ.get('NOTEBOOK_IMAGE', 'quay.io/jupyter/base-notebook')
+NOTEBOOK_IMAGE = os.environ.get('NOTEBOOK_IMAGE', 'quay.io/jupyter/base-notebook')
 GMX_IMAGE = 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2'
-S3_CLIENT_IMAGE = 'rclone/rclone:latest'
 
 NAMESPACE = os.environ.get('POD_NAMESPACE', 'default')
 
@@ -63,10 +58,9 @@ MDREPO_URL = os.environ.get('MDREPO_URL', 'https://workflow-repo.test.du.cesnet.
 MDREPO_CLIENT_ID = os.environ.get('MDREPO_CLIENT_ID', '')
 MDREPO_CLIENT_SECRET = os.environ.get('MDREPO_CLIENT_SECRET', '')
 MDREPO_REDIRECT_URI = f"https://{HOSTNAME}/hub/user-redirect/dash/api/mdrepo/callback"
-
-# MDRepo OAuth endpoints (InvenioRDM standard endpoints)
 MDREPO_AUTHORIZE_URL = f'{MDREPO_URL}/oauth/authorize'
 MDREPO_TOKEN_URL = f'{MDREPO_URL}/oauth/token'
+MDREPO_SCOPES = 'user:email deposit:write deposit:actions'
 
 if not all([MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET]):
     logger.warning("MDRepo OAuth configuration incomplete. Publishing to MDRepo will require OAuth setup.")
