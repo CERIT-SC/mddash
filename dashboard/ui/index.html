@@ -7,11 +7,23 @@
     <meta name="description" content="FAIR MD Dash - Molecular Dynamics Simulation Dashboard for managing and analyzing GROMACS simulations" />
     <meta name="keywords" content="molecular dynamics, GROMACS, simulation, protein, JupyterHub, dashboard" />
     <title>FAIR MD Dash</title>
+    <!-- Dynamically set base href for proper asset resolution in nested routes -->
+    <script>
+      (function() {
+        var path = window.location.pathname;
+        var dashIndex = path.indexOf('/dash/');
+        if (dashIndex !== -1) {
+          var base = document.createElement('base');
+          base.href = path.substring(0, dashIndex + 6);
+          document.head.appendChild(base);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
     <!-- Runtime config injected by Caddy - will 404 in dev mode which is fine -->
     <script src="config.js"></script>
-    <script type="module" src="/src/Main.tsx"></script>
+    <script type="module" src="src/Main.tsx"></script>
   </body>
 </html>

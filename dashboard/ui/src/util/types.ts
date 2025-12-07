@@ -5,6 +5,7 @@ export interface Experiment {
     name: string;
     source_message: string | null;
     mdrepo_id: string | null;
+    mdrepo_record_url: string | null;
     step: number;
     status: string;
     notebook: Notebook;
