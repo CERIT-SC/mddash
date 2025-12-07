@@ -107,7 +107,8 @@ def publish_experiment(experiment_id: str) -> Response:
             HTTPStatus.UNAUTHORIZED
         )
 
-    # TODO: Allow user to select community
+    # TODO: Add endpoint to fetch available communities from MDRepo and allow user to select from a dropdown in the publish UI.
+    #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.
     mdrepo_experiment = experiment.publish(
         token=token,
         community='ceitec'
