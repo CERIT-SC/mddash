@@ -148,6 +148,7 @@ def publish_experiment(experiment_id: str):
     
     # Update experiment (step and status will be calculated dynamically)
     experiment['mdrepo_id'] = mdrepo_experiment['id']
+    experiment['mdrepo_record_url'] = mdrepo_experiment['links']['edit_html']  # type: ignore[index]
     
     return ApiResponse.success(mdrepo_experiment, HTTPStatus.CREATED)
 
