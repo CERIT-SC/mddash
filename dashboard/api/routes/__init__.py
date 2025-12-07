@@ -6,6 +6,7 @@ from .tuner import tuner_bp
 from .gmx import gmx_bp
 from .files import files_bp
 from .misc import misc_bp
+from .mdrepo import mdrepo_bp
 
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     'tuner_bp',
     'gmx_bp',
     'files_bp',
-    'misc_bp'
+    'misc_bp',
+    'mdrepo_bp',
 ]

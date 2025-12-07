@@ -14,6 +14,7 @@ class DemoState:
     
     def __init__(self) -> None:
         self.experiments: dict[str, dict] = {}
+        self.mdrepo_authenticated: bool = False
         self._init_demo_data()
     
     def _init_demo_data(self):
@@ -76,6 +77,7 @@ class DemoState:
             'name': name,
             'source_message': source_message,
             'mdrepo_id': mdrepo_id,
+            'mdrepo_record_url': f'https://workflow-repo.test.du.cesnet.cz/datasets/uploads/{mdrepo_id}' if mdrepo_id else None,
             'notebook': notebook,
             'tuner_jobs': [],
             'gromacs_jobs': [],
