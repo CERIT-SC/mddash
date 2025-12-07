@@ -12,11 +12,13 @@
       (function() {
         var path = window.location.pathname;
         var dashIndex = path.indexOf('/dash/');
+        var base = document.createElement('base');
         if (dashIndex !== -1) {
-          var base = document.createElement('base');
           base.href = path.substring(0, dashIndex + 6);
-          document.head.appendChild(base);
+        } else {
+          base.href = '/';
         }
+        document.head.appendChild(base);
       })();
     </script>
   </head>
