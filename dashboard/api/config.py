@@ -65,4 +65,4 @@ MDREPO_AUTHORIZE_URL = f'{MDREPO_URL}/oauth/authorize'
 MDREPO_TOKEN_URL = f'{MDREPO_URL}/oauth/token'
 
 if not all([MDREPO_URL, MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET, MDREPO_SCOPES]):
-    logger.warning("MDRepo configuration incomplete. Publishing to MDRepo will not properly.")
+    logger.warning("MDRepo configuration incomplete. Publishing to MDRepo will not work properly.")
