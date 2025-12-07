@@ -4,13 +4,10 @@ MDRepo API client using OAuth2 Bearer token authentication.
 This module provides functions to interact with the MDRepo (InvenioRDM) API
 for creating experiments and uploading files.
 """
-import os
 import requests
 from pathlib import Path
+from config import MDREPO_RECORD_NAME, MDREPO_API_URL
 
-MDREPO_URL = os.environ.get('MDREPO_URL', 'https://workflow-repo.test.du.cesnet.cz')
-MDREPO_API_URL = f'{MDREPO_URL}/api'
-MDREPO_RECORD_NAME = 'datasets'
 
 
 def _auth_header(token: str) -> dict[str, str]:

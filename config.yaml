@@ -16,6 +16,11 @@ registry: cerit.io/xkrasa
 dashboard:
   hostname: mddash.dyn.cloud.e-infra.cz
 
+# MDRepo integration for publishing experiments
+mdrepo:
+  url: https://workflow-repo.test.du.cesnet.cz
+  scopes: user:email
+
 # Sidecar container images for user pod
 sidecars:
   platform: linux/amd64

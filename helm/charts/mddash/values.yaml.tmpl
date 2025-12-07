@@ -79,18 +79,20 @@ jupyterhub:
         value: "{{ $cfg.sidecars.s3sync.image }}:{{ $cfg.sidecars.tag }}"
       NOTEBOOK_IMAGE:
         value: "{{ $cfg.notebook.image }}:{{ $cfg.notebook.tag }}"
-      # MDRepo OAuth - TODO: register MDDash as OAuth app in MDRepo and create dedicated secret
+      # MDRepo OAuth for publishing experiments to the repository
       MDREPO_URL:
-        value: "https://workflow-repo.test.du.cesnet.cz"
+        value: "{{ $cfg.mdrepo.url }}"
+      MDREPO_SCOPES:
+        value: "{{ $cfg.mdrepo.scopes }}"
       MDREPO_CLIENT_ID:
         valueFrom:
           secretKeyRef:
-            name: oidc-credentials
+            name: {{ $helmPackage }}-mdrepo-credentials
             key: client_id
       MDREPO_CLIENT_SECRET:
         valueFrom:
           secretKeyRef:
-            name: oidc-credentials
+            name: {{ $helmPackage }}-mdrepo-credentials
             key: client_secret
 
     extraVolumes:
