@@ -16,7 +16,6 @@ const PublishStep = (props: WizardStepProps) => {
     const [fileCount, setFileCount] = useState(0);
     const [totalSize, setTotalSize] = useState(0);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [mdrepoUrl, setMdrepoUrl] = useState<string>("");
 
     const isPublished = experiment.mdrepo_id !== null;
 
@@ -51,9 +50,6 @@ const PublishStep = (props: WizardStepProps) => {
                 setIsAuthenticated(false);
             } else if (data) {
                 setIsAuthenticated(data.authenticated);
-                if (data.mdrepo_url) {
-                    setMdrepoUrl(data.mdrepo_url);
-                }
             }
             setLoadingAuth(false);
         };
@@ -93,7 +89,7 @@ const PublishStep = (props: WizardStepProps) => {
             setLoading(true);
 
             if (isPublished) {
-                window.location.href = `${mdrepoUrl}/records/${experiment.mdrepo_id}`;
+                window.location.href = experiment.mdrepo_record_url!;
                 return;
             }
 
@@ -120,8 +116,8 @@ const PublishStep = (props: WizardStepProps) => {
                 window.location.href = data.links.edit_html;
             } else if (data.links?.self_html) {
                 window.location.href = data.links.self_html;
-            } else {
-                window.location.href = `${mdrepoUrl}/records/${data.id}`;
+            } else if (experiment.mdrepo_record_url) {
+                window.location.href = experiment.mdrepo_record_url;
             }
         } catch (e) {
             showError("Invalid response from server.");
@@ -129,7 +125,7 @@ const PublishStep = (props: WizardStepProps) => {
         } finally {
             setLoading(false);
         }
-    }, [experiment, isPublished, showError, mdrepoUrl]);
+    }, [experiment, isPublished, showError]);
 
     const isLoading = loadingStats || loadingAuth;
 
