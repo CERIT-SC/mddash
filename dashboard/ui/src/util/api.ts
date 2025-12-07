@@ -87,6 +87,26 @@ export const get_experiment_step = async (id: string): Promise<ApiData<number>> 
 }
 
 
+// ----- MDRepo -----
+
+interface MDRepoStatus {
+    authenticated: boolean;
+    mdrepo_url?: string;
+}
+
+export const get_mdrepo_status = async (): Promise<ApiData<MDRepoStatus>> => {
+    return await handle_request(
+        axios.get(`${API_BASE}/mdrepo/status`),
+        'Failed to check MDRepo status.'
+    )
+}
+
+export const get_mdrepo_auth_url = (returnUrl: string): string => {
+    const encodedReturnUrl = encodeURIComponent(returnUrl);
+    return `${API_BASE}/mdrepo/auth?return_url=${encodedReturnUrl}`;
+}
+
+
 // ----- Notebook -----
 
 export const get_notebook = async (id: string): Promise<ApiData<Notebook>> => {

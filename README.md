@@ -13,6 +13,8 @@ Molecular Dynamics simulation dashboard with JupyterHub integration.
    - `OAUTH_CLIENT_SECRET` - OAuth client secret
    - `MINIO_ROOT_USER` - MinIO root username (default: `minio`)
    - `MINIO_ROOT_PASSWORD` - MinIO root password (use a strong password in production!)
+   - `MDREPO_CLIENT_ID` - MDRepo OAuth client ID for publishing experiments
+   - `MDREPO_CLIENT_SECRET` - MDRepo OAuth client secret
 
 2. **Push to deploy**:
    - Push to `dev` → deploys to dev environment
@@ -101,6 +103,12 @@ kubectl create secret generic ${PACKAGE}-s3-creds \
 kubectl create secret generic minio-root-config \
   --from-literal=config.env="export MINIO_ROOT_USER=\"YOUR_MINIO_ROOT_USER\"
 export MINIO_ROOT_PASSWORD=\"YOUR_MINIO_ROOT_PASSWORD\"" \
+  -n ${NAMESPACE}
+
+# MDRepo OAuth Credentials (for publishing experiments to MDRepo)
+kubectl create secret generic ${PACKAGE}-mdrepo-credentials \
+  --from-literal=client_id="YOUR_MDREPO_CLIENT_ID" \
+  --from-literal=client_secret="YOUR_MDREPO_CLIENT_SECRET" \
   -n ${NAMESPACE}
 ```
 

@@ -1,3 +1,4 @@
+import os
 import logging
 from flask import Flask
 from flask_migrate import upgrade, init, migrate as flask_migrate
@@ -19,6 +20,13 @@ def create_app() -> Flask:
     migrations_dir = DATA_DIR / 'migrations'
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    
+    # Secret key for Flask session (used by MDRepo OAuth)
+    app.config['SECRET_KEY'] = os.environ.get('MDREPO_CLIENT_SECRET', '')
+    # Secure session cookie settings (recommended for production)
+    app.config['SESSION_COOKIE_SECURE'] = True  # Only send over HTTPS
+    app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
 
     # Initialize extensions
     db.init_app(app)
@@ -31,6 +39,7 @@ def create_app() -> Flask:
     app.register_blueprint(gmx_bp)
     app.register_blueprint(files_bp)
     app.register_blueprint(misc_bp)
+    app.register_blueprint(mdrepo_bp)
 
     with app.app_context():
         if not migrations_dir.exists():

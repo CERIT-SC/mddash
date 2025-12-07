@@ -1,44 +1,36 @@
+"""
+MDRepo API client using OAuth2 Bearer token authentication.
+
+This module provides functions to interact with the MDRepo (InvenioRDM) API
+for creating experiments and uploading files.
+"""
 import requests
 from pathlib import Path
-
-MDREPO_URL = 'https://mdrepo.eu/api'
-
-
-def login(email: str, password: str) -> str:
-    '''
-    Login to the MDRepo server and return the token.
-    
-    :param email: Email address
-    :param password: Password
-    :return: Session cookie
-    :raise ValueError: If the login fails
-    :raise KeyError: If the session cookie is not found in the response
-    '''
-    data = {
-        'email': email,
-        'password': password
-    }
-    response = requests.post(f'{MDREPO_URL}/login', json=data)
-
-    if response.status_code >= 400:
-        raise ValueError(
-            f"Failed to login: {response.status_code} - {response.text}")
-
-    return response.cookies['session']
+from config import MDREPO_RECORD_NAME, MDREPO_API_URL
 
 
-def create_experiment(session: str, community: str, metadata: dict) -> dict:
-    '''
-    Create a new experiment in MDRepo.
-    
-    :param session: Session cookie from login
-    :param community: Community name
-    :param metadata: Metadata for the experiment
-    :return: Server response
-    :raise ValueError: If the experiment creation fails
-    '''
-    cookies = {'session': session}
-    json = {
+
+def _auth_header(token: str) -> dict[str, str]:
+    """Create authorization header for API requests."""
+    return {'Authorization': f'Bearer {token}'}
+
+
+def create_experiment(token: str, community: str, metadata: dict) -> dict:
+    """
+    Create a new experiment (record) in MDRepo.
+
+    Args:
+        token: OAuth2 access token.
+        community: Community slug to publish under.
+        metadata: Metadata for the experiment.
+
+    Returns:
+        Server response containing the created experiment data.
+
+    Raises:
+        ValueError: If the experiment creation fails.
+    """
+    json_data = {
         'files': {'enabled': True},
         'parent': {
             'communities': {'default': community}
@@ -47,54 +39,65 @@ def create_experiment(session: str, community: str, metadata: dict) -> dict:
     }
 
     response = requests.post(
-        f'{MDREPO_URL}/experiments', json=json, cookies=cookies)
+        f'{MDREPO_API_URL}/{MDREPO_RECORD_NAME}',
+        json=json_data,
+        headers=_auth_header(token),
+        timeout=30
+    )
 
-    if response.status_code >= 400:
-        raise ValueError(
-            f"Failed to create experiment: {response.status_code} - {response.text}")
+    if not response.ok:
+        raise ValueError(f"Failed to create experiment: {response.status_code} - {response.text}")
 
     return response.json()
 
 
-def upload_file(session: str, experiment_id: str, file: Path) -> dict:
-    '''
-    Upload a file to an experiment in MDRepo.
-    
-    :param session: Session cookie from login
-    :param experiment_id: Experiment ID in MDRepo
-    :param file: Path to the file to upload
-    :return: Server response
-    :raise ValueError: If the file upload fails
-    '''
-    cookies = {'session': session}
+def upload_file(token: str, experiment_id: str, file: Path) -> dict:
+    """
+    Upload a file to an experiment draft in MDRepo.
 
-    # set file metadata
-    json = [{'key': file.name}]
+    Args:
+        token: OAuth2 access token.
+        experiment_id: Experiment (record) ID in MDRepo.
+        file: Path to the file to upload.
+
+    Returns:
+        Server response from file commit.
+
+    Raises:
+        ValueError: If any step of the file upload fails.
+    """
+    headers = _auth_header(token)
+
+    # Initialize file upload
+    json_data = [{'key': file.name}]
     response = requests.post(
-        f'{MDREPO_URL}/experiments/{experiment_id}/draft/files',
-        cookies=cookies,
-        json=json,
+        f'{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files',
+        headers=headers,
+        json=json_data,
+        timeout=30
     )
 
     if not response.ok:
-        raise ValueError(f"Failed to set file metadata: {response.status_code} - {response.text}")
+        raise ValueError(f"Failed to initialize file upload: {response.status_code} - {response.text}")
 
-    # upload the file
+    # Upload file content
     with open(file, 'rb') as f:
         response = requests.put(
-            f'{MDREPO_URL}/experiments/{experiment_id}/draft/files/{file.name}/content',
-            cookies=cookies,
+            f'{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files/{file.name}/content',
+            headers=headers,
             data=f,
-            stream=True
+            stream=True,
+            timeout=300  # longer timeout for file uploads
         )
 
     if not response.ok:
         raise ValueError(f"Failed to upload file: {response.status_code} - {response.text}")
 
-    # commit the file
+    # Commit the file
     response = requests.post(
-        f'{MDREPO_URL}/experiments/{experiment_id}/draft/files/{file.name}/commit',
-        cookies=cookies
+        f'{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files/{file.name}/commit',
+        headers=headers,
+        timeout=30
     )
 
     if not response.ok:
