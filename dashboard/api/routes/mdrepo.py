@@ -45,16 +45,30 @@ def get_mdrepo_token() -> str | None:
 def get_status() -> Response:
     """Check if user has a valid MDRepo token."""
     token = session.get(MDREPO_TOKEN_KEY)
-    
+
     if not token:
         return ApiResponse.success({'authenticated': False})
-    
-    # Optionally validate token by making a test request to MDRepo
-    # For now, just check if token exists
-    return ApiResponse.success({
-        'authenticated': True,
-        'mdrepo_url': MDREPO_URL
-    })
+
+    try:
+        resp = requests.get(
+            f"{MDREPO_URL}/api/me",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10
+        )
+
+        if resp.status_code == 200:
+            return ApiResponse.success({
+                'authenticated': True,
+                'mdrepo_url': MDREPO_URL
+            })
+
+        else:
+            # Token invalid or expired
+            session.pop(MDREPO_TOKEN_KEY, None)
+            return ApiResponse.success({'authenticated': False})
+    except Exception as e:
+        logger.error(f"MDRepo token validation failed: {e}")
+        return ApiResponse.success({'authenticated': False})
 
 
 @mdrepo_bp.route('/auth', methods=['GET'])
