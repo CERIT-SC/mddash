@@ -10,7 +10,7 @@ from cachetools import TTLCache, cached
 from werkzeug.datastructures import FileStorage
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from config import DATA_DIR
+from config import DATA_DIR, MDREPO_URL, MDREPO_RECORD_NAME
 from enums import PodStatus, JobStatus
 from utils import get_files_with_extensions, get_unique_id
 from clients import mdrepo
@@ -59,6 +59,13 @@ class Experiment(db.Model):  # type: ignore
     def status(self) -> str:
         '''Status of the experiment based on its current state.'''
         return self._step_status()[1]
+
+    @property
+    def mdrepo_record_url(self) -> str | None:
+        """Get the MDRepo record URL if published."""
+        if self.mdrepo_id:
+            return f"{MDREPO_URL}/{MDREPO_RECORD_NAME}/uploads/{self.mdrepo_id}"
+        return None
 
     @classmethod
     def prepare_env(cls) -> str:
