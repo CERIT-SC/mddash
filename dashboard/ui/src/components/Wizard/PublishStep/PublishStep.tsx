@@ -89,7 +89,7 @@ const PublishStep = (props: WizardStepProps) => {
             setLoading(true);
 
             if (isPublished) {
-                window.location.href = experiment.mdrepo_record_url!;
+                window.open(experiment.mdrepo_record_url!, "_blank");
                 return;
             }
 
@@ -111,13 +111,13 @@ const PublishStep = (props: WizardStepProps) => {
 
             experiment.mdrepo_id = data.id;
 
-            // Redirect to MDRepo to complete the record
+            // Open MDRepo record in a new tab
             if (data.links?.edit_html) {
-                window.location.href = data.links.edit_html;
+                window.open(data.links.edit_html, "_blank");
             } else if (data.links?.self_html) {
-                window.location.href = data.links.self_html;
+                window.open(data.links.self_html, "_blank");
             } else if (experiment.mdrepo_record_url) {
-                window.location.href = experiment.mdrepo_record_url;
+                window.open(experiment.mdrepo_record_url, "_blank");
             }
         } catch (e) {
             showError("Invalid response from server.");
