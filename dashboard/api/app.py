@@ -22,7 +22,7 @@ def create_app() -> Flask:
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     # Secret key for Flask session (used by MDRepo OAuth)
-    app.config['SECRET_KEY'] = os.environ.get('MDREPO_CLIENT_SECRET', 'dev-secret-key')
+    app.config['SECRET_KEY'] = os.environ.get('MDREPO_CLIENT_SECRET', '')
     # Secure session cookie settings (recommended for production)
     app.config['SESSION_COOKIE_SECURE'] = True  # Only send over HTTPS
     app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access
