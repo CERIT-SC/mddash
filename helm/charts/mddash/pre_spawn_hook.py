@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import aiohttp
 from kubernetes_asyncio import config
 from kubernetes_asyncio.client import (
-    CoreV1Api,  # type: ignore[import]
+    CoreV1Api,
     RbacAuthorizationV1Api,
     V1Capabilities,
     V1Pod,
