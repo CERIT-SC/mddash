@@ -1,29 +1,30 @@
-import os
-import time
-import secrets
-import hmac
 import hashlib
+import hmac
+import os
+import secrets
+import time
+
 import requests
-from flask import Flask, request, redirect, make_response
+from flask import Flask, Response, make_response, redirect, request
 
 app = Flask(__name__)
 
 
 # Environment/config
-USER = os.environ.get('JUPYTERHUB_USER')
-CLIENT_ID = os.environ.get('JUPYTERHUB_CLIENT_ID')
-API_TOKEN = os.environ.get('JUPYTERHUB_API_TOKEN')
-API_URL = os.environ.get('JUPYTERHUB_API_URL')
-CALLBACK_URL = os.environ.get('JUPYTERHUB_OAUTH_CALLBACK_URL')
-DEFAULT_URL = os.environ.get('JUPYTERHUB_DEFAULT_URL', '/')
-SERVICE_PREFIX = os.environ.get('JUPYTERHUB_SERVICE_PREFIX', f'/user/{USER}').rstrip('/')
+USER = os.environ.get("JUPYTERHUB_USER", "")
+CLIENT_ID = os.environ.get("JUPYTERHUB_CLIENT_ID", "")
+API_TOKEN = os.environ.get("JUPYTERHUB_API_TOKEN", "")
+API_URL = os.environ.get("JUPYTERHUB_API_URL", "")
+CALLBACK_URL = os.environ.get("JUPYTERHUB_OAUTH_CALLBACK_URL", "")
+DEFAULT_URL = os.environ.get("JUPYTERHUB_DEFAULT_URL", "/")
+SERVICE_PREFIX = os.environ.get("JUPYTERHUB_SERVICE_PREFIX", f"/user/{USER}").rstrip("/")
 
 if not all([USER, CLIENT_ID, API_TOKEN, API_URL, CALLBACK_URL]):
     raise ValueError("Missing one of the required environment variables.")
 
 # Session/cookie config
-COOKIE_NAME = 'mddash-auth'
-STATE_COOKIE = 'mddash-state'
+COOKIE_NAME = "mddash-auth"
+STATE_COOKIE = "mddash-state"
 
 # Master secret key for state validation
 STATE_SECRET = secrets.token_bytes(32)
@@ -49,6 +50,7 @@ def remove_expired_sessions() -> None:
     for t in expired:
         del _sessions[t]
 
+
 def is_valid_session(token: str, user: str) -> bool:
     """Check if the session token is valid for the given user."""
     if not token:
@@ -57,6 +59,7 @@ def is_valid_session(token: str, user: str) -> bool:
     username, expiry = _sessions.get(token, (None, 0))
     return username == user and expiry > now
 
+
 def create_session(user: str) -> str:
     """Create a new session for the user and return the token."""
     token = secrets.token_urlsafe(32)
@@ -64,69 +67,63 @@ def create_session(user: str) -> str:
     _sessions[token] = (user, expiry)
     return token
 
+
 def sign(data: str) -> str:
     """Create HMAC signature for state."""
     return hmac.new(STATE_SECRET, data.encode(), hashlib.sha256).hexdigest()
 
 
-@app.route('/health')
-def health():
-    return 'OK', 200
+@app.route("/health")
+def health() -> tuple[str, int]:
+    """Health check endpoint."""
+    return "OK", 200
 
 
-@app.route('/auth')
-def auth():
+@app.route("/auth")
+def auth() -> tuple[str, int] | Response:
+    """Authenticate user via session cookie or initiate OAuth flow."""
     remove_expired_sessions()
     token = request.cookies.get(COOKIE_NAME)
-    if is_valid_session(token, USER):
-        return '', 200
+    if token and is_valid_session(token, USER):
+        return "", 200
 
     # Not authenticated, start OAuth
     state = secrets.token_urlsafe(16)
     signature = sign(state)
-    params = {
-        'client_id': CLIENT_ID,
-        'redirect_uri': CALLBACK_URL,
-        'response_type': 'code',
-        'state': state
-    }
-    url = f"/hub/api/oauth2/authorize?" + '&'.join(f"{k}={v}" for k, v in params.items())
+    params = {"client_id": CLIENT_ID, "redirect_uri": CALLBACK_URL, "response_type": "code", "state": state}
+    url = f"/hub/api/oauth2/authorize?" + "&".join(f"{k}={v}" for k, v in params.items())
     resp = make_response(redirect(url))
     resp.set_cookie(STATE_COOKIE, signature, path=SERVICE_PREFIX, httponly=True)
     return resp
 
 
-@app.route('/oauth_callback')
-def oauth_callback():
-    code = request.args.get('code')
-    state = request.args.get('state')
+@app.route("/oauth_callback")
+def oauth_callback() -> tuple[str, int] | Response:
+    """Handle OAuth callback, exchange code for token, and create session."""
+    code = request.args.get("code")
+    state = request.args.get("state")
     signed_state = request.cookies.get(STATE_COOKIE)
 
     # Verify state by checking HMAC signature
     if not code or not state or not signed_state:
-        return 'Invalid state', 400
+        return "Invalid state", 400
     if not hmac.compare_digest(signed_state, sign(state)):
-        return 'Invalid state', 400
+        return "Invalid state", 400
 
     # Exchange code for token
-    data = {
-        'client_id': CLIENT_ID,
-        'client_secret': API_TOKEN,
-        'grant_type': 'authorization_code',
-        'code': code
-    }
+    data = {"client_id": CLIENT_ID, "client_secret": API_TOKEN, "grant_type": "authorization_code", "code": code}
     r = requests.post(f"{API_URL}/oauth2/token", data=data, timeout=5)
     if r.status_code != 200:
-        return 'Token exchange failed', 400
-    access_token = r.json().get('access_token')
+        return "Token exchange failed", 400
+    access_token = r.json().get("access_token")
     if not access_token:
-        return 'No access token', 400
+        return "No access token", 400
 
     # Get user info
-    headers = {'Authorization': f'token {access_token}'}
+    headers = {"Authorization": f"token {access_token}"}
     r = requests.get(f"{API_URL}/user", headers=headers, timeout=5)
-    if r.status_code != 200 or r.json().get('name') != USER:
-        return 'User mismatch', 403
+    if r.status_code != 200 or r.json().get("name") != USER:
+        return "User mismatch", 403
 
     # Create session and set cookie
     token = create_session(USER)
@@ -136,5 +133,5 @@ def oauth_callback():
     return resp
 
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5001)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5001)
