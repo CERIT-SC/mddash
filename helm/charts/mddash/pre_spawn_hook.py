@@ -1,27 +1,42 @@
+import asyncio
 import json
 import os
-import asyncio
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
+
 import aiohttp
-from kubernetes_asyncio import config  # type: ignore
-from kubernetes_asyncio.client import CoreV1Api, RbacAuthorizationV1Api, V1SecurityContext, V1Capabilities  # type: ignore
-from kubernetes_asyncio.client.rest import ApiException  # type: ignore
+from kubernetes_asyncio import config
+from kubernetes_asyncio.client import (
+    CoreV1Api,  # type: ignore[import]
+    RbacAuthorizationV1Api,
+    V1Capabilities,
+    V1Pod,
+    V1SecurityContext,
+)
+from kubernetes_asyncio.client.rest import ApiException
+
+if TYPE_CHECKING:
+    from kubespawner import KubeSpawner
 
 
 # =============================================================================
 # Kubernetes Manifest Builders
 # =============================================================================
 
-def get_namespace_manifest(namespace: str, rancher_project_id: str,
-                           cpu_limit: str, mem_limit: str,
-                           cpu_request: str, mem_request: str) -> dict:
-    resource_quota = json.dumps({
-        "limit": {
-            "limitsCpu": cpu_limit,
-            "limitsMemory": mem_limit,
-            "requestsCpu": cpu_request,
-            "requestsMemory": mem_request
+
+def _get_namespace_manifest(
+    namespace: str, rancher_project_id: str, cpu_limit: str, mem_limit: str, cpu_request: str, mem_request: str
+) -> dict:
+    resource_quota = json.dumps(
+        {
+            "limit": {
+                "limitsCpu": cpu_limit,
+                "limitsMemory": mem_limit,
+                "requestsCpu": cpu_request,
+                "requestsMemory": mem_request,
+            }
         }
-    })
+    )
     return {
         "apiVersion": "v1",
         "kind": "Namespace",
@@ -29,13 +44,13 @@ def get_namespace_manifest(namespace: str, rancher_project_id: str,
             "name": namespace,
             "annotations": {
                 "field.cattle.io/projectId": rancher_project_id,
-                "field.cattle.io/resourceQuota": resource_quota
-            }
-        }
+                "field.cattle.io/resourceQuota": resource_quota,
+            },
+        },
     }
 
 
-def get_role_manifest(role_name: str, include_pvc: bool = False) -> dict:
+def _get_role_manifest(role_name: str, include_pvc: bool = False) -> dict:
     resources = ["pods", "pods/exec", "services", "events"]
     if include_pvc:
         resources.append("persistentvolumeclaims")
@@ -45,27 +60,20 @@ def get_role_manifest(role_name: str, include_pvc: bool = False) -> dict:
         "kind": "Role",
         "metadata": {"name": role_name},
         "rules": [
-            {
-                "apiGroups": [""],
-                "resources": resources,
-                "verbs": ["create", "delete", "get", "list", "watch"]
-            },
-            {
-                "apiGroups": [""],
-                "resources": ["pods/log"],
-                "verbs": ["get", "list"]
-            },
+            {"apiGroups": [""], "resources": resources, "verbs": ["create", "delete", "get", "list", "watch"]},
+            {"apiGroups": [""], "resources": ["pods/log"], "verbs": ["get", "list"]},
             {
                 "apiGroups": ["batch"],
                 "resources": ["jobs"],
-                "verbs": ["create", "get", "list", "watch", "update", "patch", "delete"]
+                "verbs": ["create", "get", "list", "watch", "update", "patch", "delete"],
             },
         ],
     }
 
 
-def get_role_binding_manifest(role_binding_name: str, service_account_name: str,
-                              role_name: str, namespace: str | None = None) -> dict:
+def _get_role_binding_manifest(
+    role_binding_name: str, service_account_name: str, role_name: str, namespace: str | None = None
+) -> dict:
     subject = {"kind": "ServiceAccount", "name": service_account_name}
     if namespace:
         subject["namespace"] = namespace
@@ -83,8 +91,7 @@ def get_role_binding_manifest(role_binding_name: str, service_account_name: str,
     }
 
 
-def get_pvc_manifest(pvc_name: str, storage_size: str = "10Gi",
-                     storage_class: str = "nfs-csi") -> dict:
+def _get_pvc_manifest(pvc_name: str, storage_size: str = "10Gi", storage_class: str = "nfs-csi") -> dict:
     return {
         "apiVersion": "v1",
         "kind": "PersistentVolumeClaim",
@@ -92,8 +99,8 @@ def get_pvc_manifest(pvc_name: str, storage_size: str = "10Gi",
         "spec": {
             "storageClassName": storage_class,
             "accessModes": ["ReadWriteMany"],
-            "resources": {"requests": {"storage": storage_size}}
-        }
+            "resources": {"requests": {"storage": storage_size}},
+        },
     }
 
 
@@ -101,16 +108,17 @@ def get_pvc_manifest(pvc_name: str, storage_size: str = "10Gi",
 # Helper Functions
 # =============================================================================
 
-async def ensure_resource(method, **kwargs):
+
+async def _ensure_resource(method: Callable[..., Awaitable[object]], **kwargs: object) -> None:
     """Create a Kubernetes resource, ignoring AlreadyExists errors."""
     try:
-        await method(**kwargs)
+        await method(**kwargs)  # type: ignore[arg-type]
     except ApiException as e:
         if e.status != 409:
             raise
 
 
-async def create_s3_bucket(bucket_name: str):
+async def _create_s3_bucket(bucket_name: str) -> None:
     """Create an S3 bucket if it doesn't exist."""
     s3_endpoint = os.environ.get("S3_ENDPOINT")
     access_key = os.environ.get("S3_ACCESS_KEY")
@@ -131,7 +139,7 @@ async def create_s3_bucket(bucket_name: str):
             print(f"Error creating bucket {bucket_name}: {e}")
 
 
-def get_security_context() -> dict:
+def _get_security_context() -> dict:
     """Return hardened security context for sidecar containers."""
     return {
         "allowPrivilegeEscalation": False,
@@ -139,13 +147,14 @@ def get_security_context() -> dict:
         "runAsUser": 1000,
         "runAsGroup": 1000,
         "capabilities": {"drop": ["ALL"]},
-        "seccompProfile": {"type": "RuntimeDefault"}
+        "seccompProfile": {"type": "RuntimeDefault"},
     }
 
 
 # =============================================================================
 # Sidecar Container Builders
 # =============================================================================
+
 
 def _proxy_container(service_prefix: str, username: str, security_context: dict) -> dict | None:
     image = os.environ.get("PROXY_IMAGE")
@@ -164,16 +173,14 @@ def _proxy_container(service_prefix: str, username: str, security_context: dict)
             {"name": "API_HOST", "value": "localhost"},
             {"name": "NOTEBOOK_HOST", "value": "localhost"},
         ],
-        "resources": {
-            "requests": {"cpu": "10m", "memory": "32Mi"},
-            "limits": {"cpu": "100m", "memory": "64Mi"}
-        },
-        "securityContext": security_context
+        "resources": {"requests": {"cpu": "10m", "memory": "32Mi"}, "limits": {"cpu": "100m", "memory": "64Mi"}},
+        "securityContext": security_context,
     }
 
 
-def _auth_container(service_prefix: str, username: str, hub_namespace: str,
-                    jupyterhub_env: dict, security_context: dict) -> dict | None:
+def _auth_container(
+    service_prefix: str, username: str, hub_namespace: str, jupyterhub_env: dict, security_context: dict
+) -> dict | None:
     image = os.environ.get("AUTH_IMAGE")
     if not image:
         return None
@@ -192,17 +199,21 @@ def _auth_container(service_prefix: str, username: str, hub_namespace: str,
             {"name": "JUPYTERHUB_SERVICE_PREFIX", "value": service_prefix},
             {"name": "JUPYTERHUB_DEFAULT_URL", "value": "/dash"},
         ],
-        "resources": {
-            "requests": {"cpu": "10m", "memory": "48Mi"},
-            "limits": {"cpu": "100m", "memory": "96Mi"}
-        },
-        "securityContext": security_context
+        "resources": {"requests": {"cpu": "10m", "memory": "48Mi"}, "limits": {"cpu": "100m", "memory": "96Mi"}},
+        "securityContext": security_context,
     }
 
 
-def _api_container(service_prefix: str, username: str, user_namespace: str,
-                   hub_namespace: str, bucket_name: str, pvc_name: str,
-                   volume_name: str, security_context: dict) -> dict | None:
+def _api_container(
+    service_prefix: str,
+    username: str,
+    user_namespace: str,
+    hub_namespace: str,
+    bucket_name: str,
+    pvc_name: str,
+    volume_name: str,
+    security_context: dict,
+) -> dict | None:
     image = os.environ.get("API_IMAGE")
     if not image:
         return None
@@ -233,16 +244,12 @@ def _api_container(service_prefix: str, username: str, user_namespace: str,
             {"name": "MDREPO_CLIENT_SECRET", "value": os.environ.get("MDREPO_CLIENT_SECRET", "")},
         ],
         "volumeMounts": [{"name": volume_name, "mountPath": "/mddash"}],
-        "resources": {
-            "requests": {"cpu": "50m", "memory": "128Mi"},
-            "limits": {"cpu": "300m", "memory": "256Mi"}
-        },
-        "securityContext": security_context
+        "resources": {"requests": {"cpu": "50m", "memory": "128Mi"}, "limits": {"cpu": "300m", "memory": "256Mi"}},
+        "securityContext": security_context,
     }
 
 
-def _s3_sync_container(bucket_name: str, volume_name: str,
-                       security_context: dict) -> dict | None:
+def _s3_sync_container(bucket_name: str, volume_name: str, security_context: dict) -> dict | None:
     image = os.environ.get("S3_SYNC_IMAGE")
     if not image:
         return None
@@ -258,28 +265,34 @@ def _s3_sync_container(bucket_name: str, volume_name: str,
             {"name": "S3_SECRET_KEY", "value": os.environ.get("S3_SECRET_KEY", "")},
         ],
         "volumeMounts": [{"name": volume_name, "mountPath": "/mddash"}],
-        "resources": {
-            "requests": {"cpu": "10m", "memory": "64Mi"},
-            "limits": {"cpu": "200m", "memory": "256Mi"}
-        },
-        "securityContext": security_context
+        "resources": {"requests": {"cpu": "10m", "memory": "64Mi"}, "limits": {"cpu": "200m", "memory": "256Mi"}},
+        "securityContext": security_context,
     }
 
 
-def get_sidecar_containers(spawner, bucket_name: str, pvc_name: str,
-                           volume_name: str, user_namespace: str) -> list[dict]:
+def _get_sidecar_containers(
+    spawner: "KubeSpawner", bucket_name: str, pvc_name: str, volume_name: str, user_namespace: str
+) -> list[dict]:
     """Build sidecar container configurations for the user pod."""
-    username = spawner.user.name
+    username: str = spawner.user.name  # type: ignore[union-attr]
     hub_namespace = os.environ.get("POD_NAMESPACE", "default")
     service_prefix = f"/user/{username}"
     jupyterhub_env = spawner.get_env()
-    security_context = get_security_context()
+    security_context = _get_security_context()
 
     container_builders = [
         lambda: _proxy_container(service_prefix, username, security_context),
         lambda: _auth_container(service_prefix, username, hub_namespace, jupyterhub_env, security_context),
-        lambda: _api_container(service_prefix, username, user_namespace, hub_namespace,
-                               bucket_name, pvc_name, volume_name, security_context),
+        lambda: _api_container(
+            service_prefix,
+            username,
+            user_namespace,
+            hub_namespace,
+            bucket_name,
+            pvc_name,
+            volume_name,
+            security_context,
+        ),
         lambda: _s3_sync_container(bucket_name, volume_name, security_context),
     ]
 
@@ -290,16 +303,18 @@ def get_sidecar_containers(spawner, bucket_name: str, pvc_name: str,
 # JupyterHub Spawner Hooks
 # =============================================================================
 
-async def pre_spawn_hook(spawner):
+
+async def pre_spawn_hook(spawner: KubeSpawner) -> None:
     """
     Prepare user environment before spawning the notebook server.
+
     Creates user namespace, RBAC, PVC, S3 bucket, and configures sidecar containers.
     """
-    await config.load_kube_config(config_file="/home/jovyan/.kube/config")
+    await config.load_kube_config(config_file="/home/jovyan/.kube/config")  # type: ignore[misc]
     core_api = CoreV1Api()
     rbac_api = RbacAuthorizationV1Api()
 
-    username = spawner.user.name
+    username: str = spawner.user.name  # type: ignore[union-attr]
     helm_package = os.environ.get("HELM_PACKAGE", "mddash")
     hub_namespace = os.environ.get("POD_NAMESPACE", "default")
     rancher_project_id = os.environ.get("RANCHER_PROJECT_ID", "")
@@ -309,48 +324,60 @@ async def pre_spawn_hook(spawner):
     pvc_name = f"{helm_package}-user-pvc"
     volume_name = "mddash-volume"
 
+    # Start S3 bucket creation early (independent of K8s operations)
+    s3_task = asyncio.create_task(_create_s3_bucket(bucket_name))
+
     # Create namespace with resource quotas
-    namespace_manifest = get_namespace_manifest(
-        user_namespace, rancher_project_id,
+    namespace_manifest = _get_namespace_manifest(
+        user_namespace,
+        rancher_project_id,
         cpu_limit=os.environ.get("NS_LIMITS_CPU", "64000m"),
         mem_limit=os.environ.get("NS_LIMITS_MEMORY", "256Gi"),
         cpu_request=os.environ.get("NS_REQUESTS_CPU", "1000m"),
-        mem_request=os.environ.get("NS_REQUESTS_MEMORY", "4Gi")
+        mem_request=os.environ.get("NS_REQUESTS_MEMORY", "4Gi"),
     )
-    await ensure_resource(core_api.create_namespace, body=namespace_manifest)
+    await _ensure_resource(core_api.create_namespace, body=namespace_manifest)  # type: ignore[arg-type]
     await asyncio.sleep(1)
-    await core_api.patch_namespace(name=user_namespace, body=namespace_manifest)
+    await core_api.patch_namespace(name=user_namespace, body=namespace_manifest)  # type: ignore[misc]
 
-    # Create RBAC for default service account (user workloads)
+    # Prepare resource names and manifests
     user_role = f"{helm_package}-user-role"
     user_binding = f"{helm_package}-user-binding"
-    await ensure_resource(rbac_api.create_namespaced_role,
-                          namespace=user_namespace,
-                          body=get_role_manifest(user_role))
-    await ensure_resource(rbac_api.create_namespaced_role_binding,
-                          namespace=user_namespace,
-                          body=get_role_binding_manifest(user_binding, "default", user_role))
-
-    # Create RBAC for hub service account (cross-namespace access)
     hub_role = f"{helm_package}-hub-role"
     hub_binding = f"{helm_package}-hub-binding"
-    await ensure_resource(rbac_api.create_namespaced_role,
-                          namespace=user_namespace,
-                          body=get_role_manifest(hub_role, include_pvc=True))
-    await ensure_resource(rbac_api.create_namespaced_role_binding,
-                          namespace=user_namespace,
-                          body=get_role_binding_manifest(hub_binding, "hub", hub_role, namespace=hub_namespace))
-
-    # Create PVC for user data
-    pvc_manifest = get_pvc_manifest(
+    pvc_manifest = _get_pvc_manifest(
         pvc_name,
         storage_size=os.environ.get("PVC_STORAGE_SIZE", "10Gi"),
-        storage_class=os.environ.get("PVC_STORAGE_CLASS", "nfs-csi")
+        storage_class=os.environ.get("PVC_STORAGE_CLASS", "nfs-csi"),
     )
-    await ensure_resource(core_api.create_namespaced_persistent_volume_claim,
-                          namespace=user_namespace, body=pvc_manifest)
 
-    await create_s3_bucket(bucket_name)
+    # Create all namespaced resources in parallel (RBAC + PVC)
+    await asyncio.gather(
+        _ensure_resource(rbac_api.create_namespaced_role, namespace=user_namespace, body=_get_role_manifest(user_role)),  # type: ignore[arg-type]
+        _ensure_resource(
+            rbac_api.create_namespaced_role_binding,  # type: ignore[arg-type]
+            namespace=user_namespace,
+            body=_get_role_binding_manifest(user_binding, "default", user_role),
+        ),
+        _ensure_resource(
+            rbac_api.create_namespaced_role,  # type: ignore[arg-type]
+            namespace=user_namespace,
+            body=_get_role_manifest(hub_role, include_pvc=True),
+        ),
+        _ensure_resource(
+            rbac_api.create_namespaced_role_binding,  # type: ignore[arg-type]
+            namespace=user_namespace,
+            body=_get_role_binding_manifest(hub_binding, "hub", hub_role, namespace=hub_namespace),
+        ),
+        _ensure_resource(
+            core_api.create_namespaced_persistent_volume_claim,  # type: ignore[arg-type]
+            namespace=user_namespace,
+            body=pvc_manifest,
+        ),
+    )
+
+    # Ensure S3 bucket creation completes
+    await s3_task
 
     # Configure spawner
     spawner.namespace = user_namespace
@@ -365,13 +392,15 @@ async def pre_spawn_hook(spawner):
     spawner.environment["JUPYTERHUB_API_URL"] = hub_api_base
     spawner.environment["JUPYTERHUB_ACTIVITY_URL"] = f"{hub_api_base}/users/{username}/activity"
 
-    sidecar_containers = get_sidecar_containers(spawner, bucket_name, pvc_name, volume_name, user_namespace)
+    sidecar_containers = _get_sidecar_containers(spawner, bucket_name, pvc_name, volume_name, user_namespace)
     if sidecar_containers:
         spawner.extra_containers = sidecar_containers
 
 
-def modify_pod_hook(spawner, pod):
+def modify_pod_hook(spawner: KubeSpawner, pod: V1Pod) -> V1Pod:
     """Apply security hardening to the notebook container (e-INFRA requirement)."""
+    if pod.spec is None:
+        return pod
     for container in pod.spec.containers:
         if container.name == "notebook":
             sc = container.security_context
@@ -386,21 +415,22 @@ def modify_pod_hook(spawner, pod):
     return pod
 
 
-async def post_stop_hook(spawner, **kwargs):
+async def post_stop_hook(spawner: KubeSpawner, **kwargs: object) -> None:
     """
     Clean up after user pod stops.
+
     Sets namespace quota to zero and deletes all pods to free resources.
     """
-    await config.load_kube_config(config_file="/home/jovyan/.kube/config")
+    await config.load_kube_config(config_file="/home/jovyan/.kube/config")  # type: ignore[misc]
     core_api = CoreV1Api()
 
-    username = spawner.user.name
+    username: str = spawner.user.name  # type: ignore[union-attr]
     helm_package = os.environ.get("HELM_PACKAGE", "mddash")
     user_namespace = f"{helm_package}-user-{username}-ns"
     rancher_project_id = os.environ.get("RANCHER_PROJECT_ID", "")
 
-    zero_quota_manifest = get_namespace_manifest(user_namespace, rancher_project_id, "0", "0", "0", "0")
-    await core_api.patch_namespace(name=user_namespace, body=zero_quota_manifest)
+    zero_quota_manifest = _get_namespace_manifest(user_namespace, rancher_project_id, "0", "0", "0", "0")
+    await core_api.patch_namespace(name=user_namespace, body=zero_quota_manifest)  # type: ignore[misc]
 
     try:
         await core_api.delete_collection_namespaced_pod(namespace=user_namespace)
