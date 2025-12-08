@@ -1,11 +1,11 @@
 import logging
+import os
 import threading
 import time
-import os
-from flask import Flask
 
-from models import MdrunJob
 from enums import JobStatus
+from flask import Flask
+from models import MdrunJob
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +23,9 @@ def _polling_worker(app: Flask) -> None:
                 # Query all active jobs
                 active_statuses = [JobStatus.PENDING, JobStatus.UNKNOWN, JobStatus.RUNNING]
                 jobs: list[MdrunJob] = MdrunJob.query.filter(MdrunJob.last_status.in_(active_statuses)).all()
-                
+
                 logger.info(f"Polling {len(jobs)} active jobs")
-                
+
                 for job in jobs:
                     try:
                         # Access the status property to trigger the update
@@ -43,21 +43,17 @@ def _polling_worker(app: Flask) -> None:
 def start_polling(app: Flask) -> None:
     """
     Start the background polling thread.
+
     Only runs in the first uWSGI worker to avoid duplicate polling.
     """
     # In uWSGI, only start polling in worker 1
-    worker_id = os.environ.get('UWSGI_WORKER_ID', '1')
-    
-    if worker_id != '1':
+    worker_id = os.environ.get("UWSGI_WORKER_ID", "1")
+
+    if worker_id != "1":
         logger.info(f"Skipping polling worker in uWSGI worker {worker_id}")
         return
-    
+
     logger.info("Starting polling worker in uWSGI worker 1")
-    thread = threading.Thread(
-        target=_polling_worker,
-        args=(app,),
-        daemon=True,
-        name="JobStatusPoller"
-    )
+    thread = threading.Thread(target=_polling_worker, args=(app,), daemon=True, name="JobStatusPoller")
     thread.start()
     logger.info("Job status polling thread started")

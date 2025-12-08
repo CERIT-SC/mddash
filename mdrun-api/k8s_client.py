@@ -1,9 +1,11 @@
 import logging
-from kubernetes import client, config  # type: ignore
-from kubernetes.client.rest import ApiException  # type: ignore
+from typing import cast
 
+from config import GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
 from enums import JobStatus
-from config import GPU_TYPE, S3_ACCESS_KEY, S3_SECRET_KEY, S3_ENDPOINT
+from kubernetes import client, config  # type: ignore
+from kubernetes.client import V1Job  # type: ignore
+from kubernetes.client.rest import ApiException  # type: ignore
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +24,24 @@ def create_gromacs_job(
     ntomp: int,
     nb: str,
     pme: str,
-    extra_args: str
+    extra_args: str,
 ) -> None:
-    if ping_resource('job', name, ns):
+    """
+    Create a GROMACS MD simulation job in Kubernetes.
+
+    Args:
+        ns: Kubernetes namespace for the job.
+        bucket_name: S3 bucket name for data storage.
+        name: Unique name for the Kubernetes job.
+        experiment_id: Experiment identifier for data organization.
+        deffnm: GROMACS default filename prefix (without .tpr extension).
+        np: Number of MPI processes.
+        ntomp: Number of OpenMP threads per process.
+        nb: Non-bonded interaction device type ('cpu' or 'gpu').
+        pme: PME calculation device type ('cpu' or 'gpu').
+        extra_args: Additional arguments to pass to gmx mdrun.
+    """
+    if ping_resource("job", name, ns):
         logger.warning(f"Job {name} already exists in namespace {ns}. Skipping creation.")
         return
 
@@ -33,8 +50,8 @@ def create_gromacs_job(
     nb = nb.lower()
     pme = pme.lower()
 
-    gromacs_image = 'cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2'
-    s3_sync_image = 'rclone/rclone:latest'  # TODO: lock version
+    gromacs_image = "cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2"
+    s3_sync_image = "rclone/rclone:latest"  # TODO: lock version
 
     gromacs_command = f"""
         trap 'touch /data/job_completed' EXIT TERM INT
@@ -89,170 +106,102 @@ EOF
     """
 
     job_manifest = {
-        'apiVersion': 'batch/v1',
-        'kind': 'Job',
-        'metadata': {
-            'name': name,
-            'namespace': ns,
-            'labels': {
-                'app': name
-            }
-        },
-        'spec': {
-            'backoffLimit': 0,
-            'ttlSecondsAfterFinished': 3600,  # 1 hour
-            'template': {
-                'metadata': {
-                    'labels': {
-                        'job': name
-                    }
-                },
-                'spec': {
-                    'restartPolicy': 'Never',
-                    'securityContext': {
-                        'fsGroup': 1000
-                    },
-                    'initContainers': [
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "metadata": {"name": name, "namespace": ns, "labels": {"app": name}},
+        "spec": {
+            "backoffLimit": 0,
+            "ttlSecondsAfterFinished": 3600,  # 1 hour
+            "template": {
+                "metadata": {"labels": {"job": name}},
+                "spec": {
+                    "restartPolicy": "Never",
+                    "securityContext": {"fsGroup": 1000},
+                    "initContainers": [
                         {
-                            'name': 's3-init',
-                            'image': s3_sync_image,
-                            'command': ['sh', '-c', s3_init_command],
-                            'securityContext': {
-                                'runAsUser': 1000,
-                                'runAsGroup': 1000,
-                                'runAsNonRoot': True,
-                                'seccompProfile': {
-                                    'type': 'RuntimeDefault'
-                                },
-                                'allowPrivilegeEscalation': False,
-                                'capabilities': {
-                                    'drop': ['ALL']
-                                }
+                            "name": "s3-init",
+                            "image": s3_sync_image,
+                            "command": ["sh", "-c", s3_init_command],
+                            "securityContext": {
+                                "runAsUser": 1000,
+                                "runAsGroup": 1000,
+                                "runAsNonRoot": True,
+                                "seccompProfile": {"type": "RuntimeDefault"},
+                                "allowPrivilegeEscalation": False,
+                                "capabilities": {"drop": ["ALL"]},
                             },
-                            'env': [
-                                {
-                                    'name': 'S3_ENDPOINT',
-                                    'value': S3_ENDPOINT or ''
-                                },
-                                {
-                                    'name': 'S3_ACCESS_KEY',
-                                    'value': S3_ACCESS_KEY or ''
-                                },
-                                {
-                                    'name': 'S3_SECRET_KEY',
-                                    'value': S3_SECRET_KEY or ''
-                                }
+                            "env": [
+                                {"name": "S3_ENDPOINT", "value": S3_ENDPOINT or ""},
+                                {"name": "S3_ACCESS_KEY", "value": S3_ACCESS_KEY or ""},
+                                {"name": "S3_SECRET_KEY", "value": S3_SECRET_KEY or ""},
                             ],
-                            'volumeMounts': [
-                                {
-                                    'name': 'shared-data',
-                                    'mountPath': '/data'
-                                }
-                            ]
+                            "volumeMounts": [{"name": "shared-data", "mountPath": "/data"}],
                         }
                     ],
-                    'containers': [
+                    "containers": [
                         {
-                            'name': name,
-                            'image': gromacs_image,
-                            'workingDir': f'/data/{experiment_id}',
-                            'command': ['bash', '-c', gromacs_command],
-                            'securityContext': {
-                                'runAsUser': 1000,
-                                'runAsGroup': 1000,
-                                'runAsNonRoot': True,
-                                'seccompProfile': {
-                                    'type': 'RuntimeDefault'
-                                },
-                                'allowPrivilegeEscalation': False,
-                                'capabilities': {
-                                    'drop': ['ALL']
-                                }
+                            "name": name,
+                            "image": gromacs_image,
+                            "workingDir": f"/data/{experiment_id}",
+                            "command": ["bash", "-c", gromacs_command],
+                            "securityContext": {
+                                "runAsUser": 1000,
+                                "runAsGroup": 1000,
+                                "runAsNonRoot": True,
+                                "seccompProfile": {"type": "RuntimeDefault"},
+                                "allowPrivilegeEscalation": False,
+                                "capabilities": {"drop": ["ALL"]},
                             },
-                            'env': [
-                                {
-                                    'name': 'OMP_NUM_THREADS',
-                                    'value': str(ntomp)
-                                }
-                            ],
-                            'resources': {
-                                'requests': {
-                                    'cpu': str(np * ntomp),
-                                    'memory': f'{4 * np}Gi',
-                                    GPU_TYPE: '1' if nb == 'gpu' or pme == 'gpu' else '0'
+                            "env": [{"name": "OMP_NUM_THREADS", "value": str(ntomp)}],
+                            "resources": {
+                                "requests": {
+                                    "cpu": str(np * ntomp),
+                                    "memory": f"{4 * np}Gi",
+                                    GPU_TYPE: "1" if nb == "gpu" or pme == "gpu" else "0",
                                 },
-                                'limits': {
-                                    'cpu': str(np * ntomp),
-                                    'memory': f'{4 * np}Gi',
-                                    GPU_TYPE: '1' if nb == 'gpu' or pme == 'gpu' else '0'
-                                }
+                                "limits": {
+                                    "cpu": str(np * ntomp),
+                                    "memory": f"{4 * np}Gi",
+                                    GPU_TYPE: "1" if nb == "gpu" or pme == "gpu" else "0",
+                                },
                             },
-                            'volumeMounts': [
-                                {
-                                    'name': 'shared-data',
-                                    'mountPath': '/data'
-                                }
-                            ]
+                            "volumeMounts": [{"name": "shared-data", "mountPath": "/data"}],
                         },
                         {
-                            'name': 's3-sync',
-                            'image': s3_sync_image,
-                            'command': ['sh', '-c', s3_sync_command],
-                            'securityContext': {
-                                'runAsUser': 1000,
-                                'runAsGroup': 1000,
-                                'runAsNonRoot': True,
-                                'seccompProfile': {
-                                    'type': 'RuntimeDefault'
-                                },
-                                'allowPrivilegeEscalation': False,
-                                'capabilities': {
-                                    'drop': ['ALL']
-                                }
+                            "name": "s3-sync",
+                            "image": s3_sync_image,
+                            "command": ["sh", "-c", s3_sync_command],
+                            "securityContext": {
+                                "runAsUser": 1000,
+                                "runAsGroup": 1000,
+                                "runAsNonRoot": True,
+                                "seccompProfile": {"type": "RuntimeDefault"},
+                                "allowPrivilegeEscalation": False,
+                                "capabilities": {"drop": ["ALL"]},
                             },
-                            'env': [
-                                {
-                                    'name': 'S3_ENDPOINT',
-                                    'value': S3_ENDPOINT or ''
-                                },
-                                {
-                                    'name': 'S3_ACCESS_KEY',
-                                    'value': S3_ACCESS_KEY or ''
-                                },
-                                {
-                                    'name': 'S3_SECRET_KEY',
-                                    'value': S3_SECRET_KEY or ''
-                                }
+                            "env": [
+                                {"name": "S3_ENDPOINT", "value": S3_ENDPOINT or ""},
+                                {"name": "S3_ACCESS_KEY", "value": S3_ACCESS_KEY or ""},
+                                {"name": "S3_SECRET_KEY", "value": S3_SECRET_KEY or ""},
                             ],
-                            'resources': {
-                                'requests': {
-                                    'cpu': '100m',
-                                    'memory': '128Mi'
-                                },
-                                'limits': {
-                                    'cpu': '200m',
-                                    'memory': '256Mi'
-                                }
+                            "resources": {
+                                "requests": {"cpu": "100m", "memory": "128Mi"},
+                                "limits": {"cpu": "200m", "memory": "256Mi"},
                             },
-                            'volumeMounts': [
-                                {
-                                    'name': 'shared-data',
-                                    'mountPath': '/data'
-                                }
-                            ]
+                            "volumeMounts": [{"name": "shared-data", "mountPath": "/data"}],
+                        },
+                    ],
+                    "volumes": [
+                        {
+                            "name": "shared-data",
+                            "emptyDir": {
+                                "sizeLimit": "100Gi"  # TODO: adjust based on our needs
+                            },
                         }
                     ],
-                    'volumes': [
-                        {
-                            'name': 'shared-data',
-                            'emptyDir': {
-                                'sizeLimit': '100Gi'  # TODO: adjust based on our needs
-                            }
-                        }
-                    ]
-                }
-            }
-        }
+                },
+            },
+        },
     }
 
     batch_v1.create_namespaced_job(namespace=ns, body=job_manifest)
@@ -260,7 +209,14 @@ EOF
 
 
 def delete_job(ns: str, name: str) -> None:
-    if not ping_resource('job', name, ns):
+    """
+    Delete a Kubernetes job by name.
+
+    Args:
+        ns: Kubernetes namespace containing the job.
+        name: Name of the job to delete.
+    """
+    if not ping_resource("job", name, ns):
         logger.warning(f"Job {name} does not exist in namespace {ns}. Skipping deletion.")
         return
 
@@ -268,27 +224,41 @@ def delete_job(ns: str, name: str) -> None:
         name=name,
         namespace=ns,
         body=client.V1DeleteOptions(
-            propagation_policy='Background',
+            propagation_policy="Background",
             grace_period_seconds=5,
-        )
+        ),
     )
     logger.info(f"Deleted job {name} from namespace {ns}")
 
 
 def ping_resource(resource_type: str, name: str, ns: str) -> bool:
+    """
+    Check if a Kubernetes resource exists.
+
+    Args:
+        resource_type: Type of resource ('svc', 'pod', 'configmap', 'secret', 'pvc', 'job').
+        name: Name of the resource.
+        ns: Kubernetes namespace to check.
+
+    Returns:
+        bool: True if the resource exists, False otherwise.
+
+    Raises:
+        ValueError: If an unsupported resource type is provided.
+    """
     try:
         match resource_type:
-            case 'svc':
+            case "svc":
                 core_v1.read_namespaced_service(name=name, namespace=ns)
-            case 'pod':
+            case "pod":
                 core_v1.read_namespaced_pod(name=name, namespace=ns)
-            case 'configmap':
+            case "configmap":
                 core_v1.read_namespaced_config_map(name=name, namespace=ns)
-            case 'secret':
+            case "secret":
                 core_v1.read_namespaced_secret(name=name, namespace=ns)
-            case 'pvc':
+            case "pvc":
                 core_v1.read_namespaced_persistent_volume_claim(name=name, namespace=ns)
-            case 'job':
+            case "job":
                 batch_v1.read_namespaced_job(name=name, namespace=ns)
             case _:
                 raise ValueError(f"Unsupported resource type: {resource_type}")
@@ -298,21 +268,31 @@ def ping_resource(resource_type: str, name: str, ns: str) -> bool:
 
 
 def get_job_status(ns: str, name: str) -> JobStatus:
-    try:
-        job = batch_v1.read_namespaced_job(name=name, namespace=ns)
+    """
+    Get the current status of a Kubernetes job.
 
-        if job.status.conditions:
+    Args:
+        ns: Kubernetes namespace containing the job.
+        name: Name of the job to check.
+
+    Returns:
+        JobStatus: Current status of the job (PENDING, RUNNING, TERMINATED, ERROR, or UNKNOWN).
+    """
+    try:
+        job = cast(V1Job, batch_v1.read_namespaced_job(name=name, namespace=ns))
+
+        if job.status and job.status.conditions:
             for condition in job.status.conditions:
                 if condition.type == "Complete" and condition.status == "True":
                     return JobStatus.TERMINATED
                 elif condition.type == "Failed" and condition.status == "True":
                     return JobStatus.ERROR
 
-        if job.status.succeeded and job.status.succeeded > 0:
+        if job.status and job.status.succeeded and job.status.succeeded > 0:
             return JobStatus.TERMINATED
-        elif job.status.failed and job.status.failed > 0:
+        elif job.status and job.status.failed and job.status.failed > 0:
             return JobStatus.ERROR
-        elif job.status.active and job.status.active > 0:
+        elif job.status and job.status.active and job.status.active > 0:
             return JobStatus.RUNNING
         else:
             return JobStatus.PENDING
