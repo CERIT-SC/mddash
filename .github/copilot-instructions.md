@@ -108,16 +108,17 @@ Status computed from associated notebook/job states (see `experiment._step_statu
 
 ```
 dashboard/
-  api/              Flask API with blueprints (routes/), SQLAlchemy models, K8s clients
-  ui/               React + Vite + MUI frontend, TypeScript
-  auth/             JupyterHub OAuth forward authentication service
-  proxy/            Caddy reverse proxy configuration
-  s3-sync/          rclone S3 sync daemon
-mdrun-api/          Independent Flask service for GROMACS job orchestration
-helm/charts/mddash/ JupyterHub Helm chart with custom config
-notebook/           Experiment setup Jupyter image with gmx wrapper (requires gmx sidecar)
-config.yaml         Production configuration
-config.dev.yaml     Development configuration
+  api/                 Flask API with blueprints (routes/), SQLAlchemy models, K8s clients
+  ui/                  React + Vite + MUI frontend, TypeScript
+  auth/                JupyterHub OAuth forward authentication service
+  proxy/               Caddy reverse proxy configuration
+  s3-sync/             rclone S3 sync daemon
+mdrun-api/             Independent Flask service for GROMACS job orchestration
+helm/charts/mddash/    JupyterHub Helm chart with custom config
+helm/charts/mdrun-api/ Helm chart for mdrun-api deployment (used as sub-chart by mddash)
+notebook/              Experiment setup Jupyter image with gmx wrapper (requires gmx sidecar)
+config.yaml            Production configuration
+config.dev.yaml        Development configuration
 ```
 
 ## Common Tasks
