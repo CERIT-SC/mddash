@@ -17,6 +17,9 @@ applyTo: '**'
 - Use language idioms that reduce code without obscuring intent
 - Functions should do one thing and stay under 20 lines
 - Max 3 levels of indentation, max 4 parameters
+- Avoid Duplication (DRY): If logic appears twice, refactor it into a shared function
+- Reuse Existing Code: Always search the workspace for existing utilities before implementing new ones
+- Single Source of Truth: Define data, constants, and configuration in one place and reference them everywhere
 
 ## Decision Framework
 
@@ -79,6 +82,25 @@ export const config = {
 class ConfigManager {
     private static instance: ConfigManager;
     static getInstance() { /* ... */ }
+}
+```
+
+### Single Source of Truth (DRY)
+```javascript
+// Good: Defined once, used everywhere
+const STATUS = {
+    PENDING: 'pending',
+    ACTIVE: 'active',
+    CLOSED: 'closed'
+};
+
+function isActive(status) {
+    return status === STATUS.ACTIVE;
+}
+
+// Bad: Magic strings duplicated across files
+function isActive(status) {
+    return status === 'active'; // If 'active' changes, this breaks
 }
 ```
 
