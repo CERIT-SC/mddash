@@ -27,9 +27,9 @@ def get_metrics() -> Response:
     requests["storage"] = get_directory_size(DATA_DIR)
 
     limits = {
-        "cpu": k8s._parse_cpu(CPU_REQUEST_QUOTA),
-        "memory": k8s._parse_memory(MEMORY_REQUEST_QUOTA),
-        "storage": k8s._parse_memory(PVC_SIZE),
+        "cpu": k8s.parse_cpu(CPU_REQUEST_QUOTA),
+        "memory": k8s.parse_memory(MEMORY_REQUEST_QUOTA),
+        "storage": k8s.parse_memory(PVC_SIZE),
     }
 
     return ApiResponse.success({"requests": requests, "limits": limits})

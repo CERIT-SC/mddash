@@ -5,4 +5,4 @@ from .gromacs_job import GromacsJobSchema
 from .notebook import NotebookSchema
 from .tuner_job import TunerJobSchema
 
-__all__ = ["ExperimentSchema", "NotebookSchema", "TunerJobSchema", "GromacsJobSchema"]
+__all__ = ["ExperimentSchema", "GromacsJobSchema", "NotebookSchema", "TunerJobSchema"]

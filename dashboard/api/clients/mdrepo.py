@@ -77,7 +77,7 @@ def upload_file(token: str, experiment_id: str, file: Path) -> dict:
         raise ValueError(f"Failed to initialize file upload: {response.status_code} - {response.text}")
 
     # Upload file content
-    with open(file, "rb") as f:
+    with file.open("rb") as f:
         response = requests.put(
             f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files/{file.name}/content",
             headers=headers,

@@ -57,12 +57,12 @@ class Notebook(db.Model):  # type: ignore
             k8s.create_notebook_pod(pod_name, self.experiment_id, f"{PREFIX}/notebook/{self.experiment_id}", self.token)
         except ApiException as e:
             if e.status == 403:
-                logger.debug(f"Quota exceeded when creating notebook pod.", exc_info=True)
+                logger.debug("Quota exceeded when creating notebook pod.", exc_info=True)
                 abort(403, description="Resource quota exceeded. Please stop other notebooks.")
             elif e.status == 409:
-                abort(409, description=f"Notebook pod already exists.")
+                abort(409, description="Notebook pod already exists.")
             else:
-                logger.error(f"Failed to create notebook pod.", exc_info=True)
+                logger.exception("Failed to create notebook pod.")
                 abort(500, description=f"Failed to create notebook pod: {e.reason}")
 
         try:
@@ -95,12 +95,12 @@ class Notebook(db.Model):  # type: ignore
         try:
             k8s.delete_pod(pod_name)
         except Exception:
-            logger.error(f"Failed to delete notebook pod.", exc_info=True)
+            logger.exception("Failed to delete notebook pod.")
 
         try:
             k8s.delete_service(svc_name)
         except Exception:
-            logger.error(f"Failed to delete notebook service.", exc_info=True)
+            logger.exception("Failed to delete notebook service.")
 
         if not caddy.remove_route(route_id):
             logger.error("Failed to remove route from Caddy.")

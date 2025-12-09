@@ -7,7 +7,15 @@ from flask import Flask
 from flask_migrate import init, upgrade
 from flask_migrate import migrate as flask_migrate
 from logging_utils import configure_logging, enable_loggers
-from routes import *
+from routes import (
+    experiments_bp,
+    files_bp,
+    gmx_bp,
+    mdrepo_bp,
+    misc_bp,
+    notebook_bp,
+    tuner_bp,
+)
 
 logger = logging.getLogger(__name__)
 

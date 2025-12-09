@@ -55,10 +55,10 @@ def get_status() -> Response:
         if resp.status_code == 200:
             return ApiResponse.success({"authenticated": True, "mdrepo_url": MDREPO_URL})
 
-        else:
-            # Token invalid or expired
-            session.pop(MDREPO_TOKEN_KEY, None)
-            return ApiResponse.success({"authenticated": False})
+        # Token invalid or expired
+        session.pop(MDREPO_TOKEN_KEY, None)
+        return ApiResponse.success({"authenticated": False})
+
     except Exception as e:
         logger.error(f"MDRepo token validation failed: {e}")
         return ApiResponse.success({"authenticated": False})

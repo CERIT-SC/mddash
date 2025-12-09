@@ -103,7 +103,8 @@ def tail(file: Path | str, n: int = 10) -> str:
     Raises:
         FileNotFoundError: If the file does not exist.
     """
-    with open(file, "rb") as f:
+    file_path = Path(file) if isinstance(file, str) else file
+    with file_path.open("rb") as f:
         f.seek(0, os.SEEK_END)
         file_size = f.tell()
 

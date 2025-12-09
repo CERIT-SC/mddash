@@ -2,7 +2,7 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from cachetools import TTLCache, cached
 from clients import mdrun
@@ -31,7 +31,7 @@ class GromacsJob(db.Model):  # type: ignore
     __tablename__ = "gromacs_jobs"
 
     # TODO: verify if files with these extensions should really be deleted
-    RESULT_EXTENSIONS = ["edr", "gro", "log", "trr", "xtc", "cpt", "fit.xtc"]
+    RESULT_EXTENSIONS: ClassVar[list[str]] = ["edr", "gro", "log", "trr", "xtc", "cpt", "fit.xtc"]
 
     # ID of the job inside the database
     id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
@@ -91,7 +91,7 @@ class GromacsJob(db.Model):  # type: ignore
         try:
             return JobStatus.from_string(mdrun.get_job(self.id)["status"])
         except Exception:
-            logger.error(f"Error fetching job status for job {self.id}", exc_info=True)
+            logger.exception(f"Error fetching job status for job {self.id}")
             return JobStatus.UNKNOWN
 
     @property
@@ -270,9 +270,8 @@ class GromacsJob(db.Model):  # type: ignore
         try:
             if tail_lines:
                 return tail(log_file, tail_lines)
-            else:
-                with open(log_file, "r") as f:
-                    return f.read()
+            with log_file.open("r") as f:
+                return f.read()
         except FileNotFoundError:
             abort(404, description=f"Log file not found: {log_file.name}")
         except PermissionError:
@@ -305,7 +304,7 @@ class GromacsJob(db.Model):  # type: ignore
             return None
 
         try:
-            with open(self._gmx_log, "r") as f:
+            with self._gmx_log.open("r") as f:
                 for line in f:
                     if "nsteps" not in line:
                         continue
@@ -314,7 +313,7 @@ class GromacsJob(db.Model):  # type: ignore
                     return int(parts[-1].strip())
 
         except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
-            logger.error(f"Error reading nsteps from log file.", exc_info=True)
+            logger.exception("Error reading nsteps from log file.")
 
         return None
 
@@ -343,7 +342,7 @@ class GromacsJob(db.Model):  # type: ignore
                 return int(parts[0])
 
         except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
-            logger.error(f"Error reading nsteps_done from log file.", exc_info=True)
+            logger.exception("Error reading nsteps_done from log file.")
 
         return None
 
@@ -358,7 +357,7 @@ class GromacsJob(db.Model):  # type: ignore
             return None
 
         try:
-            with open(self._gmx_log, "r") as f:
+            with self._gmx_log.open("r") as f:
                 for line in f:
                     if "Started mdrun" not in line:
                         continue
@@ -369,7 +368,7 @@ class GromacsJob(db.Model):  # type: ignore
                     return int(dt.timestamp())
 
         except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
-            logger.error(f"Error reading start time from log file.", exc_info=True)
+            logger.exception("Error reading start time from log file.")
 
         return None
 
@@ -395,7 +394,7 @@ class GromacsJob(db.Model):  # type: ignore
                 return int(dt.timestamp())
 
         except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
-            logger.error(f"Error reading finish time from log file.", exc_info=True)
+            logger.exception("Error reading finish time from log file.")
 
         return None
 
@@ -419,7 +418,7 @@ class GromacsJob(db.Model):  # type: ignore
                 return float(parts[-2])
 
         except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
-            logger.error(f"Error reading performance from log file.", exc_info=True)
+            logger.exception("Error reading performance from log file.")
             return None
 
         return None
