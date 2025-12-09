@@ -1,4 +1,3 @@
-import json
 import logging
 import threading
 from typing import Callable, cast
@@ -259,7 +258,7 @@ def ping_resource(resource_type: str, name: str) -> bool:
             case _:
                 raise ValueError(f"Unsupported resource type: {resource_type}")
         return True
-    except ApiException as e:
+    except ApiException:
         return False
 
 
@@ -346,7 +345,7 @@ def create_service(name: str, target_name: str) -> None:
     core_v1.create_namespaced_service(namespace=NAMESPACE, body=service)
 
 
-def _parse_cpu(cpu_str: str | None) -> int:
+def parse_cpu(cpu_str: str | None) -> int:
     """
     Parse CPU value from Kubernetes format to millicores.
 
@@ -365,7 +364,7 @@ def _parse_cpu(cpu_str: str | None) -> int:
     return int(float(cpu_str) * 1000)
 
 
-def _parse_memory(mem_str: str | None) -> int:
+def parse_memory(mem_str: str | None) -> int:
     """
     Parse memory value from Kubernetes format to bytes.
 
@@ -384,19 +383,19 @@ def _parse_memory(mem_str: str | None) -> int:
 
     if mem_str.endswith("Gi"):
         return int(float(mem_str[:-2]) * 1024**3)
-    elif mem_str.endswith("G"):
+    if mem_str.endswith("G"):
         return int(float(mem_str[:-1]) * 1000**3)
-    elif mem_str.endswith("Mi"):
+    if mem_str.endswith("Mi"):
         return int(float(mem_str[:-2]) * 1024**2)
-    elif mem_str.endswith("M"):
+    if mem_str.endswith("M"):
         return int(float(mem_str[:-1]) * 1000**2)
-    elif mem_str.endswith("Ki"):
+    if mem_str.endswith("Ki"):
         return int(float(mem_str[:-2]) * 1024)
-    elif mem_str.endswith("K"):
+    if mem_str.endswith("K"):
         return int(float(mem_str[:-1]) * 1000)
-    elif mem_str.endswith("Ti"):
+    if mem_str.endswith("Ti"):
         return int(float(mem_str[:-2]) * 1024**4)
-    elif mem_str.endswith("T"):
+    if mem_str.endswith("T"):
         return int(float(mem_str[:-1]) * 1000**4)
 
     # Try to parse as plain number (bytes)
@@ -432,8 +431,8 @@ def _sum_container_resources(containers: list, resource_type: str) -> dict:
         cpu_value = resources.get("cpu") if isinstance(resources, dict) else None
         memory_value = resources.get("memory") if isinstance(resources, dict) else None
 
-        total_cpu += _parse_cpu(cpu_value)
-        total_memory += _parse_memory(memory_value)
+        total_cpu += parse_cpu(cpu_value)
+        total_memory += parse_memory(memory_value)
 
     return {"cpu": total_cpu, "memory": total_memory}
 
@@ -451,7 +450,7 @@ def get_pod_resource_requests() -> dict:
     Raises:
         ApiException: If an error occurs while listing the pods.
     """
-    pods = cast(V1PodList, core_v1.list_namespaced_pod(namespace=NAMESPACE))
+    pods = cast("V1PodList", core_v1.list_namespaced_pod(namespace=NAMESPACE))
 
     requests_total = {"cpu": 0, "memory": 0}
 
@@ -479,7 +478,7 @@ def get_pod_status(name: str) -> PodStatus:
         PodStatus: The current status (RUNNING, PENDING, TERMINATED, ERROR, DOWN, TERMINATING, or UNKNOWN).
     """
     try:
-        pod = cast(V1Pod, core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE))
+        pod = cast("V1Pod", core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE))
 
         if not pod.metadata or not pod.status:
             return PodStatus.UNKNOWN
@@ -495,14 +494,14 @@ def get_pod_status(name: str) -> PodStatus:
                 all_ready = all(container.ready for container in pod.status.container_statuses)
                 return PodStatus.RUNNING if all_ready else PodStatus.PENDING
             return PodStatus.RUNNING
-        elif phase == "Succeeded":
+        if phase == "Succeeded":
             return PodStatus.TERMINATED
-        elif phase == "Failed":
+        if phase == "Failed":
             return PodStatus.ERROR
-        elif phase == "Pending":
+        if phase == "Pending":
             return PodStatus.PENDING
-        else:
-            return PodStatus.UNKNOWN
+
+        return PodStatus.UNKNOWN
 
     except ApiException as e:
         return PodStatus.DOWN if e.status == 404 else PodStatus.ERROR
@@ -519,7 +518,7 @@ def get_job_status(name: str) -> JobStatus:
         JobStatus: The current status (RUNNING, PENDING, TERMINATED, ERROR, or UNKNOWN).
     """
     try:
-        job = cast(V1Job, batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE))
+        job = cast("V1Job", batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE))
 
         if not job.status:
             return JobStatus.UNKNOWN
@@ -528,17 +527,17 @@ def get_job_status(name: str) -> JobStatus:
             for condition in job.status.conditions:
                 if condition.type == "Complete" and condition.status == "True":
                     return JobStatus.TERMINATED
-                elif condition.type == "Failed" and condition.status == "True":
+                if condition.type == "Failed" and condition.status == "True":
                     return JobStatus.ERROR
 
         if job.status.succeeded and job.status.succeeded > 0:
             return JobStatus.TERMINATED
-        elif job.status.failed and job.status.failed > 0:
+        if job.status.failed and job.status.failed > 0:
             return JobStatus.ERROR
-        elif job.status.active and job.status.active > 0:
+        if job.status.active and job.status.active > 0:
             return JobStatus.RUNNING
-        else:
-            return JobStatus.PENDING
+
+        return JobStatus.PENDING
 
     except ApiException as e:
         if e.status == 404:
@@ -571,7 +570,7 @@ def wait_for_job(
                 if status == JobStatus.TERMINATED:
                     on_success()
                     return
-                elif status == JobStatus.ERROR:
+                if status == JobStatus.ERROR:
                     raise RuntimeError(f"Job {name} failed")
                 time.sleep(2)
 

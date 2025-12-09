@@ -92,7 +92,7 @@ def delete_job(job_id: str) -> None:
 
     # 404 = job already deleted or does not exist (success)
     if response.status_code == 404:
-        return None
+        return
 
     if not response.ok:
         raise requests.HTTPError(response.json()["message"], request=None, response=response)

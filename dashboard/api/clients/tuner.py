@@ -48,7 +48,7 @@ def run_submit(tpr_path: Path) -> dict:
         FileNotFoundError: If the TPR file does not exist.
         HTTPError: If the request fails.
     """
-    with open(tpr_path, "rb") as f:
+    with tpr_path.open("rb") as f:
         files = {"file": f}
         response = requests.post(f"{TUNER_URL}/tuner_runs", files=files, auth=AUTH)
     return get_tuner_response_data(response)

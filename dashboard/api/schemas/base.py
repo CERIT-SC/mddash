@@ -11,12 +11,12 @@ class BaseAutoSchema(ma.SQLAlchemyAutoSchema):  # type: ignore
     """Base schema that automatically includes all non-private properties."""
 
     @post_dump
-    def remove_private_fields(self, data: dict[str, Any], **kwargs: object) -> dict[str, Any]:
+    def remove_private_fields(self, data: dict[str, Any], **kwargs: object) -> dict[str, Any]:  # noqa: ARG002
         """Remove any fields that start with underscore."""
         return {key: value for key, value in data.items() if not key.startswith("_")}
 
     @post_dump(pass_original=True)
-    def add_computed_properties(self, data: dict[str, Any], obj: object, **kwargs: object) -> dict[str, Any]:
+    def add_computed_properties(self, data: dict[str, Any], obj: object, **kwargs: object) -> dict[str, Any]:  # noqa: ARG002
         """Automatically add all non-private properties."""
         if not obj:
             return data

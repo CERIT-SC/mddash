@@ -194,7 +194,7 @@ def get_notebook(experiment_id: str) -> Response:
     if not exp:
         return ApiResponse.error(f"Experiment {experiment_id} not found", HTTPStatus.NOT_FOUND)
 
-    return ApiResponse.success(state._clean_notebook(exp["notebook"]))
+    return ApiResponse.success(state.clean_notebook(exp["notebook"]))
 
 
 @bp.route("/api/experiments/<experiment_id>/notebook", methods=["POST"])
@@ -208,7 +208,7 @@ def start_notebook(experiment_id: str) -> Response:
     notebook["status"] = "PENDING"
     notebook["start_time"] = time.time()
 
-    return ApiResponse.success(state._clean_notebook(notebook), HTTPStatus.CREATED)
+    return ApiResponse.success(state.clean_notebook(notebook), HTTPStatus.CREATED)
 
 
 @bp.route("/api/experiments/<experiment_id>/notebook", methods=["DELETE"])
@@ -234,7 +234,7 @@ def list_tuner_jobs(experiment_id: str) -> Response:
     if not exp:
         return ApiResponse.error(f"Experiment {experiment_id} not found", HTTPStatus.NOT_FOUND)
 
-    tuner_jobs = [state._format_tuner_job(tj) for tj in exp["tuner_jobs"]]
+    tuner_jobs = [state.format_tuner_job(tj) for tj in exp["tuner_jobs"]]
     return ApiResponse.success(tuner_jobs)
 
 
@@ -248,7 +248,7 @@ def get_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     tuner = next((tj for tj in exp["tuner_jobs"] if tj["tpr_name"] == tpr_name), None)
     if not tuner:
         return ApiResponse.error(f"Tuner job for '{tpr_name}' not found.", HTTPStatus.NOT_FOUND)
-    return ApiResponse.success(state._format_tuner_job(tuner))
+    return ApiResponse.success(state.format_tuner_job(tuner))
 
 
 @bp.route("/api/experiments/<experiment_id>/tuner/<tpr_name>", methods=["POST"])
@@ -261,12 +261,12 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     # Check if already exists
     existing = next((tj for tj in exp["tuner_jobs"] if tj["tpr_name"] == tpr_name), None)
     if existing:
-        return ApiResponse.success(state._format_tuner_job(existing), HTTPStatus.OK)
+        return ApiResponse.success(state.format_tuner_job(existing), HTTPStatus.OK)
 
     # Create new tuner job
-    tuner = state._create_tuner_job(experiment_id, tpr_name, is_pending=False)
+    tuner = state.create_tuner_job(experiment_id, tpr_name, is_pending=False)
     exp["tuner_jobs"].append(tuner)
-    return ApiResponse.success(state._format_tuner_job(tuner), HTTPStatus.CREATED)
+    return ApiResponse.success(state.format_tuner_job(tuner), HTTPStatus.CREATED)
 
 
 @bp.route("/api/experiments/<experiment_id>/tuner/<tpr_name>/stop", methods=["POST"])
@@ -316,7 +316,7 @@ def get_gmx_jobs(experiment_id: str) -> Response:
     if not exp:
         return ApiResponse.error(f"Experiment {experiment_id} not found", HTTPStatus.NOT_FOUND)
 
-    jobs = [state._clean_gromacs_job(gj) for gj in exp["gromacs_jobs"]]
+    jobs = [state.clean_gromacs_job(gj) for gj in exp["gromacs_jobs"]]
     return ApiResponse.success(jobs)
 
 
@@ -331,7 +331,7 @@ def get_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     if not job:
         return ApiResponse.error(f"GROMACS job for '{tpr_name}' not found.", HTTPStatus.NOT_FOUND)
 
-    return ApiResponse.success(state._clean_gromacs_job(job))
+    return ApiResponse.success(state.clean_gromacs_job(job))
 
 
 @bp.route("/api/experiments/<experiment_id>/gmx/<tpr_name>", methods=["POST"])
@@ -344,7 +344,7 @@ def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     # Check if job already exists and return it
     existing = next((gj for gj in exp["gromacs_jobs"] if gj["tpr_name"] == tpr_name), None)
     if existing:
-        return ApiResponse.success(state._clean_gromacs_job(existing), HTTPStatus.OK)
+        return ApiResponse.success(state.clean_gromacs_job(existing), HTTPStatus.OK)
 
     # Get parameters from form
     np = int(request.form.get("np", 2))
@@ -354,12 +354,12 @@ def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     extra_args = request.form.get("extra_args", "")
 
     # Create job
-    job = state._create_gromacs_job(
+    job = state.create_gromacs_job(
         experiment_id, tpr_name, np=np, ntomp=ntomp, nb=nb, pme=pme, status="RUNNING", extra_args=extra_args
     )
     exp["gromacs_jobs"].append(job)
 
-    return ApiResponse.success(state._clean_gromacs_job(job), HTTPStatus.CREATED)
+    return ApiResponse.success(state.clean_gromacs_job(job), HTTPStatus.CREATED)
 
 
 @bp.route("/api/experiments/<experiment_id>/gmx/<tpr_name>", methods=["DELETE"])
@@ -465,10 +465,10 @@ def list_experiment_files(experiment_id: str) -> Response:
 
 
 @bp.route("/api/experiments/<experiment_id>/files/<path:path>", methods=["GET"])
-def get_experiment_file(experiment_id: str, path: str) -> Response:
+def get_experiment_file(experiment_id: str, path: str) -> Response:  # noqa: ARG001
     """Get experiment file."""
     file_path = Path(__file__).parent / "data" / path
     if file_path.exists():
         return send_file(file_path, as_attachment=False)
-    else:
-        return ApiResponse.error("File not found", HTTPStatus.NOT_FOUND)
+
+    return ApiResponse.error("File not found", HTTPStatus.NOT_FOUND)

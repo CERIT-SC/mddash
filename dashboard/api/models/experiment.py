@@ -152,7 +152,7 @@ class Experiment(db.Model):  # type: ignore
             elif response.status_code != 200:
                 abort(500, description=f"Failed to download PDB file: {response.status_code}")
 
-            with open(DATA_DIR / experiment_id / "input.pdb", "wb") as f:
+            with (DATA_DIR / experiment_id / "input.pdb").open("wb") as f:
                 f.write(response.content)
 
             message: str = f"Created by downloading '{pdb_id}' from RCSB PDB."
@@ -290,14 +290,14 @@ class Experiment(db.Model):  # type: ignore
             try:
                 tuner_job.delete()
             except Exception:
-                logger.error(f"Failed to delete tuner job {tuner_job.tuner_run_id}:", exc_info=True)
+                logger.exception(f"Failed to delete tuner job {tuner_job.tuner_run_id}")
 
         # Delete GROMACS jobs
         for gmx_job in self.gromacs_jobs:
             try:
                 gmx_job.delete()
             except Exception:
-                logger.error(f"Failed to delete GROMACS job {gmx_job.id}:", exc_info=True)
+                logger.exception(f"Failed to delete GROMACS job {gmx_job.id}")
 
         # Delete all files in the experiment directory
         rmtree(DATA_DIR / self.id, ignore_errors=True)
@@ -337,7 +337,7 @@ class Experiment(db.Model):  # type: ignore
             try:
                 mdrepo.upload_file(token, mdrepo_id, file)
             except ValueError:
-                logger.error(f"Failed to upload file {file.name} to MDRepo.", exc_info=True)
+                logger.exception(f"Failed to upload file {file.name} to MDRepo.")
 
         db.session.commit()
         logger.info(f"Published experiment {self.id} to MDRepo with ID {self.mdrepo_id}")

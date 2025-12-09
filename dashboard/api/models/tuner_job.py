@@ -78,7 +78,7 @@ class TunerJob(db.Model):  # type: ignore
         try:
             return tuner.poll_status(self.tuner_run_id)
         except Exception:
-            logger.error(f"Failed to fetch status for tuner job {self.tuner_run_id}", exc_info=True)
+            logger.exception(f"Failed to fetch status for tuner job {self.tuner_run_id}")
             return {}
 
     @staticmethod
@@ -140,7 +140,7 @@ class TunerJob(db.Model):  # type: ignore
         tuning_tpr_name = f"{tpr_path.stem}_tuning_{job.id}.tpr"
         tuning_tpr_path = tpr_path.parent / tuning_tpr_name
 
-        app = current_app._get_current_object()  # type: ignore
+        app = current_app._get_current_object()  # type: ignore[attr-defined]  # noqa: SLF001
 
         def on_tpr_ready() -> None:
             """Submit to tuner when TPR modification completes."""
@@ -157,9 +157,9 @@ class TunerJob(db.Model):  # type: ignore
                     db.session.commit()
                     logger.info(f"Tuner job {response['tuner_run_id']} started for experiment {experiment.id}")
                 except Exception as e:
-                    logger.error(f"Failed to submit tuner job: {e}", exc_info=True)
+                    logger.exception(f"Failed to submit tuner job: {e}")
                     fresh_job.is_pending = False
-                    fresh_job.error_message = f"Failed to submit to tuner: {str(e)}"
+                    fresh_job.error_message = f"Failed to submit to tuner: {e!s}"
                     db.session.commit()
                 finally:
                     tuning_tpr_path.unlink(missing_ok=True)
@@ -167,11 +167,11 @@ class TunerJob(db.Model):  # type: ignore
         def on_tpr_error(error: Exception) -> None:
             """Handle TPR modification failure."""
             with app.app_context():
-                logger.error(f"TPR modification failed: {error}", exc_info=True)
+                logger.error(f"TPR modification failed: {error}")
                 fresh_job = db.session.get(TunerJob, job.id)
                 if fresh_job:
                     fresh_job.is_pending = False
-                    fresh_job.error_message = f"TPR modification failed: {str(error)}"
+                    fresh_job.error_message = f"TPR modification failed: {error!s}"
                     db.session.commit()
 
         # Start async TPR modification

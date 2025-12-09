@@ -31,11 +31,11 @@ class DemoState:
             "Created by downloading repository from 'https://zenodo.org/records/7261108'.",
         )
         exp2["notebook"]["status"] = "RUNNING"
-        exp2["tuner_jobs"].append(self._create_tuner_job("bbbbb", "LSD.tpr", is_pending=False))
-        exp2["tuner_jobs"].append(self._create_tuner_job("bbbbb", "MDMA.tpr", is_pending=False, is_stopped=True))
-        exp2["tuner_jobs"].append(self._create_tuner_job("bbbbb", "Pending.tpr", is_pending=True))
+        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "LSD.tpr", is_pending=False))
+        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "MDMA.tpr", is_pending=False, is_stopped=True))
+        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "Pending.tpr", is_pending=True))
         exp2["tuner_jobs"].append(
-            self._create_tuner_job(
+            self.create_tuner_job(
                 "bbbbb",
                 "Failed.tpr",
                 is_pending=False,
@@ -43,7 +43,7 @@ class DemoState:
             )
         )
         exp2["gromacs_jobs"].append(
-            self._create_gromacs_job(
+            self.create_gromacs_job(
                 "bbbbb",
                 "LSD.tpr",
                 np=2,
@@ -56,7 +56,7 @@ class DemoState:
             )
         )
         exp2["gromacs_jobs"].append(
-            self._create_gromacs_job(
+            self.create_gromacs_job(
                 "bbbbb",
                 "MDMA.tpr",
                 np=8,
@@ -80,7 +80,7 @@ class DemoState:
         )
         exp3["notebook"]["status"] = "DOWN"
         exp3["gromacs_jobs"].append(
-            self._create_gromacs_job(
+            self.create_gromacs_job(
                 "ccccc",
                 "output.tpr",
                 np=4,
@@ -127,7 +127,7 @@ class DemoState:
         self.experiments[exp_id] = experiment
         return experiment
 
-    def _create_tuner_job(
+    def create_tuner_job(
         self,
         exp_id: str,
         tpr_name: str,
@@ -192,7 +192,7 @@ class DemoState:
             "cluster_resources": cluster_resources,
         }
 
-    def _create_gromacs_job(
+    def create_gromacs_job(
         self,
         exp_id: str,
         tpr_name: str,
@@ -241,16 +241,16 @@ class DemoState:
         exp_copy["step"] = step
         exp_copy["status"] = status
 
-        exp_copy["tuner_jobs"] = [self._format_tuner_job(tj) for tj in exp["tuner_jobs"]]
-        exp_copy["gromacs_jobs"] = [self._clean_gromacs_job(gj) for gj in exp["gromacs_jobs"]]
-        exp_copy["notebook"] = self._clean_notebook(exp["notebook"])
+        exp_copy["tuner_jobs"] = [self.format_tuner_job(tj) for tj in exp["tuner_jobs"]]
+        exp_copy["gromacs_jobs"] = [self.clean_gromacs_job(gj) for gj in exp["gromacs_jobs"]]
+        exp_copy["notebook"] = self.clean_notebook(exp["notebook"])
 
         return exp_copy
 
     def get_all_experiments(self) -> list[dict]:
         """Get all experiments with formatted data."""
         result = []
-        for exp_id in self.experiments.keys():
+        for exp_id in self.experiments:
             exp = self.get_experiment(exp_id)
             if exp:
                 result.append(exp)
@@ -263,7 +263,7 @@ class DemoState:
         del self.experiments[exp_id]
         return True
 
-    def _format_tuner_job(self, tuner: dict) -> dict:
+    def format_tuner_job(self, tuner: dict) -> dict:
         """Format tuner job with summary and clean internal fields."""
         tuner_copy = tuner.copy()
         tuner_copy["summary"] = self._get_tuner_summary(tuner)
@@ -275,13 +275,13 @@ class DemoState:
 
         return tuner_copy
 
-    def _clean_gromacs_job(self, job: dict) -> dict:
+    def clean_gromacs_job(self, job: dict) -> dict:
         """Remove internal fields from gromacs job."""
         job_copy = job.copy()
         job_copy.pop("start_time", None)
         return job_copy
 
-    def _clean_notebook(self, notebook: dict) -> dict:
+    def clean_notebook(self, notebook: dict) -> dict:
         """Remove internal fields from notebook."""
         notebook_copy = notebook.copy()
         notebook_copy.pop("start_time", None)

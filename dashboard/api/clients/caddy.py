@@ -79,6 +79,6 @@ def remove_route(route_id: str) -> bool:
         response = requests.delete(url)
         response.raise_for_status()
         return True
-    except RequestException as e:
-        logger.error(f"Error when removing route '{route_id}' from Caddy:", exc_info=True)
+    except RequestException:
+        logger.exception(f"Error when removing route '{route_id}' from Caddy")
         return False
