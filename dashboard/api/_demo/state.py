@@ -22,7 +22,7 @@ class DemoState:
     def _init_demo_data(self) -> None:
         """Initialize with some demo experiments."""
         # Experiment 1: Cancer cure (setup stage)
-        exp1 = self.create_experiment("aaaaa", "Cancer cure", "Created by uploading TPR file 'cancer_cure.tpr'.")
+        self.create_experiment("aaaaa", "Cancer cure", "Created by uploading TPR file 'cancer_cure.tpr'.")
 
         # Experiment 2: HIV research (simulating stage)
         exp2 = self.create_experiment(
