@@ -1,9 +1,9 @@
 import json
-import uuid
-import requests
 import logging
-from requests.exceptions import RequestException
+import uuid
 
+import requests
+from requests.exceptions import RequestException
 
 logger = logging.getLogger(__name__)
 CADDY_ADMIN_API_URL = "http://localhost:2019"
@@ -11,12 +11,15 @@ CADDY_ADMIN_API_URL = "http://localhost:2019"
 
 def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> str | None:
     """
-    Adds a new proxy route inside the @protected (authenticated) Caddy route group.
-    
-    :param path: The path to match for the route (e.g., "/user/admin/dash/notebook/experiment1")
-    :param upstream: The address of the server to proxy to (e.g., "localhost:8081")
-    :param route_id: Optional. A specific ID for the route. If None, a UUID will be generated.
-    :return: The ID of the added route if successful, None otherwise.
+    Add a new proxy route inside the @protected (authenticated) Caddy route group.
+
+    Args:
+        path: The path to match for the route (e.g., "/user/admin/dash/notebook/experiment1").
+        upstream: The address of the server to proxy to (e.g., "localhost:8081").
+        route_id: A specific ID for the route. If None, a UUID will be generated.
+
+    Returns:
+        The ID of the added route if successful, None otherwise.
     """
     route_id = route_id or f"route-{uuid.uuid4()}"
     path = path.rstrip("/")
@@ -24,20 +27,8 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
     new_route = {
         "@id": route_id,
         "group": "group4",
-        "handle": [
-            {
-                "handler": "reverse_proxy",
-                "upstreams": [{"dial": upstream}]
-            }
-        ],
-        "match": [
-            {
-                "path_regexp": {
-                    "name": route_id.replace("-", "_"),
-                    "pattern": f"^{path}.*$"
-                }
-            }
-        ]
+        "handle": [{"handler": "reverse_proxy", "upstreams": [{"dial": upstream}]}],
+        "match": [{"path_regexp": {"name": route_id.replace("-", "_"), "pattern": f"^{path}.*$"}}],
     }
 
     try:
@@ -50,9 +41,12 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
 
         # Find dash route index
         dash_index = next(
-            (i for i, r in enumerate(routes)
-             if any(m.get("path_regexp", {}).get("name") == "dash_routes" for m in r.get("match", []))),
-            3
+            (
+                i
+                for i, r in enumerate(routes)
+                if any(m.get("path_regexp", {}).get("name") == "dash_routes" for m in r.get("match", []))
+            ),
+            3,
         )
 
         # Insert new route
@@ -71,10 +65,13 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
 
 def remove_route(route_id: str) -> bool:
     """
-    Removes a route from the Caddy configuration using its ID.
+    Remove a route from the Caddy configuration using its ID.
 
-    :param route_id: The ID of the route to remove.
-    :return: True if the route was removed successfully, False otherwise.
+    Args:
+        route_id: The ID of the route to remove.
+
+    Returns:
+        True if the route was removed successfully, False otherwise.
     """
     url = f"{CADDY_ADMIN_API_URL}/id/{route_id}"
 

@@ -4,7 +4,6 @@ import sys
 
 def configure_logging(log_format: str, level: int | str) -> None:
     """Configure the root logger to behave like `print`."""
-
     numeric_level = level
     if isinstance(numeric_level, str):
         numeric_level = getattr(logging, numeric_level.upper(), logging.INFO)

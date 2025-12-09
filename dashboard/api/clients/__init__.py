@@ -1,9 +1,5 @@
 """Client modules for external services."""
 
-from . import k8s
-from . import caddy
-from . import tuner
-from . import mdrun
-from . import mdrepo
+from . import caddy, k8s, mdrepo, mdrun, tuner
 
-__all__ = ['caddy', 'k8s', 'tuner', 'mdrun', 'mdrepo']
+__all__ = ["caddy", "k8s", "tuner", "mdrun", "mdrepo"]

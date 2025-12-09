@@ -1,20 +1,31 @@
 import json
 import logging
 import threading
-from typing import Callable
-from kubernetes import client, config  # type: ignore
-from kubernetes.client.rest import ApiException  # type: ignore
+from typing import Callable, cast
 
-from enums import PodStatus, JobStatus
-from config import NOTEBOOK_IMAGE, GMX_IMAGE, NAMESPACE, PVC_NAME
-
+from config import GMX_IMAGE, NAMESPACE, NOTEBOOK_IMAGE, PVC_NAME
+from enums import JobStatus, PodStatus
+from kubernetes import config
+from kubernetes.client import (
+    BatchV1Api,
+    CoreV1Api,
+    V1DeleteOptions,
+    V1Job,
+    V1ObjectMeta,
+    V1Pod,
+    V1PodList,
+    V1Service,
+    V1ServicePort,
+    V1ServiceSpec,
+)
+from kubernetes.client.rest import ApiException
 
 logger = logging.getLogger(__name__)
 
 
 config.load_incluster_config()
-core_v1 = client.CoreV1Api()
-batch_v1 = client.BatchV1Api()
+core_v1 = CoreV1Api()
+batch_v1 = BatchV1Api()
 
 
 def get_container(
@@ -27,7 +38,8 @@ def get_container(
     set_working_dir: bool = True,
     resources: dict | None = None,
 ) -> dict:
-    """Create a container specification with security context and volume mounts.
+    """
+    Create a container specification with security context and volume mounts.
 
     Generates a Kubernetes container spec with security best practices (non-root user,
     dropped capabilities, seccomp profile) and mounts the shared volume at /mddash.
@@ -41,47 +53,40 @@ def get_container(
         env: Optional list of environment variable dictionaries with 'name' and 'value' keys.
         set_working_dir: Whether to set the working directory to /mddash/{experiment_id}.
         resources: Optional resource requests/limits dict. Defaults to 100m CPU and 128Mi memory.
+
     Returns:
         dict: Container specification dictionary for Kubernetes pod/job manifest.
     """
-
     container = {
-        'securityContext': {
-            'runAsUser': 1000,
-            'runAsGroup': 1000,
-            'runAsNonRoot': True,
-            'allowPrivilegeEscalation': False,
-            'capabilities': {
-                'drop': ['ALL']
-            },
-            'seccompProfile': {
-                'type': 'RuntimeDefault'
-            }
+        "securityContext": {
+            "runAsUser": 1000,
+            "runAsGroup": 1000,
+            "runAsNonRoot": True,
+            "allowPrivilegeEscalation": False,
+            "capabilities": {"drop": ["ALL"]},
+            "seccompProfile": {"type": "RuntimeDefault"},
         },
-        'name': name,
-        'image': image,
-        'imagePullPolicy': 'Always',  # TODO: maybe IfNotPresent?
-        'resources': resources or {
-            'requests': {'cpu': '50m', 'memory': '64Mi'},
-            'limits': {'cpu': '500m', 'memory': '256Mi'}
-        },
-        'command': command,
-        'volumeMounts': [
-            {'mountPath': '/mddash', 'name': volume_name}
-        ]
+        "name": name,
+        "image": image,
+        "imagePullPolicy": "Always",  # TODO: maybe IfNotPresent?
+        "resources": resources
+        or {"requests": {"cpu": "50m", "memory": "64Mi"}, "limits": {"cpu": "500m", "memory": "256Mi"}},
+        "command": command,
+        "volumeMounts": [{"mountPath": "/mddash", "name": volume_name}],
     }
 
     if set_working_dir:
-        container['workingDir'] = f'/mddash/{experiment_id}'
+        container["workingDir"] = f"/mddash/{experiment_id}"
 
     if env:
-        container['env'] = env
+        container["env"] = env
 
     return container
 
 
 def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) -> None:
-    """Create a JupyterLab notebook pod with GROMACS tools for experiment setup.
+    """
+    Create a JupyterLab notebook pod with GROMACS tools for experiment setup.
 
     Creates a pod with three containers: a Jupyter notebook server, a GROMACS container,
     and an init container that sets up the working directory. The pod uses a PVC for
@@ -92,10 +97,11 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         experiment_id: The ID of the experiment (used for directory path).
         prefix: The base URL prefix for the notebook server.
         token: Authentication token for accessing the notebook.
+
     Raises:
         ApiException: If an error occurs while creating the pod.
     """
-    if ping_resource('pod', name):
+    if ping_resource("pod", name):
         logger.warning(f"Pod {name} already exists in namespace {NAMESPACE}. Skipping creation.")
         return
 
@@ -127,84 +133,61 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         fi
     """
 
-    volume_name = 'shared-data'
+    volume_name = "shared-data"
     workdir_init_container = get_container(
-        'workdir-init',
+        "workdir-init",
         NOTEBOOK_IMAGE,
         experiment_id,
         volume_name,
-        ['sh', '-c', workdir_init_command],
+        ["sh", "-c", workdir_init_command],
         set_working_dir=False,
-        resources={
-            'requests': {'cpu': '10m', 'memory': '32Mi'},
-            'limits': {'cpu': '100m', 'memory': '64Mi'}
-        }
+        resources={"requests": {"cpu": "10m", "memory": "32Mi"}, "limits": {"cpu": "100m", "memory": "64Mi"}},
     )
-    gmx_container = get_container('gmx', GMX_IMAGE, experiment_id, volume_name, ['sleep', 'infinity'], resources={
-        'requests': {'cpu': '100m', 'memory': '256Mi'},
-        'limits': {'cpu': '2000m', 'memory': '2Gi'}
-    })
+    gmx_container = get_container(
+        "gmx",
+        GMX_IMAGE,
+        experiment_id,
+        volume_name,
+        ["sleep", "infinity"],
+        resources={"requests": {"cpu": "100m", "memory": "256Mi"}, "limits": {"cpu": "2000m", "memory": "2Gi"}},
+    )
 
     jupyter_command = [
-        'start-notebook.sh',
-        f'--NotebookApp.base_url={prefix}',
-        f'--NotebookApp.notebook_dir=/mddash/{experiment_id}',
-        f'--NotebookApp.token="{token}"'
+        "start-notebook.sh",
+        f"--NotebookApp.base_url={prefix}",
+        f"--NotebookApp.notebook_dir=/mddash/{experiment_id}",
+        f'--NotebookApp.token="{token}"',
     ]
-    jupyter_env = [{'name': 'WORKDIR', 'value': f'/mddash/{experiment_id}'}]
-    jupyter_resources = {
-        'requests': {'cpu': '200m', 'memory': '512Mi'},
-        'limits': {'cpu': '2000m', 'memory': '4Gi'}
-    }
+    jupyter_env = [{"name": "WORKDIR", "value": f"/mddash/{experiment_id}"}]
+    jupyter_resources = {"requests": {"cpu": "200m", "memory": "512Mi"}, "limits": {"cpu": "2000m", "memory": "4Gi"}}
     jupyter_container = get_container(
-        'jupyter',
+        "jupyter",
         NOTEBOOK_IMAGE,
         experiment_id,
         volume_name,
         jupyter_command,
         env=jupyter_env,
-        resources=jupyter_resources
+        resources=jupyter_resources,
     )
 
     pod_manifest = {
-        'apiVersion': 'v1',
-        'kind': 'Pod',
-        'metadata': {
-            'name': name,
-            'namespace': NAMESPACE,
-            'labels': {
-                'app': name
-            }
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {"name": name, "namespace": NAMESPACE, "labels": {"app": name}},
+        "spec": {
+            "securityContext": {"fsGroup": 1000, "fsGroupChangePolicy": "Always", "supplementalGroups": [1000]},
+            "initContainers": [workdir_init_container],
+            "containers": [jupyter_container, gmx_container],
+            "volumes": [{"name": volume_name, "persistentVolumeClaim": {"claimName": PVC_NAME}}],
         },
-        'spec': {
-            'securityContext': {
-                'fsGroup': 1000,
-                'fsGroupChangePolicy': 'Always',
-                'supplementalGroups': [1000]
-            },
-            'initContainers': [
-                workdir_init_container
-            ],
-            'containers': [
-                jupyter_container,
-                gmx_container
-            ],
-            'volumes': [
-                {
-                    'name': volume_name,
-                    'persistentVolumeClaim': {
-                        'claimName': PVC_NAME
-                    }
-                }
-            ]
-        }
     }
 
     core_v1.create_namespaced_pod(namespace=NAMESPACE, body=pod_manifest)
 
 
 def create_job(name: str, image: str, experiment_id: str, command: str) -> None:
-    """Create a Kubernetes job that runs a command in the experiment directory.
+    """
+    Create a Kubernetes job that runs a command in the experiment directory.
 
     Creates a batch job with a single container that executes the specified command
     in /mddash/{experiment_id}. The job uses the shared PVC for persistent storage
@@ -215,84 +198,63 @@ def create_job(name: str, image: str, experiment_id: str, command: str) -> None:
         image: The container image to use for the job.
         experiment_id: The ID of the experiment, used to set the working directory.
         command: The shell command to run (will be wrapped in sh -c).
+
     Raises:
         ApiException: If an error occurs while creating the job.
     """
-
-    if ping_resource('job', name):
+    if ping_resource("job", name):
         logger.warning(f"Job {name} already exists in namespace {NAMESPACE}. Skipping creation.")
         return
 
-    volume_name = 'shared-data'
+    volume_name = "shared-data"
 
-    job_container = get_container(name, image, experiment_id, volume_name, ['sh', '-c', command])
+    job_container = get_container(name, image, experiment_id, volume_name, ["sh", "-c", command])
 
     job_manifest = {
-        'apiVersion': 'batch/v1',
-        'kind': 'Job',
-        'metadata': {
-            'name': name,
-            'namespace': NAMESPACE,
-            'labels': {
-                'app': name
-            }
-        },
-        'spec': {
-            'backoffLimit': 0,
-            'template': {
-                'metadata': {
-                    'labels': {
-                        'job': name
-                    }
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "metadata": {"name": name, "namespace": NAMESPACE, "labels": {"app": name}},
+        "spec": {
+            "backoffLimit": 0,
+            "template": {
+                "metadata": {"labels": {"job": name}},
+                "spec": {
+                    "restartPolicy": "Never",
+                    "securityContext": {"fsGroup": 1000},
+                    "containers": [job_container],
+                    "volumes": [{"name": volume_name, "persistentVolumeClaim": {"claimName": PVC_NAME}}],
                 },
-                'spec': {
-                    'restartPolicy': 'Never',
-                    'securityContext': {
-                        'fsGroup': 1000
-                    },
-                    'containers': [
-                        job_container
-                    ],
-                    'volumes': [
-                        {
-                            'name': volume_name,
-                            'persistentVolumeClaim': {
-                                'claimName': PVC_NAME
-                            }
-                        }
-                    ]
-                }
-            }
-        }
+            },
+        },
     }
 
     batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job_manifest)
 
 
 def ping_resource(resource_type: str, name: str) -> bool:
-    """Check if a Kubernetes resource exists in the namespace.
+    """
+    Check if a Kubernetes resource exists in the namespace.
 
     Args:
         resource_type: The type of resource ('svc', 'pod', 'configmap', 'secret', 'pvc', or 'job').
         name: The name of the resource to check.
+
     Returns:
         bool: True if the resource exists, False if not found or on API error.
     """
-
     try:
         match resource_type:
-            case 'svc':
+            case "svc":
                 core_v1.read_namespaced_service(name=name, namespace=NAMESPACE)
-            case 'pod':
+            case "pod":
                 core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE)
-            case 'configmap':
+            case "configmap":
                 core_v1.read_namespaced_config_map(name=name, namespace=NAMESPACE)
-            case 'secret':
+            case "secret":
                 core_v1.read_namespaced_secret(name=name, namespace=NAMESPACE)
-            case 'pvc':
-                core_v1.read_namespaced_persistent_volume_claim(
-                    name=name, namespace=NAMESPACE)
-            case 'job':
+            case "pvc":
+                core_v1.read_namespaced_persistent_volume_claim(name=name, namespace=NAMESPACE)
+            case "job":
                 batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE)
             case _:
                 raise ValueError(f"Unsupported resource type: {resource_type}")
@@ -302,56 +264,63 @@ def ping_resource(resource_type: str, name: str) -> bool:
 
 
 def delete_pod(name: str) -> None:
-    """Delete a pod from the namespace.
+    """
+    Delete a pod from the namespace.
 
     Args:
         name: The name of the pod to delete.
+
     Raises:
         ApiException: If an error occurs while deleting the pod.
     """
-    if not ping_resource('pod', name):
+    if not ping_resource("pod", name):
         return
 
     core_v1.delete_namespaced_pod(name=name, namespace=NAMESPACE)
 
 
 def delete_job(name: str) -> None:
-    """Delete a job from the namespace with background propagation.
+    """
+    Delete a job from the namespace with background propagation.
 
     Args:
         name: The name of the job to delete.
+
     Raises:
         ApiException: If an error occurs while deleting the job.
     """
-    if not ping_resource('job', name):
+    if not ping_resource("job", name):
         return
 
     batch_v1.delete_namespaced_job(
         name=name,
         namespace=NAMESPACE,
-        body=client.V1DeleteOptions(
-            propagation_policy='Background',
+        body=V1DeleteOptions(
+            propagation_policy="Background",
             grace_period_seconds=5,
-        )
+        ),
     )
 
 
 def delete_service(name: str) -> None:
-    """Delete a service from the namespace.
+    """
+    Delete a service from the namespace.
 
     Args:
         name: The name of the service to delete.
+
     Raises:
         ApiException: If an error occurs while deleting the service.
     """
-    if not ping_resource('svc', name):
+    if not ping_resource("svc", name):
         return
 
     core_v1.delete_namespaced_service(name=name, namespace=NAMESPACE)
 
 
 def create_service(name: str, target_name: str) -> None:
-    """Create a Kubernetes service to expose a pod.
+    """
+    Create a Kubernetes service to expose a pod.
 
     Creates a service that routes TCP traffic on port 80 to port 8888 of pods
     matching the target app label.
@@ -359,39 +328,31 @@ def create_service(name: str, target_name: str) -> None:
     Args:
         name: The name of the service to create.
         target_name: The app label value of pods to target.
+
     Raises:
         ApiException: If an error occurs while creating the service.
     """
-    if ping_resource('svc', name):
+    if ping_resource("svc", name):
         logger.warning(f"Service {name} already exists in namespace {NAMESPACE}. Skipping creation.")
         return
 
-    service = client.V1Service(
-        metadata=client.V1ObjectMeta(
-            name=name,
-            namespace=NAMESPACE
+    service = V1Service(
+        metadata=V1ObjectMeta(name=name, namespace=NAMESPACE),
+        spec=V1ServiceSpec(
+            selector={"app": target_name}, ports=[V1ServicePort(protocol="TCP", port=80, target_port=8888)]
         ),
-        spec=client.V1ServiceSpec(
-            selector={"app": target_name},
-            ports=[client.V1ServicePort(
-                protocol="TCP",
-                port=80,
-                target_port=8888
-            )]
-        )
     )
 
-    core_v1.create_namespaced_service(
-        namespace=NAMESPACE,
-        body=service
-    )
+    core_v1.create_namespaced_service(namespace=NAMESPACE, body=service)
 
 
 def _parse_cpu(cpu_str: str | None) -> int:
-    """Parse CPU value from Kubernetes format to millicores.
+    """
+    Parse CPU value from Kubernetes format to millicores.
 
     Args:
         cpu_str: CPU value (e.g., '100m', '1', '1.5').
+
     Returns:
         int: CPU value in millicores.
     """
@@ -399,16 +360,18 @@ def _parse_cpu(cpu_str: str | None) -> int:
         return 0
 
     cpu_str = str(cpu_str)
-    if cpu_str.endswith('m'):
+    if cpu_str.endswith("m"):
         return int(cpu_str[:-1])
     return int(float(cpu_str) * 1000)
 
 
 def _parse_memory(mem_str: str | None) -> int:
-    """Parse memory value from Kubernetes format to bytes.
+    """
+    Parse memory value from Kubernetes format to bytes.
 
     Args:
         mem_str: Memory value (e.g., '128Mi', '1Gi', '1G').
+
     Returns:
         int: Memory value in bytes.
     """
@@ -418,22 +381,22 @@ def _parse_memory(mem_str: str | None) -> int:
     mem_str = str(mem_str).strip()
     if not mem_str:
         return 0
-    
-    if mem_str.endswith('Gi'):
+
+    if mem_str.endswith("Gi"):
         return int(float(mem_str[:-2]) * 1024**3)
-    elif mem_str.endswith('G'):
+    elif mem_str.endswith("G"):
         return int(float(mem_str[:-1]) * 1000**3)
-    elif mem_str.endswith('Mi'):
+    elif mem_str.endswith("Mi"):
         return int(float(mem_str[:-2]) * 1024**2)
-    elif mem_str.endswith('M'):
+    elif mem_str.endswith("M"):
         return int(float(mem_str[:-1]) * 1000**2)
-    elif mem_str.endswith('Ki'):
+    elif mem_str.endswith("Ki"):
         return int(float(mem_str[:-2]) * 1024)
-    elif mem_str.endswith('K'):
+    elif mem_str.endswith("K"):
         return int(float(mem_str[:-1]) * 1000)
-    elif mem_str.endswith('Ti'):
+    elif mem_str.endswith("Ti"):
         return int(float(mem_str[:-2]) * 1024**4)
-    elif mem_str.endswith('T'):
+    elif mem_str.endswith("T"):
         return int(float(mem_str[:-1]) * 1000**4)
 
     # Try to parse as plain number (bytes)
@@ -445,11 +408,13 @@ def _parse_memory(mem_str: str | None) -> int:
 
 
 def _sum_container_resources(containers: list, resource_type: str) -> dict:
-    """Sum CPU and memory resources for a list of containers.
+    """
+    Sum CPU and memory resources for a list of containers.
 
     Args:
         containers: List of Kubernetes container objects.
         resource_type: Either 'requests' or 'limits'.
+
     Returns:
         dict: Dictionary with 'cpu' (millicores) and 'memory' (bytes) totals.
     """
@@ -457,58 +422,67 @@ def _sum_container_resources(containers: list, resource_type: str) -> dict:
     total_memory = 0
 
     for container in containers:
-        if not hasattr(container, 'resources') or container.resources is None:
+        if not hasattr(container, "resources") or container.resources is None:
             continue
-            
+
         resources = getattr(container.resources, resource_type, None)
         if not resources:
             continue
 
-        cpu_value = resources.get('cpu') if isinstance(resources, dict) else None
-        memory_value = resources.get('memory') if isinstance(resources, dict) else None
-        
+        cpu_value = resources.get("cpu") if isinstance(resources, dict) else None
+        memory_value = resources.get("memory") if isinstance(resources, dict) else None
+
         total_cpu += _parse_cpu(cpu_value)
         total_memory += _parse_memory(memory_value)
 
-    return {
-        'cpu': total_cpu,
-        'memory': total_memory
-    }
+    return {"cpu": total_cpu, "memory": total_memory}
 
 
 def get_pod_resource_requests() -> dict:
-    """Calculate total resource requests for all pods in the namespace.
+    """
+    Calculate total resource requests for all pods in the namespace.
 
     Iterates through all pods and sums up CPU and memory resource requests.
     Handles multiple unit formats (m for millicores, Mi/Gi for memory).
 
     Returns:
         dict: Dictionary with 'cpu' (millicores) and 'memory' (bytes).
+
     Raises:
         ApiException: If an error occurs while listing the pods.
     """
-    pods = core_v1.list_namespaced_pod(namespace=NAMESPACE)
+    pods = cast(V1PodList, core_v1.list_namespaced_pod(namespace=NAMESPACE))
 
-    requests_total = {'cpu': 0, 'memory': 0}
+    requests_total = {"cpu": 0, "memory": 0}
+
+    if not pods.items:
+        return requests_total
 
     for pod in pods.items:
-        requests = _sum_container_resources(pod.spec.containers, 'requests')
-        requests_total['cpu'] += requests['cpu']
-        requests_total['memory'] += requests['memory']
+        if not pod.spec or not pod.spec.containers:
+            continue
+        requests = _sum_container_resources(pod.spec.containers, "requests")
+        requests_total["cpu"] += requests["cpu"]
+        requests_total["memory"] += requests["memory"]
 
     return requests_total
 
 
 def get_pod_status(name: str) -> PodStatus:
-    """Get the current status of a pod.
+    """
+    Get the current status of a pod.
 
     Args:
         name: The name of the pod.
+
     Returns:
         PodStatus: The current status (RUNNING, PENDING, TERMINATED, ERROR, DOWN, TERMINATING, or UNKNOWN).
     """
     try:
-        pod = core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE)
+        pod = cast(V1Pod, core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE))
+
+        if not pod.metadata or not pod.status:
+            return PodStatus.UNKNOWN
 
         if pod.metadata.deletion_timestamp:
             return PodStatus.TERMINATING
@@ -535,15 +509,20 @@ def get_pod_status(name: str) -> PodStatus:
 
 
 def get_job_status(name: str) -> JobStatus:
-    """Get the current status of a job.
+    """
+    Get the current status of a job.
 
     Args:
         name: The name of the job.
+
     Returns:
         JobStatus: The current status (RUNNING, PENDING, TERMINATED, ERROR, or UNKNOWN).
     """
     try:
-        job = batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE)
+        job = cast(V1Job, batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE))
+
+        if not job.status:
+            return JobStatus.UNKNOWN
 
         if job.status.conditions:
             for condition in job.status.conditions:
@@ -567,8 +546,11 @@ def get_job_status(name: str) -> JobStatus:
         return JobStatus.ERROR
 
 
-def wait_for_job(name: str, on_success: Callable[[], None], on_error: Callable[[Exception], None], timeout: int = 60) -> None:
-    """Wait for a Kubernetes job to complete asynchronously and execute callbacks.
+def wait_for_job(
+    name: str, on_success: Callable[[], None], on_error: Callable[[Exception], None], timeout: int = 60
+) -> None:
+    """
+    Wait for a Kubernetes job to complete asynchronously and execute callbacks.
 
     Spawns a daemon thread that polls the job status every 2 seconds until completion,
     failure, or timeout. Executes the appropriate callback based on the outcome.
@@ -580,8 +562,8 @@ def wait_for_job(name: str, on_success: Callable[[], None], on_error: Callable[[
         timeout: Maximum time to wait in seconds (default: 60).
     """
     import time
-    
-    def wait_and_callback():
+
+    def wait_and_callback() -> None:
         try:
             start_time = time.time()
             while time.time() - start_time < timeout:
@@ -592,10 +574,10 @@ def wait_for_job(name: str, on_success: Callable[[], None], on_error: Callable[[
                 elif status == JobStatus.ERROR:
                     raise RuntimeError(f"Job {name} failed")
                 time.sleep(2)
-            
+
             raise RuntimeError(f"Job {name} timed out after {timeout}s")
         except Exception as e:
             on_error(e)
-    
+
     thread = threading.Thread(target=wait_and_callback, daemon=True)
     thread.start()
