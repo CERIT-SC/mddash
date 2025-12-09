@@ -1,22 +1,23 @@
 import logging
-from marshmallow import post_dump
-from extensions import ma
+from typing import Any
 
+from extensions import ma
+from marshmallow import post_dump
 
 logger = logging.getLogger(__name__)
 
 
 class BaseAutoSchema(ma.SQLAlchemyAutoSchema):  # type: ignore
-    """Base schema that automatically includes all non-private properties"""
+    """Base schema that automatically includes all non-private properties."""
 
     @post_dump
-    def remove_private_fields(self, data, **kwargs):
-        """Remove any fields that start with underscore"""
-        return {key: value for key, value in data.items() if not key.startswith('_')}
+    def remove_private_fields(self, data: dict[str, Any], **kwargs: object) -> dict[str, Any]:
+        """Remove any fields that start with underscore."""
+        return {key: value for key, value in data.items() if not key.startswith("_")}
 
     @post_dump(pass_original=True)
-    def add_computed_properties(self, data, obj, **kwargs):
-        """Automatically add all non-private properties"""
+    def add_computed_properties(self, data: dict[str, Any], obj: object, **kwargs: object) -> dict[str, Any]:
+        """Automatically add all non-private properties."""
         if not obj:
             return data
 
@@ -24,9 +25,11 @@ class BaseAutoSchema(ma.SQLAlchemyAutoSchema):  # type: ignore
         obj_type = type(obj)
 
         for attr_name in dir(obj_type):
-            if (attr_name.startswith('_') or 
-                attr_name in data or 
-                attr_name in ['metadata', 'query', 'query_class', 'registry']):
+            if (
+                attr_name.startswith("_")
+                or attr_name in data
+                or attr_name in ["metadata", "query", "query_class", "registry"]
+            ):
                 continue
 
             if isinstance(getattr(obj_type, attr_name, None), property):
