@@ -1,11 +1,14 @@
 import logging
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from config import GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
 from enums import JobStatus
-from kubernetes import client, config  # type: ignore
-from kubernetes.client import V1Job  # type: ignore
-from kubernetes.client.rest import ApiException  # type: ignore
+from kubernetes import client, config
+from kubernetes.client.rest import ApiException
+
+if TYPE_CHECKING:
+    from kubernetes.client import V1Job
+
 
 logger = logging.getLogger(__name__)
 
@@ -263,7 +266,7 @@ def ping_resource(resource_type: str, name: str, ns: str) -> bool:
             case _:
                 raise ValueError(f"Unsupported resource type: {resource_type}")
         return True
-    except ApiException as e:
+    except ApiException:
         return False
 
 
@@ -279,23 +282,22 @@ def get_job_status(ns: str, name: str) -> JobStatus:
         JobStatus: Current status of the job (PENDING, RUNNING, TERMINATED, ERROR, or UNKNOWN).
     """
     try:
-        job = cast(V1Job, batch_v1.read_namespaced_job(name=name, namespace=ns))
+        job = cast("V1Job", batch_v1.read_namespaced_job(name=name, namespace=ns))
 
         if job.status and job.status.conditions:
             for condition in job.status.conditions:
                 if condition.type == "Complete" and condition.status == "True":
                     return JobStatus.TERMINATED
-                elif condition.type == "Failed" and condition.status == "True":
+                if condition.type == "Failed" and condition.status == "True":
                     return JobStatus.ERROR
 
         if job.status and job.status.succeeded and job.status.succeeded > 0:
             return JobStatus.TERMINATED
-        elif job.status and job.status.failed and job.status.failed > 0:
+        if job.status and job.status.failed and job.status.failed > 0:
             return JobStatus.ERROR
-        elif job.status and job.status.active and job.status.active > 0:
+        if job.status and job.status.active and job.status.active > 0:
             return JobStatus.RUNNING
-        else:
-            return JobStatus.PENDING
+        return JobStatus.PENDING
 
     except ApiException as e:
         if e.status == 404:
