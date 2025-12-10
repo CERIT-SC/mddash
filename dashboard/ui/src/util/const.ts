@@ -10,10 +10,10 @@ declare global {
 }
 
 // Detect dev mode: config.js won't be loaded in dev, so MDDASH_CONFIG will be undefined
-export const DEBUG = typeof window.MDDASH_CONFIG === 'undefined';
+export const DEBUG = typeof window.MDDASH_CONFIG === "undefined";
 
 // Use runtime config or fallback to dev defaults
-export const BASE_PATH = window.MDDASH_CONFIG?.basePath ?? '/';
-export const API_BASE = window.MDDASH_CONFIG?.apiPath ?? 'http://localhost:8888/api';
-export const HUB_API_BASE = '/hub/api';
-export const USER = window.MDDASH_CONFIG?.user ?? 'dev-user';
+export const BASE_PATH = window.MDDASH_CONFIG?.basePath ?? "/";
+export const API_BASE = window.MDDASH_CONFIG?.apiPath ?? "http://localhost:8888/api";
+export const HUB_API_BASE = "/hub/api";
+export const USER = window.MDDASH_CONFIG?.user ?? "dev-user";

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 import { Paper, Box } from "@mui/material";
 
@@ -13,10 +13,10 @@ export default function LogsView(props: LogsViewProps) {
 
     const [logs, setLogs] = useState<string>("");
 
-    const fetchLogs = async () => {
+    const fetchLogs = useCallback(async () => {
         const logText = await getLogs();
         setLogs("...\n" + logText);
-    };
+    }, [getLogs]);
 
     useEffect(() => {
         fetchLogs();
@@ -24,7 +24,7 @@ export default function LogsView(props: LogsViewProps) {
             const interval = setInterval(fetchLogs, refreshInterval);
             return () => clearInterval(interval);
         }
-    }, [getLogs, refreshInterval]);
+    }, [fetchLogs, refreshInterval]);
 
     return (
         <Paper variant="outlined" sx={{ height: 400, width: "100%", p: 2, ...sx }}>

@@ -1,4 +1,4 @@
-import React, { createContext, useMemo, useState, useCallback, ReactNode } from "react";
+import React, { useMemo, useState, useCallback, ReactNode } from "react";
 import {
     createTheme,
     ThemeOptions,
@@ -9,6 +9,7 @@ import {
 import { alpha } from "@mui/material/styles";
 import type { CSSObject, Theme } from "@mui/material/styles";
 import { TypographyOptions } from "@mui/material/styles/createTypography";
+import { ThemeContext } from "./ThemeContext";
 
 const typography: TypographyOptions = {
     fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
@@ -99,11 +100,6 @@ const createScrollbarOverrides = (palette: Theme["palette"]): CSSObject => {
         },
     };
 };
-
-export const ThemeContext = createContext({
-    mode: "light",
-    toggleTheme: () => {},
-});
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     // Get initial mode: localStorage > system preference > default 'light'

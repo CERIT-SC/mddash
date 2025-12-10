@@ -13,8 +13,8 @@ import {
 } from "@mui/icons-material";
 
 import { get_notebook, spawn_notebook, delete_notebook } from "@/util/api";
-import { useNotification } from "@/contexts/NotificationContext";
-import { Notebook, PodStatus } from "@/util/types";
+import { useNotification } from "@/contexts/useNotification";
+import { Notebook, getPodStatusColor } from "@/util/types";
 
 const UNKNOWN_NOTEBOOK: Notebook = {
     id: -1,
@@ -143,7 +143,7 @@ const NotebookController = ({ experimentId }: NotebookControllerProps) => {
                             <StatusIcon color={statusConfig.color} />
                         ) : null}
                         <Typography variant="h4">Notebook Status:</Typography>
-                        <Chip size="small" label={notebook.status} color={PodStatus.getColor(notebook.status)} />
+                        <Chip size="small" label={notebook.status} color={getPodStatusColor(notebook.status)} />
                     </Stack>
 
                     <Typography variant="body2">{statusConfig.message}</Typography>

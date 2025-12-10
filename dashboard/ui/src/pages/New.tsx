@@ -15,7 +15,7 @@ import {
 
 import Dropzone from "@/components/Dropzone";
 import { create_experiment } from "@/util/api";
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 
 const tabStyles = {
     textTransform: "none",
@@ -31,7 +31,7 @@ const tabStyles = {
     },
     "&:not(.Mui-selected):hover": {
         bgcolor: "action.hover",
-        color: "text.primary"
+        color: "text.primary",
     },
 } as const;
 

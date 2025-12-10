@@ -16,7 +16,7 @@ import {
 import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
 
-import { JobStatus, TunerTrial } from "@/util/types";
+import { JobStatus, TunerTrial, getJobStatusColor } from "@/util/types";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
 const StyledTableCell = styled(TableCell)(({ theme }) => ({
@@ -48,7 +48,7 @@ const TunerTable = (props: TunerTableProps) => {
                 if (b.performance === null) return -1;
                 return b.performance - a.performance;
             }),
-        [rows]
+        [rows],
     );
 
     const handleRadioClick = useCallback(
@@ -60,7 +60,7 @@ const TunerTable = (props: TunerTableProps) => {
             if (!isOptimal) setConfirmChoiceDialog(true);
             setSelectedTrial(row);
         },
-        [selectedTrial, setSelectedTrial]
+        [selectedTrial, setSelectedTrial],
     );
 
     if (rows.length === 0) {
@@ -106,7 +106,11 @@ const TunerTable = (props: TunerTableProps) => {
                                         />
                                     </StyledTableCell>
                                     <StyledTableCell>
-                                        <Chip size="small" label={row.status} color={JobStatus.getColor(row.status as JobStatus)} />
+                                        <Chip
+                                            size="small"
+                                            label={row.status}
+                                            color={getJobStatusColor(row.status as JobStatus)}
+                                        />
                                     </StyledTableCell>
                                     <StyledTableCell align="right">
                                         {row.performance !== null ? row.performance.toFixed(2) : "N/A"}

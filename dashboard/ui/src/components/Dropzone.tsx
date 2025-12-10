@@ -17,7 +17,7 @@ import {
 } from "@mui/material";
 import { Check, CloudUpload } from "@mui/icons-material";
 
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 import { formatFileSize } from "@/util/helpers";
 
 const getAcceptedExtensions = (acceptedTypes: Accept): string =>

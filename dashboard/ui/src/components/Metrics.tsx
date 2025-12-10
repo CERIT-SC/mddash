@@ -14,7 +14,7 @@ import { Memory, DeveloperBoard, Storage } from "@mui/icons-material";
 
 import { get_metrics } from "@/util/api";
 import { ResourceUsage } from "@/util/types";
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 
 const formatBytes = (bytes: number): string => {
     const gb = bytes / 1024 ** 3;

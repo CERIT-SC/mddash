@@ -4,7 +4,7 @@ import { Box, Stack } from "@mui/material";
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { tuner_statuses, stop_tuner, delete_tuner } from "@/util/api";
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import TunerView from "./TunerView";
 import TprSelector from "@/components/Wizard/TprSelector";
@@ -46,7 +46,7 @@ const TuneStep = (props: WizardStepProps) => {
                 setTprFiles((prev) => prev.filter((t) => t !== tpr));
             }
         },
-        [existingJobs]
+        [existingJobs],
     );
 
     const stopJob = useCallback(
@@ -55,7 +55,7 @@ const TuneStep = (props: WizardStepProps) => {
             if (error) showError(error);
             fetchTunerJobs();
         },
-        [experiment.id, showError, fetchTunerJobs]
+        [experiment.id, showError, fetchTunerJobs],
     );
 
     const deleteJob = useCallback(
@@ -65,7 +65,7 @@ const TuneStep = (props: WizardStepProps) => {
             setSelectedTpr(null);
             fetchTunerJobs();
         },
-        [experiment.id, showError, fetchTunerJobs]
+        [experiment.id, showError, fetchTunerJobs],
     );
 
     useEffect(() => {
