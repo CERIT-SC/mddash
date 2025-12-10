@@ -91,7 +91,7 @@ def auth() -> tuple[str, int] | Response:
     state = secrets.token_urlsafe(16)
     signature = sign(state)
     params = {"client_id": CLIENT_ID, "redirect_uri": CALLBACK_URL, "response_type": "code", "state": state}
-    url = f"/hub/api/oauth2/authorize?" + "&".join(f"{k}={v}" for k, v in params.items())
+    url = "/hub/api/oauth2/authorize?" + "&".join(f"{k}={v}" for k, v in params.items())
     resp = make_response(redirect(url))
     resp.set_cookie(STATE_COOKIE, signature, path=SERVICE_PREFIX, httponly=True)
     return resp
