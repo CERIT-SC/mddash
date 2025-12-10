@@ -31,10 +31,10 @@ def _polling_worker(app: Flask) -> None:
                         # Access the status property to trigger the update
                         _ = job.status
                     except Exception as e:
-                        logger.error(f"Error polling job {job.job_name}: {e}", exc_info=True)
+                        logger.exception(f"Error polling job {job.job_name}: {e}")
 
         except Exception as e:
-            logger.error(f"Error in polling worker: {e}", exc_info=True)
+            logger.exception(f"Error in polling worker: {e}")
 
         # Wait for the next polling interval
         time.sleep(POLL_INTERVAL_SECONDS)
