@@ -40,7 +40,7 @@ def get_job(job_id: str) -> Response:
 def create_job() -> Response:
     """Create and start a new GROMACS simulation job."""
     request_schema = JobCreateRequestSchema()
-    data = cast(dict[str, Any], request_schema.load(request.json or {}))
+    data = cast("dict[str, Any]", request_schema.load(request.json or {}))
 
     job: MdrunJob = MdrunJob.create_and_start(
         experiment_id=data["experiment_id"],

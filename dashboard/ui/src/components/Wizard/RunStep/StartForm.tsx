@@ -17,7 +17,7 @@ import {
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { submit_gmx } from "@/util/api";
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 import { Add, RocketLaunch } from "@mui/icons-material";
 
 const MDRUN_ARGUMENTS = [
@@ -93,17 +93,17 @@ export const StartForm = (props: ManualStartFormProps) => {
     const [selectedArgument, setSelectedArgument] = useState("");
     const [argumentValue, setArgumentValue] = useState("");
     const [addedArguments, setAddedArguments] = useState<Array<{ key: string; value: string; description: string }>>(
-        []
+        [],
     );
 
     const selectedArgConfig = useMemo(
         () => MDRUN_ARGUMENTS.find((arg) => arg.key === selectedArgument),
-        [selectedArgument]
+        [selectedArgument],
     );
 
     const availableArguments = useMemo(
         () => MDRUN_ARGUMENTS.filter((arg) => !addedArguments.some((added) => added.key === arg.key)),
-        [addedArguments]
+        [addedArguments],
     );
 
     const isAddDisabled = useMemo(() => {
@@ -158,7 +158,7 @@ export const StartForm = (props: ManualStartFormProps) => {
 
             onStartJob();
         },
-        [experiment.id, tprName, addedArguments, onStartJob, showError]
+        [experiment.id, tprName, addedArguments, onStartJob, showError],
     );
 
     return (

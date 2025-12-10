@@ -1,32 +1,41 @@
-import os
 import logging
-from flask import Flask
-from flask_migrate import upgrade, init, migrate as flask_migrate
+import os
 
 from config import DATA_DIR, LOG_FORMAT, LOG_LEVEL
 from extensions import db, ma, migrate
-from routes import *
+from flask import Flask
+from flask_migrate import init, upgrade
+from flask_migrate import migrate as flask_migrate
 from logging_utils import configure_logging, enable_loggers
-
+from routes import (
+    experiments_bp,
+    files_bp,
+    gmx_bp,
+    mdrepo_bp,
+    misc_bp,
+    notebook_bp,
+    tuner_bp,
+)
 
 logger = logging.getLogger(__name__)
 
 
 def create_app() -> Flask:
+    """Create and configure the Flask application."""
     app = Flask(__name__)
-    
+
     # Configuration
-    db_path = DATA_DIR / 'experiments.db'
-    migrations_dir = DATA_DIR / 'migrations'
-    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    
+    db_path = DATA_DIR / "experiments.db"
+    migrations_dir = DATA_DIR / "migrations"
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
     # Secret key for Flask session (used by MDRepo OAuth)
-    app.config['SECRET_KEY'] = os.environ.get('MDREPO_CLIENT_SECRET', '')
+    app.config["SECRET_KEY"] = os.environ.get("MDREPO_CLIENT_SECRET", "")
     # Secure session cookie settings (recommended for production)
-    app.config['SESSION_COOKIE_SECURE'] = True  # Only send over HTTPS
-    app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access
-    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+    app.config["SESSION_COOKIE_SECURE"] = True  # Only send over HTTPS
+    app.config["SESSION_COOKIE_HTTPONLY"] = True  # Prevent JavaScript access
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # CSRF protection
 
     # Initialize extensions
     db.init_app(app)
@@ -46,16 +55,16 @@ def create_app() -> Flask:
             logger.info("Initializing database migrations...")
             init(directory=str(migrations_dir))
             logger.info("Creating initial migration...")
-            flask_migrate(message='Initial migration')
+            flask_migrate(message="Initial migration")
         else:
             # Auto-generate migration if models have changed
             try:
                 logger.info("Checking for model changes...")
-                flask_migrate(message='Auto-generated migration')
+                flask_migrate(message="Auto-generated migration")
                 logger.info("New migration generated")
             except Exception:
                 logger.debug("No migration needed", exc_info=True)
-        
+
         try:
             logger.info("Running database migrations...")
             upgrade()
@@ -74,6 +83,6 @@ app = create_app()
 
 
 # DEVELOPMENT ONLY - when running directly with python app.py
-if __name__ == '__main__':
+if __name__ == "__main__":
     logger.info("Starting Flask development server...")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5000)

@@ -4,7 +4,7 @@ import { CloudUpload, Edit, CheckCircle, Info, Folder, Storage, Login } from "@m
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { publish_experiment, find_files, get_mdrepo_status, get_mdrepo_auth_url } from "@/util/api";
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 import { formatFileSize } from "@/util/helpers";
 
 const PublishStep = (props: WizardStepProps) => {

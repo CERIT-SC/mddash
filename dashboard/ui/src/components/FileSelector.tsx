@@ -5,7 +5,7 @@ import { FormControl, InputLabel, Select, MenuItem, SelectChangeEvent } from "@m
 import { find_files } from "@/util/api";
 import { FileOption } from "@/util/types";
 import { formatFileSize } from "@/util/helpers";
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 
 export interface FileSelectorProps {
     experimentId: string;
@@ -34,7 +34,7 @@ const FileSelector = (props: FileSelectorProps) => {
 
     const filteredFiles = useMemo(
         () => availableFiles.filter((file) => !ignoreFiles.includes(file.name)),
-        [availableFiles, ignoreFiles]
+        [availableFiles, ignoreFiles],
     );
 
     useEffect(() => {
@@ -50,7 +50,7 @@ const FileSelector = (props: FileSelectorProps) => {
             setSelectedFile(selectedUrl);
             onFileSelected(selectedUrl);
         },
-        [onFileSelected]
+        [onFileSelected],
     );
 
     return (

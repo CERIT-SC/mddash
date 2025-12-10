@@ -5,7 +5,7 @@ from .job_status import JobStatus
 from .pod_status import PodStatus
 
 __all__ = [
-    'DeviceType', 
-    'JobStatus',
-    'PodStatus',
+    "DeviceType",
+    "JobStatus",
+    "PodStatus",
 ]

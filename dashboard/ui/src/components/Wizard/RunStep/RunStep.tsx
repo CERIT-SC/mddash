@@ -4,7 +4,7 @@ import { Box, Stack } from "@mui/material";
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { delete_gmx, gmx_statuses } from "@/util/api";
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import RunView from "./RunView";
 import TprSelector from "../TprSelector";
@@ -46,7 +46,7 @@ const RunStep = (props: WizardStepProps) => {
                 setTprFiles((prev) => prev.filter((t) => t !== tpr));
             }
         },
-        [existingJobs]
+        [existingJobs],
     );
 
     const deleteJob = useCallback(
@@ -56,7 +56,7 @@ const RunStep = (props: WizardStepProps) => {
             setSelectedTpr(null);
             fetchGromacsJobs();
         },
-        [experiment.id, showError, fetchGromacsJobs]
+        [experiment.id, showError, fetchGromacsJobs],
     );
 
     useEffect(() => {

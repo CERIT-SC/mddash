@@ -15,9 +15,9 @@ import {
 } from "@mui/material";
 import { AddCircleOutline, AutoFixHigh, Delete } from "@mui/icons-material";
 
-import { Experiment, PodStatus } from "@/util/types";
+import { Experiment, getPodStatusColor } from "@/util/types";
 import { delete_experiment, get_experiments } from "@/util/api";
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 import ConfirmDialog from "./ConfirmDialog";
 
 const Experiments = () => {
@@ -47,7 +47,7 @@ const Experiments = () => {
                 fetchExperiments();
             }
         },
-        [showError, fetchExperiments]
+        [showError, fetchExperiments],
     );
 
     const handleDeleteClick = useCallback((experiment: Experiment) => {
@@ -102,7 +102,7 @@ const Experiments = () => {
                                     <Typography variant="subtitle2">Notebook:</Typography>
                                     <Typography
                                         variant="body2"
-                                        color={PodStatus.getColor(experiment.notebook?.status || "UNKNOWN")}
+                                        color={getPodStatusColor(experiment.notebook?.status || "UNKNOWN")}
                                     >
                                         {experiment.notebook?.status || "UNKNOWN"}
                                     </Typography>

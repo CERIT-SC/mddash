@@ -1,6 +1,6 @@
 import { Snackbar, Alert, AlertTitle, IconButton } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 
 const NotificationContainer = () => {
     const { notifications, removeNotification } = useNotification();

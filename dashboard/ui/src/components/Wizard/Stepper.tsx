@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 
 import {
     styled,
@@ -16,7 +16,7 @@ import { BlurOn, Tune, PlayArrow, Assessment, Publish } from "@mui/icons-materia
 import { Experiment } from "@/util/types";
 import { DEBUG } from "@/util/const";
 import { get_experiment_step } from "@/util/api";
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 import WizardSetup from "./SetupStep";
 import TuneStep from "./TuneStep";
 import RunStep from "./RunStep";
@@ -83,12 +83,12 @@ const ColorLibStepIconRoot = styled("div")<{ ownerState: { completed?: boolean; 
         ...(ownerState.completed && {
             backgroundColor: theme.palette.success.main,
         }),
-    })
+    }),
 );
 
 export interface WizardStepperProps {
     experiment: Experiment;
-    setExperiment: Function;
+    setExperiment: React.Dispatch<React.SetStateAction<Experiment | null>>;
 }
 
 export interface WizardStepProps extends WizardStepperProps {
@@ -101,16 +101,17 @@ const WizardStepper = (props: WizardStepperProps) => {
     const { showError } = useNotification();
     const [activeStep, setActiveStep] = useState(Math.min(experiment.step, steps.length - 1));
 
-    const fetchStep = async () => {
+    const fetchStep = useCallback(async () => {
         const { data, error } = await get_experiment_step(experiment.id);
 
         if (error) showError(error);
         else if (data !== null && data !== experiment.step) {
-            setExperiment((prev: Experiment) => {
+            setExperiment((prev) => {
+                if (!prev) return prev;
                 return { ...prev, step: data };
             });
         }
-    };
+    }, [experiment.id, experiment.step, setExperiment, showError]);
 
     const changeStep = async (step: number) => {
         if (step < 0 || step >= steps.length) return;
@@ -122,7 +123,8 @@ const WizardStepper = (props: WizardStepperProps) => {
         if (experiment.step >= steps.length - 1) return;
 
         setActiveStep(experiment.step + 1);
-        setExperiment((prev: Experiment) => {
+        setExperiment((prev) => {
+            if (!prev) return prev;
             return { ...prev, step: prev.step + 1 };
         });
     };
@@ -130,7 +132,7 @@ const WizardStepper = (props: WizardStepperProps) => {
     useEffect(() => {
         const interval = setInterval(fetchStep, 5000);
         return () => clearInterval(interval);
-    }, [experiment.id, experiment.step]);
+    }, [experiment.id, experiment.step, fetchStep]);
 
     const childProps = {
         ...props,

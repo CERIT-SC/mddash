@@ -4,15 +4,16 @@ MDRepo API client using OAuth2 Bearer token authentication.
 This module provides functions to interact with the MDRepo (InvenioRDM) API
 for creating experiments and uploading files.
 """
-import requests
-from pathlib import Path
-from config import MDREPO_RECORD_NAME, MDREPO_API_URL
 
+from pathlib import Path
+
+import requests
+from config import MDREPO_API_URL, MDREPO_RECORD_NAME
 
 
 def _auth_header(token: str) -> dict[str, str]:
     """Create authorization header for API requests."""
-    return {'Authorization': f'Bearer {token}'}
+    return {"Authorization": f"Bearer {token}"}
 
 
 def create_experiment(token: str, community: str, metadata: dict) -> dict:
@@ -31,18 +32,13 @@ def create_experiment(token: str, community: str, metadata: dict) -> dict:
         ValueError: If the experiment creation fails.
     """
     json_data = {
-        'files': {'enabled': True},
-        'parent': {
-            'communities': {'default': community}
-        },
-        'metadata': metadata,
+        "files": {"enabled": True},
+        "parent": {"communities": {"default": community}},
+        "metadata": metadata,
     }
 
     response = requests.post(
-        f'{MDREPO_API_URL}/{MDREPO_RECORD_NAME}',
-        json=json_data,
-        headers=_auth_header(token),
-        timeout=30
+        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}", json=json_data, headers=_auth_header(token), timeout=30
     )
 
     if not response.ok:
@@ -69,25 +65,25 @@ def upload_file(token: str, experiment_id: str, file: Path) -> dict:
     headers = _auth_header(token)
 
     # Initialize file upload
-    json_data = [{'key': file.name}]
+    json_data = [{"key": file.name}]
     response = requests.post(
-        f'{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files',
+        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files",
         headers=headers,
         json=json_data,
-        timeout=30
+        timeout=30,
     )
 
     if not response.ok:
         raise ValueError(f"Failed to initialize file upload: {response.status_code} - {response.text}")
 
     # Upload file content
-    with open(file, 'rb') as f:
+    with file.open("rb") as f:
         response = requests.put(
-            f'{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files/{file.name}/content',
+            f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files/{file.name}/content",
             headers=headers,
             data=f,
             stream=True,
-            timeout=300  # longer timeout for file uploads
+            timeout=300,  # longer timeout for file uploads
         )
 
     if not response.ok:
@@ -95,9 +91,9 @@ def upload_file(token: str, experiment_id: str, file: Path) -> dict:
 
     # Commit the file
     response = requests.post(
-        f'{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files/{file.name}/commit',
+        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files/{file.name}/commit",
         headers=headers,
-        timeout=30
+        timeout=30,
     )
 
     if not response.ok:

@@ -10,7 +10,7 @@ import { StateTransforms } from "molstar/lib/mol-plugin-state/transforms";
 import { BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory";
 import { BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates";
 
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 
 interface MolStarProps {
     width?: React.CSSProperties["width"];
@@ -144,7 +144,7 @@ async function loadSingleStructure(
         url: string;
         format: BuiltInTrajectoryFormat | "mmcif";
         isBinary?: boolean;
-    }
+    },
 ) {
     const { url, format, isBinary = format !== "pdb" && format !== "gro" } = options;
 
@@ -170,7 +170,7 @@ async function loadTrajectoryWithCoordinates(
         structureFormat: BuiltInTrajectoryFormat;
         coordsUrl: string;
         coordsFormat: BuiltInCoordinatesFormat;
-    }
+    },
 ) {
     const { structureUrl, structureFormat, coordsUrl, coordsFormat } = options;
     const state = plugin.state.data;
@@ -180,7 +180,7 @@ async function loadTrajectoryWithCoordinates(
 
     const structureData = await plugin.builders.data.download(
         { url: structureUrl, isBinary: structureIsBinary },
-        { state: { isGhost: true } }
+        { state: { isGhost: true } },
     );
 
     if (!structureData || !structureData.isOk) {
@@ -201,7 +201,7 @@ async function loadTrajectoryWithCoordinates(
 
     const coordsData = await plugin.builders.data.download(
         { url: coordsUrl, isBinary: coordsIsBinary },
-        { state: { isGhost: true } }
+        { state: { isGhost: true } },
     );
 
     if (!coordsData || !coordsData.isOk) {
@@ -248,7 +248,7 @@ async function loadTrajectoryWithCoordinates(
                 modelRef: model.ref,
                 coordinatesRef: coords.ref,
             },
-            { dependsOn: [model.ref, coords.ref] }
+            { dependsOn: [model.ref, coords.ref] },
         )
         .commit({ revertOnError: true });
 
