@@ -3,12 +3,12 @@ import { Paper, Typography, CircularProgress, TextField, IconButton } from "@mui
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 import WizardStepper from "@/components/Wizard/Stepper";
 import { Experiment } from "@/util/types";
 import { get_experiment, edit_experiment } from "@/util/api";
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 
 const Wizard = () => {
     const { id } = useParams<{ id: string }>();
@@ -18,17 +18,17 @@ const Wizard = () => {
     const [editingName, setEditingName] = useState(false);
     const [nameInput, setNameInput] = useState("");
 
-    const getExperiment = async () => {
+    const getExperiment = useCallback(async () => {
         if (!id) return;
 
         const { data, error } = await get_experiment(id);
         if (error) showError(error);
         setExperiment(data || null);
-    };
+    }, [id, showError]);
 
     useEffect(() => {
         getExperiment();
-    }, []);
+    }, [getExperiment]);
 
     const editExperimentName = async (newName: string) => {
         if (!experiment || newName === experiment.name) return;

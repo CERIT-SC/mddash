@@ -16,7 +16,7 @@ import {
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { GromacsJob } from "@/util/types";
 import { gmx_status, gmx_logs } from "@/util/api";
-import { useNotification } from "@/contexts/NotificationContext";
+import { useNotification } from "@/contexts/useNotification";
 import LogsView from "@/components/LogsView";
 import StartForm from "./StartForm";
 import JobStatusDisplay from "./JobStatusDisplay";
@@ -47,7 +47,7 @@ const RunView = (props: RunViewProps) => {
             }
             setJobStatus(data || null);
         },
-        [experiment.id, tprName, showError]
+        [experiment.id, tprName, showError],
     );
 
     useEffect(() => {

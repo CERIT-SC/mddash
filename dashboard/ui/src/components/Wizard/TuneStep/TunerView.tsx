@@ -6,8 +6,8 @@ import { PlayArrow, Pause } from "@mui/icons-material";
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { tuner_status, run_tuner } from "@/util/api";
 import { TunerJob, TunerTrial } from "@/util/types";
-import { useNotification } from "@/contexts/NotificationContext";
-import { StartForm } from "@/components/Wizard/RunStep";
+import { useNotification } from "@/contexts/useNotification";
+import StartForm from "@/components/Wizard/RunStep/StartForm";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import TunerTable from "./TunerTable";
 
@@ -44,7 +44,7 @@ const TunerView = (props: TunerViewProps) => {
                 setSelectedTrial(updatedTrial || null);
             }
         },
-        [experiment.id, tprName, selectedTrial, showError]
+        [experiment.id, tprName, selectedTrial, showError],
     );
 
     const runTuner = useCallback(async () => {
@@ -56,14 +56,18 @@ const TunerView = (props: TunerViewProps) => {
     }, [nsteps, experiment.id, tprName, showError, onStartTuner, fetchStatus]);
 
     const goToRunStep = useCallback(async () => {
-        experiment.step < 2 ? nextStep() : changeStep(2);
+        if (experiment.step < 2) {
+            nextStep();
+        } else {
+            changeStep(2);
+        }
     }, [experiment.step, nextStep, changeStep]);
 
     // initial fetch
     useEffect(() => {
         setLoading(true);
         fetchStatus(false).finally(() => setLoading(false));
-    }, [tprName, experiment.id]);
+    }, [tprName, experiment.id, fetchStatus]);
 
     useEffect(() => {
         const shouldPoll =

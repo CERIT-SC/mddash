@@ -1,6 +1,6 @@
 import { Stack, Typography, Chip, LinearProgress, Paper, Grid2 as Grid } from "@mui/material";
 
-import { GromacsJob, JobStatus } from "@/util/types";
+import { GromacsJob, getJobStatusColor } from "@/util/types";
 import { formatDuration } from "@/util/helpers";
 
 interface JobStatusDisplayProps {
@@ -18,7 +18,7 @@ const JobStatusDisplay = ({ jobStatus }: JobStatusDisplayProps) => {
             <Paper variant="outlined" sx={{ padding: 2 }}>
                 <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" width="100%">
                     <Typography variant="subtitle1">Status</Typography>
-                    <Chip label={jobStatus.status} color={JobStatus.getColor(jobStatus.status)} />
+                    <Chip label={jobStatus.status} color={getJobStatusColor(jobStatus.status)} />
                 </Stack>
 
                 {isRunningWithProgress && (
@@ -57,7 +57,7 @@ const JobStatusDisplay = ({ jobStatus }: JobStatusDisplayProps) => {
                                         Performance
                                     </Typography>
                                     <Typography variant="body1">{`${jobStatus.performance.toFixed(
-                                        2
+                                        2,
                                     )} ns/day`}</Typography>
                                 </Paper>
                             </Grid>
