@@ -1,105 +1,101 @@
 {
-    log {
-        output stdout
-        level INFO
-        format console
-    }
+	log {
+		output stdout
+		level INFO
+		format console
+	}
 
-    admin 0.0.0.0:2019
+	admin 0.0.0.0:2019
 
-    auto_https off
+	auto_https off
 }
 
 http://:8888 {
-    # NOTE: When changing something here, it can break the dashboard/api/clients/caddy.py logic!
+	# NOTE: When changing something here, it can break the dashboard/api/clients/caddy.py logic!
 
-    log {
-        output stdout
-        format console
-    }
+	log {
+		output stdout
+		format console
+	}
 
-    # Health check endpoint
-    handle /health {
-        respond "OK" 200
-    }
+	# Health check endpoint
+	handle /health {
+		respond "OK" 200
+	}
 
-    # OAuth callback route - proxied to auth container
-    @oauth_callback {
-        path {$CADDY_ROUTE_PREFIX}/oauth_callback*
-    }
-    handle @oauth_callback {
-        uri strip_prefix {$CADDY_ROUTE_PREFIX}
-        reverse_proxy {$AUTH_HOST}:5001
-    }
+	# OAuth callback route - proxied to auth container
+	@oauth_callback {
+		path {$CADDY_ROUTE_PREFIX}/oauth_callback*
+	}
+	handle @oauth_callback {
+		uri strip_prefix {$CADDY_ROUTE_PREFIX}
+		reverse_proxy {$AUTH_HOST}:5001
+	}
 
-    # API routes - authenticated via forward_auth to auth container
-    @api_routes {
-        path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/api.*$
-    }
-    handle @api_routes {
-        forward_auth {$AUTH_HOST}:5001 {
-            uri /auth
-        }
+	# API routes - authenticated via forward_auth to auth container
+	@api_routes {
+		path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/api.*$
+	}
+	handle @api_routes {
+		forward_auth {$AUTH_HOST}:5001 {
+			uri /auth
+		}
 
-        reverse_proxy {$API_HOST}:5000
-    }
+		reverse_proxy {$API_HOST}:5000
+	}
 
-    # /dash -> /dash/
-    @dash_redirect {
-        path {$CADDY_ROUTE_PREFIX}/dash
-    }
-    redir @dash_redirect {$CADDY_ROUTE_PREFIX}/dash/ 308
+	# /dash -> /dash/
+	@dash_redirect {
+		path {$CADDY_ROUTE_PREFIX}/dash
+	}
+	redir @dash_redirect {$CADDY_ROUTE_PREFIX}/dash/ 308
 
-    # Dynamic config.js for React app - injects runtime configuration
-    @config_js {
-        path {$CADDY_ROUTE_PREFIX}/dash/config.js
-    }
-    handle @config_js {
-        forward_auth {$AUTH_HOST}:5001 {
-            uri /auth
-        }
-        header Content-Type "application/javascript"
-        respond `window.MDDASH_CONFIG = {
-    basePath: "{$CADDY_ROUTE_PREFIX}/dash",
-    apiPath: "{$CADDY_ROUTE_PREFIX}/dash/api",
-    user: "{$JUPYTERHUB_USER}"
-};`
-    }
+	# Dynamic config.js for React app - injects runtime configuration
+	@config_js {
+		path {$CADDY_ROUTE_PREFIX}/dash/config.js
+	}
+	handle @config_js {
+		forward_auth {$AUTH_HOST}:5001 {
+			uri /auth
+		}
+		header Content-Type "application/javascript"
+		respond `window.MDDASH_CONFIG = {basePath: "{$CADDY_ROUTE_PREFIX}/dash", apiPath: "{$CADDY_ROUTE_PREFIX}/dash/api", user: "{$JUPYTERHUB_USER}"};`
+	}
 
-    # Dashboard routes - static files with authentication
-    @dash_routes {
-        path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/.*$
-    }
-    handle @dash_routes {
-        forward_auth {$AUTH_HOST}:5001 {
-            uri /auth
-        }
+	# Dashboard routes - static files with authentication
+	@dash_routes {
+		path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/.*$
+	}
+	handle @dash_routes {
+		forward_auth {$AUTH_HOST}:5001 {
+			uri /auth
+		}
 
-        root * /opt/dash
+		root * /opt/dash
 
-        @is_asset {
-            path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/(.*)$
-        }
-        rewrite @is_asset /{re.1}
+		@is_asset {
+			path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/(.*)$
+		}
+		rewrite @is_asset /{re.1}
 
-        @not_a_file {
-            not file {path}
-        }
-        rewrite @not_a_file /index.html
+		@not_a_file {
+			not file {path}
+		}
+		rewrite @not_a_file /index.html
 
-        try_files {path} /index.html
+		try_files {path} /index.html
 
-        file_server
-        encode zstd gzip
-    }
+		file_server
+		encode zstd gzip
+	}
 
-    # JupyterHub - everything else proxied to notebook container
-    handle {$CADDY_ROUTE_PREFIX}* {
-        reverse_proxy {$NOTEBOOK_HOST}:8080
-    }
+	# JupyterHub - everything else proxied to notebook container
+	handle {$CADDY_ROUTE_PREFIX}* {
+		reverse_proxy {$NOTEBOOK_HOST}:8080
+	}
 
-    # Fallback
-    route {
-        respond "Where the hell do you think you are going?" 404
-    }
+	# Fallback
+	route {
+		respond "Where the hell do you think you are going?" 404
+	}
 }

@@ -81,7 +81,7 @@ export const get_experiment = async (id: string): Promise<ApiData<Experiment>> =
 
 ### Kubernetes Resource Management
 - `dashboard/api/clients/k8s.py` manages pods/jobs using kubernetes-python client
-- `helm/charts/mddash/pre_spawn_hook.py` creates per-user namespaces with RBAC and configures sidecar containers on JupyterHub spawn
+- `helm/charts/mddash/files/pre_spawn_hook.py` creates per-user namespaces with RBAC and configures sidecar containers on JupyterHub spawn
 
 ### Storage
 - MinIO (S3-compatible) for experiment persistence

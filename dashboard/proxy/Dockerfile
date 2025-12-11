@@ -10,10 +10,13 @@ FROM caddy:2.10-alpine
 # Remove cap_net_bind_service - Caddy won't bind privileged ports
 RUN apk add --no-cache libcap curl && setcap -r /usr/bin/caddy
 
+RUN mkdir -p /config/caddy /data/caddy && \
+    chown -R 1000:1000 /config /data
+
 COPY --from=ui /dist /opt/dash
 COPY Caddyfile /etc/caddy/Caddyfile
 
-USER nobody
+USER 1000
 
 EXPOSE 8888
 
