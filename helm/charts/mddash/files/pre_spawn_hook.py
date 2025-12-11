@@ -164,7 +164,12 @@ def _proxy_container(service_prefix: str, username: str, security_context: dict)
     return {
         "name": "proxy",
         "image": image,
-        "imagePullPolicy": "Always",  # TODO: Change to IfNotPresent in production
+        "imagePullPolicy": os.environ.get("IMAGE_PULL_POLICY", "Always"),
+        "command": [
+            "sh",
+            "-c",
+            "until curl -s --connect-timeout 1 http://localhost:5001 > /dev/null && curl -s --connect-timeout 1 http://localhost:5000 > /dev/null; do sleep 0.1; done; caddy run --config /etc/caddy/Caddyfile --adapter caddyfile",
+        ],
         "ports": [{"containerPort": 8888, "name": "http"}],
         "env": [
             {"name": "CADDY_ROUTE_PREFIX", "value": service_prefix},
@@ -188,7 +193,7 @@ def _auth_container(
     return {
         "name": "auth",
         "image": image,
-        "imagePullPolicy": "Always",  # TODO: Change to IfNotPresent in production
+        "imagePullPolicy": os.environ.get("IMAGE_PULL_POLICY", "Always"),
         "ports": [{"containerPort": 5001, "name": "auth"}],
         "env": [
             {"name": "JUPYTERHUB_USER", "value": username},
@@ -221,11 +226,12 @@ def _api_container(
     return {
         "name": "api",
         "image": image,
-        "imagePullPolicy": "Always",  # TODO: Change to IfNotPresent in production
+        "imagePullPolicy": os.environ.get("IMAGE_PULL_POLICY", "Always"),
         "ports": [{"containerPort": 5000, "name": "api"}],
         "env": [
             {"name": "JUPYTERHUB_USER", "value": username},
             {"name": "JUPYTERHUB_SERVICE_PREFIX", "value": service_prefix},
+            {"name": "IMAGE_PULL_POLICY", "value": os.environ.get("IMAGE_PULL_POLICY", "Always")},
             {"name": "POD_NAMESPACE", "value": user_namespace},
             {"name": "HUB_NAMESPACE", "value": hub_namespace},
             {"name": "NOTEBOOK_IMAGE", "value": os.environ.get("NOTEBOOK_IMAGE", "")},
@@ -257,7 +263,7 @@ def _s3_sync_container(bucket_name: str, volume_name: str, security_context: dic
     return {
         "name": "s3-sync",
         "image": image,
-        "imagePullPolicy": "Always",  # TODO: Change to IfNotPresent in production
+        "imagePullPolicy": os.environ.get("IMAGE_PULL_POLICY", "Always"),
         "env": [
             {"name": "S3_BUCKET", "value": bucket_name},
             {"name": "S3_ENDPOINT", "value": os.environ.get("S3_ENDPOINT", "")},
@@ -337,7 +343,6 @@ async def pre_spawn_hook(spawner: KubeSpawner) -> None:
         mem_request=os.environ.get("NS_REQUESTS_MEMORY", "4Gi"),
     )
     await _ensure_resource(core_api.create_namespace, body=namespace_manifest)  # type: ignore[arg-type]
-    await asyncio.sleep(1)
     await core_api.patch_namespace(name=user_namespace, body=namespace_manifest)  # type: ignore[misc]
 
     # Prepare resource names and manifests

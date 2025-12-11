@@ -26,15 +26,13 @@ render: ## Render Helm values template
 install: render update hub-templates ## Install Helm chart
 	helm install $(package) $(chart_path) --namespace $(namespace) \
 		$(values_file) \
-		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py \
-		--set-file jupyterhub.singleuser.extraFiles.wait-for-proxy.stringData=$(chart_path)/files/wait_for_proxy.py
+		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 
 .PHONY: upgrade
 upgrade: render hub-templates ## Upgrade Helm release
 	helm upgrade $(package) $(chart_path) --namespace $(namespace) \
 		$(values_file) \
-		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py \
-		--set-file jupyterhub.singleuser.extraFiles.wait-for-proxy.stringData=$(chart_path)/files/wait_for_proxy.py
+		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 
 .PHONY: deploy
 deploy: upgrade ## Deploy (alias for upgrade)

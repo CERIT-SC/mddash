@@ -29,7 +29,9 @@ http://:8888 {
 	}
 	handle @oauth_callback {
 		uri strip_prefix {$CADDY_ROUTE_PREFIX}
-		reverse_proxy {$AUTH_HOST}:5001
+		reverse_proxy {$AUTH_HOST}:5001 {
+			lb_try_duration 5s
+		}
 	}
 
 	# API routes - authenticated via forward_auth to auth container
@@ -41,7 +43,9 @@ http://:8888 {
 			uri /auth
 		}
 
-		reverse_proxy {$API_HOST}:5000
+		reverse_proxy {$API_HOST}:5000 {
+			lb_try_duration 5s
+		}
 	}
 
 	# /dash -> /dash/
@@ -91,7 +95,9 @@ http://:8888 {
 
 	# JupyterHub - everything else proxied to notebook container
 	handle {$CADDY_ROUTE_PREFIX}* {
-		reverse_proxy {$NOTEBOOK_HOST}:8080
+		reverse_proxy {$NOTEBOOK_HOST}:8080 {
+			lb_try_duration 5s
+		}
 	}
 
 	# Fallback

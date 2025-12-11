@@ -1,4 +1,5 @@
 import logging
+import os
 import threading
 from typing import Callable, cast
 
@@ -67,7 +68,7 @@ def get_container(
         },
         "name": name,
         "image": image,
-        "imagePullPolicy": "Always",  # TODO: maybe IfNotPresent?
+        "imagePullPolicy": os.environ.get("IMAGE_PULL_POLICY", "Always"),
         "resources": resources
         or {"requests": {"cpu": "50m", "memory": "64Mi"}, "limits": {"cpu": "500m", "memory": "256Mi"}},
         "command": command,

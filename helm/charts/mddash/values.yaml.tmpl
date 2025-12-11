@@ -31,6 +31,8 @@ jupyterhub:
         value: "{{ $cfg.dashboard.hostname }}"
       HELM_PACKAGE:
         value: "{{ $helmPackage }}"
+      IMAGE_PULL_POLICY:
+        value: "{{ $cfg.sidecars.pullPolicy | default "Always" }}"
       RANCHER_PROJECT_ID:
         value: "{{ $cfg.rancherProjectId }}"  # Set the Rancher project ID for namespace annotation
       OAUTH_CLIENT_ID:
@@ -133,12 +135,6 @@ jupyterhub:
       JUPYTERHUB_SINGLEUSER_APP:
         value: "jupyter_server.serverapp.ServerApp"
     cmd: ["jupyterhub-singleuser", "--port=8080"]
-
-    extraFiles:
-      wait-for-proxy:
-        mountPath: /usr/local/bin/before-notebook.d/00-wait-for-proxy.py
-        mode: 0755
-        stringData: null  # populated by --set-file inside Makefile
 
     # Default URL to redirect after spawn
     defaultUrl: "/dash"

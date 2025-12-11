@@ -25,6 +25,7 @@ mdrepo:
 sidecars:
   platform: linux/amd64
   tag: dev
+  pullPolicy: Always
   ui:
     image: cerit.io/xkrasa/mddash-ui
   proxy:
