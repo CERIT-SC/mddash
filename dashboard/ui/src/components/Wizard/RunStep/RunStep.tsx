@@ -64,30 +64,32 @@ const RunStep = (props: WizardStepProps) => {
     }, [fetchGromacsJobs]);
 
     return (
-        <Stack direction="row" spacing={2}>
-            <TprSelector
-                experimentId={experiment.id}
-                title="Gromacs Jobs"
-                addTitle="Add Gromacs Job"
-                tprFiles={tprFiles}
-                selectedTpr={selectedTpr}
-                onAddTpr={handleAddTpr}
-                onDeleteTpr={handleDeleteTpr}
-                onSelectTpr={setSelectedTpr}
-            />
+        <Stack direction="column" alignItems="center" spacing={2}>
+            <Stack direction="row" width="90%" spacing={2}>
+                <TprSelector
+                    experimentId={experiment.id}
+                    title="Gromacs Jobs"
+                    addTitle="Add Gromacs Job"
+                    tprFiles={tprFiles}
+                    selectedTpr={selectedTpr}
+                    onAddTpr={handleAddTpr}
+                    onDeleteTpr={handleDeleteTpr}
+                    onSelectTpr={setSelectedTpr}
+                />
 
-            {selectedTpr && (
-                <Box flex={1}>
-                    <RunView tprName={selectedTpr} onStartJob={fetchGromacsJobs} {...props} />
-                </Box>
-            )}
+                {selectedTpr && (
+                    <Box flex={1}>
+                        <RunView tprName={selectedTpr} onStartJob={fetchGromacsJobs} {...props} />
+                    </Box>
+                )}
 
-            <ConfirmDialog
-                open={confirmDeleteDialog}
-                setOpen={setConfirmDeleteDialog}
-                onConfirm={() => deleteJob(deleteTpr!)}
-                message={"Are you sure you want to delete this GROMACS job? The data will be lost."}
-            />
+                <ConfirmDialog
+                    open={confirmDeleteDialog}
+                    setOpen={setConfirmDeleteDialog}
+                    onConfirm={() => deleteJob(deleteTpr!)}
+                    message={"Are you sure you want to delete this GROMACS job? The data will be lost."}
+                />
+            </Stack>
         </Stack>
     );
 };

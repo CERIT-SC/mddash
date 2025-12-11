@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 
-import { Box, Stack } from "@mui/material";
+import { Box, Stack, Button } from "@mui/material";
+import { SkipNext } from "@mui/icons-material";
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import { tuner_statuses, stop_tuner, delete_tuner } from "@/util/api";
@@ -18,6 +19,7 @@ const TuneStep = (props: WizardStepProps) => {
     const [existingJobs, setExistingJobs] = useState<string[]>([]);
     const [deleteTpr, setDeleteTpr] = useState<string | null>(null);
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
+    const [skipDialog, setSkipDialog] = useState(false);
 
     const fetchTunerJobs = useCallback(async () => {
         const { data, error } = await tuner_statuses(experiment.id);
@@ -73,23 +75,44 @@ const TuneStep = (props: WizardStepProps) => {
     }, [fetchTunerJobs]);
 
     return (
-        <Stack direction="row" spacing={2}>
-            <TprSelector
-                experimentId={experiment.id}
-                title="Tuner Jobs"
-                addTitle="Add Tuner Job"
-                tprFiles={tprFiles}
-                selectedTpr={selectedTpr}
-                onAddTpr={handleAddTpr}
-                onDeleteTpr={handleDeleteTpr}
-                onSelectTpr={setSelectedTpr}
-            />
+        <Stack direction="column" alignItems="center" width="100%">
+            <Stack direction="row" spacing={2} width="90%">
+                <TprSelector
+                    experimentId={experiment.id}
+                    title="Tuner Jobs"
+                    addTitle="Add Tuner Job"
+                    tprFiles={tprFiles}
+                    selectedTpr={selectedTpr}
+                    onAddTpr={handleAddTpr}
+                    onDeleteTpr={handleDeleteTpr}
+                    onSelectTpr={setSelectedTpr}
+                />
 
-            {selectedTpr && (
-                <Box flex={1}>
-                    <TunerView tprName={selectedTpr} stopJob={stopJob} onStartTuner={fetchTunerJobs} {...props} />
-                </Box>
-            )}
+                {selectedTpr ? (
+                    <Box flex={1}>
+                        <TunerView tprName={selectedTpr} stopJob={stopJob} onStartTuner={fetchTunerJobs} {...props} />
+                    </Box>
+                ) : (
+                    <Box flex={1} display="flex" justifyContent="flex-end" alignItems="flex-start">
+                        <Button
+                            variant="outlined"
+                            color="error"
+                            startIcon={<SkipNext />}
+                            onClick={() => setSkipDialog(true)}
+                        >
+                            Skip Tuning
+                        </Button>
+                    </Box>
+                )}
+            </Stack>
+
+            <ConfirmDialog
+                open={skipDialog}
+                setOpen={setSkipDialog}
+                title="Skip Tuning?"
+                message="Are you sure you want to skip tuning? Your simulation may run slowly without tuning."
+                onConfirm={props.nextStep}
+            />
 
             <ConfirmDialog
                 open={confirmDeleteDialog}

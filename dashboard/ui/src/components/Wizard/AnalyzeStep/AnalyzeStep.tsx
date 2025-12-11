@@ -41,45 +41,47 @@ const AnalyzeStep = (props: WizardStepProps) => {
     }, [structureFile, coordsFile]);
 
     return (
-        <Stack direction="row" spacing={2}>
-            <Paper variant="outlined" sx={{ minWidth: 300, padding: 4 }}>
-                <Stack spacing={2}>
-                    <Typography variant="h3">Analyze Files</Typography>
+        <Stack direction="column" alignItems="center" spacing={2}>
+            <Stack direction="row" width="90%" spacing={2}>
+                <Paper variant="outlined" sx={{ minWidth: 300, padding: 4 }}>
+                    <Stack spacing={2}>
+                        <Typography variant="h3">Analyze Files</Typography>
 
-                    <Stack direction="row" spacing={1} alignItems="center">
-                        <Category fontSize="small" color="action" />
-                        <Typography variant="subtitle1" color="text.secondary">
-                            Structure
-                        </Typography>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                            <Category fontSize="small" color="action" />
+                            <Typography variant="subtitle1" color="text.secondary">
+                                Structure
+                            </Typography>
+                        </Stack>
+                        <FileSelector
+                            experimentId={experiment.id}
+                            ext={STRUCTURE_FORMATS}
+                            title="Select structure file"
+                            onFileSelected={setStructureFile}
+                        />
+                        {structureFile && (
+                            <>
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                    <Timeline fontSize="small" color="action" />
+                                    <Typography variant="subtitle1" color="text.secondary">
+                                        Coordinates
+                                    </Typography>
+                                </Stack>
+                                <FileSelector
+                                    experimentId={experiment.id}
+                                    ext={COORDINATE_FORMATS}
+                                    title="Select coordinates file"
+                                    onFileSelected={setCoordsFile}
+                                />
+                            </>
+                        )}
                     </Stack>
-                    <FileSelector
-                        experimentId={experiment.id}
-                        ext={STRUCTURE_FORMATS}
-                        title="Select structure file"
-                        onFileSelected={setStructureFile}
-                    />
-                    {structureFile && (
-                        <>
-                            <Stack direction="row" spacing={1} alignItems="center">
-                                <Timeline fontSize="small" color="action" />
-                                <Typography variant="subtitle1" color="text.secondary">
-                                    Coordinates
-                                </Typography>
-                            </Stack>
-                            <FileSelector
-                                experimentId={experiment.id}
-                                ext={COORDINATE_FORMATS}
-                                title="Select coordinates file"
-                                onFileSelected={setCoordsFile}
-                            />
-                        </>
-                    )}
-                </Stack>
-            </Paper>
+                </Paper>
 
-            <Box flexGrow={1} display="flex" justifyContent="center" alignItems="center">
-                {molstarViewer}
-            </Box>
+                <Box flexGrow={1} display="flex" justifyContent="center" alignItems="center">
+                    {molstarViewer}
+                </Box>
+            </Stack>
         </Stack>
     );
 };
