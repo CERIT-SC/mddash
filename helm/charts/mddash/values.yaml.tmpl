@@ -134,6 +134,12 @@ jupyterhub:
         value: "jupyter_server.serverapp.ServerApp"
     cmd: ["jupyterhub-singleuser", "--port=8080"]
 
+    extraFiles:
+      wait-for-proxy:
+        mountPath: /usr/local/bin/before-notebook.d/00-wait-for-proxy.py
+        mode: 0755
+        stringData: null  # populated by --set-file inside Makefile
+
     # Default URL to redirect after spawn
     defaultUrl: "/dash"
 
