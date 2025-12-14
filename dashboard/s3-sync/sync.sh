@@ -1,5 +1,5 @@
 #!/bin/sh
-set -e
+set -euo pipefail
 
 # S3 Sync Container - bidirectional sync between /mddash and S3 bucket
 
@@ -8,8 +8,7 @@ log() {
 }
 
 ROBUST_FLAGS="--force --local-no-check-updated --create-empty-src-dirs --retries 3 --retries-sleep 2s --ignore-errors"
-
-RCLONE_EXCLUDE_ARGS="--exclude #*# --exclude *.swp --exclude *.tmp --exclude .nfs* --exclude .ipynb_checkpoints/** --exclude **/.ipynb_checkpoints/** --exclude __pycache__/** --exclude **/__pycache__/** --exclude .cache/** --exclude **/.cache/**"
+RCLONE_FILTER_FILE="/rclone-filters.txt"
 
 setup_rclone() {
     if [ -z "$S3_BUCKET" ]; then
@@ -35,7 +34,7 @@ EOF
 
     # Initial sync from S3
     log "Initial sync from S3 to /mddash..."
-    rclone sync s3remote:${S3_BUCKET} /mddash --create-empty-src-dirs --log-level INFO $RCLONE_EXCLUDE_ARGS
+    rclone sync s3remote:${S3_BUCKET} /mddash --create-empty-src-dirs --log-level INFO --filter-from "$RCLONE_FILTER_FILE"
 
     # Create marker file for bisync
     if [ ! -f "/mddash/.s3-init" ]; then
@@ -57,13 +56,13 @@ run_sync_loop() {
     
     # Initial resync to establish baseline
     log "Performing initial bisync resync..."
-    rclone bisync /mddash s3remote:${S3_BUCKET} --resync --log-level INFO $RCLONE_EXCLUDE_ARGS $ROBUST_FLAGS || log "Initial resync had issues, continuing..."
+    rclone bisync /mddash s3remote:${S3_BUCKET} --resync --log-level INFO --filter-from "$RCLONE_FILTER_FILE" $ROBUST_FLAGS || log "Initial resync had issues, continuing..."
 
     FAIL_COUNT=0
     MAX_FAILURES=3
 
     while true; do
-        if rclone bisync /mddash s3remote:${S3_BUCKET} --delete-during --log-level ERROR $RCLONE_EXCLUDE_ARGS $ROBUST_FLAGS 2>&1; then
+        if rclone bisync /mddash s3remote:${S3_BUCKET} --delete-during --log-level ERROR --filter-from "$RCLONE_FILTER_FILE" $ROBUST_FLAGS 2>&1; then
             if [ $FAIL_COUNT -gt 0 ]; then
                 log "Sync recovered after $FAIL_COUNT failures"
             fi
@@ -75,7 +74,7 @@ run_sync_loop() {
             
             if [ $FAIL_COUNT -ge $MAX_FAILURES ]; then
                 log "Critical failure, attempting recovery with --resync..."
-                if rclone bisync /mddash s3remote:${S3_BUCKET} --resync --log-level INFO $RCLONE_EXCLUDE_ARGS $ROBUST_FLAGS 2>&1; then
+                if rclone bisync /mddash s3remote:${S3_BUCKET} --resync --log-level INFO --filter-from "$RCLONE_FILTER_FILE" $ROBUST_FLAGS 2>&1; then
                     log "Recovery successful"
                     FAIL_COUNT=0
                 else
@@ -95,7 +94,7 @@ final_sync() {
     fi
     
     log "Performing final sync to S3..."
-    rclone sync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --force --delete-during $RCLONE_EXCLUDE_ARGS 2>&1 || log "Final sync had issues"
+    rclone sync /mddash s3remote:${S3_BUCKET} --create-empty-src-dirs --force --delete-during --filter-from "$RCLONE_FILTER_FILE" 2>&1 || log "Final sync had issues"
     log "Final sync complete"
 }
 

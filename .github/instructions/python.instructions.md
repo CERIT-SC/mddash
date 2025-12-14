@@ -30,6 +30,7 @@ applyTo: '**/*.py'
 ## Code Structure & Style
 - **Imports**:
   - Group imports: Standard Library, Third Party, Local Application.
+  - Place all imports at the top of the file.
   - Use absolute imports for project modules (e.g., `from src.utils import helper`).
 - **Naming**:
   - `snake_case` for functions, variables, and file names.

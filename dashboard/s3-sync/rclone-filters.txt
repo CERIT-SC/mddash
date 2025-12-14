@@ -1,0 +1,17 @@
+- #*#
+- *.swp
+- *.tmp
+- .nfs*
+- .ipynb_checkpoints/**
+- **/.ipynb_checkpoints/**
+- __pycache__/**
+- **/__pycache__/**
+- .cache/**
+- **/.cache/**
+- **/*.edr/**
+- **/*.xtc/**
+- **/*.fit.xtc/**
+- **/*.tpr/**
+- **/*.cpt/**
+- **/*.gro/**
+- **/*.log/**
