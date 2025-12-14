@@ -151,13 +151,18 @@ class GromacsJob(db.Model):  # type: ignore
             return None
 
         remaining_steps = self.nsteps - self.nsteps_done
-
         if remaining_steps <= 0:
             return 0
 
-        now = int(datetime.now().timestamp())
-        time_per_step = (now - self.start_timestamp) / self.nsteps_done
-        return int(remaining_steps * time_per_step)
+        try:
+            last_updated = self._gmx_log.stat().st_mtime
+        except OSError:
+            last_updated = datetime.now().timestamp()
+
+        time_per_step = (last_updated - self.start_timestamp) / self.nsteps_done
+        base_estimate = remaining_steps * time_per_step
+        time_since_update = datetime.now().timestamp() - last_updated
+        return max(0, int(base_estimate - time_since_update))
 
     @property
     @cached(cache=performance_cache)
