@@ -232,7 +232,7 @@ const PublishStep = (props: WizardStepProps) => {
                     {!isPublished && isAuthenticated && (
                         <Typography variant="caption" color="text.secondary" textAlign="center">
                             After clicking the button, you'll be redirected to MDRepo to complete the metadata and
-                            finalize the publication.
+                            finalize the publication. Your files will be uploaded in the background.
                         </Typography>
                     )}
                 </Stack>
