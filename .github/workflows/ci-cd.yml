@@ -412,3 +412,39 @@ jobs:
           else
             make -C helm install ENV=${{ needs.setup.outputs.env }}
           fi
+
+  verify-deployment:
+    needs: [setup, deploy, check-changes]
+    if: needs.check-changes.outputs.any_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install tools
+        run: sudo apt-get install -y curl
+
+      - name: Verify deployment health
+        timeout-minutes: 5
+        run: |
+          if [[ "${{ needs.setup.outputs.env }}" == "prod" ]]; then
+            URL="https://mddash.dyn.cloud.e-infra.cz/hub/health"
+          else
+            URL="https://mddash-dev.dyn.cloud.e-infra.cz/hub/health"
+          fi
+          
+          echo "Checking health of $URL..."
+          
+          # Retry loop for 5 minutes (30 * 10s)
+          for i in {1..30}; do
+            # Check for 200 OK. JupyterHub /hub/health returns 200.
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+            
+            if [[ "$HTTP_CODE" == "200" ]]; then
+              echo "✅ Deployment is healthy! (Status: $HTTP_CODE)"
+              exit 0
+            fi
+            
+            echo "Waiting for service... (Status: $HTTP_CODE)"
+            sleep 10
+          done
+          
+          echo "❌ Deployment failed health check after 5 minutes"
+          exit 1
