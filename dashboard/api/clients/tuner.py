@@ -1,14 +1,11 @@
 from pathlib import Path
 
 import requests
+from config import TUNER_PASSWORD, TUNER_URL, TUNER_USER
 from requests import HTTPError, Response
 from requests.auth import HTTPBasicAuth
 
-# TODO: Move to config.py and make it less static
-TUNER_URL = "http://gromacs-tuner-api-svc.gromacs-tuner-ns.svc.cluster.local:8000/api"
-TUNER_USERNAME = "admin"
-TUNER_PASSWORD = "strong-secret-here"
-AUTH = HTTPBasicAuth(TUNER_USERNAME, TUNER_PASSWORD)
+AUTH = HTTPBasicAuth(TUNER_USER, TUNER_PASSWORD)
 
 
 def get_tuner_response_data(response: Response) -> dict:
@@ -50,7 +47,7 @@ def run_submit(tpr_path: Path) -> dict:
     """
     with tpr_path.open("rb") as f:
         files = {"file": f}
-        response = requests.post(f"{TUNER_URL}/tuner_runs", files=files, auth=AUTH)
+        response = requests.post(f"{TUNER_URL}/tuner_runs", files=files, auth=AUTH, timeout=30)
     return get_tuner_response_data(response)
 
 
@@ -67,7 +64,7 @@ def poll_status(job_id: str) -> dict:
     Raises:
         HTTPError: If the request fails.
     """
-    response = requests.get(f"{TUNER_URL}/tuner_runs/{job_id}/status", auth=AUTH)
+    response = requests.get(f"{TUNER_URL}/tuner_runs/{job_id}/status", auth=AUTH, timeout=5)
     return get_tuner_response_data(response)
 
 
@@ -84,7 +81,7 @@ def delete_job(job_id: str) -> dict:
     Raises:
         HTTPError: If the request fails.
     """
-    response = requests.delete(f"{TUNER_URL}/tuner_runs/{job_id}", auth=AUTH)
+    response = requests.delete(f"{TUNER_URL}/tuner_runs/{job_id}", auth=AUTH, timeout=10)
     return get_tuner_response_data(response)
 
 

@@ -15,6 +15,8 @@ Molecular Dynamics simulation dashboard with JupyterHub integration.
    - `MINIO_ROOT_PASSWORD` - MinIO root password (use a strong password in production!)
    - `MDREPO_CLIENT_ID` - MDRepo OAuth client ID for publishing experiments
    - `MDREPO_CLIENT_SECRET` - MDRepo OAuth client secret
+   - `TUNER_USER` - Username for Gromacs Tuner
+   - `TUNER_PASSWORD` - Password for Gromacs Tuner
 
 2. **Push to deploy**:
    - Push to `dev` → deploys to dev environment
@@ -109,6 +111,12 @@ export MINIO_ROOT_PASSWORD=\"YOUR_MINIO_ROOT_PASSWORD\"" \
 kubectl create secret generic ${PACKAGE}-mdrepo-credentials \
   --from-literal=client_id="YOUR_MDREPO_CLIENT_ID" \
   --from-literal=client_secret="YOUR_MDREPO_CLIENT_SECRET" \
+  -n ${NAMESPACE}
+
+# Gromacs Tuner Credentials
+kubectl create secret generic tuner-auth \
+  --from-literal=user="YOUR_TUNER_USER" \
+  --from-literal=password="YOUR_TUNER_PASSWORD" \
   -n ${NAMESPACE}
 ```
 

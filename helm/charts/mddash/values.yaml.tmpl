@@ -96,6 +96,16 @@ jupyterhub:
           secretKeyRef:
             name: {{ $helmPackage }}-mdrepo-credentials
             key: client_secret
+      TUNER_USER:
+        valueFrom:
+          secretKeyRef:
+            name: tuner-auth
+            key: user
+      TUNER_PASSWORD:
+        valueFrom:
+          secretKeyRef:
+            name: tuner-auth
+            key: password
 
     extraVolumes:
       - name: kubeconfig
@@ -130,10 +140,6 @@ jupyterhub:
       tag: "5"
       pullPolicy: IfNotPresent
 
-    # Run notebook on port 8080 (proxy uses 8888)
-    extraEnv:
-      JUPYTERHUB_SINGLEUSER_APP:
-        value: "jupyter_server.serverapp.ServerApp"
     cmd: ["jupyterhub-singleuser", "--port=8080"]
 
     # Default URL to redirect after spawn
@@ -160,6 +166,8 @@ jupyterhub:
     uid: 1000
     fsGid: 1000
     extraEnv:
+      JUPYTERHUB_SINGLEUSER_APP:
+        value: "jupyter_server.serverapp.ServerApp"
       POD_NAMESPACE:
         valueFrom:
           fieldRef:
@@ -203,31 +211,6 @@ jupyterhub:
       nginx.ingress.kubernetes.io/proxy-body-size: "100m"
       nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-
-mdrun-api:
-  image:
-    repository: {{ $cfg.mdrunApi.image }}
-    tag: "{{ $cfg.mdrunApi.tag }}"
-    pullPolicy: Always
-  storage:
-    size: {{ $cfg.mdrunApi.storage.size }}
-  uwsgi:
-    processes: 2
-    threads: 4
-  replicaCount: 1
-  env:
-    - name: S3_ACCESS_KEY
-      valueFrom:
-        secretKeyRef:
-          name: {{ $helmPackage }}-s3-creds
-          key: S3_ACCESS_KEY
-    - name: S3_SECRET_KEY
-      valueFrom:
-        secretKeyRef:
-          name: {{ $helmPackage }}-s3-creds
-          key: S3_SECRET_KEY
-    - name: S3_ENDPOINT
-      value: "http://minio.{{ $namespace }}.svc.cluster.local:80"
 
 tenant:
   tenant:
@@ -289,3 +272,81 @@ tenant:
       initialDelaySeconds: 10
       periodSeconds: 1
       timeoutSeconds: 1
+
+mdrun-api:
+  image:
+    repository: {{ $cfg.mdrunApi.image }}
+    tag: "{{ $cfg.mdrunApi.tag }}"
+    pullPolicy: Always
+  storage:
+    size: {{ $cfg.mdrunApi.storage.size }}
+  uwsgi:
+    processes: 2
+    threads: 4
+  replicaCount: 1
+  env:
+    - name: S3_ACCESS_KEY
+      valueFrom:
+        secretKeyRef:
+          name: {{ $helmPackage }}-s3-creds
+          key: S3_ACCESS_KEY
+    - name: S3_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: {{ $helmPackage }}-s3-creds
+          key: S3_SECRET_KEY
+    - name: S3_ENDPOINT
+      value: "http://minio.{{ $namespace }}.svc.cluster.local:80"
+
+gromacs-tuner:
+  image:
+    repository: {{ $cfg.gromacsTuner.image.repository }}
+    tag: "{{ $cfg.gromacsTuner.image.tag }}"
+    pullPolicy: Always
+
+  ingress:
+    enabled: false
+    host: "gromacs-tuner.local"
+
+  # API resources
+  api:
+    resources:
+      limits:
+        cpu: "{{ $cfg.gromacsTuner.api.resources.limits.cpu }}"
+        memory: "{{ $cfg.gromacsTuner.api.resources.limits.memory }}"
+      requests:
+        cpu: "{{ $cfg.gromacsTuner.api.resources.requests.cpu }}"
+        memory: "{{ $cfg.gromacsTuner.api.resources.requests.memory }}"
+
+  # Storage configuration
+  storage:
+    size: "{{ $cfg.gromacsTuner.storage.size }}"
+    storageClassName: "{{ $cfg.storageClassName }}"
+
+  # Ray cluster configuration
+  ray:
+    version: "2.42.1"
+    image: "{{ $cfg.gromacsTuner.ray.image }}"
+
+    head:
+      resources:
+        limits:
+          cpu: "{{ $cfg.gromacsTuner.ray.head.resources.limits.cpu }}"
+          memory: "{{ $cfg.gromacsTuner.ray.head.resources.limits.memory }}"
+        requests:
+          cpu: "{{ $cfg.gromacsTuner.ray.head.resources.requests.cpu }}"
+          memory: "{{ $cfg.gromacsTuner.ray.head.resources.requests.memory }}"
+
+    worker:
+      replicas: {{ $cfg.gromacsTuner.ray.worker.replicas }}
+      nodeSelector:
+        nvidia.com/gpu.product: "{{ $cfg.gromacsTuner.ray.worker.gpuProduct }}"
+      resources:
+        limits:
+          cpu: "{{ $cfg.gromacsTuner.ray.worker.resources.limits.cpu }}"
+          memory: "{{ $cfg.gromacsTuner.ray.worker.resources.limits.memory }}"
+          nvidia.com/gpu: '{{ index $cfg.gromacsTuner.ray.worker.resources.limits "nvidia.com/gpu" }}'
+        requests:
+          cpu: "{{ $cfg.gromacsTuner.ray.worker.resources.requests.cpu }}"
+          memory: "{{ $cfg.gromacsTuner.ray.worker.resources.requests.memory }}"
+          nvidia.com/gpu: '{{ index $cfg.gromacsTuner.ray.worker.resources.requests "nvidia.com/gpu" }}'

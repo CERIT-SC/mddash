@@ -15,6 +15,6 @@ dependencies:
   - name: tenant
     version: "7.1.1"
     repository: "https://operator.min.io/"
-  # - name: gromacs-tuner
-  #   version: "0.1.1"
-  #   repository: "oci://cerit.io/xkrasa"
+  - name: gromacs-tuner
+    version: "0.1.2"
+    repository: "oci://cerit.io/xkrasa"

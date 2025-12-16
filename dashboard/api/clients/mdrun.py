@@ -37,7 +37,7 @@ def get_job(job_id: str) -> dict:
     Raises:
         requests.HTTPError: If the request fails.
     """
-    response = requests.get(f"{MDRUN_API_URL}/jobs/{job_id}")
+    response = requests.get(f"{MDRUN_API_URL}/jobs/{job_id}", timeout=5)
     return get_mdrun_response_data(response)
 
 
@@ -74,7 +74,7 @@ def create_job(
         "extra_args": extra_args,
     }
 
-    response = requests.post(f"{MDRUN_API_URL}/jobs", json=data)
+    response = requests.post(f"{MDRUN_API_URL}/jobs", json=data, timeout=10)
     return get_mdrun_response_data(response)
 
 
@@ -88,7 +88,7 @@ def delete_job(job_id: str) -> None:
     Raises:
         requests.HTTPError: If the request fails.
     """
-    response = requests.delete(f"{MDRUN_API_URL}/jobs/{job_id}")
+    response = requests.delete(f"{MDRUN_API_URL}/jobs/{job_id}", timeout=10)
 
     # 404 = job already deleted or does not exist (success)
     if response.status_code == 404:

@@ -248,6 +248,8 @@ def _api_container(
             {"name": "MDREPO_SCOPES", "value": os.environ.get("MDREPO_SCOPES", "")},
             {"name": "MDREPO_CLIENT_ID", "value": os.environ.get("MDREPO_CLIENT_ID", "")},
             {"name": "MDREPO_CLIENT_SECRET", "value": os.environ.get("MDREPO_CLIENT_SECRET", "")},
+            {"name": "TUNER_USER", "value": os.environ.get("TUNER_USER", "")},
+            {"name": "TUNER_PASSWORD", "value": os.environ.get("TUNER_PASSWORD", "")},
         ],
         "volumeMounts": [{"name": volume_name, "mountPath": "/mddash"}],
         "resources": {"requests": {"cpu": "50m", "memory": "128Mi"}, "limits": {"cpu": "300m", "memory": "256Mi"}},

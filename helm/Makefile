@@ -39,15 +39,15 @@ deploy: upgrade ## Deploy (alias for upgrade)
 
 .PHONY: update
 update: ## Update Helm dependencies
-	helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ 2>/dev/null || true
-	helm repo add minio https://operator.min.io/ 2>/dev/null || true
-	helm repo update
+	helm repo add kuberay https://ray-project.github.io/kuberay-helm/ || true
+	helm install kuberay-operator kuberay/kuberay-operator || true
 	rm -rf $(chart_path)/charts/*.tgz $(chart_path)/Chart.lock
 	helm dependency update $(chart_path)
 
 .PHONY: uninstall
 uninstall: ## Uninstall Helm release
 	helm uninstall $(package) --namespace $(namespace)
+	helm uninstall kuberay-operator || true
 
 .PHONY: hub-templates
 hub-templates: ## Create hub templates ConfigMap

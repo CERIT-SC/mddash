@@ -146,7 +146,7 @@ class Experiment(db.Model):  # type: ignore
         try:
             # Download PDB file
             url: str = f"https://files.rcsb.org/download/{pdb_id}.pdb"
-            response = requests.get(url)
+            response = requests.get(url, timeout=30)
 
             if response.status_code == 404:
                 abort(404, description=f"PDB ID '{pdb_id}' not found.")
@@ -192,7 +192,7 @@ class Experiment(db.Model):  # type: ignore
 
             record_id: str = repo_link_parts[-1]
             url: str = f"https://zenodo.org/api/records/{record_id}/files-archive"
-            response = requests.get(url)
+            response = requests.get(url, timeout=60)
 
             if response.status_code == 404:
                 abort(404, description=f"Repository '{repo_link}' not found.")

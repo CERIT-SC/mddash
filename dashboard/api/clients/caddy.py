@@ -33,7 +33,7 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
 
     try:
         # Load current config
-        resp = requests.get(f"{CADDY_ADMIN_API_URL}/config/")
+        resp = requests.get(f"{CADDY_ADMIN_API_URL}/config/", timeout=5)
         resp.raise_for_status()
         config = resp.json()
 
@@ -54,7 +54,7 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
 
         # Update Caddy config
         headers = {"Content-Type": "application/json"}
-        load_resp = requests.post(f"{CADDY_ADMIN_API_URL}/load", headers=headers, data=json.dumps(config))
+        load_resp = requests.post(f"{CADDY_ADMIN_API_URL}/load", headers=headers, data=json.dumps(config), timeout=5)
         load_resp.raise_for_status()
         return route_id
 
@@ -76,7 +76,7 @@ def remove_route(route_id: str) -> bool:
     url = f"{CADDY_ADMIN_API_URL}/id/{route_id}"
 
     try:
-        response = requests.delete(url)
+        response = requests.delete(url, timeout=5)
         response.raise_for_status()
         return True
     except RequestException:

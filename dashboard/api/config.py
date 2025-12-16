@@ -33,10 +33,17 @@ HUB_NAMESPACE = os.environ.get("HUB_NAMESPACE", NAMESPACE)
 
 MDRUN_API_URL = f"http://mdrun-api.{HUB_NAMESPACE}.svc.cluster.local/api"
 
+TUNER_URL = f"http://gromacs-tuner-api-svc.{HUB_NAMESPACE}.svc.cluster.local:8000/api"
+TUNER_USER = os.environ.get("TUNER_USER", "")
+TUNER_PASSWORD = os.environ.get("TUNER_PASSWORD", "")
+
+if not all([TUNER_USER, TUNER_PASSWORD]):
+    logger.warning("TUNER_USER or TUNER_PASSWORD environment variables are not set. Tuner won't work.")
+
 PVC_NAME = os.environ.get("PVC_NAME", "")
 PVC_SIZE = os.environ.get("PVC_STORAGE_SIZE", "")
 
-if not PVC_NAME or not PVC_SIZE:
+if not all([PVC_NAME, PVC_SIZE]):
     logger.warning(
         "PVC_NAME or PVC_STORAGE_SIZE environment variables are not set. Persistent storage may not be configured properly."
     )
@@ -44,7 +51,7 @@ if not PVC_NAME or not PVC_SIZE:
 CPU_REQUEST_QUOTA = os.environ.get("NS_REQUESTS_CPU", "")
 MEMORY_REQUEST_QUOTA = os.environ.get("NS_REQUESTS_MEMORY", "")
 
-if not CPU_REQUEST_QUOTA or not MEMORY_REQUEST_QUOTA:
+if not all([CPU_REQUEST_QUOTA, MEMORY_REQUEST_QUOTA]):
     logger.warning(
         "NS_REQUESTS_CPU or NS_REQUESTS_MEMORY environment variables are not set. Namespace resource requests may not be configured properly."
     )

@@ -402,6 +402,11 @@ jobs:
             --from-literal=client_secret="${{ secrets.MDREPO_CLIENT_SECRET }}" \
             -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
+          kubectl create secret generic tuner-auth \
+            --from-literal=user="${{ secrets.TUNER_USER }}" \
+            --from-literal=password="${{ secrets.TUNER_PASSWORD }}" \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Deploy
         run: |
           NAMESPACE=$(yq '.namespace' ${{ needs.setup.outputs.config }})

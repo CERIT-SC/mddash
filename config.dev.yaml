@@ -21,6 +21,12 @@ mdrepo:
   url: https://workflow-repo.test.du.cesnet.cz
   scopes: user:email
 
+# Notebook image (spawned by Dashboard pod)
+notebook:
+  image: cerit.io/xkrasa/mddash-notebook
+  platform: linux/amd64
+  tag: dev
+
 # Sidecar container images for user pod
 sidecars:
   platform: linux/amd64
@@ -36,20 +42,6 @@ sidecars:
     image: cerit.io/xkrasa/mddash-api
   s3sync:
     image: cerit.io/xkrasa/mddash-s3sync
-
-# mdrun-api service
-mdrunApi:
-  image: cerit.io/xkrasa/mdrun-api
-  platform: linux/amd64
-  tag: dev
-  storage:  # Persistent storage for mdrun-api database
-    size: 2Gi
-
-# Notebook image (spawned by Dashboard pod)
-notebook:
-  image: cerit.io/xkrasa/mddash-notebook
-  platform: linux/amd64
-  tag: dev
 
 # MinIO object storage tenant
 minio:
@@ -74,3 +66,49 @@ resources:
 
 helm:
   package: mddash-dev
+
+# mdrun-api service
+mdrunApi:
+  image: cerit.io/xkrasa/mdrun-api
+  platform: linux/amd64
+  tag: dev
+  storage:  # Persistent storage for mdrun-api database
+    size: 2Gi
+
+# Gromacs Tuner service
+gromacsTuner:
+  image:
+    repository: cerit.io/adamondrejka/gromacs-tuner-api
+    tag: "1.2"
+  storage:
+    size: 2Gi
+  api:
+    resources:
+      limits:
+        cpu: "1"
+        memory: "2Gi"
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+  ray:
+    image: "cerit.io/adamondrejka/gmx-cuda-ray-2-42-1-with-user"
+    head:
+      resources:
+        limits:
+          cpu: "1"
+          memory: "2Gi"
+        requests:
+          cpu: "200m"
+          memory: "512Mi"
+    worker:
+      replicas: 1
+      gpuProduct: "NVIDIA-A40"
+      resources:
+        limits:
+          cpu: "8"
+          memory: "16Gi"
+          nvidia.com/gpu: "1"
+        requests:
+          cpu: "4"
+          memory: "8Gi"
+          nvidia.com/gpu: "1"
