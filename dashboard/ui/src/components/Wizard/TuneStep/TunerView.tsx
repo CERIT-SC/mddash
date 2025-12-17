@@ -39,12 +39,15 @@ const TunerView = (props: TunerViewProps) => {
             if (displayError && error) showError(error);
             setTuner(data || null);
 
-            if (selectedTrial && data?.trials) {
-                const updatedTrial = data.trials.find((trial) => trial.id === selectedTrial.id);
-                setSelectedTrial(updatedTrial || null);
+            if (data?.trials) {
+                setSelectedTrial((prev) => {
+                    if (!prev) return null;
+                    const updatedTrial = data.trials.find((trial) => trial.id === prev.id);
+                    return updatedTrial || null;
+                });
             }
         },
-        [experiment.id, tprName, selectedTrial, showError],
+        [experiment.id, tprName, showError],
     );
 
     const runTuner = useCallback(async () => {
