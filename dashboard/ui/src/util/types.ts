@@ -26,6 +26,7 @@ export interface TunerJob {
     tuner_run_id: string | null;
     experiment_id: string;
     tpr_name: string;
+    tuner_status: JobStatus | null;
     is_pending: boolean;
     error_message: string | null;
     created_at: string;

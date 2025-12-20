@@ -8,6 +8,7 @@ from typing import Callable
 from cachetools import TTLCache, cached
 from clients import k8s, tuner
 from config import GMX_IMAGE
+from enums import JobStatus
 from extensions import db
 from flask import current_app
 from requests import HTTPError
@@ -52,6 +53,11 @@ class TunerJob(db.Model):  # type: ignore
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="tuner_jobs")
 
     @property
+    def tuner_status(self) -> JobStatus:
+        """Status of the job on the tuner."""
+        return self._status().get("status", JobStatus.UNKNOWN)
+
+    @property
     def summary(self) -> dict:
         """Summary of the tuner trial statuses."""
         if self.is_stopped and self._preserved_summary:
@@ -77,7 +83,11 @@ class TunerJob(db.Model):  # type: ignore
         if self.is_stopped or self.is_pending or not self.tuner_run_id:
             return {}
         try:
-            return tuner.poll_status(self.tuner_run_id)
+            status = tuner.poll_status(self.tuner_run_id)
+            if err_msg := status.get("error"):
+                self.error_message = err_msg
+                db.session.commit()
+            return status
         except Exception:
             logger.exception(f"Failed to fetch status for tuner job {self.tuner_run_id}")
             return {}

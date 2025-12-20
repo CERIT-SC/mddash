@@ -2,7 +2,7 @@ from enum import Enum
 
 
 class JobStatus(str, Enum):
-    """Status values for Kubernetes jobs."""
+    """Status values for all kinds of jobs."""
 
     UNKNOWN = "UNKNOWN"
     PENDING = "PENDING"

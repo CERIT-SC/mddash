@@ -281,6 +281,7 @@ def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
         return ApiResponse.error(f"Tuner job for '{tpr_name}' not found.", HTTPStatus.NOT_FOUND)
 
     tuner["is_stopped"] = True
+    tuner["tuner_status"] = "TERMINATED"
 
     # Convert all RUNNING trials to TERMINATED
     for trial in tuner["trials"]:

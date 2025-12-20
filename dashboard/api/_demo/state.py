@@ -141,6 +141,15 @@ class DemoState:
         trials: list[dict] = []
         cluster_resources = "Pending" if is_pending else ("Error" if error_message else "0/32 CPUs, 0/1 GPUs used")
 
+        if is_pending:
+            tuner_status = "PENDING"
+        elif error_message:
+            tuner_status = "ERROR"
+        elif is_stopped:
+            tuner_status = "TERMINATED"
+        else:
+            tuner_status = "RUNNING" if tuner_run_id else "UNKNOWN"
+
         if not is_pending and not error_message and tuner_run_id:
             trials = [
                 {
@@ -181,6 +190,7 @@ class DemoState:
         return {
             "id": self._get_next_tuner_id(),
             "tuner_run_id": tuner_run_id,
+            "tuner_status": tuner_status,
             "experiment_id": exp_id,
             "tpr_name": tpr_name,
             "is_pending": is_pending,

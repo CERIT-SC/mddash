@@ -30,7 +30,7 @@ const TunerView = (props: TunerViewProps) => {
     const [nsteps, setNsteps] = useState<number | "">(DEFAULT_NSTEPS);
     const [confirmStopDialog, setConfirmStopDialog] = useState(false);
 
-    const tunerStarted = !!tuner && !tuner.is_pending && !!tuner.trials && tuner.trials.length > 0;
+    const tunerStarted = !!tuner && tuner.tuner_status !== "PENDING" && tuner.tuner_status !== "ERROR";
     const tunerStopped = tuner?.is_stopped || false;
 
     const fetchStatus = useCallback(
