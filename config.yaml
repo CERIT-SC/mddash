@@ -78,8 +78,9 @@ mdrunApi:
 # Gromacs Tuner service
 gromacsTuner:
   image:
-    repository: cerit.io/adamondrejka/gromacs-tuner-api
-    tag: "1.2"
+    repository: cerit.io/xkrasa/gromacs-tuner-api
+    tag: "latest"  # TODO: lock version
+    pullPolicy: IfNotPresent
   storage:
     size: 2Gi
   api:

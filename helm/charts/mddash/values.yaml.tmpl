@@ -302,7 +302,7 @@ gromacs-tuner:
   image:
     repository: {{ $cfg.gromacsTuner.image.repository }}
     tag: "{{ $cfg.gromacsTuner.image.tag }}"
-    pullPolicy: Always
+    pullPolicy: "{{ $cfg.gromacsTuner.image.pullPolicy }}"
 
   ingress:
     enabled: false
