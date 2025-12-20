@@ -10,6 +10,7 @@ from clients import k8s, tuner
 from config import GMX_IMAGE
 from extensions import db
 from flask import current_app
+from requests import HTTPError
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -184,9 +185,6 @@ class TunerJob(db.Model):  # type: ignore
         Stop the tuner job and preserve its current status.
 
         The job gets deleted from the tuner but data is preserved in the database.
-
-        Raises:
-            HTTPError: If the tuner api request fails.
         """
         if self.is_stopped or self.is_pending:
             return
@@ -211,7 +209,10 @@ class TunerJob(db.Model):  # type: ignore
         self.is_stopped = True
 
         if self.tuner_run_id:
-            tuner.delete_job(self.tuner_run_id)
+            try:
+                tuner.delete_job(self.tuner_run_id)
+            except HTTPError:
+                logger.exception(f"Failed to delete tuner job {self.tuner_run_id}")
 
         status_cache.clear()
         logger.info(f"Stopped tuner job {self.tuner_run_id}")
@@ -221,10 +222,10 @@ class TunerJob(db.Model):  # type: ignore
         Delete the tuner job completely.
 
         If running, deletes from tuner API.
-        If pending, the background TPR modification job will complete harmlessly.
-
-        Raises:
-            HTTPError: If the tuner api request fails.
+        If pending or stopped, does nothing on tuner API.
         """
         if not self.is_stopped and not self.is_pending and self.tuner_run_id:
-            tuner.delete_job(self.tuner_run_id)
+            try:
+                tuner.delete_job(self.tuner_run_id)
+            except HTTPError:
+                logger.exception(f"Failed to delete tuner job {self.tuner_run_id}")

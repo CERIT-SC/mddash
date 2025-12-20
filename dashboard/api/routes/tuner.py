@@ -48,8 +48,14 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
         return ApiResponse.error(f"TPR file {tpr_name} does not exist.", HTTPStatus.NOT_FOUND)
 
     if tuner_job:
-        # Job already exists
-        return ApiResponse.success(schema.dump(tuner_job), HTTPStatus.OK)
+        if tuner_job.error_message:
+            # Job has failed, clean it up so we can restart
+            tuner_job.delete()
+            db.session.delete(tuner_job)
+            db.session.commit()
+        else:
+            # Job already exists
+            return ApiResponse.success(schema.dump(tuner_job), HTTPStatus.OK)
 
     # Get nsteps from query parameter, default to 25000 (50 ps)
     nsteps = request.args.get("nsteps", default=25000, type=int)
