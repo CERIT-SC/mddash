@@ -150,42 +150,27 @@ class DemoState:
         else:
             tuner_status = "RUNNING" if tuner_run_id else "UNKNOWN"
 
-        if not is_pending and not error_message and tuner_run_id:
+        # If the job was already stopped, keep one terminated trial for demo clarity.
+        if is_stopped and tuner_run_id:
             trials = [
                 {
                     "id": f"{tuner_run_id[:5]}_00000",
-                    "status": "RUNNING",
-                    "np": 2,
-                    "ntomp": 2,
-                    "nb": "cpu",
+                    "status": "TERMINATED",
+                    "np": 8,
+                    "ntomp": 1,
+                    "nb": "gpu",
                     "pme": "cpu",
-                    "performance": None,
-                    "start_time": time.time(),
-                },
-                {
-                    "id": f"{tuner_run_id[:5]}_00001",
-                    "status": "RUNNING",
-                    "np": 2,
-                    "ntomp": 8,
-                    "nb": "cpu",
-                    "pme": "cpu",
-                    "performance": None,
-                    "start_time": time.time(),
-                },
+                    "performance": 70.158,
+                    "start_time": time.time() - 100,
+                }
             ]
-            if is_stopped:
-                trials.append(
-                    {
-                        "id": f"{tuner_run_id[:5]}_00002",
-                        "status": "TERMINATED",
-                        "np": 8,
-                        "ntomp": 1,
-                        "nb": "gpu",
-                        "pme": "cpu",
-                        "performance": 70.158,
-                        "start_time": time.time() - 100,
-                    }
-                )
+
+        # For normal RUNNING tuner jobs, start with zero trials and record how many
+        # trials should be added over time. The simulator will append trials gradually.
+        trials_to_add = 0
+        # For demo purposes, create a full tuning run of 20 trials added gradually.
+        if not is_pending and not error_message and not is_stopped and tuner_run_id:
+            trials_to_add = 20
 
         return {
             "id": self._get_next_tuner_id(),
@@ -199,6 +184,10 @@ class DemoState:
             "is_stopped": is_stopped,
             "start_time": None if is_pending else time.time(),
             "trials": trials,
+            # Number of trials the simulator should create over time
+            "trials_to_add": trials_to_add,
+            # Timestamp of last trial addition (simulator will update)
+            "last_trial_added_at": None,
             "cluster_resources": cluster_resources,
         }
 

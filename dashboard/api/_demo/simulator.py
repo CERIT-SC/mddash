@@ -8,6 +8,7 @@ import random
 import threading
 import time
 from typing import Optional
+from uuid import uuid4
 
 from state import state
 
@@ -61,28 +62,60 @@ class DemoSimulator:
         """Simulate tuner job state transitions."""
         for exp in state.experiments.values():
             for tuner in exp["tuner_jobs"]:
-                if tuner["is_pending"] or tuner["error_message"] or tuner["is_stopped"]:
+                # Skip tuners that are pending or errored
+                if tuner["is_pending"] or tuner["error_message"]:
                     continue
 
                 start_time = tuner.get("start_time")
                 if not start_time:
                     continue
 
-                # Simulate running trials completion (30-60 seconds)
-                for trial in tuner["trials"]:
+                # Gradually add trials for newly-started tuner runs.
+                trials_to_add = tuner.get("trials_to_add") or 0
+                if (
+                    trials_to_add
+                    and len(tuner.get("trials", [])) < trials_to_add
+                    and not tuner.get("is_stopped", False)
+                ):
+                    last_added = tuner.get("last_trial_added_at") or start_time
+                    # Add one trial every ~2-10 seconds (randomized)
+                    if time.time() - last_added > random.uniform(2, 10):
+                        new_id = f"{(tuner.get('tuner_run_id') or str(uuid4()))[:5]}_{len(tuner['trials']):05d}"
+                        new_trial = {
+                            "id": new_id,
+                            "status": "RUNNING",
+                            "np": 2,
+                            "ntomp": random.choice([1, 2, 4, 8]),
+                            "nb": "cpu",
+                            "pme": "cpu",
+                            "performance": None,
+                            "start_time": time.time(),
+                        }
+                        tuner.setdefault("trials", []).append(new_trial)
+                        tuner["last_trial_added_at"] = time.time()
+
+                # Simulate running trials completion (10-20 seconds)
+                for trial in list(tuner.get("trials", [])):
                     if trial["status"] == "RUNNING":
                         trial_start = trial.get("start_time", start_time)
-                        if time.time() - trial_start > random.uniform(30, 60):
+                        if time.time() - trial_start > random.uniform(10, 20):
                             trial["status"] = "TERMINATED"
-                            trial["performance"] = round(random.uniform(40.0, 80.0), 3)
+                            trial["performance"] = round(random.uniform(10.0, 500.0), 3)
 
                 # Update cluster resources based on running trials
-                running_count = sum(1 for t in tuner["trials"] if t["status"] == "RUNNING")
+                running_count = sum(1 for t in tuner.get("trials", []) if t["status"] == "RUNNING")
                 if running_count > 0:
                     cpus_used = running_count * 8
                     tuner["cluster_resources"] = f"{cpus_used}/32 CPUs, 0/1 GPUs used"
                 else:
                     tuner["cluster_resources"] = "0/32 CPUs, 0/1 GPUs used"
+
+                # If we've added all trials and none are running, mark tuner as terminated
+                total_expected = tuner.get("trials_to_add", 0) or 0
+                current_total = len(tuner.get("trials", []))
+                if total_expected > 0 and current_total >= total_expected and running_count == 0:
+                    tuner["tuner_status"] = "TERMINATED"
+                    tuner["is_stopped"] = True
 
     def _simulate_gromacs_jobs(self) -> None:
         """Simulate GROMACS job progress."""
