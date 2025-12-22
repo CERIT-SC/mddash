@@ -12,6 +12,8 @@ import {
     Paper,
     Tooltip,
     Radio,
+    CircularProgress,
+    Stack,
 } from "@mui/material";
 import { tableCellClasses } from "@mui/material/TableCell";
 import { styled } from "@mui/material/styles";
@@ -64,7 +66,16 @@ const TunerTable = (props: TunerTableProps) => {
     );
 
     if (rows.length === 0) {
-        return <Typography variant="body1">No tuning trials available yet...</Typography>;
+        return (
+            <Paper variant="outlined" sx={{ p: 4, display: "flex", justifyContent: "center", alignItems: "center" }}>
+                <Stack direction="row" spacing={2} alignItems="center">
+                    <CircularProgress size={24} />
+                    <Typography variant="body1" color="text.secondary">
+                        Waiting for tuning trials...
+                    </Typography>
+                </Stack>
+            </Paper>
+        );
     }
 
     return (
