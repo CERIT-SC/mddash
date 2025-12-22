@@ -78,11 +78,8 @@ const TunerView = (props: TunerViewProps) => {
     }, [tprName, experiment.id, fetchStatus]);
 
     useEffect(() => {
-        const shouldPoll =
-            tuner?.is_pending || (tunerStarted && !tunerStopped) || (tuner?.tuner_run_id && !tunerStarted);
-
+        const shouldPoll = tuner?.is_pending || (tunerStarted && !tunerStopped && tuner?.tuner_status !== "TERMINATED");
         if (!shouldPoll) return;
-
         const intervalId = window.setInterval(() => fetchStatus(true), POLLING_INTERVAL);
         return () => window.clearInterval(intervalId);
     }, [tuner?.is_pending, tuner?.tuner_run_id, tunerStarted, tunerStopped, fetchStatus]);
