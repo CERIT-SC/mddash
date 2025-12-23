@@ -80,9 +80,9 @@ gromacsTuner:
   image:
     repository: cerit.io/xkrasa/gromacs-tuner-api
     tag: "latest"  # TODO: lock version
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   storage:
-    size: 2Gi
+    size: 100Gi
   api:
     resources:
       limits:
@@ -106,10 +106,10 @@ gromacsTuner:
       gpuProduct: "NVIDIA-A40"
       resources:
         limits:
-          cpu: "32"
+          cpu: "8"  # TODO: ask for more (should be at least 32)
           memory: "128Gi"
           nvidia.com/gpu: "1"
         requests:
-          cpu: "32"
+          cpu: "8"  # should to be same as limit
           memory: "16Gi"
           nvidia.com/gpu: "1"

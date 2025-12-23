@@ -82,7 +82,7 @@ gromacsTuner:
     tag: "latest"
     pullPolicy: Always
   storage:
-    size: 2Gi
+    size: 10Gi
   api:
     resources:
       limits:
@@ -106,10 +106,10 @@ gromacsTuner:
       gpuProduct: "NVIDIA-A40"
       resources:
         limits:
-          cpu: "8"
+          cpu: "4"
           memory: "16Gi"
           nvidia.com/gpu: "1"
         requests:
-          cpu: "4"
+          cpu: "4"  # should to be same as limit
           memory: "8Gi"
           nvidia.com/gpu: "1"

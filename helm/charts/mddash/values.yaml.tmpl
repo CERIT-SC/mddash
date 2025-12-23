@@ -339,6 +339,8 @@ gromacs-tuner:
 
     worker:
       replicas: {{ $cfg.gromacsTuner.ray.worker.replicas }}
+      numCpu: {{ $cfg.gromacsTuner.ray.worker.resources.limits.cpu }}
+      numGpu: {{ index $cfg.gromacsTuner.ray.worker.resources.limits "nvidia.com/gpu" }}
       nodeSelector:
         nvidia.com/gpu.product: "{{ $cfg.gromacsTuner.ray.worker.gpuProduct }}"
       resources:
