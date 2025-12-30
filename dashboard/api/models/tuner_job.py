@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -162,6 +163,20 @@ class TunerJob(db.Model):  # type: ignore
                     return
 
                 try:
+                    # Wait for file to appear (NFS consistency)
+                    # Sometimes the job finishes but the file is not yet visible on the NFS mount
+                    max_retries = 10
+                    for i in range(max_retries):
+                        # Force NFS directory refresh by listing the parent directory using pathlib
+                        list(tuning_tpr_path.parent.iterdir())
+                        if tuning_tpr_path.exists():
+                            break
+                        logger.info(f"Waiting for {tuning_tpr_path} to appear (attempt {i + 1}/{max_retries})")
+                        time.sleep(1)
+
+                    if not tuning_tpr_path.exists():
+                        raise FileNotFoundError(f"TPR file {tuning_tpr_path} not found after waiting")
+
                     response = tuner.run_submit(tuning_tpr_path)
                     fresh_job.tuner_run_id = response["tuner_run_id"]
                     fresh_job.is_pending = False
