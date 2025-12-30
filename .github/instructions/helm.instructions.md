@@ -1,5 +1,4 @@
 ---
-description: 'Helm chart best practices for production-ready Kubernetes deployments'
 applyTo: 'helm/**/Chart.yaml, helm/**/values.yaml, helm/**/templates/*.yaml, helm/**/templates/*.tpl'
 ---
 
@@ -233,13 +232,13 @@ kind: Service
 
 ## Common Mistakes to Avoid
 
-- ❌ Using uppercase or underscores in chart/value names
-- ❌ Unquoted strings in values.yaml
-- ❌ Hardcoded secrets or default passwords
-- ❌ Running containers as root user
-- ❌ Missing resource limits
-- ❌ Overly permissive RBAC (cluster-admin)
-- ❌ Undocumented values
-- ❌ Directly interpolating user input into commands
-- ❌ Using complex nested structures when flat would work
-- ❌ Missing health checks (liveness/readiness probes)
+- Using uppercase or underscores in chart/value names
+- Unquoted strings in values.yaml
+- Hardcoded secrets or default passwords
+- Running containers as root user
+- Missing resource limits
+- Overly permissive RBAC (cluster-admin)
+- Undocumented values
+- Directly interpolating user input into commands
+- Using complex nested structures when flat would work
+- Missing health checks (liveness/readiness probes)

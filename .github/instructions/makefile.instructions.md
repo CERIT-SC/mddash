@@ -1,5 +1,4 @@
 ---
-description: 'Makefile best practices for consistent, maintainable build automation'
 applyTo: '**/Makefile, **/*.mk'
 ---
 

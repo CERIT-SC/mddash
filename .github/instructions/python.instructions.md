@@ -1,117 +1,274 @@
 ---
-description: 'Python coding conventions and guidelines'
-applyTo: '**/*.py'
+applyTo: "**/*.py"
 ---
 
-# Python Coding Conventions
+# Python Development Guidelines
 
-## Core Philosophy
-- **Modern & Idiomatic**: Use Python 3.10+ features and modern standard libraries.
-- **Type Safe**: Strict type hinting is mandatory for all function signatures and class attributes.
-- **Readable**: Code should be self-documenting; comments explain *why*, not *what*.
-- **Robust**: Handle errors explicitly; avoid silent failures.
+These instructions focus on **idiomatic Python implementation details**.
 
-## Modern Python Standards
-- **Type Hinting**:
-  - Use built-in generics (`list[str]`, `dict[str, int]`) instead of `typing.List`.
-  - Use the union operator (`str | int`) instead of `typing.Union`.
-  - Use `str | None` instead of `typing.Optional`.
-- **Data Structures**:
-  - Prefer `dataclasses` or `pydantic.BaseModel` over plain dictionaries for structured data.
-  - Use `NamedTuple` for simple immutable data structures.
-- **String Formatting**:
-  - Always use **f-strings** (`f"{var}"`) instead of `.format()` or `%` formatting.
-- **Path Handling**:
-  - Use `pathlib.Path` for all file system operations. Avoid `os.path`.
-- **Control Flow**:
-  - Use `match/case` for complex conditional logic (Python 3.10+).
-  - Use `contextlib.suppress` for ignoring specific exceptions.
+## 1. Modern Idioms & Control Flow
+Write code that leverages modern Python (3.10+) features for readability and safety.
 
-## Code Structure & Style
-- **Imports**:
-  - Group imports: Standard Library, Third Party, Local Application.
-  - Place all imports at the top of the file.
-  - Use absolute imports for project modules (e.g., `from src.utils import helper`).
-- **Naming**:
-  - `snake_case` for functions, variables, and file names.
-  - `PascalCase` for classes and exceptions.
-  - `UPPER_CASE` for constants.
-  - Prefix private members with `_`.
-- **Formatting**:
-  - Follow **PEP 8**.
-  - Max line length: **120 characters**.
-  - Use trailing commas in multi-line lists/dicts/function calls.
+### Path Handling
+Use `pathlib` instead of `os.path` for filesystem operations. It offers an object-oriented interface and better cross-platform compatibility.
 
-## Error Handling & Safety
-- **Exceptions**:
-  - Create custom exception classes for domain-specific errors.
-  - **NEVER** use bare `except:` or `except Exception:` without re-raising or logging.
-  - Use `try/except/else/finally` blocks appropriately.
-- **Resources**:
-  - Always use context managers (`with` statement) for file I/O, locks, and connections.
-
-## Documentation
-- **Docstrings**:
-  - Use **Google Style** docstrings for all public modules, classes, and functions.
-  - Include `Args`, `Returns`, and `Raises` sections.
-- **Comments**:
-  - Do not comment obvious code.
-  - Use comments to explain complex algorithmic decisions or business logic.
-
-## Testing (Only when requested)
-- If asked to write tests, use **pytest**.
-- Use `conftest.py` for shared fixtures.
-- Use `@pytest.mark.parametrize` for data-driven tests.
-- Do not mock internal implementation details; test public interfaces.
-
-## Examples
-
-### ✅ Good: Modern & Clean
+**Bad:**
 ```python
-import json
-from dataclasses import dataclass
+import os
+path = os.path.join(data_dir, "file.txt")
+if os.path.exists(path):
+    ...
+```
+
+**Good:**
+```python
 from pathlib import Path
+path = Path(data_dir) / "file.txt"
+if path.exists():
+    ...
+```
 
+### String Formatting
+Always use **f-strings** for string interpolation. They are faster and more readable than `.format()` or `%` formatting.
 
-@dataclass
-class UserConfig:
-    """Data class to hold user configuration."""
+**Bad:**
+```python
+print("Hello, %s" % user)
+print("Hello, {}".format(user))
+```
 
-    username: str
-    retries: int = 3
+**Good:**
+```python
+print(f"Hello, {user}")
+```
 
+### Comprehensions
+Use list/dict comprehensions for simple transformations instead of `map()` or loops.
 
-def load_config(config_path: Path) -> UserConfig:
-    """
-    Load user configuration from a JSON file.
+**Bad:**
+```python
+users = []
+for u in user_list:
+    if u.active:
+        users.append(u.name)
+```
+
+**Good:**
+```python
+users = [u.name for u in user_list if u.active]
+```
+
+### Iteration
+Use `enumerate()` instead of `range(len())`. Use `zip()` to iterate multiple sequences simultaneously.
+
+**Bad:**
+```python
+for i in range(len(items)):
+    print(i, items[i])
+```
+
+**Good:**
+```python
+for i, item in enumerate(items):
+    print(i, item)
+```
+
+## 2. Type Safety & Documentation
+Python is dynamically typed, but we enforce strict static analysis to catch bugs early.
+
+### Strict Typing
+Annotate all function arguments and return values. Avoid `Any`.
+
+**Bad:**
+```python
+def process(data):
+    return data["id"]
+```
+
+**Good:**
+```python
+from typing import Dict, Any
+
+def process(data: Dict[str, Any]) -> int:
+    return data["id"]
+```
+
+### Docstrings
+Follow **Google Style** docstrings. Do not duplicate type information in the docstring; rely on type hints.
+
+**Good:**
+```python
+def calculate_tax(price: float, rate: float) -> float:
+    """Calculates the tax amount.
 
     Args:
-        config_path: Path to the configuration file.
+        price: The base price.
+        rate: The tax rate (0.0 to 1.0).
 
     Returns:
-        UserConfig: The parsed configuration object.
+        The calculated tax.
 
     Raises:
-        FileNotFoundError: If the config file does not exist.
-        json.JSONDecodeError: If the file contains invalid JSON.
+        ValueError: If rate is negative.
     """
-    if not config_path.exists():
-        raise FileNotFoundError(f"Config file not found: {config_path}")
-
-    with config_path.open("r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    return UserConfig(**data)
+    return price * rate
 ```
 
-### ❌ Bad: Outdated & Unsafe
+## 3. Class Design
+
+### Data Classes
+Use `@dataclass` for classes that primarily store data. It automatically generates `__init__`, `__repr__`, and `__eq__`.
+
+**Good:**
 ```python
-def load_config(path): # No type hints
-    import os # Import inside function
-    if os.path.exists(path): # Old os.path
-        f = open(path) # No context manager (resource leak)
-        data = json.load(f)
-        return data # Returns dict, not structured object
-    else:
-        return None # Returns None instead of raising error
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class User:
+    id: int
+    name: str
 ```
+
+### Properties
+Use `@property` instead of Java-style getters and setters.
+
+**Bad:**
+```python
+class Box:
+    def get_width(self):
+        return self._width
+```
+
+**Good:**
+```python
+class Box:
+    @property
+    def width(self):
+        return self._width
+```
+
+### Magic Methods
+Implement `__repr__` for all custom classes to ensure they are debuggable.
+
+**Good:**
+```python
+def __repr__(self):
+    return f"User(id={self.id}, name='{self.name}')"
+```
+
+## 4. Error Handling & Logging
+
+### Specific Exceptions
+Never catch `Exception` directly. Catch specific errors (e.g., `ValueError`, `KeyError`).
+
+**Bad:**
+```python
+try:
+    process()
+except Exception:
+    pass
+```
+
+**Good:**
+```python
+try:
+    process()
+except ValueError as e:
+    logger.error(f"Invalid input: {e}")
+```
+
+### Logging vs Print
+**Never** use `print()` in production code. Use the standard `logging` module.
+
+**Bad:**
+```python
+print(f"Processing user {user_id}")
+```
+
+**Good:**
+```python
+import logging
+logger = logging.getLogger(__name__)
+
+logger.info("Processing user %s", user_id)
+```
+
+## 5. Configuration
+**Never** hardcode secrets or configuration. Use Environment Variables.
+
+**Bad:**
+```python
+DB_URL = "postgres://user:pass@localhost:5432/db"
+```
+
+**Good:**
+```python
+import os
+DB_URL = os.environ.get("DB_URL")
+```
+
+## 6. Testing with Pytest
+> ⚠️ **Note:** Only write tests when explicitly requested.
+
+### Fixtures
+Use `pytest.fixture` for setup/teardown logic.
+
+**Good:**
+```python
+@pytest.fixture
+def db():
+    conn = connect()
+    yield conn
+    conn.close()
+```
+
+### Parametrization
+Use `@pytest.mark.parametrize` to test multiple inputs.
+
+**Good:**
+```python
+@pytest.mark.parametrize("inp,out", [(1, 2), (2, 4)])
+def test_double(inp, out):
+    assert double(inp) == out
+```
+
+## 7. Resource Management
+Always use Context Managers (`with` statements).
+
+**Bad:**
+```python
+f = open("file.txt")
+data = f.read()
+f.close()
+```
+
+**Good:**
+```python
+with open("file.txt") as f:
+    data = f.read()
+```
+
+## 8. Critical Anti-Patterns
+
+### Mutable Default Arguments
+**Never** use mutable objects (lists, dicts) as default arguments.
+
+**Bad:**
+```python
+def append(item, list=[]):
+    list.append(item)
+```
+
+**Good:**
+```python
+def append(item, list=None):
+    if list is None:
+        list = []
+    list.append(item)
+```
+
+### Wildcard Imports
+**Never** use `from module import *`. It pollutes the namespace.
+
+### Inline Imports
+**Never** place imports inside functions. Imports belong at the top of the file.

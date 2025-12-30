@@ -1,5 +1,4 @@
 ---
-description: 'Shell scripting best practices for robust, secure, and maintainable bash scripts'
 applyTo: '**/*.sh'
 ---
 

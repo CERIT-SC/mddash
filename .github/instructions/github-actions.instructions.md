@@ -1,6 +1,5 @@
 ---
 applyTo: '.github/workflows/*.yml'
-description: 'GitHub Actions CI/CD best practices for secure, efficient pipelines'
 ---
 
 # GitHub Actions Best Practices

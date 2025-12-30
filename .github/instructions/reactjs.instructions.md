@@ -1,151 +1,172 @@
 ---
-description: 'ReactJS development standards and best practices'
-applyTo: '**/*.jsx, **/*.tsx, **/*.js, **/*.ts, **/*.css, **/*.scss'
+applyTo: "**/*.jsx, **/*.tsx, **/*.js, **/*.ts, **/*.css, **/*.scss"
 ---
 
-# ReactJS Development Instructions
+# ReactJS Guidelines
 
-Instructions for building high-quality ReactJS applications with modern patterns, hooks, and best practices following the official React documentation at https://react.dev.
+## Context
+Guidelines for building high-quality, scalable React applications using React 19+ and TypeScript. Focus on functional components, hooks, and component composition.
 
-## Project Context
-- Latest React version (React 19+)
-- TypeScript for type safety (when applicable)
-- Functional components with hooks as default
-- Material UI (MUI) for component library and styling
-- Follow React's official style guide and best practices
-- Use modern build tools (Vite, Create React App, or custom Webpack setup)
-- Implement proper component composition and reusability patterns
+## Tech Stack
+- **Framework:** React 19+
+- **Language:** TypeScript (Strict Mode)
+- **State Management:** React Context, React Query (Server State)
+- **Routing:** React Router
+- **Forms:** React Hook Form / Formik
+- **Build Tool:** Vite
 
-## Development Standards
+## Boundaries
 
-### Architecture
-- Use functional components with hooks as the primary pattern
-- Implement component composition over inheritance
-- Organize components by feature or domain for scalability
-- Separate presentational and container components clearly
-- Use custom hooks for reusable stateful logic
-- Implement proper component hierarchies with clear data flow
+### ✅ Always
+- **Functional Components:** Use functional components with hooks.
+- **TypeScript:** Define interfaces for all props (`interface Props { ... }`) and state. Use `React.FC` or explicit return types.
+- **MUI Components:** Use MUI components (`Box`, `Stack`, `Grid`, `Typography`) instead of native HTML tags (`div`, `span`, `p`) for layout and text.
+- **Styling:** Use the `sx` prop for component-specific styles and the MUI `theme` for colors/spacing.
+- **Error Handling:** Implement Error Boundaries and handle async errors gracefully.
+- **Hooks Rules:** Call hooks only at the top level; include all dependencies in `useEffect` arrays.
+- **Naming:** Use PascalCase for components and camelCase for hooks/functions.
 
-### TypeScript Integration
-- Use TypeScript interfaces for props, state, and component definitions
-- Define proper types for event handlers and refs
-- Implement generic components where appropriate
-- Use strict mode in `tsconfig.json` for type safety
-- Leverage React's built-in types (`React.FC`, `React.ComponentProps`, etc.)
-- Create union types for component variants and states
+### ⚠️ Ask First
+- **Testing:** Do not write tests unless explicitly asked. If asked, use React Testing Library and Jest.
+- **New Dependencies:** Ask before adding new npm packages.
+- **Complex State:** Ask before introducing complex `useReducer` or global state libraries (Redux/Zustand) if Context/Query suffices.
 
-### Component Design
-- Follow the single responsibility principle for components
-- Use descriptive and consistent naming conventions
-- Implement proper prop validation with TypeScript or PropTypes
-- Design components to be testable and reusable
-- Keep components small and focused on a single concern
-- Use composition patterns (render props, children as functions)
-- Prefer MUI components (Box, Stack, Grid) for layout over custom div wrappers
+### 🚫 Never
+- **Class Components:** Never use class-based components.
+- **Any Type:** Never use `any`; use `unknown` or specific types.
+- **Direct DOM:** Never manipulate the DOM directly; use `useRef`.
+- **Hardcoded Styles:** Never hardcode hex colors or pixel values; use theme tokens (e.g., `theme.palette.primary.main`, `p={2}`).
+- **Prop Drilling:** Avoid passing props through more than 2-3 layers; use Composition or Context.
 
-### State Management
-- Use `useState` for local component state
-- Implement `useReducer` for complex state logic
-- Leverage `useContext` for sharing state across component trees
-- Implement proper state normalization and data structures
-- Use React Query for server state management
+## Examples
 
-### Hooks and Effects
-- Use `useEffect` with proper dependency arrays to avoid infinite loops
-- Implement cleanup functions in effects to prevent memory leaks
-- Use `useMemo` and `useCallback` for performance optimization when needed
-- Create custom hooks for reusable stateful logic
-- Follow the rules of hooks (only call at the top level)
-- Use `useRef` for accessing DOM elements and storing mutable values
+### Component Pattern
 
-### Styling
-- Use Material UI components (`@mui/material`) as the primary UI library
-- Leverage MUI's `sx` prop for component-specific styling
-- Use MUI's theme system for consistent colors, spacing, and typography
-- Implement responsive design with MUI's breakpoint utilities
-- Extend MUI theme for custom design tokens when needed
-- Prefer MUI components over custom implementations for consistency
-- Ensure accessibility with proper ARIA attributes and semantic HTML
+```tsx
+// ❌ Bad: Class component, any type, native tags, inline styles
+class UserCard extends React.Component<any, any> {
+  render() {
+    return (
+      <div style={{ padding: '20px', backgroundColor: '#f0f0f0' }}>
+        <h1>{this.props.name}</h1>
+      </div>
+    );
+  }
+}
 
-### Performance Optimization
-- Use `React.memo` for component memoization when appropriate
-- Implement code splitting with `React.lazy` and `Suspense`
-- Optimize bundle size with tree shaking and dynamic imports
-- Use `useMemo` and `useCallback` judiciously to prevent unnecessary re-renders
-- Implement virtual scrolling for large lists
-- Profile components with React DevTools to identify performance bottlenecks
+// ✅ Good: Functional, Typed, MUI, Theme-aware
+import { Box, Typography, Paper } from '@mui/material';
 
-### Data Fetching
-- Use modern data fetching libraries (React Query, SWR, Apollo Client)
-- Implement proper loading, error, and success states
-- Handle race conditions and request cancellation
-- Use optimistic updates for better user experience
-- Implement proper caching strategies
-- Handle offline scenarios and network errors gracefully
+interface UserCardProps {
+  name: string;
+  role?: string;
+  onAction: () => void;
+}
 
-### Error Handling
-- Implement Error Boundaries for component-level error handling
-- Use proper error states in data fetching
-- Implement fallback UI for error scenarios
-- Log errors appropriately for debugging
-- Handle async errors in effects and event handlers
-- Provide meaningful error messages to users
+export const UserCard = ({ name, role = 'User', onAction }: UserCardProps) => {
+  return (
+    <Paper 
+      elevation={2} 
+      sx={{ 
+        p: 2, 
+        bgcolor: 'background.paper',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1
+      }}
+    >
+      <Typography variant="h6" component="h2">
+        {name}
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        {role}
+      </Typography>
+    </Paper>
+  );
+};
+```
 
-### Forms and Validation
-- Use controlled components for form inputs
-- Implement proper form validation with libraries like Formik, React Hook Form
-- Handle form submission and error states appropriately
-- Implement accessibility features for forms (labels, ARIA attributes)
-- Use debounced validation for better user experience
-- Handle file uploads and complex form scenarios
+### Data Fetching Pattern
 
-### Routing
-- Use React Router for client-side routing
-- Implement nested routes and route protection
-- Handle route parameters and query strings properly
-- Implement lazy loading for route-based code splitting
-- Use proper navigation patterns and back button handling
-- Implement breadcrumbs and navigation state management
+```tsx
+// ✅ Good: Custom Hook with Loading/Error states
+const useUserData = (userId: string) => {
+  const [data, setData] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
-### Testing
-- Do not write any tests unless explicitly asked
-- Write unit tests for components using React Testing Library
-- Test component behavior, not implementation details
-- Use Jest for test runner and assertion library
-- Implement integration tests for complex component interactions
-- Mock external dependencies and API calls appropriately
-- Test accessibility features and keyboard navigation
+  useEffect(() => {
+    let mounted = true;
+    
+    const fetchData = async () => {
+      try {
+        const result = await api.getUser(userId);
+        if (mounted) setData(result);
+      } catch (err) {
+        if (mounted) setError(err as Error);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
 
-### Accessibility
-- Use semantic HTML elements appropriately
-- Implement proper ARIA attributes and roles
-- Ensure keyboard navigation works for all interactive elements
-- Provide alt text for images and descriptive text for icons
-- Implement proper color contrast ratios
+    fetchData();
 
-## Implementation Process
-1. Plan component architecture and data flow
-2. Set up project structure with proper folder organization
-3. Define TypeScript interfaces and types
-4. Implement core components with proper styling
-5. Add state management and data fetching logic
-6. Implement routing and navigation
-7. Add form handling and validation
-8. Implement error handling and loading states
-9. Add testing coverage for components and functionality
-10. Optimize performance and bundle size
-11. Ensure accessibility compliance
-12. Add documentation and code comments
+    return () => { mounted = false; };
+  }, [userId]);
 
-## Additional Guidelines
-- Follow React's naming conventions (PascalCase for components, camelCase for functions)
-- Implement proper code splitting and lazy loading strategies
-- Document complex components and custom hooks with JSDoc
+  return { data, loading, error };
+};
+```
 
-## Common Patterns
-- Higher-Order Components (HOCs) for cross-cutting concerns
-- Render props pattern for component composition
-- Compound components for related functionality
-- Provider pattern for context-based state sharing
-- Container/Presentational component separation
-- Custom hooks for reusable logic extraction
+## Project Structure
+- `src/components`: Reusable, generic UI components (Buttons, Inputs).
+- `src/features`: Domain-specific features (UserProfile, Dashboard).
+- `src/hooks`: Shared custom hooks.
+- `src/pages`: Route-level components.
+- `src/utils`: Helper functions and constants.
+- `src/types`: Shared TypeScript interfaces.
+
+## Detailed Guidelines
+
+### Routing (React Router)
+- **Client-Side Routing:** Use React Router for all navigation.
+- **Lazy Loading:** Implement `React.lazy` and `Suspense` for route-based code splitting.
+- **Protection:** Use wrapper components (e.g., `<RequireAuth>`) for protected routes.
+- **Navigation:** Handle route parameters, query strings, and back button behavior correctly.
+- **UX:** Implement breadcrumbs and preserve navigation state where appropriate.
+
+### Testing Standards
+> ⚠️ **Note:** Only write tests when explicitly requested.
+- **Tools:** Use Jest and React Testing Library.
+- **Focus:** Test component behavior (user interactions), not implementation details.
+- **Integration:** Prefer integration tests for complex interactions over shallow unit tests.
+- **Mocking:** Mock external dependencies (API calls, context providers) appropriately.
+- **Accessibility:** Test keyboard navigation and screen reader compatibility.
+
+### Accessibility (a11y)
+- **Semantics:** Use semantic HTML (`<main>`, `<nav>`, `<article>`) alongside MUI components.
+- **ARIA:** Implement proper ARIA attributes (`aria-label`, `aria-expanded`) for interactive elements.
+- **Keyboard:** Ensure all interactive elements are focusable and operable via keyboard.
+- **Visuals:** Maintain proper color contrast ratios and provide alt text for images.
+
+### Common Design Patterns
+- **Compound Components:** Use for related functionality (e.g., `Select` + `Select.Option`).
+- **Custom Hooks:** Extract reusable logic (data fetching, form handling) into hooks.
+- **Context Provider:** Use the Provider pattern for dependency injection and state sharing.
+- **Container/Presentational:** Separate logic (Container) from UI (Presentational) when components become complex.
+- **Render Props:** Use for flexible component composition (though Hooks are preferred).
+
+## Development Workflow
+1.  **Plan:** Define component architecture, data flow, and types.
+2.  **Structure:** Set up folder organization (`features/`, `components/`).
+3.  **Types:** Define TypeScript interfaces for props and state.
+4.  **UI:** Implement core components with MUI and `sx` styling.
+5.  **Logic:** Add state management (Hooks/Context) and data fetching.
+6.  **Routing:** Configure routes and navigation.
+7.  **Forms:** Add form handling and validation (React Hook Form).
+8.  **Error/Loading:** Implement Error Boundaries and Suspense/Loading states.
+9.  **Testing:** (If requested) Add unit/integration tests.
+10. **Optimization:** Apply `React.memo` or `useMemo` only if performance issues arise.
+11. **A11y:** Verify accessibility compliance.
+12. **Docs:** Add JSDoc for complex logic.
+

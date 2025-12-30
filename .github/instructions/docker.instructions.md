@@ -1,145 +1,133 @@
 ---
-description: 'Docker best practices for optimized, secure container images'
-applyTo: '**/Dockerfile,**/Dockerfile.*,**/*.dockerfile,**/docker-compose*.yml,**/docker-compose*.yaml'
+applyTo: "**/Dockerfile,**/Dockerfile.*,**/*.dockerfile,**/docker-compose*.yml,**/docker-compose*.yaml"
 ---
 
-# Docker Best Practices
+# Docker Guidelines
 
-Build secure, efficient, and maintainable Docker images following these core principles:
+## Context
+Standardized guidelines for containerizing applications to ensure reproducibility, security, and efficiency.
+- **Immutability:** Never modify running containers; create new images for changes.
+- **Efficiency:** Minimize image size and build time (multi-stage, caching).
+- **Security:** Run as non-root, scan for vulnerabilities, and use minimal base images.
+- **Portability:** Externalize configuration; ensure images run consistently everywhere.
 
-## Core Principles
+## Boundaries
 
-**Immutability**: Never modify running containers. Create new versioned images for changes.
-- Use semantic versioning for tags (avoid `latest` in production)
-- Enable instant rollbacks and reproducible deployments
+### ✅ Always
+- **Multi-Stage Builds:** Use multi-stage builds to separate build dependencies from the runtime environment.
+- **Non-Root User:** Create and switch to a non-root user (e.g., `appuser`) in the final stage.
+- **Pin Versions:** Use specific tags for base images (e.g., `node:18-alpine3.19` instead of `node:alpine`).
+- **.dockerignore:** Maintain a comprehensive `.dockerignore` to exclude `.git`, `node_modules`, secrets, and temporary files.
+- **Exec Form:** Use the JSON array syntax for `CMD` and `ENTRYPOINT` (e.g., `CMD ["node", "app.js"]`) to ensure signals are passed correctly.
+- **Health Checks:** Define a `HEALTHCHECK` instruction to monitor application status.
 
-**Efficiency**: Minimize image size to reduce attack surface, build time, and resource usage.
-- Prefer Alpine/slim variants and multi-stage builds
-- Exclude development dependencies from production images
+### ⚠️ Ask First
+- **Base Image OS:** Ask before choosing between Alpine (smaller) and Debian/Ubuntu (better compatibility) if not specified.
+- **Capabilities:** Ask before adding or dropping Linux capabilities (e.g., `--cap-drop ALL` is secure but may break apps).
+- **Exposing Ports:** Verify which ports need to be exposed and published.
+- **Persistence:** Ask about volume strategies for stateful services.
 
-**Security**: Run as non-root user, use minimal base images, scan for vulnerabilities.
-- Never include secrets in image layers
-- Implement health checks for container lifecycle management
+### 🚫 Never
+- **Secrets in Images:** Never `COPY` secrets or credentials into the image. Use environment variables or secret mounts.
+- **Latest Tag:** Never use the `latest` tag for base images in production builds.
+- **Root Processes:** Never run the main application process as root (UID 0).
+- **Dev Dependencies:** Never include build tools (git, gcc, etc.) or development dependencies in the final production image.
+- **Mutable Tags:** Avoid overwriting image tags; use unique semantic versions or commit SHAs.
 
-**Portability**: Externalize configuration via environment variables.
-- Design self-contained images that run consistently across environments
+## Examples
 
-## Dockerfile Guidelines
-
-### 1. Multi-Stage Builds
-Use multiple `FROM` stages to separate build dependencies from runtime. Copy only necessary artifacts to final stage.
+### Dockerfile Best Practices
 
 ```dockerfile
-FROM node:18-alpine AS build
+# ❌ Bad: Single stage, running as root, vague tag
+FROM node:latest
+COPY . .
+RUN npm install
+CMD npm start
+
+# ✅ Good: Multi-stage, pinned version, non-root, optimized
+# Stage 1: Build
+FROM node:18-alpine3.19 AS builder
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:18-alpine AS production
+# Stage 2: Runtime
+FROM node:18-alpine3.19 AS runner
 WORKDIR /app
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/package*.json ./
-USER node
+# Create non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Copy only necessary files
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package*.json ./
+# Install only production deps
+RUN npm ci --only=production && npm cache clean --force
+# Set permissions
+RUN chown -R appuser:appgroup /app
+USER appuser
 EXPOSE 3000
+# Use exec form
 CMD ["node", "dist/main.js"]
 ```
 
-### 2. Base Image Selection
-- Use Alpine (`node:18-alpine`) or slim variants for minimal size
-- Pin specific versions (avoid `latest` in production)
-- Prefer official images from trusted sources
+### Docker Compose Best Practices
 
-### 3. Layer Optimization
-- Order instructions from least to most frequently changing
-- Combine `RUN` commands to reduce layers
-- Clean up in the same layer: `RUN apt-get update && apt-get install -y pkg && rm -rf /var/lib/apt/lists/*`
+```yaml
+# ❌ Bad: Version 2 (legacy), no resource limits
+version: '2'
+services:
+  db:
+    image: postgres
+    environment:
+      POSTGRES_PASSWORD: password123 # Hardcoded secret
 
-```dockerfile
-# Good: Copy dependencies first, then source code
-COPY package*.json ./
-RUN npm ci
-COPY src/ ./src/
+# ✅ Good: Modern format, explicit versions, secrets
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+
+volumes:
+  db_data:
 ```
 
-### 4. .dockerignore
-Create comprehensive `.dockerignore` to exclude:
-- Version control (`.git*`)
-- Dependencies installed in container (`node_modules`, `__pycache__`)
-- Build artifacts, logs, IDE files
-- Test files and documentation
+### Optimization Patterns
 
-### 5. Security: Non-Root User
-Always run as non-root user with proper permissions:
+**Dependency Caching (Node.js example):**
+Copy package files and install dependencies *before* copying source code to leverage Docker layer caching.
 
 ```dockerfile
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-RUN chown -R appuser:appgroup /app
-USER appuser
-```
-
-### 6. Command Execution
-- Use exec form `CMD ["executable", "arg"]` for proper signal handling
-- Use `ENTRYPOINT` for the main executable, `CMD` for default arguments
-- Document ports with `EXPOSE` (doesn't publish, just documents)
-
-### 7. Configuration
-- Externalize config via `ENV` variables with sensible defaults
-- Never hardcode secrets in images
-- Use runtime injection for sensitive data (K8s secrets, Docker secrets)
-
-## Security Checklist
-
-When creating or reviewing Dockerfiles, ensure:
-
-- [ ] **Non-root user**: Define `USER` directive with dedicated application user
-- [ ] **Minimal base image**: Use Alpine/slim variants with pinned versions
-- [ ] **No secrets in layers**: Use runtime injection, never `COPY` secrets
-- [ ] **Health checks**: Implement `HEALTHCHECK` for orchestration
-- [ ] **Security scanning**: Integrate `hadolint` and `trivy` in CI pipeline
-- [ ] **Layer optimization**: Combine commands, clean up in same layer
-- [ ] **`.dockerignore`**: Exclude dev files, secrets, and unnecessary content
-
-## Health Checks
-
-Define health checks for container lifecycle management:
-
-```dockerfile
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl --fail http://localhost:8080/health || exit 1
-```
-
-## Common Patterns
-
-**Multi-stage with different base images:**
-```dockerfile
-FROM golang:1.21-alpine AS build
-WORKDIR /app
-COPY go.* ./
-RUN go mod download
-COPY . .
-RUN go build -o server
-
-FROM alpine:3.19
-RUN addgroup -S app && adduser -S app -G app
-COPY --from=build /app/server /app/server
-USER app
-HEALTHCHECK CMD ["/app/server", "-health"]
-CMD ["/app/server"]
-```
-
-**Node.js with separate dependency install:**
-```dockerfile
-FROM node:18-alpine AS deps
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-
 FROM node:18-alpine
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+# 1. Copy dependency definitions
+COPY package*.json ./
+# 2. Install dependencies (cached if package.json doesn't change)
+RUN npm ci --only=production
+# 3. Copy source code
 COPY . .
-USER node
 CMD ["node", "server.js"]
 ```
+
+## Project Structure
+- Place `Dockerfile` in the root of the service directory.
+- Place `.dockerignore` alongside the `Dockerfile`.
+- Use `docker-compose.yml` for local development orchestration.
+- Use `docker-compose.prod.yml` (or similar) for production overrides if not using K8s.
+
