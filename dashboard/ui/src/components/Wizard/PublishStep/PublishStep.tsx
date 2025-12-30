@@ -8,7 +8,7 @@ import { useNotification } from "@/contexts/useNotification";
 import { formatFileSize } from "@/util/helpers";
 
 const PublishStep = (props: WizardStepProps) => {
-    const { experiment } = props;
+    const { experiment, setExperiment } = props;
     const { showError, showSuccess } = useNotification();
     const [loading, setLoading] = useState(false);
     const [loadingStats, setLoadingStats] = useState(true);
@@ -109,13 +109,20 @@ const PublishStep = (props: WizardStepProps) => {
                 return;
             }
 
-            experiment.mdrepo_id = data.id;
+            const recordUrl = data.links?.edit_html || data.links?.self_html;
+
+            setExperiment((prev) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    mdrepo_id: data.id,
+                    mdrepo_record_url: recordUrl || prev.mdrepo_record_url,
+                };
+            });
 
             // Open MDRepo record in a new tab
-            if (data.links?.edit_html) {
-                window.open(data.links.edit_html, "_blank");
-            } else if (data.links?.self_html) {
-                window.open(data.links.self_html, "_blank");
+            if (recordUrl) {
+                window.open(recordUrl, "_blank");
             } else if (experiment.mdrepo_record_url) {
                 window.open(experiment.mdrepo_record_url, "_blank");
             }
@@ -125,7 +132,7 @@ const PublishStep = (props: WizardStepProps) => {
         } finally {
             setLoading(false);
         }
-    }, [experiment, isPublished, showError]);
+    }, [experiment, isPublished, showError, setExperiment]);
 
     const isLoading = loadingStats || loadingAuth;
 
