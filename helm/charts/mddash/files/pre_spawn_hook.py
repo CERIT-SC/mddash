@@ -118,6 +118,17 @@ async def _ensure_resource(method: Callable[..., Awaitable[object]], **kwargs: o
             raise
 
 
+async def _resource_exists(method: Callable[..., Awaitable[object]], **kwargs: object) -> bool:
+    """Check if a Kubernetes resource exists."""
+    try:
+        await method(**kwargs)  # type: ignore[arg-type]
+        return True
+    except ApiException as e:
+        if e.status == 404:
+            return False
+        raise
+
+
 async def _create_s3_bucket(bucket_name: str) -> None:
     """Create an S3 bucket if it doesn't exist."""
     s3_endpoint = os.environ.get("S3_ENDPOINT")
@@ -312,7 +323,7 @@ def _get_sidecar_containers(
 # =============================================================================
 
 
-async def pre_spawn_hook(spawner: KubeSpawner) -> None:
+async def pre_spawn_hook(spawner: "KubeSpawner") -> None:
     """
     Prepare user environment before spawning the notebook server.
 
@@ -345,6 +356,10 @@ async def pre_spawn_hook(spawner: KubeSpawner) -> None:
         mem_request=os.environ.get("NS_REQUESTS_MEMORY", "4Gi"),
     )
     await _ensure_resource(core_api.create_namespace, body=namespace_manifest)  # type: ignore[arg-type]
+
+    while not await _resource_exists(core_api.read_namespace, name=user_namespace):  # type: ignore[arg-type]
+        await asyncio.sleep(0.5)
+
     await core_api.patch_namespace(name=user_namespace, body=namespace_manifest)  # type: ignore[misc]
 
     # Prepare resource names and manifests
@@ -404,7 +419,7 @@ async def pre_spawn_hook(spawner: KubeSpawner) -> None:
         spawner.extra_containers = sidecar_containers
 
 
-def modify_pod_hook(spawner: KubeSpawner, pod: V1Pod) -> V1Pod:
+def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:
     """Apply security hardening to the notebook container (e-INFRA requirement)."""
     if pod.spec is None:
         return pod
@@ -422,7 +437,7 @@ def modify_pod_hook(spawner: KubeSpawner, pod: V1Pod) -> V1Pod:
     return pod
 
 
-async def post_stop_hook(spawner: KubeSpawner, **kwargs: object) -> None:
+async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:
     """
     Clean up after user pod stops.
 
