@@ -18,11 +18,13 @@ DB_URL = f"sqlite:///{DATA_DIR}/mdrun.db?timeout=30"
 NAMESPACE = os.environ.get("POD_NAMESPACE", "default")
 PVC_NAME = os.environ.get("PVC_NAME", "mdrun-api-pvc")
 
-GPU_TYPE = "nvidia.com/mig-1g.10gb"
+GPU_TYPE = "nvidia.com/mig-1g.10gb"  # TODO: is this correct? should be same as tuner
 
 S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
 S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
 S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
 
+logger = logging.getLogger(__name__)
+
 if not all([S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY]):
-    raise ValueError("S3_ENDPOINT, S3_ACCESS_KEY and S3_SECRET_KEY environment variables must be set")
+    logger.error("S3_ACCESS_KEY, S3_SECRET_KEY or S3_ENDPOINT are not set!")
