@@ -43,11 +43,9 @@ sidecars:
   s3sync:
     image: cerit.io/xkrasa/mddash-s3sync
 
-# MinIO object storage tenant
-minio:
-  servers: 2
-  volumesPerServer: 2
-  poolSize: 100Gi  # Storage pool size
+# S3 object storage configuration
+s3:
+  endpoint: https://s3.cl4.du.cesnet.cz
 
 resources:
   singleuser:

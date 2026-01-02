@@ -11,8 +11,8 @@ Molecular Dynamics simulation dashboard with JupyterHub integration.
    - `KUBECONFIG` - Your kubeconfig base64 encoded: `cat ~/.kube/config | base64 -w 0`
    - `OAUTH_CLIENT_ID` - OAuth client ID for authentication
    - `OAUTH_CLIENT_SECRET` - OAuth client secret
-   - `MINIO_ROOT_USER` - MinIO root username (default: `minio`)
-   - `MINIO_ROOT_PASSWORD` - MinIO root password (use a strong password in production!)
+   - `S3_ACCESS_KEY` - S3 access key
+   - `S3_SECRET_KEY` - S3 secret key
    - `MDREPO_CLIENT_ID` - MDRepo OAuth client ID for publishing experiments
    - `MDREPO_CLIENT_SECRET` - MDRepo OAuth client secret
    - `TUNER_USER` - Username for Gromacs Tuner
@@ -95,16 +95,10 @@ kubectl create secret generic ${PACKAGE}-kubeconfig-secret \
   --from-file=config=$HOME/.kube/config \
   -n ${NAMESPACE}
 
-# S3/MinIO Credentials
+# S3 Credentials
 kubectl create secret generic ${PACKAGE}-s3-creds \
-  --from-literal=S3_ACCESS_KEY="YOUR_MINIO_ROOT_USER" \
-  --from-literal=S3_SECRET_KEY="YOUR_MINIO_ROOT_PASSWORD" \
-  -n ${NAMESPACE}
-
-# MinIO Root Config (required for MinIO tenant)
-kubectl create secret generic minio-root-config \
-  --from-literal=config.env="export MINIO_ROOT_USER=\"YOUR_MINIO_ROOT_USER\"
-export MINIO_ROOT_PASSWORD=\"YOUR_MINIO_ROOT_PASSWORD\"" \
+  --from-literal=S3_ACCESS_KEY="YOUR_S3_ACCESS_KEY" \
+  --from-literal=S3_SECRET_KEY="YOUR_S3_SECRET_KEY" \
   -n ${NAMESPACE}
 
 # MDRepo OAuth Credentials (for publishing experiments to MDRepo)

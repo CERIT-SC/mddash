@@ -46,7 +46,7 @@ jupyterhub:
             name: oidc-credentials
             key: client_secret
       S3_ENDPOINT:
-        value: "http://minio.{{ $namespace }}.svc.cluster.local:80"
+        value: "{{ $cfg.s3.endpoint }}"
       S3_ACCESS_KEY:
         valueFrom:
           secretKeyRef:
@@ -212,67 +212,6 @@ jupyterhub:
       nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
 
-tenant:
-  tenant:
-    name: minio
-    configSecret:
-      name: minio-root-config
-      existingSecret: true
-    # this is outdated, but CI/CD pipeline fails without it
-    configuration:
-      name: minio-root-config
-    pools:
-      - servers: {{ $cfg.minio.servers }}
-        name: pool-0
-        volumesPerServer: {{ $cfg.minio.volumesPerServer }}
-        size: {{ $cfg.minio.poolSize }}
-        storageClassName: {{ $cfg.storageClassName }}
-        securityContext:
-          runAsNonRoot: true
-          runAsUser: 1000
-          runAsGroup: 1000
-          fsGroup: 1000
-          seccompProfile:
-            type: RuntimeDefault
-        containerSecurityContext:
-          allowPrivilegeEscalation: false
-          runAsNonRoot: true
-          runAsUser: 1000
-          runAsGroup: 1000
-          capabilities:
-            drop:
-              - ALL
-          seccompProfile:
-            type: RuntimeDefault
-    requestAutoCert: false
-    buckets: []
-    certificate:
-      requestAutoCert: false
-    features:
-      bucketDNS: false
-    podManagementPolicy: Parallel
-    exposeServices:
-      minio: true
-    serviceMetadata:
-      minioServiceLabels:
-        service-type: "minio-api"
-    liveness:
-      httpGet:
-        path: /minio/health/live
-        port: 9000
-        scheme: HTTP
-      initialDelaySeconds: 10
-      periodSeconds: 1
-      timeoutSeconds: 1
-    readiness:
-      httpGet:
-        path: /minio/health/ready
-        port: 9000
-        scheme: HTTP
-      initialDelaySeconds: 10
-      periodSeconds: 1
-      timeoutSeconds: 1
-
 mdrun-api:
   image:
     repository: {{ $cfg.mdrunApi.image }}
@@ -296,7 +235,7 @@ mdrun-api:
           name: {{ $helmPackage }}-s3-creds
           key: S3_SECRET_KEY
     - name: S3_ENDPOINT
-      value: "http://minio.{{ $namespace }}.svc.cluster.local:80"
+      value: "{{ $cfg.s3.endpoint }}"
 
 gromacs-tuner:
   image:
