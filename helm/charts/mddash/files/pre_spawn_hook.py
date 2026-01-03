@@ -164,7 +164,7 @@ def _ns_initialized(annotations: dict[str, str] | None) -> bool:
     if not isinstance(conditions, list):
         return False
 
-    required = {"InitialRolesPopulated", "ResourceQuotaInit"}
+    required = {"InitialRolesPopulated", "ResourceQuotaInit", "ResourceQuotaValidated"}
     found_true: set[str] = set()
     for cond in conditions:
         if not isinstance(cond, dict):
@@ -174,7 +174,7 @@ def _ns_initialized(annotations: dict[str, str] | None) -> bool:
         if cond_type in required and cond_status == "True":
             found_true.add(cond_type)
 
-    return found_true == required
+    return required.issubset(found_true)
 
 
 async def _wait_for_ns_init(core_api: CoreV1Api, namespace: str, timeout: float = 60.0, interval: float = 0.1) -> None:
