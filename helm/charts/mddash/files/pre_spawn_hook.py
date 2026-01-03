@@ -1,8 +1,8 @@
 import asyncio
 import json
 import os
-from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING
+import time
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 from kubernetes_asyncio import config
@@ -109,24 +109,85 @@ def _get_pvc_manifest(pvc_name: str, storage_size: str = "10Gi", storage_class: 
 # =============================================================================
 
 
-async def _ensure_resource(method: Callable[..., Awaitable[object]], **kwargs: object) -> None:
+async def _ensure_resource(method: Any, **kwargs: object) -> None:  # noqa: ANN401
     """Create a Kubernetes resource, ignoring AlreadyExists errors."""
     try:
-        await method(**kwargs)  # type: ignore[arg-type]
+        await method(**kwargs)
     except ApiException as e:
         if e.status != 409:
             raise
 
 
-async def _resource_exists(method: Callable[..., Awaitable[object]], **kwargs: object) -> bool:
+async def _resource_exists(method: Any, **kwargs: object) -> bool:  # noqa: ANN401
     """Check if a Kubernetes resource exists."""
     try:
-        await method(**kwargs)  # type: ignore[arg-type]
+        await method(**kwargs)
         return True
     except ApiException as e:
         if e.status == 404:
             return False
         raise
+
+
+async def _wait_for_resource(method: Any, timeout: float = 30.0, interval: float = 0.1, **kwargs: object) -> None:  # noqa: ANN401
+    """Wait until a Kubernetes resource exists (or time out)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if await _resource_exists(method, **kwargs):
+            return
+        await asyncio.sleep(interval)
+
+    raise TimeoutError(f"Timed out after {timeout:.1f}s waiting for resource")
+
+
+def _ns_initialized(annotations: dict[str, str] | None) -> bool:
+    """
+    Check if Rancher finished namespace initialization.
+
+    Rancher sets `cattle.io/status` JSON with Conditions including:
+    - Type: InitialRolesPopulated, Status: True
+    - Type: ResourceQuotaInit, Status: True
+    """
+    if not annotations:
+        return False
+
+    status_raw = annotations.get("cattle.io/status")
+    if not status_raw:
+        return False
+
+    try:
+        status_obj = json.loads(status_raw)
+    except json.JSONDecodeError:
+        return False
+
+    conditions = status_obj.get("Conditions")
+    if not isinstance(conditions, list):
+        return False
+
+    required = {"InitialRolesPopulated", "ResourceQuotaInit"}
+    found_true: set[str] = set()
+    for cond in conditions:
+        if not isinstance(cond, dict):
+            continue
+        cond_type = cond.get("Type")
+        cond_status = cond.get("Status")
+        if cond_type in required and cond_status == "True":
+            found_true.add(cond_type)
+
+    return found_true == required
+
+
+async def _wait_for_ns_init(core_api: CoreV1Api, namespace: str, timeout: float = 60.0, interval: float = 0.1) -> None:
+    """Wait until Rancher populates initial RBAC for a new project namespace."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        ns_obj = await core_api.read_namespace(name=namespace)  # type: ignore[misc]
+        annotations = getattr(getattr(ns_obj, "metadata", None), "annotations", None)
+        if _ns_initialized(annotations):
+            return
+        await asyncio.sleep(interval)
+
+    raise TimeoutError(f"Timed out after {timeout:.1f}s waiting for Rancher namespace-auth in {namespace}")
 
 
 async def _create_s3_bucket(bucket_name: str) -> None:
@@ -355,12 +416,13 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:
         cpu_request=os.environ.get("NS_REQUESTS_CPU", "1000m"),
         mem_request=os.environ.get("NS_REQUESTS_MEMORY", "4Gi"),
     )
-    await _ensure_resource(core_api.create_namespace, body=namespace_manifest)  # type: ignore[arg-type]
-
-    while not await _resource_exists(core_api.read_namespace, name=user_namespace):  # type: ignore[arg-type]
-        await asyncio.sleep(0.5)
-
+    await _ensure_resource(core_api.create_namespace, body=namespace_manifest)
+    await _wait_for_resource(core_api.read_namespace, name=user_namespace)
     await core_api.patch_namespace(name=user_namespace, body=namespace_manifest)  # type: ignore[misc]
+
+    # Rancher creates RoleBindings asynchronously after namespace creation.
+    # Until that runs, the kubeconfig user may not have permissions inside the new namespace.
+    await _wait_for_ns_init(core_api, user_namespace)
 
     # Prepare resource names and manifests
     user_role = f"{helm_package}-user-role"
@@ -373,28 +435,42 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:
         storage_class=os.environ.get("PVC_STORAGE_CLASS", "nfs-csi"),
     )
 
-    # Create all namespaced resources in parallel (RBAC + PVC)
+    # Create Roles first, then RoleBindings.
+    # Some clusters (or admission webhooks) reject RoleBindings that reference
+    # Roles that haven't been created yet.
     await asyncio.gather(
-        _ensure_resource(rbac_api.create_namespaced_role, namespace=user_namespace, body=_get_role_manifest(user_role)),  # type: ignore[arg-type]
         _ensure_resource(
-            rbac_api.create_namespaced_role_binding,  # type: ignore[arg-type]
+            rbac_api.create_namespaced_role,
             namespace=user_namespace,
-            body=_get_role_binding_manifest(user_binding, "default", user_role),
+            body=_get_role_manifest(user_role),
         ),
         _ensure_resource(
-            rbac_api.create_namespaced_role,  # type: ignore[arg-type]
+            rbac_api.create_namespaced_role,
             namespace=user_namespace,
             body=_get_role_manifest(hub_role, include_pvc=True),
         ),
         _ensure_resource(
-            rbac_api.create_namespaced_role_binding,  # type: ignore[arg-type]
-            namespace=user_namespace,
-            body=_get_role_binding_manifest(hub_binding, "hub", hub_role, namespace=hub_namespace),
-        ),
-        _ensure_resource(
-            core_api.create_namespaced_persistent_volume_claim,  # type: ignore[arg-type]
+            core_api.create_namespaced_persistent_volume_claim,
             namespace=user_namespace,
             body=pvc_manifest,
+        ),
+    )
+
+    await asyncio.gather(
+        _wait_for_resource(rbac_api.read_namespaced_role, name=user_role, namespace=user_namespace),
+        _wait_for_resource(rbac_api.read_namespaced_role, name=hub_role, namespace=user_namespace),
+    )
+
+    await asyncio.gather(
+        _ensure_resource(
+            rbac_api.create_namespaced_role_binding,
+            namespace=user_namespace,
+            body=_get_role_binding_manifest(user_binding, "default", user_role),
+        ),
+        _ensure_resource(
+            rbac_api.create_namespaced_role_binding,
+            namespace=user_namespace,
+            body=_get_role_binding_manifest(hub_binding, "hub", hub_role, namespace=hub_namespace),
         ),
     )
 
@@ -419,7 +495,7 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:
         spawner.extra_containers = sidecar_containers
 
 
-def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:
+def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:  # noqa: ARG001
     """Apply security hardening to the notebook container (e-INFRA requirement)."""
     if pod.spec is None:
         return pod
@@ -437,7 +513,7 @@ def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:
     return pod
 
 
-async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:
+async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # noqa: ARG001
     """
     Clean up after user pod stops.
 
@@ -464,6 +540,6 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:
 # Hook Registration
 # =============================================================================
 
-c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore
-c.KubeSpawner.modify_pod_hook = modify_pod_hook  # type: ignore
-c.KubeSpawner.post_stop_hook = post_stop_hook  # type: ignore
+c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore # noqa: F821
+c.KubeSpawner.modify_pod_hook = modify_pod_hook  # type: ignore # noqa: F821
+c.KubeSpawner.post_stop_hook = post_stop_hook  # type: ignore # noqa: F821
