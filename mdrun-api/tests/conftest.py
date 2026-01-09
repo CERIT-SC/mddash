@@ -17,6 +17,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from flask import Flask
 from flask.testing import FlaskClient
+from pytest_mock import MockerFixture
 
 # Add parent directory to path so we can import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -113,7 +114,7 @@ def db_session(app: Flask) -> Generator:
 
 
 @pytest.fixture
-def mock_k8s_client(mocker: MagicMock) -> dict[str, MagicMock]:
+def mock_k8s_client(mocker: MockerFixture) -> dict[str, MagicMock]:
     """
     Mock individual k8s_client functions for fine-grained control.
 

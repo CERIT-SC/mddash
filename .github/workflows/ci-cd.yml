@@ -71,6 +71,7 @@ jobs:
         uses: codecov/codecov-action@v4
         if: always()
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: dashboard/api/coverage.xml
           flags: dashboard-api
           fail_ci_if_error: false
@@ -100,6 +101,7 @@ jobs:
         uses: codecov/codecov-action@v4
         if: always()
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: dashboard/auth/coverage.xml
           flags: dashboard-auth
           fail_ci_if_error: false
@@ -129,6 +131,7 @@ jobs:
         uses: codecov/codecov-action@v4
         if: always()
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
           files: mdrun-api/coverage.xml
           flags: mdrun-api
           fail_ci_if_error: false

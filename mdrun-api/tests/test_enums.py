@@ -22,6 +22,7 @@ class TestJobStatus:
         assert JobStatus.RUNNING.value == "running"
         assert JobStatus.TERMINATED.value == "terminated"
         assert JobStatus.ERROR.value == "error"
+        assert JobStatus.UNKNOWN.value == "unknown"
 
 
 class TestDeviceType:
@@ -46,5 +47,5 @@ class TestDeviceType:
         """Should raise ValueError for invalid strings."""
         from enums import DeviceType
 
-        with pytest.raises(ValueError, match="invalid"):
+        with pytest.raises(ValueError, match="is not a valid DeviceType"):
             DeviceType.from_string("invalid")

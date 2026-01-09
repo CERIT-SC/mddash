@@ -18,6 +18,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from flask import Flask
 from flask.testing import FlaskClient
+from pytest_mock import MockerFixture
 
 # Add parent directory to path so we can import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -125,7 +126,7 @@ def db_session(app: Flask) -> Generator:
 
 
 @pytest.fixture
-def mock_requests(mocker: MagicMock) -> tuple:
+def mock_requests(mocker: MockerFixture) -> tuple:
     """
     Mock the requests library for external HTTP calls.
 
