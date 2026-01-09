@@ -16,6 +16,25 @@ help: ## Show this help
 	@echo ""
 	@echo "Current: BRANCH=$(CURRENT_BRANCH), ENV=$(ENV), TAG=$(IMAGE_TAG), NS=$(namespace)"
 
+# ==================== TEST ====================
+
+.PHONY: test
+test: test-dashboard-api test-dashboard-auth test-mdrun-api ## Run all tests
+
+.PHONY: test-dashboard-api
+test-dashboard-api: ## Run dashboard API tests
+	cd dashboard/api && pip install -q -r requirements-dev.txt && pytest
+
+.PHONY: test-dashboard-auth
+test-dashboard-auth: ## Run dashboard auth tests
+	cd dashboard/auth && pip install -q -r requirements-dev.txt && pytest
+
+.PHONY: test-mdrun-api
+test-mdrun-api: ## Run mdrun-api tests
+	cd mdrun-api && pip install -q -r requirements-dev.txt && pytest
+
+# ==================== BUILD ====================
+
 .PHONY: build
 build: build-dashboard build-notebook build-mdrun-api ## Build all images
 

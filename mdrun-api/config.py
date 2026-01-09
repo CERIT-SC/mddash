@@ -11,7 +11,7 @@ logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL)
 
 API_PREFIX = "/api"
 
-DATA_DIR = Path("/data")
+DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_URL = f"sqlite:///{DATA_DIR}/mdrun.db?timeout=30"
 

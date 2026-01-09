@@ -1,3 +1,10 @@
 Dockerfile*
 __pycache__/
 *.py[cod]
+
+# Testing - excluded from production image
+tests/
+pytest.ini
+requirements-dev.txt
+.pytest_cache/
+.coverage
