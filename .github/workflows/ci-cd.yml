@@ -43,9 +43,102 @@ jobs:
           REGISTRY=$(yq '.registry' ${CONFIG_FILE} | cut -d'/' -f1)
           echo "registry=${REGISTRY}" >> $GITHUB_OUTPUT
 
+  # ==================== TESTS ====================
+  # Run tests before building images
+
+  test-dashboard-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: dashboard/api/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest --cov=. --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: dashboard/api/coverage.xml
+          flags: dashboard-api
+          fail_ci_if_error: false
+
+  test-dashboard-auth:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard/auth
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: dashboard/auth/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest --cov=. --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: dashboard/auth/coverage.xml
+          flags: dashboard-auth
+          fail_ci_if_error: false
+
+  test-mdrun-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mdrun-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: mdrun-api/requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest --cov=. --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: mdrun-api/coverage.xml
+          flags: mdrun-api
+          fail_ci_if_error: false
+
+  # ==================== BUILDS ====================
+  # Build images after tests pass
+
   # Build UI first (proxy depends on it)
   build-ui:
-    needs: setup
+    needs: [setup]
     runs-on: ubuntu-latest
     outputs:
       changed: ${{ steps.changes.outputs.changed }}
@@ -148,7 +241,7 @@ jobs:
 
   # Build independent sidecars in parallel
   build-sidecars:
-    needs: setup
+    needs: [setup, test-dashboard-api, test-dashboard-auth]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -216,7 +309,7 @@ jobs:
 
   # Build other components in parallel
   build-components:
-    needs: setup
+    needs: [setup, test-mdrun-api]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

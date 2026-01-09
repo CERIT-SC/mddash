@@ -18,7 +18,7 @@ JUPYTER_SERVER_NAME = os.environ.get("JUPYTERHUB_SERVER_NAME", "")
 PREFIX = os.environ.get("JUPYTERHUB_SERVICE_PREFIX", "/").rstrip("/") + "/dash"
 API_PREFIX = f"{PREFIX}/api"
 
-DATA_DIR = Path("/mddash")
+DATA_DIR = Path(os.environ.get("DATA_DIR", "/mddash"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 NOTEBOOK_IMAGE = os.environ.get("NOTEBOOK_IMAGE", "quay.io/jupyter/base-notebook")

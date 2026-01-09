@@ -32,6 +32,21 @@ help: ## Show this help
 	@echo ""
 	@echo "ENV=$(ENV), TAG=$(tag)"
 
+# ==================== TEST ====================
+
+.PHONY: test
+test: test-api test-auth ## Run all dashboard tests
+
+.PHONY: test-api
+test-api: ## Run API tests
+	cd api && pip install -q -r requirements-dev.txt && pytest
+
+.PHONY: test-auth
+test-auth: ## Run auth tests
+	cd auth && pip install -q -r requirements-dev.txt && pytest
+
+# ==================== BUILD ====================
+
 # Build targets
 .PHONY: build
 build: build-proxy build-auth build-api build-s3sync ## Build all sidecar images
