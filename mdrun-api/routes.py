@@ -8,7 +8,9 @@ from decorators import handle_exceptions
 from enums import DeviceType
 from extensions import db
 from flask import Blueprint, Response, request
+from marshmallow import ValidationError
 from models import MdrunJob
+from sanitization import sanitize_bucket_name, sanitize_experiment_id, sanitize_extra_args, sanitize_tpr_name
 from schemas import JobCreateRequestSchema
 
 logger = logging.getLogger(__name__)
@@ -42,18 +44,32 @@ def create_job() -> Response:
     request_schema = JobCreateRequestSchema()
     data = cast("dict[str, Any]", request_schema.load(request.json or {}))
 
-    job: MdrunJob = MdrunJob.create_and_start(
-        experiment_id=data["experiment_id"],
-        tpr_name=data["tpr_name"],
-        bucket_name=data["bucket_name"],
-        pme=DeviceType.from_string(data["pme"]),
-        nb=DeviceType.from_string(data["nb"]),
-        np=data["np"],
-        ntomp=data["ntomp"],
-        extra_args=data.get("extra_args", ""),
-    )
+    experiment_id = sanitize_experiment_id(cast("str", data.get("experiment_id")))
+    tpr_name = sanitize_tpr_name(cast("str", data.get("tpr_name")))
+    bucket_name = sanitize_bucket_name(cast("str", data.get("bucket_name")))
+    extra_args = sanitize_extra_args(cast("str", data.get("extra_args", "")))
 
-    # TODO: add sanitization of user input
+    np = int(data["np"])
+    ntomp = int(data["ntomp"])
+    if np <= 0 or ntomp <= 0:
+        raise ValidationError("np and ntomp must be positive integers.")
+
+    try:
+        pme = DeviceType.from_string(cast("str", data["pme"]))
+        nb = DeviceType.from_string(cast("str", data["nb"]))
+    except ValueError as e:
+        raise ValidationError(str(e)) from e
+
+    job: MdrunJob = MdrunJob.create_and_start(
+        experiment_id=experiment_id,
+        tpr_name=tpr_name,
+        bucket_name=bucket_name,
+        pme=pme,
+        nb=nb,
+        np=np,
+        ntomp=ntomp,
+        extra_args=extra_args,
+    )
 
     return ApiResponse.success({"id": job.id, "status": job.status.value}, HTTPStatus.CREATED)
 

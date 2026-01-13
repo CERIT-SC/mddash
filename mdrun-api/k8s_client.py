@@ -1,4 +1,5 @@
 import logging
+import shlex
 from typing import TYPE_CHECKING, cast
 
 from config import GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
@@ -15,6 +16,10 @@ logger = logging.getLogger(__name__)
 config.load_incluster_config()
 core_v1 = client.CoreV1Api()
 batch_v1 = client.BatchV1Api()
+
+
+def _q(value: str) -> str:
+    return shlex.quote(value)
 
 
 def create_gromacs_job(
@@ -53,19 +58,54 @@ def create_gromacs_job(
     nb = nb.lower()
     pme = pme.lower()
 
+    exp_dir = f"/data/{experiment_id}"
+    exp_dir_q = _q(f"{exp_dir}/")
+    remote_q = _q(f"s3remote:{bucket_name}/{experiment_id}/")
+
+    extra_part = f" {extra_args}" if extra_args else ""
+
     gromacs_image = "cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2"
     s3_sync_image = "rclone/rclone:latest"  # TODO: lock version
 
-    gromacs_command = f"""
-        trap 'touch /data/job_completed' EXIT TERM INT
-        mpirun -np {np} gmx mdrun -ntomp {ntomp} -nb {nb} -pme {pme} -deffnm {deffnm} {extra_args} > >(tee {name}.out) 2> >(tee {name}.err >&2)
-        echo "Processing trajectory for visualization..."
-        gmx select -s {deffnm}.gro -on {deffnm}.p.ndx -select Protein && \
-        gmx trjconv -s {deffnm}.gro -f {deffnm}.xtc -o {deffnm}.pbc.xtc -pbc nojump -n {deffnm}.p.ndx && \
-        gmx trjconv -s {deffnm}.gro -f {deffnm}.pbc.xtc -o {deffnm}.fit.xtc -fit rot+trans -n {deffnm}.p.ndx && \
-        rm -f {deffnm}.p.ndx {deffnm}.pbc.xtc && \
-        echo "Trajectory processing completed."
-    """
+    gromacs_command = "\n".join(
+        [
+            "set -euo pipefail",
+            "trap 'touch /data/job_completed' EXIT TERM INT",
+            (
+                " ".join(
+                    [
+                        "mpirun",
+                        "-np",
+                        str(np),
+                        "gmx",
+                        "mdrun",
+                        "-ntomp",
+                        str(ntomp),
+                        "-nb",
+                        _q(nb),
+                        "-pme",
+                        _q(pme),
+                        "-deffnm",
+                        _q(deffnm),
+                    ]
+                )
+                + extra_part
+                + f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2)"
+            ),
+            "echo 'Processing trajectory for visualization...'",
+            f"gmx select -s {_q(f'{deffnm}.gro')} -on {_q(f'{deffnm}.p.ndx')} -select Protein",
+            (
+                f"gmx trjconv -s {_q(f'{deffnm}.gro')} -f {_q(f'{deffnm}.xtc')} -o {_q(f'{deffnm}.pbc.xtc')} "
+                f"-pbc nojump -n {_q(f'{deffnm}.p.ndx')}"
+            ),
+            (
+                f"gmx trjconv -s {_q(f'{deffnm}.gro')} -f {_q(f'{deffnm}.pbc.xtc')} -o {_q(f'{deffnm}.fit.xtc')} "
+                f"-fit rot+trans -n {_q(f'{deffnm}.p.ndx')}"
+            ),
+            f"rm -f {_q(f'{deffnm}.p.ndx')} {_q(f'{deffnm}.pbc.xtc')}",
+            "echo 'Trajectory processing completed.'",
+        ]
+    )
 
     # S3 sync commands using rclone - download initially, then continuously sync with final sync on completion
     s3_init_command = f"""
@@ -78,9 +118,9 @@ access_key_id = $S3_ACCESS_KEY
 secret_access_key = $S3_SECRET_KEY
 endpoint = $S3_ENDPOINT
 EOF
-        echo "Downloading experiment data from s3remote:{bucket_name}/{experiment_id}..." &&
-        mkdir -p /data/{experiment_id} &&
-        rclone sync --config /tmp/.config/rclone/rclone.conf s3remote:{bucket_name}/{experiment_id}/ /data/{experiment_id}/ --progress || echo "No existing data found, starting with empty directory"
+        echo "Downloading experiment data from object storage..." &&
+        mkdir -p {_q(exp_dir)} &&
+        rclone sync --config /tmp/.config/rclone/rclone.conf {remote_q} {exp_dir_q} --progress || echo "No existing data found, starting with empty directory"
     """
 
     s3_sync_command = f"""
@@ -98,12 +138,12 @@ EOF
             # Check if main job is done
             if [ -f /data/job_completed ]; then
                 echo "Job completed, performing final sync..." &&
-                rclone sync --config /tmp/.config/rclone/rclone.conf /data/{experiment_id}/ s3remote:{bucket_name}/{experiment_id}/ --checksum --progress &&
+                rclone sync --config /tmp/.config/rclone/rclone.conf {exp_dir_q} {remote_q} --checksum --progress &&
                 echo "Final sync completed, exiting..." &&
                 break
             fi
             # Regular sync every 10 seconds - allow syncing of changing files
-            rclone sync --config /tmp/.config/rclone/rclone.conf /data/{experiment_id}/ s3remote:{bucket_name}/{experiment_id}/ --ignore-checksum --retries 1 --quiet || echo "Sync attempt failed, retrying..."
+            rclone sync --config /tmp/.config/rclone/rclone.conf {exp_dir_q} {remote_q} --ignore-checksum --retries 1 --quiet || echo "Sync attempt failed, retrying..."
             sleep 10
         done
     """
@@ -145,7 +185,7 @@ EOF
                         {
                             "name": name,
                             "image": gromacs_image,
-                            "workingDir": f"/data/{experiment_id}",
+                            "workingDir": exp_dir,
                             "command": ["bash", "-c", gromacs_command],
                             "securityContext": {
                                 "runAsUser": 1000,

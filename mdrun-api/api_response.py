@@ -2,6 +2,7 @@ import logging
 from http import HTTPStatus
 
 from flask import Response, jsonify
+from marshmallow import ValidationError
 from werkzeug.exceptions import HTTPException
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,10 @@ class ApiResponse:
         """
         exc_info = False
 
-        if isinstance(error, HTTPException):
+        if isinstance(error, ValidationError):
+            status = HTTPStatus.BAD_REQUEST
+            message = error.messages if getattr(error, "messages", None) else str(error)
+        elif isinstance(error, HTTPException):
             status = error.code or status
             message = error.description or "Unknown error occurred."
         elif isinstance(error, Exception):

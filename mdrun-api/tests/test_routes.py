@@ -125,8 +125,7 @@ class TestCreateJob:
             content_type="application/json",
         )
 
-        # API returns 500 because decorator catches validation error
-        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        assert response.status_code == HTTPStatus.BAD_REQUEST
         data = json.loads(response.data)
         assert data["success"] is False
 
