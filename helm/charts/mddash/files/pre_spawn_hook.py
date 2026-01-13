@@ -4,7 +4,6 @@ import os
 import time
 from typing import TYPE_CHECKING, Any
 
-import aiohttp
 from kubernetes_asyncio import config
 from kubernetes_asyncio.client import (
     CoreV1Api,
@@ -188,27 +187,6 @@ async def _wait_for_ns_init(core_api: CoreV1Api, namespace: str, timeout: float 
         await asyncio.sleep(interval)
 
     raise TimeoutError(f"Timed out after {timeout:.1f}s waiting for Rancher namespace-auth in {namespace}")
-
-
-async def _create_s3_bucket(bucket_name: str) -> None:
-    """Create an S3 bucket if it doesn't exist."""
-    s3_endpoint = os.environ.get("S3_ENDPOINT")
-    access_key = os.environ.get("S3_ACCESS_KEY")
-    secret_key = os.environ.get("S3_SECRET_KEY")
-
-    if not access_key or not secret_key:
-        raise ValueError("S3 credentials not found in environment variables")
-
-    url = f"{s3_endpoint}/{bucket_name}"
-    auth = aiohttp.BasicAuth(access_key, secret_key)
-
-    async with aiohttp.ClientSession(auth=auth) as session:
-        try:
-            async with session.put(url) as response:
-                if response.status not in [200, 409]:
-                    print(f"Failed to create bucket {bucket_name}: {response.text}")
-        except Exception as e:
-            print(f"Error creating bucket {bucket_name}: {e}")
 
 
 def _get_security_context() -> dict:
@@ -404,9 +382,6 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:
     pvc_name = f"{helm_package}-user-pvc"
     volume_name = "mddash-volume"
 
-    # Start S3 bucket creation early (independent of K8s operations)
-    s3_task = asyncio.create_task(_create_s3_bucket(bucket_name))
-
     # Create namespace with resource quotas
     namespace_manifest = _get_namespace_manifest(
         user_namespace,
@@ -473,9 +448,6 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:
             body=_get_role_binding_manifest(hub_binding, "hub", hub_role, namespace=hub_namespace),
         ),
     )
-
-    # Ensure S3 bucket creation completes
-    await s3_task
 
     # Configure spawner
     spawner.namespace = user_namespace

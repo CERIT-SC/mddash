@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 HOSTNAME = os.environ.get("HOSTNAME", "localhost")
 JUPYTER_USER = os.environ.get("JUPYTERHUB_USER", "")
-JUPYTER_SERVER_NAME = os.environ.get("JUPYTERHUB_SERVER_NAME", "")
+JUPYTER_SERVER_NAME = os.environ.get("JUPYTERHUB_SERVER_NAME", "")  # TODO: unused
 PREFIX = os.environ.get("JUPYTERHUB_SERVICE_PREFIX", "/").rstrip("/") + "/dash"
 API_PREFIX = f"{PREFIX}/api"
 
@@ -56,10 +56,10 @@ if not all([CPU_REQUEST_QUOTA, MEMORY_REQUEST_QUOTA]):
         "NS_REQUESTS_CPU or NS_REQUESTS_MEMORY environment variables are not set. Namespace resource requests may not be configured properly."
     )
 
-S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "")
+S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "")  # TODO: not required in API container
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
-S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "")
-S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "")
+S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "")  # TODO: not required in API container
+S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "")  # TODO: not required in API container
 
 if not all([S3_ENDPOINT, S3_BUCKET, S3_ACCESS_KEY, S3_SECRET_KEY]):
     logger.warning("One or more S3 configuration environment variables are not set. S3 functionality may be limited.")
