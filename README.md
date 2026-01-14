@@ -76,9 +76,14 @@ You must manually create the required Kubernetes secrets in your target namespac
 
 First, get the namespace and package name from your config:
 ```bash
-NAMESPACE=$(yq '.namespace' config.${ENV}.yaml)
-PACKAGE=$(yq '.helm.package' config.${ENV}.yaml)
-kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+if [ "${ENV}" = "dev" ]; then
+  CONFIG=config.dev.yaml
+else
+  CONFIG=config.yaml
+fi
+NAMESPACE=$(yq '.namespace' "${CONFIG}")
+PACKAGE=$(yq '.helm.package' "${CONFIG}")
+kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 ```
 
 Then create the secrets (replace placeholders with actual values):
@@ -147,9 +152,6 @@ Shared infrastructure components that manage the platform and compute resources.
 - **MDRun API**
   - *Location*: `mdrun-api/`, `helm/charts/mdrun-api` (Configured in `helm/charts/mddash/values.yaml.tmpl`)
   - *Purpose*: Decouples simulation execution from user sessions, ensuring long-running GROMACS jobs continue even if the user logs out.
-- **MinIO S3**
-  - *Location*: Configured in `helm/charts/mddash/values.yaml.tmpl`
-  - *Purpose*: Provides a central, scalable storage layer accessible by all services to persist large simulation datasets and trajectories.
 - **Gromacs Tuner**
   - *Location*: [source code](https://github.com/CERIT-SC/gromacs-tuner) (Configured in `helm/charts/mddash/values.yaml.tmpl`)
   - *Purpose*: Automatically benchmarks and selects the most efficient simulation parameters to optimize performance and resource usage.
@@ -178,10 +180,17 @@ Isolated environments created for each logged-in user.
   - *Purpose*: Centralizes business logic to manage experiment state and coordinate actions between the user interface and backend simulation services.
 - **S3 Sync Daemon**
   - *Location*: `dashboard/s3-sync/`
-  - *Purpose*: Bridges the gap between local file access and cloud storage by automatically syncing user data to MinIO for persistence and sharing.
+  - *Purpose*: Bridges the gap between local file access and cloud storage by automatically syncing user data to S3 for persistence and sharing.
 - **Jupyter Notebooks**
   - *Location*: `notebook/`
   - *Purpose*: Offers an interactive environment for specific setup tasks (like protein preparation) that require manual visualization or intervention.
 - **User PVC**
   - *Location*: Configured in `helm/charts/mddash/pre_spawn_hook.py`
   - *Purpose*: Mounts the `/mddash` directory to a persistent volume, ensuring user data and configurations persist across sessions.
+
+### External Services
+Services outside the Kubernetes cluster that the application depends on.
+
+- **S3**
+  - *Location*: Endpoint configured in `config.yaml` and `config.dev.yaml` (secrets stored in `${PACKAGE}-s3-creds`)
+  - *Purpose*: Provides a central, scalable storage layer accessible by all services to persist large simulation datasets and trajectories.

@@ -18,7 +18,7 @@ Each user pod runs 5 containers:
 | **s3-sync** | `dashboard/s3-sync/` | - | rclone bidirectional S3 sync daemon |
 | **notebook** | (stock image) | 8080 | JupyterHub singleuser |
 
-**Data flow**: User → Caddy proxy → Auth check → API/Notebook → K8s resources + mdrun-api → S3/MinIO storage
+**Data flow**: User → Caddy proxy → Auth check → API/Notebook → K8s resources + mdrun-api → S3 storage
 
 ## Development Workflow
 
@@ -84,7 +84,7 @@ export const get_experiment = async (id: string): Promise<ApiData<Experiment>> =
 - `helm/charts/mddash/files/pre_spawn_hook.py` creates per-user namespaces with RBAC and configures sidecar containers on JupyterHub spawn
 
 ### Storage
-- MinIO (S3-compatible) for experiment persistence
+- S3 for experiment persistence
 - SQLite databases for API state (`experiments.db` in dashboard, mdrun-api uses PostgreSQL in prod)
 - s3-sync sidecar handles bidirectional sync between S3 and `/mddash` volume
 

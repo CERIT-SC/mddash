@@ -28,7 +28,7 @@ _test_data_dir = tempfile.mkdtemp(prefix="mdrun_test_")
 # Set test environment before importing app modules
 os.environ["DATA_DIR"] = _test_data_dir
 os.environ["APP_ENV"] = "test"
-os.environ["S3_ENDPOINT"] = "http://minio.test:9000"
+os.environ["S3_ENDPOINT"] = "http://s3.test:9000"
 os.environ["S3_ACCESS_KEY"] = "test-access-key"
 os.environ["S3_SECRET_KEY"] = "test-secret-key"
 

@@ -73,24 +73,81 @@ for i, item in enumerate(items):
     print(i, item)
 ```
 
+### Structural Pattern Matching (Python 3.10+)
+Use `match`/`case` statements for complex conditional logic involving type checks or value unpacking. Avoid long `if`/`elif` chains when matching against patterns.
+
+**Bad:**
+```python
+def handle_response(response):
+    if isinstance(response, dict) and "error" in response:
+        return f"Error: {response['error']}"
+    elif isinstance(response, dict) and "data" in response:
+        return response["data"]
+    elif response is None:
+        return "No response"
+    else:
+        return str(response)
+```
+
+**Good:**
+```python
+def handle_response(response):
+    match response:
+        case {"error": msg}:
+            return f"Error: {msg}"
+        case {"data": data}:
+            return data
+        case None:
+            return "No response"
+        case _:
+            return str(response)
+```
+
 ## 2. Type Safety & Documentation
 Python is dynamically typed, but we enforce strict static analysis to catch bugs early.
 
 ### Strict Typing
 Annotate all function arguments and return values. Avoid `Any`.
 
+Use **built-in generics** (PEP 585) instead of importing from `typing`. Since Python 3.9+, `list`, `dict`, `tuple`, `set`, and `type` are directly subscriptable.
+
 **Bad:**
 ```python
-def process(data):
-    return data["id"]
+from typing import List, Dict, Optional  # ❌ Deprecated imports
+
+def process(data: Dict[str, Any]) -> Optional[int]:
+    return data.get("id")
 ```
 
 **Good:**
 ```python
-from typing import Dict, Any
+from typing import Any  # Only import types not available as builtins
 
-def process(data: Dict[str, Any]) -> int:
-    return data["id"]
+def process(data: dict[str, Any]) -> int | None:
+    return data.get("id")
+```
+
+### Union Types (Python 3.10+)
+Use the `|` operator instead of `Union` or `Optional` from the `typing` module.
+
+**Bad:**
+```python
+from typing import Union, Optional
+
+def find(id: int) -> Optional[User]:  # ❌ Verbose
+    ...
+
+def parse(value: Union[str, int]) -> str:  # ❌ Verbose
+    ...
+```
+
+**Good:**
+```python
+def find(id: int) -> User | None:  # ✅ Clean
+    ...
+
+def parse(value: str | int) -> str:  # ✅ Clean
+    ...
 ```
 
 ### Docstrings
@@ -208,7 +265,7 @@ DB_URL = os.environ.get("DB_URL")
 ```
 
 ## 6. Testing with Pytest
-> ⚠️ **Note:** Only write tests when explicitly requested.
+> ⚠️ **Note:** Only write tests when explicitly requested or if the codebase already includes tests.
 
 ### Fixtures
 Use `pytest.fixture` for setup/teardown logic.
@@ -233,19 +290,33 @@ def test_double(inp, out):
 ```
 
 ## 7. Resource Management
-Always use Context Managers (`with` statements).
+Always use Context Managers (`with` statements) to ensure resources are properly released.
 
 **Bad:**
 ```python
-f = open("file.txt")
-data = f.read()
-f.close()
+conn = db.connect()
+result = conn.execute(query)
+conn.close()  # ❌ Won't run if execute() raises an exception
 ```
 
 **Good:**
 ```python
-with open("file.txt") as f:
-    data = f.read()
+with db.connect() as conn:
+    result = conn.execute(query)
+# Connection is always closed, even on exception
+```
+
+**Good (file I/O with pathlib):**
+```python
+from pathlib import Path
+
+file = Path("file.txt")
+data = file.read_text()  # Simple read, auto-closes
+
+# For larger files or line-by-line processing:
+with file.open() as f:
+    for line in f:
+        process(line)
 ```
 
 ## 8. Critical Anti-Patterns
@@ -272,3 +343,32 @@ def append(item, list=None):
 
 ### Inline Imports
 **Never** place imports inside functions. Imports belong at the top of the file.
+
+### Unbounded Loops
+> ⚠️ **Warning:** Avoid `while True` in production code without safeguards.
+
+Unbounded loops can cause infinite execution, resource exhaustion, or hung processes. Always include a **maximum iteration limit** or **timeout** for retry/polling logic.
+
+**Bad:**
+```python
+while True:  # ❌ Can hang forever
+    result = fetch_data()
+    if result:
+        break
+    time.sleep(1)
+```
+
+**Good:**
+```python
+MAX_ATTEMPTS = 10
+
+for attempt in range(MAX_ATTEMPTS):
+    result = fetch_data()
+    if result:
+        break
+    time.sleep(1)
+else:
+    raise TimeoutError(f"Failed after {MAX_ATTEMPTS} attempts")
+```
+
+> **Exception:** `while True` is acceptable for **intentional** infinite loops like event loops, servers, or daemons—but these should handle graceful shutdown signals.
