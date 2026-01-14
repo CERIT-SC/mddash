@@ -21,6 +21,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate secrets
+        run: |
+          MISSING_SECRETS=()
+
+          check_secret() {
+            if [ -z "$1" ]; then
+              MISSING_SECRETS+=("$2")
+            fi
+          }
+
+          check_secret "${{ secrets.CODECOV_TOKEN }}" "CODECOV_TOKEN"
+          check_secret "${{ secrets.REGISTRY_USERNAME }}" "REGISTRY_USERNAME"
+          check_secret "${{ secrets.REGISTRY_PASSWORD }}" "REGISTRY_PASSWORD"
+          check_secret "${{ secrets.KUBECONFIG }}" "KUBECONFIG"
+          check_secret "${{ secrets.OAUTH_CLIENT_ID }}" "OAUTH_CLIENT_ID"
+          check_secret "${{ secrets.OAUTH_CLIENT_SECRET }}" "OAUTH_CLIENT_SECRET"
+          check_secret "${{ secrets.S3_ACCESS_KEY }}" "S3_ACCESS_KEY"
+          check_secret "${{ secrets.S3_SECRET_KEY }}" "S3_SECRET_KEY"
+          check_secret "${{ secrets.MDREPO_CLIENT_ID }}" "MDREPO_CLIENT_ID"
+          check_secret "${{ secrets.MDREPO_CLIENT_SECRET }}" "MDREPO_CLIENT_SECRET"
+          check_secret "${{ secrets.TUNER_USER }}" "TUNER_USER"
+          check_secret "${{ secrets.TUNER_PASSWORD }}" "TUNER_PASSWORD"
+
+          if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
+            for secret in "${MISSING_SECRETS[@]}"; do
+              echo "::error::Secret $secret is missing or empty"
+            done
+            exit 1
+          fi
+
       - name: Install yq
         run: |
           sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
