@@ -13,11 +13,11 @@ RUN pip install --no-cache-dir -r requirements.txt gunicorn
 
 COPY --chown=app:app . .
 
-RUN mkdir -p /data && chown app:app /data
+RUN mkdir -p /mddash && chown app:app /mddash
 
 USER app
 
-ENV DATA_DIR=/data
+ENV DATA_DIR=/mddash
 
 EXPOSE 5000
 
