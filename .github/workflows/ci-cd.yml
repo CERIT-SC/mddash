@@ -31,7 +31,6 @@ jobs:
             fi
           }
 
-          check_secret "${{ secrets.CODECOV_TOKEN }}" "CODECOV_TOKEN"
           check_secret "${{ secrets.REGISTRY_USERNAME }}" "REGISTRY_USERNAME"
           check_secret "${{ secrets.REGISTRY_PASSWORD }}" "REGISTRY_PASSWORD"
           check_secret "${{ secrets.KUBECONFIG }}" "KUBECONFIG"
@@ -95,16 +94,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run tests
-        run: pytest --cov=. --cov-report=xml --cov-report=term-missing
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: dashboard/api/coverage.xml
-          flags: dashboard-api
-          fail_ci_if_error: false
+        run: pytest
 
   test-dashboard-auth:
     runs-on: ubuntu-latest
@@ -125,16 +115,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run tests
-        run: pytest --cov=. --cov-report=xml --cov-report=term-missing
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: dashboard/auth/coverage.xml
-          flags: dashboard-auth
-          fail_ci_if_error: false
+        run: pytest
 
   test-mdrun-api:
     runs-on: ubuntu-latest
@@ -155,16 +136,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run tests
-        run: pytest --cov=. --cov-report=xml --cov-report=term-missing
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: mdrun-api/coverage.xml
-          flags: mdrun-api
-          fail_ci_if_error: false
+        run: pytest
 
   # ==================== BUILDS ====================
   # Build images after tests pass
