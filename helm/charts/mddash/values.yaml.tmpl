@@ -277,7 +277,7 @@ gromacs-tuner:
           memory: "{{ $cfg.gromacsTuner.ray.head.resources.requests.memory }}"
 
     worker:
-      replicas: {{ $cfg.gromacsTuner.ray.worker.replicas }}
+      maxReplicas: {{ $cfg.gromacsTuner.ray.worker.maxReplicas }}
       numCpu: {{ $cfg.gromacsTuner.ray.worker.resources.limits.cpu }}
       numGpu: {{ index $cfg.gromacsTuner.ray.worker.resources.limits "nvidia.com/gpu" }}
       nodeSelector:

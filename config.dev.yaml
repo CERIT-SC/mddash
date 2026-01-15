@@ -100,7 +100,7 @@ gromacsTuner:
           cpu: "200m"
           memory: "512Mi"
     worker:
-      replicas: 1
+      maxReplicas: 1
       gpuProduct: "NVIDIA-A40"
       resources:
         limits:
