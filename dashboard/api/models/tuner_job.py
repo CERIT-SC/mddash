@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -19,7 +18,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .experiment import Experiment
 
 logger = logging.getLogger(__name__)
-status_cache: TTLCache = TTLCache(maxsize=100, ttl=0.2)  # 200ms
+status_cache: TTLCache = TTLCache(maxsize=100, ttl=30)  # 30s
 
 
 class TunerJob(db.Model):  # type: ignore
@@ -89,8 +88,11 @@ class TunerJob(db.Model):  # type: ignore
                 self.error_message = err_msg
                 db.session.commit()
             return status
+        except TimeoutError:
+            logger.warning(f"Timeout while fetching status for tuner job {self.tuner_run_id}")
+            return {}
         except Exception:
-            logger.exception(f"Failed to fetch status for tuner job {self.tuner_run_id}")
+            logger.exception(f"Unexpected error while fetching status for tuner job {self.tuner_run_id}")
             return {}
 
     @staticmethod

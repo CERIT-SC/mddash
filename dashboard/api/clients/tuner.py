@@ -4,8 +4,13 @@ import requests
 from config import TUNER_PASSWORD, TUNER_URL, TUNER_USER
 from requests import HTTPError, Response
 from requests.auth import HTTPBasicAuth
+from requests.exceptions import Timeout
 
 AUTH = HTTPBasicAuth(TUNER_USER, TUNER_PASSWORD)
+
+DEFAULT_TIMEOUT = 5
+SUBMIT_TIMEOUT = 30
+DELETE_TIMEOUT = 10
 
 
 def get_tuner_response_data(response: Response) -> dict:
@@ -47,7 +52,7 @@ def run_submit(tpr_path: Path) -> dict:
     """
     with tpr_path.open("rb") as f:
         files = {"file": f}
-        response = requests.post(f"{TUNER_URL}/tuner_runs", files=files, auth=AUTH, timeout=30)
+        response = requests.post(f"{TUNER_URL}/tuner_runs", files=files, auth=AUTH, timeout=SUBMIT_TIMEOUT)
     return get_tuner_response_data(response)
 
 
@@ -62,10 +67,14 @@ def poll_status(job_id: str) -> dict:
         The response from the tuner.
 
     Raises:
+        TimeoutError: If the request timed out.
         HTTPError: If the request fails.
     """
-    response = requests.get(f"{TUNER_URL}/tuner_runs/{job_id}/status", auth=AUTH, timeout=5)
-    return get_tuner_response_data(response)
+    try:
+        response = requests.get(f"{TUNER_URL}/tuner_runs/{job_id}/status", auth=AUTH, timeout=DEFAULT_TIMEOUT)
+        return get_tuner_response_data(response)
+    except Timeout as e:
+        raise TimeoutError(f"Tuner poll status timed out for job {job_id}") from e
 
 
 def delete_job(job_id: str) -> dict:
@@ -81,7 +90,7 @@ def delete_job(job_id: str) -> dict:
     Raises:
         HTTPError: If the request fails.
     """
-    response = requests.delete(f"{TUNER_URL}/tuner_runs/{job_id}", auth=AUTH, timeout=10)
+    response = requests.delete(f"{TUNER_URL}/tuner_runs/{job_id}", auth=AUTH, timeout=DELETE_TIMEOUT)
     return get_tuner_response_data(response)
 
 
