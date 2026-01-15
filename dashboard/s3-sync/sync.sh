@@ -7,7 +7,7 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') [S3-SYNC] $1"
 }
 
-ROBUST_FLAGS="--force --local-no-check-updated --create-empty-src-dirs --retries 3 --retries-sleep 2s --ignore-errors"
+ROBUST_FLAGS="--force --local-no-check-updated --create-empty-src-dirs --retries 3 --retries-sleep 2s --ignore-errors --fast-list"
 RCLONE_FILTER_FILE="/rclone-filters.txt"
 
 setup_rclone() {
@@ -32,9 +32,10 @@ EOF
     log "Creating bucket if it doesn't exist..."
     rclone mkdir s3remote:${S3_BUCKET} 2>&1 || log "Bucket creation failed or already exists"
 
-    # Initial sync from S3
+    # Initial sync from S3 - use copy + update instead of sync
+    # This avoids deleting local files and only overwrites if S3 has a newer version
     log "Initial sync from S3 to /mddash..."
-    rclone sync s3remote:${S3_BUCKET} /mddash --create-empty-src-dirs --log-level INFO --filter-from "$RCLONE_FILTER_FILE"
+    rclone copy s3remote:${S3_BUCKET} /mddash --create-empty-src-dirs --log-level INFO --filter-from "$RCLONE_FILTER_FILE" --update --fast-list
 
     # Create marker file for bisync
     if [ ! -f "/mddash/.s3-init" ]; then
