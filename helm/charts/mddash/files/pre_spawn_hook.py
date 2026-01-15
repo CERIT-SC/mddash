@@ -123,7 +123,9 @@ async def _resource_exists(method: Any, **kwargs: object) -> bool:  # noqa: ANN4
         await method(**kwargs)
         return True
     except ApiException as e:
-        if e.status == 404:
+        # In Rancher environments, a 403 Forbidden can occur briefly after
+        # resource creation before permissions propagate to the proxy.
+        if e.status in (403, 404):
             return False
         raise
 
@@ -180,10 +182,15 @@ async def _wait_for_ns_init(core_api: CoreV1Api, namespace: str, timeout: float 
     """Wait until Rancher populates initial RBAC for a new project namespace."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        ns_obj = await core_api.read_namespace(name=namespace)  # type: ignore[misc]
-        annotations = getattr(getattr(ns_obj, "metadata", None), "annotations", None)
-        if _ns_initialized(annotations):
-            return
+        try:
+            ns_obj = await core_api.read_namespace(name=namespace)  # type: ignore[misc]
+            annotations = getattr(getattr(ns_obj, "metadata", None), "annotations", None)
+            if _ns_initialized(annotations):
+                return
+        except ApiException as e:
+            # Catch 403/404 during the propagation window
+            if e.status not in (403, 404):
+                raise
         await asyncio.sleep(interval)
 
     raise TimeoutError(f"Timed out after {timeout:.1f}s waiting for Rancher namespace-auth in {namespace}")
