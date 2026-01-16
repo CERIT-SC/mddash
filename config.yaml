@@ -102,13 +102,12 @@ gromacsTuner:
     worker:
       maxReplicas: 2
       idleTimeoutSeconds: 3600
-      gpuProduct: "NVIDIA-A40"
       resources:
         limits:
           cpu: "8"  # TODO: ask for more (should be at least 32)
           memory: "128Gi"
-          nvidia.com/gpu: "1"
+          nvidia.com/mig-1g.10gb: "1"
         requests:
           cpu: "8"  # should to be same as limit
           memory: "16Gi"
-          nvidia.com/gpu: "1"
+          nvidia.com/mig-1g.10gb: "1"

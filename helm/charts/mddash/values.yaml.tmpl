@@ -250,12 +250,7 @@ gromacs-tuner:
   # API resources
   api:
     resources:
-      limits:
-        cpu: "{{ $cfg.gromacsTuner.api.resources.limits.cpu }}"
-        memory: "{{ $cfg.gromacsTuner.api.resources.limits.memory }}"
-      requests:
-        cpu: "{{ $cfg.gromacsTuner.api.resources.requests.cpu }}"
-        memory: "{{ $cfg.gromacsTuner.api.resources.requests.memory }}"
+{{ $cfg.gromacsTuner.api.resources | toYAML | indent 6 }}
 
   # Storage configuration
   storage:
@@ -271,25 +266,17 @@ gromacs-tuner:
 
     head:
       resources:
-        limits:
-          cpu: "{{ $cfg.gromacsTuner.ray.head.resources.limits.cpu }}"
-          memory: "{{ $cfg.gromacsTuner.ray.head.resources.limits.memory }}"
-        requests:
-          cpu: "{{ $cfg.gromacsTuner.ray.head.resources.requests.cpu }}"
-          memory: "{{ $cfg.gromacsTuner.ray.head.resources.requests.memory }}"
+{{ $cfg.gromacsTuner.ray.head.resources | toYAML | indent 8 }}
 
     worker:
       maxReplicas: {{ $cfg.gromacsTuner.ray.worker.maxReplicas }}
       numCpu: {{ $cfg.gromacsTuner.ray.worker.resources.limits.cpu }}
-      numGpu: {{ index $cfg.gromacsTuner.ray.worker.resources.limits "nvidia.com/gpu" }}
-      nodeSelector:
-        nvidia.com/gpu.product: "{{ $cfg.gromacsTuner.ray.worker.gpuProduct }}"
+      {{- $numGpu := 0 -}}
+      {{- range $k, $v := $cfg.gromacsTuner.ray.worker.resources.limits -}}
+        {{- if or (strings.HasPrefix "nvidia.com/" $k) (strings.Contains (strings.ToLower $k) "gpu") -}}
+          {{- $numGpu = $v -}}
+        {{- end -}}
+      {{- end }}
+      numGpu: {{ $numGpu }}
       resources:
-        limits:
-          cpu: "{{ $cfg.gromacsTuner.ray.worker.resources.limits.cpu }}"
-          memory: "{{ $cfg.gromacsTuner.ray.worker.resources.limits.memory }}"
-          nvidia.com/gpu: '{{ index $cfg.gromacsTuner.ray.worker.resources.limits "nvidia.com/gpu" }}'
-        requests:
-          cpu: "{{ $cfg.gromacsTuner.ray.worker.resources.requests.cpu }}"
-          memory: "{{ $cfg.gromacsTuner.ray.worker.resources.requests.memory }}"
-          nvidia.com/gpu: '{{ index $cfg.gromacsTuner.ray.worker.resources.requests "nvidia.com/gpu" }}'
+{{ $cfg.gromacsTuner.ray.worker.resources | toYAML | indent 8 }}
