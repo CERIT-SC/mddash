@@ -101,6 +101,7 @@ gromacsTuner:
           memory: "512Mi"
     worker:
       maxReplicas: 1
+      idleTimeoutSeconds: 3600
       gpuProduct: "NVIDIA-A40"
       resources:
         limits:

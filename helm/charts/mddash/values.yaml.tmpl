@@ -266,6 +266,8 @@ gromacs-tuner:
   ray:
     version: "2.42.1"
     image: "{{ $cfg.gromacsTuner.ray.image }}"
+    autoscaler:
+      idleTimeoutSeconds: "{{ $cfg.gromacsTuner.ray.worker.idleTimeoutSeconds }}"
 
     head:
       resources:
