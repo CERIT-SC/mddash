@@ -42,16 +42,29 @@ const TunerTable = (props: TunerTableProps) => {
 
     const [confirmChoiceDialog, setConfirmChoiceDialog] = useState(false);
 
-    const sortedRows = useMemo(
-        () =>
-            [...rows].sort((a, b) => {
-                if (a.performance === null && b.performance === null) return 0;
-                if (a.performance === null) return 1;
-                if (b.performance === null) return -1;
-                return b.performance - a.performance;
-            }),
-        [rows],
-    );
+    const sortedRows = useMemo(() => {
+        const statusRank: Record<JobStatus, number> = {
+            TERMINATED: 0,
+            RUNNING: 1,
+            ERROR: 2,
+            PENDING: 3,
+        };
+
+        return [...rows].sort((a, b) => {
+            // Both performances missing -> sort by status
+            if (a.performance === null && b.performance === null) return statusRank[a.status] - statusRank[b.status];
+
+            // Treat null performance as worst
+            if (a.performance === null) return 1;
+            if (b.performance === null) return -1;
+
+            // Different measured performance -> sort descending
+            if (a.performance !== b.performance) return b.performance - a.performance;
+
+            // Same performance -> fallback to status ordering
+            return statusRank[a.status] - statusRank[b.status];
+        });
+    }, [rows]);
 
     const handleRadioClick = useCallback(
         (row: TunerTrial, isOptimal: boolean) => {

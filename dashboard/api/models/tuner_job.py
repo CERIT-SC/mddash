@@ -218,16 +218,12 @@ class TunerJob(db.Model):  # type: ignore
 
         current_status = self._status()
 
-        # Convert RUNNING trials to TERMINATED
-        trials = current_status.get("trials", [])
-        for trial in trials:
-            if trial.get("status") == "RUNNING":
-                trial["status"] = "TERMINATED"
+        # Only preserve trials with performance data
+        trials = [trial for trial in current_status.get("trials", []) if trial.get("performance") is not None]
 
         # Update summary counts
         summary = current_status.get("summary", {})
-        terminated_count = summary.get("TERMINATED", 0) + summary.get("RUNNING", 0)
-        summary["TERMINATED"] = terminated_count
+        summary["TERMINATED"] = len(trials)
         summary["RUNNING"] = 0
 
         self._preserved_summary = json.dumps(summary)
