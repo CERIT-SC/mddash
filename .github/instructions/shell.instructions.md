@@ -2,33 +2,45 @@
 applyTo: '**/*.sh'
 ---
 
-# Shell Scripting Rules for AI Agents
+# Shell Scripting Guidelines
 
-## Mandatory Header
-ALWAYS include:
+Robust, portable Bash scripts.
+
+<context>
+Essential patterns for writing safe, maintainable shell scripts. Focus on error handling, input validation, and security.
+</context>
+
+<best_practices>
+
+<header>
+### Mandatory Header
 ```bash
 #!/bin/bash
 set -euo pipefail  # Exit on error, unset vars, pipeline failures
 ```
+</header>
 
-## Core Rules
-
+<variables>
 ### Variables
-- **ALWAYS quote variables**: `"$var"` not `$var`
-- Use arrays for lists: `files=("f1" "f2")` then `"${files[@]}"`
-- Naming: `lowercase_with_underscores`, `CONSTANTS_UPPERCASE`
-- Mark constants: `readonly MAX_RETRIES=3`
+- **Always quote:** `"$var"` not `$var`
+- **Arrays for lists:** `files=("f1" "f2")` then `"${files[@]}"`
+- **Naming:** `lowercase_with_underscores`, `CONSTANTS_UPPERCASE`
+- **Constants:** `readonly MAX_RETRIES=3`
+</variables>
 
+<functions>
 ### Functions
 ```bash
 function_name() {
     local arg1="$1"
-    local arg2="${2:-default}"  # With default
+    local arg2="${2:-default}"
     # Function body
-    return 0  # Explicit return
+    return 0
 }
 ```
+</functions>
 
+<error_handling>
 ### Error Handling
 ```bash
 # Check commands
@@ -42,12 +54,11 @@ command || { echo "Error" >&2; exit 1; }
 
 # Cleanup trap
 trap 'rm -rf "$TEMP_DIR"' EXIT SIGINT SIGTERM
-
-# Exit codes: 0=success, 1=general error, 2=invalid args, 3+=custom
 ```
+</error_handling>
 
+<validation>
 ### Input Validation
-ALWAYS validate:
 ```bash
 # Check argument count
 [[ $# -lt 2 ]] && { echo "Usage: $0 <arg1> <arg2>" >&2; exit 2; }
@@ -61,22 +72,22 @@ ALWAYS validate:
 # Check file access
 [[ ! -r "$file" ]] && { echo "Error: Cannot read $file" >&2; exit 1; }
 ```
+</validation>
 
+<security>
 ### Security
 ```bash
-# NEVER hardcode credentials
-PASSWORD="${PASSWORD:?Error: PASSWORD not set}"  # Require env var
-
-# NEVER use eval with user input
-# BAD: eval "rm $user_input"
-# GOOD: Use arrays and proper quoting
+# Require env vars
+PASSWORD="${PASSWORD:?Error: PASSWORD not set}"
 
 # Validate before dangerous operations
 [[ -z "$DIR" || "$DIR" == "/" ]] && { echo "Error: Invalid DIR" >&2; exit 1; }
 rm -rf "${DIR:?}/"*
 ```
+</security>
 
-### Commands & Patterns
+<patterns>
+### Modern Patterns
 ```bash
 # Use [[ ]] not [ ]
 [[ "$var" == "value" ]] && echo "Match"
@@ -84,56 +95,22 @@ rm -rf "${DIR:?}/"*
 # Modern command substitution
 result=$(command args)  # NOT: result=`command args`
 
-# Parameter expansion (prefer over external commands)
+# Parameter expansion
 filename="${path##*/}"     # basename
 dirname="${path%/*}"       # dirname
-extension="${filename##*.}"
 
 # Read files
-content=$(<file.txt)       # NOT: content=$(cat file.txt)
+content=$(<file.txt)       # NOT: $(cat file.txt)
 
 # Loop over files
 for file in *.txt; do      # NOT: for file in $(ls *.txt)
     [[ -f "$file" ]] && process "$file"
 done
-
-# Case statements for multi-condition
-case "$var" in
-    opt1) action1 ;;
-    opt2) action2 ;;
-    *) echo "Unknown" >&2; exit 1 ;;
-esac
 ```
+</patterns>
 
-### Output
-```bash
-# Errors to stderr
-echo "Error message" >&2
-
-# Logging function
-log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"
-}
-
-# Suppress output
-command &> /dev/null
-```
-
-### Dependencies
-```bash
-check_dependencies() {
-    local missing=()
-    for cmd in "$@"; do
-        command -v "$cmd" &> /dev/null || missing+=("$cmd")
-    done
-    [[ ${#missing[@]} -gt 0 ]] && {
-        echo "Error: Missing: ${missing[*]}" >&2
-        exit 1
-    }
-}
-```
-
-## Complete Script Template
+<template>
+### Template
 ```bash
 #!/bin/bash
 set -euo pipefail
@@ -145,39 +122,41 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$LOG_FILE"; }
 cleanup() { log "Cleanup"; rm -rf "$TEMP_DIR"; }
 
 main() {
-    # Validate arguments
     [[ $# -lt 1 ]] && { echo "Usage: $0 <arg>" >&2; exit 2; }
     
     local arg="$1"
     trap cleanup EXIT SIGINT SIGTERM
     
-    # Script logic
     log "Processing $arg"
 }
 
 main "$@"
 ```
+</template>
 
-## ShellCheck Integration
-RUN before committing:
-```bash
-shellcheck script.sh
-shellcheck -x script.sh  # Follow sourced files
-```
+<anti_patterns>
+### Quick Reference
+| Good | Bad |
+|------|-----|
+| `"$var"` | `$var` |
+| `[[ ]]` | `[ ]` |
+| `$(cmd)` | `` `cmd` `` |
+| `$(<file)` | `$(cat file)` |
+| `for f in *.txt` | `for f in $(ls)` |
+| `command -v` | `which` |
+</anti_patterns>
 
-Common fixes:
-- Quote all variables
-- Use `[[ ]]` not `[ ]`
-- Use `$()` not backticks
-- Use `command -v` to check commands
-- Use arrays for lists
+</best_practices>
 
-## Quick Reference
-| Pattern | Good | Bad |
-|---------|------|-----|
-| Quote vars | `"$var"` | `$var` |
-| Test | `[[ ]]` | `[ ]` |
-| Substitution | `$(cmd)` | `` `cmd` `` |
-| Read file | `$(<file)` | `$(cat file)` |
-| Loop files | `for f in *.txt` | `for f in $(ls)` |
-| Check cmd | `command -v` | `which` |
+<boundaries>
+- ✅ **Always:** Include `set -euo pipefail`
+- ✅ **Always:** Quote all variables (`"$var"`)
+- ✅ **Always:** Validate inputs and arguments
+- ✅ **Always:** Use `[[ ]]` for tests
+- ✅ **Always:** Use `$(cmd)` for substitution
+- ✅ **Always:** Add cleanup traps
+- ✅ **Always:** Run `shellcheck` before committing
+- 🚫 **Never:** Hardcode credentials
+- 🚫 **Never:** Use `eval` with user input
+- 🚫 **Never:** Use `[ ]` or backticks
+</boundaries>

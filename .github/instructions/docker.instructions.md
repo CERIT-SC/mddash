@@ -4,39 +4,20 @@ applyTo: "**/Dockerfile,**/Dockerfile.*,**/*.dockerfile,**/docker-compose*.yml,*
 
 # Docker Guidelines
 
-## Context
-Standardized guidelines for containerizing applications to ensure reproducibility, security, and efficiency.
+Containerization best practices for reproducibility, security, and efficiency.
+
+<context>
 - **Immutability:** Never modify running containers; create new images for changes.
 - **Efficiency:** Minimize image size and build time (multi-stage, caching).
-- **Security:** Run as non-root, scan for vulnerabilities, and use minimal base images.
+- **Security:** Run as non-root, scan for vulnerabilities, use minimal base images.
 - **Portability:** Externalize configuration; ensure images run consistently everywhere.
+</context>
 
-## Boundaries
+<best_practices>
 
-### ✅ Always
-- **Multi-Stage Builds:** Use multi-stage builds to separate build dependencies from the runtime environment.
-- **Non-Root User:** Create and switch to a non-root user (e.g., `appuser`) in the final stage.
-- **Pin Versions:** Use specific tags for base images (e.g., `node:18-alpine3.19` instead of `node:alpine`).
-- **.dockerignore:** Maintain a comprehensive `.dockerignore` to exclude `.git`, `node_modules`, secrets, and temporary files.
-- **Exec Form:** Use the JSON array syntax for `CMD` and `ENTRYPOINT` (e.g., `CMD ["node", "app.js"]`) to ensure signals are passed correctly.
-- **Health Checks:** Define a `HEALTHCHECK` instruction to monitor application status.
-
-### ⚠️ Ask First
-- **Base Image OS:** Ask before choosing between Alpine (smaller) and Debian/Ubuntu (better compatibility) if not specified.
-- **Capabilities:** Ask before adding or dropping Linux capabilities (e.g., `--cap-drop ALL` is secure but may break apps).
-- **Exposing Ports:** Verify which ports need to be exposed and published.
-- **Persistence:** Ask about volume strategies for stateful services.
-
-### 🚫 Never
-- **Secrets in Images:** Never `COPY` secrets or credentials into the image. Use environment variables or secret mounts.
-- **Latest Tag:** Never use the `latest` tag for base images in production builds.
-- **Root Processes:** Never run the main application process as root (UID 0).
-- **Dev Dependencies:** Never include build tools (git, gcc, etc.) or development dependencies in the final production image.
-- **Mutable Tags:** Avoid overwriting image tags; use unique semantic versions or commit SHAs.
-
-## Examples
-
-### Dockerfile Best Practices
+<dockerfile>
+### Multi-Stage Builds
+Separate build dependencies from runtime.
 
 ```dockerfile
 # ❌ Bad: Single stage, running as root, vague tag
@@ -57,31 +38,40 @@ RUN npm run build
 # Stage 2: Runtime
 FROM node:18-alpine3.19 AS runner
 WORKDIR /app
-# Create non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-# Copy only necessary files
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
-# Install only production deps
 RUN npm ci --only=production && npm cache clean --force
-# Set permissions
 RUN chown -R appuser:appgroup /app
 USER appuser
 EXPOSE 3000
-# Use exec form
 CMD ["node", "dist/main.js"]
 ```
 
-### Docker Compose Best Practices
+### Layer Caching
+Copy dependency files before source code.
+
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+CMD ["node", "server.js"]
+```
+</dockerfile>
+
+<compose>
+### Docker Compose
 
 ```yaml
-# ❌ Bad: Version 2 (legacy), no resource limits
+# ❌ Bad: Version 2 (legacy), no resource limits, hardcoded secret
 version: '2'
 services:
   db:
     image: postgres
     environment:
-      POSTGRES_PASSWORD: password123 # Hardcoded secret
+      POSTGRES_PASSWORD: password123
 
 # ✅ Good: Modern format, explicit versions, secrets
 services:
@@ -107,27 +97,30 @@ secrets:
 volumes:
   db_data:
 ```
+</compose>
 
-### Optimization Patterns
+<structure>
+### Project Structure
+- `Dockerfile` in service root directory
+- `.dockerignore` alongside Dockerfile
+- `docker-compose.yml` for local development
+- `docker-compose.prod.yml` for production overrides
+</structure>
 
-**Dependency Caching (Node.js example):**
-Copy package files and install dependencies *before* copying source code to leverage Docker layer caching.
+</best_practices>
 
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-# 1. Copy dependency definitions
-COPY package*.json ./
-# 2. Install dependencies (cached if package.json doesn't change)
-RUN npm ci --only=production
-# 3. Copy source code
-COPY . .
-CMD ["node", "server.js"]
-```
-
-## Project Structure
-- Place `Dockerfile` in the root of the service directory.
-- Place `.dockerignore` alongside the `Dockerfile`.
-- Use `docker-compose.yml` for local development orchestration.
-- Use `docker-compose.prod.yml` (or similar) for production overrides if not using K8s.
-
+<boundaries>
+- ✅ **Always:** Multi-stage builds to separate build from runtime
+- ✅ **Always:** Non-root user in final stage
+- ✅ **Always:** Pin base image versions (e.g., `node:18-alpine3.19`)
+- ✅ **Always:** Maintain `.dockerignore` (exclude `.git`, `node_modules`, secrets)
+- ✅ **Always:** Exec form for `CMD`/`ENTRYPOINT` (`CMD ["node", "app.js"]`)
+- ✅ **Always:** Define `HEALTHCHECK` instruction
+- ⚠️ **Ask:** Before choosing Alpine vs Debian/Ubuntu base
+- ⚠️ **Ask:** Before adding/dropping Linux capabilities
+- ⚠️ **Ask:** About volume strategies for stateful services
+- 🚫 **Never:** Copy secrets into images
+- 🚫 **Never:** Use `latest` tag in production
+- 🚫 **Never:** Run as root (UID 0)
+- 🚫 **Never:** Include build tools in production image
+</boundaries>

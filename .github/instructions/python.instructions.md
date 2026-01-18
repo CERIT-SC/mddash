@@ -4,13 +4,17 @@ applyTo: "**/*.py"
 
 # Python Development Guidelines
 
-These instructions focus on **idiomatic Python implementation details**.
+Idiomatic Python (3.10+) patterns and anti-patterns.
 
-## 1. Modern Idioms & Control Flow
-Write code that leverages modern Python (3.10+) features for readability and safety.
+<context>
+These guidelines complement the general principles with Python-specific idioms. They apply when writing or reviewing any Python code.
+</context>
 
+<best_practices>
+
+<idioms>
 ### Path Handling
-Use `pathlib` instead of `os.path` for filesystem operations. It offers an object-oriented interface and better cross-platform compatibility.
+Use `pathlib` instead of `os.path`.
 
 **Bad:**
 ```python
@@ -29,7 +33,7 @@ if path.exists():
 ```
 
 ### String Formatting
-Always use **f-strings** for string interpolation. They are faster and more readable than `.format()` or `%` formatting.
+Use **f-strings** for interpolation.
 
 **Bad:**
 ```python
@@ -43,7 +47,7 @@ print(f"Hello, {user}")
 ```
 
 ### Comprehensions
-Use list/dict comprehensions for simple transformations instead of `map()` or loops.
+Use list/dict comprehensions for simple transformations.
 
 **Bad:**
 ```python
@@ -59,7 +63,7 @@ users = [u.name for u in user_list if u.active]
 ```
 
 ### Iteration
-Use `enumerate()` instead of `range(len())`. Use `zip()` to iterate multiple sequences simultaneously.
+Use `enumerate()` instead of `range(len())`. Use `zip()` for parallel iteration.
 
 **Bad:**
 ```python
@@ -73,12 +77,12 @@ for i, item in enumerate(items):
     print(i, item)
 ```
 
-### Structural Pattern Matching (Python 3.10+)
-Use `match`/`case` statements for complex conditional logic involving type checks or value unpacking. Avoid long `if`/`elif` chains when matching against patterns.
+### Pattern Matching
+Use `match`/`case` for complex conditional logic.
 
 **Bad:**
 ```python
-def handle_response(response):
+def handle(response):
     if isinstance(response, dict) and "error" in response:
         return f"Error: {response['error']}"
     elif isinstance(response, dict) and "data" in response:
@@ -91,7 +95,7 @@ def handle_response(response):
 
 **Good:**
 ```python
-def handle_response(response):
+def handle(response):
     match response:
         case {"error": msg}:
             return f"Error: {msg}"
@@ -102,18 +106,15 @@ def handle_response(response):
         case _:
             return str(response)
 ```
+</idioms>
 
-## 2. Type Safety & Documentation
-Python is dynamically typed, but we enforce strict static analysis to catch bugs early.
-
-### Strict Typing
-Annotate all function arguments and return values. Avoid `Any`.
-
-Use **built-in generics** (PEP 585) instead of importing from `typing`. Since Python 3.9+, `list`, `dict`, `tuple`, `set`, and `type` are directly subscriptable.
+<typing>
+### Built-in Generics (PEP 585)
+Use built-in types instead of `typing` imports.
 
 **Bad:**
 ```python
-from typing import List, Dict, Optional  # ❌ Deprecated imports
+from typing import List, Dict, Optional
 
 def process(data: Dict[str, Any]) -> Optional[int]:
     return data.get("id")
@@ -121,37 +122,31 @@ def process(data: Dict[str, Any]) -> Optional[int]:
 
 **Good:**
 ```python
-from typing import Any  # Only import types not available as builtins
+from typing import Any
 
 def process(data: dict[str, Any]) -> int | None:
     return data.get("id")
 ```
 
-### Union Types (Python 3.10+)
-Use the `|` operator instead of `Union` or `Optional` from the `typing` module.
+### Union Types (PEP 604)
+Use `|` instead of `Union` or `Optional`.
 
 **Bad:**
 ```python
 from typing import Union, Optional
 
-def find(id: int) -> Optional[User]:  # ❌ Verbose
-    ...
-
-def parse(value: Union[str, int]) -> str:  # ❌ Verbose
-    ...
+def find(id: int) -> Optional[User]: ...
+def parse(value: Union[str, int]) -> str: ...
 ```
 
 **Good:**
 ```python
-def find(id: int) -> User | None:  # ✅ Clean
-    ...
-
-def parse(value: str | int) -> str:  # ✅ Clean
-    ...
+def find(id: int) -> User | None: ...
+def parse(value: str | int) -> str: ...
 ```
 
 ### Docstrings
-Follow **Google Style** docstrings. Do not duplicate type information in the docstring; rely on type hints.
+Follow **Google Style**. Do not duplicate type info—rely on hints.
 
 **Good:**
 ```python
@@ -170,11 +165,11 @@ def calculate_tax(price: float, rate: float) -> float:
     """
     return price * rate
 ```
+</typing>
 
-## 3. Class Design
-
+<classes>
 ### Data Classes
-Use `@dataclass` for classes that primarily store data. It automatically generates `__init__`, `__repr__`, and `__eq__`.
+Use `@dataclass` for data containers. It automatically has `__init__`, `__repr__`, and `__eq__`.
 
 **Good:**
 ```python
@@ -187,7 +182,7 @@ class User:
 ```
 
 ### Properties
-Use `@property` instead of Java-style getters and setters.
+Use `@property` instead of getters/setters.
 
 **Bad:**
 ```python
@@ -205,18 +200,18 @@ class Box:
 ```
 
 ### Magic Methods
-Implement `__repr__` for all custom classes to ensure they are debuggable.
+Implement `__repr__` for debuggability.
 
 **Good:**
 ```python
 def __repr__(self):
     return f"User(id={self.id}, name='{self.name}')"
 ```
+</classes>
 
-## 4. Error Handling & Logging
-
+<error_handling>
 ### Specific Exceptions
-Never catch `Exception` directly. Catch specific errors (e.g., `ValueError`, `KeyError`).
+Catch specific errors, not bare `Exception`.
 
 **Bad:**
 ```python
@@ -231,11 +226,11 @@ except Exception:
 try:
     process()
 except ValueError as e:
-    logger.error(f"Invalid input: {e}")
+    logger.exception(f"Invalid input: {e}")
 ```
 
-### Logging vs Print
-**Never** use `print()` in production code. Use the standard `logging` module.
+### Logging
+Use `logging`, not `print()`.
 
 **Bad:**
 ```python
@@ -249,109 +244,66 @@ logger = logging.getLogger(__name__)
 
 logger.info("Processing user %s", user_id)
 ```
+</error_handling>
 
-## 5. Configuration
-**Never** hardcode secrets or configuration. Use Environment Variables.
-
-**Bad:**
-```python
-DB_URL = "postgres://user:pass@localhost:5432/db"
-```
-
-**Good:**
-```python
-import os
-DB_URL = os.environ.get("DB_URL")
-```
-
-## 6. Testing with Pytest
-> ⚠️ **Note:** Only write tests when explicitly requested or if the codebase already includes tests.
-
-### Fixtures
-Use `pytest.fixture` for setup/teardown logic.
-
-**Good:**
-```python
-@pytest.fixture
-def db():
-    conn = connect()
-    yield conn
-    conn.close()
-```
-
-### Parametrization
-Use `@pytest.mark.parametrize` to test multiple inputs.
-
-**Good:**
-```python
-@pytest.mark.parametrize("inp,out", [(1, 2), (2, 4)])
-def test_double(inp, out):
-    assert double(inp) == out
-```
-
-## 7. Resource Management
-Always use Context Managers (`with` statements) to ensure resources are properly released.
+<resources>
+### Context Managers
+Use `with` statements for resource cleanup.
 
 **Bad:**
 ```python
 conn = db.connect()
 result = conn.execute(query)
-conn.close()  # ❌ Won't run if execute() raises an exception
+conn.close()  # Won't run if execute() raises
 ```
 
 **Good:**
 ```python
 with db.connect() as conn:
     result = conn.execute(query)
-# Connection is always closed, even on exception
 ```
 
-**Good (file I/O with pathlib):**
+### File I/O
+Use `pathlib` for file operations.
+
+**Good:**
 ```python
 from pathlib import Path
 
 file = Path("file.txt")
-data = file.read_text()  # Simple read, auto-closes
+data = file.read_text()
 
-# For larger files or line-by-line processing:
+# For larger files:
 with file.open() as f:
     for line in f:
         process(line)
 ```
+</resources>
 
-## 8. Critical Anti-Patterns
-
+<anti_patterns>
 ### Mutable Default Arguments
-**Never** use mutable objects (lists, dicts) as default arguments.
 
 **Bad:**
 ```python
-def append(item, list=[]):
-    list.append(item)
+def append(item, items=[]):
+    items.append(item)
+    return items
 ```
 
 **Good:**
 ```python
-def append(item, list=None):
-    if list is None:
-        list = []
-    list.append(item)
+def append(item, items=None):
+    if items is None:
+        items = []
+    items.append(item)
+    return items
 ```
 
-### Wildcard Imports
-**Never** use `from module import *`. It pollutes the namespace.
-
-### Inline Imports
-**Never** place imports inside functions. Imports belong at the top of the file.
-
 ### Unbounded Loops
-> ⚠️ **Warning:** Avoid `while True` in production code without safeguards.
-
-Unbounded loops can cause infinite execution, resource exhaustion, or hung processes. Always include a **maximum iteration limit** or **timeout** for retry/polling logic.
 
 **Bad:**
 ```python
-while True:  # ❌ Can hang forever
+while True:
     result = fetch_data()
     if result:
         break
@@ -371,4 +323,56 @@ else:
     raise TimeoutError(f"Failed after {MAX_ATTEMPTS} attempts")
 ```
 
-> **Exception:** `while True` is acceptable for **intentional** infinite loops like event loops, servers, or daemons—but these should handle graceful shutdown signals.
+> **Exception:** `while True` is acceptable for intentional infinite loops (event loops, servers) with graceful shutdown handling.
+
+### Hardcoded Configuration
+
+**Bad:**
+```python
+DB_URL = "postgres://user:pass@localhost:5432/db"
+```
+
+**Good:**
+```python
+import os
+DB_URL = os.environ.get("DB_URL")
+```
+
+> **Exception:** Constants that are truly constant and not environment-specific (e.g., mathematical constants).
+
+</anti_patterns>
+
+<testing>
+> ⚠️ Only write tests when explicitly requested or if the codebase already includes tests.
+
+### Fixtures
+```python
+@pytest.fixture
+def db():
+    conn = connect()
+    yield conn
+    conn.close()
+```
+
+### Parametrization
+```python
+@pytest.mark.parametrize("inp,out", [(1, 2), (2, 4)])
+def test_double(inp, out):
+    assert double(inp) == out
+```
+</testing>
+
+</best_practices>
+
+<boundaries>
+- ✅ **Always:** Type hints on all function signatures
+- ✅ **Always:** `pathlib` for filesystem operations
+- ✅ **Always:** f-strings for formatting
+- ✅ **Always:** Context managers for resources
+- ✅ **Always:** `logging` module in production
+- ⚠️ **Ask:** Before adding dependencies to `requirements.txt`
+- 🚫 **Never:** Hardcode secrets or config
+- 🚫 **Never:** Mutable default arguments
+- 🚫 **Never:** Wildcard imports (`from x import *`)
+- 🚫 **Never:** Imports inside functions
+</boundaries>

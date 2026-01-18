@@ -4,104 +4,51 @@ applyTo: 'helm/**/Chart.yaml, helm/**/values.yaml, helm/**/templates/*.yaml, hel
 
 # Helm Chart Best Practices
 
-Apply these rules when creating or modifying Helm charts. All examples marked "Correct" are the expected patterns.
+Production-ready Kubernetes deployments with Helm.
 
-## Naming and Structure Rules
+<context>
+Apply these rules when creating or modifying Helm charts. Focus on naming conventions, security, and proper templating.
+</context>
+
+<best_practices>
+
+<naming>
+### Naming Conventions
 
 **Chart Names:**
 - Pattern: `lowercase-with-hyphens`
-- MUST: Start with letter, use only `[a-z0-9-]`
-- MUST NOT: Use uppercase, underscores, dots
-- Directory name MUST match chart name exactly
-- Examples: `nginx-ingress`, `cert-manager`, `oauth2-proxy`
+- Only `[a-z0-9-]`, start with letter
+- Directory name must match chart name
+- Examples: `nginx-ingress`, `cert-manager`
+
+**Values:**
+- Pattern: `camelCase`
+- Examples: `replicaCount`, `serviceAccountName`
 
 **Versioning:**
-- Use SemVer 2 format (e.g., `1.2.3`)
-- `version`: Chart version (increment on changes)
-- `appVersion`: Application version (quoted string)
-- Replace `+` with `_` in Kubernetes labels
+- SemVer 2 format: `1.2.3`
+- `version`: Chart version
+- `appVersion`: Application version (quoted)
+</naming>
 
-**File Organization:**
-- Templates: `*.yaml` (Kubernetes manifests), `*.tpl` (helpers)
-- Naming: `resource-kind.yaml` (e.g., `app-deployment.yaml`)
-- Rule: One resource per file
+<templating>
+### Templating
 
-## YAML Formatting Rules
-
-- Indentation: 2 spaces (never tabs)
-- Template syntax: `{{ .Value }}` (spaces inside braces)
-- Template names: Always namespace with chart name prefix
-
+**Namespace template names:**
 ```yaml
-# Correct template naming
+# ✅ Correct
 {{- define "chartname.fullname" }}
 {{- .Release.Name }}-{{ .Chart.Name }}
 {{- end }}
 
-# Incorrect - causes conflicts
+# ❌ Causes conflicts
 {{- define "fullname" }}...{{- end }}
 ```
 
-## Values File Requirements
-
-**Naming Convention:**
-- Pattern: `camelCase`
-- Start with lowercase letter
-- MUST NOT: Use hyphens, start with uppercase
-- Examples: `replicaCount`, `serviceAccountName`, `enableMetrics`
-
-**Structure:**
-- Prefer flat over nested (easier to override with `--set`)
-- Use maps instead of arrays when possible
-
-```yaml
-# Good - flat structure
-serverHost: "example.com"
-serverPort: "8080"
-
-# Avoid - complex nesting
-server:
-  config:
-    host: "example.com"
-```
-
-**Type Safety:**
-- MUST: Quote all strings (including version numbers)
-- MUST: Quote large integers to prevent scientific notation
-- Booleans: No quotes needed
-
-```yaml
-# Correct
-image:
-  tag: "1.2.3"
-  pullPolicy: "IfNotPresent"
-port: "8080"
-enabled: false
-```
-
-**Documentation:**
-- MUST: Document every value with comment starting with parameter name
-
-```yaml
-# replicaCount is the number of pod replicas to deploy
-replicaCount: 3
-
-# serverHost is the hostname for the webserver
-serverHost: "example.com"
-```
-
-## Template Validation Rules
-
-**Input Validation:**
-- Use `required` for mandatory values
-- Use `default` for optional values with fallback
-- Use `quote` for string interpolation
-- Use `toYaml` for complex objects
-
+**Input validation:**
 ```yaml
 # Mandatory values
-metadata:
-  name: {{ required "serviceName is required" .Values.serviceName }}
+name: {{ required "serviceName is required" .Values.serviceName }}
 
 # Optional with default
 replicas: {{ .Values.replicaCount | default 1 }}
@@ -109,20 +56,44 @@ replicas: {{ .Values.replicaCount | default 1 }}
 # Safe string handling
 value: {{ .Values.dbHost | quote }}
 ```
+</templating>
 
-**Security - Prevent Injection:**
-- MUST NOT: Concatenate user input directly into commands
-- MUST: Use `quote` or `toYaml` for external variables
-- MUST: Validate all user-provided inputs
+<values>
+### Values File
 
-## Security Requirements
+**Type safety:**
+```yaml
+# ✅ Correct - quote strings and versions
+image:
+  tag: "1.2.3"
+  pullPolicy: "IfNotPresent"
+port: "8080"
+enabled: false  # Booleans: no quotes
+```
+
+**Documentation:**
+```yaml
+# replicaCount is the number of pod replicas
+replicaCount: 3
+```
+
+**Prefer flat over nested** (easier `--set` overrides):
+```yaml
+# ✅ Good
+serverHost: "example.com"
+serverPort: "8080"
+
+# ❌ Avoid
+server:
+  config:
+    host: "example.com"
+```
+</values>
+
+<security>
+### Security
 
 **Secrets:**
-- MUST NOT: Hardcode secrets in values or templates
-- Use `lookup` to check existing secrets
-- Generate random values with `randAlphaNum`
-- Add `helm.sh/resource-policy: keep` to preserve on upgrade
-
 ```yaml
 {{- if not (lookup "v1" "Secret" .Release.Namespace "app-secret") }}
 apiVersion: v1
@@ -136,13 +107,7 @@ stringData:
 {{- end }}
 ```
 
-**RBAC:**
-- MUST: Use least-privilege principle
-- Create dedicated ServiceAccount, Role, RoleBinding
-- MUST NOT: Use `cluster-admin` unless absolutely necessary
-- Limit verbs to minimum required (avoid `*`)
-
-**Security Context (Required Defaults):**
+**Security Context (required defaults):**
 ```yaml
 securityContext:
   runAsNonRoot: true
@@ -154,17 +119,13 @@ securityContext:
     - ALL
 ```
 
-**Sensitive Defaults:**
-- MUST NOT: Provide default passwords
-- Use `required` to force user input OR generate random values
-- Disable optional features by default (explicit enable)
+**RBAC:** Use least-privilege; avoid `cluster-admin` and `*` verbs.
+</security>
 
-## Resource Specifications
-
-**Always Include:**
+<resources>
+### Resources & Health Checks
 
 ```yaml
-# Resource limits/requests
 resources:
   limits:
     cpu: {{ .Values.resources.limits.cpu | default "500m" }}
@@ -173,72 +134,44 @@ resources:
     cpu: {{ .Values.resources.requests.cpu | default "100m" }}
     memory: {{ .Values.resources.requests.memory | default "128Mi" }}
 
-# Health checks
 livenessProbe:
   httpGet:
     path: {{ .Values.healthCheckPath | default "/health" }}
     port: http
   initialDelaySeconds: 30
+
 readinessProbe:
   httpGet:
     path: {{ .Values.healthCheckPath | default "/ready" }}
     port: http
   initialDelaySeconds: 5
 ```
+</resources>
 
-## Testing and Documentation
+<validation>
+### Validation
 
-**Required Files:**
-- `Chart.yaml`: Metadata with name, version, appVersion
-- `values.yaml`: All configurable parameters with comments
-- `README.md`: Installation and configuration guide
-- `templates/NOTES.txt`: Post-install instructions
-- `templates/tests/`: Test pods with `helm.sh/hook: test` annotation
-
-**Validation Commands:**
 ```bash
-helm lint ./mychart                          # Validate syntax
-helm template ./mychart --debug              # Render templates
-helm install --dry-run --debug test ./mychart  # Simulate install
-helm test <release-name>                     # Run tests
+helm lint ./mychart
+helm template ./mychart --debug
+helm install --dry-run --debug test ./mychart
+helm test <release-name>
 ```
+</validation>
 
-**Security Scanning:**
-- Integrate `trivy` or `checkov` in CI/CD
-- Scan for misconfigurations and vulnerabilities
-- Review dependencies before each release
+</best_practices>
 
-## Conditional Resources
-
-Use `enabled` flags for optional components:
-
-```yaml
-# values.yaml
-monitoring:
-  enabled: false
-
-# Chart.yaml dependencies
-dependencies:
-- name: prometheus
-  condition: monitoring.enabled
-  
-# templates/monitoring.yaml
-{{- if .Values.monitoring.enabled }}
-apiVersion: v1
-kind: Service
-...
-{{- end }}
-```
-
-## Common Mistakes to Avoid
-
-- Using uppercase or underscores in chart/value names
-- Unquoted strings in values.yaml
-- Hardcoded secrets or default passwords
-- Running containers as root user
-- Missing resource limits
-- Overly permissive RBAC (cluster-admin)
-- Undocumented values
-- Directly interpolating user input into commands
-- Using complex nested structures when flat would work
-- Missing health checks (liveness/readiness probes)
+<boundaries>
+- ✅ **Always:** Use `lowercase-with-hyphens` for chart names
+- ✅ **Always:** Use `camelCase` for values
+- ✅ **Always:** Quote all strings in values.yaml
+- ✅ **Always:** Namespace template names with chart prefix
+- ✅ **Always:** Include resource limits and health checks
+- ✅ **Always:** Document every value with comments
+- ✅ **Always:** Use `required` for mandatory values
+- ⚠️ **Ask:** Before using `cluster-admin` RBAC
+- 🚫 **Never:** Hardcode secrets in values or templates
+- 🚫 **Never:** Provide default passwords
+- 🚫 **Never:** Run containers as root
+- 🚫 **Never:** Use overly permissive RBAC (`*` verbs)
+</boundaries>

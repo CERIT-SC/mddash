@@ -2,24 +2,33 @@
 applyTo: '**/Makefile, **/*.mk'
 ---
 
-# Makefile Rules for AI Agents
+# Makefile Guidelines
 
-## Mandatory Syntax
-**Recipes MUST use TAB (not spaces)**
+Rules for writing robust, portable Makefiles.
+
+<context>
+Essential Makefile patterns for build automation. Focus on correct syntax, proper variable usage, and common patterns.
+</context>
+
+<best_practices>
+
+<syntax>
+### Mandatory Syntax
+**Recipes MUST use TAB (not spaces):**
 ```makefile
 target: prereq
 	command    # TAB before this line
 ```
 
-## Variable Assignment
+### Variable Assignment
 ```makefile
-VAR := value    # Simple (evaluate once) - PREFER THIS
+VAR := value    # Simple (evaluate once) - PREFER
 VAR = value     # Recursive (evaluate each use)
 VAR ?= value    # Set only if undefined
 VAR += value    # Append
 ```
 
-## Automatic Variables
+### Automatic Variables
 | Var | Meaning |
 |-----|---------|
 | `$@` | Target name |
@@ -31,14 +40,14 @@ VAR += value    # Append
 %.o: %.c
 	$(CC) -c $< -o $@
 ```
+</syntax>
 
-## .PHONY Targets
-ALWAYS declare non-file targets:
+<patterns>
+### .PHONY Targets
+Always declare non-file targets:
 ```makefile
 .PHONY: all build clean test help
 ```
-
-## Core Patterns
 
 ### Help Target (Required)
 ```makefile
@@ -48,15 +57,6 @@ help: ## Show help
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
 .DEFAULT_GOAL := help
-```
-
-### Pattern Rules
-```makefile
-%.o: %.c %.h
-	$(CC) $(CFLAGS) -c $< -o $@
-
-%.yaml: %.yaml.j2 config.yaml
-	jinja2 $< config.yaml -o $@
 ```
 
 ### Error Handling
@@ -76,12 +76,11 @@ deploy:
 		-e ENV=prod \
 		-v $(PWD):/app \
 		image
-
-install:
-	@for f in $(YAMLS); do kubectl apply -f $$f; done
 ```
+</patterns>
 
-## Security Rules
+<security>
+### Security
 ```makefile
 # NEVER hardcode secrets
 ifndef API_KEY
@@ -95,17 +94,10 @@ SHELL := /bin/bash
 backup:
 	tar czf "backup-$$(date +%Y%m%d).tar.gz" "$(DIR)"
 ```
+</security>
 
-## Common Pitfalls
-| Wrong | Right |
-|-------|-------|
-| Spaces for indent | TAB character |
-| `VAR = $(shell ...)` | `VAR := $(shell ...)` |
-| Missing `.PHONY` | `.PHONY: clean test` |
-| `rm file` (fails) | `rm file \|\| true` |
-| Shell var `$$files` | `$${files}` in loops |
-
-## Standard Template
+<template>
+### Template
 ```makefile
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -130,10 +122,28 @@ test: ## Run tests
 clean: ## Clean artifacts
 	rm -rf build/ || true
 ```
+</template>
 
-## Quick Reference
-**Variable Assignment:** `:=` (once), `=` (each use), `?=` (if unset), `+=` (append)  
-**Auto Variables:** `$@` (target), `$<` (first prereq), `$^` (all prereqs)  
-**Special Targets:** `.PHONY`, `.SECONDARY`, `.PRECIOUS`, `.DEFAULT_GOAL`  
-**Silent:** `@command` suppresses echo  
-**Escape:** Use `$$` for shell variables in recipes
+<anti_patterns>
+### Common Pitfalls
+| Wrong | Right |
+|-------|-------|
+| Spaces for indent | TAB character |
+| `VAR = $(shell ...)` | `VAR := $(shell ...)` |
+| Missing `.PHONY` | `.PHONY: clean test` |
+| `rm file` (fails) | `rm file \|\| true` |
+| Shell var `$files` | `$$files` in recipes |
+</anti_patterns>
+
+</best_practices>
+
+<boundaries>
+- ✅ **Always:** Use TAB for recipe indentation
+- ✅ **Always:** Declare `.PHONY` for non-file targets
+- ✅ **Always:** Include a `help` target
+- ✅ **Always:** Use `:=` for shell commands
+- ✅ **Always:** Quote variables in shell commands
+- 🚫 **Never:** Hardcode secrets
+- 🚫 **Never:** Use spaces instead of TABs
+- 🚫 **Never:** Forget `$$` for shell variables in recipes
+</boundaries>
