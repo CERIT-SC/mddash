@@ -13,10 +13,10 @@ from clients import mdrepo
 from config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
 from enums import JobStatus, PodStatus
 from extensions import db
-from flask import abort
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from utils import get_files_with_extensions, get_unique_id
 from werkzeug.datastructures import FileStorage
+from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 from werkzeug.utils import secure_filename
 
 from .notebook import Notebook
@@ -151,11 +151,9 @@ class Experiment(db.Model):  # type: ignore
             response = requests.get(url, timeout=30)
 
             if response.status_code == HTTPStatus.NOT_FOUND:
-                abort(HTTPStatus.NOT_FOUND, description=f"PDB ID '{pdb_id}' not found.")
-            elif response.status_code != HTTPStatus.OK:
-                abort(
-                    HTTPStatus.INTERNAL_SERVER_ERROR, description=f"Failed to download PDB file: {response.status_code}"
-                )
+                raise NotFound(description=f"PDB ID '{pdb_id}' not found.")
+            if response.status_code != HTTPStatus.OK:
+                raise InternalServerError(description=f"Failed to download PDB file: {response.status_code}")
 
             with (DATA_DIR / experiment_id / "input.pdb").open("wb") as f:
                 f.write(response.content)
@@ -194,19 +192,16 @@ class Experiment(db.Model):  # type: ignore
             # Expected format: https://zenodo.org/record/1234567
             min_zenodo_parts = 4
             if len(repo_link_parts) < min_zenodo_parts or repo_link_parts[2] != "zenodo.org":
-                abort(HTTPStatus.BAD_REQUEST, description="Invalid repository link (expected zenodo.org)")
+                raise BadRequest(description="Invalid repository link (expected zenodo.org)")
 
             record_id: str = repo_link_parts[-1]
             url: str = f"https://zenodo.org/api/records/{record_id}/files-archive"
             response = requests.get(url, timeout=60)
 
             if response.status_code == HTTPStatus.NOT_FOUND:
-                abort(HTTPStatus.NOT_FOUND, description=f"Repository '{repo_link}' not found.")
-            elif response.status_code != HTTPStatus.OK:
-                abort(
-                    HTTPStatus.INTERNAL_SERVER_ERROR,
-                    description=f"Failed to download repository: {response.status_code}",
-                )
+                raise NotFound(description=f"Repository '{repo_link}' not found.")
+            if response.status_code != HTTPStatus.OK:
+                raise InternalServerError(description=f"Failed to download repository: {response.status_code}")
 
             # Extract zip file
             with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
@@ -235,9 +230,12 @@ class Experiment(db.Model):  # type: ignore
 
         Returns:
             The created Experiment instance.
+
+        Raises:
+            HTTPException: If no files are provided or saving fails.
         """
         if not files:
-            abort(400, description="No files provided")
+            raise BadRequest(description="No files provided")
 
         experiment_id: str = cls.prepare_env()
 
@@ -338,7 +336,7 @@ class Experiment(db.Model):  # type: ignore
         mdrepo_id = mdrepo_experiment.get("id")
 
         if mdrepo_id is None:
-            abort(500, description="Failed to create experiment in MDRepo.")
+            raise InternalServerError(description="Failed to create experiment in MDRepo.")
 
         self.mdrepo_id = mdrepo_id
         db.session.commit()

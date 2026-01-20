@@ -9,9 +9,15 @@ from clients import mdrun
 from config import DATA_DIR, S3_BUCKET
 from enums import DeviceType, JobStatus
 from extensions import db
-from flask import abort
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from utils import tail
+from werkzeug.exceptions import (
+    BadRequest,
+    Forbidden,
+    InternalServerError,
+    NotFound,
+    UnprocessableEntity,
+)
 
 if TYPE_CHECKING:
     from .experiment import Experiment
@@ -270,7 +276,7 @@ class GromacsJob(db.Model):  # type: ignore
             case "stderr":
                 log_file = self._stderr_log
             case _:
-                abort(400, description=f"Invalid log type: {type}")
+                raise BadRequest(description=f"Invalid log type: {type}")
 
         try:
             if tail_lines:
@@ -278,13 +284,13 @@ class GromacsJob(db.Model):  # type: ignore
             with log_file.open("r") as f:
                 return f.read()
         except FileNotFoundError:
-            abort(404, description=f"Log file not found: {log_file.name}")
+            raise NotFound(description=f"Log file not found: {log_file.name}")
         except PermissionError:
-            abort(403, description=f"Permission denied accessing log file: {log_file.name}")
+            raise Forbidden(description=f"Permission denied accessing log file: {log_file.name}")
         except UnicodeDecodeError:
-            abort(422, description=f"Unable to decode log file: {log_file.name}")
+            raise UnprocessableEntity(description=f"Unable to decode log file: {log_file.name}")
         except OSError as e:
-            abort(500, description=f"System error reading log file: {e}")
+            raise InternalServerError(description=f"System error reading log file: {e}")
 
     def _cleanup_previous_results(self) -> None:
         """

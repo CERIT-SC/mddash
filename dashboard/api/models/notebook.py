@@ -7,9 +7,9 @@ from clients import caddy, k8s
 from config import NAMESPACE, PREFIX
 from enums import PodStatus
 from extensions import db
-from flask import abort
 from kubernetes.client.rest import ApiException  # type: ignore
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from werkzeug.exceptions import Conflict, Forbidden, InternalServerError
 
 if TYPE_CHECKING:
     from .experiment import Experiment
@@ -59,12 +59,12 @@ class Notebook(db.Model):  # type: ignore
         except ApiException as e:
             if e.status == HTTPStatus.FORBIDDEN:
                 logger.debug("Quota exceeded when creating notebook pod.", exc_info=True)
-                abort(HTTPStatus.FORBIDDEN, description="Resource quota exceeded. Please stop other notebooks.")
-            elif e.status == HTTPStatus.CONFLICT:
-                abort(HTTPStatus.CONFLICT, description="Notebook pod already exists.")
-            else:
-                logger.exception("Failed to create notebook pod.")
-                abort(HTTPStatus.INTERNAL_SERVER_ERROR, description=f"Failed to create notebook pod: {e.reason}")
+                raise Forbidden(description="Resource quota exceeded. Please stop other notebooks.")
+            if e.status == HTTPStatus.CONFLICT:
+                raise Conflict(description="Notebook pod already exists.")
+
+            logger.exception("Failed to create notebook pod.")
+            raise InternalServerError(description=f"Failed to create notebook pod: {e.reason}")
 
         try:
             k8s.create_service(svc_name, pod_name)
@@ -81,7 +81,7 @@ class Notebook(db.Model):  # type: ignore
         if route_id is None:
             k8s.delete_pod(pod_name)
             k8s.delete_service(svc_name)
-            abort(500, description="Failed to create proxy connection to notebook.")
+            raise InternalServerError(description="Failed to create proxy connection to notebook.")
 
     def stop(self) -> None:
         """Stop the notebook pod and service, and remove the route from Caddy."""
