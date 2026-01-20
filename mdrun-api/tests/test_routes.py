@@ -8,7 +8,9 @@ import json
 from http import HTTPStatus
 from typing import Any
 
+from enums import JobStatus
 from flask.testing import FlaskClient
+from models import MdrunJob
 from sqlalchemy.orm import Session
 
 
@@ -43,9 +45,6 @@ class TestGetJob:
         self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]
     ) -> None:
         """Should return job status for existing job."""
-        from enums import JobStatus
-        from models import MdrunJob
-
         # Create test job directly in DB
         job = MdrunJob()
         job.id = "test-job-123"
@@ -137,9 +136,6 @@ class TestDeleteJob:
         self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]
     ) -> None:
         """Should delete job and return 204."""
-        from enums import JobStatus
-        from models import MdrunJob
-
         # Create test job
         job = MdrunJob()
         job.id = "delete-me"

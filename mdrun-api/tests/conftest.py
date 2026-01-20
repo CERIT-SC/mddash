@@ -32,6 +32,16 @@ os.environ["S3_ENDPOINT"] = "http://s3.test:9000"
 os.environ["S3_ACCESS_KEY"] = "test-access-key"
 os.environ["S3_SECRET_KEY"] = "test-secret-key"
 
+# Mock K8s configuration to prevent failure during module import
+with (
+    patch("kubernetes.config.load_incluster_config"),
+    patch("kubernetes.client.CoreV1Api"),
+    patch("kubernetes.client.BatchV1Api"),
+):
+    from enums import JobStatus
+    from extensions import db
+    from routes import health_bp, mdrun_bp
+
 
 @pytest.fixture(scope="session")
 def mock_k8s() -> Generator[MagicMock, None, None]:
@@ -64,13 +74,9 @@ def app(mock_k8s: MagicMock) -> Generator[Flask, None, None]:  # noqa: ARG001
         patch("k8s_client.delete_job") as mock_delete,
         patch("k8s_client.get_job_status") as mock_status,
     ):
-        from enums import JobStatus
-
         mock_create.return_value = None
         mock_delete.return_value = None
         mock_status.return_value = JobStatus.PENDING
-
-        from extensions import db
 
         # Create test app
         test_app = Flask(__name__)
@@ -81,9 +87,7 @@ def app(mock_k8s: MagicMock) -> Generator[Flask, None, None]:  # noqa: ARG001
 
         db.init_app(test_app)
 
-        # Import and register blueprints
-        from routes import health_bp, mdrun_bp
-
+        # Register blueprints
         test_app.register_blueprint(health_bp)
         test_app.register_blueprint(mdrun_bp)
 
@@ -106,8 +110,6 @@ def db_session(app: Flask) -> Generator:
 
     Automatically rolls back changes after each test.
     """
-    from extensions import db
-
     with app.app_context():
         yield db.session
         db.session.rollback()
@@ -120,8 +122,6 @@ def mock_k8s_client(mocker: MockerFixture) -> dict[str, MagicMock]:
 
     Returns dict of mock objects for assertions.
     """
-    from enums import JobStatus
-
     return {
         "create_gromacs_job": mocker.patch("k8s_client.create_gromacs_job"),
         "delete_job": mocker.patch("k8s_client.delete_job"),

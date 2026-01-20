@@ -3,6 +3,7 @@ import hmac
 import os
 import secrets
 import time
+from http import HTTPStatus
 
 import requests
 from flask import Flask, Response, make_response, redirect, request
@@ -28,6 +29,7 @@ STATE_COOKIE = "mddash-state"
 
 # Master secret key for state validation
 STATE_SECRET = secrets.token_bytes(32)
+HMAC_SHA256_HEX_LENGTH = 64
 
 # {token: (username, expiry_timestamp)}
 _sessions: dict[str, tuple[str, float]] = {}
@@ -38,7 +40,7 @@ CLEANUP_INTERVAL = 300  # 5 minutes
 
 def remove_expired_sessions() -> None:
     """Remove expired sessions from the in-memory store (throttled)."""
-    global _last_cleanup
+    global _last_cleanup  # noqa: PLW0603
     now = time.time()
 
     if now - _last_cleanup < CLEANUP_INTERVAL:
@@ -76,7 +78,7 @@ def sign(data: str) -> str:
 @app.route("/health")
 def health() -> tuple[str, int]:
     """Health check endpoint."""
-    return "OK", 200
+    return "OK", HTTPStatus.OK
 
 
 @app.route("/auth")
@@ -85,7 +87,7 @@ def auth() -> tuple[str, int] | Response:
     remove_expired_sessions()
     token = request.cookies.get(COOKIE_NAME)
     if token and is_valid_session(token, USER):
-        return "", 200
+        return "", HTTPStatus.OK
 
     # Not authenticated, start OAuth
     state = secrets.token_urlsafe(16)
@@ -106,24 +108,24 @@ def oauth_callback() -> tuple[str, int] | Response:
 
     # Verify state by checking HMAC signature
     if not code or not state or not signed_state:
-        return "Invalid state", 400
+        return "Invalid state", HTTPStatus.BAD_REQUEST
     if not hmac.compare_digest(signed_state, sign(state)):
-        return "Invalid state", 400
+        return "Invalid state", HTTPStatus.BAD_REQUEST
 
     # Exchange code for token
     data = {"client_id": CLIENT_ID, "client_secret": API_TOKEN, "grant_type": "authorization_code", "code": code}
     r = requests.post(f"{API_URL}/oauth2/token", data=data, timeout=5)
-    if r.status_code != 200:
-        return "Token exchange failed", 400
+    if r.status_code != HTTPStatus.OK:
+        return "Token exchange failed", HTTPStatus.BAD_REQUEST
     access_token = r.json().get("access_token")
     if not access_token:
-        return "No access token", 400
+        return "No access token", HTTPStatus.BAD_REQUEST
 
     # Get user info
     headers = {"Authorization": f"token {access_token}"}
     r = requests.get(f"{API_URL}/user", headers=headers, timeout=5)
-    if r.status_code != 200 or r.json().get("name") != USER:
-        return "User mismatch", 403
+    if r.status_code != HTTPStatus.OK or r.json().get("name") != USER:
+        return "User mismatch", HTTPStatus.FORBIDDEN
 
     # Create session and set cookie
     token = create_session(USER)

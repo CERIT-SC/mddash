@@ -6,6 +6,7 @@ from flask import Flask
 from flask_cors import CORS
 from polling import start_polling
 from routes import health_bp, mdrun_bp
+from sqlalchemy import text
 
 
 def create_app() -> Flask:
@@ -35,8 +36,6 @@ def create_app() -> Flask:
         db.create_all()
 
         # Enable WAL mode for concurrent reads/writes
-        from sqlalchemy import text
-
         db.session.execute(text("PRAGMA journal_mode=WAL"))
         db.session.commit()
 

@@ -5,9 +5,21 @@ Tests session management, HMAC signing, and OAuth flow.
 """
 
 import time
+from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
+import auth
 import pytest
+from auth import (
+    HMAC_SHA256_HEX_LENGTH,
+    STATE_COOKIE,
+    USER,
+    _sessions,
+    create_session,
+    is_valid_session,
+    remove_expired_sessions,
+    sign,
+)
 from flask import Flask
 from flask.testing import FlaskClient
 
@@ -19,7 +31,7 @@ class TestHealthEndpoint:
         """Health endpoint should return 200 OK."""
         response = client.get("/health")
 
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
         assert response.data == b"OK"
 
 
@@ -29,8 +41,6 @@ class TestSessionManagement:
 
     def test_create_session_returns_token(self, app: Flask) -> None:
         """create_session should return a token string."""
-        from auth import create_session
-
         with app.app_context():
             token = create_session("testuser")
 
@@ -39,8 +49,6 @@ class TestSessionManagement:
 
     def test_is_valid_session_with_valid_token(self, app: Flask) -> None:
         """is_valid_session should return True for valid token."""
-        from auth import create_session, is_valid_session
-
         with app.app_context():
             token = create_session("testuser")
 
@@ -48,8 +56,6 @@ class TestSessionManagement:
 
     def test_is_valid_session_with_wrong_user(self, app: Flask) -> None:
         """is_valid_session should return False for wrong user."""
-        from auth import create_session, is_valid_session
-
         with app.app_context():
             token = create_session("testuser")
 
@@ -57,22 +63,16 @@ class TestSessionManagement:
 
     def test_is_valid_session_with_invalid_token(self, app: Flask) -> None:
         """is_valid_session should return False for invalid token."""
-        from auth import is_valid_session
-
         with app.app_context():
             assert is_valid_session("invalid-token", "testuser") is False
 
     def test_is_valid_session_with_empty_token(self, app: Flask) -> None:
         """is_valid_session should return False for empty token."""
-        from auth import is_valid_session
-
         with app.app_context():
             assert is_valid_session("", "testuser") is False
 
     def test_expired_session_is_invalid(self, app: Flask) -> None:
         """Expired sessions should be invalid."""
-        from auth import _sessions, is_valid_session
-
         with app.app_context():
             # Create expired session directly
             token = "expired-token"
@@ -86,20 +86,16 @@ class TestHmacSigning:
 
     def test_sign_produces_hex_string(self, app: Flask) -> None:
         """Sign should produce a hex string."""
-        from auth import sign
-
         with app.app_context():
             signature = sign("test-state")
 
             assert isinstance(signature, str)
             # HMAC SHA256 produces 64 hex characters
-            assert len(signature) == 64
+            assert len(signature) == HMAC_SHA256_HEX_LENGTH
             assert all(c in "0123456789abcdef" for c in signature)
 
     def test_sign_is_deterministic(self, app: Flask) -> None:
         """Same input should produce same signature."""
-        from auth import sign
-
         with app.app_context():
             sig1 = sign("test-state")
             sig2 = sign("test-state")
@@ -108,8 +104,6 @@ class TestHmacSigning:
 
     def test_sign_different_inputs(self, app: Flask) -> None:
         """Different inputs should produce different signatures."""
-        from auth import sign
-
         with app.app_context():
             sig1 = sign("state1")
             sig2 = sign("state2")
@@ -123,9 +117,6 @@ class TestSessionCleanup:
 
     def test_remove_expired_sessions(self, app: Flask) -> None:
         """remove_expired_sessions should remove only expired sessions."""
-        import auth
-        from auth import _sessions, remove_expired_sessions
-
         with app.app_context():
             now = time.time()
 
@@ -148,8 +139,6 @@ class TestAuthEndpoint:
 
     def test_authenticated_user_with_valid_session(self) -> None:
         """Session validation logic should work correctly."""
-        from auth import create_session, is_valid_session
-
         # Create session and verify it's valid
         token = create_session("testuser")
         assert is_valid_session(token, "testuser") is True
@@ -158,7 +147,7 @@ class TestAuthEndpoint:
         """Unauthenticated user should be redirected to OAuth."""
         response = client.get("/auth")
 
-        assert response.status_code == 302
+        assert response.status_code == HTTPStatus.FOUND
         assert "/hub/api/oauth2/authorize" in response.location
 
 
@@ -169,24 +158,22 @@ class TestOAuthCallback:
         """Callback without code parameter should return 400."""
         response = client.get("/oauth_callback?state=test")
 
-        assert response.status_code == 400
+        assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_callback_without_state_returns_400(self, client: FlaskClient) -> None:
         """Callback without state parameter should return 400."""
         response = client.get("/oauth_callback?code=test")
 
-        assert response.status_code == 400
+        assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_callback_with_invalid_state_returns_400(self, client: FlaskClient) -> None:
         """Callback with invalid state signature should return 400."""
-        from auth import STATE_COOKIE
-
         response = client.get(
             "/oauth_callback?code=test&state=test",
             headers={"Cookie": f"{STATE_COOKIE}=invalid-signature"},
         )
 
-        assert response.status_code == 400
+        assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_successful_oauth_flow(self) -> None:
         """Complete OAuth flow logic - token exchange and user verification."""
@@ -194,13 +181,13 @@ class TestOAuthCallback:
         with patch("auth.requests.post") as mock_post, patch("auth.requests.get") as mock_get:
             # Mock token exchange
             mock_post.return_value = MagicMock(
-                status_code=200,
+                status_code=HTTPStatus.OK,
                 json=lambda: {"access_token": "test-access-token"},
             )
 
             # Mock user info request
             mock_get.return_value = MagicMock(
-                status_code=200,
+                status_code=HTTPStatus.OK,
                 json=lambda: {"name": "testuser"},
             )
 
@@ -213,8 +200,6 @@ class TestOAuthCallback:
 
     def test_user_mismatch_detection(self) -> None:
         """OAuth should detect user mismatch."""
-        from auth import USER
-
         # Verify user mismatch detection logic
         expected_user = USER  # "testuser" from conftest
         returned_user = "wronguser"

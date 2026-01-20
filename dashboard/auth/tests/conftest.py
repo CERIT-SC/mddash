@@ -27,6 +27,10 @@ os.environ["JUPYTERHUB_OAUTH_CALLBACK_URL"] = "http://localhost/oauth_callback"
 os.environ["JUPYTERHUB_DEFAULT_URL"] = "/lab"
 os.environ["JUPYTERHUB_SERVICE_PREFIX"] = "/user/testuser"
 
+# Import after environment is set to prevent validation errors at import time
+from auth import _sessions
+from auth import app as auth_app
+
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_env() -> None:
@@ -37,9 +41,6 @@ def setup_env() -> None:
 @pytest.fixture
 def app() -> Flask:
     """Provide the auth Flask app for testing."""
-    # Import after environment is set
-    from auth import app as auth_app
-
     auth_app.config["TESTING"] = True
     return auth_app
 
@@ -53,8 +54,6 @@ def client(app: Flask) -> FlaskClient:
 @pytest.fixture
 def clear_sessions() -> Generator[None, None, None]:
     """Clear session store before and after each test."""
-    from auth import _sessions
-
     _sessions.clear()
     yield
     _sessions.clear()

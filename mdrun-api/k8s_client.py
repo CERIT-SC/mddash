@@ -1,5 +1,6 @@
 import logging
 import shlex
+from http import HTTPStatus
 from typing import TYPE_CHECKING, cast
 
 from config import GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
@@ -340,6 +341,6 @@ def get_job_status(ns: str, name: str) -> JobStatus:
         return JobStatus.PENDING
 
     except ApiException as e:
-        if e.status == 404:
+        if e.status == HTTPStatus.NOT_FOUND:
             return JobStatus.UNKNOWN
         return JobStatus.ERROR

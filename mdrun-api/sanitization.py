@@ -12,6 +12,7 @@ _BUCKET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")
 
 _EXTRA_ARGS_FORBIDDEN_RE = re.compile(r"[;&|><`]|\$\(|\$\{|\n|\r|\x00")
 _EXTRA_ARGS_FORBIDDEN_FLAGS = {"-deffnm"}
+MAX_EXTRA_ARGS_TOKENS = 80
 
 
 def sanitize_experiment_id(experiment_id: str) -> str:
@@ -59,7 +60,7 @@ def sanitize_extra_args(extra_args: str) -> str:
     except ValueError as e:
         raise ValidationError(f"Invalid extra_args: {e}") from e
 
-    if len(tokens) > 80:
+    if len(tokens) > MAX_EXTRA_ARGS_TOKENS:
         raise ValidationError("extra_args is too long.")
 
     lowered = {t.lower() for t in tokens}

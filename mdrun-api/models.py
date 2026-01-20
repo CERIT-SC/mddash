@@ -101,5 +101,5 @@ class MdrunJob(db.Model):  # type: ignore
         logger.info(f"MDRun job {self.job_name} status changed from {old} to {new}")
 
         # Automatically delete finalized jobs (status is preserved in DB)
-        if new == JobStatus.TERMINATED or new == JobStatus.ERROR:
+        if new in (JobStatus.TERMINATED, JobStatus.ERROR):
             self.delete()
