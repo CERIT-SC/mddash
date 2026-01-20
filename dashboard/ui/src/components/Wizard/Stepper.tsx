@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 import {
     styled,
@@ -100,16 +100,28 @@ const WizardStepper = (props: WizardStepperProps) => {
     const { experiment, setExperiment } = props;
     const { showError } = useNotification();
     const [activeStep, setActiveStep] = useState(Math.min(experiment.step, steps.length - 1));
+    const isFetchingRef = useRef(false);
 
     const fetchStep = useCallback(async () => {
-        const { data, error } = await get_experiment_step(experiment.id);
+        if (isFetchingRef.current) return;
+        isFetchingRef.current = true;
 
-        if (error) showError(error);
-        else if (data !== null && data !== experiment.step) {
-            setExperiment((prev) => {
-                if (!prev) return prev;
-                return { ...prev, step: data };
-            });
+        try {
+            const { data, error } = await get_experiment_step(experiment.id);
+
+            if (error) {
+                showError(error);
+                return;
+            }
+
+            if (data !== null && data !== experiment.step) {
+                setExperiment((prev) => {
+                    if (!prev) return prev;
+                    return { ...prev, step: data };
+                });
+            }
+        } finally {
+            isFetchingRef.current = false;
         }
     }, [experiment.id, experiment.step, setExperiment, showError]);
 

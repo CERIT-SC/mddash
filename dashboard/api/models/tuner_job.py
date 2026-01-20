@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from cachetools import TTLCache, cached
+from cachetools import TTLCache
 from clients import k8s, tuner
 from config import GMX_IMAGE
 from enums import JobStatus
@@ -18,7 +18,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .experiment import Experiment
 
 logger = logging.getLogger(__name__)
-status_cache: TTLCache = TTLCache(maxsize=100, ttl=30)  # 30s
+status_cache: TTLCache = TTLCache(maxsize=100, ttl=30)  # 30s TTL for normal operation
+_last_known_status: dict[int, dict] = {}  # Fallback cache for failures (job_id -> status)
 
 
 class TunerJob(db.Model):  # type: ignore
@@ -78,16 +79,44 @@ class TunerJob(db.Model):  # type: ignore
             return self._preserved_cluster_resources
         return self._status().get("cluster_resources", "N/A")
 
-    @cached(cache=status_cache)
     def _status(self) -> dict:
+        """
+        Fetch tuner job status with caching and fallback on errors.
+
+        Uses a TTL cache for normal operation and falls back to last known
+        status on timeout or other errors to prevent breaking dependent code.
+        """
         if self.is_stopped or self.is_pending or not self.tuner_run_id:
             return {}
 
-        status = tuner.poll_status(self.tuner_run_id)
-        if err_msg := status.get("error"):
-            self.error_message = err_msg
-            db.session.commit()
-        return status
+        cache_key = self.id
+
+        # Return cached value if still fresh
+        if cache_key in status_cache:
+            return status_cache[cache_key]
+
+        try:
+            status = tuner.poll_status(self.tuner_run_id)
+            if err_msg := status.get("error"):
+                self.error_message = err_msg
+                db.session.commit()
+
+            # Validate response completeness
+            if "status" not in status or "trials" not in status:
+                raise ValueError(f"Incomplete status response from tuner for job {self.tuner_run_id}")
+
+            # Update both caches on success
+            status_cache[cache_key] = status
+            _last_known_status[cache_key] = status
+            return status
+
+        except TimeoutError:
+            logger.warning(f"Timeout fetching tuner status for job {self.tuner_run_id}")
+        except Exception:
+            logger.exception(f"Error fetching tuner status for job {self.tuner_run_id}")
+
+        # Return last known status if available, empty dict otherwise
+        return _last_known_status.get(cache_key, {})
 
     @staticmethod
     def _modify_tpr_async(

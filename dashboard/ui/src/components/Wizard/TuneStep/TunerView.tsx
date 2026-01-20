@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 import { Box, Stack, Paper, Button, Typography, CircularProgress, TextField, Alert } from "@mui/material";
 import { PlayArrow, Pause } from "@mui/icons-material";
@@ -30,24 +30,34 @@ const TunerView = (props: TunerViewProps) => {
     const [nsteps, setNsteps] = useState<number | "">(DEFAULT_NSTEPS);
     const [confirmStopDialog, setConfirmStopDialog] = useState(false);
 
+    const isFetchingRef = useRef(false);
+
     const tunerStarted = !!tuner && !tuner.is_pending && !tuner.error_message && tuner.tuner_status !== "ERROR";
     const tunerStopped = tuner?.is_stopped || false;
 
     const fetchStatus = useCallback(
         async (displayError: boolean) => {
-            const { data, error } = await tuner_status(experiment.id, tprName);
-            if (error) {
-                if (displayError) showError(error);
-                return;
-            }
-            setTuner(data || null);
+            // Prevent concurrent requests
+            if (isFetchingRef.current) return;
+            isFetchingRef.current = true;
 
-            if (data?.trials) {
-                setSelectedTrial((prev) => {
-                    if (!prev) return null;
-                    const updatedTrial = data.trials.find((trial) => trial.id === prev.id);
-                    return updatedTrial || null;
-                });
+            try {
+                const { data, error } = await tuner_status(experiment.id, tprName);
+                if (error) {
+                    if (displayError) showError(error);
+                    return;
+                }
+                setTuner(data || null);
+
+                if (data?.trials) {
+                    setSelectedTrial((prev) => {
+                        if (!prev) return null;
+                        const updatedTrial = data.trials.find((trial) => trial.id === prev.id);
+                        return updatedTrial || null;
+                    });
+                }
+            } finally {
+                isFetchingRef.current = false;
             }
         },
         [experiment.id, tprName, showError],
