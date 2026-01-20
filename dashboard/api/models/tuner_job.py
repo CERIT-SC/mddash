@@ -82,18 +82,12 @@ class TunerJob(db.Model):  # type: ignore
     def _status(self) -> dict:
         if self.is_stopped or self.is_pending or not self.tuner_run_id:
             return {}
-        try:
-            status = tuner.poll_status(self.tuner_run_id)
-            if err_msg := status.get("error"):
-                self.error_message = err_msg
-                db.session.commit()
-            return status
-        except TimeoutError:
-            logger.warning(f"Timeout while fetching status for tuner job {self.tuner_run_id}")
-            return {}
-        except Exception:
-            logger.exception(f"Unexpected error while fetching status for tuner job {self.tuner_run_id}")
-            return {}
+
+        status = tuner.poll_status(self.tuner_run_id)
+        if err_msg := status.get("error"):
+            self.error_message = err_msg
+            db.session.commit()
+        return status
 
     @staticmethod
     def _modify_tpr_async(

@@ -36,7 +36,10 @@ const TunerView = (props: TunerViewProps) => {
     const fetchStatus = useCallback(
         async (displayError: boolean) => {
             const { data, error } = await tuner_status(experiment.id, tprName);
-            if (displayError && error) showError(error);
+            if (error) {
+                if (displayError) showError(error);
+                return;
+            }
             setTuner(data || null);
 
             if (data?.trials) {

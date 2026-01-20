@@ -8,9 +8,9 @@ from requests.exceptions import Timeout
 
 AUTH = HTTPBasicAuth(TUNER_USER, TUNER_PASSWORD)
 
-DEFAULT_TIMEOUT = 5
-SUBMIT_TIMEOUT = 30
-DELETE_TIMEOUT = 10
+POLL_TIMEOUT = 5
+SUBMIT_TIMEOUT = 60
+DELETE_TIMEOUT = 15
 
 
 def get_tuner_response_data(response: Response) -> dict:
@@ -71,7 +71,7 @@ def poll_status(job_id: str) -> dict:
         HTTPError: If the request fails.
     """
     try:
-        response = requests.get(f"{TUNER_URL}/tuner_runs/{job_id}/status", auth=AUTH, timeout=DEFAULT_TIMEOUT)
+        response = requests.get(f"{TUNER_URL}/tuner_runs/{job_id}/status", auth=AUTH, timeout=POLL_TIMEOUT)
         return get_tuner_response_data(response)
     except Timeout as e:
         raise TimeoutError(f"Tuner poll status timed out for job {job_id}") from e
@@ -96,7 +96,7 @@ def delete_job(job_id: str) -> dict:
 
 # DEMO
 if __name__ == "__main__":
-    tpr_path = Path(__file__).parent.parent / "_demo" / "md.tpr"
+    tpr_path = Path(__file__).parent.parent / "_demo" / "data" / "md.tpr"
 
     # Submit a job
     response = run_submit(tpr_path)
