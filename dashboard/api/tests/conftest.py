@@ -16,19 +16,9 @@ from typing import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
-from extensions import db, ma
 from flask import Flask
 from flask.testing import FlaskClient
 from pytest_mock import MockerFixture
-from routes import (
-    experiments_bp,
-    files_bp,
-    gmx_bp,
-    mdrepo_bp,
-    misc_bp,
-    notebook_bp,
-    tuner_bp,
-)
 
 # Add parent directory to path so we can import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -46,6 +36,23 @@ os.environ["PVC_NAME"] = "test-pvc"
 os.environ["PVC_STORAGE_SIZE"] = "1Gi"
 os.environ["TUNER_USER"] = "tuner"
 os.environ["TUNER_PASSWORD"] = "secret"
+
+# Mock K8s configuration to prevent failure during module import
+with (
+    patch("kubernetes.config.load_incluster_config"),
+    patch("kubernetes.client.CoreV1Api"),
+    patch("kubernetes.client.BatchV1Api"),
+):
+    from extensions import db, ma
+    from routes import (
+        experiments_bp,
+        files_bp,
+        gmx_bp,
+        mdrepo_bp,
+        misc_bp,
+        notebook_bp,
+        tuner_bp,
+    )
 
 
 @pytest.fixture(scope="session")
