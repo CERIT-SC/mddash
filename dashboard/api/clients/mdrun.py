@@ -1,3 +1,5 @@
+from http import HTTPStatus
+
 import requests
 from config import MDRUN_API_URL
 
@@ -18,7 +20,7 @@ def get_mdrun_response_data(response: requests.Response) -> dict:
     """
     data = response.json()
 
-    if data["success"] != True:
+    if not data["success"]:
         raise requests.HTTPError(data["message"], request=None, response=response)
 
     return data["data"]
@@ -91,7 +93,7 @@ def delete_job(job_id: str) -> None:
     response = requests.delete(f"{MDRUN_API_URL}/jobs/{job_id}", timeout=10)
 
     # 404 = job already deleted or does not exist (success)
-    if response.status_code == 404:
+    if response.status_code == HTTPStatus.NOT_FOUND:
         return
 
     if not response.ok:

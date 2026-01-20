@@ -16,9 +16,19 @@ from typing import Generator
 from unittest.mock import MagicMock, patch
 
 import pytest
+from extensions import db, ma
 from flask import Flask
 from flask.testing import FlaskClient
 from pytest_mock import MockerFixture
+from routes import (
+    experiments_bp,
+    files_bp,
+    gmx_bp,
+    mdrepo_bp,
+    misc_bp,
+    notebook_bp,
+    tuner_bp,
+)
 
 # Add parent directory to path so we can import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -66,8 +76,6 @@ def app(mock_k8s: MagicMock, tmp_path: Path) -> Generator[Flask, None, None]:  #
     Uses an in-memory SQLite database and temporary data directory.
     The mock_k8s fixture is required to ensure K8s is mocked before app import.
     """
-    from extensions import db, ma
-
     # Create a fresh app for each test
     test_app = Flask(__name__)
     test_app.config["TESTING"] = True
@@ -80,17 +88,7 @@ def app(mock_k8s: MagicMock, tmp_path: Path) -> Generator[Flask, None, None]:  #
 
     # Patch DATA_DIR and import routes with the patch active
     with patch.dict("config.__dict__", {"DATA_DIR": tmp_path}):
-        # Import and register blueprints
-        from routes import (
-            experiments_bp,
-            files_bp,
-            gmx_bp,
-            mdrepo_bp,
-            misc_bp,
-            notebook_bp,
-            tuner_bp,
-        )
-
+        # Register blueprints
         test_app.register_blueprint(experiments_bp)
         test_app.register_blueprint(notebook_bp)
         test_app.register_blueprint(tuner_bp)
@@ -118,8 +116,6 @@ def db_session(app: Flask) -> Generator:
 
     Automatically rolls back changes after each test.
     """
-    from extensions import db
-
     with app.app_context():
         yield db.session
         db.session.rollback()

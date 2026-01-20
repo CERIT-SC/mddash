@@ -30,7 +30,7 @@ def get_tuner_response_data(response: Response) -> dict:
     response.raise_for_status()
     data = response.json()
 
-    if data["success"] != True:
+    if not data["success"]:
         raise HTTPError(data["message"], request=None, response=response)
 
     return data["data"]

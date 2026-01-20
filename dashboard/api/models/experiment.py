@@ -3,6 +3,7 @@ import logging
 import threading
 import zipfile
 from datetime import datetime
+from http import HTTPStatus
 from shutil import rmtree
 from typing import TYPE_CHECKING
 
@@ -149,10 +150,12 @@ class Experiment(db.Model):  # type: ignore
             url: str = f"https://files.rcsb.org/download/{pdb_id}.pdb"
             response = requests.get(url, timeout=30)
 
-            if response.status_code == 404:
-                abort(404, description=f"PDB ID '{pdb_id}' not found.")
-            elif response.status_code != 200:
-                abort(500, description=f"Failed to download PDB file: {response.status_code}")
+            if response.status_code == HTTPStatus.NOT_FOUND:
+                abort(HTTPStatus.NOT_FOUND, description=f"PDB ID '{pdb_id}' not found.")
+            elif response.status_code != HTTPStatus.OK:
+                abort(
+                    HTTPStatus.INTERNAL_SERVER_ERROR, description=f"Failed to download PDB file: {response.status_code}"
+                )
 
             with (DATA_DIR / experiment_id / "input.pdb").open("wb") as f:
                 f.write(response.content)
@@ -188,17 +191,22 @@ class Experiment(db.Model):  # type: ignore
         try:
             # Validate and parse repository link
             repo_link_parts: list[str] = repo_link.strip().split("/")
-            if len(repo_link_parts) < 4 or repo_link_parts[2] != "zenodo.org":
-                abort(400, description="Invalid repository link (expected zenodo.org)")
+            # Expected format: https://zenodo.org/record/1234567
+            min_zenodo_parts = 4
+            if len(repo_link_parts) < min_zenodo_parts or repo_link_parts[2] != "zenodo.org":
+                abort(HTTPStatus.BAD_REQUEST, description="Invalid repository link (expected zenodo.org)")
 
             record_id: str = repo_link_parts[-1]
             url: str = f"https://zenodo.org/api/records/{record_id}/files-archive"
             response = requests.get(url, timeout=60)
 
-            if response.status_code == 404:
-                abort(404, description=f"Repository '{repo_link}' not found.")
-            elif response.status_code != 200:
-                abort(500, description=f"Failed to download repository: {response.status_code}")
+            if response.status_code == HTTPStatus.NOT_FOUND:
+                abort(HTTPStatus.NOT_FOUND, description=f"Repository '{repo_link}' not found.")
+            elif response.status_code != HTTPStatus.OK:
+                abort(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    description=f"Failed to download repository: {response.status_code}",
+                )
 
             # Extract zip file
             with zipfile.ZipFile(io.BytesIO(response.content)) as zf:

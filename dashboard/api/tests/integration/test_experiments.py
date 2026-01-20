@@ -15,6 +15,8 @@ from models import Experiment, Notebook
 from sqlalchemy.orm import Session
 from werkzeug.utils import secure_filename
 
+EXPERIMENT_ID_LENGTH = 5
+
 
 class TestListExperiments:
     """Tests for GET /api/experiments."""
@@ -108,7 +110,7 @@ class TestCreateExperiment:
             data = json.loads(response.data)
             assert data["success"] is True
             assert data["data"]["name"] == "Test PDB Experiment"
-            assert len(data["data"]["id"]) == 5
+            assert len(data["data"]["id"]) == EXPERIMENT_ID_LENGTH
 
     def test_create_from_pdb_not_found(self, client: FlaskClient, tmp_path: Path) -> None:
         """Should return 404 when PDB ID doesn't exist."""

@@ -1,7 +1,11 @@
 """Unit tests for the handle_exceptions decorator."""
 
+from http import HTTPStatus
 from typing import NoReturn
 
+from api_response import ApiResponse
+from decorators import handle_exceptions
+from extensions import db
 from flask import Flask, Response
 
 
@@ -10,8 +14,6 @@ class TestHandleExceptionsDecorator:
 
     def test_passes_through_on_success(self, app: Flask) -> None:
         """Decorator should not interfere with successful responses."""
-        from api_response import ApiResponse
-        from decorators import handle_exceptions
 
         @handle_exceptions()
         def successful_route() -> Response:
@@ -19,11 +21,10 @@ class TestHandleExceptionsDecorator:
 
         with app.app_context():
             response = successful_route()
-            assert response.status_code == 200
+            assert response.status_code == HTTPStatus.OK
 
     def test_catches_exceptions(self, app: Flask) -> None:
         """Decorator should catch and convert exceptions to error responses."""
-        from decorators import handle_exceptions
 
         @handle_exceptions()
         def failing_route() -> NoReturn:
@@ -31,14 +32,11 @@ class TestHandleExceptionsDecorator:
 
         with app.app_context():
             response = failing_route()
-            assert response.status_code == 500
+            assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
             assert b"Test error" in response.data
 
     def test_rollback_on_exception(self, app: Flask) -> None:
         """Decorator with rollback=True should rollback DB on exception."""
-        from decorators import handle_exceptions
-        from extensions import db
-
         rollback_called = False
         original_rollback = db.session.rollback
 
@@ -61,9 +59,6 @@ class TestHandleExceptionsDecorator:
 
     def test_no_rollback_by_default(self, app: Flask) -> None:
         """Decorator without rollback=True should not rollback on exception."""
-        from decorators import handle_exceptions
-        from extensions import db
-
         rollback_called = False
         original_rollback = db.session.rollback
 

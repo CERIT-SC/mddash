@@ -1,6 +1,8 @@
 import logging
 import os
 import threading
+import time
+from http import HTTPStatus
 from typing import Callable, cast
 
 from config import GMX_IMAGE, NAMESPACE, NOTEBOOK_IMAGE, PVC_NAME
@@ -505,7 +507,7 @@ def get_pod_status(name: str) -> PodStatus:
         return PodStatus.UNKNOWN
 
     except ApiException as e:
-        return PodStatus.DOWN if e.status == 404 else PodStatus.ERROR
+        return PodStatus.DOWN if e.status == HTTPStatus.NOT_FOUND else PodStatus.ERROR
 
 
 def get_job_status(name: str) -> JobStatus:
@@ -541,7 +543,7 @@ def get_job_status(name: str) -> JobStatus:
         return JobStatus.PENDING
 
     except ApiException as e:
-        if e.status == 404:
+        if e.status == HTTPStatus.NOT_FOUND:
             return JobStatus.UNKNOWN
         return JobStatus.ERROR
 
@@ -561,7 +563,6 @@ def wait_for_job(
         on_error: Callback function to invoke with the exception when the job fails or times out.
         timeout: Maximum time to wait in seconds (default: 60).
     """
-    import time
 
     def wait_and_callback() -> None:
         try:

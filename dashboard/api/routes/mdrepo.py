@@ -52,7 +52,7 @@ def get_status() -> Response:
     try:
         resp = requests.get(f"{MDREPO_URL}/api/me", headers={"Authorization": f"Bearer {token}"}, timeout=10)
 
-        if resp.status_code == 200:
+        if resp.status_code == HTTPStatus.OK:
             return ApiResponse.success({"authenticated": True, "mdrepo_url": MDREPO_URL})
 
         # Token invalid or expired

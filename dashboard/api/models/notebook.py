@@ -1,4 +1,5 @@
 import logging
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -56,14 +57,14 @@ class Notebook(db.Model):  # type: ignore
         try:
             k8s.create_notebook_pod(pod_name, self.experiment_id, f"{PREFIX}/notebook/{self.experiment_id}", self.token)
         except ApiException as e:
-            if e.status == 403:
+            if e.status == HTTPStatus.FORBIDDEN:
                 logger.debug("Quota exceeded when creating notebook pod.", exc_info=True)
-                abort(403, description="Resource quota exceeded. Please stop other notebooks.")
-            elif e.status == 409:
-                abort(409, description="Notebook pod already exists.")
+                abort(HTTPStatus.FORBIDDEN, description="Resource quota exceeded. Please stop other notebooks.")
+            elif e.status == HTTPStatus.CONFLICT:
+                abort(HTTPStatus.CONFLICT, description="Notebook pod already exists.")
             else:
                 logger.exception("Failed to create notebook pod.")
-                abort(500, description=f"Failed to create notebook pod: {e.reason}")
+                abort(HTTPStatus.INTERNAL_SERVER_ERROR, description=f"Failed to create notebook pod: {e.reason}")
 
         try:
             k8s.create_service(svc_name, pod_name)
@@ -84,7 +85,7 @@ class Notebook(db.Model):  # type: ignore
 
     def stop(self) -> None:
         """Stop the notebook pod and service, and remove the route from Caddy."""
-        if self.status != PodStatus.RUNNING and self.status != PodStatus.PENDING:
+        if self.status not in {PodStatus.RUNNING, PodStatus.PENDING}:
             logger.warning(f"Notebook {self.experiment_id} is not running. No action taken.")
             return
 
