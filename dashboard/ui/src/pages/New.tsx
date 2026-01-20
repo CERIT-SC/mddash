@@ -11,6 +11,7 @@ import {
     Tabs,
     Tab,
     FormHelperText,
+    CircularProgress,
 } from "@mui/material";
 
 import Dropzone from "@/components/Dropzone";
@@ -48,6 +49,7 @@ const New = () => {
     const [nameError, setNameError] = useState(false);
     const [typeError, setTypeError] = useState(false);
     const [typeAuxError, setTypeAuxError] = useState(false);
+    const [loading, setLoading] = useState(false);
 
     const validateForm = () => {
         let typeAuxError = false;
@@ -68,7 +70,9 @@ const New = () => {
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
 
-        if (!validateForm()) return;
+        if (loading || !validateForm()) return;
+
+        setLoading(true);
 
         const formData = new FormData();
         formData.append("experiment-name", name);
@@ -83,11 +87,13 @@ const New = () => {
 
         if (error) {
             showError(error);
+            setLoading(false);
             return;
         }
 
         console.log("Experiment created:", data);
         showSuccess("Experiment created successfully!");
+        setLoading(false);
         navigate(`/${data!.id}/wizard`);
     };
 
@@ -157,8 +163,14 @@ const New = () => {
                     )}
                     {type === "file" && <Dropzone inputName="simulation-files" onFilesChange={setFiles} />}
 
-                    <Button variant="contained" type="submit" sx={{ alignSelf: "flex-start" }}>
-                        Create Experiment
+                    <Button
+                        variant="contained"
+                        type="submit"
+                        disabled={loading}
+                        startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
+                        sx={{ alignSelf: "flex-start" }}
+                    >
+                        {loading ? "Creating..." : "Create Experiment"}
                     </Button>
                 </Stack>
             </Paper>
