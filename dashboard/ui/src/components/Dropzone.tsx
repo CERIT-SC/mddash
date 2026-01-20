@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
 
 import { useDropzone, DropzoneOptions, FileRejection, DropEvent, Accept } from "react-dropzone";
 import {
@@ -14,8 +14,9 @@ import {
     SxProps,
     Avatar,
     Divider,
+    IconButton,
 } from "@mui/material";
-import { Check, CloudUpload } from "@mui/icons-material";
+import { Check, CloudUpload, Delete } from "@mui/icons-material";
 
 import { useNotification } from "@/contexts/useNotification";
 import { formatFileSize } from "@/util/helpers";
@@ -29,10 +30,11 @@ const getAcceptedExtensions = (acceptedTypes: Accept): string =>
 interface DropzoneProps extends DropzoneOptions {
     inputName: string;
     sx?: SxProps;
+    onFilesChange?: (files: File[]) => void;
 }
 
 const Dropzone = (props: DropzoneProps) => {
-    const { inputName, sx, onDrop, onError, ...dropzoneOptions } = props;
+    const { inputName, sx, onDrop, onError, onFilesChange, ...dropzoneOptions } = props;
 
     const [files, setFiles] = useState<File[]>([]);
     const { showError } = useNotification();
@@ -45,8 +47,17 @@ const Dropzone = (props: DropzoneProps) => {
             showError(fileRejections[0].errors[0].message);
         }
 
-        setFiles(acceptedFiles);
+        const newFiles = [...files, ...acceptedFiles];
+        setFiles(newFiles);
         onDrop?.(acceptedFiles, fileRejections, event);
+        onFilesChange?.(newFiles);
+    };
+
+    const removeFile = (index: number) => {
+        const newFiles = [...files];
+        newFiles.splice(index, 1);
+        setFiles(newFiles);
+        onFilesChange?.(newFiles);
     };
 
     const handleError = (err: Error) => {
@@ -98,8 +109,19 @@ const Dropzone = (props: DropzoneProps) => {
                 <Paper variant="outlined">
                     <List disablePadding>
                         {files.map((file, index) => (
-                            <>
-                                <ListItem key={index}>
+                            <Fragment key={`${file.name}-${index}`}>
+                                <ListItem
+                                    secondaryAction={
+                                        <IconButton
+                                            edge="end"
+                                            aria-label="delete"
+                                            onClick={() => removeFile(index)}
+                                            size="small"
+                                        >
+                                            <Delete fontSize="small" />
+                                        </IconButton>
+                                    }
+                                >
                                     <ListItemAvatar>
                                         <Avatar sx={{ bgcolor: "success.main", width: 32, height: 32 }}>
                                             <Check fontSize="small" />
@@ -108,7 +130,7 @@ const Dropzone = (props: DropzoneProps) => {
                                     <ListItemText primary={file.name} secondary={formatFileSize(file.size)} />
                                 </ListItem>
                                 {index < files.length - 1 && <Divider component="li" />}
-                            </>
+                            </Fragment>
                         ))}
                     </List>
                 </Paper>

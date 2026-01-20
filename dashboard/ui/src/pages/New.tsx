@@ -155,9 +155,7 @@ const New = () => {
                             error={typeAuxError}
                         />
                     )}
-                    {type === "file" && (
-                        <Dropzone inputName="simulation-files" onDrop={(acceptedFiles) => setFiles(acceptedFiles)} />
-                    )}
+                    {type === "file" && <Dropzone inputName="simulation-files" onFilesChange={setFiles} />}
 
                     <Button variant="contained" type="submit" sx={{ alignSelf: "flex-start" }}>
                         Create Experiment
