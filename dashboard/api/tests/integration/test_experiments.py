@@ -4,13 +4,16 @@ Integration tests for experiment API routes.
 Tests the full request/response cycle with mocked external dependencies.
 """
 
+import io
 import json
 from http import HTTPStatus
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from flask.testing import FlaskClient
+from models import Experiment, Notebook
 from sqlalchemy.orm import Session
+from werkzeug.utils import secure_filename
 
 
 class TestListExperiments:
@@ -27,8 +30,6 @@ class TestListExperiments:
 
     def test_returns_experiments(self, client: FlaskClient, db_session: Session) -> None:
         """Should return list of all experiments."""
-        from models import Experiment, Notebook
-
         # Create test experiment directly in DB
         exp = Experiment()
         exp.id = "testx"
@@ -56,8 +57,6 @@ class TestGetExperiment:
 
     def test_returns_experiment_by_id(self, client: FlaskClient, db_session: Session) -> None:
         """Should return experiment details for valid ID."""
-        from models import Experiment, Notebook
-
         exp = Experiment()
         exp.id = "abcde"
         exp.name = "My Experiment"
@@ -141,14 +140,79 @@ class TestCreateExperiment:
 
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
+    def test_create_from_files_success(self, client: FlaskClient, tmp_path: Path) -> None:
+        """Should create experiment from uploaded files."""
+        with patch("models.experiment.DATA_DIR", tmp_path):
+            data = {
+                "type": "file",
+                "experiment-name": "Test File Experiment",
+                "simulation-files": [
+                    (io.BytesIO(b"content1"), "test1.gro"),
+                    (io.BytesIO(b"content2"), "test2.itp"),
+                ],
+            }
+
+            response = client.post(
+                "/dash/api/experiments",
+                data=data,
+                content_type="multipart/form-data",
+            )
+
+            assert response.status_code == HTTPStatus.CREATED
+            data = json.loads(response.data)
+            assert data["success"] is True
+            assert data["data"]["name"] == "Test File Experiment"
+
+            # Verify files were saved
+            exp_id = data["data"]["id"]
+            exp_dir = tmp_path / exp_id
+            assert (exp_dir / "test1.gro").exists()
+            assert (exp_dir / "test2.itp").exists()
+
+    def test_create_with_malicious_filenames(self, client: FlaskClient, tmp_path: Path) -> None:
+        """Should sanitize malicious filenames during upload."""
+        with patch("models.experiment.DATA_DIR", tmp_path):
+            malicious_filename_1 = "../../../etc/passwd"
+            malicious_filename_2 = "<script>alert(1)</script>.js"
+
+            data = {
+                "type": "file",
+                "experiment-name": "Malicious Files Experiment",
+                "simulation-files": [
+                    (io.BytesIO(b"hack"), malicious_filename_1),
+                    (io.BytesIO(b"script"), malicious_filename_2),
+                ],
+            }
+
+            response = client.post(
+                "/dash/api/experiments",
+                data=data,
+                content_type="multipart/form-data",
+            )
+
+            assert response.status_code == HTTPStatus.CREATED
+            data = json.loads(response.data)
+
+            # Verify files were saved with sanitized names
+            exp_id = data["data"]["id"]
+            exp_dir = tmp_path / exp_id
+
+            expected_name_1 = secure_filename(malicious_filename_1)
+            expected_name_2 = secure_filename(malicious_filename_2)
+
+            # Ensure sanitization actually does something
+            assert expected_name_1 != malicious_filename_1
+            assert expected_name_2 != malicious_filename_2
+
+            assert (exp_dir / expected_name_1).exists()
+            assert (exp_dir / expected_name_2).exists()
+
 
 class TestEditExperiment:
     """Tests for PATCH /api/experiments/<id>."""
 
     def test_update_experiment_name(self, client: FlaskClient, db_session: Session) -> None:
         """Should update experiment name."""
-        from models import Experiment, Notebook
-
         exp = Experiment()
         exp.id = "editx"
         exp.name = "Original Name"
@@ -183,8 +247,6 @@ class TestEditExperiment:
 
     def test_update_with_no_data(self, client: FlaskClient, db_session: Session) -> None:
         """Should return 400 when no data provided."""
-        from models import Experiment, Notebook
-
         exp = Experiment()
         exp.id = "nodta"
         exp.name = "Test"
@@ -211,8 +273,6 @@ class TestDeleteExperiment:
 
     def test_delete_experiment(self, client: FlaskClient, db_session: Session, tmp_path: Path) -> None:
         """Should delete experiment and return 204."""
-        from models import Experiment, Notebook
-
         # Create experiment directory
         exp_dir = tmp_path / "delme"
         exp_dir.mkdir()

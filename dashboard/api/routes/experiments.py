@@ -25,22 +25,22 @@ def list_experiments() -> Response:
 @experiments_bp.route("", methods=["POST"])
 @handle_exceptions(rollback=True)
 def create_experiment() -> Response:
-    """Create a new experiment from PDB, repository URL, or uploaded file."""
+    """Create a new experiment from PDB, repository URL, or uploaded files."""
     schema = ExperimentSchema()
     form = request.form
 
     name = form["experiment-name"]
     pdb_id = form.get("pdb-id")
     repo_url = form.get("repo-url")
-    simulation_file = request.files.get("simulation-file")
+    simulation_files = request.files.getlist("simulation-files")
 
     match form["type"]:
         case "pdb" if pdb_id:
             experiment = Experiment.from_pdb(name, pdb_id)
         case "repo" if repo_url:
             experiment = Experiment.from_repo(name, repo_url)
-        case "file" if simulation_file:
-            experiment = Experiment.from_tpr(name, simulation_file)
+        case "file" if simulation_files:
+            experiment = Experiment.from_files(name, simulation_files)
         case _:
             return ApiResponse.error("Invalid experiment type or missing data.", HTTPStatus.BAD_REQUEST)
 

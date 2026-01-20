@@ -43,7 +43,7 @@ const New = () => {
     const [type, setType] = useState("");
     const [pdbId, setPdbId] = useState("");
     const [repoUrl, setRepoUrl] = useState("");
-    const [file, setFile] = useState<File | null>(null);
+    const [files, setFiles] = useState<File[]>([]);
 
     const [nameError, setNameError] = useState(false);
     const [typeError, setTypeError] = useState(false);
@@ -52,7 +52,7 @@ const New = () => {
     const validateForm = () => {
         let typeAuxError = false;
 
-        if ((type === "pdb" && !pdbId) || (type === "repo" && !repoUrl) || (type === "file" && !file))
+        if ((type === "pdb" && !pdbId) || (type === "repo" && !repoUrl) || (type === "file" && files.length === 0))
             typeAuxError = true;
 
         setNameError(!name);
@@ -75,7 +75,9 @@ const New = () => {
         formData.append("type", type);
         if (type === "pdb") formData.append("pdb-id", pdbId);
         if (type === "repo") formData.append("repo-url", repoUrl);
-        if (type === "file" && file) formData.append("simulation-file", file);
+        if (type === "file" && files.length > 0) {
+            files.forEach((file) => formData.append("simulation-files", file));
+        }
 
         const { data, error } = await create_experiment(formData);
 
@@ -94,7 +96,7 @@ const New = () => {
         setType(newType);
         setPdbId("");
         setRepoUrl("");
-        setFile(null);
+        setFiles([]);
     };
 
     return (
@@ -124,9 +126,9 @@ const New = () => {
                             TabIndicatorProps={{ style: { display: "none" } }}
                             sx={{ mt: 1 }}
                         >
+                            <Tab value="file" label="Upload Files" disableRipple sx={tabStyles} />
                             <Tab value="pdb" label="PDB ID" disableRipple sx={tabStyles} />
                             <Tab value="repo" label="Repository URL" disableRipple sx={tabStyles} />
-                            <Tab value="file" label="TPR/XTC file" disableRipple sx={tabStyles} />
                         </Tabs>
                         {(typeError || typeAuxError) && (
                             <FormHelperText>Select a source and fill its required details.</FormHelperText>
@@ -154,12 +156,7 @@ const New = () => {
                         />
                     )}
                     {type === "file" && (
-                        <Dropzone
-                            inputName="simulation-file"
-                            accept={{ "application/octet-stream": [".tpr", ".xtc"] }}
-                            maxFiles={1}
-                            onDrop={(acceptedFiles) => setFile(acceptedFiles[0])}
-                        />
+                        <Dropzone inputName="simulation-files" onDrop={(acceptedFiles) => setFiles(acceptedFiles)} />
                     )}
 
                     <Button variant="contained" type="submit" sx={{ alignSelf: "flex-start" }}>

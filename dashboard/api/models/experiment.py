@@ -16,6 +16,7 @@ from flask import abort
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from utils import get_files_with_extensions, get_unique_id
 from werkzeug.datastructures import FileStorage
+from werkzeug.utils import secure_filename
 
 from .notebook import Notebook
 
@@ -216,29 +217,32 @@ class Experiment(db.Model):  # type: ignore
             raise
 
     @classmethod
-    def from_tpr(cls, name: str, tpr: FileStorage) -> "Experiment":
+    def from_files(cls, name: str, files: list[FileStorage]) -> "Experiment":
         """
-        Create experiment from TPR file upload with database persistence.
+        Create experiment from file uploads with database persistence.
 
         Args:
             name: Name of the experiment.
-            tpr: Uploaded TPR file.
+            files: List of uploaded files.
 
         Returns:
             The created Experiment instance.
-
-        Raises:
-            HTTPException: If the TPR file is invalid or cannot be processed.
         """
-        if not tpr.filename or not tpr.filename.endswith(".tpr"):
-            abort(400, description="Invalid file format (expected .tpr)")
+        if not files:
+            abort(400, description="No files provided")
 
         experiment_id: str = cls.prepare_env()
 
         try:
-            tpr.save(DATA_DIR / experiment_id / "input.tpr")
+            filenames = []
+            for file in files:
+                if not file.filename:
+                    continue
+                filename = secure_filename(file.filename)
+                file.save(DATA_DIR / experiment_id / filename)
+                filenames.append(filename)
 
-            message: str = f"Created by uploading TPR file '{tpr.filename}'."
+            message: str = f"Created by uploading files: {', '.join(filenames)}."
             experiment = cls(id=experiment_id, name=name, source_message=message)  # type: ignore[call-arg]
 
             return cls._create_with_notebook(experiment)
