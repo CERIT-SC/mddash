@@ -16,10 +16,12 @@ const RunStep = (props: WizardStepProps) => {
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
     const [tprFiles, setTprFiles] = useState<string[]>([]);
     const [existingJobs, setExistingJobs] = useState<string[]>([]);
+    const [loading, setLoading] = useState(false);
     const [deleteTpr, setDeleteTpr] = useState<string | null>(null);
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
 
     const fetchGromacsJobs = useCallback(async () => {
+        setLoading(true);
         const { data, error } = await gmx_statuses(experiment.id);
         if (error) showError(error);
         const jobs = data || [];
@@ -29,6 +31,7 @@ const RunStep = (props: WizardStepProps) => {
         const jobNames = jobs.map((job) => job.tpr_name);
         setTprFiles(jobNames);
         setExistingJobs(jobNames);
+        setLoading(false);
     }, [experiment.id, showError]);
 
     const handleAddTpr = useCallback((tpr: string) => {
@@ -72,6 +75,7 @@ const RunStep = (props: WizardStepProps) => {
                     addTitle="Add Gromacs Job"
                     tprFiles={tprFiles}
                     selectedTpr={selectedTpr}
+                    loading={loading}
                     onAddTpr={handleAddTpr}
                     onDeleteTpr={handleDeleteTpr}
                     onSelectTpr={setSelectedTpr}

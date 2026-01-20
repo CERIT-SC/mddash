@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { Stack, Paper, Typography, Button, IconButton } from "@mui/material";
+import { Stack, Paper, Typography, Button, IconButton, CircularProgress, Box } from "@mui/material";
 import { Delete, Add } from "@mui/icons-material";
 
 import FileSelector from "@/components/FileSelector";
@@ -11,13 +11,14 @@ interface TprSelectorProps {
     addTitle: string;
     tprFiles: string[];
     selectedTpr: string | null;
+    loading?: boolean;
     onAddTpr: (tpr: string) => void;
     onDeleteTpr: (tpr: string) => void;
     onSelectTpr: (tpr: string) => void;
 }
 
 const TprSelector = (props: TprSelectorProps) => {
-    const { experimentId, title, addTitle, tprFiles, selectedTpr, onAddTpr, onDeleteTpr, onSelectTpr } = props;
+    const { experimentId, title, addTitle, tprFiles, selectedTpr, loading, onAddTpr, onDeleteTpr, onSelectTpr } = props;
 
     const [fileSelectorTpr, setFileSelectorTpr] = useState<string>("");
 
@@ -46,58 +47,64 @@ const TprSelector = (props: TprSelectorProps) => {
                 </Button>
 
                 <Stack direction="column" spacing={1}>
-                    {tprFiles.map((tpr) => (
-                        <Stack
-                            key={tpr}
-                            direction="row"
-                            spacing={2}
-                            alignItems="center"
-                            justifyContent="space-between"
-                            sx={{
-                                padding: "8px 12px",
-                                cursor: "pointer",
-                                borderRadius: 1,
-                                border: 1,
-                                borderColor: selectedTpr === tpr ? "text.primary" : "divider",
-                                backgroundColor: selectedTpr === tpr ? "primary.main" : "background.paper",
-                                "&:hover": {
-                                    backgroundColor: selectedTpr === tpr ? "primary.main" : "action.hover",
-                                },
-                                color: selectedTpr === tpr ? "primary.contrastText" : "text.primary",
-                                transition: "all 0.2s",
-                            }}
-                        >
-                            <Typography
-                                variant="body1"
-                                onClick={() => {
-                                    if (selectedTpr === tpr) onSelectTpr("");
-                                    else onSelectTpr(tpr);
-                                }}
-                                title={tpr}
+                    {loading ? (
+                        <Box display="flex" justifyContent="center" py={2}>
+                            <CircularProgress size={24} />
+                        </Box>
+                    ) : (
+                        tprFiles.map((tpr) => (
+                            <Stack
+                                key={tpr}
+                                direction="row"
+                                spacing={2}
+                                alignItems="center"
+                                justifyContent="space-between"
                                 sx={{
-                                    flexGrow: 1,
-                                    overflow: "hidden",
-                                    textOverflow: "ellipsis",
-                                    whiteSpace: "nowrap",
-                                }}
-                            >
-                                {tpr}
-                            </Typography>
-                            <IconButton
-                                aria-label="delete"
-                                size="small"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDeleteTpr(tpr);
-                                }}
-                                sx={{
+                                    padding: "8px 12px",
+                                    cursor: "pointer",
+                                    borderRadius: 1,
+                                    border: 1,
+                                    borderColor: selectedTpr === tpr ? "text.primary" : "divider",
+                                    backgroundColor: selectedTpr === tpr ? "primary.main" : "background.paper",
+                                    "&:hover": {
+                                        backgroundColor: selectedTpr === tpr ? "primary.main" : "action.hover",
+                                    },
                                     color: selectedTpr === tpr ? "primary.contrastText" : "text.primary",
+                                    transition: "all 0.2s",
                                 }}
                             >
-                                <Delete fontSize="small" />
-                            </IconButton>
-                        </Stack>
-                    ))}
+                                <Typography
+                                    variant="body1"
+                                    onClick={() => {
+                                        if (selectedTpr === tpr) onSelectTpr("");
+                                        else onSelectTpr(tpr);
+                                    }}
+                                    title={tpr}
+                                    sx={{
+                                        flexGrow: 1,
+                                        overflow: "hidden",
+                                        textOverflow: "ellipsis",
+                                        whiteSpace: "nowrap",
+                                    }}
+                                >
+                                    {tpr}
+                                </Typography>
+                                <IconButton
+                                    aria-label="delete"
+                                    size="small"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onDeleteTpr(tpr);
+                                    }}
+                                    sx={{
+                                        color: selectedTpr === tpr ? "primary.contrastText" : "text.primary",
+                                    }}
+                                >
+                                    <Delete fontSize="small" />
+                                </IconButton>
+                            </Stack>
+                        ))
+                    )}
                 </Stack>
             </Stack>
         </Paper>

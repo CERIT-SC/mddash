@@ -17,11 +17,13 @@ const TuneStep = (props: WizardStepProps) => {
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
     const [tprFiles, setTprFiles] = useState<string[]>([]);
     const [existingJobs, setExistingJobs] = useState<string[]>([]);
+    const [loading, setLoading] = useState(false);
     const [deleteTpr, setDeleteTpr] = useState<string | null>(null);
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
     const [skipDialog, setSkipDialog] = useState(false);
 
     const fetchTunerJobs = useCallback(async () => {
+        setLoading(true);
         const { data, error } = await tuner_statuses(experiment.id);
         if (error) showError(error);
         const jobs = data || [];
@@ -31,6 +33,7 @@ const TuneStep = (props: WizardStepProps) => {
         const jobNames = jobs.map((job) => job.tpr_name);
         setTprFiles(jobNames);
         setExistingJobs(jobNames);
+        setLoading(false);
     }, [experiment.id, showError]);
 
     const handleAddTpr = useCallback((tpr: string) => {
@@ -83,6 +86,7 @@ const TuneStep = (props: WizardStepProps) => {
                     addTitle="Add Tuner Job"
                     tprFiles={tprFiles}
                     selectedTpr={selectedTpr}
+                    loading={loading}
                     onAddTpr={handleAddTpr}
                     onDeleteTpr={handleDeleteTpr}
                     onSelectTpr={setSelectedTpr}
