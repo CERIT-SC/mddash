@@ -3,6 +3,13 @@ SHELL := /bin/bash
 
 ENV ?= dev
 
+# IMAGE_TAG inherited from parent Makefile (exported), or computed here
+ifeq ($(ENV),dev)
+  IMAGE_TAG ?= dev
+else
+  IMAGE_TAG ?= $(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD)
+endif
+
 config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
 package := $(shell yq .helm.package $(config))
 namespace := $(shell yq '.namespace' $(config))
@@ -16,8 +23,8 @@ help: ## Show this help
 
 .PHONY: render
 render: ## Render Helm values template
-	@echo "=== Rendering values for $(ENV) environment ==="
-	@gomplate -d config=$(config) \
+	@echo "=== Rendering values for $(ENV) environment (tag=$(IMAGE_TAG)) ==="
+	@IMAGE_TAG=$(IMAGE_TAG) gomplate -d config=$(config) \
 		-f $(chart_path)/values.yaml.tmpl \
 		-o $(chart_path)/values.yaml
 	@echo "✓ Rendered $(chart_path)/values.yaml"
@@ -77,3 +84,21 @@ status: ## Show deployment status
 .PHONY: logs
 logs: ## Show hub deployment logs
 	kubectl logs -f deployment/hub -n $(namespace)
+
+# ==================== ROLLBACK ====================
+
+.PHONY: history
+history: ## Show Helm release history
+	@helm history $(package) --namespace $(namespace)
+
+.PHONY: rollback
+rollback: ## Rollback to previous revision (REVISION=N for specific)
+	@if [ -n "$(REVISION)" ]; then \
+		echo "Rolling back to revision $(REVISION)..."; \
+		helm rollback $(package) $(REVISION) --namespace $(namespace); \
+	else \
+		echo "Rolling back to previous revision..."; \
+		helm rollback $(package) --namespace $(namespace); \
+	fi
+	@echo "✓ Rollback complete"
+	@$(MAKE) status

@@ -3,7 +3,14 @@ SHELL := /bin/bash
 
 CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 ENV ?= $(if $(filter master,$(CURRENT_BRANCH)),prod,dev)
-IMAGE_TAG ?= $(if $(filter dev,$(ENV)),dev,latest)
+
+# Tagging: dev uses static 'dev' tag, prod uses YYYYMMDD-<short-sha> for unique, traceable images
+ifeq ($(ENV),dev)
+  IMAGE_TAG ?= dev
+else
+  IMAGE_TAG ?= $(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD)
+endif
+export IMAGE_TAG
 
 config := $(if $(filter dev,$(ENV)),config.dev.yaml,config.yaml)
 namespace := $(shell yq '.namespace' $(config))
@@ -90,6 +97,16 @@ status: ## Show deployment status
 .PHONY: logs
 logs: ## Show deployment logs
 	@$(MAKE) -C helm logs ENV=$(ENV)
+
+# ==================== ROLLBACK ====================
+
+.PHONY: history
+history: ## Show Helm release history
+	@$(MAKE) -C helm history ENV=$(ENV)
+
+.PHONY: rollback
+rollback: ## Rollback to previous revision (REVISION=N for specific)
+	@$(MAKE) -C helm rollback ENV=$(ENV) REVISION=$(REVISION)
 
 .PHONY: demo
 demo: ## Run local demo (Flask API + React dev server)

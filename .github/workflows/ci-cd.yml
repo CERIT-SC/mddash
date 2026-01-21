@@ -60,10 +60,13 @@ jobs:
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
             CONFIG_FILE="config.yaml"
+            # Prod: use YYYYMMDD-<short-sha> for unique, traceable tags
+            TAG="$(date +%Y%m%d)-$(git rev-parse --short HEAD)"
             echo "env=prod" >> $GITHUB_OUTPUT
-            echo "tag=latest" >> $GITHUB_OUTPUT
+            echo "tag=${TAG}" >> $GITHUB_OUTPUT
           else
             CONFIG_FILE="config.dev.yaml"
+            # Dev: use static 'dev' tag
             echo "env=dev" >> $GITHUB_OUTPUT
             echo "tag=dev" >> $GITHUB_OUTPUT
           fi

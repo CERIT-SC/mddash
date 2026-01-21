@@ -19,10 +19,24 @@ Molecular Dynamics simulation dashboard with JupyterHub integration.
    - `TUNER_PASSWORD` - Password for Gromacs Tuner
 
 2. **Push to deploy**:
-   - Push to `dev` → deploys to dev environment
-   - Push to `master` → deploys to production
+   - Push to `dev` → deploys to dev environment (tag: `dev`)
+   - Push to `master` → deploys to production (tag: `YYYYMMDD-<commit-sha>`)
 
 All secrets are automatically created in the namespace during deployment.
+
+
+## Image Tagging Strategy
+
+| Environment | Branch   | Tag Format       | Pull Policy    |
+| ----------- | -------- | ---------------- | -------------- |
+| **Dev**     | `dev`    | Static `dev`     | `Always`       |
+| **Prod**    | `master` | `YYYYMMDD-<sha>` | `IfNotPresent` |
+
+### Harbor Retention Policy
+
+Configure in Harbor UI (Project → Policy → Tag Retention):
+1. **Dev tags**: Repository `**`, tag `dev` → Retain always
+2. **Prod tags**: Repository `**`, tag `*-*` → Keep last 10 pushed
 
 
 ## Configuration
@@ -44,6 +58,8 @@ Install the *Dev Containers* extension in VSCode, then `F1` → *"Reopen in Cont
 make build ENV=dev    # Build images
 make all ENV=dev      # Build, push, deploy
 make status ENV=dev   # Check status
+make history ENV=prod # Show deployment history
+make rollback ENV=prod REVISION=3  # Rollback to specific revision
 make help             # Show all commands
 ```
 

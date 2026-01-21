@@ -11,6 +11,7 @@ storageClassName: nfs-csi
 
 # Container and helm chart registry
 registry: cerit.io/xkrasa
+imageTag: latest  # Overridden by CI/CD or make deploy, see README.md
 
 # Dashboard hostname
 dashboard:
@@ -25,12 +26,10 @@ mdrepo:
 notebook:
   image: cerit.io/xkrasa/mddash-notebook
   platform: linux/amd64
-  tag: latest
 
 # Sidecar container images for user pod
 sidecars:
   platform: linux/amd64
-  tag: latest
   pullPolicy: IfNotPresent
   ui:
     image: cerit.io/xkrasa/mddash-ui
@@ -69,7 +68,6 @@ helm:
 mdrunApi:
   image: cerit.io/xkrasa/mdrun-api
   platform: linux/amd64
-  tag: latest
   storage:  # Persistent storage for mdrun-api database
     size: 20Gi
 

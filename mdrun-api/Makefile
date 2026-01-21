@@ -2,7 +2,13 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 ENV ?= dev
-IMAGE_TAG ?= latest
+
+# IMAGE_TAG inherited from parent Makefile (exported), or computed here
+ifeq ($(ENV),dev)
+  IMAGE_TAG ?= dev
+else
+  IMAGE_TAG ?= $(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD)
+endif
 
 config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
 image := $(shell yq .mdrunApi.image $(config))

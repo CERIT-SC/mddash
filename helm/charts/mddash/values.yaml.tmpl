@@ -1,6 +1,7 @@
 {{- $cfg := (datasource "config") -}}
 {{- $namespace := $cfg.namespace -}}
 {{- $helmPackage := $cfg.helm.package -}}
+{{- $imageTag := (getenv "IMAGE_TAG" $cfg.imageTag) -}}
 jupyterhub:
   hub:
     config:
@@ -72,15 +73,15 @@ jupyterhub:
         value: "{{ $cfg.storageClassName }}"
       # Sidecar container images - used by pre_spawn_hook.py to configure extra_containers
       PROXY_IMAGE:
-        value: "{{ $cfg.sidecars.proxy.image }}:{{ $cfg.sidecars.tag }}"
+        value: "{{ $cfg.sidecars.proxy.image }}:{{ $imageTag }}"
       AUTH_IMAGE:
-        value: "{{ $cfg.sidecars.auth.image }}:{{ $cfg.sidecars.tag }}"
+        value: "{{ $cfg.sidecars.auth.image }}:{{ $imageTag }}"
       API_IMAGE:
-        value: "{{ $cfg.sidecars.api.image }}:{{ $cfg.sidecars.tag }}"
+        value: "{{ $cfg.sidecars.api.image }}:{{ $imageTag }}"
       S3_SYNC_IMAGE:
-        value: "{{ $cfg.sidecars.s3sync.image }}:{{ $cfg.sidecars.tag }}"
+        value: "{{ $cfg.sidecars.s3sync.image }}:{{ $imageTag }}"
       NOTEBOOK_IMAGE:
-        value: "{{ $cfg.notebook.image }}:{{ $cfg.notebook.tag }}"
+        value: "{{ $cfg.notebook.image }}:{{ $imageTag }}"
       # MDRepo OAuth for publishing experiments to the repository
       MDREPO_URL:
         value: "{{ $cfg.mdrepo.url }}"
@@ -215,7 +216,7 @@ jupyterhub:
 mdrun-api:
   image:
     repository: {{ $cfg.mdrunApi.image }}
-    tag: "{{ $cfg.mdrunApi.tag }}"
+    tag: "{{ $imageTag }}"
     pullPolicy: Always
   storage:
     size: {{ $cfg.mdrunApi.storage.size }}
