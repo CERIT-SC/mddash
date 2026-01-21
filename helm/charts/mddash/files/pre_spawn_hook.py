@@ -1,7 +1,9 @@
 import asyncio
 import json
+import logging
 import os
 import time
+from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
 from kubernetes_asyncio import config
@@ -16,6 +18,9 @@ from kubernetes_asyncio.client.rest import ApiException
 
 if TYPE_CHECKING:
     from kubespawner import KubeSpawner
+
+
+logger = logging.getLogger(__name__)
 
 
 # =============================================================================
@@ -113,7 +118,7 @@ async def _ensure_resource(method: Any, **kwargs: object) -> None:  # noqa: ANN4
     try:
         await method(**kwargs)
     except ApiException as e:
-        if e.status != 409:
+        if e.status != HTTPStatus.CONFLICT:
             raise
 
 
@@ -125,7 +130,7 @@ async def _resource_exists(method: Any, **kwargs: object) -> bool:  # noqa: ANN4
     except ApiException as e:
         # In Rancher environments, a 403 Forbidden can occur briefly after
         # resource creation before permissions propagate to the proxy.
-        if e.status in (403, 404):
+        if e.status in (HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND):
             return False
         raise
 
@@ -141,7 +146,7 @@ async def _wait_for_resource(method: Any, timeout: float = 30.0, interval: float
     raise TimeoutError(f"Timed out after {timeout:.1f}s waiting for resource")
 
 
-def _ns_initialized(annotations: dict[str, str] | None) -> bool:
+def _ns_has_conditions(annotations: dict[str, str] | None, required: set[str]) -> bool:
     """
     Check if Rancher finished namespace initialization.
 
@@ -165,7 +170,6 @@ def _ns_initialized(annotations: dict[str, str] | None) -> bool:
     if not isinstance(conditions, list):
         return False
 
-    required = {"InitialRolesPopulated", "ResourceQuotaInit", "ResourceQuotaValidated"}
     found_true: set[str] = set()
     for cond in conditions:
         if not isinstance(cond, dict):
@@ -178,22 +182,30 @@ def _ns_initialized(annotations: dict[str, str] | None) -> bool:
     return required.issubset(found_true)
 
 
-async def _wait_for_ns_init(core_api: CoreV1Api, namespace: str, timeout: float = 60.0, interval: float = 0.1) -> None:
-    """Wait until Rancher populates initial RBAC for a new project namespace."""
+async def _wait_for_ns_conditions(
+    core_api: CoreV1Api,
+    namespace: str,
+    required: set[str],
+    timeout: float = 60.0,
+    interval: float = 0.1,
+) -> None:
+    """Wait until Rancher reports required namespace conditions."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
             ns_obj = await core_api.read_namespace(name=namespace)  # type: ignore[misc]
             annotations = getattr(getattr(ns_obj, "metadata", None), "annotations", None)
-            if _ns_initialized(annotations):
+            if _ns_has_conditions(annotations, required):
                 return
         except ApiException as e:
             # Catch 403/404 during the propagation window
-            if e.status not in (403, 404):
+            if e.status not in (HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND):
                 raise
         await asyncio.sleep(interval)
 
-    raise TimeoutError(f"Timed out after {timeout:.1f}s waiting for Rancher namespace-auth in {namespace}")
+    raise TimeoutError(
+        f"Timed out after {timeout:.1f}s waiting for Rancher namespace conditions {sorted(required)} in {namespace}"
+    )
 
 
 def _get_security_context() -> dict:
@@ -400,11 +412,8 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:
     )
     await _ensure_resource(core_api.create_namespace, body=namespace_manifest)
     await _wait_for_resource(core_api.read_namespace, name=user_namespace)
+    await _wait_for_ns_conditions(core_api, user_namespace, {"InitialRolesPopulated"})
     await core_api.patch_namespace(name=user_namespace, body=namespace_manifest)  # type: ignore[misc]
-
-    # Rancher creates RoleBindings asynchronously after namespace creation.
-    # Until that runs, the kubeconfig user may not have permissions inside the new namespace.
-    await _wait_for_ns_init(core_api, user_namespace)
 
     # Prepare resource names and manifests
     user_role = f"{helm_package}-user-role"
@@ -455,6 +464,8 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:
             body=_get_role_binding_manifest(hub_binding, "hub", hub_role, namespace=hub_namespace),
         ),
     )
+
+    await _wait_for_ns_conditions(core_api, user_namespace, {"ResourceQuotaInit", "ResourceQuotaValidated"})
 
     # Configure spawner
     spawner.namespace = user_namespace
@@ -512,7 +523,7 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # n
     try:
         await core_api.delete_collection_namespaced_pod(namespace=user_namespace)
     except ApiException as e:
-        print(f"Error deleting pods in namespace {user_namespace}: {e}")
+        logger.exception("Error deleting pods in namespace %s: %s", user_namespace, e)
 
 
 # =============================================================================
