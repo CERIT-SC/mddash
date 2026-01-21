@@ -48,6 +48,7 @@ const TunerTable = (props: TunerTableProps) => {
             RUNNING: 1,
             ERROR: 2,
             PENDING: 3,
+            UNKNOWN: 4,
         };
 
         return [...rows].sort((a, b) => {

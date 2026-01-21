@@ -57,7 +57,7 @@ const RunView = (props: RunViewProps) => {
     }, [fetchStatus]);
 
     useEffect(() => {
-        if (jobStatus?.status !== "PENDING" && jobStatus?.status !== "RUNNING") {
+        if (jobStatus?.status === "TERMINATED" || jobStatus?.status === "ERROR") {
             return;
         }
 

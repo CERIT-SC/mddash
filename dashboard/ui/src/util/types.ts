@@ -115,10 +115,12 @@ export function getPodStatusColor(status: PodStatus): MuiColor {
     }
 }
 
-export type JobStatus = "RUNNING" | "PENDING" | "TERMINATED" | "ERROR";
+export type JobStatus = "UNKNOWN" | "PENDING" | "RUNNING" | "TERMINATED" | "ERROR";
 
 export function getJobStatusColor(status: JobStatus): MuiColor {
     switch (status) {
+        case "UNKNOWN":
+            return "secondary";
         case "RUNNING":
             return "success";
         case "PENDING":
