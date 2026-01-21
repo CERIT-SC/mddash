@@ -98,7 +98,7 @@ gromacsTuner:
           cpu: "500m"
           memory: "4Gi"
     worker:
-      maxReplicas: 2
+      maxReplicas: 1  # TODO: increase when more resources are available
       idleTimeoutSeconds: 3600
       resources:
         limits:
