@@ -27,16 +27,17 @@ All secrets are automatically created in the namespace during deployment.
 
 ## Image Tagging Strategy
 
-| Environment | Branch   | Tag Format       | Pull Policy    |
-| ----------- | -------- | ---------------- | -------------- |
-| **Dev**     | `dev`    | Static `dev`     | `Always`       |
-| **Prod**    | `master` | `YYYYMMDD-<sha>` | `IfNotPresent` |
+| Environment | Branch   | Tag Format                  | Pull Policy    |
+| ----------- | -------- | --------------------------- | -------------- |
+| **Dev**     | `dev`    | Static `dev`                | `Always`       |
+| **Prod**    | `master` | `YYYYMMDD-<sha>` + `latest` | `IfNotPresent` |
 
 ### Harbor Retention Policy
 
 Configure in Harbor UI (Project → Policy → Tag Retention):
 1. **Dev tags**: Repository `**`, tag `dev` → Retain always
-2. **Prod tags**: Repository `**`, tag `*-*` → Keep last 10 pushed
+2. **Prod latest**: Repository `**`, tag `latest` → Retain always
+3. **Prod dated**: Repository `**`, tag `*-*` → Keep last 10 pushed
 
 
 ## Configuration
