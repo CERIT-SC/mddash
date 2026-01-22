@@ -233,7 +233,7 @@ def _proxy_container(service_prefix: str, username: str, security_context: dict)
     startup_script = """
 for i in $(seq 1 60); do
     curl -sf --max-time 2 http://localhost:5001/health >/dev/null 2>&1 && \
-    curl -sf --max-time 2 http://localhost:5000/health >/dev/null 2>&1 && break
+    curl -sf --max-time 2 http://localhost:5000/dash/api/health >/dev/null 2>&1 && break
     [ $i -eq 60 ] && echo "ERROR: Sidecars not ready after 60s" && exit 1
     sleep 1
 done
