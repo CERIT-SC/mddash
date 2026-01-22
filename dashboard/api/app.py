@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 
 from config import DATA_DIR, LOG_FORMAT, LOG_LEVEL
 from extensions import db, ma, migrate
@@ -52,24 +53,27 @@ def create_app() -> Flask:
 
     with app.app_context():
         alembic_ini = migrations_dir / "alembic.ini"
-        if not migrations_dir.exists() or not alembic_ini.exists():
+        if not alembic_ini.exists():
             logger.info("Initializing database migrations...")
             try:
+                # Remove incomplete migrations directory if it exists without alembic.ini
+                if migrations_dir.exists():
+                    logger.warning("Removing incomplete migrations directory...")
+                    shutil.rmtree(migrations_dir)
                 init(directory=str(migrations_dir))
                 logger.info("Creating initial migration...")
                 flask_migrate(message="Initial migration")
-            except Exception as e:
+            except (Exception, SystemExit) as e:
                 logger.error(f"Failed to initialize migrations: {e}")
-                if not db_path.exists():
-                    logger.info("Creating tables manually as a fallback...")
-                    db.create_all()
+                logger.info("Creating tables manually as a fallback...")
+                db.create_all()
         else:
             # Auto-generate migration if models have changed
             try:
                 logger.info("Checking for model changes...")
                 flask_migrate(message="Auto-generated migration")
                 logger.info("New migration generated")
-            except Exception as e:
+            except (Exception, SystemExit) as e:
                 # Flask-Migrate returns error if no changes, so we log at debug
                 logger.debug(f"Migration check finished: {e}")
 
@@ -79,15 +83,9 @@ def create_app() -> Flask:
                 upgrade(directory=str(migrations_dir))
             else:
                 logger.warning("No migrations found, skipping upgrade")
-        except Exception:
-            if not db_path.exists():
-                logger.warning("Migration failed and database file missing, creating tables manually", exc_info=True)
-                db.create_all()
-            else:
-                logger.exception(
-                    "Migration failed but database file exists. NOT overwriting with create_all() to avoid data loss."
-                )
-                # TODO: In production, we might want to crash here, but for now we'll just log loudly
+        except (Exception, SystemExit) as e:
+            logger.warning(f"Migration upgrade failed: {e}, falling back to create_all()")
+            db.create_all()
 
     # Alembic may tweak logging handlers; restore our configuration afterwards
     configure_logging(LOG_FORMAT, LOG_LEVEL)
