@@ -32,15 +32,16 @@ def create_experiment() -> Response:
     name = form["experiment-name"]
     pdb_id = form.get("pdb-id")
     repo_url = form.get("repo-url")
+    notebooks_repo = form["notebooks-repo"]
     simulation_files = request.files.getlist("simulation-files")
 
     match form["type"]:
         case "pdb" if pdb_id:
-            experiment = Experiment.from_pdb(name, pdb_id)
+            experiment = Experiment.from_pdb(name, pdb_id, notebooks_repo)
         case "repo" if repo_url:
-            experiment = Experiment.from_repo(name, repo_url)
+            experiment = Experiment.from_repo(name, repo_url, notebooks_repo)
         case "file" if simulation_files:
-            experiment = Experiment.from_files(name, simulation_files)
+            experiment = Experiment.from_files(name, simulation_files, notebooks_repo)
         case _:
             return ApiResponse.error("Invalid experiment type or missing data.", HTTPStatus.BAD_REQUEST)
 
