@@ -230,21 +230,15 @@ def _proxy_container(service_prefix: str, username: str, security_context: dict)
     if not image:
         return None
 
-    startup_script = """
-for i in $(seq 1 60); do
-    curl -sf --max-time 2 http://localhost:5001/health >/dev/null 2>&1 && \
-    curl -sf --max-time 2 http://localhost:5000/dash/api/health >/dev/null 2>&1 && break
-    [ $i -eq 60 ] && echo "ERROR: Sidecars not ready after 60s" && exit 1
-    sleep 1
-done
-exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
-"""
-
     return {
         "name": "proxy",
         "image": image,
         "imagePullPolicy": os.environ.get("IMAGE_PULL_POLICY", "Always"),
-        "command": ["sh", "-c", startup_script],
+        "command": [
+            "sh",
+            "-c",
+            "until curl -s --connect-timeout 1 http://localhost:5001 > /dev/null && curl -s --connect-timeout 1 http://localhost:5000 > /dev/null; do sleep 0.1; done; caddy run --config /etc/caddy/Caddyfile --adapter caddyfile",
+        ],
         "ports": [{"containerPort": 8888, "name": "http"}],
         "env": [
             {"name": "CADDY_ROUTE_PREFIX", "value": service_prefix},
