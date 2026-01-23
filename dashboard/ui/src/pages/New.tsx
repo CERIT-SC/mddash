@@ -21,6 +21,7 @@ import ReplayIcon from "@mui/icons-material/Replay";
 import Dropzone from "@/components/Dropzone";
 import { create_experiment } from "@/util/api";
 import { useNotification } from "@/contexts/useNotification";
+import { DEFAULT_NOTEBOOKS_REPO } from "@/util/const";
 
 const tabStyles = {
     textTransform: "none",
@@ -39,8 +40,6 @@ const tabStyles = {
         color: "text.primary",
     },
 } as const;
-
-const DEFAULT_NOTEBOOKS_REPO = "https://github.com/CERIT-SC/mddash-notebooks.git";
 
 const isValidGitUrl = (url: string): boolean => {
     // SSH format: git@host:owner/repo.git
