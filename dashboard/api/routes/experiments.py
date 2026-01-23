@@ -1,12 +1,13 @@
 from http import HTTPStatus
 
 from api_response import ApiResponse
-from config import API_PREFIX
+from config import API_PREFIX, DEFAULT_NOTEBOOKS_REPO
 from decorators import handle_exceptions
 from extensions import db
 from flask import Blueprint, Response, request
 from models import Experiment
 from schemas import ExperimentSchema
+from utils import validate_git_url
 
 from routes.mdrepo import get_mdrepo_token
 
@@ -32,8 +33,10 @@ def create_experiment() -> Response:
     name = form["experiment-name"]
     pdb_id = form.get("pdb-id")
     repo_url = form.get("repo-url")
-    notebooks_repo = form["notebooks-repo"]
+    notebooks_repo = form.get("notebooks-repo", DEFAULT_NOTEBOOKS_REPO)
     simulation_files = request.files.getlist("simulation-files")
+
+    validate_git_url(notebooks_repo)
 
     match form["type"]:
         case "pdb" if pdb_id:

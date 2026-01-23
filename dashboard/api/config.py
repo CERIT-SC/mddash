@@ -26,6 +26,8 @@ GMX_IMAGE = "cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2"
 
 IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Always")
 
+DEFAULT_NOTEBOOKS_REPO = os.environ.get("DEFAULT_NOTEBOOKS_REPO", "https://github.com/CERIT-SC/mddash-notebooks.git")
+
 NAMESPACE = os.environ.get("POD_NAMESPACE", "default")
 
 if NAMESPACE == "default":

@@ -195,7 +195,11 @@ const New = () => {
                         value={notebooksRepo}
                         onChange={(e) => setNotebooksRepo(e.target.value)}
                         error={notebooksRepoError}
-                        helperText={notebooksRepoError ? "Enter a valid git repository" : "Git repository containing setup and analysis notebooks"}
+                        helperText={
+                            notebooksRepoError
+                                ? "Enter a valid git repository"
+                                : "Git repository containing setup and analysis notebooks"
+                        }
                         slotProps={{
                             input: {
                                 endAdornment: notebooksRepo !== DEFAULT_NOTEBOOKS_REPO && (
@@ -205,6 +209,7 @@ const New = () => {
                                                 edge="end"
                                                 onClick={() => setNotebooksRepo(DEFAULT_NOTEBOOKS_REPO)}
                                                 size="small"
+                                                aria-label="Reset notebooks repo to default"
                                             >
                                                 <ReplayIcon />
                                             </IconButton>
