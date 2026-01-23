@@ -7,7 +7,6 @@ import subprocess
 import tempfile
 from collections import deque
 from pathlib import Path
-from urllib.parse import urlparse
 
 from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError
 
@@ -302,12 +301,8 @@ def download_git_repo(git_url: str, target_dir: Path) -> None:
         target_dir: Directory where files should be placed.
 
     Raises:
-        BadRequest: If the git URL is invalid.
         InternalServerError: If git clone fails.
     """
-    if not _is_valid_git_url(git_url):
-        raise BadRequest(description=f"Invalid git URL: {git_url}")
-
     target_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -315,41 +310,32 @@ def download_git_repo(git_url: str, target_dir: Path) -> None:
 
         try:
             _git_clone_shallow(git_url, clone_dir)
-            _remove_git_directory(clone_dir)
+
+            git_dir = clone_dir / ".git"
+            if git_dir.exists():
+                shutil.rmtree(git_dir)
+
             _move_contents(clone_dir, target_dir)
-            logger.info(f"Downloaded git repository from {git_url}")
+            logger.info("Downloaded git repository from %s", git_url)
 
         except subprocess.CalledProcessError as e:
-            error_msg = _parse_git_error(e.stderr)
-            logger.error(f"Git clone failed: {error_msg}")
-            raise InternalServerError(description=f"Failed to clone repository: {error_msg}")
+            stderr = (e.stderr or "").strip() if isinstance(e.stderr, str) else str(e).strip()
+            logger.error("Git clone failed: %s", stderr or str(e))
+            message = stderr or "git clone failed"
+            raise InternalServerError(description=f"Failed to clone repository: {message}")
 
         except subprocess.TimeoutExpired:
             raise InternalServerError(description=f"Git clone timed out after {GIT_CLONE_TIMEOUT}s")
 
 
-def _is_valid_git_url(url: str) -> bool:
-    """Validate git URL format (HTTPS or SSH)."""
-    # SSH format: git@host:owner/repo.git
-    if url.startswith("git@") and ":" in url:
-        return True
-
-    # HTTPS format
-    try:
-        parsed = urlparse(url)
-        return parsed.scheme in ("http", "https") and bool(parsed.netloc)
-    except Exception:
-        return False
-
-
 def _git_clone_shallow(git_url: str, clone_dir: Path) -> None:
-    """Execute shallow git clone."""
     cmd = [
         "git",
         "clone",
         "--depth",
         "1",
         "--single-branch",
+        "--no-tags",
         git_url,
         str(clone_dir),
     ]
@@ -363,37 +349,13 @@ def _git_clone_shallow(git_url: str, clone_dir: Path) -> None:
     )
 
 
-def _remove_git_directory(repo_dir: Path) -> None:
-    """Remove .git directory from cloned repository."""
-    git_dir = repo_dir / ".git"
-    if git_dir.exists():
-        shutil.rmtree(git_dir)
-
-
 def _move_contents(source_dir: Path, target_dir: Path) -> None:
-    """Move all contents from source to target directory."""
     for item in source_dir.iterdir():
         dest = target_dir / item.name
-        # Overwrite existing files/dirs (notebooks take precedence)
+        # Overwrite existing files/dirs
         if dest.exists():
             if dest.is_dir():
                 shutil.rmtree(dest)
             else:
                 dest.unlink()
-        shutil.move(str(item), str(dest))
-
-
-def _parse_git_error(stderr: str) -> str:
-    """Convert git stderr to user-friendly message."""
-    stderr_lower = stderr.lower()
-
-    if "could not find remote branch" in stderr_lower:
-        return "Branch not found in repository"
-    if "repository not found" in stderr_lower:
-        return "Repository not found"
-    if "authentication" in stderr_lower or "permission denied" in stderr_lower:
-        return "Authentication required - private repository or invalid credentials"
-    if "could not resolve host" in stderr_lower:
-        return "Could not connect to git server"
-
-    return stderr.strip() or "Unknown git error"
+        shutil.move(item, dest)

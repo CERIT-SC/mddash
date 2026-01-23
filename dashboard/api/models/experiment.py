@@ -111,11 +111,18 @@ class Experiment(db.Model):  # type: ignore
 
         Returns:
             The unique experiment ID.
+
+        Raises:
+            Exception: If there is an error during environment preparation.
         """
         experiment_id: str = get_unique_id(DATA_DIR)
         experiment_dir = DATA_DIR / experiment_id
         experiment_dir.mkdir(parents=True, exist_ok=True)
-        download_git_repo(notebooks_repo, experiment_dir)
+        try:
+            download_git_repo(notebooks_repo, experiment_dir)
+        except Exception:
+            rmtree(experiment_dir, ignore_errors=True)
+            raise
         return experiment_id
 
     @classmethod
