@@ -43,7 +43,7 @@ const SetupStep = (props: WizardStepProps) => {
                 <Stack direction="row" spacing={1} alignItems="center">
                     <Typography variant="body1">Notebook Repository:</Typography>
                     <Typography variant="body1" color="text.disabled">
-                        {experiment.notebook_repo || "N/A"}
+                        {experiment.notebooks_repo || "N/A"}
                     </Typography>
                 </Stack>
             </Stack>
