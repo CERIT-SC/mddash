@@ -212,6 +212,7 @@ jupyterhub:
       nginx.ingress.kubernetes.io/proxy-body-size: "8g"
       nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      nginx.ingress.kubernetes.io/custom-http-errors: "599"
 
 mdrun-api:
   image:
