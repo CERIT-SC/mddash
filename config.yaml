@@ -22,6 +22,9 @@ mdrepo:
   url: https://workflow-repo.test.du.cesnet.cz
   scopes: user:email
 
+# Default notebooks repository (setup and analysis notebooks)
+defaultNotebooksRepo: https://github.com/CERIT-SC/mddash-notebooks.git
+
 # Notebook image (spawned by Dashboard pod)
 notebook:
   image: cerit.io/xkrasa/mddash-notebook

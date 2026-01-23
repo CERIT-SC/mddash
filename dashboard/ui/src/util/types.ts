@@ -4,6 +4,7 @@ export interface Experiment {
     updated_at: string;
     name: string;
     source_message: string | null;
+    notebooks_repo: string | null;
     mdrepo_id: string | null;
     mdrepo_record_url: string | null;
     step: number;

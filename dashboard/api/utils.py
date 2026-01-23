@@ -1,10 +1,17 @@
+import logging
 import os
 import random
 import re
+import shutil
+import subprocess
+import tempfile
 from collections import deque
 from pathlib import Path
+from urllib.parse import urlparse
 
-from werkzeug.exceptions import BadRequest, Forbidden
+from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError
+
+logger = logging.getLogger(__name__)
 
 LETTERS = "abcdefghijklmnopqrstuvwxyz"
 
@@ -277,3 +284,86 @@ def check_positive_int(value: str, param_name: str = "value", max_value: int | N
 
     if max_value and int_value > max_value:
         raise BadRequest(f"{param_name} must not exceed {max_value}.")
+
+
+# Timeout for git clone operations (seconds)
+GIT_CLONE_TIMEOUT = 120
+
+
+def validate_git_url(git_url: str) -> None:
+    """
+    Validate git URL for safety.
+
+    Rejects unsafe URL patterns: credentials, local paths, file://, option injection.
+
+    Raises:
+        BadRequest: If URL is invalid or unsafe.
+    """
+    if not git_url or not git_url.strip():
+        raise BadRequest("Git URL cannot be empty.")
+
+    url = git_url.strip()
+
+    # Reject option injection, local paths, file:// URLs
+    if url.startswith("-") or url.startswith("/") or url.startswith("."):
+        raise BadRequest("Invalid git URL format.")
+    if url.lower().startswith("file://"):
+        raise BadRequest("file:// URLs are not allowed.")
+
+    # SSH format: git@host:owner/repo.git - valid
+    if url.startswith("git@") and ":" in url:
+        return
+
+    # HTTPS/HTTP URLs
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise BadRequest("Only http://, https://, or git@ URLs are allowed.")
+    if parsed.username or parsed.password:
+        raise BadRequest("URLs with embedded credentials are not allowed.")
+    if not parsed.netloc:
+        raise BadRequest("Invalid git URL: missing host.")
+
+
+def download_git_repo(git_url: str, target_dir: Path) -> None:
+    """
+    Download files from a git repository without history.
+
+    Files are placed directly in target_dir (no subdirectory, no .git folder).
+    Caller is responsible for validating the URL before calling this function.
+
+    Raises:
+        InternalServerError: If git clone fails.
+    """
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        clone_dir = Path(tmp_dir) / "repo"
+
+        try:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", "--single-branch", "--no-tags", "--", git_url, str(clone_dir)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=GIT_CLONE_TIMEOUT,
+            )
+
+            git_dir = clone_dir / ".git"
+            if git_dir.exists():
+                shutil.rmtree(git_dir)
+
+            for item in clone_dir.iterdir():
+                dest = target_dir / item.name
+                if dest.exists():
+                    shutil.rmtree(dest) if dest.is_dir() else dest.unlink()
+                shutil.move(item, dest)
+
+            logger.info("Downloaded git repository from %s", git_url)
+
+        except subprocess.CalledProcessError as e:
+            stderr = (e.stderr or "").strip() if isinstance(e.stderr, str) else str(e).strip()
+            logger.error("Git clone failed: %s", stderr or str(e))
+            raise InternalServerError(description=f"Failed to clone repository: {stderr or 'git clone failed'}")
+
+        except subprocess.TimeoutExpired:
+            raise InternalServerError(description=f"Git clone timed out after {GIT_CLONE_TIMEOUT}s")
