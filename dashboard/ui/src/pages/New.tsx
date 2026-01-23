@@ -16,7 +16,7 @@ import {
     IconButton,
     Tooltip,
 } from "@mui/material";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import ReplayIcon from "@mui/icons-material/Replay";
 
 import Dropzone from "@/components/Dropzone";
 import { create_experiment } from "@/util/api";
@@ -195,7 +195,7 @@ const New = () => {
                         value={notebooksRepo}
                         onChange={(e) => setNotebooksRepo(e.target.value)}
                         error={notebooksRepoError}
-                        helperText={notebooksRepoError ? "Enter a valid git repository URL" : "Git repository containing setup notebooks"}
+                        helperText={notebooksRepoError ? "Enter a valid git repository" : "Git repository containing setup and analysis notebooks"}
                         slotProps={{
                             input: {
                                 endAdornment: notebooksRepo !== DEFAULT_NOTEBOOKS_REPO && (
@@ -206,7 +206,7 @@ const New = () => {
                                                 onClick={() => setNotebooksRepo(DEFAULT_NOTEBOOKS_REPO)}
                                                 size="small"
                                             >
-                                                <RestartAltIcon />
+                                                <ReplayIcon />
                                             </IconButton>
                                         </Tooltip>
                                     </InputAdornment>
