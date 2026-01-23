@@ -8,6 +8,7 @@ export interface Experiment {
     mdrepo_id: string | null;
     mdrepo_record_url: string | null;
     step: number;
+    status: string;
     notebook: Notebook;
     tuner_jobs: TunerJob[];
     gromacs_jobs: GromacsJob[];
