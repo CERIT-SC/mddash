@@ -24,6 +24,8 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 NOTEBOOK_IMAGE = os.environ.get("NOTEBOOK_IMAGE", "quay.io/jupyter/base-notebook")
 GMX_IMAGE = "cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2"
 
+IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Always")
+
 NAMESPACE = os.environ.get("POD_NAMESPACE", "default")
 
 if NAMESPACE == "default":

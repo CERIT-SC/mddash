@@ -1,11 +1,10 @@
 import logging
-import os
 import threading
 import time
 from http import HTTPStatus
 from typing import Callable, cast
 
-from config import GMX_IMAGE, NAMESPACE, NOTEBOOK_IMAGE, PVC_NAME
+from config import GMX_IMAGE, IMAGE_PULL_POLICY, NAMESPACE, NOTEBOOK_IMAGE, PVC_NAME
 from enums import JobStatus, PodStatus
 from kubernetes import config
 from kubernetes.client import (
@@ -70,7 +69,7 @@ def get_container(
         },
         "name": name,
         "image": image,
-        "imagePullPolicy": os.environ.get("IMAGE_PULL_POLICY", "Always"),
+        "imagePullPolicy": IMAGE_PULL_POLICY,
         "resources": resources
         or {"requests": {"cpu": "50m", "memory": "64Mi"}, "limits": {"cpu": "500m", "memory": "256Mi"}},
         "command": command,
