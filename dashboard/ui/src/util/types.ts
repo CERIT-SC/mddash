@@ -4,10 +4,10 @@ export interface Experiment {
     updated_at: string;
     name: string;
     source_message: string | null;
+    notebook_repo: string | null;
     mdrepo_id: string | null;
     mdrepo_record_url: string | null;
     step: number;
-    status: string;
     notebook: Notebook;
     tuner_jobs: TunerJob[];
     gromacs_jobs: GromacsJob[];
