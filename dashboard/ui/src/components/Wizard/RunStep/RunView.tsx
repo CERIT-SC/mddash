@@ -57,13 +57,13 @@ const RunView = (props: RunViewProps) => {
     }, [fetchStatus]);
 
     useEffect(() => {
-        if (jobStatus?.status === "TERMINATED" || jobStatus?.status === "ERROR") {
+        if (!jobStatus || jobStatus.status === "TERMINATED" || jobStatus.status === "ERROR") {
             return;
         }
 
         const intervalId = setInterval(() => fetchStatus(true), POLLING_INTERVAL_MS);
         return () => clearInterval(intervalId);
-    }, [jobStatus?.status, fetchStatus]);
+    }, [jobStatus, fetchStatus]);
 
     const handleJobStarted = () => {
         fetchStatus(true);
