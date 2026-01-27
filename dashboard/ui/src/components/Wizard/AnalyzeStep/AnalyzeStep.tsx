@@ -8,9 +8,11 @@ import { BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/c
 import { WizardStepProps } from "@/components/Wizard/Stepper";
 import MolStar from "@/components/MolStar";
 import FileSelector from "@/components/FileSelector";
+import NotebookController from "@/components/Wizard/SetupStep/NotebookController";
 
 const STRUCTURE_FORMATS = ["pdb", "gro"];
 const COORDINATE_FORMATS = ["xtc", "trr"];
+const LEFT_PANEL_MIN_WIDTH = 300;
 
 const AnalyzeStep = (props: WizardStepProps) => {
     const { experiment } = props;
@@ -42,45 +44,51 @@ const AnalyzeStep = (props: WizardStepProps) => {
 
     return (
         <Stack direction="column" alignItems="center" spacing={2}>
-            <Stack direction="row" width="90%" spacing={2}>
-                <Paper variant="outlined" sx={{ minWidth: 300, padding: 4 }}>
-                    <Stack spacing={2}>
-                        <Typography variant="h3">Analyze Files</Typography>
+            <Stack direction="row" width="90%" spacing={2} alignItems="flex-start">
+                <Stack spacing={2} minWidth={LEFT_PANEL_MIN_WIDTH}>
+                    <Paper variant="outlined" sx={{ padding: 4 }}>
+                        <Stack spacing={2}>
+                            <Typography variant="h3">Analyze Files</Typography>
 
-                        <Stack direction="row" spacing={1} alignItems="center">
-                            <Category fontSize="small" color="action" />
-                            <Typography variant="subtitle1" color="text.secondary">
-                                Structure
-                            </Typography>
+                            <Stack direction="row" spacing={1} alignItems="center">
+                                <Category fontSize="small" color="action" />
+                                <Typography variant="subtitle1" color="text.secondary">
+                                    Structure
+                                </Typography>
+                            </Stack>
+                            <FileSelector
+                                experimentId={experiment.id}
+                                ext={STRUCTURE_FORMATS}
+                                title="Select structure file"
+                                onFileSelected={setStructureFile}
+                            />
+                            {structureFile && (
+                                <>
+                                    <Stack direction="row" spacing={1} alignItems="center">
+                                        <Timeline fontSize="small" color="action" />
+                                        <Typography variant="subtitle1" color="text.secondary">
+                                            Coordinates
+                                        </Typography>
+                                    </Stack>
+                                    <FileSelector
+                                        experimentId={experiment.id}
+                                        ext={COORDINATE_FORMATS}
+                                        title="Select coordinates file"
+                                        onFileSelected={setCoordsFile}
+                                    />
+                                </>
+                            )}
                         </Stack>
-                        <FileSelector
-                            experimentId={experiment.id}
-                            ext={STRUCTURE_FORMATS}
-                            title="Select structure file"
-                            onFileSelected={setStructureFile}
-                        />
-                        {structureFile && (
-                            <>
-                                <Stack direction="row" spacing={1} alignItems="center">
-                                    <Timeline fontSize="small" color="action" />
-                                    <Typography variant="subtitle1" color="text.secondary">
-                                        Coordinates
-                                    </Typography>
-                                </Stack>
-                                <FileSelector
-                                    experimentId={experiment.id}
-                                    ext={COORDINATE_FORMATS}
-                                    title="Select coordinates file"
-                                    onFileSelected={setCoordsFile}
-                                />
-                            </>
-                        )}
-                    </Stack>
-                </Paper>
+                    </Paper>
 
-                <Box flexGrow={1} display="flex" justifyContent="center" alignItems="center">
-                    {molstarViewer}
-                </Box>
+                    <NotebookController experimentId={experiment.id} />
+                </Stack>
+
+                <Stack spacing={2} flexGrow={1} alignItems="center">
+                    <Box width="100%" display="flex" justifyContent="center" alignItems="center">
+                        {molstarViewer}
+                    </Box>
+                </Stack>
             </Stack>
         </Stack>
     );
