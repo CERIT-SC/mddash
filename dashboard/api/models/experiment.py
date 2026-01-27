@@ -295,7 +295,9 @@ class Experiment(db.Model):  # type: ignore
         if any(j.status == JobStatus.TERMINATED for j in self.gromacs_jobs):
             return 4, "analyzing"
 
-        # NOTE: Step 3 is skipped because no action is required to progress from Analyze to Publish
+        # Step 3: Allow user to analyze a running simulation
+        if any(j.status == JobStatus.RUNNING for j in self.gromacs_jobs):
+            return 3, "simulating"
 
         # Step 2: Running simulation (experiment has a GROMACS job)
         if self.gromacs_jobs:
