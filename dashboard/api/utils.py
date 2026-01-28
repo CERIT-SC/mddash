@@ -1,3 +1,4 @@
+import fnmatch
 import logging
 import os
 import random
@@ -14,6 +15,30 @@ from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError
 logger = logging.getLogger(__name__)
 
 LETTERS = "abcdefghijklmnopqrstuvwxyz"
+
+EXCLUDED_DIRS: list[str] = [
+    ".ipynb_checkpoints",
+    "__pycache__",
+    ".cache",
+    ".local",
+    ".config",
+    ".jupyter",
+    ".git",
+    "*.edr",
+    "*.xtc",
+    "*.fit.xtc",
+    "*.tpr",
+    "*.cpt",
+    "*.gro",
+    "*.log",
+]
+
+EXCLUDED_FILES: list[str] = [
+    "#*#",
+    "*.swp",
+    "*.tmp",
+    ".nfs*",
+]
 
 
 def generate_id(length: int = 5) -> str:
@@ -85,6 +110,8 @@ def get_files_with_extensions(dir: Path, ext: str | list[str] | None = None) -> 
     for file in dir.iterdir():
         if not file.is_file():
             continue
+        if is_excluded_path(file, dir):
+            continue
 
         if extensions is None:
             files.append({"name": file.name, "size": file.stat().st_size})
@@ -94,6 +121,30 @@ def get_files_with_extensions(dir: Path, ext: str | list[str] | None = None) -> 
                 files.append({"name": file.name, "size": file.stat().st_size})
 
     return files
+
+
+def is_excluded_path(path: Path, base_dir: Path) -> bool:
+    """
+    Determine whether a path should be excluded from uploads.
+
+    Args:
+        path: Path to evaluate.
+        base_dir: Base directory for relative path matching.
+
+    Returns:
+        True if the path should be excluded.
+    """
+    try:
+        relative_path = path.relative_to(base_dir)
+    except ValueError:
+        relative_path = path
+
+    dir_parts = relative_path.parts if path.is_dir() else relative_path.parts[:-1]
+
+    if any(fnmatch.fnmatch(part, pattern) for part in dir_parts for pattern in EXCLUDED_DIRS):
+        return True
+
+    return any(fnmatch.fnmatch(path.name, pattern) for pattern in EXCLUDED_FILES)
 
 
 def tail(file: Path | str, n: int = 10) -> str:

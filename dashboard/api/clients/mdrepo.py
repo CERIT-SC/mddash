@@ -5,39 +5,15 @@ This module provides functions to interact with the MDRepo (InvenioRDM) API
 for creating experiments and uploading files.
 """
 
-import fnmatch
 import logging
 import threading
 from pathlib import Path
 
 import requests
 from config import MDREPO_API_URL, MDREPO_RECORD_NAME
+from utils import is_excluded_path
 
 logger = logging.getLogger(__name__)
-
-_EXCLUDED_DIRS: list[str] = [
-    ".ipynb_checkpoints",
-    "__pycache__",
-    ".cache",
-    ".local",
-    ".config",
-    ".jupyter",
-    ".git",
-    "*.edr",
-    "*.xtc",
-    "*.fit.xtc",
-    "*.tpr",
-    "*.cpt",
-    "*.gro",
-    "*.log",
-]
-
-_EXCLUDED_FILES: list[str] = [
-    "#*#",
-    "*.swp",
-    "*.tmp",
-    ".nfs*",
-]
 
 
 def _auth_header(token: str) -> dict[str, str]:
@@ -130,18 +106,6 @@ def upload_file(token: str, experiment_id: str, file: Path) -> dict:
     return response.json()
 
 
-def _is_excluded(file: Path, experiment_dir: Path) -> bool:
-    try:
-        relative_path = file.relative_to(experiment_dir)
-    except ValueError:
-        relative_path = file
-
-    if any(fnmatch.fnmatch(part, pattern) for part in relative_path.parts for pattern in _EXCLUDED_DIRS):
-        return True
-
-    return any(fnmatch.fnmatch(file.name, pattern) for pattern in _EXCLUDED_FILES)
-
-
 def upload_experiment_files(token: str, experiment_id: str, experiment_dir: Path) -> None:
     """
     Upload all experiment files that pass the upload filter.
@@ -155,7 +119,7 @@ def upload_experiment_files(token: str, experiment_id: str, experiment_dir: Path
         # TODO: Should we upload subdirectories?
         if not file.is_file():
             continue
-        if _is_excluded(file, experiment_dir):
+        if is_excluded_path(file, experiment_dir):
             continue
 
         try:
