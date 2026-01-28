@@ -1,6 +1,5 @@
 import io
 import logging
-import threading
 import zipfile
 from datetime import datetime
 from http import HTTPStatus
@@ -370,22 +369,8 @@ class Experiment(db.Model):  # type: ignore
 
         logger.info(f"Created MDRepo experiment with ID '{mdrepo_id}' for experiment '{self.id}'")
 
-        def _upload_worker(token_local: str, mdrepo_id_local: str, experiment_id: str) -> None:
-            try:
-                for file in (DATA_DIR / experiment_id).iterdir():
-                    if not file.is_file():
-                        continue
-
-                    try:
-                        mdrepo.upload_file(token_local, mdrepo_id_local, file)
-                    except ValueError:
-                        logger.exception(f"Failed to upload file '{file.name}' to MDRepo.")
-            except Exception:
-                logger.exception("Unexpected error in MDRepo upload worker")
-
         # Start background thread (daemon) to perform uploads and return immediately
-        thread = threading.Thread(target=_upload_worker, args=(token, mdrepo_id, self.id), daemon=True)
-        thread.start()
+        mdrepo.start_upload_worker(token=token, experiment_id=mdrepo_id, experiment_dir=DATA_DIR / self.id)
 
         logger.info(f"Queued file upload job '{self.id}' to MDRepo.")
         return mdrepo_experiment
