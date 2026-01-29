@@ -1,6 +1,15 @@
-# MDDash
+# MDDash - one stop shop for MD simulations
 
-Molecular Dynamics simulation dashboard with JupyterHub integration.
+1. Download from PDB, upload your files, _download from MDDB, or clone git repo (coming soon)_
+2. Run arbitrary simulation setup protocol in Jupyter notebook to record provenance
+3. Tune computation setup (MPI jobs, OMP cores, GPU assignment) for the best performance
+4. Run production simulation
+5. Analyze and visualize results
+6. Publish results to MDDB _(still to be eleaborated)_
+
+**Wanna try?** 
+- contact us, we need lightweight registration to make sure the precious hardware funded by our authorities is used according to AUP
+- go to https://mddash.dyn.cloud.e-infra.cz/
 
 
 ## CI/CD Setup
