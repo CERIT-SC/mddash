@@ -9,8 +9,6 @@ from models import Experiment
 from schemas import ExperimentSchema
 from utils import validate_git_url
 
-from routes.mdrepo import get_mdrepo_token
-
 experiments_bp = Blueprint("experiments", __name__, url_prefix=f"{API_PREFIX}/experiments")
 
 
@@ -110,13 +108,9 @@ def publish_experiment(experiment_id: str) -> Response:
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
 
-    token = get_mdrepo_token()
-    if not token:
-        return ApiResponse.error("Not authenticated with MDRepo. Please authenticate first.", HTTPStatus.UNAUTHORIZED)
-
     # TODO: Add endpoint to fetch available communities from MDRepo and allow user to select from a dropdown in the publish UI.
     #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.
-    mdrepo_experiment = experiment.publish(token=token, community="ceitec")
+    mdrepo_experiment = experiment.publish(community="ceitec")
 
     return ApiResponse.success(mdrepo_experiment, HTTPStatus.CREATED)
 

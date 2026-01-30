@@ -12,6 +12,7 @@ from clients import mdrepo
 from config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
 from enums import JobStatus, PodStatus
 from extensions import db
+from flask import session
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from utils import download_git_repo, get_files_with_extensions, get_unique_id
 from werkzeug.datastructures import FileStorage
@@ -339,12 +340,11 @@ class Experiment(db.Model):  # type: ignore
         # Delete all files in the experiment directory
         rmtree(DATA_DIR / self.id, ignore_errors=True)
 
-    def publish(self, token: str, community: str) -> dict:
+    def publish(self, community: str) -> dict:
         """
         Publish the experiment to MDRepo.
 
         Args:
-            token: OAuth2 access token for MDRepo API.
             community: Community slug to publish the experiment to.
 
         Returns:
@@ -358,7 +358,7 @@ class Experiment(db.Model):  # type: ignore
         }
 
         # Create experiment in MDRepo
-        mdrepo_experiment = mdrepo.create_experiment(token, community, metadata)
+        mdrepo_experiment = mdrepo.create_experiment(session, community, metadata)
         mdrepo_id = mdrepo_experiment.get("id")
 
         if mdrepo_id is None:
@@ -370,7 +370,7 @@ class Experiment(db.Model):  # type: ignore
         logger.info(f"Created MDRepo experiment with ID '{mdrepo_id}' for experiment '{self.id}'")
 
         # Start background thread (daemon) to perform uploads and return immediately
-        mdrepo.start_upload_worker(token=token, experiment_id=mdrepo_id, experiment_dir=DATA_DIR / self.id)
+        mdrepo.start_upload_worker(session=session, experiment_id=mdrepo_id, experiment_dir=DATA_DIR / self.id)
 
         logger.info(f"Queued file upload job '{self.id}' to MDRepo.")
         return mdrepo_experiment

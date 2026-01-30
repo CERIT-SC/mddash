@@ -7,6 +7,7 @@ for the MDRepo API.
 
 import logging
 import secrets
+import time
 from http import HTTPStatus
 from urllib.parse import urlencode
 
@@ -32,6 +33,8 @@ mdrepo_bp = Blueprint("mdrepo", __name__, url_prefix=f"{API_PREFIX}/mdrepo")
 
 # Session keys for MDRepo OAuth
 MDREPO_TOKEN_KEY = "mdrepo_token"
+MDREPO_REFRESH_TOKEN_KEY = "mdrepo_refresh_token"
+MDREPO_TOKEN_EXPIRES_AT = "mdrepo_token_expires_at"
 MDREPO_STATE_KEY = "mdrepo_oauth_state"
 
 
@@ -141,14 +144,21 @@ def oauth_callback() -> WerkzeugResponse:
 
         token_response = response.json()
         access_token = token_response.get("access_token")
+        refresh_token = token_response.get("refresh_token")
+        expires_in = token_response.get("expires_in", 3600)  # Default 1 hour
 
         if not access_token:
             logger.error("MDRepo OAuth: No access token in response")
             return redirect(f"{return_url}?mdrepo_error=No+access+token")
 
-        # Store token in session
+        # Store complete token information in session
         session[MDREPO_TOKEN_KEY] = access_token
-        logger.info("MDRepo OAuth: Successfully obtained access token")
+        if refresh_token:
+            session[MDREPO_REFRESH_TOKEN_KEY] = refresh_token
+            logger.info("MDRepo OAuth: Successfully obtained access and refresh tokens")
+        else:
+            logger.warning("MDRepo OAuth: No refresh token in response - token refresh will not be available")
+        session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + expires_in
 
         return redirect(f"{return_url}?mdrepo_auth=success")
 
@@ -160,6 +170,8 @@ def oauth_callback() -> WerkzeugResponse:
 @mdrepo_bp.route("/logout", methods=["POST"])
 @handle_exceptions()
 def logout() -> Response:
-    """Remove MDRepo token from session."""
+    """Remove all MDRepo tokens from session."""
     session.pop(MDREPO_TOKEN_KEY, None)
+    session.pop(MDREPO_REFRESH_TOKEN_KEY, None)
+    session.pop(MDREPO_TOKEN_EXPIRES_AT, None)
     return ApiResponse.success({"message": "Logged out from MDRepo"})
