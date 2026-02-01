@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 # Token refresh configuration constants
 TOKEN_REFRESH_RETRIES = 3
-TOKEN_REFRESH_RETRY_DELAY = 5  # seconds
+TOKEN_REFRESH_INITIAL_DELAY = 1  # seconds (exponential backoff: 1s, 2s, 4s)
 TOKEN_EXPIRATION_BUFFER = 60  # seconds
 
 # Session keys for MDRepo OAuth
@@ -102,6 +102,8 @@ class MDRepoTokenManager:
         """
         Refresh the access token using the refresh token.
 
+        This method implements retry logic with exponential backoff between attempts.
+
         Returns:
             True if refresh was successful, False otherwise.
         """
@@ -164,14 +166,16 @@ class MDRepoTokenManager:
                         self.clear_tokens()
                         return False
 
-                    # Retry on other errors
+                    # Retry on other errors with exponential backoff
                     if attempt < TOKEN_REFRESH_RETRIES - 1:
-                        time.sleep(TOKEN_REFRESH_RETRY_DELAY)
+                        delay = TOKEN_REFRESH_INITIAL_DELAY * (2**attempt)
+                        time.sleep(delay)
 
                 except requests.RequestException as e:
                     logger.error(f"Token refresh request failed: {e}")
                     if attempt < TOKEN_REFRESH_RETRIES - 1:
-                        time.sleep(TOKEN_REFRESH_RETRY_DELAY)
+                        delay = TOKEN_REFRESH_INITIAL_DELAY * (2**attempt)
+                        time.sleep(delay)
 
             # All retries failed
             logger.error("Token refresh failed after all retries")

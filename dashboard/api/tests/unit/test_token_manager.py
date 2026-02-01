@@ -11,8 +11,8 @@ from token_manager import (
     MDREPO_REFRESH_TOKEN_KEY,
     MDREPO_TOKEN_EXPIRES_AT,
     MDREPO_TOKEN_KEY,
+    TOKEN_REFRESH_INITIAL_DELAY,
     TOKEN_REFRESH_RETRIES,
-    TOKEN_REFRESH_RETRY_DELAY,
     MDRepoTokenManager,
 )
 
@@ -217,9 +217,10 @@ class TestMDRepoTokenManager:
         assert mock_post.call_count == TOKEN_REFRESH_RETRIES
         # Verify sleep was called twice (between retries)
         assert mock_sleep.call_count == TOKEN_REFRESH_RETRIES - 1
-        # Verify sleep was called with the correct delay
-        for call in mock_sleep.call_args_list:
-            assert call[0][0] == TOKEN_REFRESH_RETRY_DELAY
+        # Verify exponential backoff: 1s, 2s (for 3 retries)
+        expected_delays = [TOKEN_REFRESH_INITIAL_DELAY * (2**i) for i in range(TOKEN_REFRESH_RETRIES - 1)]
+        actual_delays = [call[0][0] for call in mock_sleep.call_args_list]
+        assert actual_delays == expected_delays
 
     @patch("token_manager.time.sleep")
     @patch("token_manager.requests.post")
@@ -244,6 +245,10 @@ class TestMDRepoTokenManager:
         assert mock_post.call_count == TOKEN_REFRESH_RETRIES
         # Verify sleep was called twice (between retries)
         assert mock_sleep.call_count == TOKEN_REFRESH_RETRIES - 1
+        # Verify exponential backoff: 1s, 2s (for 3 retries)
+        expected_delays = [TOKEN_REFRESH_INITIAL_DELAY * (2**i) for i in range(TOKEN_REFRESH_RETRIES - 1)]
+        actual_delays = [call[0][0] for call in mock_sleep.call_args_list]
+        assert actual_delays == expected_delays
 
     @patch("token_manager.requests.post")
     def test_refresh_token_no_new_refresh_token(self, mock_post: Mock, session: SessionMixin) -> None:
