@@ -177,8 +177,9 @@ class TestMDRepoTokenManager:
         assert "mdrepo_token" not in session
         assert "mdrepo_refresh_token" not in session
 
+    @patch("token_manager.time.sleep")
     @patch("token_manager.requests.post")
-    def test_refresh_token_with_retry(self, mock_post: Mock, session: SessionMixin) -> None:
+    def test_refresh_token_with_retry(self, mock_post: Mock, mock_sleep: Mock, session: SessionMixin) -> None:
         """Test refresh with retry on temporary failure."""
         session["mdrepo_token"] = "expired_token"
         session["mdrepo_refresh_token"] = "refresh_token"
@@ -206,9 +207,12 @@ class TestMDRepoTokenManager:
         assert result is True
         assert session["mdrepo_token"] == "new_access_token"
         assert mock_post.call_count == TOKEN_REFRESH_RETRIES
+        # Verify sleep was called twice (between retries)
+        assert mock_sleep.call_count == TOKEN_REFRESH_RETRIES - 1
 
+    @patch("token_manager.time.sleep")
     @patch("token_manager.requests.post")
-    def test_refresh_token_all_retries_fail(self, mock_post: Mock, session: SessionMixin) -> None:
+    def test_refresh_token_all_retries_fail(self, mock_post: Mock, mock_sleep: Mock, session: SessionMixin) -> None:
         """Test refresh when all retries fail."""
         session["mdrepo_token"] = "expired_token"
         session["mdrepo_refresh_token"] = "refresh_token"
@@ -227,6 +231,8 @@ class TestMDRepoTokenManager:
         assert result is False
         # Should retry 3 times
         assert mock_post.call_count == TOKEN_REFRESH_RETRIES
+        # Verify sleep was called twice (between retries)
+        assert mock_sleep.call_count == TOKEN_REFRESH_RETRIES - 1
 
     @patch("token_manager.requests.post")
     def test_refresh_token_no_new_refresh_token(self, mock_post: Mock, session: SessionMixin) -> None:

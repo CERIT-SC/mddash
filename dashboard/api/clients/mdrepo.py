@@ -11,8 +11,6 @@ from pathlib import Path
 
 import requests
 from config import MDREPO_API_URL, MDREPO_RECORD_NAME
-from flask.sessions import SessionMixin
-from token_manager import MDRepoTokenManager
 from utils import is_excluded_path
 
 logger = logging.getLogger(__name__)
@@ -31,12 +29,12 @@ def _auth_header(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def create_experiment(session: SessionMixin, community: str, metadata: dict) -> dict:
+def create_experiment(access_token: str, community: str, metadata: dict) -> dict:
     """
     Create a new experiment (record) in MDRepo.
 
     Args:
-        session: Flask session object for token management.
+        access_token: OAuth2 access token for authentication.
         community: Community slug to publish under.
         metadata: Metadata for the experiment.
 
@@ -44,14 +42,8 @@ def create_experiment(session: SessionMixin, community: str, metadata: dict) -> 
         Server response containing the created experiment data.
 
     Raises:
-        ValueError: If the experiment creation fails or no valid token is available.
+        ValueError: If the experiment creation fails.
     """
-    token_manager = MDRepoTokenManager(session)
-    token = token_manager.get_valid_token()
-
-    if not token:
-        raise ValueError("No valid MDRepo access token available. Please authenticate with MDRepo.")
-
     json_data = {
         "files": {"enabled": True},
         "parent": {"communities": {"default": community}},
@@ -59,7 +51,7 @@ def create_experiment(session: SessionMixin, community: str, metadata: dict) -> 
     }
 
     response = requests.post(
-        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}", json=json_data, headers=_auth_header(token), timeout=30
+        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}", json=json_data, headers=_auth_header(access_token), timeout=30
     )
 
     if not response.ok:
@@ -68,12 +60,12 @@ def create_experiment(session: SessionMixin, community: str, metadata: dict) -> 
     return response.json()
 
 
-def upload_file(session: SessionMixin, experiment_id: str, file: Path) -> dict:
+def upload_file(access_token: str, experiment_id: str, file: Path) -> dict:
     """
     Upload a file to an experiment draft in MDRepo.
 
     Args:
-        session: Flask session object for token management.
+        access_token: OAuth2 access token for authentication.
         experiment_id: Experiment (record) ID in MDRepo.
         file: Path to the file to upload.
 
@@ -81,15 +73,9 @@ def upload_file(session: SessionMixin, experiment_id: str, file: Path) -> dict:
         Server response from file commit.
 
     Raises:
-        ValueError: If any step of the file upload fails or no valid token is available.
+        ValueError: If any step of the file upload fails.
     """
-    token_manager = MDRepoTokenManager(session)
-    token = token_manager.get_valid_token()
-
-    if not token:
-        raise ValueError("No valid MDRepo access token available. Please authenticate with MDRepo.")
-
-    headers = _auth_header(token)
+    headers = _auth_header(access_token)
 
     # Initialize file upload
     json_data = [{"key": file.name}]
@@ -129,12 +115,12 @@ def upload_file(session: SessionMixin, experiment_id: str, file: Path) -> dict:
     return response.json()
 
 
-def upload_experiment_files(session: SessionMixin, experiment_id: str, experiment_dir: Path) -> None:
+def upload_experiment_files(access_token: str, experiment_id: str, experiment_dir: Path) -> None:
     """
     Upload all experiment files that pass the upload filter.
 
     Args:
-        session: Flask session object for token management.
+        access_token: OAuth2 access token for authentication.
         experiment_id: Experiment (record) ID in MDRepo.
         experiment_dir: Local experiment directory.
     """
@@ -146,17 +132,17 @@ def upload_experiment_files(session: SessionMixin, experiment_id: str, experimen
             continue
 
         try:
-            upload_file(session, experiment_id, file)
+            upload_file(access_token, experiment_id, file)
         except ValueError:
             logger.exception("Failed to upload file '%s' to MDRepo.", file.name)
 
 
-def start_upload_worker(session: SessionMixin, experiment_id: str, experiment_dir: Path) -> threading.Thread:
+def start_upload_worker(access_token: str, experiment_id: str, experiment_dir: Path) -> threading.Thread:
     """
     Start a background thread to upload experiment files to MDRepo.
 
     Args:
-        session: Flask session object for token management.
+        access_token: OAuth2 access token for authentication.
         experiment_id: Experiment (record) ID in MDRepo.
         experiment_dir: Local experiment directory.
 
@@ -166,7 +152,7 @@ def start_upload_worker(session: SessionMixin, experiment_id: str, experiment_di
 
     def _worker() -> None:
         try:
-            upload_experiment_files(session, experiment_id, experiment_dir)
+            upload_experiment_files(access_token, experiment_id, experiment_dir)
         except Exception:
             logger.exception("Unexpected error in MDRepo upload worker")
 

@@ -25,6 +25,7 @@ from config import (
 )
 from decorators import handle_exceptions
 from flask import Blueprint, Response, redirect, request, session
+from token_manager import MDRepoTokenManager
 from werkzeug.wrappers import Response as WerkzeugResponse
 
 logger = logging.getLogger(__name__)
@@ -171,7 +172,6 @@ def oauth_callback() -> WerkzeugResponse:
 @handle_exceptions()
 def logout() -> Response:
     """Remove all MDRepo tokens from session."""
-    session.pop(MDREPO_TOKEN_KEY, None)
-    session.pop(MDREPO_REFRESH_TOKEN_KEY, None)
-    session.pop(MDREPO_TOKEN_EXPIRES_AT, None)
+    token_manager = MDRepoTokenManager(session)
+    token_manager.clear_tokens()
     return ApiResponse.success({"message": "Logged out from MDRepo"})

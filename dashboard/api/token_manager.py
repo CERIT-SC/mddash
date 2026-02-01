@@ -32,7 +32,13 @@ class MDRepoTokenManager:
     Manages MDRepo OAuth tokens with on-demand refresh.
 
     This class provides methods to get valid access tokens, check token expiration,
-    and refresh tokens when needed. It is thread-safe and handles errors gracefully.
+    and refresh tokens when needed.
+
+    Note:
+        This class uses a threading.Lock to prevent concurrent refresh attempts
+        within a single token manager instance. However, Flask sessions are not
+        thread-safe and should not be accessed from background threads. This class
+        should only be used within the Flask request context.
     """
 
     def __init__(self, session: SessionMixin) -> None:
@@ -41,6 +47,11 @@ class MDRepoTokenManager:
 
         Args:
             session: Flask session object for storing tokens.
+
+        Warning:
+            The session object is not thread-safe and should only be accessed
+            within the Flask request context. Do not pass this token manager
+            to background threads.
         """
         self.session = session
         self._refresh_lock = threading.Lock()
@@ -89,7 +100,7 @@ class MDRepoTokenManager:
             logger.warning("No token expiration information available")
             return False
 
-        # Check if token has expired (with a small buffer for clock skew)
+        # Check if token has expired
         try:
             expires_at_float = float(expires_at)
         except (ValueError, TypeError):
@@ -102,7 +113,7 @@ class MDRepoTokenManager:
         Refresh the access token using the refresh token.
 
         This method is thread-safe to prevent concurrent refresh attempts.
-        It implements retry logic with exponential backoff.
+        It implements retry logic with a fixed delay between attempts.
 
         Returns:
             True if refresh was successful, False otherwise.

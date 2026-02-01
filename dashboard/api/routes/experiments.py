@@ -4,9 +4,10 @@ from api_response import ApiResponse
 from config import API_PREFIX, DEFAULT_NOTEBOOKS_REPO
 from decorators import handle_exceptions
 from extensions import db
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response, request, session
 from models import Experiment
 from schemas import ExperimentSchema
+from token_manager import MDRepoTokenManager
 from utils import validate_git_url
 
 experiments_bp = Blueprint("experiments", __name__, url_prefix=f"{API_PREFIX}/experiments")
@@ -107,6 +108,11 @@ def publish_experiment(experiment_id: str) -> Response:
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
+
+    # Check if user is authenticated with MDRepo
+    token_manager = MDRepoTokenManager(session)
+    if not token_manager.has_tokens():
+        return ApiResponse.error("Not authenticated with MDRepo. Please authenticate first.", HTTPStatus.UNAUTHORIZED)
 
     # TODO: Add endpoint to fetch available communities from MDRepo and allow user to select from a dropdown in the publish UI.
     #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.

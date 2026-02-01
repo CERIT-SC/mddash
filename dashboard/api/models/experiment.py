@@ -14,6 +14,7 @@ from enums import JobStatus, PodStatus
 from extensions import db
 from flask import session
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from token_manager import MDRepoTokenManager
 from utils import download_git_repo, get_files_with_extensions, get_unique_id
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
@@ -357,8 +358,16 @@ class Experiment(db.Model):  # type: ignore
             "simulations": [],
         }
 
+        token_manager = MDRepoTokenManager(session)
+        access_token = token_manager.get_valid_token()
+
+        if not access_token:
+            raise InternalServerError(
+                description="No valid MDRepo access token available. Please authenticate with MDRepo."
+            )
+
         # Create experiment in MDRepo
-        mdrepo_experiment = mdrepo.create_experiment(session, community, metadata)
+        mdrepo_experiment = mdrepo.create_experiment(access_token, community, metadata)
         mdrepo_id = mdrepo_experiment.get("id")
 
         if mdrepo_id is None:
@@ -370,7 +379,7 @@ class Experiment(db.Model):  # type: ignore
         logger.info(f"Created MDRepo experiment with ID '{mdrepo_id}' for experiment '{self.id}'")
 
         # Start background thread (daemon) to perform uploads and return immediately
-        mdrepo.start_upload_worker(session=session, experiment_id=mdrepo_id, experiment_dir=DATA_DIR / self.id)
+        mdrepo.start_upload_worker(access_token, experiment_id=mdrepo_id, experiment_dir=DATA_DIR / self.id)
 
         logger.info(f"Queued file upload job '{self.id}' to MDRepo.")
         return mdrepo_experiment
