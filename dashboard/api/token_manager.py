@@ -20,9 +20,11 @@ logger = logging.getLogger(__name__)
 # Token refresh configuration constants
 TOKEN_REFRESH_RETRIES = 3
 TOKEN_REFRESH_RETRY_DELAY = 5  # seconds
+TOKEN_EXPIRATION_BUFFER = 60  # seconds
 
-# Session keys for MDRepo OAuth (must match routes/mdrepo.py)
+# Session keys for MDRepo OAuth
 MDREPO_TOKEN_KEY = "mdrepo_token"
+MDREPO_STATE_KEY = "mdrepo_oauth_state"
 MDREPO_REFRESH_TOKEN_KEY = "mdrepo_refresh_token"
 MDREPO_TOKEN_EXPIRES_AT = "mdrepo_token_expires_at"
 
@@ -31,14 +33,7 @@ class MDRepoTokenManager:
     """
     Manages MDRepo OAuth tokens with on-demand refresh.
 
-    This class provides methods to get valid access tokens, check token expiration,
-    and refresh tokens when needed.
-
-    Note:
-        This class uses a threading.Lock to prevent concurrent refresh attempts
-        within a single token manager instance. However, Flask sessions are not
-        thread-safe and should not be accessed from background threads. This class
-        should only be used within the Flask request context.
+    This class provides methods to get valid access tokens, check token expiration, and refresh tokens when needed.
     """
 
     def __init__(self, session: SessionMixin) -> None:
@@ -47,11 +42,6 @@ class MDRepoTokenManager:
 
         Args:
             session: Flask session object for storing tokens.
-
-        Warning:
-            The session object is not thread-safe and should only be accessed
-            within the Flask request context. Do not pass this token manager
-            to background threads.
         """
         self.session = session
         self._refresh_lock = threading.Lock()
@@ -100,20 +90,17 @@ class MDRepoTokenManager:
             logger.warning("No token expiration information available")
             return False
 
-        # Check if token has expired
+        # Check if token has expired (with buffer to prevent race conditions)
         try:
             expires_at_float = float(expires_at)
         except (ValueError, TypeError):
             logger.warning("Invalid expiration timestamp, assuming expired")
             return True
-        return time.time() >= expires_at_float
+        return time.time() >= expires_at_float - TOKEN_EXPIRATION_BUFFER
 
     def refresh_token(self) -> bool:
         """
         Refresh the access token using the refresh token.
-
-        This method is thread-safe to prevent concurrent refresh attempts.
-        It implements retry logic with a fixed delay between attempts.
 
         Returns:
             True if refresh was successful, False otherwise.
@@ -124,7 +111,7 @@ class MDRepoTokenManager:
             logger.error("No refresh token available, cannot refresh access token")
             return False
 
-        # Use lock to prevent concurrent refresh attempts
+        # Use lock to serialize refresh attempts within this process
         with self._refresh_lock:
             # Check again after acquiring lock in case another thread already refreshed
             if not self.is_token_expired():
@@ -156,8 +143,14 @@ class MDRepoTokenManager:
 
                         # Update session with new tokens
                         self.session[MDREPO_TOKEN_KEY] = new_access_token
-                        if new_refresh_token:
-                            self.session[MDREPO_REFRESH_TOKEN_KEY] = new_refresh_token
+                        if "refresh_token" in token_response:
+                            if new_refresh_token:
+                                self.session[MDREPO_REFRESH_TOKEN_KEY] = new_refresh_token
+                            else:
+                                logger.warning(
+                                    "Token refresh response explicitly cleared refresh_token; removing stored refresh token from session"
+                                )
+                                self.session.pop(MDREPO_REFRESH_TOKEN_KEY, None)
                         self.session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + expires_in
 
                         logger.info("MDRepo token refreshed successfully")

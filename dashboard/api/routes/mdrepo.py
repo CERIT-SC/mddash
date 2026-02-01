@@ -25,18 +25,18 @@ from config import (
 )
 from decorators import handle_exceptions
 from flask import Blueprint, Response, redirect, request, session
-from token_manager import MDRepoTokenManager
+from token_manager import (
+    MDREPO_REFRESH_TOKEN_KEY,
+    MDREPO_STATE_KEY,
+    MDREPO_TOKEN_EXPIRES_AT,
+    MDREPO_TOKEN_KEY,
+    MDRepoTokenManager,
+)
 from werkzeug.wrappers import Response as WerkzeugResponse
 
 logger = logging.getLogger(__name__)
 
 mdrepo_bp = Blueprint("mdrepo", __name__, url_prefix=f"{API_PREFIX}/mdrepo")
-
-# Session keys for MDRepo OAuth
-MDREPO_TOKEN_KEY = "mdrepo_token"
-MDREPO_REFRESH_TOKEN_KEY = "mdrepo_refresh_token"
-MDREPO_TOKEN_EXPIRES_AT = "mdrepo_token_expires_at"
-MDREPO_STATE_KEY = "mdrepo_oauth_state"
 
 
 def get_mdrepo_token() -> str | None:

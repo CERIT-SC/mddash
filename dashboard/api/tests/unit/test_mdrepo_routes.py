@@ -7,6 +7,11 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 from routes.mdrepo import mdrepo_bp
+from token_manager import (
+    MDREPO_REFRESH_TOKEN_KEY,
+    MDREPO_TOKEN_EXPIRES_AT,
+    MDREPO_TOKEN_KEY,
+)
 
 
 @pytest.fixture
@@ -50,8 +55,8 @@ class TestMDRepoRoutes:
         mock_get.return_value = mock_response
 
         with client.session_transaction() as sess:
-            sess["mdrepo_token"] = "test_access_token"
-            sess["mdrepo_token_expires_at"] = 9999999999.0  # Far in future
+            sess[MDREPO_TOKEN_KEY] = "test_access_token"
+            sess[MDREPO_TOKEN_EXPIRES_AT] = 9999999999.0  # Far in future
 
         response = client.get("/dash/api/mdrepo/status")
         assert response.status_code == HTTPStatus.OK
@@ -67,8 +72,8 @@ class TestMDRepoRoutes:
         mock_get.return_value = mock_response
 
         with client.session_transaction() as sess:
-            sess["mdrepo_token"] = "test_access_token"
-            sess["mdrepo_token_expires_at"] = 0.0  # Expired
+            sess[MDREPO_TOKEN_KEY] = "test_access_token"
+            sess[MDREPO_TOKEN_EXPIRES_AT] = 0.0  # Expired
 
         response = client.get("/dash/api/mdrepo/status")
         assert response.status_code == HTTPStatus.OK
@@ -77,7 +82,7 @@ class TestMDRepoRoutes:
         assert data["data"]["authenticated"] is False
         # Token should be cleared from session
         with client.session_transaction() as sess:
-            assert "mdrepo_token" not in sess
+            assert MDREPO_TOKEN_KEY not in sess
 
     @patch("routes.mdrepo.MDREPO_CLIENT_ID", "")
     @patch("routes.mdrepo.MDREPO_CLIENT_SECRET", "")
@@ -125,9 +130,9 @@ class TestMDRepoRoutes:
 
         # Check that tokens are stored
         with client.session_transaction() as sess:
-            assert sess["mdrepo_token"] == "new_access_token"
-            assert sess["mdrepo_refresh_token"] == "new_refresh_token"
-            assert "mdrepo_token_expires_at" in sess
+            assert sess[MDREPO_TOKEN_KEY] == "new_access_token"
+            assert sess[MDREPO_REFRESH_TOKEN_KEY] == "new_refresh_token"
+            assert MDREPO_TOKEN_EXPIRES_AT in sess
             # State should be cleared
             assert "mdrepo_oauth_state" not in sess
 
@@ -150,9 +155,9 @@ class TestMDRepoRoutes:
 
         # Check that access token is stored but refresh token is not
         with client.session_transaction() as sess:
-            assert sess["mdrepo_token"] == "new_access_token"
-            assert "mdrepo_refresh_token" not in sess
-            assert "mdrepo_token_expires_at" in sess
+            assert sess[MDREPO_TOKEN_KEY] == "new_access_token"
+            assert MDREPO_REFRESH_TOKEN_KEY not in sess
+            assert MDREPO_TOKEN_EXPIRES_AT in sess
 
     def test_oauth_callback_error(self, client: FlaskClient) -> None:
         """Test OAuth callback with error."""
@@ -198,9 +203,9 @@ class TestMDRepoRoutes:
     def test_logout(self, client: FlaskClient) -> None:
         """Test logout endpoint."""
         with client.session_transaction() as sess:
-            sess["mdrepo_token"] = "test_token"
-            sess["mdrepo_refresh_token"] = "test_refresh_token"
-            sess["mdrepo_token_expires_at"] = 9999999999.0
+            sess[MDREPO_TOKEN_KEY] = "test_token"
+            sess[MDREPO_REFRESH_TOKEN_KEY] = "test_refresh_token"
+            sess[MDREPO_TOKEN_EXPIRES_AT] = 9999999999.0
 
         response = client.post("/dash/api/mdrepo/logout")
         assert response.status_code == HTTPStatus.OK
@@ -210,6 +215,6 @@ class TestMDRepoRoutes:
 
         # Check that all tokens are cleared
         with client.session_transaction() as sess:
-            assert "mdrepo_token" not in sess
-            assert "mdrepo_refresh_token" not in sess
-            assert "mdrepo_token_expires_at" not in sess
+            assert MDREPO_TOKEN_KEY not in sess
+            assert MDREPO_REFRESH_TOKEN_KEY not in sess
+            assert MDREPO_TOKEN_EXPIRES_AT not in sess
