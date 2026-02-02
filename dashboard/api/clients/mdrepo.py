@@ -7,6 +7,7 @@ for creating experiments and uploading files.
 
 import logging
 import threading
+from http import HTTPStatus
 from pathlib import Path
 
 import requests
@@ -135,6 +136,32 @@ def upload_experiment_files(access_token: str, experiment_id: str, experiment_di
             upload_file(access_token, experiment_id, file)
         except ValueError:
             logger.exception("Failed to upload file '%s' to MDRepo.", file.name)
+
+
+def check_experiment_exists(access_token: str, experiment_id: str) -> bool | None:
+    """
+    Check if an experiment exists in MDRepo.
+
+    Args:
+        access_token: OAuth2 access token for authentication.
+        experiment_id: Experiment (record) ID in MDRepo.
+
+    Returns:
+        True if the experiment exists (200), False if deleted (404), None if error.
+    """
+    try:
+        response = requests.get(
+            f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}",
+            headers=_auth_header(access_token),
+            timeout=30,
+        )
+        if response.status_code == HTTPStatus.NOT_FOUND:
+            return False
+        if response.ok:
+            return True
+        return None
+    except Exception:
+        return None
 
 
 def start_upload_worker(access_token: str, experiment_id: str, experiment_dir: Path) -> threading.Thread:

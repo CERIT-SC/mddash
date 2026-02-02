@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 step_status_cache: TTLCache = TTLCache(maxsize=100, ttl=0.1)  # 100ms
+mdrepo_status_cache: TTLCache = TTLCache(maxsize=100, ttl=60)  # 60s
 
 
 class Experiment(db.Model):  # type: ignore
@@ -96,6 +97,7 @@ class Experiment(db.Model):  # type: ignore
     @property
     def mdrepo_record_url(self) -> str | None:
         """Get the MDRepo record URL if published."""
+        self._sync_mdrepo_status()
         if self.mdrepo_id:
             return f"{MDREPO_URL}/{MDREPO_RECORD_NAME}/uploads/{self.mdrepo_id}"
         return None
@@ -317,6 +319,21 @@ class Experiment(db.Model):  # type: ignore
             return 1, "setup complete"
 
         return 0, "setup"
+
+    @cached(cache=mdrepo_status_cache)
+    def _sync_mdrepo_status(self) -> None:
+        """Check if the MDRepo experiment still exists and update local database if deleted."""
+        if not self.mdrepo_id:
+            return
+
+        token_manager = MDRepoTokenManager(session)
+        access_token = token_manager.get_valid_token()
+        if not access_token:
+            return
+
+        if not mdrepo.check_experiment_exists(access_token, self.mdrepo_id):
+            self.mdrepo_id = None
+            db.session.commit()
 
     def delete(self) -> None:
         """Delete the experiment and all its related resources."""
