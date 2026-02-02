@@ -12,7 +12,9 @@ from clients import mdrepo
 from config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
 from enums import JobStatus, PodStatus
 from extensions import db
+from flask import session
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from token_manager import MDRepoTokenManager
 from utils import download_git_repo, get_files_with_extensions, get_unique_id
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
@@ -27,6 +29,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 step_status_cache: TTLCache = TTLCache(maxsize=100, ttl=0.1)  # 100ms
+mdrepo_status_cache: TTLCache = TTLCache(maxsize=100, ttl=60)  # 60s
 
 
 class Experiment(db.Model):  # type: ignore
@@ -67,6 +70,8 @@ class Experiment(db.Model):  # type: ignore
     notebooks_repo: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
     # ID of the experiment in MDRepo
     mdrepo_id: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
+    # Whether the experiment is published in MDRepo (True=published, False=draft, None=not in MDRepo)
+    mdrepo_published: Mapped[bool | None] = mapped_column(db.Boolean, nullable=True)
 
     # Setup notebook status
     notebook: Mapped["Notebook"] = relationship(
@@ -286,9 +291,13 @@ class Experiment(db.Model):  # type: ignore
     @cached(cache=step_status_cache)
     def _step_status(self) -> tuple[int, str]:
         """Determine (step, status) based on current state."""
-        # Step 5: Published (experiment has mdrepo_id)
-        if self.mdrepo_id:
+        # Step 5: Published (experiment is published in MDRepo)
+        if self.mdrepo_published is True:
             return 5, "published"
+
+        # Step 5: Publishing (experiment is in MDRepo draft)
+        if self.mdrepo_published is False:
+            return 5, "publishing"
 
         # Step 4: Analyzing (experiment has terminated GROMACS job)
         if any(j.status == JobStatus.TERMINATED for j in self.gromacs_jobs):
@@ -316,6 +325,31 @@ class Experiment(db.Model):  # type: ignore
 
         return 0, "setup"
 
+    @cached(cache=mdrepo_status_cache, key=lambda self: self.mdrepo_id)
+    def _sync_mdrepo_status(self) -> None:
+        """Check if the MDRepo experiment still exists and update local database if deleted."""
+        if not self.mdrepo_id:
+            return
+
+        token_manager = MDRepoTokenManager(session)
+        access_token = token_manager.get_valid_token()
+        if not access_token:
+            return
+
+        try:
+            status = mdrepo.check_experiment_status(access_token, self.mdrepo_id)
+
+            if status is None:
+                self.mdrepo_id = None
+                self.mdrepo_published = None
+            else:
+                self.mdrepo_published = status
+
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            logger.exception(f"Failed to check MDRepo status for experiment '{self.mdrepo_id}'")
+
     def delete(self) -> None:
         """Delete the experiment and all its related resources."""
         # Delete notebook pod if it exists
@@ -339,12 +373,11 @@ class Experiment(db.Model):  # type: ignore
         # Delete all files in the experiment directory
         rmtree(DATA_DIR / self.id, ignore_errors=True)
 
-    def publish(self, token: str, community: str) -> dict:
+    def publish(self, community: str) -> dict:
         """
-        Publish the experiment to MDRepo.
+        Publish the experiment to MDRepo into a draft state.
 
         Args:
-            token: OAuth2 access token for MDRepo API.
             community: Community slug to publish the experiment to.
 
         Returns:
@@ -357,20 +390,29 @@ class Experiment(db.Model):  # type: ignore
             "simulations": [],
         }
 
+        token_manager = MDRepoTokenManager(session)
+        access_token = token_manager.get_valid_token()
+
+        if not access_token:
+            raise InternalServerError(
+                description="No valid MDRepo access token available. Please authenticate with MDRepo."
+            )
+
         # Create experiment in MDRepo
-        mdrepo_experiment = mdrepo.create_experiment(token, community, metadata)
+        mdrepo_experiment = mdrepo.create_experiment(access_token, community, metadata)
         mdrepo_id = mdrepo_experiment.get("id")
 
         if mdrepo_id is None:
             raise InternalServerError(description="Failed to create experiment in MDRepo.")
 
         self.mdrepo_id = mdrepo_id
+        self.mdrepo_published = False
         db.session.commit()
 
         logger.info(f"Created MDRepo experiment with ID '{mdrepo_id}' for experiment '{self.id}'")
 
         # Start background thread (daemon) to perform uploads and return immediately
-        mdrepo.start_upload_worker(token=token, experiment_id=mdrepo_id, experiment_dir=DATA_DIR / self.id)
+        mdrepo.start_upload_worker(access_token, experiment_id=mdrepo_id, experiment_dir=DATA_DIR / self.id)
 
         logger.info(f"Queued file upload job '{self.id}' to MDRepo.")
         return mdrepo_experiment
