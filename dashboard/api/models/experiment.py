@@ -325,7 +325,7 @@ class Experiment(db.Model):  # type: ignore
 
         return 0, "setup"
 
-    @cached(cache=mdrepo_status_cache)
+    @cached(cache=mdrepo_status_cache, key=lambda self: self.mdrepo_id)
     def _sync_mdrepo_status(self) -> None:
         """Check if the MDRepo experiment still exists and update local database if deleted."""
         if not self.mdrepo_id:
@@ -347,6 +347,7 @@ class Experiment(db.Model):  # type: ignore
 
             db.session.commit()
         except Exception:
+            db.session.rollback()
             logger.exception(f"Failed to check MDRepo status for experiment '{self.mdrepo_id}'")
 
     def delete(self) -> None:

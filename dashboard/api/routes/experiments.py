@@ -109,9 +109,10 @@ def publish_experiment(experiment_id: str) -> Response:
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
 
-    # Check if user is authenticated with MDRepo
+    # Check if user is authenticated with MDRepo and has a valid token
     token_manager = MDRepoTokenManager(session)
-    if not token_manager.has_tokens():
+    token = token_manager.get_valid_token()
+    if not token:
         return ApiResponse.error("Not authenticated with MDRepo. Please authenticate first.", HTTPStatus.UNAUTHORIZED)
 
     # TODO: Add endpoint to fetch available communities from MDRepo and allow user to select from a dropdown in the publish UI.
