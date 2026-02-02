@@ -70,6 +70,8 @@ class Experiment(db.Model):  # type: ignore
     notebooks_repo: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
     # ID of the experiment in MDRepo
     mdrepo_id: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
+    # Whether the experiment is published in MDRepo (True=published, False=draft, None=not in MDRepo)
+    mdrepo_published: Mapped[bool | None] = mapped_column(db.Boolean, nullable=True)
 
     # Setup notebook status
     notebook: Mapped["Notebook"] = relationship(
@@ -97,7 +99,6 @@ class Experiment(db.Model):  # type: ignore
     @property
     def mdrepo_record_url(self) -> str | None:
         """Get the MDRepo record URL if published."""
-        self._sync_mdrepo_status()
         if self.mdrepo_id:
             return f"{MDREPO_URL}/{MDREPO_RECORD_NAME}/uploads/{self.mdrepo_id}"
         return None
@@ -290,9 +291,13 @@ class Experiment(db.Model):  # type: ignore
     @cached(cache=step_status_cache)
     def _step_status(self) -> tuple[int, str]:
         """Determine (step, status) based on current state."""
-        # Step 5: Published (experiment has mdrepo_id)
-        if self.mdrepo_id:
+        # Step 5: Published (experiment is published in MDRepo)
+        if self.mdrepo_published is True:
             return 5, "published"
+
+        # Step 5: Publishing (experiment is in MDRepo draft)
+        if self.mdrepo_published is False:
+            return 5, "publishing"
 
         # Step 4: Analyzing (experiment has terminated GROMACS job)
         if any(j.status == JobStatus.TERMINATED for j in self.gromacs_jobs):
@@ -331,9 +336,18 @@ class Experiment(db.Model):  # type: ignore
         if not access_token:
             return
 
-        if not mdrepo.check_experiment_exists(access_token, self.mdrepo_id):
-            self.mdrepo_id = None
+        try:
+            status = mdrepo.check_experiment_status(access_token, self.mdrepo_id)
+
+            if status is None:
+                self.mdrepo_id = None
+                self.mdrepo_published = None
+            else:
+                self.mdrepo_published = status
+
             db.session.commit()
+        except Exception:
+            logger.exception(f"Failed to check MDRepo status for experiment '{self.mdrepo_id}'")
 
     def delete(self) -> None:
         """Delete the experiment and all its related resources."""
@@ -360,7 +374,7 @@ class Experiment(db.Model):  # type: ignore
 
     def publish(self, community: str) -> dict:
         """
-        Publish the experiment to MDRepo.
+        Publish the experiment to MDRepo into a draft state.
 
         Args:
             community: Community slug to publish the experiment to.
@@ -391,6 +405,7 @@ class Experiment(db.Model):  # type: ignore
             raise InternalServerError(description="Failed to create experiment in MDRepo.")
 
         self.mdrepo_id = mdrepo_id
+        self.mdrepo_published = False
         db.session.commit()
 
         logger.info(f"Created MDRepo experiment with ID '{mdrepo_id}' for experiment '{self.id}'")

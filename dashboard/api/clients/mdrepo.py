@@ -138,30 +138,43 @@ def upload_experiment_files(access_token: str, experiment_id: str, experiment_di
             logger.exception("Failed to upload file '%s' to MDRepo.", file.name)
 
 
-def check_experiment_exists(access_token: str, experiment_id: str) -> bool | None:
+def check_experiment_status(access_token: str, experiment_id: str) -> bool | None:
     """
-    Check if an experiment exists in MDRepo.
+    Check if an experiment exists in MDRepo and whether it's published or draft.
 
     Args:
         access_token: OAuth2 access token for authentication.
         experiment_id: Experiment (record) ID in MDRepo.
 
     Returns:
-        True if the experiment exists (200), False if deleted (404), None if error.
+        True if published, False if draft, None if deleted (404).
+
+    Raises:
+        requests.RequestException: If there's a network error or non-404 HTTP error.
     """
-    try:
-        response = requests.get(
-            f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}",
-            headers=_auth_header(access_token),
-            timeout=30,
-        )
-        if response.status_code == HTTPStatus.NOT_FOUND:
-            return False
-        if response.ok:
-            return True
-        return None
-    except Exception:
-        return None
+    # Check if published
+    response = requests.get(
+        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}",
+        headers=_auth_header(access_token),
+        timeout=30,
+    )
+    if response.status_code == HTTPStatus.OK:
+        return True
+    if response.status_code != HTTPStatus.NOT_FOUND:
+        response.raise_for_status()
+
+    # Check if draft
+    response = requests.get(
+        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft",
+        headers=_auth_header(access_token),
+        timeout=30,
+    )
+    if response.status_code == HTTPStatus.OK:
+        return False
+    if response.status_code != HTTPStatus.NOT_FOUND:
+        response.raise_for_status()
+
+    return None
 
 
 def start_upload_worker(access_token: str, experiment_id: str, experiment_dir: Path) -> threading.Thread:
