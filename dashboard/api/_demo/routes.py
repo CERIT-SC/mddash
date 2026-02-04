@@ -263,8 +263,12 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     if existing:
         return ApiResponse.success(state.format_tuner_job(existing), HTTPStatus.OK)
 
+    # Get parameters from request
+    nsteps = request.args.get("nsteps", default=25000, type=int)
+    extra_args = request.args.get("extra_args", default="", type=str)
+
     # Create new tuner job
-    tuner = state.create_tuner_job(experiment_id, tpr_name, is_pending=False)
+    tuner = state.create_tuner_job(experiment_id, tpr_name, nsteps=nsteps, extra_args=extra_args)
     exp["tuner_jobs"].append(tuner)
     return ApiResponse.success(state.format_tuner_job(tuner), HTTPStatus.CREATED)
 

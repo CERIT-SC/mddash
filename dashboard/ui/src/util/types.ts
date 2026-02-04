@@ -28,10 +28,8 @@ export interface TunerJob {
     experiment_id: string;
     tpr_name: string;
     tuner_status: JobStatus | null;
-    is_pending: boolean;
     error_message: string | null;
     created_at: string;
-    is_stopped: boolean;
     summary: {
         RUNNING?: number;
         PENDING?: number;

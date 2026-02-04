@@ -31,15 +31,13 @@ class DemoState:
             "Created by downloading repository from 'https://zenodo.org/records/7261108'.",
         )
         exp2["notebook"]["status"] = "RUNNING"
-        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "LSD.tpr", is_pending=False))
-        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "MDMA.tpr", is_pending=False, is_stopped=True))
-        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "Pending.tpr", is_pending=True))
+        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "LSD.tpr"))
+        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "MDMA.tpr", is_stopped=True))
         exp2["tuner_jobs"].append(
             self.create_tuner_job(
                 "bbbbb",
                 "Failed.tpr",
-                is_pending=False,
-                error_message="TPR modification failed: Job tpr-mod-abcde-1234567890 failed",
+                error_message="Failed to submit to tuner: Connection timeout",
             )
         )
         exp2["gromacs_jobs"].append(
@@ -131,19 +129,18 @@ class DemoState:
         self,
         exp_id: str,
         tpr_name: str,
-        is_pending: bool = True,
+        nsteps: int = 25000,  # noqa: ARG002 - Accepted for API compatibility, not used in demo
+        extra_args: str = "",  # noqa: ARG002 - Accepted for API compatibility, not used in demo
         is_stopped: bool = False,
         error_message: str | None = None,
     ) -> dict:
         """Create a tuner job dict."""
-        tuner_run_id = None if is_pending or error_message else str(uuid4())
+        tuner_run_id = None if error_message else str(uuid4())
 
         trials: list[dict] = []
-        cluster_resources = "Pending" if is_pending else ("Error" if error_message else "0/32 CPUs, 0/1 GPUs used")
+        cluster_resources = "Error" if error_message else "0/32 CPUs, 0/1 GPUs used"
 
-        if is_pending:
-            tuner_status = "PENDING"
-        elif error_message:
+        if error_message:
             tuner_status = "ERROR"
         elif is_stopped:
             tuner_status = "TERMINATED"
@@ -161,7 +158,6 @@ class DemoState:
                     "nb": "gpu",
                     "pme": "cpu",
                     "performance": 70.158,
-                    "start_time": time.time() - 100,
                 }
             ]
 
@@ -169,7 +165,7 @@ class DemoState:
         # trials should be added over time. The simulator will append trials gradually.
         trials_to_add = 0
         # For demo purposes, create a full tuning run of 20 trials added gradually.
-        if not is_pending and not error_message and not is_stopped and tuner_run_id:
+        if not error_message and not is_stopped and tuner_run_id:
             trials_to_add = 20
 
         return {
@@ -178,11 +174,9 @@ class DemoState:
             "tuner_status": tuner_status,
             "experiment_id": exp_id,
             "tpr_name": tpr_name,
-            "is_pending": is_pending,
             "error_message": error_message,
             "created_at": datetime.now().isoformat(),
-            "is_stopped": is_stopped,
-            "start_time": None if is_pending else time.time(),
+            "start_time": time.time(),
             "trials": trials,
             # Number of trials the simulator should create over time
             "trials_to_add": trials_to_add,
@@ -342,9 +336,7 @@ class DemoState:
         """Get summary of tuner job statuses."""
         summary = {}
 
-        if tuner["is_pending"]:
-            summary["PENDING"] = 1
-        elif tuner["error_message"]:
+        if tuner["error_message"]:
             summary["ERROR"] = 1
         else:
             for trial in tuner["trials"]:

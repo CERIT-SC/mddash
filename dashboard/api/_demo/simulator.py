@@ -62,8 +62,8 @@ class DemoSimulator:
         """Simulate tuner job state transitions."""
         for exp in state.experiments.values():
             for tuner in exp["tuner_jobs"]:
-                # Skip tuners that are pending or errored
-                if tuner["is_pending"] or tuner["error_message"]:
+                # Skip tuners that are errored
+                if tuner["error_message"]:
                     continue
 
                 start_time = tuner.get("start_time")
@@ -89,7 +89,6 @@ class DemoSimulator:
                             "nb": "cpu",
                             "pme": "cpu",
                             "performance": None,
-                            "start_time": time.time(),
                         }
                         tuner.setdefault("trials", []).append(new_trial)
                         tuner["last_trial_added_at"] = time.time()

@@ -36,12 +36,14 @@ def get_tuner_response_data(response: Response) -> dict:
     return data["data"]
 
 
-def run_submit(tpr_path: Path) -> dict:
+def run_submit(tpr_path: Path, nsteps: int = 25000, extra_args: str = "") -> dict:
     """
     Submit a TPR to get tuned.
 
     Args:
         tpr_path: The .tpr file for the simulation to be tuned.
+        nsteps: Number of steps to run in GROMACS mdrun (default: 25000).
+        extra_args: Additional GROMACS mdrun arguments (default: "").
 
     Returns:
         The response from the tuner.
@@ -52,7 +54,8 @@ def run_submit(tpr_path: Path) -> dict:
     """
     with tpr_path.open("rb") as f:
         files = {"file": f}
-        response = requests.post(f"{TUNER_URL}/tuner_runs", files=files, auth=AUTH, timeout=SUBMIT_TIMEOUT)
+        data = {"nsteps": nsteps, "extra_args": extra_args}
+        response = requests.post(f"{TUNER_URL}/tuner_runs", files=files, data=data, auth=AUTH, timeout=SUBMIT_TIMEOUT)
     return get_tuner_response_data(response)
 
 
@@ -99,7 +102,7 @@ if __name__ == "__main__":
     tpr_path = Path(__file__).parent.parent / "_demo" / "data" / "md.tpr"
 
     # Submit a job
-    response = run_submit(tpr_path)
+    response = run_submit(tpr_path, nsteps=25000, extra_args="")
     print("Submitted job:", response)
 
     print("Waiting for job to start...")
@@ -108,7 +111,7 @@ if __name__ == "__main__":
     sleep(2)
 
     # Poll the status
-    run_id = response["tuner_run_id"]
+    run_id = response["id"]
     status = poll_status(run_id)
     print("Job status:", status)
 
