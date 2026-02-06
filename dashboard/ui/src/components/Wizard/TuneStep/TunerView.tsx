@@ -32,7 +32,7 @@ const TunerView = (props: TunerViewProps) => {
 
     const isFetchingRef = useRef(false);
 
-    const tunerStarted = !!tuner && !tuner.is_pending && !tuner.error_message && tuner.tuner_status !== "ERROR";
+    const tunerStarted = !!tuner && !tuner.error_message && tuner.tuner_status !== "ERROR";
     const tunerStopped = tuner?.is_stopped || false;
 
     const fetchStatus = useCallback(
@@ -43,10 +43,7 @@ const TunerView = (props: TunerViewProps) => {
 
             try {
                 const { data, error } = await tuner_status(experiment.id, tprName);
-                if (error) {
-                    if (displayError) showError(error);
-                    return;
-                }
+                if (error && displayError) showError(error);
                 setTuner(data || null);
 
                 if (data?.trials) {
@@ -86,11 +83,11 @@ const TunerView = (props: TunerViewProps) => {
     }, [tprName, experiment.id, fetchStatus]);
 
     useEffect(() => {
-        const shouldPoll = tuner?.is_pending || (tunerStarted && !tunerStopped && tuner?.tuner_status !== "TERMINATED");
+        const shouldPoll = tunerStarted && !tunerStopped && tuner?.tuner_status !== "TERMINATED";
         if (!shouldPoll) return;
         const intervalId = window.setInterval(() => fetchStatus(true), POLLING_INTERVAL);
         return () => window.clearInterval(intervalId);
-    }, [tuner?.is_pending, tuner?.tuner_run_id, tuner?.tuner_status, tunerStarted, tunerStopped, fetchStatus]);
+    }, [tuner?.tuner_run_id, tuner?.tuner_status, tunerStarted, tunerStopped, fetchStatus]);
 
     if (loading) {
         return (
@@ -108,6 +105,7 @@ const TunerView = (props: TunerViewProps) => {
                         rows={tuner?.trials || []}
                         selectedTrial={selectedTrial}
                         setSelectedTrial={setSelectedTrial}
+                        tunerStopped={tunerStopped}
                     />
 
                     {!tunerStopped && (
@@ -141,11 +139,8 @@ const TunerView = (props: TunerViewProps) => {
                             <strong>Error:</strong> {tuner.error_message}
                         </Alert>
                     )}
-                    {tuner?.is_pending && <Alert severity="info">Preparing tuner job (modifying TPR file)...</Alert>}
 
-                    {!tuner?.is_pending && !tuner?.error_message && (
-                        <Typography variant="h3">Configure tuning job for {tprName}</Typography>
-                    )}
+                    {!tuner?.error_message && <Typography variant="h3">Configure tuning job for {tprName}</Typography>}
 
                     {/* Show input and start button only when no job exists or job has error */}
                     {(!tuner || tuner.error_message) && (
@@ -180,7 +175,10 @@ const TunerView = (props: TunerViewProps) => {
                 open={confirmStopDialog}
                 setOpen={setConfirmStopDialog}
                 confirmColor="warning"
-                onConfirm={() => stopJob(tprName)}
+                onConfirm={async () => {
+                    await stopJob(tprName);
+                    fetchStatus(true);
+                }}
                 message="Are you sure you want to stop the tuning job? You cannot resume it, but data will be preserved."
             />
         </>

@@ -35,10 +35,11 @@ interface TunerTableProps {
     rows: TunerTrial[];
     selectedTrial: TunerTrial | null;
     setSelectedTrial: (trial: TunerTrial | null) => void;
+    tunerStopped?: boolean;
 }
 
 const TunerTable = (props: TunerTableProps) => {
-    const { rows, selectedTrial, setSelectedTrial } = props;
+    const { rows, selectedTrial, setSelectedTrial, tunerStopped = false } = props;
 
     const [confirmChoiceDialog, setConfirmChoiceDialog] = useState(false);
 
@@ -83,10 +84,18 @@ const TunerTable = (props: TunerTableProps) => {
         return (
             <Paper variant="outlined" sx={{ p: 4, display: "flex", justifyContent: "center", alignItems: "center" }}>
                 <Stack direction="row" spacing={2} alignItems="center">
-                    <CircularProgress size={24} />
-                    <Typography variant="body1" color="text.secondary">
-                        Waiting for tuning trials...
-                    </Typography>
+                    {tunerStopped ? (
+                        <Typography variant="body1" color="text.secondary">
+                            No trials completed. The tuning job was stopped before any trials finished.
+                        </Typography>
+                    ) : (
+                        <>
+                            <CircularProgress size={24} />
+                            <Typography variant="body1" color="text.secondary">
+                                Waiting for tuning trials...
+                            </Typography>
+                        </>
+                    )}
                 </Stack>
             </Paper>
         );

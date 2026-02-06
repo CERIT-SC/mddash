@@ -31,15 +31,13 @@ class DemoState:
             "Created by downloading repository from 'https://zenodo.org/records/7261108'.",
         )
         exp2["notebook"]["status"] = "RUNNING"
-        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "LSD.tpr", is_pending=False))
-        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "MDMA.tpr", is_pending=False, is_stopped=True))
-        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "Pending.tpr", is_pending=True))
+        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "LSD.tpr"))
+        exp2["tuner_jobs"].append(self.create_tuner_job("bbbbb", "MDMA.tpr", is_stopped=True))
         exp2["tuner_jobs"].append(
             self.create_tuner_job(
                 "bbbbb",
                 "Failed.tpr",
-                is_pending=False,
-                error_message="TPR modification failed: Job tpr-mod-abcde-1234567890 failed",
+                error_message="Failed to submit to tuner: Connection timeout",
             )
         )
         exp2["gromacs_jobs"].append(
@@ -78,6 +76,7 @@ class DemoState:
             "Created by uploading TPR file 'my_first_experiment.tpr'.",
             mdrepo_id="xej9e-x3720",
         )
+        exp3["mdrepo_published"] = True
         exp3["notebook"]["status"] = "DOWN"
         exp3["gromacs_jobs"].append(
             self.create_gromacs_job(
@@ -131,19 +130,18 @@ class DemoState:
         self,
         exp_id: str,
         tpr_name: str,
-        is_pending: bool = True,
+        nsteps: int = 25000,  # noqa: ARG002 - Accepted for API compatibility, not used in demo
+        extra_args: str = "",  # noqa: ARG002 - Accepted for API compatibility, not used in demo
         is_stopped: bool = False,
         error_message: str | None = None,
     ) -> dict:
         """Create a tuner job dict."""
-        tuner_run_id = None if is_pending or error_message else str(uuid4())
+        tuner_run_id = None if error_message else str(uuid4())
 
         trials: list[dict] = []
-        cluster_resources = "Pending" if is_pending else ("Error" if error_message else "0/32 CPUs, 0/1 GPUs used")
+        cluster_resources = "Error" if error_message else "0/32 CPUs, 0/1 GPUs used"
 
-        if is_pending:
-            tuner_status = "PENDING"
-        elif error_message:
+        if error_message:
             tuner_status = "ERROR"
         elif is_stopped:
             tuner_status = "TERMINATED"
@@ -161,7 +159,6 @@ class DemoState:
                     "nb": "gpu",
                     "pme": "cpu",
                     "performance": 70.158,
-                    "start_time": time.time() - 100,
                 }
             ]
 
@@ -169,7 +166,7 @@ class DemoState:
         # trials should be added over time. The simulator will append trials gradually.
         trials_to_add = 0
         # For demo purposes, create a full tuning run of 20 trials added gradually.
-        if not is_pending and not error_message and not is_stopped and tuner_run_id:
+        if not error_message and not is_stopped and tuner_run_id:
             trials_to_add = 20
 
         return {
@@ -178,17 +175,20 @@ class DemoState:
             "tuner_status": tuner_status,
             "experiment_id": exp_id,
             "tpr_name": tpr_name,
-            "is_pending": is_pending,
             "error_message": error_message,
             "created_at": datetime.now().isoformat(),
-            "is_stopped": is_stopped,
-            "start_time": None if is_pending else time.time(),
+            "start_time": time.time(),
             "trials": trials,
             # Number of trials the simulator should create over time
             "trials_to_add": trials_to_add,
             # Timestamp of last trial addition (simulator will update)
             "last_trial_added_at": None,
             "cluster_resources": cluster_resources,
+            # Stopping mechanism fields
+            "is_stopped": is_stopped,
+            "_preserved_summary": None,
+            "_preserved_trials": None,
+            "_preserved_cluster_resources": None,
         }
 
     def create_gromacs_job(
@@ -265,12 +265,22 @@ class DemoState:
     def format_tuner_job(self, tuner: dict) -> dict:
         """Format tuner job with summary and clean internal fields."""
         tuner_copy = tuner.copy()
-        tuner_copy["summary"] = self._get_tuner_summary(tuner)
-        tuner_copy.pop("start_time", None)
 
-        tuner_copy["trials"] = [t.copy() for t in tuner["trials"]]
-        for trial in tuner_copy["trials"]:
-            trial.pop("start_time", None)
+        # Return preserved data if stopped
+        if tuner.get("is_stopped") and tuner.get("_preserved_summary"):
+            tuner_copy["summary"] = tuner["_preserved_summary"]
+            tuner_copy["trials"] = tuner["_preserved_trials"] or []
+            tuner_copy["cluster_resources"] = tuner["_preserved_cluster_resources"] or "N/A"
+        else:
+            tuner_copy["summary"] = self.get_tuner_summary(tuner)
+            tuner_copy["trials"] = [t.copy() for t in tuner["trials"]]
+            for trial in tuner_copy["trials"]:
+                trial.pop("start_time", None)
+
+        tuner_copy.pop("start_time", None)
+        tuner_copy.pop("_preserved_summary", None)
+        tuner_copy.pop("_preserved_trials", None)
+        tuner_copy.pop("_preserved_cluster_resources", None)
 
         return tuner_copy
 
@@ -309,15 +319,21 @@ class DemoState:
 
         Mirrors the logic from models/experiment.py
         """
-        # Step 5: Published (experiment has mdrepo_id)
-        if exp.get("mdrepo_id"):
+        # Step 5: Published (experiment is published in MDRepo)
+        if exp.get("mdrepo_published") is True:
             return 5, "published"
+
+        # Step 5: Publishing (experiment is in MDRepo draft)
+        if exp.get("mdrepo_published") is False:
+            return 5, "publishing"
 
         # Step 4: Analyzing (experiment has terminated GROMACS job)
         if any(j["status"] == "TERMINATED" for j in exp["gromacs_jobs"]):
             return 4, "analyzing"
 
-        # NOTE: Step 3 is skipped because no action is required to progress from Analyze to Publish
+        # Step 3: Allow user to analyze a running simulation
+        if any(j["status"] == "RUNNING" for j in exp["gromacs_jobs"]):
+            return 3, "simulating"
 
         # Step 2: Running simulation (experiment has a GROMACS job)
         if exp["gromacs_jobs"]:
@@ -325,7 +341,7 @@ class DemoState:
 
         # Step 2: Tuning (experiment has terminated tuner job)
         tuner_jobs = exp["tuner_jobs"]
-        if any(self._get_tuner_summary(tj).get("TERMINATED", 0) > 0 for tj in tuner_jobs):
+        if any(self.get_tuner_summary(tj).get("TERMINATED", 0) > 0 for tj in tuner_jobs):
             return 2, "tuning"
 
         # Step 1: Tuning (experiment has a tuner job)
@@ -338,13 +354,11 @@ class DemoState:
 
         return 0, "setup"
 
-    def _get_tuner_summary(self, tuner: dict) -> dict[str, int]:
+    def get_tuner_summary(self, tuner: dict) -> dict[str, int]:
         """Get summary of tuner job statuses."""
         summary = {}
 
-        if tuner["is_pending"]:
-            summary["PENDING"] = 1
-        elif tuner["error_message"]:
+        if tuner["error_message"]:
             summary["ERROR"] = 1
         else:
             for trial in tuner["trials"]:

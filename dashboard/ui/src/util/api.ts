@@ -108,9 +108,16 @@ export const tuner_status = async (id: string, tprName: string): Promise<ApiData
     );
 };
 
-export const run_tuner = async (id: string, tprName: string, nsteps: number = 25000): Promise<ApiData<TunerJob>> => {
+export const run_tuner = async (
+    id: string,
+    tprName: string,
+    nsteps: number = 25000,
+    extra_args: string = "",
+): Promise<ApiData<TunerJob>> => {
     return await handle_request(
-        axios.post(`${API_BASE}/experiments/${id}/tuner/${tprName}?nsteps=${nsteps}`),
+        axios.post(`${API_BASE}/experiments/${id}/tuner/${tprName}`, null, {
+            params: { nsteps, extra_args },
+        }),
         "Failed to run tuner.",
     );
 };

@@ -66,7 +66,7 @@ class Experiment(db.Model):  # type: ignore
     name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # message for user to understand the source of the experiment
     source_message: Mapped[str | None] = mapped_column(db.Text, nullable=False)
-    # git repository URL containing setup notebooks (nullable for legacy experiments) TODO: make non-nullable
+    # git repository URL containing setup notebooks (nullable for legacy experiments) TODO: make non-nullable (breaks db migration)
     notebooks_repo: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
     # ID of the experiment in MDRepo
     mdrepo_id: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
