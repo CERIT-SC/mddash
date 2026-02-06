@@ -43,10 +43,7 @@ const TunerView = (props: TunerViewProps) => {
 
             try {
                 const { data, error } = await tuner_status(experiment.id, tprName);
-                if (error) {
-                    if (displayError) showError(error);
-                    return;
-                }
+                if (error && displayError) showError(error);
                 setTuner(data || null);
 
                 if (data?.trials) {
