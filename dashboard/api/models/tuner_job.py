@@ -129,22 +129,13 @@ class TunerJob(db.Model):  # type: ignore
         Returns:
             The created TunerJob instance.
         """
-        # Create job record
-        job: TunerJob = cls(tpr_name=tpr_path.name, experiment=experiment)  # type: ignore[call-arg]
+        response = tuner.run_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
+
+        job: TunerJob = cls(tuner_run_id=response["id"], experiment=experiment, tpr_name=tpr_path.name)  # type: ignore[call-arg]
         db.session.add(job)
         db.session.commit()
 
-        try:
-            # Submit directly to tuner with nsteps and extra_args
-            response = tuner.run_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
-            job.tuner_run_id = response["id"]
-            db.session.commit()
-            logger.info(f"Tuner job {response['id']} started for experiment {experiment.id}")
-        except Exception as e:
-            logger.exception(f"Failed to submit tuner job: {e}")
-            job.error_message = f"Failed to submit to tuner: {e!s}"
-            db.session.commit()
-
+        logger.info(f"Tuner job {response['id']} started for experiment {experiment.id}")
         return job
 
     def stop(self) -> None:
