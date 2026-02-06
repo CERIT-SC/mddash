@@ -151,6 +151,7 @@ def publish_experiment(experiment_id: str) -> Response:
     # Update experiment (step and status will be calculated dynamically)
     experiment["mdrepo_id"] = mdrepo_experiment["id"]
     experiment["mdrepo_record_url"] = mdrepo_experiment["links"]["edit_html"]  # type: ignore[index]
+    experiment["mdrepo_published"] = False  # Draft state
 
     return ApiResponse.success(mdrepo_experiment, HTTPStatus.CREATED)
 
@@ -275,7 +276,7 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
 
 @bp.route("/api/experiments/<experiment_id>/tuner/<tpr_name>/stop", methods=["POST"])
 def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
-    """Stop tuner job."""
+    """Stop tuner job and preserve its current status."""
     exp = state.experiments.get(experiment_id)
     if not exp:
         return ApiResponse.error(f"Experiment {experiment_id} not found", HTTPStatus.NOT_FOUND)
@@ -284,21 +285,29 @@ def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     if not tuner:
         return ApiResponse.error(f"Tuner job for '{tpr_name}' not found.", HTTPStatus.NOT_FOUND)
 
+    if tuner.get("is_stopped"):
+        return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+
+    # Only preserve trials with performance data
+    trials = [trial for trial in tuner.get("trials", []) if trial.get("performance") is not None]
+
+    # Update summary counts
+    summary = state.get_tuner_summary(tuner)
+    summary["TERMINATED"] = len(trials)
+    summary["RUNNING"] = 0
+
+    tuner["_preserved_summary"] = summary
+    tuner["_preserved_trials"] = trials
+    tuner["_preserved_cluster_resources"] = tuner.get("cluster_resources", "N/A")
     tuner["is_stopped"] = True
     tuner["tuner_status"] = "TERMINATED"
-
-    # Convert all RUNNING trials to TERMINATED
-    for trial in tuner["trials"]:
-        if trial["status"] == "RUNNING":
-            trial["status"] = "TERMINATED"
-            trial["performance"] = trial.get("performance") or round(random.uniform(40.0, 80.0), 3)
 
     return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
 
 
 @bp.route("/api/experiments/<experiment_id>/tuner/<tpr_name>", methods=["DELETE"])
 def delete_tuner_job(experiment_id: str, tpr_name: str) -> Response:
-    """Delete tuner job."""
+    """Delete tuner job completely."""
     exp = state.experiments.get(experiment_id)
     if not exp:
         return ApiResponse.error(f"Experiment {experiment_id} not found", HTTPStatus.NOT_FOUND)
@@ -455,7 +464,7 @@ def list_experiment_files(experiment_id: str) -> Response:
         for f in demo_files:
             name = str(f["name"])
             if "." in name:
-                file_ext = name.split(".")[-1]
+                file_ext = name.rsplit(".", 1)[-1]
                 if file_ext in extensions:
                     files.append(f)
     else:

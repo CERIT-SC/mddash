@@ -30,6 +30,7 @@ export interface TunerJob {
     tuner_status: JobStatus | null;
     error_message: string | null;
     created_at: string;
+    is_stopped: boolean;
     summary: {
         RUNNING?: number;
         PENDING?: number;

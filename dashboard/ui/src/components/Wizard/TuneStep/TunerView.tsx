@@ -33,7 +33,7 @@ const TunerView = (props: TunerViewProps) => {
     const isFetchingRef = useRef(false);
 
     const tunerStarted = !!tuner && !tuner.error_message && tuner.tuner_status !== "ERROR";
-    const tunerStopped = tuner?.tuner_status === "TERMINATED";
+    const tunerStopped = tuner?.is_stopped || false;
 
     const fetchStatus = useCallback(
         async (displayError: boolean) => {
@@ -108,6 +108,7 @@ const TunerView = (props: TunerViewProps) => {
                         rows={tuner?.trials || []}
                         selectedTrial={selectedTrial}
                         setSelectedTrial={setSelectedTrial}
+                        tunerStopped={tunerStopped}
                     />
 
                     {!tunerStopped && (
@@ -177,7 +178,10 @@ const TunerView = (props: TunerViewProps) => {
                 open={confirmStopDialog}
                 setOpen={setConfirmStopDialog}
                 confirmColor="warning"
-                onConfirm={() => stopJob(tprName)}
+                onConfirm={async () => {
+                    await stopJob(tprName);
+                    fetchStatus(true);
+                }}
                 message="Are you sure you want to stop the tuning job? You cannot resume it, but data will be preserved."
             />
         </>

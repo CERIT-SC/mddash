@@ -76,6 +76,7 @@ class DemoState:
             "Created by uploading TPR file 'my_first_experiment.tpr'.",
             mdrepo_id="xej9e-x3720",
         )
+        exp3["mdrepo_published"] = True
         exp3["notebook"]["status"] = "DOWN"
         exp3["gromacs_jobs"].append(
             self.create_gromacs_job(
@@ -183,6 +184,11 @@ class DemoState:
             # Timestamp of last trial addition (simulator will update)
             "last_trial_added_at": None,
             "cluster_resources": cluster_resources,
+            # Stopping mechanism fields
+            "is_stopped": is_stopped,
+            "_preserved_summary": None,
+            "_preserved_trials": None,
+            "_preserved_cluster_resources": None,
         }
 
     def create_gromacs_job(
@@ -259,12 +265,22 @@ class DemoState:
     def format_tuner_job(self, tuner: dict) -> dict:
         """Format tuner job with summary and clean internal fields."""
         tuner_copy = tuner.copy()
-        tuner_copy["summary"] = self._get_tuner_summary(tuner)
-        tuner_copy.pop("start_time", None)
 
-        tuner_copy["trials"] = [t.copy() for t in tuner["trials"]]
-        for trial in tuner_copy["trials"]:
-            trial.pop("start_time", None)
+        # Return preserved data if stopped
+        if tuner.get("is_stopped") and tuner.get("_preserved_summary"):
+            tuner_copy["summary"] = tuner["_preserved_summary"]
+            tuner_copy["trials"] = tuner["_preserved_trials"] or []
+            tuner_copy["cluster_resources"] = tuner["_preserved_cluster_resources"] or "N/A"
+        else:
+            tuner_copy["summary"] = self.get_tuner_summary(tuner)
+            tuner_copy["trials"] = [t.copy() for t in tuner["trials"]]
+            for trial in tuner_copy["trials"]:
+                trial.pop("start_time", None)
+
+        tuner_copy.pop("start_time", None)
+        tuner_copy.pop("_preserved_summary", None)
+        tuner_copy.pop("_preserved_trials", None)
+        tuner_copy.pop("_preserved_cluster_resources", None)
 
         return tuner_copy
 
@@ -303,15 +319,21 @@ class DemoState:
 
         Mirrors the logic from models/experiment.py
         """
-        # Step 5: Published (experiment has mdrepo_id)
-        if exp.get("mdrepo_id"):
+        # Step 5: Published (experiment is published in MDRepo)
+        if exp.get("mdrepo_published") is True:
             return 5, "published"
+
+        # Step 5: Publishing (experiment is in MDRepo draft)
+        if exp.get("mdrepo_published") is False:
+            return 5, "publishing"
 
         # Step 4: Analyzing (experiment has terminated GROMACS job)
         if any(j["status"] == "TERMINATED" for j in exp["gromacs_jobs"]):
             return 4, "analyzing"
 
-        # NOTE: Step 3 is skipped because no action is required to progress from Analyze to Publish
+        # Step 3: Allow user to analyze a running simulation
+        if any(j["status"] == "RUNNING" for j in exp["gromacs_jobs"]):
+            return 3, "simulating"
 
         # Step 2: Running simulation (experiment has a GROMACS job)
         if exp["gromacs_jobs"]:
@@ -319,7 +341,7 @@ class DemoState:
 
         # Step 2: Tuning (experiment has terminated tuner job)
         tuner_jobs = exp["tuner_jobs"]
-        if any(self._get_tuner_summary(tj).get("TERMINATED", 0) > 0 for tj in tuner_jobs):
+        if any(self.get_tuner_summary(tj).get("TERMINATED", 0) > 0 for tj in tuner_jobs):
             return 2, "tuning"
 
         # Step 1: Tuning (experiment has a tuner job)
@@ -332,7 +354,7 @@ class DemoState:
 
         return 0, "setup"
 
-    def _get_tuner_summary(self, tuner: dict) -> dict[str, int]:
+    def get_tuner_summary(self, tuner: dict) -> dict[str, int]:
         """Get summary of tuner job statuses."""
         summary = {}
 
