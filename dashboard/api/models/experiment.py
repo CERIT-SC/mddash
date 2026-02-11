@@ -311,8 +311,8 @@ class Experiment(db.Model):  # type: ignore
         if self.gromacs_jobs:
             return 2, "simulating"
 
-        # Step 2: Tuning (experiment has terminated tuner job)
-        if any(j.summary.get("TERMINATED", 0) > 0 for j in self.tuner_jobs):
+        # Step 2: Tuning (experiment has terminated tuner trial)
+        if any(any(t.get("performance") is not None for t in j.trials) for j in self.tuner_jobs):
             return 2, "tuning"
 
         # Step 1: Tuning (experiment has a tuner job)
