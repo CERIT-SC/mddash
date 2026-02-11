@@ -13,7 +13,7 @@ Deploys a multi-tenant JupyterHub environment with MD Dashboard for molecular dy
 **Sidecar Container Pattern**: Four sidecar containers run alongside the main notebook container:
 - **proxy**: Caddy-based reverse proxy routing traffic to auth, API, and notebook services; also serves the complete static UI (compiled React/TypeScript dashboard)
 - **auth**: Validates JupyterHub tokens and provides authentication middleware
-- **api**: FastAPI backend for MD simulation management
+- **api**: Flask backend for MD simulation management
 - **s3-sync**: Background synchronization with S3-compatible storage
 
 **Template-Based Configuration**: Values file is a Jinja2 template rendered with `gomplate` using external config YAML. This enables environment-specific deployments without maintaining duplicate values files.
@@ -23,7 +23,7 @@ Deploys a multi-tenant JupyterHub environment with MD Dashboard for molecular dy
 - **JupyterHub (4.2.0)**: Base platform with KubeSpawner for Kubernetes integration
 - **kubernetes_asyncio**: Async Kubernetes API client for pre-spawn hook operations
 - **gomplate**: Template engine for rendering values.yaml from values.yaml.tmpl
-- **mdrun-api (0.1.0)**: FastAPI backend for MD simulation orchestration
+- **mdrun-api (0.1.0)**: Flask backend for MD simulation orchestration
 - **gromacs-tuner (0.1.2)**: Ray-based hyperparameter tuning service
 - **Caddy**: Reverse proxy and static file server for the UI
 
