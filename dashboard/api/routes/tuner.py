@@ -41,15 +41,19 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
-    tuner_job = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first()
+    tuner_job: TunerJob | None = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first()
     tpr_path = DATA_DIR / experiment_id / tpr_name
 
     if not tpr_path.exists():
         return ApiResponse.error(f"TPR file {tpr_name} does not exist.", HTTPStatus.NOT_FOUND)
 
     if tuner_job:
-        # Job already exists, return it
-        return ApiResponse.success(schema.dump(tuner_job), HTTPStatus.OK)
+        if tuner_job.error_message:
+            tuner_job.delete()
+            db.session.delete(tuner_job)
+            db.session.commit()
+        else:
+            return ApiResponse.success(schema.dump(tuner_job), HTTPStatus.OK)
 
     # Get parameters from request
     nsteps = request.args.get("nsteps", default=25000, type=int)
