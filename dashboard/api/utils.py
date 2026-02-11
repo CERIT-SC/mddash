@@ -375,24 +375,40 @@ def validate_git_url(git_url: str) -> None:
         raise BadRequest("Invalid git URL: missing host.")
 
 
-def download_git_repo(git_url: str, target_dir: Path) -> None:
+def download_git_repo(git_url: str, target_dir: Path, access_token: str | None = None) -> None:
     """
     Download files from a git repository without history.
 
     Files are placed directly in target_dir (no subdirectory, no .git folder).
     Caller is responsible for validating the URL before calling this function.
 
+    Args:
+        git_url: Git repository URL to clone.
+        target_dir: Directory to download files to.
+        access_token: Optional access token for private HTTPS repositories.
+                      Not applicable to SSH URLs (git@...).
+
     Raises:
         InternalServerError: If git clone fails.
     """
     target_dir.mkdir(parents=True, exist_ok=True)
+
+    # Inject token into HTTPS URLs
+    clone_url = git_url
+    if access_token and not git_url.startswith("git@"):
+        # Parse and reconstruct URL with token
+        parsed = urlparse(git_url)
+        if parsed.scheme in ("http", "https"):
+            # Construct authenticated URL: https://token@host/path
+            netloc_with_token = f"{access_token}@{parsed.netloc}"
+            clone_url = parsed._replace(netloc=netloc_with_token).geturl()
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         clone_dir = Path(tmp_dir) / "repo"
 
         try:
             subprocess.run(
-                ["git", "clone", "--depth", "1", "--single-branch", "--no-tags", "--", git_url, str(clone_dir)],
+                ["git", "clone", "--depth", "1", "--single-branch", "--no-tags", "--", clone_url, str(clone_dir)],
                 check=True,
                 capture_output=True,
                 text=True,

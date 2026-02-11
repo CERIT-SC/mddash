@@ -33,17 +33,18 @@ def create_experiment() -> Response:
     pdb_id = form.get("pdb-id")
     repo_url = form.get("repo-url")
     notebooks_repo = form.get("notebooks-repo", DEFAULT_NOTEBOOKS_REPO)
+    access_token = form.get("access-token")
     simulation_files = request.files.getlist("simulation-files")
 
     validate_git_url(notebooks_repo)
 
     match form["type"]:
         case "pdb" if pdb_id:
-            experiment = Experiment.from_pdb(name, pdb_id, notebooks_repo)
+            experiment = Experiment.from_pdb(name, pdb_id, notebooks_repo, access_token)
         case "repo" if repo_url:
-            experiment = Experiment.from_repo(name, repo_url, notebooks_repo)
+            experiment = Experiment.from_repo(name, repo_url, notebooks_repo, access_token)
         case "file" if simulation_files:
-            experiment = Experiment.from_files(name, simulation_files, notebooks_repo)
+            experiment = Experiment.from_files(name, simulation_files, notebooks_repo, access_token)
         case _:
             return ApiResponse.error("Invalid experiment type or missing data.", HTTPStatus.BAD_REQUEST)
 

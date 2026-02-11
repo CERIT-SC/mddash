@@ -104,7 +104,7 @@ class Experiment(db.Model):  # type: ignore
         return None
 
     @classmethod
-    def prepare_env(cls, notebooks_repo: str) -> str:
+    def prepare_env(cls, notebooks_repo: str, access_token: str | None = None) -> str:
         """
         Prepare environment directory for new experiment.
 
@@ -112,6 +112,7 @@ class Experiment(db.Model):  # type: ignore
 
         Args:
             notebooks_repo: Git repository URL containing setup notebooks.
+            access_token: Optional GitHub access token for private repositories.
 
         Returns:
             The unique experiment ID.
@@ -123,7 +124,7 @@ class Experiment(db.Model):  # type: ignore
         experiment_dir = DATA_DIR / experiment_id
         experiment_dir.mkdir(parents=True, exist_ok=True)
         try:
-            download_git_repo(notebooks_repo, experiment_dir)
+            download_git_repo(notebooks_repo, experiment_dir, access_token)
         except Exception:
             rmtree(experiment_dir, ignore_errors=True)
             raise
@@ -154,7 +155,7 @@ class Experiment(db.Model):  # type: ignore
         return experiment
 
     @classmethod
-    def from_pdb(cls, name: str, pdb_id: str, notebooks_repo: str) -> "Experiment":
+    def from_pdb(cls, name: str, pdb_id: str, notebooks_repo: str, access_token: str | None = None) -> "Experiment":
         """
         Create experiment from PDB ID with database persistence.
 
@@ -162,6 +163,7 @@ class Experiment(db.Model):  # type: ignore
             name: Name of the experiment.
             pdb_id: PDB ID to download (e.g., 1A2B).
             notebooks_repo: Git repository URL containing setup notebooks.
+            access_token: Optional GitHub access token for private repositories.
 
         Returns:
             The created Experiment instance.
@@ -169,7 +171,7 @@ class Experiment(db.Model):  # type: ignore
         Raises:
             HTTPException: If the PDB ID is not found or download fails.
         """
-        experiment_id: str = cls.prepare_env(notebooks_repo)
+        experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
         pdb_id = pdb_id.strip().upper()
 
         try:
@@ -197,7 +199,7 @@ class Experiment(db.Model):  # type: ignore
             raise
 
     @classmethod
-    def from_repo(cls, name: str, repo_link: str, notebooks_repo: str) -> "Experiment":
+    def from_repo(cls, name: str, repo_link: str, notebooks_repo: str, access_token: str | None = None) -> "Experiment":
         """
         Create experiment from Zenodo repository with database persistence.
 
@@ -205,6 +207,7 @@ class Experiment(db.Model):  # type: ignore
             name: Name of the experiment.
             repo_link: Zenodo repository link (e.g., https://zenodo.org/record/1234567).
             notebooks_repo: Git repository URL containing setup notebooks.
+            access_token: Optional GitHub access token for private repositories.
 
         Returns:
             The created Experiment instance.
@@ -212,7 +215,7 @@ class Experiment(db.Model):  # type: ignore
         Raises:
             HTTPException: If the repository link is invalid or download fails.
         """
-        experiment_id: str = cls.prepare_env(notebooks_repo)
+        experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
 
         try:
             # Validate and parse repository link
@@ -248,7 +251,7 @@ class Experiment(db.Model):  # type: ignore
             raise
 
     @classmethod
-    def from_files(cls, name: str, files: list[FileStorage], notebooks_repo: str) -> "Experiment":
+    def from_files(cls, name: str, files: list[FileStorage], notebooks_repo: str, access_token: str | None = None) -> "Experiment":
         """
         Create experiment from file uploads with database persistence.
 
@@ -256,6 +259,7 @@ class Experiment(db.Model):  # type: ignore
             name: Name of the experiment.
             files: List of uploaded files.
             notebooks_repo: Git repository URL containing setup notebooks.
+            access_token: Optional GitHub access token for private repositories.
 
         Returns:
             The created Experiment instance.
@@ -266,7 +270,7 @@ class Experiment(db.Model):  # type: ignore
         if not files:
             raise BadRequest(description="No files provided")
 
-        experiment_id: str = cls.prepare_env(notebooks_repo)
+        experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
 
         try:
             filenames = []

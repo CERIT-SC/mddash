@@ -15,8 +15,12 @@ import {
     InputAdornment,
     IconButton,
     Tooltip,
+    Box,
+    Collapse,
 } from "@mui/material";
 import ReplayIcon from "@mui/icons-material/Replay";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 
 import Dropzone from "@/components/Dropzone";
 import { create_experiment } from "@/util/api";
@@ -65,6 +69,21 @@ const New = () => {
     const [repoUrl, setRepoUrl] = useState("");
     const [files, setFiles] = useState<File[]>([]);
     const [notebooksRepo, setNotebooksRepo] = useState(DEFAULT_NOTEBOOKS_REPO);
+    const [accessToken, setAccessToken] = useState("");
+    const [showTokenInput, setShowTokenInput] = useState(false);
+
+    // Check if the notebooks repo supports access tokens (HTTPS URLs only, not SSH)
+    const isHttpsRepo = notebooksRepo.startsWith("http://") || notebooksRepo.startsWith("https://");
+
+    // Clear token and hide input if switching to SSH or default repo
+    const handleNotebooksRepoChange = (value: string) => {
+        setNotebooksRepo(value);
+        const isHttps = value.startsWith("http://") || value.startsWith("https://");
+        if (!isHttps || value === DEFAULT_NOTEBOOKS_REPO) {
+            setAccessToken("");
+            setShowTokenInput(false);
+        }
+    };
 
     const [nameError, setNameError] = useState(false);
     const [typeError, setTypeError] = useState(false);
@@ -106,6 +125,7 @@ const New = () => {
         if (type === "file" && files.length > 0) {
             files.forEach((file) => formData.append("simulation-files", file));
         }
+        if (accessToken) formData.append("access-token", accessToken);
 
         const { data, error } = await create_experiment(formData);
 
@@ -187,37 +207,78 @@ const New = () => {
                     )}
                     {type === "file" && <Dropzone inputName="simulation-files" onFilesChange={setFiles} />}
 
-                    <TextField
-                        id="notebooks-repo"
-                        label="Notebooks Repository"
-                        variant="outlined"
-                        value={notebooksRepo}
-                        onChange={(e) => setNotebooksRepo(e.target.value)}
-                        error={notebooksRepoError}
-                        helperText={
-                            notebooksRepoError
-                                ? "Enter a valid git repository"
-                                : "Git repository containing setup and analysis notebooks"
-                        }
-                        slotProps={{
-                            input: {
-                                endAdornment: notebooksRepo !== DEFAULT_NOTEBOOKS_REPO && (
-                                    <InputAdornment position="end">
-                                        <Tooltip title="Reset to default">
-                                            <IconButton
-                                                edge="end"
-                                                onClick={() => setNotebooksRepo(DEFAULT_NOTEBOOKS_REPO)}
-                                                size="small"
-                                                aria-label="Reset notebooks repo to default"
-                                            >
-                                                <ReplayIcon />
-                                            </IconButton>
-                                        </Tooltip>
-                                    </InputAdornment>
-                                ),
-                            },
-                        }}
-                    />
+                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        <TextField
+                            id="notebooks-repo"
+                            label="Notebooks Repository"
+                            variant="outlined"
+                            value={notebooksRepo}
+                            onChange={(e) => handleNotebooksRepoChange(e.target.value)}
+                            error={notebooksRepoError}
+                            helperText={
+                                notebooksRepoError
+                                    ? "Enter a valid git repository"
+                                    : "Git repository containing setup and analysis notebooks"
+                            }
+                            slotProps={{
+                                input: {
+                                    endAdornment: notebooksRepo !== DEFAULT_NOTEBOOKS_REPO && (
+                                        <InputAdornment position="end">
+                                            <Tooltip title="Reset to default">
+                                                <IconButton
+                                                    edge="end"
+                                                    onClick={() => handleNotebooksRepoChange(DEFAULT_NOTEBOOKS_REPO)}
+                                                    size="small"
+                                                    aria-label="Reset notebooks repo to default"
+                                                >
+                                                    <ReplayIcon />
+                                                </IconButton>
+                                            </Tooltip>
+                                        </InputAdornment>
+                                    ),
+                                },
+                            }}
+                        />
+
+                        {notebooksRepo !== DEFAULT_NOTEBOOKS_REPO && isHttpsRepo && (
+                            <Box>
+                                <Box
+                                    sx={{
+                                        cursor: "pointer",
+                                        display: "inline-block",
+                                    }}
+                                    onClick={() => setShowTokenInput(!showTokenInput)}
+                                >
+                                    <Typography
+                                        variant="body2"
+                                        color="text.secondary"
+                                        sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}
+                                    >
+                                        {showTokenInput ? (
+                                            <ExpandLessIcon fontSize="small" />
+                                        ) : (
+                                            <ExpandMoreIcon fontSize="small" />
+                                        )}
+                                        {showTokenInput ? "Hide access token" : "Provide access token"}
+                                    </Typography>
+                                </Box>
+                                <Collapse in={showTokenInput}>
+                                    <TextField
+                                        id="access-token"
+                                        label="Git Access Token"
+                                        type="password"
+                                        variant="outlined"
+                                        value={accessToken}
+                                        onChange={(e) => setAccessToken(e.target.value)}
+                                        placeholder="e.g. ghp_xxxxx, glpat_xxxxx, github_pat_xxxxx"
+                                        helperText="Required for private HTTPS repositories. Not applicable for SSH URLs. Only used for cloning, not stored."
+                                        sx={{ mt: 1 }}
+                                        fullWidth
+                                    />
+                                </Collapse>
+                            </Box>
+                        )}
+                    </Box>
 
                     <Button
                         variant="contained"
