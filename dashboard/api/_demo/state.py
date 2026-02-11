@@ -139,7 +139,6 @@ class DemoState:
         tuner_run_id = None if error_message else str(uuid4())
 
         trials: list[dict] = []
-        cluster_resources = "Error" if error_message else "0/32 CPUs, 0/1 GPUs used"
 
         if error_message:
             tuner_status = "ERROR"
@@ -183,12 +182,9 @@ class DemoState:
             "trials_to_add": trials_to_add,
             # Timestamp of last trial addition (simulator will update)
             "last_trial_added_at": None,
-            "cluster_resources": cluster_resources,
             # Stopping mechanism fields
             "is_stopped": is_stopped,
-            "_preserved_summary": None,
             "_preserved_trials": None,
-            "_preserved_cluster_resources": None,
         }
 
     def create_gromacs_job(
@@ -263,24 +259,19 @@ class DemoState:
         return True
 
     def format_tuner_job(self, tuner: dict) -> dict:
-        """Format tuner job with summary and clean internal fields."""
+        """Format tuner job and clean internal fields."""
         tuner_copy = tuner.copy()
 
         # Return preserved data if stopped
-        if tuner.get("is_stopped") and tuner.get("_preserved_summary"):
-            tuner_copy["summary"] = tuner["_preserved_summary"]
-            tuner_copy["trials"] = tuner["_preserved_trials"] or []
-            tuner_copy["cluster_resources"] = tuner["_preserved_cluster_resources"] or "N/A"
+        if tuner.get("is_stopped") and tuner.get("_preserved_trials"):
+            tuner_copy["trials"] = tuner["_preserved_trials"]
         else:
-            tuner_copy["summary"] = self.get_tuner_summary(tuner)
             tuner_copy["trials"] = [t.copy() for t in tuner["trials"]]
             for trial in tuner_copy["trials"]:
                 trial.pop("start_time", None)
 
         tuner_copy.pop("start_time", None)
-        tuner_copy.pop("_preserved_summary", None)
         tuner_copy.pop("_preserved_trials", None)
-        tuner_copy.pop("_preserved_cluster_resources", None)
 
         return tuner_copy
 
@@ -341,7 +332,8 @@ class DemoState:
 
         # Step 2: Tuning (experiment has terminated tuner job)
         tuner_jobs = exp["tuner_jobs"]
-        if any(self.get_tuner_summary(tj).get("TERMINATED", 0) > 0 for tj in tuner_jobs):
+        # Check if any tuner job has completed trials
+        if any(any(t.get("performance") is not None for t in tj.get("trials", [])) for tj in tuner_jobs):
             return 2, "tuning"
 
         # Step 1: Tuning (experiment has a tuner job)
@@ -353,19 +345,6 @@ class DemoState:
             return 1, "setup complete"
 
         return 0, "setup"
-
-    def get_tuner_summary(self, tuner: dict) -> dict[str, int]:
-        """Get summary of tuner job statuses."""
-        summary = {}
-
-        if tuner["error_message"]:
-            summary["ERROR"] = 1
-        else:
-            for trial in tuner["trials"]:
-                status = trial["status"]
-                summary[status] = summary.get(status, 0) + 1
-
-        return summary
 
 
 # Global state instance

@@ -97,17 +97,10 @@ class DemoSimulator:
                             trial["status"] = "TERMINATED"
                             trial["performance"] = round(random.uniform(10.0, 500.0), 3)
 
-                # Update cluster resources based on running trials
-                running_count = sum(1 for t in tuner.get("trials", []) if t["status"] == "RUNNING")
-                if running_count > 0:
-                    cpus_used = running_count * 8
-                    tuner["cluster_resources"] = f"{cpus_used}/32 CPUs, 0/1 GPUs used"
-                else:
-                    tuner["cluster_resources"] = "0/32 CPUs, 0/1 GPUs used"
-
                 # If we've added all trials and none are running, mark tuner as terminated
                 total_expected = tuner.get("trials_to_add", 0) or 0
                 current_total = len(tuner.get("trials", []))
+                running_count = sum(1 for t in tuner.get("trials", []) if t["status"] == "RUNNING")
                 if total_expected > 0 and current_total >= total_expected and running_count == 0:
                     tuner["tuner_status"] = "TERMINATED"
                     tuner["is_stopped"] = True

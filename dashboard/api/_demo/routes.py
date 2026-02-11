@@ -276,7 +276,7 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
 
 @bp.route("/api/experiments/<experiment_id>/tuner/<tpr_name>/stop", methods=["POST"])
 def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
-    """Stop tuner job and preserve its current status."""
+    """Stop tuner job and preserve its trials."""
     exp = state.experiments.get(experiment_id)
     if not exp:
         return ApiResponse.error(f"Experiment {experiment_id} not found", HTTPStatus.NOT_FOUND)
@@ -291,14 +291,7 @@ def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     # Only preserve trials with performance data
     trials = [trial for trial in tuner.get("trials", []) if trial.get("performance") is not None]
 
-    # Update summary counts
-    summary = state.get_tuner_summary(tuner)
-    summary["TERMINATED"] = len(trials)
-    summary["RUNNING"] = 0
-
-    tuner["_preserved_summary"] = summary
     tuner["_preserved_trials"] = trials
-    tuner["_preserved_cluster_resources"] = tuner.get("cluster_resources", "N/A")
     tuner["is_stopped"] = True
     tuner["tuner_status"] = "TERMINATED"
 
