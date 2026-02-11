@@ -38,14 +38,9 @@ class TunerJob(db.Model):  # type: ignore
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
     # whether the job was stopped (preserves data but job is deleted from tuner)
     is_stopped: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
-    # preserved status data when job is stopped
-    # TODO: use the JSON type from SQLAlchemy (breaks db migration)
-    _preserved_summary: Mapped[str] = mapped_column("preserved_summary", Text, nullable=True)
+    # preserved trials when job is stopped
     # TODO: use the JSON type from SQLAlchemy (breaks db migration)
     _preserved_trials: Mapped[str] = mapped_column("preserved_trials", Text, nullable=True)
-    _preserved_cluster_resources: Mapped[str] = mapped_column(
-        "preserved_cluster_resources", db.String(255), nullable=True
-    )
 
     # back-reference to the parent experiment
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="tuner_jobs")
@@ -56,25 +51,11 @@ class TunerJob(db.Model):  # type: ignore
         return self._status().get("status", JobStatus.UNKNOWN)
 
     @property
-    def summary(self) -> dict:
-        """Summary of the tuner trial statuses."""
-        if self.is_stopped and self._preserved_summary:
-            return json.loads(self._preserved_summary)
-        return self._status().get("summary", {})
-
-    @property
     def trials(self) -> list[dict]:
         """Trial jobs with their statuses."""
         if self.is_stopped and self._preserved_trials:
             return json.loads(self._preserved_trials)
         return self._status().get("trials", [])
-
-    @property
-    def cluster_resources(self) -> str:
-        """Cluster resources used by the tuner jobs."""
-        if self.is_stopped and self._preserved_cluster_resources:
-            return self._preserved_cluster_resources
-        return self._status().get("cluster_resources", "N/A")
 
     def _status(self) -> dict:
         """
@@ -140,9 +121,9 @@ class TunerJob(db.Model):  # type: ignore
 
     def stop(self) -> None:
         """
-        Stop the tuner job and preserve its current status.
+        Stop the tuner job and preserve its trials.
 
-        The job gets deleted from the tuner but data is preserved in the database.
+        The job gets deleted from the tuner but trials data is preserved in the database.
         """
         if self.is_stopped:
             return
@@ -152,14 +133,7 @@ class TunerJob(db.Model):  # type: ignore
         # Only preserve trials with performance data
         trials = [trial for trial in current_status.get("trials", []) if trial.get("performance") is not None]
 
-        # Update summary counts
-        summary = current_status.get("summary", {})
-        summary["TERMINATED"] = len(trials)
-        summary["RUNNING"] = 0
-
-        self._preserved_summary = json.dumps(summary)
         self._preserved_trials = json.dumps(trials)
-        self._preserved_cluster_resources = current_status.get("cluster_resources", "N/A")
         self.is_stopped = True
 
         if self.tuner_run_id:

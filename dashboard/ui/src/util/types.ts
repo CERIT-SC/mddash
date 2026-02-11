@@ -31,14 +31,7 @@ export interface TunerJob {
     error_message: string | null;
     created_at: string;
     is_stopped: boolean;
-    summary: {
-        RUNNING?: number;
-        PENDING?: number;
-        TERMINATED?: number;
-        ERROR?: number;
-    };
     trials: TunerTrial[];
-    cluster_resources: string;
 }
 
 export interface TunerTrial {
