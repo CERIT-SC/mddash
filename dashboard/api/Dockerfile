@@ -6,7 +6,7 @@ WORKDIR /app
 
 RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
 
-RUN apk add --no-cache curl
+RUN apk add --no-cache curl git
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt gunicorn

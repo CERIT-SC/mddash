@@ -5,23 +5,37 @@ This module provides functions to interact with the MDRepo (InvenioRDM) API
 for creating experiments and uploading files.
 """
 
+import logging
+import threading
+from http import HTTPStatus
 from pathlib import Path
 
 import requests
 from config import MDREPO_API_URL, MDREPO_RECORD_NAME
+from utils import is_excluded_path
+
+logger = logging.getLogger(__name__)
 
 
 def _auth_header(token: str) -> dict[str, str]:
-    """Create authorization header for API requests."""
+    """
+    Create authorization header with Bearer token.
+
+    Args:
+        token: OAuth2 access token.
+
+    Returns:
+        Authorization header dictionary.
+    """
     return {"Authorization": f"Bearer {token}"}
 
 
-def create_experiment(token: str, community: str, metadata: dict) -> dict:
+def create_experiment(access_token: str, community: str, metadata: dict) -> dict:
     """
     Create a new experiment (record) in MDRepo.
 
     Args:
-        token: OAuth2 access token.
+        access_token: OAuth2 access token for authentication.
         community: Community slug to publish under.
         metadata: Metadata for the experiment.
 
@@ -38,7 +52,7 @@ def create_experiment(token: str, community: str, metadata: dict) -> dict:
     }
 
     response = requests.post(
-        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}", json=json_data, headers=_auth_header(token), timeout=30
+        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}", json=json_data, headers=_auth_header(access_token), timeout=30
     )
 
     if not response.ok:
@@ -47,12 +61,12 @@ def create_experiment(token: str, community: str, metadata: dict) -> dict:
     return response.json()
 
 
-def upload_file(token: str, experiment_id: str, file: Path) -> dict:
+def upload_file(access_token: str, experiment_id: str, file: Path) -> dict:
     """
     Upload a file to an experiment draft in MDRepo.
 
     Args:
-        token: OAuth2 access token.
+        access_token: OAuth2 access token for authentication.
         experiment_id: Experiment (record) ID in MDRepo.
         file: Path to the file to upload.
 
@@ -62,7 +76,7 @@ def upload_file(token: str, experiment_id: str, file: Path) -> dict:
     Raises:
         ValueError: If any step of the file upload fails.
     """
-    headers = _auth_header(token)
+    headers = _auth_header(access_token)
 
     # Initialize file upload
     json_data = [{"key": file.name}]
@@ -100,3 +114,88 @@ def upload_file(token: str, experiment_id: str, file: Path) -> dict:
         raise ValueError(f"Failed to commit file: {response.status_code} - {response.text}")
 
     return response.json()
+
+
+def upload_experiment_files(access_token: str, experiment_id: str, experiment_dir: Path) -> None:
+    """
+    Upload all experiment files that pass the upload filter.
+
+    Args:
+        access_token: OAuth2 access token for authentication.
+        experiment_id: Experiment (record) ID in MDRepo.
+        experiment_dir: Local experiment directory.
+    """
+    for file in experiment_dir.iterdir():
+        # TODO: Should we upload subdirectories?
+        if not file.is_file():
+            continue
+        if is_excluded_path(file, experiment_dir):
+            continue
+
+        try:
+            upload_file(access_token, experiment_id, file)
+        except ValueError:
+            logger.exception("Failed to upload file '%s' to MDRepo.", file.name)
+
+
+def check_experiment_status(access_token: str, experiment_id: str) -> bool | None:
+    """
+    Check if an experiment exists in MDRepo and whether it's published or draft.
+
+    Args:
+        access_token: OAuth2 access token for authentication.
+        experiment_id: Experiment (record) ID in MDRepo.
+
+    Returns:
+        True if published, False if draft, None if deleted (404).
+
+    Raises:
+        requests.RequestException: If there's a network error or non-404 HTTP error.
+    """
+    # Check if published
+    response = requests.get(
+        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}",
+        headers=_auth_header(access_token),
+        timeout=30,
+    )
+    if response.status_code == HTTPStatus.OK:
+        return True
+    if response.status_code != HTTPStatus.NOT_FOUND:
+        response.raise_for_status()
+
+    # Check if draft
+    response = requests.get(
+        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft",
+        headers=_auth_header(access_token),
+        timeout=30,
+    )
+    if response.status_code == HTTPStatus.OK:
+        return False
+    if response.status_code != HTTPStatus.NOT_FOUND:
+        response.raise_for_status()
+
+    return None
+
+
+def start_upload_worker(access_token: str, experiment_id: str, experiment_dir: Path) -> threading.Thread:
+    """
+    Start a background thread to upload experiment files to MDRepo.
+
+    Args:
+        access_token: OAuth2 access token for authentication.
+        experiment_id: Experiment (record) ID in MDRepo.
+        experiment_dir: Local experiment directory.
+
+    Returns:
+        The started daemon thread.
+    """
+
+    def _worker() -> None:
+        try:
+            upload_experiment_files(access_token, experiment_id, experiment_dir)
+        except Exception:
+            logger.exception("Unexpected error in MDRepo upload worker")
+
+    thread = threading.Thread(target=_worker, daemon=True)
+    thread.start()
+    return thread

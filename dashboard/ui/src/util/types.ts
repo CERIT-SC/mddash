@@ -4,6 +4,7 @@ export interface Experiment {
     updated_at: string;
     name: string;
     source_message: string | null;
+    notebooks_repo: string | null;
     mdrepo_id: string | null;
     mdrepo_record_url: string | null;
     step: number;
@@ -27,18 +28,10 @@ export interface TunerJob {
     experiment_id: string;
     tpr_name: string;
     tuner_status: JobStatus | null;
-    is_pending: boolean;
     error_message: string | null;
     created_at: string;
     is_stopped: boolean;
-    summary: {
-        RUNNING?: number;
-        PENDING?: number;
-        TERMINATED?: number;
-        ERROR?: number;
-    };
     trials: TunerTrial[];
-    cluster_resources: string;
 }
 
 export interface TunerTrial {

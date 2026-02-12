@@ -1,14 +1,14 @@
 from http import HTTPStatus
 
 from api_response import ApiResponse
-from config import API_PREFIX
+from config import API_PREFIX, DEFAULT_NOTEBOOKS_REPO
 from decorators import handle_exceptions
 from extensions import db
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response, request, session
 from models import Experiment
 from schemas import ExperimentSchema
-
-from routes.mdrepo import get_mdrepo_token
+from token_manager import MDRepoTokenManager
+from utils import validate_git_url
 
 experiments_bp = Blueprint("experiments", __name__, url_prefix=f"{API_PREFIX}/experiments")
 
@@ -32,15 +32,19 @@ def create_experiment() -> Response:
     name = form["experiment-name"]
     pdb_id = form.get("pdb-id")
     repo_url = form.get("repo-url")
+    notebooks_repo = form.get("notebooks-repo", DEFAULT_NOTEBOOKS_REPO)
+    access_token = form.get("access-token")
     simulation_files = request.files.getlist("simulation-files")
+
+    validate_git_url(notebooks_repo)
 
     match form["type"]:
         case "pdb" if pdb_id:
-            experiment = Experiment.from_pdb(name, pdb_id)
+            experiment = Experiment.from_pdb(name, pdb_id, notebooks_repo, access_token)
         case "repo" if repo_url:
-            experiment = Experiment.from_repo(name, repo_url)
+            experiment = Experiment.from_repo(name, repo_url, notebooks_repo, access_token)
         case "file" if simulation_files:
-            experiment = Experiment.from_files(name, simulation_files)
+            experiment = Experiment.from_files(name, simulation_files, notebooks_repo, access_token)
         case _:
             return ApiResponse.error("Invalid experiment type or missing data.", HTTPStatus.BAD_REQUEST)
 
@@ -106,13 +110,15 @@ def publish_experiment(experiment_id: str) -> Response:
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
 
-    token = get_mdrepo_token()
+    # Check if user is authenticated with MDRepo and has a valid token
+    token_manager = MDRepoTokenManager(session)
+    token = token_manager.get_valid_token()
     if not token:
         return ApiResponse.error("Not authenticated with MDRepo. Please authenticate first.", HTTPStatus.UNAUTHORIZED)
 
     # TODO: Add endpoint to fetch available communities from MDRepo and allow user to select from a dropdown in the publish UI.
     #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.
-    mdrepo_experiment = experiment.publish(token=token, community="ceitec")
+    mdrepo_experiment = experiment.publish(community="ceitec")
 
     return ApiResponse.success(mdrepo_experiment, HTTPStatus.CREATED)
 

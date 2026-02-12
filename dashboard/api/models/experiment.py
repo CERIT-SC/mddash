@@ -1,6 +1,5 @@
 import io
 import logging
-import threading
 import zipfile
 from datetime import datetime
 from http import HTTPStatus
@@ -13,8 +12,10 @@ from clients import mdrepo
 from config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
 from enums import JobStatus, PodStatus
 from extensions import db
+from flask import session
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from utils import get_files_with_extensions, get_unique_id
+from token_manager import MDRepoTokenManager
+from utils import download_git_repo, get_files_with_extensions, get_unique_id
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 from werkzeug.utils import secure_filename
@@ -28,6 +29,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 step_status_cache: TTLCache = TTLCache(maxsize=100, ttl=0.1)  # 100ms
+mdrepo_status_cache: TTLCache = TTLCache(maxsize=100, ttl=60)  # 60s
 
 
 class Experiment(db.Model):  # type: ignore
@@ -44,6 +46,7 @@ class Experiment(db.Model):  # type: ignore
         updated_at: Timestamp when the experiment was last modified.
         name: Human-readable name of the experiment.
         source_message: Description of how the experiment was created.
+        notebooks_repo: Git repository URL containing setup notebooks.
         mdrepo_id: MDRepo record ID if the experiment has been published.
         notebook: Associated setup notebook for this experiment.
         tuner_jobs: List of tuner jobs associated with this experiment.
@@ -63,8 +66,12 @@ class Experiment(db.Model):  # type: ignore
     name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # message for user to understand the source of the experiment
     source_message: Mapped[str | None] = mapped_column(db.Text, nullable=False)
+    # git repository URL containing setup notebooks (nullable for legacy experiments) TODO: make non-nullable (breaks db migration)
+    notebooks_repo: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
     # ID of the experiment in MDRepo
     mdrepo_id: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
+    # Whether the experiment is published in MDRepo (True=published, False=draft, None=not in MDRepo)
+    mdrepo_published: Mapped[bool | None] = mapped_column(db.Boolean, nullable=True)
 
     # Setup notebook status
     notebook: Mapped["Notebook"] = relationship(
@@ -97,10 +104,30 @@ class Experiment(db.Model):  # type: ignore
         return None
 
     @classmethod
-    def prepare_env(cls) -> str:
-        """Prepare environment directory for new experiment."""
+    def prepare_env(cls, notebooks_repo: str, access_token: str | None = None) -> str:
+        """
+        Prepare environment directory for new experiment.
+
+        Creates a unique experiment directory and clones the notebooks repository into it.
+
+        Args:
+            notebooks_repo: Git repository URL containing setup notebooks.
+            access_token: Optional GitHub access token for private repositories.
+
+        Returns:
+            The unique experiment ID.
+
+        Raises:
+            Exception: If there is an error during environment preparation.
+        """
         experiment_id: str = get_unique_id(DATA_DIR)
-        (DATA_DIR / experiment_id).mkdir(parents=True, exist_ok=True)
+        experiment_dir = DATA_DIR / experiment_id
+        experiment_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            download_git_repo(notebooks_repo, experiment_dir, access_token)
+        except Exception:
+            rmtree(experiment_dir, ignore_errors=True)
+            raise
         return experiment_id
 
     @classmethod
@@ -128,13 +155,15 @@ class Experiment(db.Model):  # type: ignore
         return experiment
 
     @classmethod
-    def from_pdb(cls, name: str, pdb_id: str) -> "Experiment":
+    def from_pdb(cls, name: str, pdb_id: str, notebooks_repo: str, access_token: str | None = None) -> "Experiment":
         """
         Create experiment from PDB ID with database persistence.
 
         Args:
             name: Name of the experiment.
             pdb_id: PDB ID to download (e.g., 1A2B).
+            notebooks_repo: Git repository URL containing setup notebooks.
+            access_token: Optional GitHub access token for private repositories.
 
         Returns:
             The created Experiment instance.
@@ -142,7 +171,7 @@ class Experiment(db.Model):  # type: ignore
         Raises:
             HTTPException: If the PDB ID is not found or download fails.
         """
-        experiment_id: str = cls.prepare_env()
+        experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
         pdb_id = pdb_id.strip().upper()
 
         try:
@@ -159,7 +188,7 @@ class Experiment(db.Model):  # type: ignore
                 f.write(response.content)
 
             message: str = f"Created by downloading '{pdb_id}' from RCSB PDB."
-            experiment = cls(id=experiment_id, name=name, source_message=message)  # type: ignore[call-arg]
+            experiment = cls(id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo)  # type: ignore[call-arg]
 
             return cls._create_with_notebook(experiment)
 
@@ -170,13 +199,15 @@ class Experiment(db.Model):  # type: ignore
             raise
 
     @classmethod
-    def from_repo(cls, name: str, repo_link: str) -> "Experiment":
+    def from_repo(cls, name: str, repo_link: str, notebooks_repo: str, access_token: str | None = None) -> "Experiment":
         """
         Create experiment from Zenodo repository with database persistence.
 
         Args:
             name: Name of the experiment.
             repo_link: Zenodo repository link (e.g., https://zenodo.org/record/1234567).
+            notebooks_repo: Git repository URL containing setup notebooks.
+            access_token: Optional GitHub access token for private repositories.
 
         Returns:
             The created Experiment instance.
@@ -184,7 +215,7 @@ class Experiment(db.Model):  # type: ignore
         Raises:
             HTTPException: If the repository link is invalid or download fails.
         """
-        experiment_id: str = cls.prepare_env()
+        experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
 
         try:
             # Validate and parse repository link
@@ -209,7 +240,7 @@ class Experiment(db.Model):  # type: ignore
 
             # Create experiment instance
             message: str = f"Created by downloading repository from '{repo_link}'."
-            experiment = cls(id=experiment_id, name=name, source_message=message)  # type: ignore[call-arg]
+            experiment = cls(id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo)  # type: ignore[call-arg]
 
             return cls._create_with_notebook(experiment)
 
@@ -220,13 +251,15 @@ class Experiment(db.Model):  # type: ignore
             raise
 
     @classmethod
-    def from_files(cls, name: str, files: list[FileStorage]) -> "Experiment":
+    def from_files(cls, name: str, files: list[FileStorage], notebooks_repo: str, access_token: str | None = None) -> "Experiment":
         """
         Create experiment from file uploads with database persistence.
 
         Args:
             name: Name of the experiment.
             files: List of uploaded files.
+            notebooks_repo: Git repository URL containing setup notebooks.
+            access_token: Optional GitHub access token for private repositories.
 
         Returns:
             The created Experiment instance.
@@ -237,7 +270,7 @@ class Experiment(db.Model):  # type: ignore
         if not files:
             raise BadRequest(description="No files provided")
 
-        experiment_id: str = cls.prepare_env()
+        experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
 
         try:
             filenames = []
@@ -249,7 +282,7 @@ class Experiment(db.Model):  # type: ignore
                 filenames.append(filename)
 
             message: str = f"Created by uploading files: {', '.join(filenames)}."
-            experiment = cls(id=experiment_id, name=name, source_message=message)  # type: ignore[call-arg]
+            experiment = cls(id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo)  # type: ignore[call-arg]
 
             return cls._create_with_notebook(experiment)
 
@@ -262,22 +295,28 @@ class Experiment(db.Model):  # type: ignore
     @cached(cache=step_status_cache)
     def _step_status(self) -> tuple[int, str]:
         """Determine (step, status) based on current state."""
-        # Step 5: Published (experiment has mdrepo_id)
-        if self.mdrepo_id:
+        # Step 5: Published (experiment is published in MDRepo)
+        if self.mdrepo_published is True:
             return 5, "published"
+
+        # Step 5: Publishing (experiment is in MDRepo draft)
+        if self.mdrepo_published is False:
+            return 5, "publishing"
 
         # Step 4: Analyzing (experiment has terminated GROMACS job)
         if any(j.status == JobStatus.TERMINATED for j in self.gromacs_jobs):
             return 4, "analyzing"
 
-        # NOTE: Step 3 is skipped because no action is required to progress from Analyze to Publish
+        # Step 3: Allow user to analyze a running simulation
+        if any(j.status == JobStatus.RUNNING for j in self.gromacs_jobs):
+            return 3, "simulating"
 
         # Step 2: Running simulation (experiment has a GROMACS job)
         if self.gromacs_jobs:
             return 2, "simulating"
 
-        # Step 2: Tuning (experiment has terminated tuner job)
-        if any(j.summary.get("TERMINATED", 0) > 0 for j in self.tuner_jobs):
+        # Step 2: Tuning (experiment has terminated tuner trial)
+        if any(any(t.get("performance") is not None for t in j.trials) for j in self.tuner_jobs):
             return 2, "tuning"
 
         # Step 1: Tuning (experiment has a tuner job)
@@ -289,6 +328,31 @@ class Experiment(db.Model):  # type: ignore
             return 1, "setup complete"
 
         return 0, "setup"
+
+    @cached(cache=mdrepo_status_cache, key=lambda self: self.mdrepo_id)
+    def _sync_mdrepo_status(self) -> None:
+        """Check if the MDRepo experiment still exists and update local database if deleted."""
+        if not self.mdrepo_id:
+            return
+
+        token_manager = MDRepoTokenManager(session)
+        access_token = token_manager.get_valid_token()
+        if not access_token:
+            return
+
+        try:
+            status = mdrepo.check_experiment_status(access_token, self.mdrepo_id)
+
+            if status is None:
+                self.mdrepo_id = None
+                self.mdrepo_published = None
+            else:
+                self.mdrepo_published = status
+
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            logger.exception(f"Failed to check MDRepo status for experiment '{self.mdrepo_id}'")
 
     def delete(self) -> None:
         """Delete the experiment and all its related resources."""
@@ -313,12 +377,11 @@ class Experiment(db.Model):  # type: ignore
         # Delete all files in the experiment directory
         rmtree(DATA_DIR / self.id, ignore_errors=True)
 
-    def publish(self, token: str, community: str) -> dict:
+    def publish(self, community: str) -> dict:
         """
-        Publish the experiment to MDRepo.
+        Publish the experiment to MDRepo into a draft state.
 
         Args:
-            token: OAuth2 access token for MDRepo API.
             community: Community slug to publish the experiment to.
 
         Returns:
@@ -331,34 +394,29 @@ class Experiment(db.Model):  # type: ignore
             "simulations": [],
         }
 
+        token_manager = MDRepoTokenManager(session)
+        access_token = token_manager.get_valid_token()
+
+        if not access_token:
+            raise InternalServerError(
+                description="No valid MDRepo access token available. Please authenticate with MDRepo."
+            )
+
         # Create experiment in MDRepo
-        mdrepo_experiment = mdrepo.create_experiment(token, community, metadata)
+        mdrepo_experiment = mdrepo.create_experiment(access_token, community, metadata)
         mdrepo_id = mdrepo_experiment.get("id")
 
         if mdrepo_id is None:
             raise InternalServerError(description="Failed to create experiment in MDRepo.")
 
         self.mdrepo_id = mdrepo_id
+        self.mdrepo_published = False
         db.session.commit()
 
         logger.info(f"Created MDRepo experiment with ID '{mdrepo_id}' for experiment '{self.id}'")
 
-        def _upload_worker(token_local: str, mdrepo_id_local: str, experiment_id: str) -> None:
-            try:
-                for file in (DATA_DIR / experiment_id).iterdir():
-                    if not file.is_file():
-                        continue
-
-                    try:
-                        mdrepo.upload_file(token_local, mdrepo_id_local, file)
-                    except ValueError:
-                        logger.exception(f"Failed to upload file '{file.name}' to MDRepo.")
-            except Exception:
-                logger.exception("Unexpected error in MDRepo upload worker")
-
         # Start background thread (daemon) to perform uploads and return immediately
-        thread = threading.Thread(target=_upload_worker, args=(token, mdrepo_id, self.id), daemon=True)
-        thread.start()
+        mdrepo.start_upload_worker(access_token, experiment_id=mdrepo_id, experiment_dir=DATA_DIR / self.id)
 
         logger.info(f"Queued file upload job '{self.id}' to MDRepo.")
         return mdrepo_experiment

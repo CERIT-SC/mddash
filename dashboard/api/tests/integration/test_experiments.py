@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 from flask.testing import FlaskClient
 from models import Experiment, Notebook
 from sqlalchemy.orm import Session
+from werkzeug.exceptions import InternalServerError
 from werkzeug.utils import secure_filename
 
 EXPERIMENT_ID_LENGTH = 5
@@ -90,7 +91,11 @@ class TestCreateExperiment:
 
     def test_create_from_pdb_success(self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path) -> None:
         """Should create experiment from valid PDB ID."""
-        with patch("models.experiment.requests.get") as mock_get, patch("models.experiment.DATA_DIR", tmp_path):
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo") as mock_clone,
+        ):
             # Mock successful PDB download
             mock_response = MagicMock()
             mock_response.status_code = 200
@@ -103,6 +108,7 @@ class TestCreateExperiment:
                     "type": "pdb",
                     "experiment-name": "Test PDB Experiment",
                     "pdb-id": "1ABC",
+                    "notebooks-repo": "https://github.com/test/repo.git",
                 },
             )
 
@@ -110,11 +116,17 @@ class TestCreateExperiment:
             data = json.loads(response.data)
             assert data["success"] is True
             assert data["data"]["name"] == "Test PDB Experiment"
+            assert data["data"]["notebooks_repo"] == "https://github.com/test/repo.git"
             assert len(data["data"]["id"]) == EXPERIMENT_ID_LENGTH
+            mock_clone.assert_called_once()
 
     def test_create_from_pdb_not_found(self, client: FlaskClient, tmp_path: Path) -> None:
         """Should return 404 when PDB ID doesn't exist."""
-        with patch("models.experiment.requests.get") as mock_get, patch("models.experiment.DATA_DIR", tmp_path):
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo"),
+        ):
             mock_response = MagicMock()
             mock_response.status_code = 404
             mock_get.return_value = mock_response
@@ -125,10 +137,81 @@ class TestCreateExperiment:
                     "type": "pdb",
                     "experiment-name": "Invalid PDB",
                     "pdb-id": "XXXX",
+                    "notebooks-repo": "https://github.com/test/repo.git",
                 },
             )
 
             assert response.status_code == HTTPStatus.NOT_FOUND
+
+    def test_create_uses_default_notebooks_repo(
+        self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path
+    ) -> None:
+        """Should use default notebooks repo when not provided."""
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo") as mock_clone,
+            patch("routes.experiments.DEFAULT_NOTEBOOKS_REPO", "https://github.com/default/repo.git"),
+        ):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = sample_pdb_content
+            mock_get.return_value = mock_response
+
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "Test Default Repo",
+                    "pdb-id": "1ABC",
+                    # No notebooks-repo provided - should use default
+                },
+            )
+
+            assert response.status_code == HTTPStatus.CREATED
+            data = json.loads(response.data)
+            assert data["data"]["notebooks_repo"] == "https://github.com/default/repo.git"
+            mock_clone.assert_called_once()
+
+    def test_create_fails_on_clone_error(self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path) -> None:
+        """Should return error when git clone fails."""
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo") as mock_clone,
+        ):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = sample_pdb_content
+            mock_get.return_value = mock_response
+
+            mock_clone.side_effect = InternalServerError(description="Failed to clone repository")
+
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "Clone Fail Test",
+                    "pdb-id": "1ABC",
+                    "notebooks-repo": "https://github.com/test/repo.git",
+                },
+            )
+
+            assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+
+    def test_create_rejects_invalid_notebooks_repo_url(self, client: FlaskClient) -> None:
+        """Should return 400 for invalid notebooks repo URL."""
+        response = client.post(
+            "/dash/api/experiments",
+            data={
+                "type": "pdb",
+                "experiment-name": "Invalid URL Test",
+                "pdb-id": "1ABC",
+                "notebooks-repo": "file:///etc/passwd",
+            },
+        )
+
+        assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_create_invalid_type(self, client: FlaskClient) -> None:
         """Should return 400 for invalid experiment type."""
@@ -144,10 +227,11 @@ class TestCreateExperiment:
 
     def test_create_from_files_success(self, client: FlaskClient, tmp_path: Path) -> None:
         """Should create experiment from uploaded files."""
-        with patch("models.experiment.DATA_DIR", tmp_path):
+        with patch("models.experiment.DATA_DIR", tmp_path), patch("models.experiment.download_git_repo") as mock_clone:
             data = {
                 "type": "file",
                 "experiment-name": "Test File Experiment",
+                "notebooks-repo": "https://github.com/test/repo.git",
                 "simulation-files": [
                     (io.BytesIO(b"content1"), "test1.gro"),
                     (io.BytesIO(b"content2"), "test2.itp"),
@@ -164,6 +248,7 @@ class TestCreateExperiment:
             data = json.loads(response.data)
             assert data["success"] is True
             assert data["data"]["name"] == "Test File Experiment"
+            mock_clone.assert_called_once()
 
             # Verify files were saved
             exp_id = data["data"]["id"]
@@ -173,13 +258,14 @@ class TestCreateExperiment:
 
     def test_create_with_malicious_filenames(self, client: FlaskClient, tmp_path: Path) -> None:
         """Should sanitize malicious filenames during upload."""
-        with patch("models.experiment.DATA_DIR", tmp_path):
+        with patch("models.experiment.DATA_DIR", tmp_path), patch("models.experiment.download_git_repo"):
             malicious_filename_1 = "../../../etc/passwd"
             malicious_filename_2 = "<script>alert(1)</script>.js"
 
             data = {
                 "type": "file",
                 "experiment-name": "Malicious Files Experiment",
+                "notebooks-repo": "https://github.com/test/repo.git",
                 "simulation-files": [
                     (io.BytesIO(b"hack"), malicious_filename_1),
                     (io.BytesIO(b"script"), malicious_filename_2),

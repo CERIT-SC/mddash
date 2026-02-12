@@ -82,6 +82,8 @@ jupyterhub:
         value: "{{ $cfg.sidecars.s3sync.image }}:{{ $imageTag }}"
       NOTEBOOK_IMAGE:
         value: "{{ $cfg.notebook.image }}:{{ $imageTag }}"
+      DEFAULT_NOTEBOOKS_REPO:
+        value: "{{ $cfg.defaultNotebooksRepo }}"
       # MDRepo OAuth for publishing experiments to the repository
       MDREPO_URL:
         value: "{{ $cfg.mdrepo.url }}"
@@ -212,6 +214,7 @@ jupyterhub:
       nginx.ingress.kubernetes.io/proxy-body-size: "8g"
       nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      nginx.ingress.kubernetes.io/custom-http-errors: "599"
 
 mdrun-api:
   image:

@@ -62,8 +62,8 @@ class DemoSimulator:
         """Simulate tuner job state transitions."""
         for exp in state.experiments.values():
             for tuner in exp["tuner_jobs"]:
-                # Skip tuners that are pending or errored
-                if tuner["is_pending"] or tuner["error_message"]:
+                # Skip tuners that are errored or stopped
+                if tuner["error_message"] or tuner.get("is_stopped"):
                     continue
 
                 start_time = tuner.get("start_time")
@@ -72,11 +72,7 @@ class DemoSimulator:
 
                 # Gradually add trials for newly-started tuner runs.
                 trials_to_add = tuner.get("trials_to_add") or 0
-                if (
-                    trials_to_add
-                    and len(tuner.get("trials", [])) < trials_to_add
-                    and not tuner.get("is_stopped", False)
-                ):
+                if trials_to_add and len(tuner.get("trials", [])) < trials_to_add:
                     last_added = tuner.get("last_trial_added_at") or start_time
                     # Add one trial every ~2-10 seconds (randomized)
                     if time.time() - last_added > random.uniform(2, 10):
@@ -89,7 +85,6 @@ class DemoSimulator:
                             "nb": "cpu",
                             "pme": "cpu",
                             "performance": None,
-                            "start_time": time.time(),
                         }
                         tuner.setdefault("trials", []).append(new_trial)
                         tuner["last_trial_added_at"] = time.time()
@@ -102,17 +97,10 @@ class DemoSimulator:
                             trial["status"] = "TERMINATED"
                             trial["performance"] = round(random.uniform(10.0, 500.0), 3)
 
-                # Update cluster resources based on running trials
-                running_count = sum(1 for t in tuner.get("trials", []) if t["status"] == "RUNNING")
-                if running_count > 0:
-                    cpus_used = running_count * 8
-                    tuner["cluster_resources"] = f"{cpus_used}/32 CPUs, 0/1 GPUs used"
-                else:
-                    tuner["cluster_resources"] = "0/32 CPUs, 0/1 GPUs used"
-
                 # If we've added all trials and none are running, mark tuner as terminated
                 total_expected = tuner.get("trials_to_add", 0) or 0
                 current_total = len(tuner.get("trials", []))
+                running_count = sum(1 for t in tuner.get("trials", []) if t["status"] == "RUNNING")
                 if total_expected > 0 and current_total >= total_expected and running_count == 0:
                     tuner["tuner_status"] = "TERMINATED"
                     tuner["is_stopped"] = True

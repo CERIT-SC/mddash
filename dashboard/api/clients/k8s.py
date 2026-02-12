@@ -1,11 +1,10 @@
 import logging
-import os
 import threading
 import time
 from http import HTTPStatus
 from typing import Callable, cast
 
-from config import GMX_IMAGE, NAMESPACE, NOTEBOOK_IMAGE, PVC_NAME
+from config import GMX_IMAGE, IMAGE_PULL_POLICY, NAMESPACE, NOTEBOOK_IMAGE, PVC_NAME
 from enums import JobStatus, PodStatus
 from kubernetes import config
 from kubernetes.client import (
@@ -70,7 +69,7 @@ def get_container(
         },
         "name": name,
         "image": image,
-        "imagePullPolicy": os.environ.get("IMAGE_PULL_POLICY", "Always"),
+        "imagePullPolicy": IMAGE_PULL_POLICY,
         "resources": resources
         or {"requests": {"cpu": "50m", "memory": "64Mi"}, "limits": {"cpu": "500m", "memory": "256Mi"}},
         "command": command,
@@ -107,44 +106,7 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         logger.warning(f"Pod {name} already exists in namespace {NAMESPACE}. Skipping creation.")
         return
 
-    workdir_init_command = f"""
-        if [ ! -d "/mddash/{experiment_id}" ]; then
-            mkdir -p /mddash/{experiment_id}
-        fi
-
-        if [ ! -w "/mddash/{experiment_id}" ]; then
-            echo "Notebook directory /mddash/{experiment_id} is not writable" >&2
-            exit 1
-        fi
-
-        if ls /home/jovyan/*.ipynb 1> /dev/null 2>&1; then
-            echo "Preparing notebook templates in /mddash/{experiment_id}"
-            for n in /home/jovyan/*.ipynb; do 
-                b=$(basename "$n")
-                if [ -f "/mddash/{experiment_id}/$b" ]; then
-                    echo "Template $b exists, writing $b.new"
-                    cp "$n" "/mddash/{experiment_id}/$b.new"
-                else
-                    echo "Copying template $b"
-                    cp "$n" "/mddash/{experiment_id}/$b"
-                fi
-            done
-            echo "Notebook templates ready in /mddash/{experiment_id}"
-        else
-            echo "No notebook templates found, skipping copy"
-        fi
-    """
-
     volume_name = "shared-data"
-    workdir_init_container = get_container(
-        "workdir-init",
-        NOTEBOOK_IMAGE,
-        experiment_id,
-        volume_name,
-        ["sh", "-c", workdir_init_command],
-        set_working_dir=False,
-        resources={"requests": {"cpu": "10m", "memory": "32Mi"}, "limits": {"cpu": "100m", "memory": "64Mi"}},
-    )
     gmx_container = get_container(
         "gmx",
         GMX_IMAGE,
@@ -178,7 +140,6 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         "metadata": {"name": name, "namespace": NAMESPACE, "labels": {"app": name}},
         "spec": {
             "securityContext": {"fsGroup": 1000, "fsGroupChangePolicy": "Always", "supplementalGroups": [1000]},
-            "initContainers": [workdir_init_container],
             "containers": [jupyter_container, gmx_container],
             "volumes": [{"name": volume_name, "persistentVolumeClaim": {"claimName": PVC_NAME}}],
         },

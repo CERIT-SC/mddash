@@ -23,3 +23,5 @@
 - **/.config/**
 - .jupyter/**
 - **/.jupyter/**
+- .git/**
+- **/.git/**

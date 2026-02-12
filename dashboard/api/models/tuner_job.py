@@ -1,16 +1,12 @@
 import json
 import logging
-import time
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
 
 from cachetools import TTLCache
-from clients import k8s, tuner
-from config import GMX_IMAGE
+from clients import tuner
 from enums import JobStatus
 from extensions import db
-from flask import current_app
 from requests import HTTPError
 from sqlalchemy import Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -28,6 +24,7 @@ class TunerJob(db.Model):  # type: ignore
     __tablename__ = "tuner_jobs"
 
     # Local auto-incrementing ID
+    # TODO: use the `tuner_run_id` as primary key (breaks db migration)
     id: Mapped[int] = mapped_column(db.Integer, primary_key=True, autoincrement=True)
     # ID of the tune job from the tuner API (set after submission)
     tuner_run_id: Mapped[str | None] = mapped_column(db.String(36), nullable=True)
@@ -35,20 +32,15 @@ class TunerJob(db.Model):  # type: ignore
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
     # name of the TPR file being tuned
     tpr_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
-    # whether the job is pending TPR modification
-    is_pending: Mapped[bool] = mapped_column(db.Boolean, default=True, nullable=False)
     # error message if job creation failed
     error_message: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
     # creation time
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
     # whether the job was stopped (preserves data but job is deleted from tuner)
     is_stopped: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
-    # preserved status data when job is stopped
-    _preserved_summary: Mapped[str] = mapped_column("preserved_summary", Text, nullable=True)
+    # preserved trials when job is stopped
+    # TODO: use the JSON type from SQLAlchemy (breaks db migration)
     _preserved_trials: Mapped[str] = mapped_column("preserved_trials", Text, nullable=True)
-    _preserved_cluster_resources: Mapped[str] = mapped_column(
-        "preserved_cluster_resources", db.String(255), nullable=True
-    )
 
     # back-reference to the parent experiment
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="tuner_jobs")
@@ -59,25 +51,11 @@ class TunerJob(db.Model):  # type: ignore
         return self._status().get("status", JobStatus.UNKNOWN)
 
     @property
-    def summary(self) -> dict:
-        """Summary of the tuner trial statuses."""
-        if self.is_stopped and self._preserved_summary:
-            return json.loads(self._preserved_summary)
-        return self._status().get("summary", {})
-
-    @property
     def trials(self) -> list[dict]:
         """Trial jobs with their statuses."""
         if self.is_stopped and self._preserved_trials:
             return json.loads(self._preserved_trials)
         return self._status().get("trials", [])
-
-    @property
-    def cluster_resources(self) -> str:
-        """Cluster resources used by the tuner jobs."""
-        if self.is_stopped and self._preserved_cluster_resources:
-            return self._preserved_cluster_resources
-        return self._status().get("cluster_resources", "N/A")
 
     def _status(self) -> dict:
         """
@@ -86,7 +64,7 @@ class TunerJob(db.Model):  # type: ignore
         Uses a TTL cache for normal operation and falls back to last known
         status on timeout or other errors to prevent breaking dependent code.
         """
-        if self.is_stopped or self.is_pending or not self.tuner_run_id:
+        if self.is_stopped or not self.tuner_run_id:
             return {}
 
         cache_key = self.id
@@ -118,125 +96,36 @@ class TunerJob(db.Model):  # type: ignore
         # Return last known status if available, empty dict otherwise
         return _last_known_status.get(cache_key, {})
 
-    @staticmethod
-    def _modify_tpr_async(
-        experiment_id: str,
-        input_tpr_name: str,
-        output_tpr_name: str,
-        nsteps: int,
-        on_success: Callable,
-        on_error: Callable,
-    ) -> None:
-        """
-        Modify a TPR file by running gmx convert-tpr in a K8s job (async with callbacks).
-
-        Args:
-            experiment_id: The experiment ID.
-            input_tpr_name: Name of the input TPR file.
-            output_tpr_name: Name of the output TPR file.
-            nsteps: Number of simulation steps.
-            on_success: Callback to call when TPR modification succeeds.
-            on_error: Callback to call when TPR modification fails.
-        """
-        job_name = f"tpr-mod-{experiment_id}-{int(time.time())}"
-        command = f"gmx convert-tpr -s {input_tpr_name} -o {output_tpr_name} -nsteps {nsteps}"
-
-        logger.info(f"Starting TPR modification for experiment {experiment_id} with nsteps={nsteps}")
-        k8s.create_job(job_name, GMX_IMAGE, experiment_id, command)
-
-        def success() -> None:
-            k8s.delete_job(job_name)
-            on_success()
-
-        def error(error: Exception) -> None:
-            k8s.delete_job(job_name)
-            on_error(error)
-
-        k8s.wait_for_job(job_name, success, error, timeout=60)
-
     @classmethod
-    def start(cls, experiment: Experiment, tpr_path: Path, nsteps: int = 25000) -> "TunerJob":
+    def start(cls, experiment: Experiment, tpr_path: Path, nsteps: int = 25000, extra_args: str = "") -> "TunerJob":
         """
-        Start a tuner job for the given experiment and TPR file (async).
-
-        Creates the job record immediately in pending state, then modifies TPR in background.
+        Start a tuner job for the given experiment and TPR file.
 
         Args:
             experiment: The parent experiment.
             tpr_path: Path to the TPR file.
             nsteps: Number of steps for tuning runs (default: 25000, which is 50 ps).
+            extra_args: Additional GROMACS mdrun arguments (default: "").
 
         Returns:
-            The created TunerJob instance (in pending state).
+            The created TunerJob instance.
         """
-        # Create job immediately in pending state
-        job: TunerJob = cls(tpr_name=tpr_path.name, experiment=experiment, is_pending=True)  # type: ignore[call-arg]
+        response = tuner.run_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
+
+        job: TunerJob = cls(tuner_run_id=response["id"], experiment=experiment, tpr_name=tpr_path.name)  # type: ignore[call-arg]
         db.session.add(job)
         db.session.commit()
 
-        tuning_tpr_name = f"{tpr_path.stem}_tuning_{job.id}.tpr"
-        tuning_tpr_path = tpr_path.parent / tuning_tpr_name
-
-        app = current_app._get_current_object()  # type: ignore[attr-defined]  # noqa: SLF001
-
-        def on_tpr_ready() -> None:
-            """Submit to tuner when TPR modification completes."""
-            with app.app_context():
-                fresh_job = db.session.get(TunerJob, job.id)
-                if not fresh_job:
-                    logger.info(f"Tuner job {job.id} was deleted, skipping submission")
-                    return
-
-                try:
-                    # Wait for file to appear (NFS consistency)
-                    # Sometimes the job finishes but the file is not yet visible on the NFS mount
-                    max_retries = 10
-                    for i in range(max_retries):
-                        # Force NFS directory refresh by listing the parent directory using pathlib
-                        list(tuning_tpr_path.parent.iterdir())
-                        if tuning_tpr_path.exists():
-                            break
-                        logger.info(f"Waiting for {tuning_tpr_path} to appear (attempt {i + 1}/{max_retries})")
-                        time.sleep(1)
-
-                    if not tuning_tpr_path.exists():
-                        raise FileNotFoundError(f"TPR file {tuning_tpr_path} not found after waiting")
-
-                    response = tuner.run_submit(tuning_tpr_path)
-                    fresh_job.tuner_run_id = response["tuner_run_id"]
-                    fresh_job.is_pending = False
-                    db.session.commit()
-                    logger.info(f"Tuner job {response['tuner_run_id']} started for experiment {experiment.id}")
-                except Exception as e:
-                    logger.exception(f"Failed to submit tuner job: {e}")
-                    fresh_job.is_pending = False
-                    fresh_job.error_message = f"Failed to submit to tuner: {e!s}"
-                    db.session.commit()
-                finally:
-                    tuning_tpr_path.unlink(missing_ok=True)
-
-        def on_tpr_error(error: Exception) -> None:
-            """Handle TPR modification failure."""
-            with app.app_context():
-                logger.error(f"TPR modification failed: {error}")
-                fresh_job = db.session.get(TunerJob, job.id)
-                if fresh_job:
-                    fresh_job.is_pending = False
-                    fresh_job.error_message = f"TPR modification failed: {error!s}"
-                    db.session.commit()
-
-        # Start async TPR modification
-        cls._modify_tpr_async(experiment.id, tpr_path.name, tuning_tpr_name, nsteps, on_tpr_ready, on_tpr_error)
-
+        logger.info(f"Tuner job {response['id']} started for experiment {experiment.id}")
         return job
 
     def stop(self) -> None:
         """
-        Stop the tuner job and preserve its current status.
+        Stop the tuner job and preserve its trials.
 
-        The job gets deleted from the tuner but data is preserved in the database.
+        The job gets deleted from the tuner but trials data is preserved in the database.
         """
-        if self.is_stopped or self.is_pending:
+        if self.is_stopped:
             return
 
         current_status = self._status()
@@ -244,14 +133,7 @@ class TunerJob(db.Model):  # type: ignore
         # Only preserve trials with performance data
         trials = [trial for trial in current_status.get("trials", []) if trial.get("performance") is not None]
 
-        # Update summary counts
-        summary = current_status.get("summary", {})
-        summary["TERMINATED"] = len(trials)
-        summary["RUNNING"] = 0
-
-        self._preserved_summary = json.dumps(summary)
         self._preserved_trials = json.dumps(trials)
-        self._preserved_cluster_resources = current_status.get("cluster_resources", "N/A")
         self.is_stopped = True
 
         if self.tuner_run_id:
@@ -268,10 +150,12 @@ class TunerJob(db.Model):  # type: ignore
         Delete the tuner job completely.
 
         If running, deletes from tuner API.
-        If pending or stopped, does nothing on tuner API.
+        If stopped, does nothing on tuner API.
         """
-        if not self.is_stopped and not self.is_pending and self.tuner_run_id:
-            try:
-                tuner.delete_job(self.tuner_run_id)
-            except HTTPError:
-                logger.exception(f"Failed to delete tuner job {self.tuner_run_id}")
+        if self.is_stopped or not self.tuner_run_id:
+            return
+
+        try:
+            tuner.delete_job(self.tuner_run_id)
+        except HTTPError:
+            logger.exception(f"Failed to delete tuner job {self.tuner_run_id}")

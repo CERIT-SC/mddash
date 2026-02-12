@@ -1,12 +1,44 @@
+import fnmatch
+import logging
 import os
 import random
 import re
+import shutil
+import subprocess
+import tempfile
 from collections import deque
 from pathlib import Path
+from urllib.parse import urlparse
 
-from werkzeug.exceptions import BadRequest, Forbidden
+from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError
+
+logger = logging.getLogger(__name__)
 
 LETTERS = "abcdefghijklmnopqrstuvwxyz"
+
+EXCLUDED_DIRS: list[str] = [
+    ".ipynb_checkpoints",
+    "__pycache__",
+    ".cache",
+    ".local",
+    ".config",
+    ".jupyter",
+    ".git",
+    "*.edr",
+    "*.xtc",
+    "*.fit.xtc",
+    "*.tpr",
+    "*.cpt",
+    "*.gro",
+    "*.log",
+]
+
+EXCLUDED_FILES: list[str] = [
+    "#*#",
+    "*.swp",
+    "*.tmp",
+    ".nfs*",
+]
 
 
 def generate_id(length: int = 5) -> str:
@@ -78,6 +110,8 @@ def get_files_with_extensions(dir: Path, ext: str | list[str] | None = None) -> 
     for file in dir.iterdir():
         if not file.is_file():
             continue
+        if is_excluded_path(file, dir):
+            continue
 
         if extensions is None:
             files.append({"name": file.name, "size": file.stat().st_size})
@@ -87,6 +121,30 @@ def get_files_with_extensions(dir: Path, ext: str | list[str] | None = None) -> 
                 files.append({"name": file.name, "size": file.stat().st_size})
 
     return files
+
+
+def is_excluded_path(path: Path, base_dir: Path) -> bool:
+    """
+    Determine whether a path should be excluded from uploads.
+
+    Args:
+        path: Path to evaluate.
+        base_dir: Base directory for relative path matching.
+
+    Returns:
+        True if the path should be excluded.
+    """
+    try:
+        relative_path = path.relative_to(base_dir)
+    except ValueError:
+        relative_path = path
+
+    dir_parts = relative_path.parts if path.is_dir() else relative_path.parts[:-1]
+
+    if any(fnmatch.fnmatch(part, pattern) for part in dir_parts for pattern in EXCLUDED_DIRS):
+        return True
+
+    return any(fnmatch.fnmatch(path.name, pattern) for pattern in EXCLUDED_FILES)
 
 
 def tail(file: Path | str, n: int = 10) -> str:
@@ -277,3 +335,102 @@ def check_positive_int(value: str, param_name: str = "value", max_value: int | N
 
     if max_value and int_value > max_value:
         raise BadRequest(f"{param_name} must not exceed {max_value}.")
+
+
+# Timeout for git clone operations (seconds)
+GIT_CLONE_TIMEOUT = 120
+
+
+def validate_git_url(git_url: str) -> None:
+    """
+    Validate git URL for safety.
+
+    Rejects unsafe URL patterns: credentials, local paths, file://, option injection.
+
+    Raises:
+        BadRequest: If URL is invalid or unsafe.
+    """
+    if not git_url or not git_url.strip():
+        raise BadRequest("Git URL cannot be empty.")
+
+    url = git_url.strip()
+
+    # Reject option injection, local paths, file:// URLs
+    if url.startswith("-") or url.startswith("/") or url.startswith("."):
+        raise BadRequest("Invalid git URL format.")
+    if url.lower().startswith("file://"):
+        raise BadRequest("file:// URLs are not allowed.")
+
+    # SSH format: git@host:owner/repo.git - valid
+    if url.startswith("git@") and ":" in url:
+        return
+
+    # HTTPS/HTTP URLs
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise BadRequest("Only http://, https://, or git@ URLs are allowed.")
+    if parsed.username or parsed.password:
+        raise BadRequest("URLs with embedded credentials are not allowed.")
+    if not parsed.netloc:
+        raise BadRequest("Invalid git URL: missing host.")
+
+
+def download_git_repo(git_url: str, target_dir: Path, access_token: str | None = None) -> None:
+    """
+    Download files from a git repository without history.
+
+    Files are placed directly in target_dir (no subdirectory, no .git folder).
+    Caller is responsible for validating the URL before calling this function.
+
+    Args:
+        git_url: Git repository URL to clone.
+        target_dir: Directory to download files to.
+        access_token: Optional access token for private HTTPS repositories.
+                      Not applicable to SSH URLs (git@...).
+
+    Raises:
+        InternalServerError: If git clone fails.
+    """
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    # Inject token into HTTPS URLs
+    clone_url = git_url
+    if access_token and not git_url.startswith("git@"):
+        # Parse and reconstruct URL with token
+        parsed = urlparse(git_url)
+        if parsed.scheme in ("http", "https"):
+            # Construct authenticated URL: https://token@host/path
+            netloc_with_token = f"{access_token}@{parsed.netloc}"
+            clone_url = parsed._replace(netloc=netloc_with_token).geturl()
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        clone_dir = Path(tmp_dir) / "repo"
+
+        try:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", "--single-branch", "--no-tags", "--", clone_url, str(clone_dir)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=GIT_CLONE_TIMEOUT,
+            )
+
+            git_dir = clone_dir / ".git"
+            if git_dir.exists():
+                shutil.rmtree(git_dir)
+
+            for item in clone_dir.iterdir():
+                dest = target_dir / item.name
+                if dest.exists():
+                    shutil.rmtree(dest) if dest.is_dir() else dest.unlink()
+                shutil.move(item, dest)
+
+            logger.info("Downloaded git repository from %s", git_url)
+
+        except subprocess.CalledProcessError as e:
+            stderr = (e.stderr or "").strip() if isinstance(e.stderr, str) else str(e).strip()
+            logger.error("Git clone failed: %s", stderr or str(e))
+            raise InternalServerError(description=f"Failed to clone repository: {stderr or 'git clone failed'}")
+
+        except subprocess.TimeoutExpired:
+            raise InternalServerError(description=f"Git clone timed out after {GIT_CLONE_TIMEOUT}s")
