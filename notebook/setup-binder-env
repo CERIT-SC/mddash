@@ -2,9 +2,8 @@
 # Detect and install Binder repository dependencies before notebook startup.
 # Placed in /usr/local/bin/before-notebook.d/ so jupyter/base-notebook runs it automatically.
 #
-# The conda environment is created at a --prefix path on the PVC so it persists
-# across pod restarts. On subsequent starts only the Jupyter kernel is re-registered
-# (sub-second operation).
+# The conda environment is created at a --prefix path on the PVC so it persists across pod restarts.
+# On subsequent starts only the Jupyter kernel is re-registered.
 
 set -uo pipefail
 
@@ -27,11 +26,9 @@ if [[ -z "$binder_dir" ]]; then
     exit 0
 fi
 
-# --- Fast path: env already built, just re-register the kernel ---
+# --- Fast path: env already built ---
 if [[ -f "$MARKER" ]] && [[ -x "${ENV_PREFIX}/bin/python" ]]; then
-    echo "Binder environment already installed, registering kernel..."
-    "${ENV_PREFIX}/bin/python" -m ipykernel install \
-        --user --name python3 --display-name "Python 3 (Binder)" 2>&1
+    echo "Binder environment already installed at ${ENV_PREFIX}"
     exit 0
 fi
 
@@ -73,7 +70,7 @@ if [[ -f "${binder_dir}/requirements.txt" ]] && [[ -x "${ENV_PREFIX}/bin/pip" ]]
     fi
 fi
 
-# 3. Ensure ipykernel is available and register as default kernel
+# 3. Ensure ipykernel is available (needed for jupyter)
 if [[ -x "${ENV_PREFIX}/bin/python" ]]; then
     if ! "${ENV_PREFIX}/bin/python" -c "import ipykernel" 2>/dev/null; then
         echo "Installing ipykernel into binder environment..."
@@ -82,10 +79,6 @@ if [[ -x "${ENV_PREFIX}/bin/python" ]]; then
             failed=true
         }
     fi
-
-    echo "Registering binder environment as default Jupyter kernel..."
-    "${ENV_PREFIX}/bin/python" -m ipykernel install \
-        --user --name python3 --display-name "Python 3 (Binder)" 2>&1
 fi
 
 # 4. postBuild script (run with binder env on PATH)

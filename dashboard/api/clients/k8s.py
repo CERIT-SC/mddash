@@ -118,7 +118,7 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
 
     jupyter_command = [
         "start.sh",
-        "start-notebook.py",
+        "start-with-binder.sh",
         f"--ServerApp.base_url={prefix}",
         f"--ServerApp.root_dir=/mddash/{experiment_id}",
         f"--IdentityProvider.token={token}",
@@ -126,6 +126,10 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
     jupyter_env = [
         {"name": "WORKDIR", "value": f"/mddash/{experiment_id}"},
         {"name": "JUPYTER_DOCKER_STACKS_QUIET", "value": "1"},
+        {
+            "name": "JUPYTER_PATH",
+            "value": f"/mddash/{experiment_id}/.binder-env/share/jupyter:/opt/conda/share/jupyter",
+        },
     ]
     jupyter_resources = {"requests": {"cpu": "200m", "memory": "512Mi"}, "limits": {"cpu": "2000m", "memory": "4Gi"}}
     jupyter_container = get_container(
