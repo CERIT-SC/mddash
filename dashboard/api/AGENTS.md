@@ -98,6 +98,7 @@ graph TD
 - **Path validation**: Always use `check_path()` and `check_filename()` to prevent traversal
 - **Excluded paths**: `.ipynb_checkpoints`, `__pycache__`, `*.edr`, `*.xtc`, `*.tpr`, `*.log`, etc.
 - **Upload filtering**: `is_excluded_path()` filters files before MDRepo upload
+- **Binder support**: Cloned git repositories may contain Binder configuration files (`environment.yml`, `requirements.txt`, `postBuild`). The notebook image startup hook automatically detects and installs these environments at `/mddash/{experiment_id}/.binder-env`.
 
 ### Error Handling
 - **Always use `@handle_exceptions()` decorator** on route handlers
