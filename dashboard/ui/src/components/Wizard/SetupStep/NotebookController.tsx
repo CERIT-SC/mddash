@@ -40,6 +40,11 @@ const STATUS_CONFIG = {
         color: null,
         message: "Your notebook is starting up. This may take a minute.",
     },
+    INITIALIZING: {
+        icon: null,
+        color: null,
+        message: "Your notebook is setting up the environment. This may take a few minutes if using Binder repository.",
+    },
     TERMINATING: {
         icon: null,
         color: null,
@@ -70,6 +75,7 @@ const NotebookController = ({ experimentId }: NotebookControllerProps) => {
     const { showError } = useNotification();
     const [loading, setLoading] = useState(false);
     const [notebook, setNotebook] = useState<Notebook>(UNKNOWN_NOTEBOOK);
+    const [displayStatus, setDisplayStatus] = useState<Notebook["status"]>("UNKNOWN");
 
     const fetchStatus = useCallback(async () => {
         const { data, error } = await get_notebook(experimentId);
@@ -79,6 +85,32 @@ const NotebookController = ({ experimentId }: NotebookControllerProps) => {
         }
         setNotebook(data || UNKNOWN_NOTEBOOK);
     }, [experimentId, showError]);
+
+    const probeNotebook = useCallback(async (path: string): Promise<boolean> => {
+        try {
+            const response = await fetch(path);
+            return response.ok;
+        } catch {
+            return false;
+        }
+    }, []);
+
+    useEffect(() => {
+        if (notebook.status === "RUNNING" && notebook.path && displayStatus !== "RUNNING") {
+            const checkReadiness = async () => {
+                const isReady = await probeNotebook(notebook.path);
+                setDisplayStatus(isReady ? "RUNNING" : "INITIALIZING");
+            };
+
+            setDisplayStatus("INITIALIZING");
+            checkReadiness();
+
+            const intervalId = window.setInterval(checkReadiness, 2000);
+            return () => window.clearInterval(intervalId);
+        } else {
+            setDisplayStatus(notebook.status);
+        }
+    }, [notebook.status, notebook.path, displayStatus, probeNotebook]);
 
     const spawnNotebook = useCallback(async () => {
         const { error, data } = await spawn_notebook(experimentId);
@@ -109,16 +141,18 @@ const NotebookController = ({ experimentId }: NotebookControllerProps) => {
     }, [fetchStatus]);
 
     useEffect(() => {
-        const isPolling = notebook.status === "PENDING" || notebook.status === "TERMINATING";
+        const isPolling =
+            displayStatus === "PENDING" || displayStatus === "INITIALIZING" || displayStatus === "TERMINATING";
         if (!isPolling) return;
 
         const intervalId = window.setInterval(fetchStatus, 1000);
         return () => window.clearInterval(intervalId);
-    }, [notebook.status, fetchStatus]);
+    }, [displayStatus, fetchStatus]);
 
-    const statusConfig = useMemo(() => STATUS_CONFIG[notebook.status] || STATUS_CONFIG.UNKNOWN, [notebook.status]);
+    const statusConfig = useMemo(() => STATUS_CONFIG[displayStatus] || STATUS_CONFIG.UNKNOWN, [displayStatus]);
     const StatusIcon = statusConfig.icon;
-    const isTransitioning = notebook.status === "PENDING" || notebook.status === "TERMINATING";
+    const isTransitioning =
+        displayStatus === "PENDING" || displayStatus === "INITIALIZING" || displayStatus === "TERMINATING";
 
     return (
         <Paper
@@ -143,13 +177,13 @@ const NotebookController = ({ experimentId }: NotebookControllerProps) => {
                             <StatusIcon color={statusConfig.color} />
                         ) : null}
                         <Typography variant="h4">Notebook Status:</Typography>
-                        <Chip size="small" label={notebook.status} color={getPodStatusColor(notebook.status)} />
+                        <Chip size="small" label={displayStatus} color={getPodStatusColor(displayStatus)} />
                     </Stack>
 
                     <Typography variant="body2">{statusConfig.message}</Typography>
 
                     <Stack direction="row" spacing={2} justifyContent="center">
-                        {(notebook.status === "DOWN" || notebook.status === "TERMINATED") && (
+                        {(displayStatus === "DOWN" || displayStatus === "TERMINATED") && (
                             <Button
                                 variant="contained"
                                 color="primary"
@@ -159,7 +193,7 @@ const NotebookController = ({ experimentId }: NotebookControllerProps) => {
                                 Start
                             </Button>
                         )}
-                        {notebook.status === "RUNNING" && (
+                        {displayStatus === "RUNNING" && (
                             <Button
                                 variant="contained"
                                 color="primary"
@@ -171,12 +205,14 @@ const NotebookController = ({ experimentId }: NotebookControllerProps) => {
                                 Open
                             </Button>
                         )}
-                        {(notebook.status === "RUNNING" || notebook.status === "PENDING") && (
+                        {(displayStatus === "RUNNING" ||
+                            displayStatus === "PENDING" ||
+                            displayStatus === "INITIALIZING") && (
                             <Button variant="outlined" color="error" onClick={stopNotebook} startIcon={<Stop />}>
                                 Stop
                             </Button>
                         )}
-                        {(notebook.status === "ERROR" || notebook.status === "UNKNOWN") && (
+                        {(displayStatus === "ERROR" || displayStatus === "UNKNOWN") && (
                             <Button
                                 variant="contained"
                                 color="warning"
