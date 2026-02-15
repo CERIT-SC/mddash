@@ -117,12 +117,16 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
     )
 
     jupyter_command = [
-        "start-notebook.sh",
-        f"--NotebookApp.base_url={prefix}",
-        f"--NotebookApp.notebook_dir=/mddash/{experiment_id}",
-        f'--NotebookApp.token="{token}"',
+        "start.sh",
+        "start-notebook.py",
+        f"--ServerApp.base_url={prefix}",
+        f"--ServerApp.root_dir=/mddash/{experiment_id}",
+        f"--IdentityProvider.token={token}",
     ]
-    jupyter_env = [{"name": "WORKDIR", "value": f"/mddash/{experiment_id}"}]
+    jupyter_env = [
+        {"name": "WORKDIR", "value": f"/mddash/{experiment_id}"},
+        {"name": "JUPYTER_DOCKER_STACKS_QUIET", "value": "1"},
+    ]
     jupyter_resources = {"requests": {"cpu": "200m", "memory": "512Mi"}, "limits": {"cpu": "2000m", "memory": "4Gi"}}
     jupyter_container = get_container(
         "jupyter",

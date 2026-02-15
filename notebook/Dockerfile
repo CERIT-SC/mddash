@@ -14,6 +14,6 @@ COPY requirements.txt /tmp
 RUN pip3 install -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 COPY --chown=1000:1000 --chmod=755 gmx /usr/local/bin/gmx
-COPY --chown=1000:1000 --chmod=755 setup-binder-env.sh /usr/local/bin/before-notebook.d/setup-binder-env.sh
+COPY --chown=1000:1000 --chmod=755 setup-binder-env /usr/local/bin/before-notebook.d/setup-binder-env
 
 USER 1000
