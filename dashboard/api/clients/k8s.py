@@ -143,7 +143,7 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         "kind": "Pod",
         "metadata": {"name": name, "namespace": NAMESPACE, "labels": {"app": name}},
         "spec": {
-            "securityContext": {"fsGroup": 1000, "fsGroupChangePolicy": "Always", "supplementalGroups": [1000]},
+            "securityContext": {"fsGroup": 1000, "fsGroupChangePolicy": "OnRootMismatch", "supplementalGroups": [1000]},
             "containers": [jupyter_container, gmx_container],
             "volumes": [{"name": volume_name, "persistentVolumeClaim": {"claimName": PVC_NAME}}],
         },
