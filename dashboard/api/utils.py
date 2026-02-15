@@ -24,6 +24,7 @@ EXCLUDED_DIRS: list[str] = [
     ".config",
     ".jupyter",
     ".git",
+    ".binder-env",
     "*.edr",
     "*.xtc",
     "*.fit.xtc",
@@ -38,6 +39,7 @@ EXCLUDED_FILES: list[str] = [
     "*.swp",
     "*.tmp",
     ".nfs*",
+    ".binder-env-installed",
 ]
 
 
