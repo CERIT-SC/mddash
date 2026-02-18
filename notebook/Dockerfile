@@ -2,7 +2,7 @@ FROM quay.io/jupyter/base-notebook:latest
 
 USER root
 
-RUN apt update && apt install -y curl vim jq && apt clean && rm -rf /var/lib/apt/lists/*
+RUN apt update && apt install -y curl vim && apt clean && rm -rf /var/lib/apt/lists/*
 
 # Create group 1000 for jovyan (K8s fsGroup compatibility)
 RUN groupadd -f -g 1000 jovyan && usermod -aG jovyan jovyan
