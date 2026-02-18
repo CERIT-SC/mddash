@@ -25,3 +25,7 @@
 - **/.jupyter/**
 - .git/**
 - **/.git/**
+- .binder-env/**
+- **/.binder-env/**
+- .binder-env-installed
+- **/.binder-env-installed

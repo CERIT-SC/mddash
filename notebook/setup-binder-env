@@ -1,0 +1,100 @@
+#!/bin/bash
+# Detect and install Binder repository dependencies before notebook startup.
+# Placed in /usr/local/bin/before-notebook.d/ so jupyter/base-notebook runs it automatically.
+#
+# The conda environment is created at a --prefix path on the PVC so it persists across pod restarts.
+# On subsequent starts the existing Binder environment is reused and this script exits quickly if the marker is present.
+
+set -euo pipefail
+
+readonly WORKDIR="${WORKDIR:?Error: WORKDIR not set}"
+readonly ENV_PREFIX="${WORKDIR}/.binder-env"
+readonly MARKER="${WORKDIR}/.binder-env-installed"
+
+# Determine binder config directory (binder/ subdirectory takes precedence)
+binder_dir=""
+if [[ -d "${WORKDIR}/binder" ]]; then
+    binder_dir="${WORKDIR}/binder"
+elif [[ -f "${WORKDIR}/environment.yml" ]] \
+  || [[ -f "${WORKDIR}/requirements.txt" ]] \
+  || [[ -f "${WORKDIR}/postBuild" ]]; then
+    binder_dir="${WORKDIR}"
+fi
+
+# No binder files found — nothing to do
+if [[ -z "$binder_dir" ]]; then
+    exit 0
+fi
+
+# --- Fast path: env already built ---
+if [[ -f "$MARKER" ]] && [[ -x "${ENV_PREFIX}/bin/python" ]]; then
+    echo "Binder environment already installed at ${ENV_PREFIX}"
+    exit 0
+fi
+
+# --- First-time install path ---
+echo "Binder configuration detected in ${binder_dir}"
+failed=false
+
+# 1. Create conda environment at prefix on PVC
+if [[ -f "${binder_dir}/environment.yml" ]]; then
+    echo "Creating conda environment from environment.yml..."
+    if [[ -d "$ENV_PREFIX" ]]; then
+        if ! mamba env update --prefix "$ENV_PREFIX" --file "${binder_dir}/environment.yml"; then
+            echo "WARNING: Failed to update conda environment" >&2
+            failed=true
+        fi
+    else
+        if ! mamba env create --prefix "$ENV_PREFIX" --file "${binder_dir}/environment.yml"; then
+            echo "WARNING: Failed to create conda environment" >&2
+            failed=true
+        fi
+    fi
+else
+    # No environment.yml but other binder files exist — create a minimal env
+    if [[ ! -d "$ENV_PREFIX" ]]; then
+        echo "Creating minimal conda environment..."
+        if ! mamba create --prefix "$ENV_PREFIX" --yes python; then
+            echo "WARNING: Failed to create base conda environment" >&2
+            failed=true
+        fi
+    fi
+fi
+
+# 2. Pip requirements (use the env's own pip)
+if [[ -f "${binder_dir}/requirements.txt" ]] && [[ -x "${ENV_PREFIX}/bin/pip" ]]; then
+    echo "Installing pip requirements from requirements.txt..."
+    if ! "${ENV_PREFIX}/bin/pip" install --no-cache-dir -r "${binder_dir}/requirements.txt"; then
+        echo "WARNING: Failed to install pip requirements" >&2
+        failed=true
+    fi
+fi
+
+# 3. Ensure ipykernel is available (needed for jupyter)
+if [[ -x "${ENV_PREFIX}/bin/python" ]]; then
+    if ! "${ENV_PREFIX}/bin/python" -c "import ipykernel" 2>/dev/null; then
+        echo "Installing ipykernel into binder environment..."
+        mamba install --prefix "$ENV_PREFIX" --yes ipykernel 2>&1 || {
+            echo "WARNING: Failed to install ipykernel" >&2
+            failed=true
+        }
+    fi
+fi
+
+# 4. postBuild script (run with binder env on PATH)
+if [[ -f "${binder_dir}/postBuild" ]]; then
+    echo "Running postBuild script..."
+    chmod +x "${binder_dir}/postBuild"
+    if ! env PATH="${ENV_PREFIX}/bin:${PATH}" "${binder_dir}/postBuild"; then
+        echo "WARNING: postBuild script failed" >&2
+        failed=true
+    fi
+fi
+
+# Only write marker if everything succeeded so failed installs are retried
+if [[ "$failed" == "false" ]]; then
+    touch "$MARKER"
+    echo "Binder environment setup complete."
+else
+    echo "WARNING: Binder environment setup finished with errors (will retry on next start)" >&2
+fi
