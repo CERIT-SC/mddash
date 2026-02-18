@@ -61,7 +61,7 @@ def create_experiment(access_token: str, community: str, metadata: dict) -> dict
     return response.json()
 
 
-def upload_file(access_token: str, experiment_id: str, file: Path) -> dict:
+def upload_file(access_token: str, experiment_id: str, file: Path, file_key: str) -> dict:
     """
     Upload a file to an experiment draft in MDRepo.
 
@@ -69,6 +69,7 @@ def upload_file(access_token: str, experiment_id: str, file: Path) -> dict:
         access_token: OAuth2 access token for authentication.
         experiment_id: Experiment (record) ID in MDRepo.
         file: Path to the file to upload.
+        file_key: Key to use for the file (relative path).
 
     Returns:
         Server response from file commit.
@@ -79,7 +80,7 @@ def upload_file(access_token: str, experiment_id: str, file: Path) -> dict:
     headers = _auth_header(access_token)
 
     # Initialize file upload
-    json_data = [{"key": file.name}]
+    json_data = [{"key": file_key}]
     response = requests.post(
         f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files",
         headers=headers,
@@ -93,7 +94,7 @@ def upload_file(access_token: str, experiment_id: str, file: Path) -> dict:
     # Upload file content
     with file.open("rb") as f:
         response = requests.put(
-            f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files/{file.name}/content",
+            f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files/{file_key}/content",
             headers=headers,
             data=f,
             stream=True,
@@ -105,7 +106,7 @@ def upload_file(access_token: str, experiment_id: str, file: Path) -> dict:
 
     # Commit the file
     response = requests.post(
-        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files/{file.name}/commit",
+        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft/files/{file_key}/commit",
         headers=headers,
         timeout=30,
     )
@@ -116,26 +117,35 @@ def upload_file(access_token: str, experiment_id: str, file: Path) -> dict:
     return response.json()
 
 
-def upload_experiment_files(access_token: str, experiment_id: str, experiment_dir: Path) -> None:
+def upload_experiment_files(
+    access_token: str, experiment_id: str, experiment_dir: Path, base_dir: Path | None = None
+) -> None:
     """
     Upload all experiment files that pass the upload filter.
+
+    Recursively uploads files from subdirectories, using relative paths as file keys.
 
     Args:
         access_token: OAuth2 access token for authentication.
         experiment_id: Experiment (record) ID in MDRepo.
         experiment_dir: Local experiment directory.
+        base_dir: Base directory for calculating relative paths (used internally for recursion).
     """
-    for file in experiment_dir.iterdir():
-        # TODO: Should we upload subdirectories?
-        if not file.is_file():
-            continue
-        if is_excluded_path(file, experiment_dir):
+    if base_dir is None:
+        base_dir = experiment_dir
+
+    for item in experiment_dir.iterdir():
+        if is_excluded_path(item, base_dir):
             continue
 
-        try:
-            upload_file(access_token, experiment_id, file)
-        except ValueError:
-            logger.exception("Failed to upload file '%s' to MDRepo.", file.name)
+        if item.is_file():
+            try:
+                file_key = str(item.relative_to(base_dir))
+                upload_file(access_token, experiment_id, item, file_key)
+            except ValueError:
+                logger.exception("Failed to upload file '%s' to MDRepo.", item.name)
+        elif item.is_dir():
+            upload_experiment_files(access_token, experiment_id, item, base_dir)
 
 
 def check_experiment_status(access_token: str, experiment_id: str) -> bool | None:
