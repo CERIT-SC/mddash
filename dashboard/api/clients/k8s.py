@@ -121,7 +121,8 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         "start-with-binder.sh",
         f"--ServerApp.base_url={prefix}",
         f"--ServerApp.root_dir=/mddash/{experiment_id}",
-        f"--IdentityProvider.token={token}",
+        f"--ServerApp.token={token}",
+        f"--NotebookApp.token={token}",
     ]
     jupyter_env = [
         {"name": "WORKDIR", "value": f"/mddash/{experiment_id}"},
