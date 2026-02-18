@@ -12,12 +12,9 @@ from http import HTTPStatus
 from typing import cast
 
 import requests
+from cache import mdrepo_status_cache
 from config import MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET, MDREPO_TOKEN_URL
 from flask.sessions import SessionMixin
-
-# Import mdrepo_status_cache to clear it on token refresh
-# This is imported here to avoid circular imports
-from models.experiment import mdrepo_status_cache
 
 logger = logging.getLogger(__name__)
 

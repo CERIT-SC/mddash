@@ -9,7 +9,8 @@ from shutil import rmtree
 from typing import TYPE_CHECKING
 
 import requests
-from cachetools import TTLCache, cached
+from cache import mdrepo_status_cache, step_status_cache
+from cachetools import cached
 from clients import mdrepo
 from config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
 from enums import JobStatus, PodStatus
@@ -30,8 +31,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-step_status_cache: TTLCache = TTLCache(maxsize=100, ttl=0.1)  # 100ms
-mdrepo_status_cache: TTLCache = TTLCache(maxsize=100, ttl=60)  # 60s
 
 
 class Experiment(db.Model):  # type: ignore

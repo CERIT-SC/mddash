@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-from cachetools import TTLCache
+from cache import metrics_cache
 from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError
 
 logger = logging.getLogger(__name__)
@@ -43,9 +43,6 @@ EXCLUDED_FILES: list[str] = [
     ".nfs*",
     ".binder-env-installed",
 ]
-
-# contains `pod_resources` and `directory_size` keys to cache metrics.
-metrics_cache: TTLCache = TTLCache(maxsize=2, ttl=120)
 
 
 @dataclass

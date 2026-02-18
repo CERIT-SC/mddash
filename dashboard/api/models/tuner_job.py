@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from cachetools import TTLCache
+from cache import tuner_last_known_status, tuner_status_cache
 from clients import tuner
 from enums import JobStatus
 from extensions import db
@@ -14,8 +14,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .experiment import Experiment
 
 logger = logging.getLogger(__name__)
-status_cache: TTLCache = TTLCache(maxsize=100, ttl=30)  # 30s TTL for normal operation
-_last_known_status: dict[int, dict] = {}  # Fallback cache for failures (job_id -> status)
 
 
 class TunerJob(db.Model):  # type: ignore
@@ -70,8 +68,8 @@ class TunerJob(db.Model):  # type: ignore
         cache_key = self.id
 
         # Return cached value if still fresh
-        if cache_key in status_cache:
-            return status_cache[cache_key]
+        if cache_key in tuner_status_cache:
+            return tuner_status_cache[cache_key]
 
         try:
             status = tuner.poll_status(self.tuner_run_id)
@@ -84,8 +82,8 @@ class TunerJob(db.Model):  # type: ignore
                 raise ValueError(f"Incomplete status response from tuner for job {self.tuner_run_id}")
 
             # Update both caches on success
-            status_cache[cache_key] = status
-            _last_known_status[cache_key] = status
+            tuner_status_cache[cache_key] = status
+            tuner_last_known_status[cache_key] = status
             return status
 
         except TimeoutError:
@@ -94,7 +92,7 @@ class TunerJob(db.Model):  # type: ignore
             logger.exception(f"Error fetching tuner status for job {self.tuner_run_id}")
 
         # Return last known status if available, empty dict otherwise
-        return _last_known_status.get(cache_key, {})
+        return tuner_last_known_status.get(cache_key, {})
 
     @classmethod
     def start(cls, experiment: Experiment, tpr_path: Path, nsteps: int = 25000, extra_args: str = "") -> "TunerJob":
@@ -142,7 +140,7 @@ class TunerJob(db.Model):  # type: ignore
             except HTTPError:
                 logger.exception(f"Failed to delete tuner job {self.tuner_run_id}")
 
-        status_cache.clear()
+        tuner_status_cache.clear()
         logger.info(f"Stopped tuner job {self.tuner_run_id}")
 
     def delete(self) -> None:
