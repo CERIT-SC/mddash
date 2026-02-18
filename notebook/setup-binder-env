@@ -5,7 +5,7 @@
 # The conda environment is created at a --prefix path on the PVC so it persists across pod restarts.
 # On subsequent starts only the Jupyter kernel is re-registered.
 
-set -uo pipefail
+set -euo pipefail
 
 readonly WORKDIR="${WORKDIR:?Error: WORKDIR not set}"
 readonly ENV_PREFIX="${WORKDIR}/.binder-env"
