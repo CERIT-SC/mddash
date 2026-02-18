@@ -3,7 +3,7 @@
 # Placed in /usr/local/bin/before-notebook.d/ so jupyter/base-notebook runs it automatically.
 #
 # The conda environment is created at a --prefix path on the PVC so it persists across pod restarts.
-# On subsequent starts only the Jupyter kernel is re-registered.
+# On subsequent starts the existing Binder environment is reused and this script exits quickly if the marker is present.
 
 set -euo pipefail
 
