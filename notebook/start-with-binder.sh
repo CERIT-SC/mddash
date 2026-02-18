@@ -18,5 +18,5 @@ else
     echo "Binder environment not found or incomplete, using base image Python"
 fi
 
-# Start jupyter with the original arguments using the base image Python
-exec /opt/conda/bin/python /usr/local/bin/start-notebook.py "$@"
+# Start jupyter with the original arguments
+exec start-notebook.py "$@"
