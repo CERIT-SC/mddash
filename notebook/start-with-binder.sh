@@ -14,5 +14,5 @@ if [[ -d "$BINDER_ENV" ]]; then
     export CONDA_DEFAULT_ENV="$BINDER_ENV"
 fi
 
-# Start jupyter with the original arguments
-exec start-notebook.py "$@"
+# Start jupyter with the original arguments using the base image Python
+exec /opt/conda/bin/python /usr/local/bin/start-notebook.py "$@"
