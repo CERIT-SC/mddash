@@ -7,7 +7,7 @@ from extensions import db
 from flask import Blueprint, Response, request
 from models import Experiment, TunerJob
 from schemas import TunerJobSchema
-from utils import check_filename
+from utils import check_filename, find_file
 
 tuner_bp = Blueprint("tuner", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/tuner")
 
@@ -42,9 +42,9 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
     tuner_job: TunerJob | None = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first()
-    tpr_path = DATA_DIR / experiment_id / tpr_name
+    tpr_path = find_file(DATA_DIR / experiment_id, tpr_name)
 
-    if not tpr_path.exists():
+    if not tpr_path:
         return ApiResponse.error(f"TPR file {tpr_name} does not exist.", HTTPStatus.NOT_FOUND)
 
     if tuner_job:

@@ -3,7 +3,7 @@ from clients import k8s
 from config import API_PREFIX, CPU_REQUEST_QUOTA, DATA_DIR, MEMORY_REQUEST_QUOTA, PVC_SIZE
 from decorators import handle_exceptions
 from flask import Blueprint, Response
-from utils import get_directory_size
+from utils import get_directory_size, metrics_cache
 
 misc_bp = Blueprint("misc", __name__, url_prefix=API_PREFIX)
 
@@ -20,11 +20,17 @@ def index() -> Response:
 @handle_exceptions()
 def get_metrics() -> Response:
     """Get resource usage metrics for the current user."""
-    # Get actual pod resource requests
-    requests = k8s.get_pod_resource_requests()
+    if "pod_resources" in metrics_cache:
+        requests = metrics_cache["pod_resources"]
+    else:
+        requests = k8s.get_pod_resource_requests()
+        metrics_cache["pod_resources"] = requests
 
-    # Calculate storage used in DATA_DIR
-    requests["storage"] = get_directory_size(DATA_DIR)
+    if "directory_size" in metrics_cache:
+        requests["storage"] = metrics_cache["directory_size"]
+    else:
+        requests["storage"] = get_directory_size(DATA_DIR)
+        metrics_cache["directory_size"] = requests["storage"]
 
     limits = {
         "cpu": k8s.parse_cpu(CPU_REQUEST_QUOTA),

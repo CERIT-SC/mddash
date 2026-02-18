@@ -7,9 +7,11 @@ import shutil
 import subprocess
 import tempfile
 from collections import deque
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
+from cachetools import TTLCache
 from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,18 @@ EXCLUDED_FILES: list[str] = [
     ".nfs*",
     ".binder-env-installed",
 ]
+
+# contains `pod_resources` and `directory_size` keys to cache metrics.
+metrics_cache: TTLCache = TTLCache(maxsize=2, ttl=120)
+
+
+@dataclass
+class FileInfo:
+    """Data class representing a file with its name, size, and relative path."""
+
+    name: str
+    size: int
+    path: str
 
 
 def generate_id(length: int = 5) -> str:
@@ -85,7 +99,37 @@ def get_unique_id(id_dir: Path) -> str:
     return id
 
 
-def get_files_with_extensions(dir: Path, ext: str | list[str] | None = None) -> list[dict[str, object]]:
+def find_file(dir: Path, filename: str) -> Path | None:
+    """
+    Find a file by name in a directory tree.
+
+    Args:
+        dir: Directory to search.
+        filename: Name of the file to find.
+
+    Returns:
+        Path to the file if found, None otherwise.
+    """
+    if not dir.is_dir():
+        return None
+
+    for item in dir.iterdir():
+        if is_excluded_path(item, dir):
+            continue
+
+        if item.is_file() and item.name == filename:
+            return item
+        if item.is_dir():
+            result = find_file(item, filename)
+            if result:
+                return result
+
+    return None
+
+
+def get_files_with_extensions(
+    dir: Path, ext: str | list[str] | None = None, base_dir: Path | None = None
+) -> list[FileInfo]:
     """
     Get all files in a directory, optionally filtered by extension.
 
@@ -93,9 +137,10 @@ def get_files_with_extensions(dir: Path, ext: str | list[str] | None = None) -> 
         dir: Directory to search for files.
         ext: File extension(s) to filter by (e.g., 'txt', ['tpr', 'gro']).
              If None, returns all files.
+        base_dir: Base directory for calculating relative paths (used internally for recursion).
 
     Returns:
-        list[dict[str, object]]: List of dictionaries with file name and size.
+        list[FileInfo]: List of FileInfo objects with file name, size, and relative path.
 
     Raises:
         ValueError: If dir is not a directory.
@@ -103,24 +148,29 @@ def get_files_with_extensions(dir: Path, ext: str | list[str] | None = None) -> 
     if not dir.is_dir():
         raise ValueError(f"{dir} is not a directory")
 
+    if base_dir is None:
+        base_dir = dir
+
     extensions = None
     if ext is not None:
         extensions = [e.lower() for e in ext] if isinstance(ext, list) else [ext.lower()]
 
     files = []
 
-    for file in dir.iterdir():
-        if not file.is_file():
-            continue
-        if is_excluded_path(file, dir):
+    for item in dir.iterdir():
+        if is_excluded_path(item, base_dir):
             continue
 
-        if extensions is None:
-            files.append({"name": file.name, "size": file.stat().st_size})
-        else:
-            file_ext = file.suffix.lstrip(".").lower()
-            if file_ext in extensions:
-                files.append({"name": file.name, "size": file.stat().st_size})
+        if item.is_file():
+            relative_path = str(item.relative_to(base_dir))
+            if extensions is None:
+                files.append(FileInfo(name=item.name, size=item.stat().st_size, path=relative_path))
+            else:
+                file_ext = item.suffix.lstrip(".").lower()
+                if file_ext in extensions:
+                    files.append(FileInfo(name=item.name, size=item.stat().st_size, path=relative_path))
+        elif item.is_dir():
+            files.extend(get_files_with_extensions(item, ext, base_dir))
 
     return files
 
@@ -200,7 +250,7 @@ def get_directory_size(path: Path | str) -> int:
     """
     Calculate total size of a directory in bytes.
 
-    Walks the directory tree and sums up all file sizes. Uses os.scandir for fast iteration.
+    Uses the `du` command for fast directory traversal.
 
     Args:
         path: Path to the directory.
@@ -220,15 +270,15 @@ def get_directory_size(path: Path | str) -> int:
     if not path.is_dir():
         raise NotADirectoryError(f"{path} is not a directory")
 
-    total_size = 0
-
-    for entry in os.scandir(path):
-        if entry.is_file(follow_symlinks=False):
-            total_size += entry.stat(follow_symlinks=False).st_size
-        elif entry.is_dir(follow_symlinks=False):
-            total_size += get_directory_size(entry.path)
-
-    return total_size
+    result = subprocess.run(
+        ["du", "-sb", str(path)],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=120,
+    )
+    size_str = result.stdout.split()[0]
+    return int(size_str)
 
 
 def check_experiment_id(experiment_id: str) -> None:

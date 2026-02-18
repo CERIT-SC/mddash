@@ -1,8 +1,10 @@
 import io
 import logging
+import threading
 import zipfile
 from datetime import datetime
 from http import HTTPStatus
+from pathlib import Path
 from shutil import rmtree
 from typing import TYPE_CHECKING
 
@@ -251,7 +253,9 @@ class Experiment(db.Model):  # type: ignore
             raise
 
     @classmethod
-    def from_files(cls, name: str, files: list[FileStorage], notebooks_repo: str, access_token: str | None = None) -> "Experiment":
+    def from_files(
+        cls, name: str, files: list[FileStorage], notebooks_repo: str, access_token: str | None = None
+    ) -> "Experiment":
         """
         Create experiment from file uploads with database persistence.
 
@@ -374,8 +378,15 @@ class Experiment(db.Model):  # type: ignore
             except Exception:
                 logger.exception(f"Failed to delete GROMACS job {gmx_job.id}")
 
-        # Delete all files in the experiment directory
-        rmtree(DATA_DIR / self.id, ignore_errors=True)
+        def del_dir(dir: Path) -> None:
+            try:
+                rmtree(dir, ignore_errors=True)
+                logger.info(f"Deleted experiment directory: {dir}")
+            except Exception:
+                logger.exception(f"Failed to delete experiment directory {dir}")
+
+        thread = threading.Thread(target=del_dir, args=(DATA_DIR / self.id,), daemon=True)
+        thread.start()
 
     def publish(self, community: str) -> dict:
         """

@@ -1,3 +1,4 @@
+from dataclasses import asdict
 from http import HTTPStatus
 
 from api_response import ApiResponse
@@ -19,10 +20,13 @@ def get_files(experiment_id: str) -> Response:
 
     files = get_files_with_extensions(DATA_DIR / experiment_id, extensions)
 
+    file_dicts = []
     for f in files:
-        f["url"] = f"{API_PREFIX}/experiments/{experiment_id}/files/{f['name']}"
+        file_dict = asdict(f)
+        file_dict["url"] = f"{API_PREFIX}/experiments/{experiment_id}/files/{f.path}"
+        file_dicts.append(file_dict)
 
-    return ApiResponse.success(files)
+    return ApiResponse.success(file_dicts)
 
 
 @files_bp.route("/<path:path>", methods=["GET"])
