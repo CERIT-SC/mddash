@@ -112,6 +112,10 @@ graph TD
 - `NAMESPACE` defaults to `default` but logs warning if not set
 - Missing required env vars log warnings but don't crash (graceful degradation)
 
+### Local Demo Harness
+- `dashboard/api/_demo/app.py` runs the real API with test-style mocks applied before app import
+- Demo seeding/mocks live in `dashboard/api/_demo/profile.py` and use real DB models/schemas/routes
+
 ### Caching
 - `step_status_cache`: 100ms TTL for experiment step calculations
 - `mdrepo_status_cache`: 60s TTL for MDRepo publication status

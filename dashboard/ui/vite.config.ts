@@ -16,5 +16,11 @@ export default defineConfig({
     server: {
         host: "0.0.0.0",
         port: 5173,
+        proxy: {
+            "/dash/api": {
+                target: "http://localhost:8888",
+                changeOrigin: true,
+            },
+        },
     },
 });

@@ -109,9 +109,9 @@ rollback: ## Rollback to previous revision (REVISION=N for specific)
 	@$(MAKE) -C helm rollback ENV=$(ENV) REVISION=$(REVISION)
 
 .PHONY: demo
-demo: ## Run local demo (Flask API + React dev server)
+demo: ## Run local demo (real Flask API in demo profile + React dev server)
 	@echo "Starting Flask API..."; \
-	python3 dashboard/api/_demo/app.py & \
+	PORT=8888 python3 dashboard/api/_demo/app.py & \
 	API_PID=$$!; \
 	echo "Flask API started (PID: $$API_PID)"; \
 	echo "Starting React dev server..."; \

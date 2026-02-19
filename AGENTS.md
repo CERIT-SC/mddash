@@ -176,7 +176,7 @@ sequenceDiagram
 
 ## Development Workflow
 
-1. **Local Development**: Use `make demo` to run Flask API + React dev server locally
+1. **Local Development**: Use `make demo` to run the real Flask API through `dashboard/api/_demo/app.py` (test-style mocks + seeded data) + React dev server locally
 2. **Testing**: Run `make test` to execute all component tests
 3. **Building**: Run `make build ENV=dev` or `make build ENV=prod` to build all images
 4. **Deployment**: Run `make deploy ENV=dev` or `make deploy ENV=prod` to deploy via Helm
