@@ -1,8 +1,5 @@
 """Demo harness that runs the real API with deterministic seeded data and mocked integrations."""
 
-from __future__ import annotations
-
-import importlib
 import os
 import sys
 from pathlib import Path
@@ -39,7 +36,7 @@ def _configure_demo_env() -> None:
     os.environ.setdefault("MDREPO_CLIENT_SECRET", "demo-secret")
 
 
-def create_demo_app() -> Flask:
+def create_demo_app() -> "Flask":
     """Create the real API app configured for local demo with mocked dependencies."""
     _configure_demo_env()
 
@@ -48,20 +45,16 @@ def create_demo_app() -> Flask:
         patch("kubernetes.client.CoreV1Api"),
         patch("kubernetes.client.BatchV1Api"),
     ):
-        real_app_module = importlib.import_module("app")
-        demo_profile_module = importlib.import_module("_demo.profile")
-        real_app = real_app_module.app
-        setup_demo_profile = demo_profile_module.setup_demo_profile
+        from app import app  # noqa: PLC0415
 
-    setup_demo_profile(real_app)
-    return real_app
+        from _demo.profile import setup_demo_profile  # noqa: PLC0415
+
+    setup_demo_profile(app)
+    return app
 
 
-def run_demo_app(host: str = "0.0.0.0", port: int = 8888, debug: bool = True) -> None:
-    """Run the demo harness."""
-    app = create_demo_app()
-    app.run(debug=debug, host=host, port=port)
+app = create_demo_app()
 
 
 if __name__ == "__main__":
-    run_demo_app(debug=os.environ.get("FLASK_DEBUG", "1") == "1")
+    app.run(debug=True, host="0.0.0.0", port=8888)
