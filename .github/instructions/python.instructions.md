@@ -1,17 +1,10 @@
 ---
 applyTo: "**/*.py"
 ---
-
-# Python Development Guidelines
-
-Idiomatic Python (3.10+) patterns and anti-patterns.
-
 <context>
-These guidelines complement the general principles with Python-specific idioms. They apply when writing or reviewing any Python code.
+These guidelines cover Python-specific best practices, idioms, and anti-patterns.
 </context>
-
 <best_practices>
-
 <idioms>
 ### Path Handling
 Use `pathlib` instead of `os.path`.
@@ -107,7 +100,6 @@ def handle(response):
             return str(response)
 ```
 </idioms>
-
 <typing>
 ### Built-in Generics (PEP 585)
 Use built-in types instead of `typing` imports.
@@ -166,7 +158,6 @@ def calculate_tax(price: float, rate: float) -> float:
     return price * rate
 ```
 </typing>
-
 <classes>
 ### Data Classes
 Use `@dataclass` for data containers. It automatically has `__init__`, `__repr__`, and `__eq__`.
@@ -208,7 +199,6 @@ def __repr__(self):
     return f"User(id={self.id}, name='{self.name}')"
 ```
 </classes>
-
 <error_handling>
 ### Specific Exceptions
 Catch specific errors, not bare `Exception`.
@@ -245,7 +235,6 @@ logger = logging.getLogger(__name__)
 logger.info("Processing user %s", user_id)
 ```
 </error_handling>
-
 <resources>
 ### Context Managers
 Use `with` statements for resource cleanup.
@@ -279,7 +268,6 @@ with file.open() as f:
         process(line)
 ```
 </resources>
-
 <anti_patterns>
 ### Mutable Default Arguments
 
@@ -361,9 +349,7 @@ def test_double(inp, out):
     assert double(inp) == out
 ```
 </testing>
-
 </best_practices>
-
 <boundaries>
 - ✅ **Always:** Type hints on all function signatures
 - ✅ **Always:** `pathlib` for filesystem operations

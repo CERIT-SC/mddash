@@ -1,20 +1,11 @@
 ---
 applyTo: 'helm/**/Chart.yaml, helm/**/values.yaml, helm/**/templates/*.yaml, helm/**/templates/*.tpl'
 ---
-
-# Helm Chart Best Practices
-
-Production-ready Kubernetes deployments with Helm.
-
 <context>
 Apply these rules when creating or modifying Helm charts. Focus on naming conventions, security, and proper templating.
 </context>
-
 <best_practices>
-
 <naming>
-### Naming Conventions
-
 **Chart Names:**
 - Pattern: `lowercase-with-hyphens`
 - Only `[a-z0-9-]`, start with letter
@@ -30,10 +21,7 @@ Apply these rules when creating or modifying Helm charts. Focus on naming conven
 - `version`: Chart version
 - `appVersion`: Application version (quoted)
 </naming>
-
 <templating>
-### Templating
-
 **Namespace template names:**
 ```yaml
 # ✅ Correct
@@ -57,17 +45,14 @@ replicas: {{ .Values.replicaCount | default 1 }}
 value: {{ .Values.dbHost | quote }}
 ```
 </templating>
-
 <values>
-### Values File
-
 **Type safety:**
 ```yaml
 # ✅ Correct - quote strings and versions
 image:
   tag: "1.2.3"
   pullPolicy: "IfNotPresent"
-port: "8080"
+port: 8080
 enabled: false  # Booleans: no quotes
 ```
 
@@ -81,7 +66,7 @@ replicaCount: 3
 ```yaml
 # ✅ Good
 serverHost: "example.com"
-serverPort: "8080"
+serverPort: 8080
 
 # ❌ Avoid
 server:
@@ -89,9 +74,7 @@ server:
     host: "example.com"
 ```
 </values>
-
 <security>
-### Security
 
 **Secrets:**
 ```yaml
@@ -121,10 +104,7 @@ securityContext:
 
 **RBAC:** Use least-privilege; avoid `cluster-admin` and `*` verbs.
 </security>
-
 <resources>
-### Resources & Health Checks
-
 ```yaml
 resources:
   limits:
@@ -136,21 +116,18 @@ resources:
 
 livenessProbe:
   httpGet:
-    path: {{ .Values.healthCheckPath | default "/health" }}
+    path: {{ .Values.livenessProbe.path | default "/health" }}
     port: http
   initialDelaySeconds: 30
 
 readinessProbe:
   httpGet:
-    path: {{ .Values.healthCheckPath | default "/ready" }}
+    path: {{ .Values.readinessProbe.path | default "/ready" }}
     port: http
   initialDelaySeconds: 5
 ```
 </resources>
-
 <validation>
-### Validation
-
 ```bash
 helm lint ./mychart
 helm template ./mychart --debug
@@ -158,13 +135,11 @@ helm install --dry-run --debug test ./mychart
 helm test <release-name>
 ```
 </validation>
-
 </best_practices>
-
 <boundaries>
 - ✅ **Always:** Use `lowercase-with-hyphens` for chart names
 - ✅ **Always:** Use `camelCase` for values
-- ✅ **Always:** Quote all strings in values.yaml
+- ✅ **Always:** Quote all strings in values.yaml (exception: numeric fields such as ports, replica counts, and resource quantities must be unquoted integers)
 - ✅ **Always:** Namespace template names with chart prefix
 - ✅ **Always:** Include resource limits and health checks
 - ✅ **Always:** Document every value with comments

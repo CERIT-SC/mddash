@@ -1,35 +1,23 @@
 ---
 applyTo: '**/*.sh'
 ---
-
-# Shell Scripting Guidelines
-
-Robust, portable Bash scripts.
-
 <context>
 Essential patterns for writing safe, maintainable shell scripts. Focus on error handling, input validation, and security.
 </context>
-
 <best_practices>
-
 <header>
-### Mandatory Header
 ```bash
 #!/bin/bash
 set -euo pipefail  # Exit on error, unset vars, pipeline failures
 ```
 </header>
-
 <variables>
-### Variables
 - **Always quote:** `"$var"` not `$var`
 - **Arrays for lists:** `files=("f1" "f2")` then `"${files[@]}"`
 - **Naming:** `lowercase_with_underscores`, `CONSTANTS_UPPERCASE`
 - **Constants:** `readonly MAX_RETRIES=3`
 </variables>
-
 <functions>
-### Functions
 ```bash
 function_name() {
     local arg1="$1"
@@ -39,9 +27,7 @@ function_name() {
 }
 ```
 </functions>
-
 <error_handling>
-### Error Handling
 ```bash
 # Check commands
 if ! mkdir -p "$dir"; then
@@ -73,9 +59,7 @@ trap 'rm -rf "$TEMP_DIR"' EXIT SIGINT SIGTERM
 [[ ! -r "$file" ]] && { echo "Error: Cannot read $file" >&2; exit 1; }
 ```
 </validation>
-
 <security>
-### Security
 ```bash
 # Require env vars
 PASSWORD="${PASSWORD:?Error: PASSWORD not set}"
@@ -85,9 +69,7 @@ PASSWORD="${PASSWORD:?Error: PASSWORD not set}"
 rm -rf "${DIR:?}/"*
 ```
 </security>
-
 <patterns>
-### Modern Patterns
 ```bash
 # Use [[ ]] not [ ]
 [[ "$var" == "value" ]] && echo "Match"
@@ -108,9 +90,7 @@ for file in *.txt; do      # NOT: for file in $(ls *.txt)
 done
 ```
 </patterns>
-
 <template>
-### Template
 ```bash
 #!/bin/bash
 set -euo pipefail
@@ -133,9 +113,7 @@ main() {
 main "$@"
 ```
 </template>
-
 <anti_patterns>
-### Quick Reference
 | Good | Bad |
 |------|-----|
 | `"$var"` | `$var` |
@@ -145,9 +123,7 @@ main "$@"
 | `for f in *.txt` | `for f in $(ls)` |
 | `command -v` | `which` |
 </anti_patterns>
-
 </best_practices>
-
 <boundaries>
 - ✅ **Always:** Include `set -euo pipefail`
 - ✅ **Always:** Quote all variables (`"$var"`)
