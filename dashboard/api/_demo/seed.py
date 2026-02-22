@@ -1,4 +1,3 @@
-import json
 import time
 from datetime import datetime, timedelta
 
@@ -51,14 +50,14 @@ def seed_data() -> None:
         TunerJob,
         experiment=tuning,
         tpr_name="LSD.tpr",
-        tuner_run_id="demo-tuner-lsd",
+        id="demo-tuner-lsd",
         created_at=now - timedelta(hours=8),
         is_stopped=False,
         error_message=None,
     )
-    if running_tuner.tuner_run_id:
+    if running_tuner.id:
         started_at = time.time() - 4
-        demo_state.tuner_jobs[running_tuner.tuner_run_id] = {
+        demo_state.tuner_jobs[running_tuner.id] = {
             "status": JobStatus.RUNNING.value,
             "created_at": started_at,
             "max_trials": 4,
@@ -89,22 +88,20 @@ def seed_data() -> None:
         TunerJob,
         experiment=tuning,
         tpr_name="MDMA.tpr",
-        tuner_run_id="demo-tuner-mdma",
+        id="demo-tuner-mdma",
         created_at=now - timedelta(hours=9),
         is_stopped=True,
-        _preserved_trials=json.dumps(
-            [
-                {
-                    "id": "mdma_00000",
-                    "status": JobStatus.TERMINATED.value,
-                    "np": 8,
-                    "ntomp": 1,
-                    "nb": "gpu",
-                    "pme": "cpu",
-                    "performance": 66.1,
-                }
-            ]
-        ),
+        _preserved_trials=[
+            {
+                "id": "mdma_00000",
+                "status": JobStatus.TERMINATED.value,
+                "np": 8,
+                "ntomp": 1,
+                "nb": "gpu",
+                "pme": "cpu",
+                "performance": 66.1,
+            }
+        ],
         error_message=None,
     )
 
@@ -112,7 +109,7 @@ def seed_data() -> None:
         TunerJob,
         experiment=tuning,
         tpr_name="Failed.tpr",
-        tuner_run_id=None,
+        id="demo-tuner-failed",
         created_at=now - timedelta(hours=10),
         is_stopped=False,
         error_message="Failed to submit to tuner: Connection timeout",

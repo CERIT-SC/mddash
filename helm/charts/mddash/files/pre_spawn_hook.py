@@ -328,7 +328,7 @@ def _api_container(
             },
         ],
         "volumeMounts": [{"name": volume_name, "mountPath": "/mddash"}],
-        "resources": {"requests": {"cpu": "50m", "memory": "128Mi"}, "limits": {"cpu": "300m", "memory": "256Mi"}},
+        "resources": {"requests": {"cpu": "50m", "memory": "128Mi"}, "limits": {"cpu": "250m", "memory": "512Mi"}},
         "securityContext": security_context,
     }
 
@@ -483,7 +483,6 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:
         spawner.namespace = user_namespace
         spawner.service_account = "default"
         spawner.volumes = [{"name": volume_name, "persistentVolumeClaim": {"claimName": pvc_name}}]
-        spawner.volume_mounts = [{"name": volume_name, "mountPath": "/home/jovyan"}]
 
         # Override hub URLs for cross-namespace access
         hub_api_base = f"http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api"

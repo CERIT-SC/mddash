@@ -23,8 +23,7 @@ export interface Notebook {
 }
 
 export interface TunerJob {
-    id: number;
-    tuner_run_id: string | null;
+    id: string;
     experiment_id: string;
     tpr_name: string;
     tuner_status: JobStatus | null;

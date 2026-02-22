@@ -87,7 +87,7 @@ const TunerView = (props: TunerViewProps) => {
         if (!shouldPoll) return;
         const intervalId = window.setInterval(() => fetchStatus(true), POLLING_INTERVAL);
         return () => window.clearInterval(intervalId);
-    }, [tuner?.tuner_run_id, tuner?.tuner_status, tunerStarted, tunerStopped, fetchStatus]);
+    }, [tuner?.id, tuner?.tuner_status, tunerStarted, tunerStopped, fetchStatus]);
 
     if (loading) {
         return (

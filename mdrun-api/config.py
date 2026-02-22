@@ -18,7 +18,7 @@ DB_URL = f"sqlite:///{DATA_DIR}/mdrun.db?timeout=30"
 NAMESPACE = os.environ.get("POD_NAMESPACE", "default")
 PVC_NAME = os.environ.get("PVC_NAME", "mdrun-api-pvc")
 
-GPU_TYPE = "nvidia.com/mig-1g.10gb"  # TODO: is this correct? should be same as tuner
+GPU_TYPE = "nvidia.com/mig-1g.10gb"
 
 S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
 S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")

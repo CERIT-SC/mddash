@@ -20,7 +20,7 @@ metrics_cache: TTLCache = TTLCache(maxsize=2, ttl=120)
 tuner_status_cache: TTLCache = TTLCache(maxsize=100, ttl=30)
 
 # Fallback cache for tuner job failures (job_id -> status)
-tuner_last_known_status: dict[int, dict] = {}
+tuner_last_known_status: dict[str, dict] = {}
 
 # Cache for GROMACS job status (1s TTL)
 gromacs_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
