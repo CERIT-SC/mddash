@@ -203,6 +203,7 @@ const New = () => {
                             value={repoUrl}
                             onChange={(e) => setRepoUrl(e.target.value)}
                             error={typeAuxError}
+                            helperText="Supports any InvenioRDM repository (e.g. Zenodo, MDRepo)"
                         />
                     )}
                     {type === "file" && <Dropzone inputName="simulation-files" onFilesChange={setFiles} />}

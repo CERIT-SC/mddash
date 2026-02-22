@@ -7,6 +7,7 @@ from http import HTTPStatus
 from pathlib import Path
 from shutil import rmtree
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 import requests
 from cache import mdrepo_status_cache, step_status_cache
@@ -202,11 +203,12 @@ class Experiment(db.Model):  # type: ignore
     @classmethod
     def from_repo(cls, name: str, repo_link: str, notebooks_repo: str, access_token: str | None = None) -> "Experiment":
         """
-        Create experiment from Zenodo repository with database persistence.
+        Create experiment from an InvenioRDM-compatible repository (Zenodo, MDRepo, etc.).
 
         Args:
             name: Name of the experiment.
-            repo_link: Zenodo repository link (e.g., https://zenodo.org/record/1234567).
+            repo_link: Repository record URL (e.g., https://zenodo.org/records/1234567
+                       or https://workflow-repo.test.du.cesnet.cz/datasets/records/8gahj-dh519).
             notebooks_repo: Git repository URL containing setup notebooks.
             access_token: Optional GitHub access token for private repositories.
 
@@ -219,15 +221,16 @@ class Experiment(db.Model):  # type: ignore
         experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
 
         try:
-            # Validate and parse repository link
-            repo_link_parts: list[str] = repo_link.strip().split("/")
-            # Expected format: https://zenodo.org/record/1234567
-            min_zenodo_parts = 4
-            if len(repo_link_parts) < min_zenodo_parts or repo_link_parts[2] != "zenodo.org":
-                raise BadRequest(description="Invalid repository link (expected zenodo.org)")
-
-            record_id: str = repo_link_parts[-1]
-            url: str = f"https://zenodo.org/api/records/{record_id}/files-archive"
+            # Parse InvenioRDM-compatible URL (Zenodo, MDRepo, etc.)
+            # UI URL format:  {scheme}://{host}/[collection/]records/{id}
+            # API URL format: {scheme}://{host}/api/{collection_or_records}/{id}/files-archive
+            parsed = urlparse(repo_link.strip().rstrip("/"))
+            path_parts = [p for p in parsed.path.split("/") if p]
+            record_id: str = path_parts[-1]
+            records_idx: int = path_parts.index("records")  # raises ValueError if missing
+            prefix_parts: list[str] = path_parts[:records_idx]
+            api_segment: str = "/".join(prefix_parts) if prefix_parts else "records"
+            url: str = f"{parsed.scheme}://{parsed.netloc}/api/{api_segment}/{record_id}/files-archive"
             response = requests.get(url, timeout=60)
 
             if response.status_code == HTTPStatus.NOT_FOUND:
