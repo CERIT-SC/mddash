@@ -221,10 +221,17 @@ class Experiment(db.Model):  # type: ignore
         experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
 
         try:
+            repo_link = repo_link.strip().rstrip("/")
+
+            # Resolve DOI links by following the redirect to the actual record URL
+            if urlparse(repo_link).netloc == "doi.org":
+                doi_response = requests.head(repo_link, allow_redirects=True, timeout=30)
+                repo_link = doi_response.url.rstrip("/")
+
             # Parse InvenioRDM-compatible URL (Zenodo, MDRepo, etc.)
             # UI URL format:  {scheme}://{host}/[collection/]records/{id}
             # API URL format: {scheme}://{host}/api/{collection_or_records}/{id}/files-archive
-            parsed = urlparse(repo_link.strip().rstrip("/"))
+            parsed = urlparse(repo_link)
             path_parts = [p for p in parsed.path.split("/") if p]
             record_id: str = path_parts[-1]
             records_idx: int = path_parts.index("records")  # raises ValueError if missing

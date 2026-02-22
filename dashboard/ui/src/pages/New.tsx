@@ -178,7 +178,7 @@ const New = () => {
                         >
                             <Tab value="file" label="Upload Files" disableRipple sx={tabStyles} />
                             <Tab value="pdb" label="PDB ID" disableRipple sx={tabStyles} />
-                            <Tab value="repo" label="Repository URL" disableRipple sx={tabStyles} />
+                            <Tab value="repo" label="DOI / Repository" disableRipple sx={tabStyles} />
                         </Tabs>
                         {(typeError || typeAuxError) && (
                             <FormHelperText>Select a source and fill its required details.</FormHelperText>
@@ -198,12 +198,12 @@ const New = () => {
                     {type === "repo" && (
                         <TextField
                             id="repo-url"
-                            label="Repository URL"
+                            label="DOI or Repository URL"
                             variant="outlined"
                             value={repoUrl}
                             onChange={(e) => setRepoUrl(e.target.value)}
                             error={typeAuxError}
-                            helperText="Supports any InvenioRDM repository (e.g. Zenodo, MDRepo)"
+                            helperText="Supports any InvenioRDM repository (e.g. Zenodo, MDRepo) or a DOI link"
                         />
                     )}
                     {type === "file" && <Dropzone inputName="simulation-files" onFilesChange={setFiles} />}
