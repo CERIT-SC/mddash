@@ -13,7 +13,7 @@ step_status_cache: TTLCache = TTLCache(maxsize=100, ttl=0.1)
 # Cache for MDRepo publication status (60s TTL)
 mdrepo_status_cache: TTLCache = TTLCache(maxsize=100, ttl=60)
 
-# Cache for metrics (pod resources and directory size) (120s TTL)
+# Cache for metrics (pod resources) (120s TTL)
 metrics_cache: TTLCache = TTLCache(maxsize=2, ttl=120)
 
 # Cache for tuner job status (30s TTL)

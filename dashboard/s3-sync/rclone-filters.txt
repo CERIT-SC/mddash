@@ -29,3 +29,4 @@
 - **/.binder-env/**
 - .binder-env-installed
 - **/.binder-env-installed
+- .duc.db

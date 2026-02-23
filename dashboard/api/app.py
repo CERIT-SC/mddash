@@ -17,6 +17,7 @@ from routes import (
     notebook_bp,
     tuner_bp,
 )
+from utils import start_duc_indexer
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +91,8 @@ def create_app() -> Flask:
     # Alembic may tweak logging handlers; restore our configuration afterwards
     configure_logging(LOG_FORMAT, LOG_LEVEL)
     enable_loggers()
+
+    start_duc_indexer(DATA_DIR)
 
     return app
 

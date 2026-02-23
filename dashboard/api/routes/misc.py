@@ -1,9 +1,10 @@
 from api_response import ApiResponse
+from cache import metrics_cache
 from clients import k8s
 from config import API_PREFIX, CPU_REQUEST_QUOTA, DATA_DIR, MEMORY_REQUEST_QUOTA, PVC_SIZE
 from decorators import handle_exceptions
 from flask import Blueprint, Response
-from utils import get_directory_size, metrics_cache
+from utils import duc_query_size
 
 misc_bp = Blueprint("misc", __name__, url_prefix=API_PREFIX)
 
@@ -26,11 +27,7 @@ def get_metrics() -> Response:
         requests = k8s.get_pod_resource_requests()
         metrics_cache["pod_resources"] = requests
 
-    if "directory_size" in metrics_cache:
-        requests["storage"] = metrics_cache["directory_size"]
-    else:
-        requests["storage"] = get_directory_size(DATA_DIR)
-        metrics_cache["directory_size"] = requests["storage"]
+    requests["storage"] = duc_query_size(DATA_DIR)
 
     limits = {
         "cpu": k8s.parse_cpu(CPU_REQUEST_QUOTA),

@@ -69,7 +69,7 @@ export interface ResourceUsage {
     requests: {
         cpu: number;
         memory: number;
-        storage: number;
+        storage: number | null;
     };
     limits: {
         cpu: number;
