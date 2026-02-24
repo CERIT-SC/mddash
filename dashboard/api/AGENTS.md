@@ -98,6 +98,7 @@ graph TD
 - **Path validation**: Always use `check_path()` and `check_filename()` to prevent traversal
 - **Excluded paths**: `.ipynb_checkpoints`, `__pycache__`, `*.edr`, `*.xtc`, `*.tpr`, `*.log`, etc.
 - **Upload filtering**: `is_excluded_path()` filters files before MDRepo upload
+- **Binder support**: Cloned git repositories may contain Binder configuration files (`environment.yml`, `requirements.txt`, `postBuild`). The notebook image startup hook automatically detects and installs these environments at `/mddash/{experiment_id}/.binder-env`.
 
 ### Error Handling
 - **Always use `@handle_exceptions()` decorator** on route handlers
@@ -110,6 +111,10 @@ graph TD
 - `DATA_DIR` defaults to `/mddash` - all experiment data stored here
 - `NAMESPACE` defaults to `default` but logs warning if not set
 - Missing required env vars log warnings but don't crash (graceful degradation)
+
+### Local Demo Harness
+- `dashboard/api/_demo/app.py` runs the real API with test-style mocks applied before app import
+- Demo seeding/mocks live in `dashboard/api/_demo/profile.py` and use real DB models/schemas/routes
 
 ### Caching
 - `step_status_cache`: 100ms TTL for experiment step calculations

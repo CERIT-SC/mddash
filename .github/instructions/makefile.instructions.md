@@ -1,19 +1,11 @@
 ---
 applyTo: '**/Makefile, **/*.mk'
 ---
-
-# Makefile Guidelines
-
-Rules for writing robust, portable Makefiles.
-
 <context>
 Essential Makefile patterns for build automation. Focus on correct syntax, proper variable usage, and common patterns.
 </context>
-
 <best_practices>
-
 <syntax>
-### Mandatory Syntax
 **Recipes MUST use TAB (not spaces):**
 ```makefile
 target: prereq
@@ -41,7 +33,6 @@ VAR += value    # Append
 	$(CC) -c $< -o $@
 ```
 </syntax>
-
 <patterns>
 ### .PHONY Targets
 Always declare non-file targets:
@@ -78,28 +69,25 @@ deploy:
 		image
 ```
 </patterns>
-
 <security>
-### Security
 ```makefile
 # NEVER hardcode secrets
 ifndef API_KEY
 $(error API_KEY not set)
 endif
 
-# Set SHELL for consistency
-SHELL := /bin/bash
+# Use POSIX shell by default for portability (Alpine, minimal CI).
+# Switch to /bin/bash only if recipes use bash-specific syntax (arrays, [[ ]], etc.).
+SHELL := /bin/sh
 
 # Quote variables in shell
 backup:
 	tar czf "backup-$$(date +%Y%m%d).tar.gz" "$(DIR)"
 ```
 </security>
-
 <template>
-### Template
 ```makefile
-SHELL := /bin/bash
+SHELL := /bin/sh
 .DEFAULT_GOAL := help
 
 CONFIG ?= config.yaml
@@ -123,9 +111,7 @@ clean: ## Clean artifacts
 	rm -rf build/ || true
 ```
 </template>
-
 <anti_patterns>
-### Common Pitfalls
 | Wrong | Right |
 |-------|-------|
 | Spaces for indent | TAB character |
@@ -134,9 +120,7 @@ clean: ## Clean artifacts
 | `rm file` (fails) | `rm file \|\| true` |
 | Shell var `$files` | `$$files` in recipes |
 </anti_patterns>
-
 </best_practices>
-
 <boundaries>
 - ✅ **Always:** Use TAB for recipe indentation
 - ✅ **Always:** Declare `.PHONY` for non-file targets

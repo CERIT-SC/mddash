@@ -25,6 +25,7 @@ from config import (
 )
 from decorators import handle_exceptions
 from flask import Blueprint, Response, redirect, request, session
+from models.experiment import mdrepo_status_cache
 from token_manager import (
     MDREPO_REFRESH_TOKEN_KEY,
     MDREPO_STATE_KEY,
@@ -160,6 +161,10 @@ def oauth_callback() -> WerkzeugResponse:
         else:
             logger.warning("MDRepo OAuth: No refresh token in response - token refresh will not be available")
         session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + expires_in
+
+        # Clear MDRepo status cache to force re-sync with new token
+        mdrepo_status_cache.clear()
+        logger.info("MDRepo OAuth: Cleared mdrepo_status_cache")
 
         return redirect(f"{return_url}?mdrepo_auth=success")
 

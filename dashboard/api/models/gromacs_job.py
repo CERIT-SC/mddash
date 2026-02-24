@@ -4,7 +4,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from cachetools import TTLCache, cached
+from cache import (
+    gromacs_estimated_time_cache,
+    gromacs_nsteps_done_cache,
+    gromacs_performance_cache,
+    gromacs_status_cache,
+)
+from cachetools import cached
 from clients import mdrun
 from config import DATA_DIR, S3_BUCKET
 from enums import DeviceType, JobStatus
@@ -24,11 +30,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)  # 1s
-performance_cache: TTLCache = TTLCache(maxsize=100, ttl=1)  # 1s
-nsteps_done_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)  # 500ms
-estimated_time_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)  # 500ms
 
 
 class GromacsJob(db.Model):  # type: ignore
@@ -91,7 +92,7 @@ class GromacsJob(db.Model):  # type: ignore
         return DATA_DIR / self.experiment_id / f"mdrun-{self.id}.err"
 
     @property
-    @cached(cache=status_cache)
+    @cached(cache=gromacs_status_cache)
     def status(self) -> JobStatus:
         """Current status of the k8s job."""
         try:
@@ -113,7 +114,7 @@ class GromacsJob(db.Model):  # type: ignore
         return self._nsteps
 
     @property
-    @cached(cache=nsteps_done_cache)
+    @cached(cache=gromacs_nsteps_done_cache)
     def nsteps_done(self) -> int | None:
         """Number of steps completed so far."""
         # If simulation has finished, return total steps
@@ -150,7 +151,7 @@ class GromacsJob(db.Model):  # type: ignore
         return self._finish_timestamp
 
     @property
-    @cached(cache=estimated_time_cache)
+    @cached(cache=gromacs_estimated_time_cache)
     def estimated_time(self) -> int | None:
         """Estimated time until completion in seconds."""
         if self.start_timestamp is None or self.nsteps is None or self.nsteps_done is None or self.nsteps_done == 0:
@@ -171,7 +172,7 @@ class GromacsJob(db.Model):  # type: ignore
         return max(0, int(base_estimate - time_since_update))
 
     @property
-    @cached(cache=performance_cache)
+    @cached(cache=gromacs_performance_cache)
     def performance(self) -> float | None:
         """Performance of the job in ns/day."""
         if self._performance:

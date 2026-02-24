@@ -116,6 +116,7 @@ sequenceDiagram
 - **Shared PVC**: All containers in user pod mount `/mddash` directory to a persistent volume for user data.
 - **Non-root Containers**: All containers run as UID 1000 with security context for e-INFRA compliance.
 - **Rancher-Specific Annotations**: User namespaces require `field.cattle.io/projectId` and `field.cattle.io/resourceQuota` annotations. Pre-spawn hook waits for Rancher conditions.
+- **Binder Repository Support**: Notebook image automatically detects and installs Binder-compatible repositories (`environment.yml`, `requirements.txt`, `postBuild`). Conda environments are created at `/mddash/{experiment_id}/.binder-env` on the PVC for persistence across pod restarts.
 
 ### Database & Migrations
 - **Auto-generated on Startup**: Both Dashboard API and MDRun API automatically generate and run migrations on every startup. Fallback to `db.create_all()` if migration fails.
@@ -175,7 +176,7 @@ sequenceDiagram
 
 ## Development Workflow
 
-1. **Local Development**: Use `make demo` to run Flask API + React dev server locally
+1. **Local Development**: Use `make demo` to run the real Flask API through `dashboard/api/_demo/app.py` (test-style mocks + seeded data) + React dev server locally
 2. **Testing**: Run `make test` to execute all component tests
 3. **Building**: Run `make build ENV=dev` or `make build ENV=prod` to build all images
 4. **Deployment**: Run `make deploy ENV=dev` or `make deploy ENV=prod` to deploy via Helm

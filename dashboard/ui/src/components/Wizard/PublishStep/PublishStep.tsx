@@ -89,6 +89,11 @@ const PublishStep = (props: WizardStepProps) => {
             setLoading(true);
 
             if (isPublished) {
+                // Check if user is authenticated before opening MDRepo URL
+                if (!isAuthenticated) {
+                    showError("You need to authenticate with MDRepo to view the published experiment.");
+                    return;
+                }
                 window.open(experiment.mdrepo_record_url!, "_blank");
                 return;
             }
@@ -132,7 +137,7 @@ const PublishStep = (props: WizardStepProps) => {
         } finally {
             setLoading(false);
         }
-    }, [experiment, isPublished, showError, setExperiment]);
+    }, [experiment, isPublished, isAuthenticated, showError, setExperiment]);
 
     const isLoading = loadingStats || loadingAuth;
 
@@ -191,18 +196,17 @@ const PublishStep = (props: WizardStepProps) => {
                                 </Stack>
                             )}
 
-                            {!isPublished && !isAuthenticated && (
+                            {!isAuthenticated && (
                                 <Alert severity="warning" sx={{ width: "100%" }}>
                                     <Typography variant="body2">
-                                        You need to authenticate with MDRepo before publishing. This is a one-time
-                                        authorization using your e-INFRA CZ account.
+                                        You need to authenticate with MDRepo to {isPublished ? "view or edit the published experiment" : "publish your experiment"}. This is a one-time authorization using your e-INFRA CZ account.
                                     </Typography>
                                 </Alert>
                             )}
                         </Stack>
                     )}
 
-                    {!isPublished && !isAuthenticated ? (
+                    {!isAuthenticated ? (
                         <Button
                             variant="contained"
                             color="primary"

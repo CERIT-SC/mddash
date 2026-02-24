@@ -1,13 +1,17 @@
-import io
 import logging
+import tempfile
+import threading
 import zipfile
 from datetime import datetime
 from http import HTTPStatus
+from pathlib import Path
 from shutil import rmtree
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 import requests
-from cachetools import TTLCache, cached
+from cache import mdrepo_status_cache, step_status_cache
+from cachetools import cached
 from clients import mdrepo
 from config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
 from enums import JobStatus, PodStatus
@@ -28,8 +32,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-step_status_cache: TTLCache = TTLCache(maxsize=100, ttl=0.1)  # 100ms
-mdrepo_status_cache: TTLCache = TTLCache(maxsize=100, ttl=60)  # 60s
 
 
 class Experiment(db.Model):  # type: ignore
@@ -201,11 +203,12 @@ class Experiment(db.Model):  # type: ignore
     @classmethod
     def from_repo(cls, name: str, repo_link: str, notebooks_repo: str, access_token: str | None = None) -> "Experiment":
         """
-        Create experiment from Zenodo repository with database persistence.
+        Create experiment from an InvenioRDM-compatible repository (Zenodo, MDRepo, etc.).
 
         Args:
             name: Name of the experiment.
-            repo_link: Zenodo repository link (e.g., https://zenodo.org/record/1234567).
+            repo_link: Repository record URL (e.g., https://zenodo.org/records/1234567
+                       or https://workflow-repo.test.du.cesnet.cz/datasets/records/8gahj-dh519).
             notebooks_repo: Git repository URL containing setup notebooks.
             access_token: Optional GitHub access token for private repositories.
 
@@ -218,25 +221,44 @@ class Experiment(db.Model):  # type: ignore
         experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
 
         try:
-            # Validate and parse repository link
-            repo_link_parts: list[str] = repo_link.strip().split("/")
-            # Expected format: https://zenodo.org/record/1234567
-            min_zenodo_parts = 4
-            if len(repo_link_parts) < min_zenodo_parts or repo_link_parts[2] != "zenodo.org":
-                raise BadRequest(description="Invalid repository link (expected zenodo.org)")
+            repo_link = repo_link.strip().rstrip("/")
 
-            record_id: str = repo_link_parts[-1]
-            url: str = f"https://zenodo.org/api/records/{record_id}/files-archive"
-            response = requests.get(url, timeout=60)
+            # Resolve DOI links by following the redirect to the actual record URL
+            if urlparse(repo_link).netloc == "doi.org":
+                doi_response = requests.head(repo_link, allow_redirects=True, timeout=30)
+                repo_link = doi_response.url.rstrip("/")
 
-            if response.status_code == HTTPStatus.NOT_FOUND:
-                raise NotFound(description=f"Repository '{repo_link}' not found.")
-            if response.status_code != HTTPStatus.OK:
-                raise InternalServerError(description=f"Failed to download repository: {response.status_code}")
+            # Parse InvenioRDM-compatible URL (Zenodo, MDRepo, etc.)
+            # UI URL format:  {scheme}://{host}/[collection/]records/{id}
+            # API URL format: {scheme}://{host}/api/{collection_or_records}/{id}/files-archive
+            parsed = urlparse(repo_link)
+            path_parts = [p for p in parsed.path.split("/") if p]
+            record_id: str = path_parts[-1]
+            records_idx: int = path_parts.index("records")  # raises ValueError if missing
+            prefix_parts: list[str] = path_parts[:records_idx]
+            api_segment: str = "/".join(prefix_parts) if prefix_parts else "records"
+            url: str = f"{parsed.scheme}://{parsed.netloc}/api/{api_segment}/{record_id}/files-archive"
+            # Download repository to a temporary file
+            with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_file:
+                tmp_path = Path(tmp_file.name)
+                try:
+                    with requests.get(url, stream=True, timeout=60) as response:
+                        if response.status_code == HTTPStatus.NOT_FOUND:
+                            raise NotFound(description=f"Repository '{repo_link}' not found.")
+                        if response.status_code != HTTPStatus.OK:
+                            raise InternalServerError(
+                                description=f"Failed to download repository: {response.status_code}"
+                            )
 
-            # Extract zip file
-            with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
-                zf.extractall(DATA_DIR / experiment_id)
+                        for chunk in response.iter_content(chunk_size=8192):
+                            tmp_file.write(chunk)
+
+                    # Extract zip file
+                    with zipfile.ZipFile(tmp_path) as zf:
+                        zf.extractall(DATA_DIR / experiment_id)
+                finally:
+                    if tmp_path.exists():
+                        tmp_path.unlink()
 
             # Create experiment instance
             message: str = f"Created by downloading repository from '{repo_link}'."
@@ -251,7 +273,9 @@ class Experiment(db.Model):  # type: ignore
             raise
 
     @classmethod
-    def from_files(cls, name: str, files: list[FileStorage], notebooks_repo: str, access_token: str | None = None) -> "Experiment":
+    def from_files(
+        cls, name: str, files: list[FileStorage], notebooks_repo: str, access_token: str | None = None
+    ) -> "Experiment":
         """
         Create experiment from file uploads with database persistence.
 
@@ -365,7 +389,7 @@ class Experiment(db.Model):  # type: ignore
             try:
                 tuner_job.delete()
             except Exception:
-                logger.exception(f"Failed to delete tuner job {tuner_job.tuner_run_id}")
+                logger.exception(f"Failed to delete tuner job {tuner_job.id}")
 
         # Delete GROMACS jobs
         for gmx_job in self.gromacs_jobs:
@@ -374,8 +398,15 @@ class Experiment(db.Model):  # type: ignore
             except Exception:
                 logger.exception(f"Failed to delete GROMACS job {gmx_job.id}")
 
-        # Delete all files in the experiment directory
-        rmtree(DATA_DIR / self.id, ignore_errors=True)
+        def del_dir(dir: Path) -> None:
+            try:
+                rmtree(dir, ignore_errors=True)
+                logger.info(f"Deleted experiment directory: {dir}")
+            except Exception:
+                logger.exception(f"Failed to delete experiment directory {dir}")
+
+        thread = threading.Thread(target=del_dir, args=(DATA_DIR / self.id,), daemon=True)
+        thread.start()
 
     def publish(self, community: str) -> dict:
         """

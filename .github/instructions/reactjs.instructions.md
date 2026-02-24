@@ -1,27 +1,19 @@
 ---
 applyTo: "**/*.jsx, **/*.tsx, **/*.js, **/*.ts, **/*.css, **/*.scss"
 ---
-
-# ReactJS Guidelines
-
-Modern React (19+) with TypeScript and MUI.
-
 <context>
 Guidelines for building scalable React applications using functional components, hooks, and component composition.
 
 **Tech Stack:**
 - React 19+ with TypeScript (Strict Mode)
-- State: React Context, React Query (server state)
+- UI: MUI (Material-UI) with Emotion
+- State: React Context
 - Routing: React Router
 - Forms: React Hook Form
 - Build: Vite
 </context>
-
 <best_practices>
-
 <components>
-### Component Pattern
-
 ```tsx
 // ❌ Bad: Class component, any type, native tags, inline styles
 class UserCard extends React.Component<any, any> {
@@ -66,10 +58,7 @@ export const UserCard = ({ name, role = 'User', onAction }: UserCardProps) => {
 };
 ```
 </components>
-
 <data_fetching>
-### Data Fetching
-
 ```tsx
 const useUserData = (userId: string) => {
   const [data, setData] = useState<User | null>(null);
@@ -98,17 +87,13 @@ const useUserData = (userId: string) => {
 };
 ```
 </data_fetching>
-
 <patterns>
-### Design Patterns
 - **Compound Components:** Related functionality (e.g., `Select` + `Select.Option`)
 - **Custom Hooks:** Extract reusable logic (data fetching, forms)
 - **Context Provider:** Dependency injection and state sharing
 - **Container/Presentational:** Separate logic from UI when complex
 </patterns>
-
 <structure>
-### Project Structure
 - `src/components/` — Reusable UI components
 - `src/features/` — Domain-specific features
 - `src/hooks/` — Shared custom hooks
@@ -116,24 +101,18 @@ const useUserData = (userId: string) => {
 - `src/utils/` — Helper functions
 - `src/types/` — Shared TypeScript interfaces
 </structure>
-
 <routing>
-### Routing
 - Use React Router for client-side navigation
 - `React.lazy` + `Suspense` for route code splitting
 - Wrapper components for protected routes (`<RequireAuth>`)
 </routing>
-
 <accessibility>
-### Accessibility
 - Semantic HTML (`<main>`, `<nav>`, `<article>`)
 - ARIA attributes for interactive elements
 - Keyboard navigation support
 - Proper color contrast
 </accessibility>
-
 </best_practices>
-
 <boundaries>
 - ✅ **Always:** Functional components with hooks
 - ✅ **Always:** TypeScript interfaces for props and state

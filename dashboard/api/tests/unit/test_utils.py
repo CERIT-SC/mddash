@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from utils import (
+    FileInfo,
     generate_id,
     get_files_with_extensions,
     get_unique_id,
@@ -80,10 +81,13 @@ class TestGetFilesWithExtensions:
 
         found_files_count = 2
         assert len(result) == found_files_count
-        names = [f["name"] for f in result]
+        names = [f.name for f in result]
+        paths = [f.path for f in result]
         assert "file1.pdb" in names
         assert "file2.xtc" in names
         assert "file3.txt" not in names
+        assert "file1.pdb" in paths
+        assert "file2.xtc" in paths
 
     def test_returns_empty_for_no_matches(self, tmp_path: Path) -> None:
         """Should return empty list when no files match."""
@@ -104,7 +108,7 @@ class TestGetFilesWithExtensions:
 
         result = get_files_with_extensions(tmp_path, ["pdb", "tmp"])
 
-        names = [f["name"] for f in result]
+        names = [f.name for f in result]
         assert "keep.pdb" in names
         assert "notes.tmp" not in names
 

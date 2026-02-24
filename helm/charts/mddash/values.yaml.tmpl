@@ -25,6 +25,7 @@ jupyterhub:
         allow_all: true
       KubeSpawner:
         services_enabled: true
+        events_enabled: false
         http_timeout: 120
 
     extraEnv:
@@ -188,7 +189,7 @@ jupyterhub:
   proxy:
     secretToken: "your-secret-token-here-change-me"
 
-  # TODO: Requires cluster-wide permissions to be enabled
+  # Requires cluster-wide permissions to be enabled
   scheduling:
     userScheduler:
       enabled: false

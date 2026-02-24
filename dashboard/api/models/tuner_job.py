@@ -1,21 +1,18 @@
-import json
 import logging
 from datetime import datetime
 from pathlib import Path
 
-from cachetools import TTLCache
+from cache import tuner_last_known_status, tuner_status_cache
 from clients import tuner
 from enums import JobStatus
 from extensions import db
 from requests import HTTPError
-from sqlalchemy import Text
+from sqlalchemy import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .experiment import Experiment
 
 logger = logging.getLogger(__name__)
-status_cache: TTLCache = TTLCache(maxsize=100, ttl=30)  # 30s TTL for normal operation
-_last_known_status: dict[int, dict] = {}  # Fallback cache for failures (job_id -> status)
 
 
 class TunerJob(db.Model):  # type: ignore
@@ -23,11 +20,8 @@ class TunerJob(db.Model):  # type: ignore
 
     __tablename__ = "tuner_jobs"
 
-    # Local auto-incrementing ID
-    # TODO: use the `tuner_run_id` as primary key (breaks db migration)
-    id: Mapped[int] = mapped_column(db.Integer, primary_key=True, autoincrement=True)
-    # ID of the tune job from the tuner API (set after submission)
-    tuner_run_id: Mapped[str | None] = mapped_column(db.String(36), nullable=True)
+    # ID of the tune job from the tuner API (primary key)
+    id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
     # ID of the experiment this job belongs to
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
     # name of the TPR file being tuned
@@ -39,8 +33,7 @@ class TunerJob(db.Model):  # type: ignore
     # whether the job was stopped (preserves data but job is deleted from tuner)
     is_stopped: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
     # preserved trials when job is stopped
-    # TODO: use the JSON type from SQLAlchemy (breaks db migration)
-    _preserved_trials: Mapped[str] = mapped_column("preserved_trials", Text, nullable=True)
+    _preserved_trials: Mapped[list[dict] | None] = mapped_column("preserved_trials", JSON, nullable=True)
 
     # back-reference to the parent experiment
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="tuner_jobs")
@@ -54,7 +47,7 @@ class TunerJob(db.Model):  # type: ignore
     def trials(self) -> list[dict]:
         """Trial jobs with their statuses."""
         if self.is_stopped and self._preserved_trials:
-            return json.loads(self._preserved_trials)
+            return self._preserved_trials
         return self._status().get("trials", [])
 
     def _status(self) -> dict:
@@ -64,37 +57,37 @@ class TunerJob(db.Model):  # type: ignore
         Uses a TTL cache for normal operation and falls back to last known
         status on timeout or other errors to prevent breaking dependent code.
         """
-        if self.is_stopped or not self.tuner_run_id:
+        if self.is_stopped:
             return {}
 
         cache_key = self.id
 
         # Return cached value if still fresh
-        if cache_key in status_cache:
-            return status_cache[cache_key]
+        if cache_key in tuner_status_cache:
+            return tuner_status_cache[cache_key]
 
         try:
-            status = tuner.poll_status(self.tuner_run_id)
+            status = tuner.poll_status(self.id)
             if err_msg := status.get("error"):
                 self.error_message = err_msg
                 db.session.commit()
 
             # Validate response completeness
             if "status" not in status or "trials" not in status:
-                raise ValueError(f"Incomplete status response from tuner for job {self.tuner_run_id}")
+                raise ValueError(f"Incomplete status response from tuner for job {self.id}")
 
             # Update both caches on success
-            status_cache[cache_key] = status
-            _last_known_status[cache_key] = status
+            tuner_status_cache[cache_key] = status
+            tuner_last_known_status[cache_key] = status
             return status
 
         except TimeoutError:
-            logger.warning(f"Timeout fetching tuner status for job {self.tuner_run_id}")
+            logger.warning(f"Timeout fetching tuner status for job {self.id}")
         except Exception:
-            logger.exception(f"Error fetching tuner status for job {self.tuner_run_id}")
+            logger.exception(f"Error fetching tuner status for job {self.id}")
 
         # Return last known status if available, empty dict otherwise
-        return _last_known_status.get(cache_key, {})
+        return tuner_last_known_status.get(cache_key, {})
 
     @classmethod
     def start(cls, experiment: Experiment, tpr_path: Path, nsteps: int = 25000, extra_args: str = "") -> "TunerJob":
@@ -112,7 +105,7 @@ class TunerJob(db.Model):  # type: ignore
         """
         response = tuner.run_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
 
-        job: TunerJob = cls(tuner_run_id=response["id"], experiment=experiment, tpr_name=tpr_path.name)  # type: ignore[call-arg]
+        job: TunerJob = cls(id=response["id"], experiment=experiment, tpr_name=tpr_path.name)  # type: ignore[call-arg]
         db.session.add(job)
         db.session.commit()
 
@@ -133,17 +126,16 @@ class TunerJob(db.Model):  # type: ignore
         # Only preserve trials with performance data
         trials = [trial for trial in current_status.get("trials", []) if trial.get("performance") is not None]
 
-        self._preserved_trials = json.dumps(trials)
+        self._preserved_trials = trials
         self.is_stopped = True
 
-        if self.tuner_run_id:
-            try:
-                tuner.delete_job(self.tuner_run_id)
-            except HTTPError:
-                logger.exception(f"Failed to delete tuner job {self.tuner_run_id}")
+        try:
+            tuner.delete_job(self.id)
+        except HTTPError:
+            logger.exception(f"Failed to delete tuner job {self.id}")
 
-        status_cache.clear()
-        logger.info(f"Stopped tuner job {self.tuner_run_id}")
+        tuner_status_cache.clear()
+        logger.info(f"Stopped tuner job {self.id}")
 
     def delete(self) -> None:
         """
@@ -152,10 +144,10 @@ class TunerJob(db.Model):  # type: ignore
         If running, deletes from tuner API.
         If stopped, does nothing on tuner API.
         """
-        if self.is_stopped or not self.tuner_run_id:
+        if self.is_stopped:
             return
 
         try:
-            tuner.delete_job(self.tuner_run_id)
+            tuner.delete_job(self.id)
         except HTTPError:
-            logger.exception(f"Failed to delete tuner job {self.tuner_run_id}")
+            logger.exception(f"Failed to delete tuner job {self.id}")

@@ -1,12 +1,14 @@
 # API container - Development version with hot reload and debug mode
 
-FROM python:3.12-alpine
+FROM python:3.12-slim
 
 WORKDIR /app
 
-RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
+RUN groupadd -g 1000 app && useradd -u 1000 -g 1000 -M -s /usr/sbin/nologin app
 
-RUN apk add --no-cache curl git
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl git duc-nox \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt watchdog

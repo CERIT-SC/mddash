@@ -12,6 +12,7 @@ from http import HTTPStatus
 from typing import cast
 
 import requests
+from cache import mdrepo_status_cache
 from config import MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET, MDREPO_TOKEN_URL
 from flask.sessions import SessionMixin
 
@@ -155,7 +156,9 @@ class MDRepoTokenManager:
                                 self.session.pop(MDREPO_REFRESH_TOKEN_KEY, None)
                         self.session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + expires_in
 
-                        logger.info("MDRepo token refreshed successfully")
+                        # Clear MDRepo status cache to force re-sync with new token
+                        mdrepo_status_cache.clear()
+                        logger.info("MDRepo token refreshed successfully, cleared mdrepo_status_cache")
                         return True
 
                     logger.error(f"Token refresh failed: {response.status_code} - {response.text}")
@@ -190,7 +193,9 @@ class MDRepoTokenManager:
         self.session.pop(MDREPO_TOKEN_KEY, None)
         self.session.pop(MDREPO_REFRESH_TOKEN_KEY, None)
         self.session.pop(MDREPO_TOKEN_EXPIRES_AT, None)
-        logger.info("All MDRepo tokens cleared from session")
+        # Clear MDRepo status cache when tokens are cleared
+        mdrepo_status_cache.clear()
+        logger.info("All MDRepo tokens cleared from session, cleared mdrepo_status_cache")
 
     def has_tokens(self) -> bool:
         """

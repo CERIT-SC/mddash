@@ -23,8 +23,7 @@ export interface Notebook {
 }
 
 export interface TunerJob {
-    id: number;
-    tuner_run_id: string | null;
+    id: string;
     experiment_id: string;
     tpr_name: string;
     tuner_status: JobStatus | null;
@@ -70,7 +69,7 @@ export interface ResourceUsage {
     requests: {
         cpu: number;
         memory: number;
-        storage: number;
+        storage: number | null;
     };
     limits: {
         cpu: number;
@@ -87,20 +86,27 @@ export interface FileOption {
 
 export type MuiColor = "primary" | "secondary" | "success" | "warning" | "error" | "info";
 
-export type PodStatus = "RUNNING" | "PENDING" | "TERMINATED" | "ERROR" | "TERMINATING" | "DOWN" | "UNKNOWN";
+export type PodStatus =
+    | "RUNNING"
+    | "PENDING"
+    | "INITIALIZING"
+    | "TERMINATED"
+    | "ERROR"
+    | "TERMINATING"
+    | "DOWN"
+    | "UNKNOWN";
 
 export function getPodStatusColor(status: PodStatus): MuiColor {
     switch (status) {
         case "RUNNING":
             return "success";
         case "PENDING":
+        case "INITIALIZING":
+        case "TERMINATING":
             return "warning";
         case "TERMINATED":
             return "info";
         case "ERROR":
-            return "error";
-        case "TERMINATING":
-            return "warning";
         case "DOWN":
             return "error";
         case "UNKNOWN":

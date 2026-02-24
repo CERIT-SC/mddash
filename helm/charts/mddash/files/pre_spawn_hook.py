@@ -128,8 +128,7 @@ async def _resource_exists(method: Any, **kwargs: object) -> bool:  # noqa: ANN4
         await method(**kwargs)
         return True
     except ApiException as e:
-        # In Rancher environments, a 403 Forbidden can occur briefly after
-        # resource creation before permissions propagate to the proxy.
+        # In Rancher environments, a 403 Forbidden can occur briefly after resource creation before permissions propagate to the proxy.
         if e.status in (HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND):
             return False
         raise
@@ -246,7 +245,10 @@ def _proxy_container(service_prefix: str, username: str, security_context: dict)
             {"name": "AUTH_HOST", "value": "localhost"},
             {"name": "API_HOST", "value": "localhost"},
             {"name": "NOTEBOOK_HOST", "value": "localhost"},
-            {"name": "DEFAULT_NOTEBOOKS_REPO", "value": os.environ.get("DEFAULT_NOTEBOOKS_REPO", "https://github.com/CERIT-SC/mddash-notebooks.git")},
+            {
+                "name": "DEFAULT_NOTEBOOKS_REPO",
+                "value": os.environ.get("DEFAULT_NOTEBOOKS_REPO", "https://github.com/CERIT-SC/mddash-notebooks.git"),
+            },
         ],
         "resources": {"requests": {"cpu": "10m", "memory": "32Mi"}, "limits": {"cpu": "100m", "memory": "64Mi"}},
         "securityContext": security_context,
@@ -320,10 +322,13 @@ def _api_container(
             {"name": "MDREPO_CLIENT_SECRET", "value": os.environ.get("MDREPO_CLIENT_SECRET", "")},
             {"name": "TUNER_USER", "value": os.environ.get("TUNER_USER", "")},
             {"name": "TUNER_PASSWORD", "value": os.environ.get("TUNER_PASSWORD", "")},
-            {"name": "DEFAULT_NOTEBOOKS_REPO", "value": os.environ.get("DEFAULT_NOTEBOOKS_REPO", "https://github.com/CERIT-SC/mddash-notebooks.git")},
+            {
+                "name": "DEFAULT_NOTEBOOKS_REPO",
+                "value": os.environ.get("DEFAULT_NOTEBOOKS_REPO", "https://github.com/CERIT-SC/mddash-notebooks.git"),
+            },
         ],
         "volumeMounts": [{"name": volume_name, "mountPath": "/mddash"}],
-        "resources": {"requests": {"cpu": "50m", "memory": "128Mi"}, "limits": {"cpu": "300m", "memory": "256Mi"}},
+        "resources": {"requests": {"cpu": "50m", "memory": "128Mi"}, "limits": {"cpu": "250m", "memory": "512Mi"}},
         "securityContext": security_context,
     }
 
@@ -393,98 +398,105 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:
     core_api = CoreV1Api()
     rbac_api = RbacAuthorizationV1Api()
 
-    username: str = spawner.user.name  # type: ignore[union-attr]
-    helm_package = os.environ.get("HELM_PACKAGE", "mddash")
-    hub_namespace = os.environ.get("POD_NAMESPACE", "default")
-    rancher_project_id = os.environ.get("RANCHER_PROJECT_ID", "")
+    try:
+        username: str = spawner.user.name  # type: ignore[union-attr]
+        helm_package = os.environ.get("HELM_PACKAGE", "mddash")
+        hub_namespace = os.environ.get("POD_NAMESPACE", "default")
+        rancher_project_id = os.environ.get("RANCHER_PROJECT_ID", "")
 
-    user_namespace = f"{helm_package}-user-{username}-ns"
-    bucket_name = f"{helm_package}-user-{username}"
-    pvc_name = f"{helm_package}-user-pvc"
-    volume_name = "mddash-volume"
+        user_namespace = f"{helm_package}-user-{username}-ns"
+        bucket_name = f"{helm_package}-user-{username}"
+        pvc_name = f"{helm_package}-user-pvc"
+        volume_name = "mddash-volume"
 
-    # Create namespace with resource quotas
-    namespace_manifest = _get_namespace_manifest(
-        user_namespace,
-        rancher_project_id,
-        cpu_limit=os.environ.get("NS_LIMITS_CPU", "64000m"),
-        mem_limit=os.environ.get("NS_LIMITS_MEMORY", "256Gi"),
-        cpu_request=os.environ.get("NS_REQUESTS_CPU", "1000m"),
-        mem_request=os.environ.get("NS_REQUESTS_MEMORY", "4Gi"),
-    )
-    await _ensure_resource(core_api.create_namespace, body=namespace_manifest)
-    await _wait_for_resource(core_api.read_namespace, name=user_namespace)
-    await _wait_for_ns_conditions(core_api, user_namespace, {"InitialRolesPopulated"})
-    await core_api.patch_namespace(name=user_namespace, body=namespace_manifest)  # type: ignore[misc]
+        # Create namespace with resource quotas
+        namespace_manifest = _get_namespace_manifest(
+            user_namespace,
+            rancher_project_id,
+            cpu_limit=os.environ.get("NS_LIMITS_CPU", "64000m"),
+            mem_limit=os.environ.get("NS_LIMITS_MEMORY", "256Gi"),
+            cpu_request=os.environ.get("NS_REQUESTS_CPU", "1000m"),
+            mem_request=os.environ.get("NS_REQUESTS_MEMORY", "4Gi"),
+        )
+        await _ensure_resource(core_api.create_namespace, body=namespace_manifest)
+        await _wait_for_resource(core_api.read_namespace, name=user_namespace)
+        await _wait_for_ns_conditions(core_api, user_namespace, {"InitialRolesPopulated"})
+        await core_api.patch_namespace(name=user_namespace, body=namespace_manifest)  # type: ignore[misc]
 
-    # Prepare resource names and manifests
-    user_role = f"{helm_package}-user-role"
-    user_binding = f"{helm_package}-user-binding"
-    hub_role = f"{helm_package}-hub-role"
-    hub_binding = f"{helm_package}-hub-binding"
-    pvc_manifest = _get_pvc_manifest(
-        pvc_name,
-        storage_size=os.environ.get("PVC_STORAGE_SIZE", "10Gi"),
-        storage_class=os.environ.get("PVC_STORAGE_CLASS", "nfs-csi"),
-    )
+        # Prepare resource names and manifests
+        user_role = f"{helm_package}-user-role"
+        user_binding = f"{helm_package}-user-binding"
+        hub_role = f"{helm_package}-hub-role"
+        hub_binding = f"{helm_package}-hub-binding"
+        pvc_manifest = _get_pvc_manifest(
+            pvc_name,
+            storage_size=os.environ.get("PVC_STORAGE_SIZE", "10Gi"),
+            storage_class=os.environ.get("PVC_STORAGE_CLASS", "nfs-csi"),
+        )
 
-    # Create Roles first, then RoleBindings.
-    # Some clusters (or admission webhooks) reject RoleBindings that reference
-    # Roles that haven't been created yet.
-    await asyncio.gather(
-        _ensure_resource(
-            rbac_api.create_namespaced_role,
-            namespace=user_namespace,
-            body=_get_role_manifest(user_role),
-        ),
-        _ensure_resource(
-            rbac_api.create_namespaced_role,
-            namespace=user_namespace,
-            body=_get_role_manifest(hub_role, include_pvc=True),
-        ),
-        _ensure_resource(
-            core_api.create_namespaced_persistent_volume_claim,
-            namespace=user_namespace,
-            body=pvc_manifest,
-        ),
-    )
+        # Create Roles first, then RoleBindings.
+        # Some clusters (or admission webhooks) reject RoleBindings that reference Roles that haven't been created yet.
+        await asyncio.gather(
+            _ensure_resource(
+                rbac_api.create_namespaced_role,
+                namespace=user_namespace,
+                body=_get_role_manifest(user_role),
+            ),
+            _ensure_resource(
+                rbac_api.create_namespaced_role,
+                namespace=user_namespace,
+                body=_get_role_manifest(hub_role, include_pvc=True),
+            ),
+            _ensure_resource(
+                core_api.create_namespaced_persistent_volume_claim,
+                namespace=user_namespace,
+                body=pvc_manifest,
+            ),
+        )
 
-    await asyncio.gather(
-        _wait_for_resource(rbac_api.read_namespaced_role, name=user_role, namespace=user_namespace),
-        _wait_for_resource(rbac_api.read_namespaced_role, name=hub_role, namespace=user_namespace),
-    )
+        await asyncio.gather(
+            _wait_for_resource(rbac_api.read_namespaced_role, name=user_role, namespace=user_namespace),
+            _wait_for_resource(rbac_api.read_namespaced_role, name=hub_role, namespace=user_namespace),
+        )
 
-    await asyncio.gather(
-        _ensure_resource(
-            rbac_api.create_namespaced_role_binding,
-            namespace=user_namespace,
-            body=_get_role_binding_manifest(user_binding, "default", user_role),
-        ),
-        _ensure_resource(
-            rbac_api.create_namespaced_role_binding,
-            namespace=user_namespace,
-            body=_get_role_binding_manifest(hub_binding, "hub", hub_role, namespace=hub_namespace),
-        ),
-    )
+        await asyncio.gather(
+            _ensure_resource(
+                rbac_api.create_namespaced_role_binding,
+                namespace=user_namespace,
+                body=_get_role_binding_manifest(user_binding, "default", user_role),
+            ),
+            _ensure_resource(
+                rbac_api.create_namespaced_role_binding,
+                namespace=user_namespace,
+                body=_get_role_binding_manifest(hub_binding, "hub", hub_role, namespace=hub_namespace),
+            ),
+        )
 
-    await _wait_for_ns_conditions(core_api, user_namespace, {"ResourceQuotaInit", "ResourceQuotaValidated"})
+        await asyncio.gather(
+            _wait_for_resource(rbac_api.read_namespaced_role_binding, name=user_binding, namespace=user_namespace),
+            _wait_for_resource(rbac_api.read_namespaced_role_binding, name=hub_binding, namespace=user_namespace),
+        )
 
-    # Configure spawner
-    spawner.namespace = user_namespace
-    spawner.service_account = "default"
-    spawner.volumes = [{"name": volume_name, "persistentVolumeClaim": {"claimName": pvc_name}}]
-    spawner.volume_mounts = [{"name": volume_name, "mountPath": "/home/jovyan"}]
+        await _wait_for_ns_conditions(core_api, user_namespace, {"ResourceQuotaInit", "ResourceQuotaValidated"})
 
-    # Override hub URLs for cross-namespace access
-    hub_api_base = f"http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api"
-    if not hasattr(spawner, "environment"):
-        spawner.environment = {}
-    spawner.environment["JUPYTERHUB_API_URL"] = hub_api_base
-    spawner.environment["JUPYTERHUB_ACTIVITY_URL"] = f"{hub_api_base}/users/{username}/activity"
+        # Configure spawner
+        spawner.namespace = user_namespace
+        spawner.service_account = "default"
+        spawner.volumes = [{"name": volume_name, "persistentVolumeClaim": {"claimName": pvc_name}}]
 
-    sidecar_containers = _get_sidecar_containers(spawner, bucket_name, pvc_name, volume_name, user_namespace)
-    if sidecar_containers:
-        spawner.extra_containers = sidecar_containers
+        # Override hub URLs for cross-namespace access
+        hub_api_base = f"http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api"
+        if not hasattr(spawner, "environment"):
+            spawner.environment = {}
+        spawner.environment["JUPYTERHUB_API_URL"] = hub_api_base
+        spawner.environment["JUPYTERHUB_ACTIVITY_URL"] = f"{hub_api_base}/users/{username}/activity"
+
+        sidecar_containers = _get_sidecar_containers(spawner, bucket_name, pvc_name, volume_name, user_namespace)
+        if sidecar_containers:
+            spawner.extra_containers = sidecar_containers
+    finally:
+        await rbac_api.api_client.close()
+        await core_api.api_client.close()
 
 
 def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:  # noqa: ARG001
@@ -514,18 +526,21 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # n
     await config.load_kube_config(config_file="/home/jovyan/.kube/config")  # type: ignore[misc]
     core_api = CoreV1Api()
 
-    username: str = spawner.user.name  # type: ignore[union-attr]
-    helm_package = os.environ.get("HELM_PACKAGE", "mddash")
-    user_namespace = f"{helm_package}-user-{username}-ns"
-    rancher_project_id = os.environ.get("RANCHER_PROJECT_ID", "")
-
-    zero_quota_manifest = _get_namespace_manifest(user_namespace, rancher_project_id, "0", "0", "0", "0")
-    await core_api.patch_namespace(name=user_namespace, body=zero_quota_manifest)  # type: ignore[misc]
-
     try:
-        await core_api.delete_collection_namespaced_pod(namespace=user_namespace)
-    except ApiException as e:
-        logger.exception("Error deleting pods in namespace %s: %s", user_namespace, e)
+        username: str = spawner.user.name  # type: ignore[union-attr]
+        helm_package = os.environ.get("HELM_PACKAGE", "mddash")
+        user_namespace = f"{helm_package}-user-{username}-ns"
+        rancher_project_id = os.environ.get("RANCHER_PROJECT_ID", "")
+
+        zero_quota_manifest = _get_namespace_manifest(user_namespace, rancher_project_id, "0", "0", "0", "0")
+        await core_api.patch_namespace(name=user_namespace, body=zero_quota_manifest)  # type: ignore[misc]
+
+        try:
+            await core_api.delete_collection_namespaced_pod(namespace=user_namespace)
+        except ApiException as e:
+            logger.exception("Error deleting pods in namespace %s: %s", user_namespace, e)
+    finally:
+        await core_api.api_client.close()
 
 
 # =============================================================================

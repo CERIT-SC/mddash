@@ -1,19 +1,11 @@
 ---
 applyTo: '.github/workflows/*.yml'
 ---
-
-# GitHub Actions Best Practices
-
-Secure, efficient CI/CD pipelines.
-
 <context>
 Guidelines for building reliable GitHub Actions workflows with proper security, caching, testing, and deployment strategies.
 </context>
-
 <best_practices>
-
 <workflow_structure>
-### Workflow Structure
 - Descriptive `name` and specific triggers (`on: push`, `pull_request`, `workflow_dispatch`)
 - `concurrency` to prevent race conditions
 - `permissions` with least privilege (default `contents: read`)
@@ -29,19 +21,24 @@ jobs:
       - uses: actions/checkout@v4
       - id: package
         run: echo "path=dist.zip" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-artifact
+          path: ${{ steps.package.outputs.path }}
   
   deploy:
+    runs-on: ubuntu-latest
     needs: build
     if: github.ref == 'refs/heads/main'
     environment: production
     steps:
       - uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+          path: dist
 ```
 </workflow_structure>
-
 <security>
-### Security
-
 **Permissions:**
 ```yaml
 permissions:
@@ -57,10 +54,7 @@ permissions:
 **OIDC:**
 - Prefer OIDC over long-lived credentials for cloud auth (AWS, Azure, GCP)
 </security>
-
 <optimization>
-### Optimization
-
 **Caching:**
 ```yaml
 - uses: actions/cache@v4
@@ -76,17 +70,14 @@ strategy:
   fail-fast: false
   matrix:
     os: [ubuntu-latest, windows-latest]
-    node-version: [18.x, 20.x]
+    node-version: [22.x, 24.x]
 ```
 
 **Checkout:**
 - `fetch-depth: 1` for shallow clones (most builds)
 - `fetch-depth: 0` only when full history needed
 </optimization>
-
 <testing>
-### Testing
-
 **Services:**
 ```yaml
 services:
@@ -101,10 +92,7 @@ services:
 - E2E tests with Playwright/Cypress against staging
 - Publish results as GitHub Checks
 </testing>
-
 <deployment>
-### Deployment
-
 **Environments:**
 ```yaml
 environment:
@@ -117,22 +105,18 @@ environment:
 - **Blue/Green:** Instant traffic switch, easy rollback
 - **Canary:** 5-10% rollout first, monitor before full deploy
 </deployment>
-
 <troubleshooting>
-### Troubleshooting
 - **Not triggering:** Check `on` triggers, `branches`/`paths` filters
 - **Permission errors:** Set `permissions` explicitly, verify secrets scope
 - **Cache issues:** Use `hashFiles()` in key, add `restore-keys`
 - **Slow workflows:** Parallelize with matrix, use caching, combine commands with `&&`
 </troubleshooting>
-
 </best_practices>
-
 <boundaries>
 - ✅ **Always:** Pin actions to `@v4` or commit SHA (never `@main`)
 - ✅ **Always:** Set `permissions: contents: read` by default
 - ✅ **Always:** Use `${{ secrets.NAME }}` for sensitive data
-- ✅ **Always:** Use `fetch-depth: 1` for checkout
+- ✅ **Always:** Use `fetch-depth: 1` for checkout unless full history is required (e.g., semantic-release, conventional-changelog, `git describe`)
 - ✅ **Always:** Use `hashFiles()` for cache keys
 - ⚠️ **Ask:** Before adding self-hosted runners
 - ⚠️ **Ask:** Before adding new workflow triggers

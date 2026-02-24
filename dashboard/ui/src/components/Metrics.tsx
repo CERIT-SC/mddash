@@ -51,7 +51,10 @@ const Metrics = () => {
 
         const cpuUsagePercent = (metrics.requests.cpu / metrics.limits.cpu) * 100;
         const memoryUsagePercent = (metrics.requests.memory / metrics.limits.memory) * 100;
-        const storageUsagePercent = (metrics.requests.storage / metrics.limits.storage) * 100;
+        const storageUsagePercent =
+            metrics.requests.storage !== null
+                ? (metrics.requests.storage / metrics.limits.storage) * 100
+                : null;
 
         return { cpuUsagePercent, memoryUsagePercent, storageUsagePercent };
     }, [metrics]);
@@ -130,20 +133,32 @@ const Metrics = () => {
                             <Stack direction="column" flex={1}>
                                 <Typography variant="subtitle1">Storage</Typography>
                                 <Typography variant="h4">
-                                    {formatBytes(metrics.requests.storage)} / {formatBytes(metrics.limits.storage)} GB
+                                    {metrics.requests.storage !== null ? formatBytes(metrics.requests.storage) : "N/A"}{" "}
+                                    / {formatBytes(metrics.limits.storage)} GB
                                 </Typography>
                             </Stack>
                             <Storage color="success" fontSize="large" />
                         </Stack>
                         <Box>
-                            <LinearProgress
-                                variant="determinate"
-                                value={Math.min(storageUsagePercent, 100)}
-                                color={storageUsagePercent > 80 ? "error" : "success"}
-                            />
-                            <Typography variant="caption" color="text.secondary" mt={0.5}>
-                                {storageUsagePercent.toFixed(1)}% used
-                            </Typography>
+                            {storageUsagePercent !== null ? (
+                                <>
+                                    <LinearProgress
+                                        variant="determinate"
+                                        value={Math.min(storageUsagePercent, 100)}
+                                        color={storageUsagePercent > 80 ? "error" : "success"}
+                                    />
+                                    <Typography variant="caption" color="text.secondary" mt={0.5}>
+                                        {storageUsagePercent.toFixed(1)}% used
+                                    </Typography>
+                                </>
+                            ) : (
+                                <>
+                                    <LinearProgress variant="indeterminate" color="success" />
+                                    <Typography variant="caption" color="text.secondary" mt={0.5}>
+                                        Calculating...
+                                    </Typography>
+                                </>
+                            )}
                         </Box>
                     </CardContent>
                 </Card>
