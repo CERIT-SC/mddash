@@ -3,6 +3,14 @@ applyTo: "**/*.jsx, **/*.tsx, **/*.js, **/*.ts, **/*.css, **/*.scss"
 ---
 <context>
 Guidelines for building scalable React applications using functional components, hooks, and component composition.
+
+**Tech Stack:**
+- React 19+ with TypeScript (Strict Mode)
+- UI: MUI (Material-UI) with Emotion
+- State: React Context
+- Routing: React Router
+- Forms: React Hook Form
+- Build: Vite
 </context>
 <best_practices>
 <components>
@@ -18,62 +26,61 @@ class UserCard extends React.Component<any, any> {
   }
 }
 
-// ✅ Good: Functional, typed, composable, Tailwind + shadcn-style UI
+// ✅ Good: Functional, Typed, MUI, Theme-aware
+import { Box, Typography, Paper } from '@mui/material';
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-type UserCardProps = {
+interface UserCardProps {
   name: string;
   role?: string;
   onAction: () => void;
-};
+}
 
 export const UserCard = ({ name, role = 'User', onAction }: UserCardProps) => {
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base font-semibold">{name}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">{role}</p>
-        <Button type="button" variant="secondary" size="sm" onClick={onAction}>
-          View
-        </Button>
-      </CardContent>
-    </Card>
+    <Paper 
+      elevation={2} 
+      sx={{ 
+        p: 2, 
+        bgcolor: 'background.paper',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1
+      }}
+    >
+      <Typography variant="h6" component="h2">
+        {name}
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        {role}
+      </Typography>
+    </Paper>
   );
 };
 ```
 </components>
 <data_fetching>
 ```tsx
-const isError = (value: unknown): value is Error => value instanceof Error;
-
 const useUserData = (userId: string) => {
   const [data, setData] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-
+    let mounted = true;
+    
     const fetchData = async () => {
       try {
-        const result = await api.getUser(userId, { signal: controller.signal });
-        setData(result);
+        const result = await api.getUser(userId);
+        if (mounted) setData(result);
       } catch (err) {
-        // Ignore abort errors — they are intentional cleanup, not real failures.
-        if (controller.signal.aborted) return;
-        setError(isError(err) ? err : new Error(String(err)));
+        if (mounted) setError(err as Error);
       } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (mounted) setLoading(false);
       }
     };
 
     fetchData();
-    return () => { controller.abort(); };
+    return () => { mounted = false; };
   }, [userId]);
 
   return { data, loading, error };
@@ -92,8 +99,13 @@ const useUserData = (userId: string) => {
 - `src/hooks/` — Shared custom hooks
 - `src/pages/` — Route-level components
 - `src/utils/` — Helper functions
-- `src/types/` — Shared TypeScript type aliases
+- `src/types/` — Shared TypeScript interfaces
 </structure>
+<routing>
+- Use React Router for client-side navigation
+- `React.lazy` + `Suspense` for route code splitting
+- Wrapper components for protected routes (`<RequireAuth>`)
+</routing>
 <accessibility>
 - Semantic HTML (`<main>`, `<nav>`, `<article>`)
 - ARIA attributes for interactive elements
@@ -103,14 +115,14 @@ const useUserData = (userId: string) => {
 </best_practices>
 <boundaries>
 - ✅ **Always:** Functional components with hooks
-- ✅ **Always:** TypeScript `type` aliases for props and state shapes
-- ✅ **Always:** Use the project design system or shared UI primitives consistently
-- ✅ **Always:** Keep styles maintainable and centralized (no large inline style objects)
+- ✅ **Always:** TypeScript interfaces for props and state
+- ✅ **Always:** MUI components for layout (`Box`, `Stack`, `Grid`)
+- ✅ **Always:** `sx` prop for styles, theme tokens for colors/spacing
 - ✅ **Always:** Error Boundaries for error handling
 - ✅ **Always:** All dependencies in `useEffect` arrays
 - ⚠️ **Ask:** Before writing tests (use RTL + Jest if requested)
 - ⚠️ **Ask:** Before adding new npm packages
-- ⚠️ **Ask:** Before introducing external state-management or data-fetching libraries
+- ⚠️ **Ask:** Before using Redux/Zustand (Context/Query often suffices)
 - 🚫 **Never:** Class components
 - 🚫 **Never:** `any` type—use `unknown` or specific types
 - 🚫 **Never:** Direct DOM manipulation (use `useRef`)
