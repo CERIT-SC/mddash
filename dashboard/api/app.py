@@ -92,8 +92,8 @@ def create_app() -> Flask:
     configure_logging(LOG_FORMAT, LOG_LEVEL)
     enable_loggers()
 
-    # Only start the indexer in the main worker process
-    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+    # Start the indexer if we are not in development reload mode or if debug is off
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
         start_duc_indexer(DATA_DIR)
 
     return app
