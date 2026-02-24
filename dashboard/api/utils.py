@@ -326,6 +326,10 @@ def start_duc_indexer(data_dir: Path) -> None:
     Args:
         data_dir: Directory to index (DATA_DIR).
     """
+    if any(t.name == "duc-indexer" for t in threading.enumerate()):
+        logger.debug("duc indexer thread already running, skipping")
+        return
+
     thread = threading.Thread(
         target=_duc_indexer_loop,
         args=(data_dir,),
