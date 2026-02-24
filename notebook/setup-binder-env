@@ -40,12 +40,12 @@ failed=false
 if [[ -f "${binder_dir}/environment.yml" ]]; then
     echo "Creating conda environment from environment.yml..."
     if [[ -d "$ENV_PREFIX" ]]; then
-        if ! mamba env update --prefix "$ENV_PREFIX" --file "${binder_dir}/environment.yml"; then
+        if ! mamba env update --prefix "$ENV_PREFIX" --file "${binder_dir}/environment.yml" --yes; then
             echo "WARNING: Failed to update conda environment" >&2
             failed=true
         fi
     else
-        if ! mamba env create --prefix "$ENV_PREFIX" --file "${binder_dir}/environment.yml"; then
+        if ! mamba env create --prefix "$ENV_PREFIX" --file "${binder_dir}/environment.yml" --yes; then
             echo "WARNING: Failed to create conda environment" >&2
             failed=true
         fi
@@ -84,8 +84,7 @@ fi
 # 4. postBuild script (run with binder env on PATH)
 if [[ -f "${binder_dir}/postBuild" ]]; then
     echo "Running postBuild script..."
-    chmod +x "${binder_dir}/postBuild"
-    if ! env PATH="${ENV_PREFIX}/bin:${PATH}" "${binder_dir}/postBuild"; then
+    if ! env PATH="${ENV_PREFIX}/bin:${PATH}" bash -e "${binder_dir}/postBuild"; then
         echo "WARNING: postBuild script failed" >&2
         failed=true
     fi

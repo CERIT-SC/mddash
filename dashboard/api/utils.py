@@ -263,7 +263,6 @@ def duc_index(data_dir: Path) -> None:
 
     Raises:
         subprocess.CalledProcessError: If duc exits non-zero.
-        subprocess.TimeoutExpired: If indexing takes longer than 5 minutes.
     """
     db_path = data_dir / DUC_DB_FILENAME
     subprocess.run(

@@ -92,7 +92,9 @@ def create_app() -> Flask:
     configure_logging(LOG_FORMAT, LOG_LEVEL)
     enable_loggers()
 
-    start_duc_indexer(DATA_DIR)
+    # Only start the indexer in the main worker process
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true":
+        start_duc_indexer(DATA_DIR)
 
     return app
 
