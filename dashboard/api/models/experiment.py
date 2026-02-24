@@ -239,26 +239,21 @@ class Experiment(db.Model):  # type: ignore
             api_segment: str = "/".join(prefix_parts) if prefix_parts else "records"
             url: str = f"{parsed.scheme}://{parsed.netloc}/api/{api_segment}/{record_id}/files-archive"
             # Download repository to a temporary file
-            with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp_file:
+            with tempfile.NamedTemporaryFile(suffix=".zip") as tmp_file:
                 tmp_path = Path(tmp_file.name)
-                try:
-                    with requests.get(url, stream=True, timeout=60) as response:
-                        if response.status_code == HTTPStatus.NOT_FOUND:
-                            raise NotFound(description=f"Repository '{repo_link}' not found.")
-                        if response.status_code != HTTPStatus.OK:
-                            raise InternalServerError(
-                                description=f"Failed to download repository: {response.status_code}"
-                            )
+                with requests.get(url, stream=True, timeout=300) as response:
+                    if response.status_code == HTTPStatus.NOT_FOUND:
+                        raise NotFound(description=f"Repository '{repo_link}' not found.")
+                    if response.status_code != HTTPStatus.OK:
+                        raise InternalServerError(description=f"Failed to download repository: {response.status_code}")
 
-                        for chunk in response.iter_content(chunk_size=8192):
-                            tmp_file.write(chunk)
+                    # 128KB chunk size for better performance with large files
+                    for chunk in response.iter_content(chunk_size=128 * 1024):
+                        tmp_file.write(chunk)
 
-                    # Extract zip file
-                    with zipfile.ZipFile(tmp_path) as zf:
-                        zf.extractall(DATA_DIR / experiment_id)
-                finally:
-                    if tmp_path.exists():
-                        tmp_path.unlink()
+                tmp_file.flush()
+                with zipfile.ZipFile(tmp_path) as zf:
+                    zf.extractall(DATA_DIR / experiment_id)
 
             # Create experiment instance
             message: str = f"Created by downloading repository from '{repo_link}'."
