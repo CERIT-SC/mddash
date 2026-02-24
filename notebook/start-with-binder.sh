@@ -8,8 +8,11 @@ MARKER="${WORKDIR}/.binder-env-installed"
 # Only activate if the environment was successfully installed
 if [[ -f "$MARKER" ]] && [[ -x "${BINDER_ENV}/bin/python" ]]; then
     echo "Activating binder environment at $BINDER_ENV"
-    # Source the conda activation script to properly set up the environment
-    source "${BINDER_ENV}/bin/activate"
+    # Prepend binder env to PATH
+    export PATH="${BINDER_ENV}/bin:${PATH}"
+    # Use binder env's python for jupyter
+    export CONDA_PREFIX="$BINDER_ENV"
+    export CONDA_DEFAULT_ENV="$BINDER_ENV"
 else
     echo "Binder environment not found or incomplete, using base image Python"
 fi

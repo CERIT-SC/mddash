@@ -219,7 +219,7 @@ const New = () => {
                             helperText={
                                 notebooksRepoError
                                     ? "Enter a valid git repository"
-                                    : "Git repository containing setup and analysis notebooks"
+                                    : "Git repository with notebooks. Supports Binder and standard repos."
                             }
                             slotProps={{
                                 input: {
