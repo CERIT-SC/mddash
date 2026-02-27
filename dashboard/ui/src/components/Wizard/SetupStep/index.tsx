@@ -1,1 +1,1 @@
-export { default } from "./SetupStep";
+export { default } from "./SetupStep"
