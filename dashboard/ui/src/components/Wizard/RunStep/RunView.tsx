@@ -2,6 +2,7 @@ import { useState } from "react"
 
 import { Loader2 } from "lucide-react"
 
+import { SELECT_NONE } from "@/util/const"
 import { useGromacsLogs, useGromacsStatus } from "@/hooks/use-gromacs"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -11,7 +12,6 @@ import { type WizardStepProps } from "@/components/Wizard/Stepper"
 import JobStatusDisplay from "./JobStatusDisplay"
 import StartForm from "./StartForm"
 
-const NONE_LOG = "__none__"
 type LogType = "gmx" | "stdout" | "stderr"
 
 interface RunViewProps extends WizardStepProps {
@@ -71,14 +71,14 @@ const RunView = (props: RunViewProps) => {
             <div className="flex items-center gap-3">
               <Label htmlFor="log-type-select">Select:</Label>
               <Select
-                value={logType || NONE_LOG}
-                onValueChange={(val) => setLogType(val === NONE_LOG ? "" : (val as LogType))}
+                value={logType || SELECT_NONE}
+                onValueChange={(val) => setLogType(val === SELECT_NONE ? "" : (val as LogType))}
               >
                 <SelectTrigger id="log-type-select" className="w-52">
                   <SelectValue placeholder="Log Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE_LOG}>
+                  <SelectItem value={SELECT_NONE}>
                     <em>None</em>
                   </SelectItem>
                   <SelectItem value="gmx">Gromacs Log</SelectItem>

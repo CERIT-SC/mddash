@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { AlertCircle, ExternalLink, HelpCircle, Loader2, Play, Power, RefreshCw, Rocket, Square } from "lucide-react"
 
+import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
-import { getPodStatusVariant, statusBadgeClass, type Notebook } from "@/util/types"
+import { getPodStatusVariant, type Notebook } from "@/util/types"
 import { useNotebook, useSpawnNotebook, useStopNotebook } from "@/hooks/use-notebook"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"

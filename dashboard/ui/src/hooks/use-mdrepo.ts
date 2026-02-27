@@ -1,14 +1,15 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { toast } from "sonner"
 
-import { get_mdrepo_status, publish_experiment } from "@/util/api"
+import { api } from "@/lib/http"
+import { API_BASE } from "@/util/const"
 
 interface MDRepoStatus {
   authenticated: boolean
   mdrepo_url?: string
 }
 
-interface PublishResponse {
+export interface PublishResponse {
   id: string
   links?: {
     edit_html?: string
@@ -16,24 +17,20 @@ interface PublishResponse {
   }
 }
 
+export function getMDRepoAuthUrl(returnUrl: string): string {
+  return `${API_BASE}/mdrepo/auth?return_url=${encodeURIComponent(returnUrl)}`
+}
+
 export function useMDRepoStatus() {
   return useQuery<MDRepoStatus>({
     queryKey: ["mdrepo", "status"],
-    queryFn: async () => {
-      const { data, error } = await get_mdrepo_status()
-      if (error) throw new Error(error)
-      return data!
-    },
+    queryFn: () => api.get("/mdrepo/status").then((r) => r.data),
   })
 }
 
 export function usePublishExperiment() {
   return useMutation<PublishResponse, Error, string>({
-    mutationFn: async (id) => {
-      const { data, error } = await publish_experiment(id)
-      if (error) throw new Error(error)
-      return data!
-    },
+    mutationFn: (id) => api.post(`/experiments/${id}/publish`).then((r) => r.data),
     onError: (error: Error) => toast.error(error.message),
   })
 }

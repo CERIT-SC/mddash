@@ -1,17 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
-import { delete_tuner, run_tuner, stop_tuner, tuner_status, tuner_statuses } from "@/util/api"
+import { api } from "@/lib/http"
 import type { TunerJob } from "@/util/types"
 
 export function useTunerStatuses(experimentId: string) {
   return useQuery<TunerJob[]>({
     queryKey: ["experiment", experimentId, "tuner"],
-    queryFn: async () => {
-      const { data, error } = await tuner_statuses(experimentId)
-      if (error) throw new Error(error)
-      return data ?? []
-    },
+    queryFn: () => api.get(`/experiments/${experimentId}/tuner`).then((r) => r.data),
     enabled: !!experimentId,
   })
 }
@@ -19,11 +15,7 @@ export function useTunerStatuses(experimentId: string) {
 export function useTunerStatus(experimentId: string, tprName: string, shouldPoll: boolean) {
   return useQuery<TunerJob>({
     queryKey: ["experiment", experimentId, "tuner", tprName],
-    queryFn: async () => {
-      const { data, error } = await tuner_status(experimentId, tprName)
-      if (error) throw new Error(error)
-      return data!
-    },
+    queryFn: () => api.get(`/experiments/${experimentId}/tuner/${tprName}`).then((r) => r.data),
     enabled: !!experimentId && !!tprName,
     refetchInterval: shouldPoll ? 5000 : false,
   })
@@ -39,17 +31,13 @@ export function useRunTuner(experimentId: string) {
   const queryClient = useQueryClient()
 
   return useMutation<TunerJob, Error, RunTunerVariables>({
-    mutationFn: async ({ tprName, nsteps, extra_args }) => {
-      const { data, error } = await run_tuner(experimentId, tprName, nsteps, extra_args)
-      if (error) throw new Error(error)
-      return data!
-    },
+    mutationFn: ({ tprName, nsteps = 25000, extra_args = "" }) =>
+      api
+        .post(`/experiments/${experimentId}/tuner/${tprName}`, null, { params: { nsteps, extra_args } })
+        .then((r) => r.data),
     onSuccess: (job) => {
       queryClient.setQueryData(["experiment", experimentId, "tuner", job.tpr_name], job)
-      queryClient.invalidateQueries({
-        queryKey: ["experiment", experimentId, "tuner"],
-        exact: true,
-      })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner"], exact: true })
     },
     onError: (error: Error) => toast.error(error.message),
   })
@@ -60,17 +48,11 @@ export function useStopTuner(experimentId: string) {
 
   return useMutation<void, Error, string>({
     mutationFn: async (tprName) => {
-      const { error } = await stop_tuner(experimentId, tprName)
-      if (error) throw new Error(error)
+      await api.post(`/experiments/${experimentId}/tuner/${tprName}/stop`)
     },
     onSuccess: (_data, tprName) => {
-      queryClient.invalidateQueries({
-        queryKey: ["experiment", experimentId, "tuner", tprName],
-      })
-      queryClient.invalidateQueries({
-        queryKey: ["experiment", experimentId, "tuner"],
-        exact: true,
-      })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner", tprName] })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner"], exact: true })
     },
     onError: (error: Error) => toast.error(error.message),
   })
@@ -81,17 +63,11 @@ export function useDeleteTuner(experimentId: string) {
 
   return useMutation<void, Error, string>({
     mutationFn: async (tprName) => {
-      const { error } = await delete_tuner(experimentId, tprName)
-      if (error) throw new Error(error)
+      await api.delete(`/experiments/${experimentId}/tuner/${tprName}`)
     },
     onSuccess: (_data, tprName) => {
-      queryClient.removeQueries({
-        queryKey: ["experiment", experimentId, "tuner", tprName],
-      })
-      queryClient.invalidateQueries({
-        queryKey: ["experiment", experimentId, "tuner"],
-        exact: true,
-      })
+      queryClient.removeQueries({ queryKey: ["experiment", experimentId, "tuner", tprName] })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner"], exact: true })
     },
     onError: (error: Error) => toast.error(error.message),
   })

@@ -2,8 +2,9 @@ import { useCallback, useMemo, useState } from "react"
 
 import { Loader2 } from "lucide-react"
 
+import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
-import { getJobStatusVariant, statusBadgeClass, type JobStatus, type TunerTrial } from "@/util/types"
+import { getJobStatusVariant, type JobStatus, type TunerTrial } from "@/util/types"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"

@@ -1,6 +1,7 @@
+import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
 import { formatDuration } from "@/util/helpers"
-import { getJobStatusVariant, statusBadgeClass, type GromacsJob } from "@/util/types"
+import { getJobStatusVariant, type GromacsJob } from "@/util/types"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 

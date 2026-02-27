@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react"
 
+import { SELECT_NONE } from "@/util/const"
 import { formatFileSize } from "@/util/helpers"
 import { useFiles } from "@/hooks/use-files"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
-const NONE_VALUE = "__none__"
 
 export interface FileSelectorProps {
   experimentId: string
@@ -34,7 +33,7 @@ const FileSelector = (props: FileSelectorProps) => {
   }, [filteredFiles, selectedFile, onFileSelected])
 
   const handleChange = (value: string) => {
-    const url = value === NONE_VALUE ? "" : value
+    const url = value === SELECT_NONE ? "" : value
     setSelectedFile(url)
     onFileSelected(url)
   }
@@ -46,12 +45,12 @@ const FileSelector = (props: FileSelectorProps) => {
       <Label htmlFor={id} className="mb-1 block text-sm font-medium">
         {title}
       </Label>
-      <Select value={selectedFile || NONE_VALUE} onValueChange={handleChange}>
+      <Select value={selectedFile || SELECT_NONE} onValueChange={handleChange}>
         <SelectTrigger id={id}>
           <SelectValue placeholder={title} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={NONE_VALUE}>
+          <SelectItem value={SELECT_NONE}>
             <em>None</em>
           </SelectItem>
           {filteredFiles.map((file) => (

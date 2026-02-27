@@ -3,6 +3,7 @@ import React, { useCallback, useMemo, useState } from "react"
 import { Plus, Rocket, X } from "lucide-react"
 import { toast } from "sonner"
 
+import { SELECT_NONE } from "@/util/const"
 import { useSubmitGmx } from "@/hooks/use-gromacs"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,8 +12,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
-
-const NONE_DEVICE = "__none__"
 
 const MDRUN_ARGUMENTS = [
   {
@@ -186,14 +185,12 @@ interface ManualStartFormProps extends WizardStepProps {
   nb?: "cpu" | "gpu" | "auto"
 }
 
-const NONE_ARG = "__none__"
-
 export const StartForm = (props: ManualStartFormProps) => {
   const { experiment, tprName, onStartJob, np, ntomp, nb, pme } = props
 
   const submitGmx = useSubmitGmx(experiment.id)
 
-  const [selectedArgument, setSelectedArgument] = useState(NONE_ARG)
+  const [selectedArgument, setSelectedArgument] = useState(SELECT_NONE)
   const [argumentValue, setArgumentValue] = useState("")
   const [addedArguments, setAddedArguments] = useState<Array<{ key: string; value: string; description: string }>>([])
 
@@ -208,7 +205,7 @@ export const StartForm = (props: ManualStartFormProps) => {
   )
 
   const isAddDisabled = useMemo(() => {
-    if (!selectedArgument || selectedArgument === NONE_ARG) return true
+    if (!selectedArgument || selectedArgument === SELECT_NONE) return true
     if (selectedArgConfig?.type === "boolean") return false
     return !argumentValue.trim()
   }, [selectedArgument, selectedArgConfig, argumentValue])
@@ -219,7 +216,7 @@ export const StartForm = (props: ManualStartFormProps) => {
   }, [])
 
   const handleAddArgument = useCallback(() => {
-    if (!selectedArgument || selectedArgument === NONE_ARG || !selectedArgConfig) return
+    if (!selectedArgument || selectedArgument === SELECT_NONE || !selectedArgConfig) return
 
     if (addedArguments.some((arg) => arg.key === selectedArgument)) {
       toast.warning("Argument already added")
@@ -235,7 +232,7 @@ export const StartForm = (props: ManualStartFormProps) => {
       },
     ])
 
-    setSelectedArgument(NONE_ARG)
+    setSelectedArgument(SELECT_NONE)
     setArgumentValue("")
   }, [selectedArgument, selectedArgConfig, argumentValue, addedArguments])
 
@@ -300,12 +297,12 @@ export const StartForm = (props: ManualStartFormProps) => {
 
             <div className="flex flex-col gap-1">
               <Label htmlFor="nb-select">Device type for non-bonded interactions (-nb)</Label>
-              <Select name="nb" defaultValue={nb || NONE_DEVICE} disabled={!!nb} required>
+              <Select name="nb" defaultValue={nb || SELECT_NONE} disabled={!!nb} required>
                 <SelectTrigger id="nb-select">
                   <SelectValue placeholder="Select device" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE_DEVICE} disabled>
+                  <SelectItem value={SELECT_NONE} disabled>
                     <em>Select...</em>
                   </SelectItem>
                   <SelectItem value="cpu">CPU</SelectItem>
@@ -317,12 +314,12 @@ export const StartForm = (props: ManualStartFormProps) => {
 
             <div className="flex flex-col gap-1">
               <Label htmlFor="pme-select">Device type for PME calculations (-pme)</Label>
-              <Select name="pme" defaultValue={pme || NONE_DEVICE} disabled={!!pme} required>
+              <Select name="pme" defaultValue={pme || SELECT_NONE} disabled={!!pme} required>
                 <SelectTrigger id="pme-select">
                   <SelectValue placeholder="Select device" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE_DEVICE} disabled>
+                  <SelectItem value={SELECT_NONE} disabled>
                     <em>Select...</em>
                   </SelectItem>
                   <SelectItem value="cpu">CPU</SelectItem>
@@ -344,7 +341,7 @@ export const StartForm = (props: ManualStartFormProps) => {
                     <SelectValue placeholder="Select argument" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NONE_ARG}>
+                    <SelectItem value={SELECT_NONE}>
                       <em>Select argument</em>
                     </SelectItem>
                     {availableArguments.map((arg) => (

@@ -4,11 +4,10 @@ import { useQueryClient } from "@tanstack/react-query"
 import { CheckCircle, CloudUpload, Folder, HardDrive, Info, Loader2, LogIn, Pencil } from "lucide-react"
 import { toast } from "sonner"
 
-import { get_mdrepo_auth_url } from "@/util/api"
 import { formatFileSize } from "@/util/helpers"
 import { type Experiment } from "@/util/types"
 import { useFiles } from "@/hooks/use-files"
-import { useMDRepoStatus, usePublishExperiment } from "@/hooks/use-mdrepo"
+import { getMDRepoAuthUrl, useMDRepoStatus, usePublishExperiment } from "@/hooks/use-mdrepo"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -50,7 +49,7 @@ const PublishStep = (props: WizardStepProps) => {
 
   const handleAuthClick = () => {
     const returnUrl = window.location.href
-    window.location.href = get_mdrepo_auth_url(returnUrl)
+    window.location.href = getMDRepoAuthUrl(returnUrl)
   }
 
   const handlePublishClick = () => {

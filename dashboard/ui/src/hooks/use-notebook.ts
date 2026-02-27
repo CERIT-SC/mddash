@@ -1,17 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
-import { delete_notebook, get_notebook, spawn_notebook } from "@/util/api"
+import { api } from "@/lib/http"
 import type { Notebook } from "@/util/types"
 
 export function useNotebook(experimentId: string, refetchInterval: number | false = false) {
   return useQuery<Notebook>({
     queryKey: ["experiment", experimentId, "notebook"],
-    queryFn: async () => {
-      const { data, error } = await get_notebook(experimentId)
-      if (error) throw new Error(error)
-      return data!
-    },
+    queryFn: () => api.get(`/experiments/${experimentId}/notebook`).then((r) => r.data),
     enabled: !!experimentId,
     refetchInterval,
   })
@@ -21,11 +17,7 @@ export function useSpawnNotebook(experimentId: string) {
   const queryClient = useQueryClient()
 
   return useMutation<Notebook, Error>({
-    mutationFn: async () => {
-      const { data, error } = await spawn_notebook(experimentId)
-      if (error) throw new Error(error)
-      return data!
-    },
+    mutationFn: () => api.post(`/experiments/${experimentId}/notebook`).then((r) => r.data),
     onSuccess: (notebook) => {
       queryClient.setQueryData(["experiment", experimentId, "notebook"], notebook)
     },
@@ -38,8 +30,7 @@ export function useStopNotebook(experimentId: string) {
 
   return useMutation<void, Error>({
     mutationFn: async () => {
-      const { error } = await delete_notebook(experimentId)
-      if (error) throw new Error(error)
+      await api.delete(`/experiments/${experimentId}/notebook`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({

@@ -1,17 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
-import { delete_gmx, gmx_logs, gmx_status, gmx_statuses, submit_gmx } from "@/util/api"
+import { api } from "@/lib/http"
 import type { GromacsJob } from "@/util/types"
 
 export function useGromacsStatuses(experimentId: string) {
   return useQuery<GromacsJob[]>({
     queryKey: ["experiment", experimentId, "gmx"],
-    queryFn: async () => {
-      const { data, error } = await gmx_statuses(experimentId)
-      if (error) throw new Error(error)
-      return data ?? []
-    },
+    queryFn: () => api.get(`/experiments/${experimentId}/gmx`).then((r) => r.data),
     enabled: !!experimentId,
   })
 }
@@ -19,11 +15,7 @@ export function useGromacsStatuses(experimentId: string) {
 export function useGromacsStatus(experimentId: string, tprName: string, shouldPoll: boolean) {
   return useQuery<GromacsJob>({
     queryKey: ["experiment", experimentId, "gmx", tprName],
-    queryFn: async () => {
-      const { data, error } = await gmx_status(experimentId, tprName)
-      if (error) throw new Error(error)
-      return data!
-    },
+    queryFn: () => api.get(`/experiments/${experimentId}/gmx/${tprName}`).then((r) => r.data),
     enabled: !!experimentId && !!tprName,
     refetchInterval: shouldPoll ? 5000 : false,
   })
@@ -38,17 +30,11 @@ export function useSubmitGmx(experimentId: string) {
   const queryClient = useQueryClient()
 
   return useMutation<GromacsJob, Error, SubmitGmxVariables>({
-    mutationFn: async ({ tprName, formData }) => {
-      const { data, error } = await submit_gmx(experimentId, tprName, formData)
-      if (error) throw new Error(error)
-      return data!
-    },
+    mutationFn: ({ tprName, formData }) =>
+      api.post(`/experiments/${experimentId}/gmx/${tprName}`, formData).then((r) => r.data),
     onSuccess: (job) => {
       queryClient.setQueryData(["experiment", experimentId, "gmx", job.tpr_name], job)
-      queryClient.invalidateQueries({
-        queryKey: ["experiment", experimentId, "gmx"],
-        exact: true,
-      })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "gmx"], exact: true })
     },
     onError: (error: Error) => toast.error(error.message),
   })
@@ -59,17 +45,11 @@ export function useDeleteGmx(experimentId: string) {
 
   return useMutation<void, Error, string>({
     mutationFn: async (tprName) => {
-      const { error } = await delete_gmx(experimentId, tprName)
-      if (error) throw new Error(error)
+      await api.delete(`/experiments/${experimentId}/gmx/${tprName}`)
     },
     onSuccess: (_data, tprName) => {
-      queryClient.removeQueries({
-        queryKey: ["experiment", experimentId, "gmx", tprName],
-      })
-      queryClient.invalidateQueries({
-        queryKey: ["experiment", experimentId, "gmx"],
-        exact: true,
-      })
+      queryClient.removeQueries({ queryKey: ["experiment", experimentId, "gmx", tprName] })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "gmx"], exact: true })
     },
     onError: (error: Error) => toast.error(error.message),
   })
@@ -79,15 +59,15 @@ export function useGromacsLogs(
   experimentId: string,
   tprName: string,
   logType: "gmx" | "stdout" | "stderr",
-  shouldPoll: boolean
+  shouldPoll: boolean,
+  tail = 100
 ) {
   return useQuery<string>({
     queryKey: ["experiment", experimentId, "gmx", tprName, "logs", logType],
-    queryFn: async () => {
-      const { data, error } = await gmx_logs(experimentId, tprName, logType, 100)
-      if (error) throw new Error(error)
-      return "...\n" + (data ?? "")
-    },
+    queryFn: () =>
+      api
+        .get(`/experiments/${experimentId}/gmx/${tprName}/log`, { params: { type: logType, tail } })
+        .then((r) => "...\n" + r.data),
     enabled: !!experimentId && !!tprName,
     refetchInterval: shouldPoll ? 5000 : false,
   })

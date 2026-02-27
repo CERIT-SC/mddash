@@ -1,17 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
-import { create_experiment, delete_experiment, get_experiments } from "@/util/api"
+import { api } from "@/lib/http"
 import type { Experiment } from "@/util/types"
 
 export function useExperiments() {
   return useQuery<Experiment[]>({
     queryKey: ["experiments"],
-    queryFn: async () => {
-      const { data, error } = await get_experiments()
-      if (error) throw new Error(error)
-      return data ?? []
-    },
+    queryFn: () => api.get("/experiments").then((r) => r.data),
   })
 }
 
@@ -20,8 +16,7 @@ export function useDeleteExperiment() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await delete_experiment(id)
-      if (error) throw new Error(error)
+      await api.delete(`/experiments/${id}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["experiments"] })
@@ -34,11 +29,7 @@ export function useCreateExperiment() {
   const queryClient = useQueryClient()
 
   return useMutation<Experiment, Error, FormData>({
-    mutationFn: async (formData) => {
-      const { data, error } = await create_experiment(formData)
-      if (error) throw new Error(error)
-      return data!
-    },
+    mutationFn: (formData) => api.post("/experiments", formData).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["experiments"] })
     },

@@ -3,17 +3,13 @@ import { useEffect, useRef } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
-import { edit_experiment, get_experiment, get_experiment_step } from "@/util/api"
+import { api } from "@/lib/http"
 import type { Experiment } from "@/util/types"
 
 export function useExperiment(id: string) {
   return useQuery<Experiment>({
     queryKey: ["experiment", id],
-    queryFn: async () => {
-      const { data, error } = await get_experiment(id)
-      if (error) throw new Error(error)
-      return data!
-    },
+    queryFn: () => api.get(`/experiments/${id}`).then((r) => r.data),
     enabled: !!id,
   })
 }
@@ -24,11 +20,7 @@ export function useExperimentStep(id: string, currentStep: number) {
 
   const query = useQuery<number>({
     queryKey: ["experiment", id, "step"],
-    queryFn: async () => {
-      const { data, error } = await get_experiment_step(id)
-      if (error) throw new Error(error)
-      return data!
-    },
+    queryFn: () => api.get(`/experiments/${id}/step`).then((r) => r.data),
     enabled: !!id,
     refetchInterval: 5000,
   })
@@ -48,11 +40,7 @@ export function useEditExperiment() {
   const queryClient = useQueryClient()
 
   return useMutation<Experiment, Error, { id: string; data: object }>({
-    mutationFn: async ({ id, data }) => {
-      const { data: result, error } = await edit_experiment(id, data)
-      if (error) throw new Error(error)
-      return result!
-    },
+    mutationFn: ({ id, data }) => api.patch(`/experiments/${id}`, data).then((r) => r.data),
     onSuccess: (updatedExperiment) => {
       queryClient.setQueryData(["experiment", updatedExperiment.id], updatedExperiment)
     },
