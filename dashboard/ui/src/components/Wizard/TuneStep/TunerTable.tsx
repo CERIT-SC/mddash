@@ -1,35 +1,13 @@
 import { useState, useMemo, useCallback } from "react";
 
-import {
-    Typography,
-    Chip,
-    TableContainer,
-    Table,
-    TableHead,
-    TableRow,
-    TableCell,
-    TableBody,
-    Paper,
-    Tooltip,
-    Radio,
-    CircularProgress,
-    Stack,
-} from "@mui/material";
-import { tableCellClasses } from "@mui/material/TableCell";
-import { styled } from "@mui/material/styles";
+import { Loader2 } from "lucide-react";
 
-import { JobStatus, TunerTrial, getJobStatusColor } from "@/util/types";
+import { JobStatus, TunerTrial, getJobStatusVariant, statusBadgeClass } from "@/util/types";
 import ConfirmDialog from "@/components/ConfirmDialog";
-
-const StyledTableCell = styled(TableCell)(({ theme }) => ({
-    [`&.${tableCellClasses.head}`]: {
-        backgroundColor: theme.palette.primary.main,
-        color: theme.palette.common.white,
-    },
-    [`&.${tableCellClasses.body}`]: {
-        fontSize: 14,
-    },
-}));
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface TunerTableProps {
     rows: TunerTrial[];
@@ -53,17 +31,10 @@ const TunerTable = (props: TunerTableProps) => {
         };
 
         return [...rows].sort((a, b) => {
-            // Both performances missing -> sort by status
             if (a.performance === null && b.performance === null) return statusRank[a.status] - statusRank[b.status];
-
-            // Treat null performance as worst
             if (a.performance === null) return 1;
             if (b.performance === null) return -1;
-
-            // Different measured performance -> sort descending
             if (a.performance !== b.performance) return b.performance - a.performance;
-
-            // Same performance -> fallback to status ordering
             return statusRank[a.status] - statusRank[b.status];
         });
     }, [rows]);
@@ -82,83 +53,108 @@ const TunerTable = (props: TunerTableProps) => {
 
     if (rows.length === 0) {
         return (
-            <Paper variant="outlined" sx={{ p: 4, display: "flex", justifyContent: "center", alignItems: "center" }}>
-                <Stack direction="row" spacing={2} alignItems="center">
+            <div className="rounded-md border p-6 flex justify-center items-center">
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
                     {tunerStopped ? (
-                        <Typography variant="body1" color="text.secondary">
-                            No trials completed. The tuning job was stopped before any trials finished.
-                        </Typography>
+                        <span>No trials completed. The tuning job was stopped before any trials finished.</span>
                     ) : (
                         <>
-                            <CircularProgress size={24} />
-                            <Typography variant="body1" color="text.secondary">
-                                Waiting for tuning trials...
-                            </Typography>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Waiting for tuning trials...</span>
                         </>
                     )}
-                </Stack>
-            </Paper>
+                </div>
+            </div>
         );
     }
 
     return (
         <>
-            <TableContainer component={Paper}>
-                <Table sx={{ minWidth: 650 }} aria-label="tuner trials table">
-                    <TableHead sx={{ backgroundColor: "primary.main" }}>
-                        <TableRow>
-                            <StyledTableCell>Select</StyledTableCell>
-                            <StyledTableCell>Status</StyledTableCell>
-                            <Tooltip title="Measured performance (ns/day)">
-                                <StyledTableCell align="right">Performance</StyledTableCell>
+            <div className="rounded-md border overflow-hidden">
+                <Table>
+                    <TableHeader>
+                        <TableRow className="bg-primary hover:bg-primary">
+                            <TableHead className="text-primary-foreground">Select</TableHead>
+                            <TableHead className="text-primary-foreground">Status</TableHead>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <TableHead className="text-primary-foreground text-right cursor-help">
+                                        Performance
+                                    </TableHead>
+                                </TooltipTrigger>
+                                <TooltipContent>Measured performance (ns/day)</TooltipContent>
                             </Tooltip>
-                            <Tooltip title="Device type for PME calculations">
-                                <StyledTableCell align="right">PME</StyledTableCell>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <TableHead className="text-primary-foreground text-right cursor-help">
+                                        PME
+                                    </TableHead>
+                                </TooltipTrigger>
+                                <TooltipContent>Device type for PME calculations</TooltipContent>
                             </Tooltip>
-                            <Tooltip title="Device type for non-bonded interactions">
-                                <StyledTableCell align="right">NB</StyledTableCell>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <TableHead className="text-primary-foreground text-right cursor-help">NB</TableHead>
+                                </TooltipTrigger>
+                                <TooltipContent>Device type for non-bonded interactions</TooltipContent>
                             </Tooltip>
-                            <Tooltip title="Number of MPI processes">
-                                <StyledTableCell align="right">NP</StyledTableCell>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <TableHead className="text-primary-foreground text-right cursor-help">NP</TableHead>
+                                </TooltipTrigger>
+                                <TooltipContent>Number of MPI processes</TooltipContent>
                             </Tooltip>
-                            <Tooltip title="Number of OpenMP threads per MPI rank to start">
-                                <StyledTableCell align="right">NTOMP</StyledTableCell>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <TableHead className="text-primary-foreground text-right cursor-help">
+                                        NTOMP
+                                    </TableHead>
+                                </TooltipTrigger>
+                                <TooltipContent>Number of OpenMP threads per MPI rank</TooltipContent>
                             </Tooltip>
                         </TableRow>
-                    </TableHead>
+                    </TableHeader>
                     <TableBody>
                         {sortedRows.map((row, idx) => {
                             const isOptimal = idx === 0 && row.performance !== null;
+                            const variant = getJobStatusVariant(row.status as JobStatus);
                             return (
-                                <TableRow key={row.id} sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
-                                    <StyledTableCell>
-                                        <Radio
-                                            checked={selectedTrial?.id === row.id}
-                                            onClick={() => handleRadioClick(row, isOptimal)}
+                                <TableRow key={row.id}>
+                                    <TableCell>
+                                        <input
+                                            type="radio"
                                             name="selectedTrial"
-                                            sx={{ color: isOptimal ? "text.primary" : "text.disabled" }}
+                                            checked={selectedTrial?.id === row.id}
+                                            onChange={() => handleRadioClick(row, isOptimal)}
+                                            onClick={() => {
+                                                if (selectedTrial?.id === row.id) {
+                                                    setSelectedTrial(null);
+                                                }
+                                            }}
+                                            className={cn(
+                                                "cursor-pointer",
+                                                isOptimal ? "accent-primary" : "accent-muted-foreground",
+                                            )}
                                         />
-                                    </StyledTableCell>
-                                    <StyledTableCell>
-                                        <Chip
-                                            size="small"
-                                            label={row.status}
-                                            color={getJobStatusColor(row.status as JobStatus)}
-                                        />
-                                    </StyledTableCell>
-                                    <StyledTableCell align="right">
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className={cn("text-xs", statusBadgeClass(variant))}>
+                                            {row.status}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-right">
                                         {row.performance !== null ? row.performance.toFixed(2) : "N/A"}
-                                    </StyledTableCell>
-                                    <StyledTableCell align="right">{row.pme}</StyledTableCell>
-                                    <StyledTableCell align="right">{row.nb}</StyledTableCell>
-                                    <StyledTableCell align="right">{row.np}</StyledTableCell>
-                                    <StyledTableCell align="right">{row.ntomp}</StyledTableCell>
+                                    </TableCell>
+                                    <TableCell className="text-right">{row.pme}</TableCell>
+                                    <TableCell className="text-right">{row.nb}</TableCell>
+                                    <TableCell className="text-right">{row.np}</TableCell>
+                                    <TableCell className="text-right">{row.ntomp}</TableCell>
                                 </TableRow>
                             );
                         })}
                     </TableBody>
                 </Table>
-            </TableContainer>
+            </div>
             <ConfirmDialog
                 open={confirmChoiceDialog}
                 setOpen={setConfirmChoiceDialog}

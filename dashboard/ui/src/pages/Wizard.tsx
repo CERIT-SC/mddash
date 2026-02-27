@@ -1,44 +1,21 @@
-import { useParams } from "react-router-dom";
-import { Paper, Typography, CircularProgress, TextField, IconButton } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import CheckIcon from "@mui/icons-material/Check";
-import CloseIcon from "@mui/icons-material/Close";
-import { useEffect, useState, useCallback } from "react";
+import React, { useState } from "react";
+
+import { useParams } from "@tanstack/react-router";
+import { Pencil, Check, X, Loader2 } from "lucide-react";
 
 import WizardStepper from "@/components/Wizard/Stepper";
-import { Experiment } from "@/util/types";
-import { get_experiment, edit_experiment } from "@/util/api";
-import { useNotification } from "@/contexts/useNotification";
+import { useExperiment, useEditExperiment } from "@/hooks/use-experiment";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 const Wizard = () => {
-    const { id } = useParams<{ id: string }>();
-    const { showError } = useNotification();
+    const { id } = useParams({ from: "/$id/wizard" });
+    const { data: experiment, isLoading } = useExperiment(id);
+    const editExperiment = useEditExperiment();
 
-    const [experiment, setExperiment] = useState<Experiment | null>(null);
     const [editingName, setEditingName] = useState(false);
     const [nameInput, setNameInput] = useState("");
-
-    const getExperiment = useCallback(async () => {
-        if (!id) return;
-
-        const { data, error } = await get_experiment(id);
-        if (error) showError(error);
-        setExperiment(data || null);
-    }, [id, showError]);
-
-    useEffect(() => {
-        getExperiment();
-    }, [getExperiment]);
-
-    const editExperimentName = async (newName: string) => {
-        if (!experiment || newName === experiment.name) return;
-        const { data, error } = await edit_experiment(experiment.id, { name: newName });
-        if (error) {
-            showError(error);
-        } else if (data) {
-            setExperiment(data);
-        }
-    };
 
     const handleEditClick = () => {
         if (experiment) {
@@ -47,13 +24,9 @@ const Wizard = () => {
         }
     };
 
-    const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setNameInput(e.target.value);
-    };
-
     const handleNameSave = async () => {
         if (experiment && nameInput.trim() && nameInput !== experiment.name) {
-            await editExperimentName(nameInput.trim());
+            editExperiment.mutate({ id: experiment.id, data: { name: nameInput.trim() } });
         }
         setEditingName(false);
     };
@@ -64,67 +37,58 @@ const Wizard = () => {
     };
 
     const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter") {
-            handleNameSave();
-        } else if (e.key === "Escape") {
-            handleNameCancel();
-        }
+        if (e.key === "Enter") handleNameSave();
+        else if (e.key === "Escape") handleNameCancel();
     };
 
     return (
-        <>
-            <Typography variant="h1">Wizard</Typography>
+        <div className="flex flex-col gap-4">
+            <h1 className="text-3xl font-bold">Wizard</h1>
 
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 56 }}>
-                {experiment ? (
-                    <Paper elevation={2} sx={{ display: "flex", alignItems: "center", px: 2, py: 1 }}>
+            <div className="flex items-center justify-center" style={{ minHeight: 56 }}>
+                {isLoading ? (
+                    <p className="text-muted-foreground">Loading...</p>
+                ) : experiment ? (
+                    <Card className="flex items-center px-4 py-2">
                         {editingName ? (
-                            <>
-                                <TextField
+                            <div className="flex items-center gap-1">
+                                <Input
                                     value={nameInput}
-                                    onChange={handleNameChange}
+                                    onChange={(e) => setNameInput(e.target.value)}
                                     onBlur={handleNameSave}
                                     onKeyDown={handleNameKeyDown}
-                                    size="small"
                                     autoFocus
-                                    variant="outlined"
-                                    sx={{ minWidth: "40vw", maxWidth: "80vw" }}
+                                    className="min-w-64 max-w-xl"
                                 />
-                                <IconButton aria-label="Save" onClick={handleNameSave} size="small">
-                                    <CheckIcon fontSize="small" />
-                                </IconButton>
-                                <IconButton aria-label="Cancel" onClick={handleNameCancel} size="small">
-                                    <CloseIcon fontSize="small" />
-                                </IconButton>
-                            </>
+                                <Button variant="ghost" size="icon" aria-label="Save" onClick={handleNameSave}>
+                                    <Check className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" aria-label="Cancel" onClick={handleNameCancel}>
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
                         ) : (
-                            <>
-                                <Typography variant="h4" sx={{ textAlign: "center", mr: 1 }}>
-                                    {experiment.name}
-                                </Typography>
-                                <IconButton aria-label="Edit name" onClick={handleEditClick} size="small">
-                                    <EditIcon fontSize="small" />
-                                </IconButton>
-                            </>
+                            <div className="flex items-center gap-1">
+                                <span className="text-lg font-semibold mr-1">{experiment.name}</span>
+                                <Button variant="ghost" size="icon" aria-label="Edit name" onClick={handleEditClick}>
+                                    <Pencil className="h-4 w-4" />
+                                </Button>
+                            </div>
                         )}
-                    </Paper>
-                ) : (
-                    <Typography variant="h4" sx={{ textAlign: "center" }}>
-                        Loading...
-                    </Typography>
-                )}
+                    </Card>
+                ) : null}
             </div>
 
-            {(experiment && (
-                <Paper elevation={2} sx={{ p: 4, mt: 2 }}>
-                    <WizardStepper experiment={experiment} setExperiment={setExperiment} />
-                </Paper>
-            )) || (
-                <div style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>
-                    <CircularProgress />
+            {isLoading ? (
+                <div className="flex justify-center mt-6">
+                    <Loader2 className="h-10 w-10 animate-spin text-muted-foreground" />
                 </div>
-            )}
-        </>
+            ) : experiment ? (
+                <Card className="p-6 mt-2">
+                    <WizardStepper experiment={experiment} />
+                </Card>
+            ) : null}
+        </div>
     );
 };
 

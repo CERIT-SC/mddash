@@ -1,114 +1,92 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
 
-import { Box, Stack, Button } from "@mui/material";
-import { SkipNext } from "@mui/icons-material";
+import { SkipForward } from "lucide-react";
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
-import { tuner_statuses, stop_tuner, delete_tuner } from "@/util/api";
-import { useNotification } from "@/contexts/useNotification";
+import { useTunerStatuses, useStopTuner, useDeleteTuner } from "@/hooks/use-tuner";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { Button } from "@/components/ui/button";
 import TunerView from "./TunerView";
 import TprSelector from "@/components/Wizard/TprSelector";
 
 const TuneStep = (props: WizardStepProps) => {
     const { experiment } = props;
-    const { showError } = useNotification();
+
+    const { data: tunerJobs = [], refetch: refetchJobs } = useTunerStatuses(experiment.id);
+    const stopTuner = useStopTuner(experiment.id);
+    const deleteTuner = useDeleteTuner(experiment.id);
+
+    const tprFiles = tunerJobs.map((job) => job.tpr_name);
+    const existingJobs = tprFiles;
 
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
-    const [tprFiles, setTprFiles] = useState<string[]>([]);
-    const [existingJobs, setExistingJobs] = useState<string[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [localTprFiles, setLocalTprFiles] = useState<string[]>([]);
     const [deleteTpr, setDeleteTpr] = useState<string | null>(null);
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
     const [skipDialog, setSkipDialog] = useState(false);
 
-    const fetchTunerJobs = useCallback(async () => {
-        setLoading(true);
-        const { data, error } = await tuner_statuses(experiment.id);
-        if (error) showError(error);
-        const jobs = data || [];
+    // Merge server jobs into local list
+    const allTprFiles = Array.from(new Set([...existingJobs, ...localTprFiles]));
 
-        if (jobs.length === 0) setSelectedTpr(null);
-
-        const jobNames = jobs.map((job) => job.tpr_name);
-        setTprFiles(jobNames);
-        setExistingJobs(jobNames);
-        setLoading(false);
-    }, [experiment.id, showError]);
-
-    const handleAddTpr = useCallback((tpr: string) => {
-        setTprFiles((prev) => [...prev, tpr]);
+    const handleAddTpr = (tpr: string) => {
+        setLocalTprFiles((prev) => (prev.includes(tpr) ? prev : [...prev, tpr]));
         setSelectedTpr(tpr);
-    }, []);
+    };
 
-    const handleDeleteTpr = useCallback(
-        (tpr: string) => {
-            if (existingJobs.includes(tpr)) {
-                setDeleteTpr(tpr);
-                setConfirmDeleteDialog(true);
-            } else {
-                setSelectedTpr(null);
-                setTprFiles((prev) => prev.filter((t) => t !== tpr));
-            }
-        },
-        [existingJobs],
-    );
-
-    const stopJob = useCallback(
-        async (tprName: string) => {
-            const { error } = await stop_tuner(experiment.id, tprName);
-            if (error) showError(error);
-            fetchTunerJobs();
-        },
-        [experiment.id, showError, fetchTunerJobs],
-    );
-
-    const deleteJob = useCallback(
-        async (tprName: string) => {
-            const { error } = await delete_tuner(experiment.id, tprName);
-            if (error) showError(error);
+    const handleDeleteTpr = (tpr: string) => {
+        if (existingJobs.includes(tpr)) {
+            setDeleteTpr(tpr);
+            setConfirmDeleteDialog(true);
+        } else {
             setSelectedTpr(null);
-            fetchTunerJobs();
-        },
-        [experiment.id, showError, fetchTunerJobs],
-    );
+            setLocalTprFiles((prev) => prev.filter((t) => t !== tpr));
+        }
+    };
 
-    useEffect(() => {
-        fetchTunerJobs();
-    }, [fetchTunerJobs]);
+    const handleConfirmDelete = async () => {
+        if (!deleteTpr) return;
+        await deleteTuner.mutateAsync(deleteTpr);
+        setSelectedTpr(null);
+        setLocalTprFiles((prev) => prev.filter((t) => t !== deleteTpr));
+        refetchJobs();
+    };
+
+    const handleStop = async (tprName: string) => {
+        await stopTuner.mutateAsync(tprName);
+        refetchJobs();
+    };
 
     return (
-        <Stack direction="column" alignItems="center" width="100%">
-            <Stack direction="row" spacing={2} width="90%">
+        <div className="flex flex-col items-center gap-4 w-full">
+            <div className="flex flex-row gap-4 w-[90%]">
                 <TprSelector
                     experimentId={experiment.id}
                     title="Tuner Jobs"
                     addTitle="Add Tuner Job"
-                    tprFiles={tprFiles}
+                    tprFiles={allTprFiles}
                     selectedTpr={selectedTpr}
-                    loading={loading}
                     onAddTpr={handleAddTpr}
                     onDeleteTpr={handleDeleteTpr}
                     onSelectTpr={setSelectedTpr}
                 />
 
                 {selectedTpr ? (
-                    <Box flex={1}>
-                        <TunerView tprName={selectedTpr} stopJob={stopJob} onStartTuner={fetchTunerJobs} {...props} />
-                    </Box>
+                    <div className="flex-1">
+                        <TunerView tprName={selectedTpr} stopJob={handleStop} onStartTuner={refetchJobs} {...props} />
+                    </div>
                 ) : (
-                    <Box flex={1} display="flex" justifyContent="flex-end" alignItems="flex-start">
+                    <div className="flex-1 flex justify-end items-start">
                         <Button
-                            variant="outlined"
-                            color="error"
-                            startIcon={<SkipNext />}
+                            variant="outline"
+                            className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
                             onClick={() => setSkipDialog(true)}
                         >
+                            <SkipForward className="h-4 w-4 mr-1" />
                             Skip Tuning
                         </Button>
-                    </Box>
+                    </div>
                 )}
-            </Stack>
+            </div>
 
             <ConfirmDialog
                 open={skipDialog}
@@ -121,10 +99,10 @@ const TuneStep = (props: WizardStepProps) => {
             <ConfirmDialog
                 open={confirmDeleteDialog}
                 setOpen={setConfirmDeleteDialog}
-                onConfirm={() => deleteJob(deleteTpr!)}
-                message={"Are you sure you want to delete this tuning job? The data will be lost."}
+                onConfirm={handleConfirmDelete}
+                message="Are you sure you want to delete this tuning job? The data will be lost."
             />
-        </Stack>
+        </div>
     );
 };
 

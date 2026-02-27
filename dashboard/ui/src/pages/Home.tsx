@@ -1,25 +1,21 @@
-import { Typography } from "@mui/material";
-
 import Experiments from "@/components/Experiments";
 import Metrics from "@/components/Metrics";
 
 const Home = () => {
     return (
-        <>
-            <Typography variant="h1">My Experiments</Typography>
+        <div className="flex flex-col gap-8">
+            <h1 className="text-3xl font-bold">My Experiments</h1>
 
             <Experiments />
 
-            <Typography variant="h1">Resource Usage</Typography>
+            <h1 className="text-3xl font-bold">Resource Usage</h1>
 
             <Metrics />
 
-            <Typography variant="h1">Documentation</Typography>
+            <h1 className="text-3xl font-bold">Documentation</h1>
 
-            <Typography variant="body1" p={4}>
-                There is no documentation yet :P
-            </Typography>
-        </>
+            <p className="text-muted-foreground px-4">There is no documentation yet :P</p>
+        </div>
     );
 };
 

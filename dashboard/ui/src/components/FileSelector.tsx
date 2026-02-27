@@ -1,36 +1,25 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 
-import { FormControl, InputLabel, Select, MenuItem, SelectChangeEvent } from "@mui/material";
-
-import { find_files } from "@/util/api";
-import { FileOption } from "@/util/types";
+import { useFiles } from "@/hooks/use-files";
 import { formatFileSize } from "@/util/helpers";
-import { useNotification } from "@/contexts/useNotification";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+
+const NONE_VALUE = "__none__";
 
 export interface FileSelectorProps {
     experimentId: string;
     ext: string | string[];
     title: string;
     onFileSelected: (filePath: string) => void;
-    width?: React.CSSProperties["width"];
+    className?: string;
     ignoreFiles?: string[];
 }
 
 const FileSelector = (props: FileSelectorProps) => {
-    const { experimentId, ext, onFileSelected, title, width = "100%", ignoreFiles = [] } = props;
-    const { showError } = useNotification();
-    const [availableFiles, setAvailableFiles] = useState<FileOption[]>([]);
+    const { experimentId, ext, onFileSelected, title, className, ignoreFiles = [] } = props;
+    const { data: availableFiles = [] } = useFiles(experimentId, ext);
     const [selectedFile, setSelectedFile] = useState<string>("");
-
-    const fetchFiles = useCallback(async () => {
-        const { data, error } = await find_files(experimentId, ext);
-        if (error) showError(error);
-        setAvailableFiles(data || []);
-    }, [experimentId, ext, showError]);
-
-    useEffect(() => {
-        fetchFiles();
-    }, [fetchFiles]);
 
     const filteredFiles = useMemo(
         () => availableFiles.filter((file) => !ignoreFiles.includes(file.name)),
@@ -44,29 +33,35 @@ const FileSelector = (props: FileSelectorProps) => {
         }
     }, [filteredFiles, selectedFile, onFileSelected]);
 
-    const handleFileChange = useCallback(
-        (event: SelectChangeEvent) => {
-            const selectedUrl = event.target.value;
-            setSelectedFile(selectedUrl);
-            onFileSelected(selectedUrl);
-        },
-        [onFileSelected],
-    );
+    const handleChange = (value: string) => {
+        const url = value === NONE_VALUE ? "" : value;
+        setSelectedFile(url);
+        onFileSelected(url);
+    };
+
+    const id = `file-selector-${title.toLowerCase().replace(/\s+/g, "-")}`;
 
     return (
-        <FormControl sx={{ width }}>
-            <InputLabel id="file-selector-label">{title}</InputLabel>
-            <Select labelId="file-selector-label" value={selectedFile} label={title} onChange={handleFileChange}>
-                <MenuItem value="">
-                    <em>None</em>
-                </MenuItem>
-                {filteredFiles.map((file) => (
-                    <MenuItem key={file.name} value={file.url}>
-                        {file.name} ({formatFileSize(file.size)})
-                    </MenuItem>
-                ))}
+        <div className={className}>
+            <Label htmlFor={id} className="text-sm font-medium mb-1 block">
+                {title}
+            </Label>
+            <Select value={selectedFile || NONE_VALUE} onValueChange={handleChange}>
+                <SelectTrigger id={id}>
+                    <SelectValue placeholder={title} />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value={NONE_VALUE}>
+                        <em>None</em>
+                    </SelectItem>
+                    {filteredFiles.map((file) => (
+                        <SelectItem key={file.name} value={file.url}>
+                            {file.name} ({formatFileSize(file.size)})
+                        </SelectItem>
+                    ))}
+                </SelectContent>
             </Select>
-        </FormControl>
+        </div>
     );
 };
 

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createRoot, Root } from "react-dom/client";
 
-import { CircularProgress, Box } from "@mui/material";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import "molstar/lib/mol-plugin-ui/skin/light.scss";
 import { DefaultPluginUISpec, PluginUISpec } from "molstar/lib/mol-plugin-ui/spec";
 import { PluginUIContext } from "molstar/lib/mol-plugin-ui/context";
@@ -9,8 +10,6 @@ import { Plugin } from "molstar/lib/mol-plugin-ui/plugin";
 import { StateTransforms } from "molstar/lib/mol-plugin-state/transforms";
 import { BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory";
 import { BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates";
-
-import { useNotification } from "@/contexts/useNotification";
 
 interface MolStarProps {
     width?: React.CSSProperties["width"];
@@ -25,7 +24,6 @@ interface MolStarProps {
 export default function MolStar(props: MolStarProps) {
     const { width = "500px", height = "500px", pdbId, structureUrl, structureFormat, coordsUrl, coordsFormat } = props;
 
-    const { showError } = useNotification();
     const [loading, setLoading] = useState(true);
     const pluginRef = useRef<PluginUIContext | null>(null);
     const rootRef = useRef<Root | null>(null);
@@ -94,7 +92,7 @@ export default function MolStar(props: MolStarProps) {
                 if (isMountedRef.current) {
                     console.error("MolStar initialization error:", error);
                     const errorMessage = error instanceof Error ? error.message : String(error);
-                    showError(errorMessage);
+                    toast.error(errorMessage);
                 }
             } finally {
                 if (isMountedRef.current) {
@@ -116,13 +114,13 @@ export default function MolStar(props: MolStarProps) {
                 rootRef.current = null;
             }
         };
-    }, [pdbId, structureUrl, structureFormat, coordsUrl, coordsFormat, showError]);
+    }, [pdbId, structureUrl, structureFormat, coordsUrl, coordsFormat]);
 
     return (
-        <Box sx={{ width, height, position: "relative", zIndex: 10 }}>
+        <div style={{ width, height, position: "relative", zIndex: 10 }}>
             {loading && (
-                <Box
-                    sx={{
+                <div
+                    style={{
                         position: "absolute",
                         top: "50%",
                         left: "50%",
@@ -130,11 +128,11 @@ export default function MolStar(props: MolStarProps) {
                         zIndex: 11,
                     }}
                 >
-                    <CircularProgress />
-                </Box>
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
             )}
             <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
-        </Box>
+        </div>
     );
 }
 

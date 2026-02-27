@@ -1,124 +1,97 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useState } from "react";
 
-import { Box, Stack, Paper, Button, Typography, CircularProgress, TextField, Alert } from "@mui/material";
-import { PlayArrow, Pause } from "@mui/icons-material";
+import { Play, Pause, Loader2 } from "lucide-react";
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
-import { tuner_status, run_tuner } from "@/util/api";
-import { TunerJob, TunerTrial } from "@/util/types";
-import { useNotification } from "@/contexts/useNotification";
-import StartForm from "@/components/Wizard/RunStep/StartForm";
+import { useTunerStatus, useRunTuner } from "@/hooks/use-tuner";
+import { TunerTrial } from "@/util/types";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
+import StartForm from "@/components/Wizard/RunStep/StartForm";
 import TunerTable from "./TunerTable";
 
 const DEFAULT_NSTEPS = 25000;
-const POLLING_INTERVAL = 5000;
 
 interface TunerViewProps extends WizardStepProps {
     tprName: string;
     stopJob: (tprName: string) => void;
-    onStartTuner?: (tprName: string) => void;
+    onStartTuner?: () => void;
 }
 
 const TunerView = (props: TunerViewProps) => {
     const { experiment, tprName, stopJob, nextStep, changeStep, onStartTuner } = props;
-    const { showError } = useNotification();
 
-    const [loading, setLoading] = useState(false);
-    const [tuner, setTuner] = useState<TunerJob | null>(null);
     const [selectedTrial, setSelectedTrial] = useState<TunerTrial | null>(null);
     const [nsteps, setNsteps] = useState<number | "">(DEFAULT_NSTEPS);
     const [confirmStopDialog, setConfirmStopDialog] = useState(false);
 
-    const isFetchingRef = useRef(false);
+    const runTuner = useRunTuner(experiment.id);
 
-    const tunerStarted = !!tuner && !tuner.error_message && tuner.tuner_status !== "ERROR";
-    const tunerStopped = tuner?.is_stopped || false;
+    const tunerStarted_condition = (tuner: ReturnType<typeof useTunerStatus>["data"]) =>
+        !!tuner && !tuner.error_message && tuner.tuner_status !== "ERROR";
 
-    const fetchStatus = useCallback(
-        async (displayError: boolean) => {
-            // Prevent concurrent requests
-            if (isFetchingRef.current) return;
-            isFetchingRef.current = true;
-
-            try {
-                const { data, error } = await tuner_status(experiment.id, tprName);
-                if (error && displayError) showError(error);
-                setTuner(data || null);
-
-                if (data?.trials) {
-                    setSelectedTrial((prev) => {
-                        if (!prev) return null;
-                        const updatedTrial = data.trials.find((trial) => trial.id === prev.id);
-                        return updatedTrial || null;
-                    });
-                }
-            } finally {
-                isFetchingRef.current = false;
-            }
-        },
-        [experiment.id, tprName, showError],
+    const { data: tuner, isLoading } = useTunerStatus(
+        experiment.id,
+        tprName,
+        // Poll when running and not stopped
+        false, // will be updated below via shouldPoll derived from data
     );
 
-    const runTuner = useCallback(async () => {
+    const tunerStarted = tunerStarted_condition(tuner);
+    const tunerStopped = tuner?.is_stopped || false;
+    const shouldPoll = tunerStarted && !tunerStopped && tuner?.tuner_status !== "TERMINATED";
+
+    // Re-query with polling when needed
+    const { data: polledTuner } = useTunerStatus(experiment.id, tprName, shouldPoll);
+    const activeTuner = shouldPoll ? polledTuner : tuner;
+
+    const handleRunTuner = () => {
         const actualNsteps = nsteps === "" ? DEFAULT_NSTEPS : nsteps;
-        const { error } = await run_tuner(experiment.id, tprName, actualNsteps);
-        if (error) showError(error);
-        onStartTuner?.(tprName);
-        fetchStatus(true);
-    }, [nsteps, experiment.id, tprName, showError, onStartTuner, fetchStatus]);
+        runTuner.mutate({ tprName, nsteps: actualNsteps }, { onSuccess: () => onStartTuner?.() });
+    };
 
-    const goToRunStep = useCallback(async () => {
-        if (experiment.step < 2) {
-            nextStep();
-        } else {
-            changeStep(2);
-        }
-    }, [experiment.step, nextStep, changeStep]);
+    const goToRunStep = () => {
+        if (experiment.step < 2) nextStep();
+        else changeStep(2);
+    };
 
-    // initial fetch
-    useEffect(() => {
-        setLoading(true);
-        fetchStatus(false).finally(() => setLoading(false));
-    }, [tprName, experiment.id, fetchStatus]);
-
-    useEffect(() => {
-        const shouldPoll = tunerStarted && !tunerStopped && tuner?.tuner_status !== "TERMINATED";
-        if (!shouldPoll) return;
-        const intervalId = window.setInterval(() => fetchStatus(true), POLLING_INTERVAL);
-        return () => window.clearInterval(intervalId);
-    }, [tuner?.id, tuner?.tuner_status, tunerStarted, tunerStopped, fetchStatus]);
-
-    if (loading) {
+    if (isLoading) {
         return (
-            <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-                <CircularProgress />
-            </Box>
+            <div className="flex justify-center items-center h-full">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
         );
     }
 
+    const displayTuner = activeTuner ?? tuner;
+    const displayStarted = tunerStarted_condition(displayTuner);
+    const displayStopped = displayTuner?.is_stopped || false;
+
     return (
         <>
-            {tunerStarted ? (
-                <Stack direction="column" spacing={2}>
+            {displayStarted ? (
+                <div className="flex flex-col gap-4">
                     <TunerTable
-                        rows={tuner?.trials || []}
+                        rows={displayTuner?.trials || []}
                         selectedTrial={selectedTrial}
                         setSelectedTrial={setSelectedTrial}
-                        tunerStopped={tunerStopped}
+                        tunerStopped={displayStopped}
                     />
 
-                    {!tunerStopped && (
-                        <Stack direction="row" spacing={2} justifyContent="flex-end">
+                    {!displayStopped && (
+                        <div className="flex justify-end gap-2">
                             <Button
-                                variant="contained"
-                                color="warning"
-                                startIcon={<Pause />}
+                                variant="default"
+                                className="bg-yellow-500 hover:bg-yellow-600 text-white"
                                 onClick={() => setConfirmStopDialog(true)}
                             >
+                                <Pause className="h-4 w-4 mr-1" />
                                 Stop
                             </Button>
-                        </Stack>
+                        </div>
                     )}
 
                     {selectedTrial && (
@@ -131,44 +104,51 @@ const TunerView = (props: TunerViewProps) => {
                             {...props}
                         />
                     )}
-                </Stack>
+                </div>
             ) : (
-                <Stack direction="column" spacing={2} alignItems="center" justifyContent="center" height="100%">
-                    {tuner?.error_message && (
-                        <Alert severity="error">
-                            <strong>Error:</strong> {tuner.error_message}
-                        </Alert>
+                <div className="flex flex-col gap-4 items-center justify-center h-full">
+                    {displayTuner?.error_message && (
+                        <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive w-full">
+                            <strong>Error:</strong> {displayTuner.error_message}
+                        </div>
                     )}
 
-                    {!tuner?.error_message && <Typography variant="h3">Configure tuning job for {tprName}</Typography>}
+                    {!displayTuner?.error_message && (
+                        <h3 className="text-lg font-semibold">Configure tuning job for {tprName}</h3>
+                    )}
 
-                    {/* Show input and start button only when no job exists or job has error */}
-                    {(!tuner || tuner.error_message) && (
-                        <Paper variant="outlined" sx={{ padding: 4 }}>
-                            <Stack direction="column" spacing={2} alignItems="center">
-                                <TextField
-                                    label="Number of steps (nsteps)"
-                                    type="number"
-                                    value={nsteps}
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        setNsteps(val === "" ? "" : parseInt(val) || "");
-                                    }}
-                                    sx={{ width: 300 }}
-                                />
+                    {(!displayTuner || displayTuner.error_message) && (
+                        <Card className="w-fit">
+                            <CardContent className="pt-4 flex flex-col gap-4 items-center">
+                                <div className="flex flex-col gap-1 w-72">
+                                    <Label htmlFor="nsteps-input">Number of steps (nsteps)</Label>
+                                    <Input
+                                        id="nsteps-input"
+                                        type="number"
+                                        value={nsteps}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            setNsteps(val === "" ? "" : parseInt(val) || "");
+                                        }}
+                                    />
+                                </div>
                                 <Button
-                                    variant="contained"
-                                    color="primary"
-                                    startIcon={<PlayArrow />}
-                                    onClick={runTuner}
-                                    sx={{ width: 200 }}
+                                    variant="default"
+                                    onClick={handleRunTuner}
+                                    disabled={runTuner.isPending}
+                                    className="w-48"
                                 >
+                                    {runTuner.isPending ? (
+                                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                    ) : (
+                                        <Play className="h-4 w-4 mr-1" />
+                                    )}
                                     Start tune job
                                 </Button>
-                            </Stack>
-                        </Paper>
+                            </CardContent>
+                        </Card>
                     )}
-                </Stack>
+                </div>
             )}
 
             <ConfirmDialog
@@ -177,7 +157,6 @@ const TunerView = (props: TunerViewProps) => {
                 confirmColor="warning"
                 onConfirm={async () => {
                     await stopJob(tprName);
-                    fetchStatus(true);
                 }}
                 message="Are you sure you want to stop the tuning job? You cannot resume it, but data will be preserved."
             />

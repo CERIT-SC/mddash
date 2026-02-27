@@ -2,3 +2,4 @@
 __pycache__/
 /private/
 .vscode/*
+.mcp.json

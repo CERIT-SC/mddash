@@ -1,7 +1,8 @@
-import { Stack, Typography, Chip, LinearProgress, Paper, Grid2 as Grid } from "@mui/material";
-
-import { GromacsJob, getJobStatusColor } from "@/util/types";
+import { GromacsJob, getJobStatusVariant, statusBadgeClass } from "@/util/types";
 import { formatDuration } from "@/util/helpers";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 
 interface JobStatusDisplayProps {
     jobStatus: GromacsJob;
@@ -12,109 +13,82 @@ const JobStatusDisplay = ({ jobStatus }: JobStatusDisplayProps) => {
         jobStatus.status === "RUNNING" && jobStatus.nsteps !== null && jobStatus.nsteps_done !== null;
 
     const progressPercentage = isRunningWithProgress ? (jobStatus.nsteps_done! / jobStatus.nsteps!) * 100 : 0;
+    const variant = getJobStatusVariant(jobStatus.status);
 
     return (
-        <Stack spacing={2} width="100%">
-            <Paper variant="outlined" sx={{ padding: 2 }}>
-                <Stack direction="row" spacing={1} alignItems="center" justifyContent="center" width="100%">
-                    <Typography variant="subtitle1">Status</Typography>
-                    <Chip label={jobStatus.status} color={getJobStatusColor(jobStatus.status)} />
-                </Stack>
+        <div className="flex flex-col gap-4 w-full">
+            {/* Status card */}
+            <div className="rounded-md border p-3 flex flex-col gap-3">
+                <div className="flex items-center justify-center gap-2">
+                    <span className="text-sm font-medium">Status</span>
+                    <Badge variant="outline" className={cn("text-xs", statusBadgeClass(variant))}>
+                        {jobStatus.status}
+                    </Badge>
+                </div>
 
                 {isRunningWithProgress && (
-                    <Stack spacing={1} mt={2} alignItems="center" justifyContent="center" width="100%">
-                        <Typography variant="subtitle1" color="text.secondary">
-                            Progress
-                        </Typography>
-                        <Typography variant="h3" color="text.primary">
-                            {`${progressPercentage.toFixed(1)}%`}
-                        </Typography>
-                        <LinearProgress
-                            variant="determinate"
-                            value={progressPercentage}
-                            sx={{ width: "100%", height: 12, borderRadius: 1 }}
-                        />
-                        <Typography variant="body2" color="text.secondary">
-                            {`${jobStatus.nsteps_done!.toLocaleString()} / ${jobStatus.nsteps!.toLocaleString()} steps`}
-                        </Typography>
+                    <div className="flex flex-col gap-1 items-center">
+                        <span className="text-sm text-muted-foreground">Progress</span>
+                        <span className="text-2xl font-bold">{progressPercentage.toFixed(1)}%</span>
+                        <Progress value={progressPercentage} className="w-full h-3 rounded" />
+                        <span className="text-xs text-muted-foreground">
+                            {jobStatus.nsteps_done!.toLocaleString()} / {jobStatus.nsteps!.toLocaleString()} steps
+                        </span>
                         {jobStatus.estimated_time !== null && (
-                            <Typography variant="body2" color="text.secondary" sx={{ display: "block", mt: 0.5 }}>
+                            <span className="text-xs text-muted-foreground">
                                 Estimated time remaining: {formatDuration(jobStatus.estimated_time)}
-                            </Typography>
+                            </span>
                         )}
-                    </Stack>
+                    </div>
                 )}
-            </Paper>
+            </div>
 
+            {/* Job summary (after completion) */}
             {jobStatus.status === "TERMINATED" && (
                 <>
-                    <Typography variant="subtitle1">Job Summary</Typography>
-                    <Grid direction="row" spacing={2} container>
+                    <h3 className="text-sm font-semibold">Job Summary</h3>
+                    <div className="grid grid-cols-2 gap-2">
                         {jobStatus.performance && (
-                            <Grid size={6}>
-                                <Paper variant="outlined" sx={{ padding: 2, flexGrow: 1 }}>
-                                    <Typography variant="subtitle1" color="text.secondary">
-                                        Performance
-                                    </Typography>
-                                    <Typography variant="body1">{`${jobStatus.performance.toFixed(
-                                        2,
-                                    )} ns/day`}</Typography>
-                                </Paper>
-                            </Grid>
+                            <div className="rounded-md border p-3">
+                                <p className="text-xs text-muted-foreground">Performance</p>
+                                <p className="text-sm">{jobStatus.performance.toFixed(2)} ns/day</p>
+                            </div>
                         )}
                         {jobStatus.start_timestamp && jobStatus.finish_timestamp && (
-                            <Grid size={6}>
-                                <Paper variant="outlined" sx={{ padding: 2, flexGrow: 1 }}>
-                                    <Typography variant="subtitle1" color="text.secondary">
-                                        Total Runtime
-                                    </Typography>
-                                    <Typography variant="body1">
-                                        {formatDuration(jobStatus.finish_timestamp - jobStatus.start_timestamp)}
-                                    </Typography>
-                                </Paper>
-                            </Grid>
+                            <div className="rounded-md border p-3">
+                                <p className="text-xs text-muted-foreground">Total Runtime</p>
+                                <p className="text-sm">
+                                    {formatDuration(jobStatus.finish_timestamp - jobStatus.start_timestamp)}
+                                </p>
+                            </div>
                         )}
-                    </Grid>
+                    </div>
                 </>
             )}
 
-            <Typography variant="subtitle1">Simulation Parameters</Typography>
-
-            <Grid direction="row" spacing={2} container>
-                <Grid size={3}>
-                    <Paper variant="outlined" sx={{ padding: 2, flexGrow: 1 }}>
-                        <Typography variant="subtitle1" color="text.secondary">
-                            Processes
-                        </Typography>
-                        <Typography variant="body1">
-                            {jobStatus.np} × {jobStatus.ntomp} threads
-                        </Typography>
-                    </Paper>
-                </Grid>
-
-                <Grid size={3}>
-                    <Paper variant="outlined" sx={{ padding: 2, flexGrow: 1 }}>
-                        <Typography variant="subtitle1" color="text.secondary">
-                            PME / NB
-                        </Typography>
-                        <Typography variant="body1">
-                            {jobStatus.pme} / {jobStatus.nb}
-                        </Typography>
-                    </Paper>
-                </Grid>
-
+            {/* Simulation parameters */}
+            <h3 className="text-sm font-semibold">Simulation Parameters</h3>
+            <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-md border p-3">
+                    <p className="text-xs text-muted-foreground">Processes</p>
+                    <p className="text-sm">
+                        {jobStatus.np} × {jobStatus.ntomp} threads
+                    </p>
+                </div>
+                <div className="rounded-md border p-3">
+                    <p className="text-xs text-muted-foreground">PME / NB</p>
+                    <p className="text-sm">
+                        {jobStatus.pme} / {jobStatus.nb}
+                    </p>
+                </div>
                 {jobStatus.extra_args && (
-                    <Grid size={6}>
-                        <Paper variant="outlined" sx={{ padding: 2, flexGrow: 1 }}>
-                            <Typography variant="subtitle1" color="text.secondary">
-                                Extra Arguments
-                            </Typography>
-                            <Typography variant="body1">{jobStatus.extra_args}</Typography>
-                        </Paper>
-                    </Grid>
+                    <div className="rounded-md border p-3 col-span-2">
+                        <p className="text-xs text-muted-foreground">Extra Arguments</p>
+                        <p className="text-sm">{jobStatus.extra_args}</p>
+                    </div>
                 )}
-            </Grid>
-        </Stack>
+            </div>
+        </div>
     );
 };
 

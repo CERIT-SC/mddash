@@ -1,24 +1,18 @@
-import { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 
-import {
-    Box,
-    Stack,
-    Paper,
-    Typography,
-    Chip,
-    Grid2 as Grid,
-    Button,
-    FormControl,
-    MenuItem,
-    InputLabel,
-    Select,
-    TextField,
-} from "@mui/material";
+import { Plus, Rocket, X } from "lucide-react";
+import { toast } from "sonner";
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
-import { submit_gmx } from "@/util/api";
-import { useNotification } from "@/contexts/useNotification";
-import { Add, RocketLaunch } from "@mui/icons-material";
+import { useSubmitGmx } from "@/hooks/use-gromacs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const NONE_DEVICE = "__none__";
 
 const MDRUN_ARGUMENTS = [
     { key: "xvg", type: "select", options: ["xmgrace", "xmgr", "none"], description: "xvg plot formatting" },
@@ -86,11 +80,14 @@ interface ManualStartFormProps extends WizardStepProps {
     nb?: "cpu" | "gpu" | "auto";
 }
 
+const NONE_ARG = "__none__";
+
 export const StartForm = (props: ManualStartFormProps) => {
     const { experiment, tprName, onStartJob, np, ntomp, nb, pme } = props;
-    const { showError, showWarning } = useNotification();
 
-    const [selectedArgument, setSelectedArgument] = useState("");
+    const submitGmx = useSubmitGmx(experiment.id);
+
+    const [selectedArgument, setSelectedArgument] = useState(NONE_ARG);
     const [argumentValue, setArgumentValue] = useState("");
     const [addedArguments, setAddedArguments] = useState<Array<{ key: string; value: string; description: string }>>(
         [],
@@ -107,7 +104,7 @@ export const StartForm = (props: ManualStartFormProps) => {
     );
 
     const isAddDisabled = useMemo(() => {
-        if (!selectedArgument) return true;
+        if (!selectedArgument || selectedArgument === NONE_ARG) return true;
         if (selectedArgConfig?.type === "boolean") return false;
         return !argumentValue.trim();
     }, [selectedArgument, selectedArgConfig, argumentValue]);
@@ -118,25 +115,21 @@ export const StartForm = (props: ManualStartFormProps) => {
     }, []);
 
     const handleAddArgument = useCallback(() => {
-        if (!selectedArgument || !selectedArgConfig) return;
+        if (!selectedArgument || selectedArgument === NONE_ARG || !selectedArgConfig) return;
 
         if (addedArguments.some((arg) => arg.key === selectedArgument)) {
-            showWarning("Argument already added");
+            toast.warning("Argument already added");
             return;
         }
 
         setAddedArguments((prev) => [
             ...prev,
-            {
-                key: selectedArgument,
-                value: argumentValue.trim(),
-                description: selectedArgConfig.description,
-            },
+            { key: selectedArgument, value: argumentValue.trim(), description: selectedArgConfig.description },
         ]);
 
-        setSelectedArgument("");
+        setSelectedArgument(NONE_ARG);
         setArgumentValue("");
-    }, [selectedArgument, selectedArgConfig, argumentValue, addedArguments, showWarning]);
+    }, [selectedArgument, selectedArgConfig, argumentValue, addedArguments]);
 
     const handleDeleteArgument = useCallback((keyToDelete: string) => {
         setAddedArguments((prev) => prev.filter((arg) => arg.key !== keyToDelete));
@@ -150,200 +143,185 @@ export const StartForm = (props: ManualStartFormProps) => {
             const extraArgs = addedArguments.map((arg) => `-${arg.key} ${arg.value}`).join(" ");
             formData.append("extra_args", extraArgs);
 
-            const { error } = await submit_gmx(experiment.id, tprName, formData);
-            if (error) {
-                showError(error);
-                return;
-            }
-
-            onStartJob();
+            submitGmx.mutate({ tprName, formData }, { onSuccess: () => onStartJob() });
         },
-        [experiment.id, tprName, addedArguments, onStartJob, showError],
+        [tprName, addedArguments, onStartJob, submitGmx],
     );
 
     return (
-        <Paper variant="outlined" sx={{ p: 3 }}>
-            <Typography variant="h3" sx={{ mb: 2 }}>
-                Start simulation
-            </Typography>
+        <Card>
+            <CardHeader className="pb-2">
+                <CardTitle className="text-base">Start simulation</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    {/* Hidden inputs for pre-filled values */}
+                    {!!np && <input type="hidden" name="np" value={np} />}
+                    {!!ntomp && <input type="hidden" name="ntomp" value={ntomp} />}
+                    {!!nb && <input type="hidden" name="nb" value={nb} />}
+                    {!!pme && <input type="hidden" name="pme" value={pme} />}
 
-            <Grid container spacing={2} component="form" onSubmit={handleSubmit}>
-                {/* Hidden inputs for disabled fields to ensure their values are included in FormData */}
-                {!!np && <input type="hidden" name="np" value={np} />}
-                {!!ntomp && <input type="hidden" name="ntomp" value={ntomp} />}
-                {!!nb && <input type="hidden" name="nb" value={nb} />}
-                {!!pme && <input type="hidden" name="pme" value={pme} />}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1">
+                            <Label htmlFor="np-input">Number of MPI processes (np)</Label>
+                            <Input
+                                id="np-input"
+                                name="np"
+                                type="number"
+                                min={1}
+                                step={1}
+                                required
+                                defaultValue={np || ""}
+                                disabled={!!np}
+                            />
+                        </div>
 
-                <Grid size={6}>
-                    <TextField
-                        name="np"
-                        type="number"
-                        label="Number of MPI processes (np)"
-                        slotProps={{
-                            htmlInput: {
-                                min: 1,
-                                step: 1,
-                            },
-                        }}
-                        required
-                        fullWidth
-                        defaultValue={np || ""}
-                        disabled={!!np}
-                    />
-                </Grid>
+                        <div className="flex flex-col gap-1">
+                            <Label htmlFor="ntomp-input">OpenMP threads per MPI rank (-ntomp)</Label>
+                            <Input
+                                id="ntomp-input"
+                                name="ntomp"
+                                type="number"
+                                min={0}
+                                step={1}
+                                required
+                                defaultValue={ntomp || ""}
+                                disabled={!!ntomp}
+                            />
+                        </div>
 
-                <Grid size={6}>
-                    <TextField
-                        name="ntomp"
-                        type="number"
-                        label="Number of OpenMP threads per MPI rank to start (-ntomp)"
-                        slotProps={{
-                            htmlInput: {
-                                min: 0, // 0 makes mdrun guess the value
-                                step: 1,
-                            },
-                        }}
-                        required
-                        fullWidth
-                        defaultValue={ntomp || ""}
-                        disabled={!!ntomp}
-                    />
-                </Grid>
+                        <div className="flex flex-col gap-1">
+                            <Label htmlFor="nb-select">Device type for non-bonded interactions (-nb)</Label>
+                            <Select name="nb" defaultValue={nb || NONE_DEVICE} disabled={!!nb} required>
+                                <SelectTrigger id="nb-select">
+                                    <SelectValue placeholder="Select device" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value={NONE_DEVICE} disabled>
+                                        <em>Select...</em>
+                                    </SelectItem>
+                                    <SelectItem value="cpu">CPU</SelectItem>
+                                    <SelectItem value="gpu">GPU</SelectItem>
+                                    <SelectItem value="auto">Auto</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                <Grid size={6}>
-                    <FormControl fullWidth required>
-                        <InputLabel id="nb-device-selector">Device type for non-bonded interactions (-nb)</InputLabel>
-                        <Select
-                            name="nb"
-                            labelId="nb-device-selector"
-                            label={"Device type for non-bonded interactions (-nb)"}
-                            defaultValue={nb || ""}
-                            disabled={!!nb}
-                        >
-                            <MenuItem value="cpu">CPU</MenuItem>
-                            <MenuItem value="gpu">GPU</MenuItem>
-                            <MenuItem value="auto">Auto</MenuItem>
-                        </Select>
-                    </FormControl>
-                </Grid>
+                        <div className="flex flex-col gap-1">
+                            <Label htmlFor="pme-select">Device type for PME calculations (-pme)</Label>
+                            <Select name="pme" defaultValue={pme || NONE_DEVICE} disabled={!!pme} required>
+                                <SelectTrigger id="pme-select">
+                                    <SelectValue placeholder="Select device" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value={NONE_DEVICE} disabled>
+                                        <em>Select...</em>
+                                    </SelectItem>
+                                    <SelectItem value="cpu">CPU</SelectItem>
+                                    <SelectItem value="gpu">GPU</SelectItem>
+                                    <SelectItem value="auto">Auto</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
 
-                <Grid size={6}>
-                    <FormControl fullWidth required>
-                        <InputLabel id="pme-device-selector">Device type for PME calculations (-pme)</InputLabel>
-                        <Select
-                            name="pme"
-                            labelId="pme-device-selector"
-                            label={"Device type for PME calculations (-pme)"}
-                            defaultValue={pme || ""}
-                            disabled={!!pme}
-                        >
-                            <MenuItem value="cpu">CPU</MenuItem>
-                            <MenuItem value="gpu">GPU</MenuItem>
-                            <MenuItem value="auto">Auto</MenuItem>
-                        </Select>
-                    </FormControl>
-                </Grid>
+                    {/* Additional mdrun arguments */}
+                    <div className="flex flex-col gap-2">
+                        <Label>Additional mdrun arguments</Label>
 
-                <Grid size={12}>
-                    <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                        Additional mdrun arguments
-                    </Typography>
-
-                    <Stack spacing={2}>
-                        <Stack direction="row" spacing={2} alignItems="center">
-                            <FormControl sx={{ minWidth: "50%" }}>
-                                <InputLabel id="mdrun-args-selector">Select argument</InputLabel>
-                                <Select
-                                    labelId="mdrun-args-selector"
-                                    label="Select argument"
-                                    value={selectedArgument}
-                                    onChange={(e) => handleSelectArgument(e.target.value)}
-                                >
-                                    {availableArguments.map((arg) => (
-                                        <MenuItem key={arg.key} value={arg.key}>
-                                            -{arg.key} - {arg.description}
-                                        </MenuItem>
-                                    ))}
+                        <div className="flex gap-2 items-end flex-wrap">
+                            <div className="flex flex-col gap-1 flex-1 min-w-48">
+                                <Select value={selectedArgument} onValueChange={handleSelectArgument}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select argument" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value={NONE_ARG}>
+                                            <em>Select argument</em>
+                                        </SelectItem>
+                                        {availableArguments.map((arg) => (
+                                            <SelectItem key={arg.key} value={arg.key}>
+                                                -{arg.key} — {arg.description}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
                                 </Select>
-                            </FormControl>
+                            </div>
 
                             {selectedArgConfig?.type === "select" ? (
-                                <FormControl sx={{ flexGrow: 1 }}>
-                                    <InputLabel>Value</InputLabel>
-                                    <Select
-                                        label="Value"
-                                        value={argumentValue}
-                                        onChange={(e) => setArgumentValue(e.target.value)}
-                                    >
-                                        {"options" in selectedArgConfig &&
-                                            selectedArgConfig.options.map((option) => (
-                                                <MenuItem key={option} value={option}>
-                                                    {option}
-                                                </MenuItem>
-                                            ))}
+                                <div className="flex-1 min-w-32">
+                                    <Select value={argumentValue} onValueChange={setArgumentValue}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Value" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {"options" in selectedArgConfig &&
+                                                selectedArgConfig.options.map((opt) => (
+                                                    <SelectItem key={opt} value={opt}>
+                                                        {opt}
+                                                    </SelectItem>
+                                                ))}
+                                        </SelectContent>
                                     </Select>
-                                </FormControl>
+                                </div>
                             ) : selectedArgConfig?.type === "boolean" ? (
-                                <Typography
-                                    variant="body2"
-                                    color="text.secondary"
-                                    sx={{ flexGrow: 1, alignSelf: "center" }}
-                                >
+                                <p className="flex-1 text-sm text-muted-foreground self-center">
                                     Boolean flag (no value required)
-                                </Typography>
+                                </p>
                             ) : (
-                                <TextField
-                                    label="Value"
-                                    placeholder="Enter value"
-                                    value={argumentValue}
-                                    type={selectedArgConfig?.type === "number" ? "number" : "text"}
-                                    onChange={(e) => setArgumentValue(e.target.value)}
-                                    sx={{ flexGrow: 1 }}
-                                />
+                                <div className="flex-1 min-w-32">
+                                    <Input
+                                        placeholder="Value"
+                                        value={argumentValue}
+                                        type={selectedArgConfig?.type === "number" ? "number" : "text"}
+                                        onChange={(e) => setArgumentValue(e.target.value)}
+                                    />
+                                </div>
                             )}
 
                             <Button
-                                variant="contained"
+                                type="button"
+                                variant="default"
                                 onClick={handleAddArgument}
                                 disabled={isAddDisabled}
-                                startIcon={<Add />}
                             >
+                                <Plus className="h-4 w-4 mr-1" />
                                 Add
                             </Button>
-                        </Stack>
+                        </div>
 
-                        {/* List of added arguments */}
-                        <Box>
-                            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-                                Added arguments:
-                            </Typography>
-                            <Stack direction="row" spacing={1} flexWrap="wrap">
+                        <div className="flex flex-col gap-1">
+                            <p className="text-xs text-muted-foreground">Added arguments:</p>
+                            <div className="flex flex-wrap gap-1">
                                 {addedArguments.length === 0 ? (
-                                    <Typography variant="body2" color="text.disabled">
-                                        No arguments added
-                                    </Typography>
+                                    <p className="text-xs text-muted-foreground italic">No arguments added</p>
                                 ) : (
                                     addedArguments.map((arg) => (
-                                        <Chip
-                                            key={arg.key}
-                                            label={`-${arg.key} ${arg.value}`}
-                                            onDelete={() => handleDeleteArgument(arg.key)}
-                                            variant="outlined"
-                                        />
+                                        <Badge key={arg.key} variant="outline" className="gap-1">
+                                            -{arg.key} {arg.value}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDeleteArgument(arg.key)}
+                                                className="ml-1 hover:text-destructive"
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </Badge>
                                     ))
                                 )}
-                            </Stack>
-                        </Box>
-                    </Stack>
-                </Grid>
+                            </div>
+                        </div>
+                    </div>
 
-                <Grid size={12} sx={{ mt: 2 }} justifyContent="flex-end" container>
-                    <Button type="submit" variant="contained" color="primary" startIcon={<RocketLaunch />}>
-                        Run
-                    </Button>
-                </Grid>
-            </Grid>
-        </Paper>
+                    <div className="flex justify-end mt-2">
+                        <Button type="submit" disabled={submitGmx.isPending}>
+                            <Rocket className="h-4 w-4 mr-1" />
+                            Run
+                        </Button>
+                    </div>
+                </form>
+            </CardContent>
+        </Card>
     );
 };
 

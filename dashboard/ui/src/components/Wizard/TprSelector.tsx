@@ -1,9 +1,11 @@
 import { useState } from "react";
 
-import { Stack, Paper, Typography, Button, IconButton, CircularProgress, Box } from "@mui/material";
-import { Delete, Add } from "@mui/icons-material";
+import { Plus, Trash2, Loader2 } from "lucide-react";
 
 import FileSelector from "@/components/FileSelector";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface TprSelectorProps {
     experimentId: string;
@@ -23,9 +25,9 @@ const TprSelector = (props: TprSelectorProps) => {
     const [fileSelectorTpr, setFileSelectorTpr] = useState<string>("");
 
     return (
-        <Paper variant="outlined" sx={{ width: 300, padding: 4 }}>
-            <Stack direction="column" spacing={2}>
-                {title && <Typography variant="h3">{title}</Typography>}
+        <Card className="w-72 shrink-0">
+            <CardHeader className="pb-2">{title && <CardTitle className="text-base">{title}</CardTitle>}</CardHeader>
+            <CardContent className="flex flex-col gap-3">
                 <FileSelector
                     experimentId={experimentId}
                     ext="tpr"
@@ -34,80 +36,63 @@ const TprSelector = (props: TprSelectorProps) => {
                     ignoreFiles={tprFiles}
                 />
                 <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={<Add />}
+                    variant="default"
                     disabled={!fileSelectorTpr || tprFiles.includes(fileSelectorTpr)}
                     onClick={() => {
                         onAddTpr(fileSelectorTpr);
                         setFileSelectorTpr("");
                     }}
                 >
+                    <Plus className="h-4 w-4 mr-1" />
                     {addTitle}
                 </Button>
 
-                <Stack direction="column" spacing={1}>
+                <div className="flex flex-col gap-1">
                     {loading ? (
-                        <Box display="flex" justifyContent="center" py={2}>
-                            <CircularProgress size={24} />
-                        </Box>
+                        <div className="flex justify-center py-2">
+                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
                     ) : (
                         tprFiles.map((tpr) => (
-                            <Stack
+                            <div
                                 key={tpr}
-                                direction="row"
-                                spacing={2}
-                                alignItems="center"
-                                justifyContent="space-between"
-                                sx={{
-                                    padding: "8px 12px",
-                                    cursor: "pointer",
-                                    borderRadius: 1,
-                                    border: 1,
-                                    borderColor: selectedTpr === tpr ? "text.primary" : "divider",
-                                    backgroundColor: selectedTpr === tpr ? "primary.main" : "background.paper",
-                                    "&:hover": {
-                                        backgroundColor: selectedTpr === tpr ? "primary.main" : "action.hover",
-                                    },
-                                    color: selectedTpr === tpr ? "primary.contrastText" : "text.primary",
-                                    transition: "all 0.2s",
+                                className={cn(
+                                    "flex items-center justify-between gap-2 px-3 py-2 rounded-md border cursor-pointer transition-colors text-sm",
+                                    selectedTpr === tpr
+                                        ? "border-foreground bg-primary text-primary-foreground"
+                                        : "border-border hover:bg-muted",
+                                )}
+                                onClick={() => {
+                                    if (selectedTpr === tpr) onSelectTpr("");
+                                    else onSelectTpr(tpr);
                                 }}
                             >
-                                <Typography
-                                    variant="body1"
-                                    onClick={() => {
-                                        if (selectedTpr === tpr) onSelectTpr("");
-                                        else onSelectTpr(tpr);
-                                    }}
-                                    title={tpr}
-                                    sx={{
-                                        flexGrow: 1,
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap",
-                                    }}
-                                >
+                                <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap" title={tpr}>
                                     {tpr}
-                                </Typography>
-                                <IconButton
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
                                     aria-label="delete"
-                                    size="small"
+                                    className={cn(
+                                        "h-6 w-6 shrink-0",
+                                        selectedTpr === tpr
+                                            ? "text-primary-foreground hover:bg-primary-foreground/20"
+                                            : "",
+                                    )}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         onDeleteTpr(tpr);
                                     }}
-                                    sx={{
-                                        color: selectedTpr === tpr ? "primary.contrastText" : "text.primary",
-                                    }}
                                 >
-                                    <Delete fontSize="small" />
-                                </IconButton>
-                            </Stack>
+                                    <Trash2 className="h-3 w-3" />
+                                </Button>
+                            </div>
                         ))
                     )}
-                </Stack>
-            </Stack>
-        </Paper>
+                </div>
+            </CardContent>
+        </Card>
     );
 };
 

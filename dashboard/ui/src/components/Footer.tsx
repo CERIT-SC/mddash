@@ -1,13 +1,9 @@
-import { AppBar, Toolbar, Typography } from "@mui/material";
-
 const Footer = () => (
-    <AppBar position="static" color="primary">
-        <Toolbar>
-            <Typography variant="body1" sx={{ flexGrow: 1, textAlign: "center" }}>
-                TODO
-            </Typography>
-        </Toolbar>
-    </AppBar>
+    <footer className="bg-primary text-primary-foreground dark:bg-card">
+        <div className="flex items-center justify-center px-4 py-3">
+            <p className="text-sm">MD Dash</p>
+        </div>
+    </footer>
 );
 
 export default Footer;

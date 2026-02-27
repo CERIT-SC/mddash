@@ -1,5 +1,14 @@
-import { Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button } from "@mui/material";
-import { Check, Close } from "@mui/icons-material";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 
 interface ConfirmDialogProps {
     open: boolean;
@@ -10,7 +19,7 @@ interface ConfirmDialogProps {
     message?: string;
     confirmText?: string;
     cancelText?: string;
-    confirmColor?: "primary" | "secondary" | "error" | "warning" | "info" | "success";
+    confirmColor?: "primary" | "destructive" | "warning";
 }
 
 const ConfirmDialog = (props: ConfirmDialogProps) => {
@@ -23,7 +32,7 @@ const ConfirmDialog = (props: ConfirmDialogProps) => {
         message = "Are you sure you want to proceed? This action cannot be undone.",
         confirmText = "Confirm",
         cancelText = "Cancel",
-        confirmColor = "error",
+        confirmColor = "destructive",
     } = props;
 
     const handleConfirm = () => {
@@ -36,23 +45,26 @@ const ConfirmDialog = (props: ConfirmDialogProps) => {
         setOpen(false);
     };
 
+    const confirmClass = cn(
+        confirmColor === "warning" && "bg-yellow-500 hover:bg-yellow-600 text-white",
+        confirmColor === "primary" && "bg-primary hover:bg-primary/90 text-primary-foreground",
+    );
+
     return (
-        <Dialog open={open} onClose={handleCancel} aria-labelledby="confirm-dialog-title">
-            <DialogTitle variant="h4" id="confirm-dialog-title">
-                {title}
-            </DialogTitle>
-            <DialogContent>
-                <DialogContentText>{message}</DialogContentText>
-            </DialogContent>
-            <DialogActions>
-                <Button onClick={handleCancel} color="inherit" variant="outlined" startIcon={<Close />} autoFocus>
-                    {cancelText}
-                </Button>
-                <Button onClick={handleConfirm} color={confirmColor} variant="contained" startIcon={<Check />}>
-                    {confirmText}
-                </Button>
-            </DialogActions>
-        </Dialog>
+        <AlertDialog open={open} onOpenChange={setOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>{title}</AlertDialogTitle>
+                    <AlertDialogDescription>{message}</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel onClick={handleCancel}>{cancelText}</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleConfirm} className={confirmClass || undefined}>
+                        {confirmText}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 };
 

@@ -1,100 +1,77 @@
-import { useState, useEffect, useCallback } from "react";
-
-import { Box, Stack } from "@mui/material";
+import { useState } from "react";
 
 import { WizardStepProps } from "@/components/Wizard/Stepper";
-import { delete_gmx, gmx_statuses } from "@/util/api";
-import { useNotification } from "@/contexts/useNotification";
+import { useGromacsStatuses, useDeleteGmx } from "@/hooks/use-gromacs";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import RunView from "./RunView";
 import TprSelector from "../TprSelector";
 
 const RunStep = (props: WizardStepProps) => {
     const { experiment } = props;
-    const { showError } = useNotification();
+
+    const { data: gromacsJobs = [], refetch: refetchJobs } = useGromacsStatuses(experiment.id);
+    const deleteGmx = useDeleteGmx(experiment.id);
+
+    const existingJobs = gromacsJobs.map((job) => job.tpr_name);
 
     const [selectedTpr, setSelectedTpr] = useState<string | null>(null);
-    const [tprFiles, setTprFiles] = useState<string[]>([]);
-    const [existingJobs, setExistingJobs] = useState<string[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [localTprFiles, setLocalTprFiles] = useState<string[]>([]);
     const [deleteTpr, setDeleteTpr] = useState<string | null>(null);
     const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false);
 
-    const fetchGromacsJobs = useCallback(async () => {
-        setLoading(true);
-        const { data, error } = await gmx_statuses(experiment.id);
-        if (error) showError(error);
-        const jobs = data || [];
+    const allTprFiles = Array.from(new Set([...existingJobs, ...localTprFiles]));
 
-        if (jobs.length === 0) setSelectedTpr(null);
-
-        const jobNames = jobs.map((job) => job.tpr_name);
-        setTprFiles(jobNames);
-        setExistingJobs(jobNames);
-        setLoading(false);
-    }, [experiment.id, showError]);
-
-    const handleAddTpr = useCallback((tpr: string) => {
-        setTprFiles((prev) => [...prev, tpr]);
+    const handleAddTpr = (tpr: string) => {
+        setLocalTprFiles((prev) => (prev.includes(tpr) ? prev : [...prev, tpr]));
         setSelectedTpr(tpr);
-    }, []);
+    };
 
-    const handleDeleteTpr = useCallback(
-        (tpr: string) => {
-            if (existingJobs.includes(tpr)) {
-                setDeleteTpr(tpr);
-                setConfirmDeleteDialog(true);
-            } else {
-                setSelectedTpr(null);
-                setTprFiles((prev) => prev.filter((t) => t !== tpr));
-            }
-        },
-        [existingJobs],
-    );
-
-    const deleteJob = useCallback(
-        async (tprName: string) => {
-            const { error } = await delete_gmx(experiment.id, tprName);
-            if (error) showError(error);
+    const handleDeleteTpr = (tpr: string) => {
+        if (existingJobs.includes(tpr)) {
+            setDeleteTpr(tpr);
+            setConfirmDeleteDialog(true);
+        } else {
             setSelectedTpr(null);
-            fetchGromacsJobs();
-        },
-        [experiment.id, showError, fetchGromacsJobs],
-    );
+            setLocalTprFiles((prev) => prev.filter((t) => t !== tpr));
+        }
+    };
 
-    useEffect(() => {
-        fetchGromacsJobs();
-    }, [fetchGromacsJobs]);
+    const handleConfirmDelete = async () => {
+        if (!deleteTpr) return;
+        await deleteGmx.mutateAsync(deleteTpr);
+        setSelectedTpr(null);
+        setLocalTprFiles((prev) => prev.filter((t) => t !== deleteTpr));
+        refetchJobs();
+    };
 
     return (
-        <Stack direction="column" alignItems="center" spacing={2}>
-            <Stack direction="row" width="90%" spacing={2}>
+        <div className="flex flex-col items-center gap-4 w-full">
+            <div className="flex flex-row gap-4 w-[90%]">
                 <TprSelector
                     experimentId={experiment.id}
                     title="Gromacs Jobs"
                     addTitle="Add Gromacs Job"
-                    tprFiles={tprFiles}
+                    tprFiles={allTprFiles}
                     selectedTpr={selectedTpr}
-                    loading={loading}
                     onAddTpr={handleAddTpr}
                     onDeleteTpr={handleDeleteTpr}
                     onSelectTpr={setSelectedTpr}
                 />
 
                 {selectedTpr && (
-                    <Box flex={1}>
-                        <RunView tprName={selectedTpr} onStartJob={fetchGromacsJobs} {...props} />
-                    </Box>
+                    <div className="flex-1">
+                        <RunView tprName={selectedTpr} onStartJob={refetchJobs} {...props} />
+                    </div>
                 )}
+            </div>
 
-                <ConfirmDialog
-                    open={confirmDeleteDialog}
-                    setOpen={setConfirmDeleteDialog}
-                    onConfirm={() => deleteJob(deleteTpr!)}
-                    message={"Are you sure you want to delete this GROMACS job? The data will be lost."}
-                />
-            </Stack>
-        </Stack>
+            <ConfirmDialog
+                open={confirmDeleteDialog}
+                setOpen={setConfirmDeleteDialog}
+                onConfirm={handleConfirmDelete}
+                message="Are you sure you want to delete this GROMACS job? The data will be lost."
+            />
+        </div>
     );
 };
 

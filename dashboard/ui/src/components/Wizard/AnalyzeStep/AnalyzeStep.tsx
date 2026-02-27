@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from "react";
 
-import { Stack, Paper, Box, Typography } from "@mui/material";
-import { Category, Timeline } from "@mui/icons-material";
+import { Shapes, Activity } from "lucide-react";
 import { BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory";
 import { BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates";
 
@@ -9,10 +8,10 @@ import { WizardStepProps } from "@/components/Wizard/Stepper";
 import MolStar from "@/components/MolStar";
 import FileSelector from "@/components/FileSelector";
 import NotebookController from "@/components/Wizard/SetupStep/NotebookController";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const STRUCTURE_FORMATS = ["pdb", "gro"];
 const COORDINATE_FORMATS = ["xtc", "trr"];
-const LEFT_PANEL_MIN_WIDTH = 300;
 
 const AnalyzeStep = (props: WizardStepProps) => {
     const { experiment } = props;
@@ -21,7 +20,6 @@ const AnalyzeStep = (props: WizardStepProps) => {
     const [coordsFile, setCoordsFile] = useState<string>("");
 
     useEffect(() => {
-        // also clear coords file when structure file is cleared
         if (!structureFile) {
             setCoordsFile("");
         }
@@ -43,54 +41,50 @@ const AnalyzeStep = (props: WizardStepProps) => {
     }, [structureFile, coordsFile]);
 
     return (
-        <Stack direction="column" alignItems="center" spacing={2}>
-            <Stack direction="row" width="90%" spacing={2} alignItems="flex-start">
-                <Stack spacing={2} minWidth={LEFT_PANEL_MIN_WIDTH}>
-                    <Paper variant="outlined" sx={{ padding: 4 }}>
-                        <Stack spacing={2}>
-                            <Typography variant="h3">Analyze Files</Typography>
+        <div className="flex flex-col items-center gap-4 w-full">
+            <div className="flex flex-row gap-4 w-[90%] items-start">
+                <div className="flex flex-col gap-4 min-w-72">
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-base">Analyze Files</CardTitle>
+                        </CardHeader>
+                        <CardContent className="flex flex-col gap-4">
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                    <Shapes className="h-4 w-4" />
+                                    <span>Structure</span>
+                                </div>
+                                <FileSelector
+                                    experimentId={experiment.id}
+                                    ext={STRUCTURE_FORMATS}
+                                    title="Select structure file"
+                                    onFileSelected={setStructureFile}
+                                />
+                            </div>
 
-                            <Stack direction="row" spacing={1} alignItems="center">
-                                <Category fontSize="small" color="action" />
-                                <Typography variant="subtitle1" color="text.secondary">
-                                    Structure
-                                </Typography>
-                            </Stack>
-                            <FileSelector
-                                experimentId={experiment.id}
-                                ext={STRUCTURE_FORMATS}
-                                title="Select structure file"
-                                onFileSelected={setStructureFile}
-                            />
                             {structureFile && (
-                                <>
-                                    <Stack direction="row" spacing={1} alignItems="center">
-                                        <Timeline fontSize="small" color="action" />
-                                        <Typography variant="subtitle1" color="text.secondary">
-                                            Coordinates
-                                        </Typography>
-                                    </Stack>
+                                <div className="flex flex-col gap-2">
+                                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                                        <Activity className="h-4 w-4" />
+                                        <span>Coordinates</span>
+                                    </div>
                                     <FileSelector
                                         experimentId={experiment.id}
                                         ext={COORDINATE_FORMATS}
                                         title="Select coordinates file"
                                         onFileSelected={setCoordsFile}
                                     />
-                                </>
+                                </div>
                             )}
-                        </Stack>
-                    </Paper>
+                        </CardContent>
+                    </Card>
 
                     <NotebookController experimentId={experiment.id} />
-                </Stack>
+                </div>
 
-                <Stack spacing={2} flexGrow={1} alignItems="center">
-                    <Box width="100%" display="flex" justifyContent="center" alignItems="center">
-                        {molstarViewer}
-                    </Box>
-                </Stack>
-            </Stack>
-        </Stack>
+                <div className="flex-1 flex justify-center items-center">{molstarViewer}</div>
+            </div>
+        </div>
     );
 };
 
