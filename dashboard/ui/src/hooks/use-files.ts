@@ -1,12 +1,10 @@
 import { useQuery } from "@tanstack/react-query"
-import axios from "axios"
 
-import { api } from "@/lib/http"
-import { API_BASE } from "@/util/const"
+import { api, apiRaw } from "@/lib/http"
 import type { FileOption } from "@/util/types"
 
 export async function getFile(experimentId: string, path: string): Promise<File> {
-  const response = await axios.get(`${API_BASE}/experiments/${experimentId}/files/${path}`, {
+  const response = await apiRaw.get(`/experiments/${experimentId}/files/${path}`, {
     responseType: "blob",
   })
   return new File([response.data], path, { type: response.headers["content-type"] })
