@@ -12,8 +12,8 @@ import {
 interface ConfirmDialogProps {
   open: boolean
   setOpen: (open: boolean) => void
-  onConfirm?: () => void
-  onCancel?: () => void
+  onConfirm?: () => void | Promise<void>
+  onCancel?: () => void | Promise<void>
   title?: string
   message?: string
   confirmText?: string
@@ -34,13 +34,21 @@ const ConfirmDialog = (props: ConfirmDialogProps) => {
     confirmColor = "destructive",
   } = props
 
-  const handleConfirm = () => {
-    onConfirm?.()
+  const handleConfirm = async () => {
+    try {
+      await onConfirm?.()
+    } catch {
+      // caller's onError handler (e.g. mutation toast) already surfaces the error
+    }
     setOpen(false)
   }
 
-  const handleCancel = () => {
-    onCancel?.()
+  const handleCancel = async () => {
+    try {
+      await onCancel?.()
+    } catch {
+      // caller's onError handler already surfaces the error
+    }
     setOpen(false)
   }
 

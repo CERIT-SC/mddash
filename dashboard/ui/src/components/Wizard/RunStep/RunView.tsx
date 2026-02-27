@@ -32,7 +32,7 @@ const RunView = (props: RunViewProps) => {
   const logsAvailable = !!jobStatus && jobStatus.nsteps !== null
   const shouldRefreshLogs = isRunning
 
-  const logsQuery = useGromacsLogs(experiment.id, tprName, logType as LogType, shouldRefreshLogs)
+  const logsQuery = useGromacsLogs(experiment.id, tprName, logType, shouldRefreshLogs)
 
   const handleJobStarted = () => {
     jobQuery.refetch()

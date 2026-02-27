@@ -62,7 +62,7 @@ export function useDeleteGmx(experimentId: string) {
 export function useGromacsLogs(
   experimentId: string,
   tprName: string,
-  logType: "gmx" | "stdout" | "stderr",
+  logType: "gmx" | "stdout" | "stderr" | "",
   shouldPoll: boolean,
   tail = 100
 ) {
@@ -72,7 +72,7 @@ export function useGromacsLogs(
       api
         .get(`/experiments/${experimentId}/gmx/${tprName}/log`, { params: { type: logType, tail } })
         .then((r) => "...\n" + r.data),
-    enabled: !!experimentId && !!tprName,
+    enabled: !!experimentId && !!tprName && !!logType,
     refetchInterval: shouldPoll ? 5000 : false,
   })
 }
