@@ -10,7 +10,7 @@ import { API_BASE } from "@/util/const"
 export const api = axios.create({ baseURL: API_BASE })
 
 api.interceptors.response.use(
-  (res) => ({ ...res, data: res.data.data }),
+  (res) => ({ ...res, data: res.data?.data ?? null }),
   (error) => {
     const msg = error.response?.data?.message ?? "Request failed."
     return Promise.reject(new Error(msg))

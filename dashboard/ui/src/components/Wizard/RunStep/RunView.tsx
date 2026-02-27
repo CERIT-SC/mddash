@@ -24,19 +24,10 @@ const RunView = (props: RunViewProps) => {
 
   const [logType, setLogType] = useState<LogType | "">("")
 
-  const jobQuery = useGromacsStatus(
-    experiment.id,
-    tprName,
-    // Poll when running
-    false // will be handled via shouldPoll below once we have data
-  )
+  const jobQuery = useGromacsStatus(experiment.id, tprName)
 
   const jobStatus = jobQuery.data ?? null
   const isRunning = jobStatus?.status === "RUNNING"
-  const shouldPollJob = !!jobStatus && jobStatus.status !== "TERMINATED" && jobStatus.status !== "ERROR"
-
-  // Separate query for polling
-  useGromacsStatus(experiment.id, tprName, shouldPollJob)
 
   const logsAvailable = !!jobStatus && jobStatus.nsteps !== null
   const shouldRefreshLogs = isRunning

@@ -12,7 +12,9 @@ const getInitialMode = (): "light" | "dark" => {
 
 // Apply immediately at module init to avoid a flash of unstyled content on page load
 const _initialMode = getInitialMode()
-document.documentElement.classList.toggle("dark", _initialMode === "dark")
+if (typeof document !== "undefined") {
+  document.documentElement.classList.toggle("dark", _initialMode === "dark")
+}
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
   const [mode, setMode] = useState<"light" | "dark">(_initialMode)

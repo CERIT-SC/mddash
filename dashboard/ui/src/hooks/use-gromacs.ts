@@ -12,12 +12,16 @@ export function useGromacsStatuses(experimentId: string) {
   })
 }
 
-export function useGromacsStatus(experimentId: string, tprName: string, shouldPoll: boolean) {
+export function useGromacsStatus(experimentId: string, tprName: string) {
   return useQuery<GromacsJob>({
     queryKey: ["experiment", experimentId, "gmx", tprName],
     queryFn: () => api.get(`/experiments/${experimentId}/gmx/${tprName}`).then((r) => r.data),
     enabled: !!experimentId && !!tprName,
-    refetchInterval: shouldPoll ? 5000 : false,
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (!data || data.status === "TERMINATED" || data.status === "ERROR") return false
+      return 5000
+    },
   })
 }
 

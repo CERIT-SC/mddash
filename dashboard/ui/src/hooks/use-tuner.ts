@@ -12,12 +12,16 @@ export function useTunerStatuses(experimentId: string) {
   })
 }
 
-export function useTunerStatus(experimentId: string, tprName: string, shouldPoll: boolean) {
+export function useTunerStatus(experimentId: string, tprName: string) {
   return useQuery<TunerJob>({
     queryKey: ["experiment", experimentId, "tuner", tprName],
     queryFn: () => api.get(`/experiments/${experimentId}/tuner/${tprName}`).then((r) => r.data),
     enabled: !!experimentId && !!tprName,
-    refetchInterval: shouldPoll ? 5000 : false,
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (!data || data.error_message || data.tuner_status === "ERROR" || data.is_stopped || data.tuner_status === "TERMINATED") return false
+      return 5000
+    },
   })
 }
 

@@ -34,20 +34,7 @@ const TunerView = (props: TunerViewProps) => {
   const tunerStarted_condition = (tuner: ReturnType<typeof useTunerStatus>["data"]) =>
     !!tuner && !tuner.error_message && tuner.tuner_status !== "ERROR"
 
-  const { data: tuner, isLoading } = useTunerStatus(
-    experiment.id,
-    tprName,
-    // Poll when running and not stopped
-    false // will be updated below via shouldPoll derived from data
-  )
-
-  const tunerStarted = tunerStarted_condition(tuner)
-  const tunerStopped = tuner?.is_stopped || false
-  const shouldPoll = tunerStarted && !tunerStopped && tuner?.tuner_status !== "TERMINATED"
-
-  // Re-query with polling when needed
-  const { data: polledTuner } = useTunerStatus(experiment.id, tprName, shouldPoll)
-  const activeTuner = shouldPoll ? polledTuner : tuner
+  const { data: tuner, isLoading } = useTunerStatus(experiment.id, tprName)
 
   const handleRunTuner = () => {
     const actualNsteps = nsteps === "" ? DEFAULT_NSTEPS : nsteps
@@ -67,16 +54,15 @@ const TunerView = (props: TunerViewProps) => {
     )
   }
 
-  const displayTuner = activeTuner ?? tuner
-  const displayStarted = tunerStarted_condition(displayTuner)
-  const displayStopped = displayTuner?.is_stopped || false
+  const displayStarted = tunerStarted_condition(tuner)
+  const displayStopped = tuner?.is_stopped || false
 
   return (
     <>
       {displayStarted ? (
         <div className="flex flex-col gap-4">
           <TunerTable
-            rows={displayTuner?.trials || []}
+            rows={tuner?.trials || []}
             selectedTrial={selectedTrial}
             setSelectedTrial={setSelectedTrial}
             tunerStopped={displayStopped}
@@ -108,17 +94,17 @@ const TunerView = (props: TunerViewProps) => {
         </div>
       ) : (
         <div className="flex h-full flex-col items-center justify-center gap-4">
-          {displayTuner?.error_message && (
+          {tuner?.error_message && (
             <div className="border-destructive bg-destructive/10 text-destructive w-full rounded-md border p-3 text-sm">
-              <strong>Error:</strong> {displayTuner.error_message}
+              <strong>Error:</strong> {tuner.error_message}
             </div>
           )}
 
-          {!displayTuner?.error_message && (
+          {!tuner?.error_message && (
             <h3 className="text-lg font-semibold">Configure tuning job for {tprName}</h3>
           )}
 
-          {(!displayTuner || displayTuner.error_message) && (
+          {(!tuner || tuner.error_message) && (
             <Card className="w-fit">
               <CardContent className="flex flex-col items-center gap-4 pt-4">
                 <div className="flex w-72 flex-col gap-1">
