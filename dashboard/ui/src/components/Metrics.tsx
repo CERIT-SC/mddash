@@ -100,7 +100,7 @@ const Metrics = () => {
             </>
           ) : (
             <>
-              <Progress value={50} className="animate-pulse" />
+              <Progress value={100} className="animate-pulse [&>div]:bg-green-500" />
               <p className="text-muted-foreground text-xs">Calculating...</p>
             </>
           )}
