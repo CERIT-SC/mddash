@@ -16,7 +16,7 @@ interface TprSelectorProps {
   loading?: boolean
   onAddTpr: (tpr: string) => void
   onDeleteTpr: (tpr: string) => void
-  onSelectTpr: (tpr: string) => void
+  onSelectTpr: (tpr: string | null) => void
 }
 
 const TprSelector = (props: TprSelectorProps) => {
@@ -63,7 +63,7 @@ const TprSelector = (props: TprSelectorProps) => {
                     : "border-border hover:bg-muted"
                 )}
                 onClick={() => {
-                  if (selectedTpr === tpr) onSelectTpr("")
+                  if (selectedTpr === tpr) onSelectTpr(null)
                   else onSelectTpr(tpr)
                 }}
               >
