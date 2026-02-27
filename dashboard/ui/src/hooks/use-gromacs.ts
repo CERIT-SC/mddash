@@ -17,6 +17,7 @@ export function useGromacsStatus(experimentId: string, tprName: string) {
     queryKey: ["experiment", experimentId, "gmx", tprName],
     queryFn: () => api.get(`/experiments/${experimentId}/gmx/${tprName}`).then((r) => r.data),
     enabled: !!experimentId && !!tprName,
+    meta: { suppressError: true },
     refetchInterval: (query) => {
       const data = query.state.data
       if (!data || data.status === "TERMINATED" || data.status === "ERROR") return false
