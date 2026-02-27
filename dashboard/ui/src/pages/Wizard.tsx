@@ -1,131 +1,98 @@
-import { useParams } from "react-router-dom";
-import { Paper, Typography, CircularProgress, TextField, IconButton } from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import CheckIcon from "@mui/icons-material/Check";
-import CloseIcon from "@mui/icons-material/Close";
-import { useEffect, useState, useCallback } from "react";
+import React, { useState } from "react"
 
-import WizardStepper from "@/components/Wizard/Stepper";
-import { Experiment } from "@/util/types";
-import { get_experiment, edit_experiment } from "@/util/api";
-import { useNotification } from "@/contexts/useNotification";
+import { useParams } from "@tanstack/react-router"
+import { Check, Loader2, Pencil, X } from "lucide-react"
+
+import { useEditExperiment, useExperiment } from "@/hooks/use-experiment"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import WizardStepper from "@/components/Wizard/Stepper"
 
 const Wizard = () => {
-    const { id } = useParams<{ id: string }>();
-    const { showError } = useNotification();
+  const { id } = useParams({ from: "/$id/wizard" })
+  const { data: experiment, isLoading } = useExperiment(id)
+  const editExperiment = useEditExperiment()
 
-    const [experiment, setExperiment] = useState<Experiment | null>(null);
-    const [editingName, setEditingName] = useState(false);
-    const [nameInput, setNameInput] = useState("");
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState("")
 
-    const getExperiment = useCallback(async () => {
-        if (!id) return;
+  const handleEditClick = () => {
+    if (experiment) {
+      setNameInput(experiment.name)
+      setEditingName(true)
+    }
+  }
 
-        const { data, error } = await get_experiment(id);
-        if (error) showError(error);
-        setExperiment(data || null);
-    }, [id, showError]);
+  const handleNameSave = async () => {
+    if (experiment && nameInput.trim() && nameInput !== experiment.name) {
+      editExperiment.mutate({
+        id: experiment.id,
+        data: { name: nameInput.trim() },
+      })
+    }
+    setEditingName(false)
+  }
 
-    useEffect(() => {
-        getExperiment();
-    }, [getExperiment]);
+  const handleNameCancel = () => {
+    setEditingName(false)
+    setNameInput("")
+  }
 
-    const editExperimentName = async (newName: string) => {
-        if (!experiment || newName === experiment.name) return;
-        const { data, error } = await edit_experiment(experiment.id, { name: newName });
-        if (error) {
-            showError(error);
-        } else if (data) {
-            setExperiment(data);
-        }
-    };
+  const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") handleNameSave()
+    else if (e.key === "Escape") handleNameCancel()
+  }
 
-    const handleEditClick = () => {
-        if (experiment) {
-            setNameInput(experiment.name);
-            setEditingName(true);
-        }
-    };
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="text-3xl font-bold">Wizard</h1>
 
-    const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setNameInput(e.target.value);
-    };
-
-    const handleNameSave = async () => {
-        if (experiment && nameInput.trim() && nameInput !== experiment.name) {
-            await editExperimentName(nameInput.trim());
-        }
-        setEditingName(false);
-    };
-
-    const handleNameCancel = () => {
-        setEditingName(false);
-        setNameInput("");
-    };
-
-    const handleNameKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter") {
-            handleNameSave();
-        } else if (e.key === "Escape") {
-            handleNameCancel();
-        }
-    };
-
-    return (
-        <>
-            <Typography variant="h1">Wizard</Typography>
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 56 }}>
-                {experiment ? (
-                    <Paper elevation={2} sx={{ display: "flex", alignItems: "center", px: 2, py: 1 }}>
-                        {editingName ? (
-                            <>
-                                <TextField
-                                    value={nameInput}
-                                    onChange={handleNameChange}
-                                    onBlur={handleNameSave}
-                                    onKeyDown={handleNameKeyDown}
-                                    size="small"
-                                    autoFocus
-                                    variant="outlined"
-                                    sx={{ minWidth: "40vw", maxWidth: "80vw" }}
-                                />
-                                <IconButton aria-label="Save" onClick={handleNameSave} size="small">
-                                    <CheckIcon fontSize="small" />
-                                </IconButton>
-                                <IconButton aria-label="Cancel" onClick={handleNameCancel} size="small">
-                                    <CloseIcon fontSize="small" />
-                                </IconButton>
-                            </>
-                        ) : (
-                            <>
-                                <Typography variant="h4" sx={{ textAlign: "center", mr: 1 }}>
-                                    {experiment.name}
-                                </Typography>
-                                <IconButton aria-label="Edit name" onClick={handleEditClick} size="small">
-                                    <EditIcon fontSize="small" />
-                                </IconButton>
-                            </>
-                        )}
-                    </Paper>
-                ) : (
-                    <Typography variant="h4" sx={{ textAlign: "center" }}>
-                        Loading...
-                    </Typography>
-                )}
-            </div>
-
-            {(experiment && (
-                <Paper elevation={2} sx={{ p: 4, mt: 2 }}>
-                    <WizardStepper experiment={experiment} setExperiment={setExperiment} />
-                </Paper>
-            )) || (
-                <div style={{ display: "flex", justifyContent: "center", marginTop: "20px" }}>
-                    <CircularProgress />
-                </div>
+      <div className="flex items-center justify-center" style={{ minHeight: 56 }}>
+        {isLoading ? (
+          <p className="text-muted-foreground">Loading...</p>
+        ) : experiment ? (
+          <Card className="flex items-center px-4 py-2">
+            {editingName ? (
+              <div className="flex items-center gap-1">
+                <Input
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  onBlur={handleNameSave}
+                  onKeyDown={handleNameKeyDown}
+                  autoFocus
+                  className="max-w-xl min-w-64"
+                />
+                <Button variant="ghost" size="icon" aria-label="Save" onClick={handleNameSave}>
+                  <Check className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" aria-label="Cancel" onClick={handleNameCancel}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                <span className="mr-1 text-lg font-semibold">{experiment.name}</span>
+                <Button variant="ghost" size="icon" aria-label="Edit name" onClick={handleEditClick}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </div>
             )}
-        </>
-    );
-};
+          </Card>
+        ) : null}
+      </div>
 
-export default Wizard;
+      {isLoading ? (
+        <div className="mt-6 flex justify-center">
+          <Loader2 className="text-muted-foreground h-10 w-10 animate-spin" />
+        </div>
+      ) : experiment ? (
+        <Card className="mt-2 p-6">
+          <WizardStepper experiment={experiment} />
+        </Card>
+      ) : null}
+    </div>
+  )
+}
+
+export default Wizard

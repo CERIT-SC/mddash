@@ -1,0 +1,44 @@
+import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router"
+
+import { BASE_PATH } from "@/util/const"
+import RootLayout from "@/layouts/RootLayout"
+import NotFound from "@/pages/error/404"
+import Home from "@/pages/Home"
+import New from "@/pages/New"
+import Wizard from "@/pages/Wizard"
+
+const rootRoute = createRootRoute({
+  component: RootLayout,
+  notFoundComponent: NotFound,
+})
+
+const homeRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/",
+  component: Home,
+})
+
+const newRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/new",
+  component: New,
+})
+
+const wizardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/$id/wizard",
+  component: Wizard,
+})
+
+const routeTree = rootRoute.addChildren([homeRoute, newRoute, wizardRoute])
+
+export const router = createRouter({
+  routeTree,
+  basepath: BASE_PATH,
+})
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router
+  }
+}

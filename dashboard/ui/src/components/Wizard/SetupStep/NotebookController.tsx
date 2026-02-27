@@ -1,232 +1,171 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
-import { Stack, Paper, Button, Typography, CircularProgress, Chip } from "@mui/material";
+import { useCallback, useEffect, useMemo, useState } from "react"
 
-import {
-    PowerSettingsNew,
-    RocketLaunch,
-    HelpOutline,
-    Error,
-    PlayArrow,
-    Stop,
-    Refresh,
-    OpenInNew,
-} from "@mui/icons-material";
+import { AlertCircle, ExternalLink, HelpCircle, Loader2, Play, Power, RefreshCw, Rocket, Square } from "lucide-react"
 
-import { get_notebook, spawn_notebook, delete_notebook } from "@/util/api";
-import { useNotification } from "@/contexts/useNotification";
-import { Notebook, getPodStatusColor } from "@/util/types";
+import { statusBadgeClass } from "@/lib/status"
+import { cn } from "@/lib/utils"
+import { getPodStatusVariant, type Notebook } from "@/util/types"
+import { useNotebook, useSpawnNotebook, useStopNotebook } from "@/hooks/use-notebook"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 
 const UNKNOWN_NOTEBOOK: Notebook = {
-    id: -1,
-    experiment_id: "",
-    token: "",
-    status: "UNKNOWN",
-    path: "",
-};
+  id: -1,
+  experiment_id: "",
+  token: "",
+  status: "UNKNOWN",
+  path: "",
+}
 
 const STATUS_CONFIG = {
-    DOWN: {
-        icon: PowerSettingsNew,
-        color: "error" as const,
-        message: "Your notebook is not running. Click the button below to start it.",
-    },
-    TERMINATED: {
-        icon: PowerSettingsNew,
-        color: "error" as const,
-        message: "Your notebook is not running. Click the button below to start it.",
-    },
-    PENDING: {
-        icon: null,
-        color: null,
-        message: "Your notebook is starting up. This may take a minute.",
-    },
-    INITIALIZING: {
-        icon: null,
-        color: null,
-        message: "Your notebook is setting up the environment. This may take a few minutes if using Binder repository.",
-    },
-    TERMINATING: {
-        icon: null,
-        color: null,
-        message: "Your notebook is shutting down. Please wait.",
-    },
-    RUNNING: {
-        icon: RocketLaunch,
-        color: "success" as const,
-        message: "Your notebook is up. Click the button below to open it.",
-    },
-    ERROR: {
-        icon: Error,
-        color: "error" as const,
-        message: "There was an error with your notebook. Try respawning it.",
-    },
-    UNKNOWN: {
-        icon: HelpOutline,
-        color: "disabled" as const,
-        message: "Notebook status is unknown.",
-    },
-} as const;
+  DOWN: {
+    Icon: Power,
+    message: "Your notebook is not running. Click the button below to start it.",
+  },
+  TERMINATED: {
+    Icon: Power,
+    message: "Your notebook is not running. Click the button below to start it.",
+  },
+  PENDING: {
+    Icon: null,
+    message: "Your notebook is starting up. This may take a minute.",
+  },
+  INITIALIZING: {
+    Icon: null,
+    message: "Your notebook is setting up the environment. This may take a few minutes if using Binder repository.",
+  },
+  TERMINATING: {
+    Icon: null,
+    message: "Your notebook is shutting down. Please wait.",
+  },
+  RUNNING: {
+    Icon: Rocket,
+    message: "Your notebook is up. Click the button below to open it.",
+  },
+  ERROR: {
+    Icon: AlertCircle,
+    message: "There was an error with your notebook. Try respawning it.",
+  },
+  UNKNOWN: {
+    Icon: HelpCircle,
+    message: "Notebook status is unknown.",
+  },
+} as const
 
 interface NotebookControllerProps {
-    experimentId: string;
+  experimentId: string
 }
 
 const NotebookController = ({ experimentId }: NotebookControllerProps) => {
-    const { showError } = useNotification();
-    const [loading, setLoading] = useState(false);
-    const [notebook, setNotebook] = useState<Notebook>(UNKNOWN_NOTEBOOK);
-    const [displayStatus, setDisplayStatus] = useState<Notebook["status"]>("UNKNOWN");
+  const isTransitioning_status = (s: Notebook["status"]) =>
+    s === "PENDING" || s === "INITIALIZING" || s === "TERMINATING"
 
-    const fetchStatus = useCallback(async () => {
-        const { data, error } = await get_notebook(experimentId);
-        if (error) {
-            showError(error);
-            return;
-        }
-        setNotebook(data || UNKNOWN_NOTEBOOK);
-    }, [experimentId, showError]);
+  // Poll when transitioning
+  const [displayStatus, setDisplayStatus] = useState<Notebook["status"]>("UNKNOWN")
+  const shouldPoll = isTransitioning_status(displayStatus)
 
-    const probeNotebook = useCallback(async (path: string): Promise<boolean> => {
-        try {
-            const response = await fetch(path);
-            return response.ok;
-        } catch {
-            return false;
-        }
-    }, []);
+  const { data: notebook = UNKNOWN_NOTEBOOK, isLoading } = useNotebook(experimentId, shouldPoll ? 1000 : false)
+  const spawnNotebook = useSpawnNotebook(experimentId)
+  const stopNotebook = useStopNotebook(experimentId)
 
-    useEffect(() => {
-        if (notebook.status === "RUNNING" && notebook.path && displayStatus !== "RUNNING") {
-            const checkReadiness = async () => {
-                const isReady = await probeNotebook(notebook.path);
-                setDisplayStatus(isReady ? "RUNNING" : "INITIALIZING");
-            };
+  const probeNotebook = useCallback(async (path: string): Promise<boolean> => {
+    try {
+      const response = await fetch(path)
+      return response.ok
+    } catch {
+      return false
+    }
+  }, [])
 
-            setDisplayStatus("INITIALIZING");
-            checkReadiness();
+  // Readiness probe when API says RUNNING
+  useEffect(() => {
+    if (notebook.status === "RUNNING" && notebook.path && displayStatus !== "RUNNING") {
+      const checkReadiness = async () => {
+        const isReady = await probeNotebook(notebook.path)
+        setDisplayStatus(isReady ? "RUNNING" : "INITIALIZING")
+      }
 
-            const intervalId = window.setInterval(checkReadiness, 2000);
-            return () => window.clearInterval(intervalId);
-        } else {
-            setDisplayStatus(notebook.status);
-        }
-    }, [notebook.status, notebook.path, displayStatus, probeNotebook]);
+      setDisplayStatus("INITIALIZING")
+      checkReadiness()
 
-    const spawnNotebook = useCallback(async () => {
-        const { error, data } = await spawn_notebook(experimentId);
-        if (error) {
-            showError(error);
-            return;
-        }
-        setNotebook(data || UNKNOWN_NOTEBOOK);
-    }, [experimentId, showError]);
+      const intervalId = window.setInterval(checkReadiness, 2000)
+      return () => window.clearInterval(intervalId)
+    } else {
+      setDisplayStatus(notebook.status)
+    }
+  }, [notebook.status, notebook.path, displayStatus, probeNotebook])
 
-    const stopNotebook = useCallback(async () => {
-        const { error } = await delete_notebook(experimentId);
-        if (error) {
-            showError(error);
-            return;
-        }
-        await fetchStatus();
-    }, [experimentId, showError, fetchStatus]);
+  const respawnNotebook = async () => {
+    await stopNotebook.mutateAsync()
+    await spawnNotebook.mutateAsync()
+  }
 
-    const respawnNotebook = useCallback(async () => {
-        await stopNotebook();
-        await spawnNotebook();
-    }, [stopNotebook, spawnNotebook]);
+  const statusConfig = useMemo(() => STATUS_CONFIG[displayStatus] || STATUS_CONFIG.UNKNOWN, [displayStatus])
+  const { Icon: StatusIcon, message } = statusConfig
+  const isTransitioning = isTransitioning_status(displayStatus)
+  const variant = getPodStatusVariant(displayStatus)
 
-    useEffect(() => {
-        setLoading(true);
-        fetchStatus().finally(() => setLoading(false));
-    }, [fetchStatus]);
+  return (
+    <div className="flex min-h-48 w-96 items-center justify-center rounded-md border p-6">
+      {isLoading ? (
+        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
+            {isTransitioning ? (
+              <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
+            ) : StatusIcon ? (
+              <StatusIcon className="text-muted-foreground h-5 w-5" />
+            ) : null}
+            <span className="text-sm font-medium">Notebook Status:</span>
+            <Badge variant="outline" className={cn("text-xs", statusBadgeClass(variant))}>
+              {displayStatus}
+            </Badge>
+          </div>
 
-    useEffect(() => {
-        const isPolling =
-            displayStatus === "PENDING" || displayStatus === "INITIALIZING" || displayStatus === "TERMINATING";
-        if (!isPolling) return;
+          <p className="text-muted-foreground text-sm">{message}</p>
 
-        const intervalId = window.setInterval(fetchStatus, 1000);
-        return () => window.clearInterval(intervalId);
-    }, [displayStatus, fetchStatus]);
-
-    const statusConfig = useMemo(() => STATUS_CONFIG[displayStatus] || STATUS_CONFIG.UNKNOWN, [displayStatus]);
-    const StatusIcon = statusConfig.icon;
-    const isTransitioning =
-        displayStatus === "PENDING" || displayStatus === "INITIALIZING" || displayStatus === "TERMINATING";
-
-    return (
-        <Paper
-            variant="outlined"
-            sx={{
-                width: 400,
-                height: 200,
-                padding: 4,
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-            }}
-        >
-            {loading ? (
-                <CircularProgress />
-            ) : (
-                <Stack spacing={2}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                        {isTransitioning ? (
-                            <CircularProgress size={20} />
-                        ) : StatusIcon ? (
-                            <StatusIcon color={statusConfig.color} />
-                        ) : null}
-                        <Typography variant="h4">Notebook Status:</Typography>
-                        <Chip size="small" label={displayStatus} color={getPodStatusColor(displayStatus)} />
-                    </Stack>
-
-                    <Typography variant="body2">{statusConfig.message}</Typography>
-
-                    <Stack direction="row" spacing={2} justifyContent="center">
-                        {(displayStatus === "DOWN" || displayStatus === "TERMINATED") && (
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                onClick={spawnNotebook}
-                                startIcon={<PlayArrow />}
-                            >
-                                Start
-                            </Button>
-                        )}
-                        {displayStatus === "RUNNING" && (
-                            <Button
-                                variant="contained"
-                                color="primary"
-                                href={notebook.path}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                startIcon={<OpenInNew />}
-                            >
-                                Open
-                            </Button>
-                        )}
-                        {(displayStatus === "RUNNING" ||
-                            displayStatus === "PENDING" ||
-                            displayStatus === "INITIALIZING") && (
-                            <Button variant="outlined" color="error" onClick={stopNotebook} startIcon={<Stop />}>
-                                Stop
-                            </Button>
-                        )}
-                        {(displayStatus === "ERROR" || displayStatus === "UNKNOWN") && (
-                            <Button
-                                variant="contained"
-                                color="warning"
-                                onClick={respawnNotebook}
-                                startIcon={<Refresh />}
-                            >
-                                Respawn
-                            </Button>
-                        )}
-                    </Stack>
-                </Stack>
+          <div className="flex flex-wrap justify-center gap-2">
+            {(displayStatus === "DOWN" || displayStatus === "TERMINATED") && (
+              <Button variant="default" onClick={() => spawnNotebook.mutate()} disabled={spawnNotebook.isPending}>
+                <Play className="mr-1 h-4 w-4" />
+                Start
+              </Button>
             )}
-        </Paper>
-    );
-};
+            {displayStatus === "RUNNING" && (
+              <Button variant="default" asChild>
+                <a href={notebook.path} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-1 h-4 w-4" />
+                  Open
+                </a>
+              </Button>
+            )}
+            {(displayStatus === "RUNNING" || displayStatus === "PENDING" || displayStatus === "INITIALIZING") && (
+              <Button
+                variant="outline"
+                className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => stopNotebook.mutate()}
+                disabled={stopNotebook.isPending}
+              >
+                <Square className="mr-1 h-4 w-4" />
+                Stop
+              </Button>
+            )}
+            {(displayStatus === "ERROR" || displayStatus === "UNKNOWN") && (
+              <Button
+                variant="default"
+                className="bg-yellow-500 text-white hover:bg-yellow-600"
+                onClick={respawnNotebook}
+              >
+                <RefreshCw className="mr-1 h-4 w-4" />
+                Respawn
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
-export default NotebookController;
+export default NotebookController

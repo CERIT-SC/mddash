@@ -1,54 +1,75 @@
-import { useContext } from "react";
+import { useContext } from "react"
 
-import { Link, useLocation } from "react-router-dom";
-import { Typography, IconButton, Toolbar, AppBar, Stack, Tooltip } from "@mui/material";
-import { HubTwoTone, DashboardTwoTone, Brightness4, Brightness7 } from "@mui/icons-material";
+import { ThemeContext } from "@/ThemeContext"
+import { Link, useRouterState } from "@tanstack/react-router"
+import { LayoutDashboard, Moon, Sun, Waypoints } from "lucide-react"
 
-import { ThemeContext } from "@/ThemeContext";
+import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 const Header = () => {
-    const location = useLocation();
-    const notHome = location.pathname !== "/" && location.pathname !== "";
-    const { toggleTheme, mode } = useContext(ThemeContext);
+  const routerState = useRouterState()
+  const pathname = routerState.location.pathname
+  const notHome = pathname !== "/" && pathname !== ""
+  const { toggleTheme, mode } = useContext(ThemeContext)
 
-    return (
-        <AppBar position="static" color="primary" elevation={0}>
-            <Toolbar sx={{ minHeight: "64px", px: 2 }}>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ width: "100%" }}>
-                    {/* Fixed-width left icon container */}
-                    <Stack direction="row" alignItems="center" sx={{ width: 96 }}>
-                        <IconButton size="large" sx={{ color: "white" }} href="/hub/home" title="Back to JupyterHub">
-                            <HubTwoTone />
-                        </IconButton>
-                        {notHome && (
-                            <IconButton
-                                size="large"
-                                sx={{ color: "white" }}
-                                component={Link}
-                                to="/"
-                                title="Back to Dashboard"
-                            >
-                                <DashboardTwoTone />
-                            </IconButton>
-                        )}
-                    </Stack>
-                    <div style={{ flex: 1, textAlign: "center" }}>
-                        <Link to="/" style={{ textDecoration: "none", color: "white" }}>
-                            <Typography variant="h1">MD Dash</Typography>
-                        </Link>
-                    </div>
-                    {/* Fixed-width right spacer to match left, with theme switch */}
-                    <Stack direction="row" alignItems="center" justifyContent="flex-end" sx={{ width: 96 }}>
-                        <Tooltip title={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}>
-                            <IconButton size="large" sx={{ color: "white" }} onClick={toggleTheme}>
-                                {mode === "dark" ? <Brightness7 /> : <Brightness4 />}
-                            </IconButton>
-                        </Tooltip>
-                    </Stack>
-                </Stack>
-            </Toolbar>
-        </AppBar>
-    );
-};
+  return (
+    <header className="bg-primary text-primary-foreground dark:bg-card">
+      <div className="flex items-center justify-between px-2" style={{ minHeight: 64 }}>
+        {/* Left icons */}
+        <div className="flex items-center" style={{ width: 96 }}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" asChild className="text-primary-foreground hover:bg-foreground/10">
+                <a href="/hub/home" aria-label="Back to JupyterHub">
+                  <Waypoints className="h-5 w-5" />
+                </a>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Back to JupyterHub</TooltipContent>
+          </Tooltip>
 
-export default Header;
+          {notHome && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" asChild className="text-primary-foreground hover:bg-foreground/10">
+                  <Link to="/" aria-label="Back to Dashboard">
+                    <LayoutDashboard className="h-5 w-5" />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Back to Dashboard</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+
+        {/* Title */}
+        <div className="flex-1 text-center">
+          <Link to="/" className="text-primary-foreground hover:text-primary-foreground no-underline">
+            <h1 className="text-2xl font-bold tracking-tight">MD Dash</h1>
+          </Link>
+        </div>
+
+        {/* Right icons */}
+        <div className="flex items-center justify-end" style={{ width: 96 }}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
+                className="text-primary-foreground hover:bg-foreground/10"
+                aria-label={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {mode === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}</TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+    </header>
+  )
+}
+
+export default Header

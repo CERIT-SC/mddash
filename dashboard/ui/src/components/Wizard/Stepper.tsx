@@ -1,192 +1,119 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState } from "react"
 
-import {
-    styled,
-    Stepper,
-    Step,
-    StepLabel,
-    StepIconProps,
-    StepConnector,
-    stepConnectorClasses,
-    Box,
-    Button,
-} from "@mui/material";
-import { BlurOn, Tune, PlayArrow, Assessment, Publish } from "@mui/icons-material";
+import { useQueryClient } from "@tanstack/react-query"
+import { Atom, BarChart2, Play, SlidersHorizontal, Upload } from "lucide-react"
 
-import { Experiment } from "@/util/types";
-import { DEBUG } from "@/util/const";
-import { get_experiment_step } from "@/util/api";
-import { useNotification } from "@/contexts/useNotification";
-import WizardSetup from "./SetupStep";
-import TuneStep from "./TuneStep";
-import RunStep from "./RunStep";
-import AnalyzeStep from "./AnalyzeStep";
-import PublishStep from "./PublishStep";
+import { cn } from "@/lib/utils"
+import { DEBUG } from "@/util/const"
+import { type Experiment } from "@/util/types"
+import { useExperimentStep } from "@/hooks/use-experiment"
+import { Button } from "@/components/ui/button"
 
-const steps = [
-    { label: "Setup", icon: <BlurOn />, child: WizardSetup },
-    { label: "Tune", icon: <Tune />, child: TuneStep },
-    { label: "Run", icon: <PlayArrow />, child: RunStep },
-    { label: "Analyze", icon: <Assessment />, child: AnalyzeStep },
-    { label: "Publish", icon: <Publish />, child: PublishStep },
-];
+import AnalyzeStep from "./AnalyzeStep"
+import PublishStep from "./PublishStep"
+import RunStep from "./RunStep"
+import WizardSetup from "./SetupStep"
+import TuneStep from "./TuneStep"
 
-const ColorLibConnector = styled(StepConnector)(({ theme }) => ({
-    [`&.${stepConnectorClasses.alternativeLabel}`]: {
-        top: 22,
-    },
-    [`&.${stepConnectorClasses.active}`]: {
-        [`& .${stepConnectorClasses.line}`]: {
-            backgroundColor: theme.palette.primary.main,
-        },
-    },
-    [`&.${stepConnectorClasses.completed}`]: {
-        [`& .${stepConnectorClasses.line}`]: {
-            backgroundColor: theme.palette.success.main,
-        },
-    },
-    [`& .${stepConnectorClasses.line}`]: {
-        height: 3,
-        border: 0,
-        backgroundColor: "#eaeaf0",
-        borderRadius: 1,
-        ...theme.applyStyles("dark", {
-            backgroundColor: theme.palette.grey[800],
-        }),
-    },
-}));
-
-const ColorLibStepIconRoot = styled("div")<{ ownerState: { completed?: boolean; active?: boolean } }>(
-    ({ theme, ownerState }) => ({
-        backgroundColor: "#ccc",
-        zIndex: 1,
-        color: "#fff",
-        width: 50,
-        height: 50,
-        display: "flex",
-        borderRadius: "50%",
-        justifyContent: "center",
-        alignItems: "center",
-        cursor: "pointer",
-        transition: "transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out",
-        "&:hover": {
-            transform: "scale(1.1)",
-            boxShadow: "0 4px 12px 0 rgba(0,0,0,.3)",
-        },
-        ...theme.applyStyles("dark", {
-            backgroundColor: theme.palette.grey[700],
-        }),
-        ...(ownerState.active && {
-            backgroundColor: theme.palette.primary.main,
-            boxShadow: "0 4px 10px 0 rgba(0,0,0,.25)",
-        }),
-        ...(ownerState.completed && {
-            backgroundColor: theme.palette.success.main,
-        }),
-    }),
-);
+const STEP_ICONS = [Atom, SlidersHorizontal, Play, BarChart2, Upload]
+const STEP_LABELS = ["Setup", "Tune", "Run", "Analyze", "Publish"]
+const STEP_COMPONENTS = [WizardSetup, TuneStep, RunStep, AnalyzeStep, PublishStep]
 
 export interface WizardStepperProps {
-    experiment: Experiment;
-    setExperiment: React.Dispatch<React.SetStateAction<Experiment | null>>;
+  experiment: Experiment
 }
 
-export interface WizardStepProps extends WizardStepperProps {
-    nextStep: () => void;
-    changeStep: (step: number) => void;
+export interface WizardStepProps {
+  experiment: Experiment
+  nextStep: () => void
+  changeStep: (step: number) => void
 }
 
-const WizardStepper = (props: WizardStepperProps) => {
-    const { experiment, setExperiment } = props;
-    const { showError } = useNotification();
-    const [activeStep, setActiveStep] = useState(Math.min(experiment.step, steps.length - 1));
-    const isFetchingRef = useRef(false);
+const WizardStepper = ({ experiment }: WizardStepperProps) => {
+  const queryClient = useQueryClient()
+  const [activeStep, setActiveStep] = useState(Math.min(experiment.step, STEP_LABELS.length - 1))
 
-    const fetchStep = useCallback(async () => {
-        if (isFetchingRef.current) return;
-        isFetchingRef.current = true;
+  // Poll experiment step; hook updates experiment cache when step changes
+  useExperimentStep(experiment.id, experiment.step)
 
-        try {
-            const { data, error } = await get_experiment_step(experiment.id);
+  const changeStep = (step: number) => {
+    if (step < 0 || step >= STEP_LABELS.length) return
+    if (step > experiment.step) return // can only go forward using nextStep
+    setActiveStep(step)
+  }
 
-            if (error) {
-                showError(error);
-                return;
-            }
+  const nextStep = () => {
+    if (experiment.step >= STEP_LABELS.length - 1) return
+    const newStep = experiment.step + 1
+    setActiveStep(newStep)
+    queryClient.setQueryData<Experiment>(["experiment", experiment.id], (old) =>
+      old ? { ...old, step: newStep } : old
+    )
+  }
 
-            if (data !== null && data !== experiment.step) {
-                setExperiment((prev) => {
-                    if (!prev) return prev;
-                    return { ...prev, step: data };
-                });
-            }
-        } finally {
-            isFetchingRef.current = false;
-        }
-    }, [experiment.id, experiment.step, setExperiment, showError]);
+  const ActiveComponent = STEP_COMPONENTS[activeStep]
 
-    const changeStep = async (step: number) => {
-        if (step < 0 || step >= steps.length) return;
-        if (step > experiment.step) return; // can only go forward using nextStep
-        setActiveStep(step);
-    };
+  return (
+    <div className="flex flex-col gap-6">
+      {DEBUG && (
+        <Button variant="default" onClick={nextStep}>
+          DEBUG: next step
+        </Button>
+      )}
 
-    const nextStep = () => {
-        if (experiment.step >= steps.length - 1) return;
+      {/* Custom stepper */}
+      <div className="flex items-center justify-center">
+        {STEP_LABELS.map((label, idx) => {
+          const Icon = STEP_ICONS[idx]
+          const isCompleted = idx < experiment.step || idx < activeStep
+          const isActive = idx === activeStep
+          const isClickable = idx <= experiment.step
 
-        setActiveStep(experiment.step + 1);
-        setExperiment((prev) => {
-            if (!prev) return prev;
-            return { ...prev, step: prev.step + 1 };
-        });
-    };
+          return (
+            <React.Fragment key={label}>
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  type="button"
+                  disabled={!isClickable}
+                  onClick={() => changeStep(idx)}
+                  className={cn(
+                    "flex h-12 w-12 items-center justify-center rounded-full border-2 text-white transition-all",
+                    isActive && "bg-primary border-primary scale-110 shadow-md",
+                    isCompleted && !isActive && "border-green-500 bg-green-500",
+                    !isActive && !isCompleted && "bg-muted border-border text-muted-foreground",
+                    isClickable && !isActive && !isCompleted && "cursor-pointer hover:scale-105 hover:shadow",
+                    isClickable && isCompleted && "cursor-pointer hover:scale-105"
+                  )}
+                >
+                  <Icon className="h-5 w-5" />
+                </button>
+                <span className={cn("text-xs font-medium", isActive ? "text-primary" : "text-muted-foreground")}>
+                  {label}
+                </span>
+              </div>
 
-    useEffect(() => {
-        const interval = setInterval(fetchStep, 5000);
-        return () => clearInterval(interval);
-    }, [experiment.id, experiment.step, fetchStep]);
+              {idx < STEP_LABELS.length - 1 && (
+                <div
+                  className={cn(
+                    "mx-1 mb-5 h-0.5 flex-1 transition-colors",
+                    idx < activeStep || idx < experiment.step
+                      ? "bg-green-500"
+                      : idx === activeStep
+                        ? "bg-primary"
+                        : "bg-border"
+                  )}
+                />
+              )}
+            </React.Fragment>
+          )
+        })}
+      </div>
 
-    const childProps = {
-        ...props,
-        nextStep: nextStep,
-        changeStep: changeStep,
-    };
+      <div className="mt-2">
+        <ActiveComponent experiment={experiment} nextStep={nextStep} changeStep={changeStep} />
+      </div>
+    </div>
+  )
+}
 
-    const ColorLibStepIcon = (props: StepIconProps) => {
-        const { active, completed, className, icon } = props;
-        const idx = Number(icon) - 1;
-        const step = steps[idx];
-
-        return (
-            <ColorLibStepIconRoot
-                ownerState={{ completed, active }}
-                className={className}
-                onClick={() => changeStep(idx)}
-            >
-                {step.icon}
-            </ColorLibStepIconRoot>
-        );
-    };
-
-    return (
-        <>
-            {DEBUG && (
-                <Button variant="contained" onClick={() => nextStep()}>
-                    DEBUG: next step
-                </Button>
-            )}
-
-            <Stepper alternativeLabel activeStep={activeStep} connector={<ColorLibConnector />}>
-                {steps.map((step, idx) => (
-                    <Step key={step.label} completed={idx < experiment.step || idx < activeStep}>
-                        <StepLabel StepIconComponent={ColorLibStepIcon}>{step.label}</StepLabel>
-                    </Step>
-                ))}
-            </Stepper>
-
-            <Box sx={{ mt: 4 }}>{React.createElement(steps[activeStep].child, childProps)}</Box>
-        </>
-    );
-};
-
-export default WizardStepper;
+export default WizardStepper

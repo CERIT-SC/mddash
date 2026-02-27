@@ -7,18 +7,18 @@ React-based web interface that provides a wizard-driven workflow for creating, c
 ## Architecture & Patterns
 
 ### Design Patterns
-- **Context API Pattern**: Global state management for Theme and Notifications without Redux
-- **Custom Hooks Pattern**: `useNotification` and `useTheme` for encapsulated state logic
+- **TanStack Query Pattern**: Server state managed via custom hooks with automatic polling; no manual `setInterval`/`useEffect` fetching
+- **TanStack Router**: Manual route tree (`src/router.tsx`) with `basepath: BASE_PATH`; no file-based routing
+- **Custom Hooks Pattern**: 8 domain hooks in `src/hooks/` encapsulate all data fetching and mutations
 - **Stepper Pattern**: Linear wizard workflow with step validation and state progression
-- **Provider Pattern**: Nested providers in Layout (ThemeProvider → NotificationProvider)
-- **Repository Pattern**: Centralized API client in `util/api.ts` with consistent error handling
+- **Provider Pattern**: Nested providers in `Main.tsx` — `ThemeProvider → QueryClientProvider → RouterProvider`
 - **Component Composition**: Wizard steps as composable child components receiving shared props
 
 ### Layer Organization
 ```
-pages/ → components/ → contexts/ → util/api.ts → Backend API
-   ↓         ↓           ↓
-Layout → ThemeProvider → NotificationProvider
+pages/ → components/ → hooks/ → lib/http.ts → Backend API
+   ↓         ↓
+layouts/RootLayout → Header + Footer + Toaster
 ```
 
 ## Core Dependencies
@@ -26,12 +26,14 @@ Layout → ThemeProvider → NotificationProvider
 | Library | Purpose | Critical Path |
 |---------|---------|---------------|
 | `react` | UI framework | Core component rendering |
-| `@mui/material` | Component library | All UI components |
-| `@mui/icons-material` | Icons | UI icons throughout the app |
-| `react-router-dom` | Routing | Navigation and URL management |
-| `axios` | HTTP client | All API communication |
+| `@shadcn/ui` (via `radix-ui`) | Headless component primitives | All UI components (new-york style, zinc base) |
+| `tailwindcss` v4 | Styling | All visual styles via CSS-first config |
+| `lucide-react` | Icons | UI icons throughout the app |
+| `@tanstack/react-router` | Routing | Navigation and URL management |
+| `@tanstack/react-query` | Server state / data fetching | All API calls and polling |
+| `axios` | HTTP client | Configured instance in `lib/http.ts` |
+| `sonner` | Toast notifications | All user-facing notifications |
 | `molstar` | 3D molecular visualization | Structure/trajectory rendering |
-| `@emotion/react` | CSS-in-JS | Styled components |
 | `react-dropzone` | File uploads | Drag-and-drop file selection |
 
 ## Data Flow
@@ -40,35 +42,31 @@ Layout → ThemeProvider → NotificationProvider
 graph TD
     A[User Interaction] --> B[React Component]
     B --> C{Action Type}
-    C -->|API Call| D[util/api.ts]
+    C -->|Query/Mutation| D[src/hooks/*.ts]
     C -->|Local State| E[useState/useReducer]
-    C -->|Notification| F[NotificationContext]
-    D --> G[Axios Request]
-    G --> H[Backend API]
-    H --> I[ApiResponse]
-    I --> J{Success?}
-    J -->|Yes| K[Component State Update]
-    J -->|No| F
+    C -->|Notification| F[sonner toast]
+    D --> G[lib/http.ts api instance]
+    G --> H[Axios Request]
+    H --> I[Backend API]
+    I --> J[Envelope unwrapped by interceptor]
+    J --> K[TanStack Query cache]
     K --> L[UI Re-render]
-    F --> L
     M[Runtime Config] --> N[window.MDDASH_CONFIG]
     N --> O[util/const.ts]
-    O --> D
+    O --> G
 ```
 
 ### Request Lifecycle
 1. User triggers action in component
-2. Component calls function from `util/api.ts`
-3. Axios makes HTTP request to backend API
-4. Response parsed via `handle_request()` wrapper
-5. Returns `{ data, error }` object
-6. Component updates state or shows notification via `useNotification()`
-7. UI re-renders with new state
+2. Component calls a TanStack Query hook from `src/hooks/`
+3. Hook's `queryFn` calls `api.get/post/patch/delete(path).then(r => r.data)` via `lib/http.ts`
+4. Axios interceptor unwraps `{ success, data, message }` backend envelope and throws on errors
+5. TanStack Query updates its cache; components re-render automatically
+6. Errors surface as thrown `Error` objects caught by query error state or `toast.error()`
 
 ### Background Operations
-- Wizard step polling: `setInterval` every 5 seconds in `WizardStepper`
+- Polling via TanStack Query `refetchInterval` option in hooks (e.g., metrics: 30s)
 - MolStar plugin cleanup on unmount via `useEffect` cleanup function
-- Notification auto-dismiss after 5 seconds via `setTimeout`
 
 ## The "Gotchas"
 
@@ -76,13 +74,34 @@ graph TD
 - **Injected by Caddy**: `window.MDDASH_CONFIG` object injected via `config.js` in production
 - **Dev mode detection**: `DEBUG` flag is `true` when `window.MDDASH_CONFIG` is undefined
 - **Required paths**: `BASE_PATH` and `API_BASE` come from runtime config, not build time
-- **Fallback values**: Dev defaults to `http://localhost:8888/api` for API_BASE
+- **Fallback values**: Dev defaults to `/dash/api` for `API_BASE`
 
-### API Client
-- **Always use `util/api.ts`**: Do not make direct axios calls - use the centralized functions
-- **Response structure**: All API functions return `{ data: T | null, error: string | null }`
-- **Error handling**: Check `error` field first before accessing `data`
-- **File downloads**: `get_file()` returns a `File` object, not JSON
+### HTTP / API Client
+- **Always use `lib/http.ts`**: Use the configured `api` axios instance, never raw `axios`
+- **No wrapper functions**: Hooks call `api.get/post/patch/delete(path).then(r => r.data)` directly
+- **Envelope unwrapped**: Interceptor strips `{ success, data, message }` — `r.data` is the payload
+- **Errors thrown**: Failed requests throw `Error` with the backend `message`; handle in hook `onError` or toast
+
+### ShadCN / Tailwind v4
+- **CSS-first config**: Uses `@tailwindcss/vite` plugin; config lives in `src/index.css` via `@import "tailwindcss"` and `@theme` blocks
+- **CSS variables**: All ShadCN theme values defined as CSS vars and exposed as Tailwind utilities via `@theme { --color-X: hsl(var(--X)); }`
+- **Do NOT use `@apply`** with CSS var utilities (e.g., `border-border`) without ensuring the `@theme` registration is present
+- **ShadCN Select sentinel**: `Select` requires non-empty string values; use `SELECT_NONE = "__none__"` (from `util/const.ts`) for "none" options
+
+### Theme System
+- **`ThemeProvider` in `src/Theme.tsx`**: Toggles `dark` class on `<html>`, persists to `localStorage`
+- **FOUC prevention**: Initial mode applied synchronously at module init (`_initialMode`) before first render
+- **Sonner integration**: `src/components/ui/sonner.tsx` reads `ThemeContext` instead of `next-themes`
+
+### Notifications
+- **Use `sonner` toast**: Call `toast.success()`, `toast.error()`, etc. directly — no context or hook needed
+- **No custom notification context**: The old `NotificationContext` / `useNotification()` pattern is removed
+
+### Wizard Workflow
+- **Step persistence**: Experiment step stored in backend, not local state
+- **Optimistic updates**: `WizardStepper` uses `queryClient.setQueryData` for immediate UI updates
+- **`WizardStepperProps`**: Only accepts `{ experiment }` — there is no `setExperiment` prop
+- **DEBUG mode**: Shows "DEBUG: next step" button when `DEBUG` is true
 
 ### MolStar Integration
 - **Manual cleanup required**: Must call `plugin.dispose()` and `root.unmount()` on unmount
@@ -90,30 +109,13 @@ graph TD
 - **Binary format detection**: Automatically determines if format is binary based on file extension
 - **Supported formats**: PDB, GRO, mmCIF for structures; XTC, DCD, TRR, NCTraj, Lammpstrj for trajectories
 
-### Wizard Workflow
-- **Step validation**: Can only navigate forward via `nextStep()`; backward navigation via `changeStep()`
-- **Step polling**: Automatically polls backend every 5 seconds for step changes
-- **Step persistence**: Experiment step stored in backend, not local state
-- **DEBUG mode**: Shows "DEBUG: next step" button when `DEBUG` is true
-
-### Notification System
-- **Duplicate prevention**: Identical messages with same severity are not added
-- **Auto-dismiss**: All notifications auto-dismiss after 5 seconds
-- **Severity levels**: error, warning, info, success (mapped to MUI colors)
-- **Always use hook**: Use `useNotification()` hook, never access Context directly
-
-### Theme System
-- **Context-based**: Uses ThemeContext with `mode` and `toggleTheme()`
-- **MUI integration**: ThemeProvider wraps entire app for Material-UI theming
-- **Dark mode support**: Uses `theme.applyStyles("dark", ...)` for dark mode styles
-
 ### File Operations
 - **Dropzone component**: Use `Dropzone.tsx` for all file uploads
 - **FormData**: File uploads use `FormData` with axios POST requests
 - **File filtering**: Backend handles file extension filtering via `find_files()` API
 
 ### TypeScript Configuration
-- **Path alias**: `@` maps to `./src` directory (configured in vite.config.ts)
+- **Path alias**: `@` maps to `./src` directory (configured in `vite.config.ts`)
 - **Strict mode**: TypeScript strict mode enabled
 - **Type definitions**: All API types defined in `util/types.ts`
 
@@ -121,10 +123,13 @@ graph TD
 
 | File | Purpose | Key Functions |
 |------|---------|---------------|
-| `src/Main.tsx` | Application root with routing | `createRoot()`, route definitions |
-| `src/Layout.tsx` | Main layout with providers | Provider nesting, Header/Footer |
-| `src/util/api.ts` | Centralized API client | All backend API functions |
-| `src/util/const.ts` | Runtime configuration | `BASE_PATH`, `API_BASE`, `DEBUG` |
+| `src/Main.tsx` | Application root, provider tree | `createRoot()`, provider nesting |
+| `src/router.tsx` | TanStack Router manual route tree | Route definitions, `basepath` |
+| `src/layouts/RootLayout.tsx` | Main layout | Header + Footer + Toaster + Outlet |
+| `src/lib/http.ts` | Configured axios instance | `api` — all HTTP calls go through here |
+| `src/lib/query-client.ts` | TanStack QueryClient | `staleTime: 30s`, `retry: 1`, no window focus refetch |
+| `src/util/const.ts` | Runtime configuration | `BASE_PATH`, `API_BASE`, `DEBUG`, `SELECT_NONE` |
+| `src/lib/status.ts` | Status badge utilities | `statusBadgeClass(variant)` |
 
 ### Page Entry Points
 - `src/pages/Home.tsx` - Landing page with experiment list
@@ -137,11 +142,15 @@ graph TD
 - `src/components/Header.tsx` - Navigation header
 - `src/components/Footer.tsx` - Page footer
 
-### Context Entry Points
-- `src/contexts/NotificationContext.tsx` - Notification state and methods
-- `src/ThemeContext.ts` - Theme context definition
-- `src/contexts/useNotification.ts` - Notification hook
-- `src/useTheme.ts` - Theme hook
+### Hook Entry Points (`src/hooks/`)
+- `use-experiments.ts` - Experiment list query
+- `use-experiment.ts` - Single experiment query + mutations
+- `use-metrics.ts` - Simulation metrics (refetchInterval: 30s)
+- `use-notebook.ts` - Notebook status and control
+- `use-tuner.ts` - Gromacs Tuner integration
+- `use-gromacs.ts` - GROMACS job state
+- `use-files.ts` - File listing query
+- `use-mdrepo.ts` - MDRepo integration + `getMDRepoAuthUrl()`
 
 ### Wizard Step Entry Points
 - `src/components/Wizard/SetupStep/SetupStep.tsx` - Initial setup and notebook spawning

@@ -57,7 +57,7 @@ graph TB
 | **Pre-Spawn Hook Pattern** | JupyterHub | Dynamically provisions user infrastructure before notebook startup |
 | **Active Record Pattern** | Dashboard API, MDRun API | Models encapsulate data persistence and orchestration logic |
 | **Background Polling Pattern** | MDRun API | Daemon threads query Kubernetes for job status updates |
-| **Context API Pattern** | Dashboard UI | Global state management without Redux |
+| **TanStack Query Pattern** | Dashboard UI | Server state management via custom hooks with automatic polling |
 | **Repository Pattern** | Dashboard UI, Dashboard API | Centralized API clients with consistent error handling |
 | **Template-Based Configuration** | Helm Charts | Jinja2 templates rendered with gomplate for environment-specific deployments |
 
@@ -67,7 +67,7 @@ graph TB
 |----------|----------------|---------|
 | **Orchestration** | JupyterHub (4.2.0), Helm, Kubernetes | Multi-tenant platform, deployment, resource management |
 | **Backend APIs** | Flask, SQLAlchemy, Marshmallow, Kubernetes Python Client | REST APIs, ORM, serialization, K8s orchestration |
-| **Frontend** | React, Material-UI, React Router, Axios, MolStar | UI framework, components, routing, HTTP client, 3D visualization |
+| **Frontend** | React, ShadCN UI (radix-ui), Tailwind v4, TanStack Router, TanStack Query, Axios, MolStar | UI framework, components, styling, routing, server state, HTTP client, 3D visualization |
 | **Infrastructure** | Caddy, rclone, Ray (Gromacs Tuner) | Reverse proxy, S3 sync, distributed computing |
 | **External Services** | MDRepo, S3-compatible storage | Experiment publishing, persistent storage |
 

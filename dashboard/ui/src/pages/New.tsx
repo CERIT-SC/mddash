@@ -1,299 +1,249 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import {
-    Stack,
-    Paper,
-    Button,
-    TextField,
-    Typography,
-    FormControl,
-    FormLabel,
-    Tabs,
-    Tab,
-    FormHelperText,
-    CircularProgress,
-    InputAdornment,
-    IconButton,
-    Tooltip,
-    Box,
-    Collapse,
-} from "@mui/material";
-import ReplayIcon from "@mui/icons-material/Replay";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import React, { useState } from "react"
 
-import Dropzone from "@/components/Dropzone";
-import { create_experiment } from "@/util/api";
-import { useNotification } from "@/contexts/useNotification";
-import { DEFAULT_NOTEBOOKS_REPO } from "@/util/const";
+import { useNavigate } from "@tanstack/react-router"
+import { ChevronDown, ChevronUp, Loader2, RotateCcw } from "lucide-react"
+import { toast } from "sonner"
 
-const tabStyles = {
-    textTransform: "none",
-    borderRadius: 1,
-    border: 1,
-    color: "text.secondary",
-    bgcolor: "background.paper",
-    borderColor: "divider",
-    "&.Mui-selected": {
-        color: "primary.contrastText",
-        bgcolor: "primary.main",
-        borderColor: "text.primary",
-    },
-    "&:not(.Mui-selected):hover": {
-        bgcolor: "action.hover",
-        color: "text.primary",
-    },
-} as const;
+import { DEFAULT_NOTEBOOKS_REPO } from "@/util/const"
+import { useCreateExperiment } from "@/hooks/use-experiments"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import Dropzone from "@/components/Dropzone"
 
 const isValidGitUrl = (url: string): boolean => {
-    // SSH format: git@host:owner/repo.git
-    if (url.startsWith("git@") && url.includes(":")) {
-        return true;
-    }
-    // HTTPS format
-    try {
-        const parsed = new URL(url);
-        return ["http:", "https:"].includes(parsed.protocol) && Boolean(parsed.host);
-    } catch {
-        return false;
-    }
-};
+  // SSH format: git@host:owner/repo.git
+  if (url.startsWith("git@") && url.includes(":")) {
+    return true
+  }
+  // HTTPS format
+  try {
+    const parsed = new URL(url)
+    return ["http:", "https:"].includes(parsed.protocol) && Boolean(parsed.host)
+  } catch {
+    return false
+  }
+}
 
 const New = () => {
-    const navigate = useNavigate();
-    const { showError, showSuccess } = useNotification();
+  const navigate = useNavigate()
+  const createExperiment = useCreateExperiment()
 
-    const [name, setName] = useState("");
-    const [type, setType] = useState("");
-    const [pdbId, setPdbId] = useState("");
-    const [repoUrl, setRepoUrl] = useState("");
-    const [files, setFiles] = useState<File[]>([]);
-    const [notebooksRepo, setNotebooksRepo] = useState(DEFAULT_NOTEBOOKS_REPO);
-    const [accessToken, setAccessToken] = useState("");
-    const [showTokenInput, setShowTokenInput] = useState(false);
+  const [name, setName] = useState("")
+  const [type, setType] = useState("")
+  const [pdbId, setPdbId] = useState("")
+  const [repoUrl, setRepoUrl] = useState("")
+  const [files, setFiles] = useState<File[]>([])
+  const [notebooksRepo, setNotebooksRepo] = useState(DEFAULT_NOTEBOOKS_REPO)
+  const [accessToken, setAccessToken] = useState("")
+  const [showTokenInput, setShowTokenInput] = useState(false)
 
-    // Check if the notebooks repo supports access tokens (HTTPS URLs only, not SSH)
-    const isHttpsRepo = notebooksRepo.startsWith("http://") || notebooksRepo.startsWith("https://");
+  const [nameError, setNameError] = useState(false)
+  const [typeError, setTypeError] = useState(false)
+  const [typeAuxError, setTypeAuxError] = useState(false)
+  const [notebooksRepoError, setNotebooksRepoError] = useState(false)
 
-    // Clear token and hide input if switching to SSH or default repo
-    const handleNotebooksRepoChange = (value: string) => {
-        setNotebooksRepo(value);
-        const isHttps = value.startsWith("http://") || value.startsWith("https://");
-        if (!isHttps || value === DEFAULT_NOTEBOOKS_REPO) {
-            setAccessToken("");
-            setShowTokenInput(false);
-        }
-    };
+  const isHttpsRepo = notebooksRepo.startsWith("http://") || notebooksRepo.startsWith("https://")
 
-    const [nameError, setNameError] = useState(false);
-    const [typeError, setTypeError] = useState(false);
-    const [typeAuxError, setTypeAuxError] = useState(false);
-    const [notebooksRepoError, setNotebooksRepoError] = useState(false);
-    const [loading, setLoading] = useState(false);
+  const handleNotebooksRepoChange = (value: string) => {
+    setNotebooksRepo(value)
+    const isHttps = value.startsWith("http://") || value.startsWith("https://")
+    if (!isHttps || value === DEFAULT_NOTEBOOKS_REPO) {
+      setAccessToken("")
+      setShowTokenInput(false)
+    }
+  }
 
-    const validateForm = () => {
-        let typeAuxError = false;
-        const notebooksInvalid = !isValidGitUrl(notebooksRepo);
+  const validateForm = () => {
+    let auxErr = false
+    const notebooksInvalid = !isValidGitUrl(notebooksRepo)
 
-        if ((type === "pdb" && !pdbId) || (type === "repo" && !repoUrl) || (type === "file" && files.length === 0))
-            typeAuxError = true;
+    if ((type === "pdb" && !pdbId) || (type === "repo" && !repoUrl) || (type === "file" && files.length === 0))
+      auxErr = true
 
-        setNameError(!name);
-        setTypeError(!type);
-        setTypeAuxError(typeAuxError);
-        setNotebooksRepoError(notebooksInvalid);
+    setNameError(!name)
+    setTypeError(!type)
+    setTypeAuxError(auxErr)
+    setNotebooksRepoError(notebooksInvalid)
 
-        if (name && type && !typeAuxError && !notebooksInvalid) return true;
+    if (name && type && !auxErr && !notebooksInvalid) return true
 
-        showError("Please fill in all required fields");
-        return false;
-    };
+    toast.error("Please fill in all required fields")
+    return false
+  }
 
-    const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-        event.preventDefault();
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
 
-        if (loading || !validateForm()) return;
+    if (createExperiment.isPending || !validateForm()) return
 
-        setLoading(true);
+    const formData = new FormData()
+    formData.append("experiment-name", name)
+    formData.append("type", type)
+    formData.append("notebooks-repo", notebooksRepo)
+    if (type === "pdb") formData.append("pdb-id", pdbId)
+    if (type === "repo") formData.append("repo-url", repoUrl)
+    if (type === "file" && files.length > 0) {
+      files.forEach((file) => formData.append("simulation-files", file))
+    }
+    if (accessToken) formData.append("access-token", accessToken)
 
-        const formData = new FormData();
-        formData.append("experiment-name", name);
-        formData.append("type", type);
-        formData.append("notebooks-repo", notebooksRepo);
-        if (type === "pdb") formData.append("pdb-id", pdbId);
-        if (type === "repo") formData.append("repo-url", repoUrl);
-        if (type === "file" && files.length > 0) {
-            files.forEach((file) => formData.append("simulation-files", file));
-        }
-        if (accessToken) formData.append("access-token", accessToken);
+    createExperiment.mutate(formData, {
+      onSuccess: (data) => {
+        toast.success("Experiment created successfully!")
+        navigate({ to: "/$id/wizard", params: { id: data.id } })
+      },
+    })
+  }
 
-        const { data, error } = await create_experiment(formData);
+  const handleTypeChange = (newType: string) => {
+    setType(newType)
+    setPdbId("")
+    setRepoUrl("")
+    setFiles([])
+  }
 
-        if (error) {
-            showError(error);
-            setLoading(false);
-            return;
-        }
+  return (
+    <div className="flex flex-col gap-6">
+      <h1 className="text-center text-3xl font-bold">New Experiment</h1>
 
-        console.log("Experiment created:", data);
-        showSuccess("Experiment created successfully!");
-        setLoading(false);
-        navigate(`/${data!.id}/wizard`);
-    };
+      <Card className="mx-auto w-full max-w-xl">
+        <CardContent className="pt-6">
+          <form autoComplete="off" onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="experiment-name">Name</Label>
+              <Input
+                id="experiment-name"
+                name="experiment-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={nameError ? "border-destructive" : ""}
+              />
+            </div>
 
-    const handleTypeChange = (_: React.SyntheticEvent, newType: string | false) => {
-        if (typeof newType !== "string") return;
-        setType(newType);
-        setPdbId("");
-        setRepoUrl("");
-        setFiles([]);
-    };
+            <div className="flex flex-col gap-2">
+              <Label>Initial Data</Label>
+              <Tabs value={type || ""} onValueChange={handleTypeChange}>
+                <TabsList className="w-full">
+                  <TabsTrigger value="file" className="flex-1">
+                    Upload Files
+                  </TabsTrigger>
+                  <TabsTrigger value="pdb" className="flex-1">
+                    PDB ID
+                  </TabsTrigger>
+                  <TabsTrigger value="repo" className="flex-1">
+                    DOI / Repository
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+              {(typeError || typeAuxError) && (
+                <p className="text-destructive text-xs">Select a source and fill its required details.</p>
+              )}
+            </div>
 
-    return (
-        <>
-            <Typography variant="h1" gutterBottom align="center">
-                New Experiment
-            </Typography>
+            {type === "pdb" && (
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="pdb-id">PDB ID</Label>
+                <Input
+                  id="pdb-id"
+                  value={pdbId}
+                  onChange={(e) => setPdbId(e.target.value)}
+                  className={typeAuxError ? "border-destructive" : ""}
+                />
+              </div>
+            )}
+            {type === "repo" && (
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="repo-url">DOI or Repository URL</Label>
+                <Input
+                  id="repo-url"
+                  value={repoUrl}
+                  onChange={(e) => setRepoUrl(e.target.value)}
+                  className={typeAuxError ? "border-destructive" : ""}
+                />
+                <p className="text-muted-foreground text-xs">
+                  Supports any InvenioRDM repository (e.g. Zenodo, MDRepo) or a DOI link
+                </p>
+              </div>
+            )}
+            {type === "file" && <Dropzone inputName="simulation-files" onFilesChange={setFiles} />}
 
-            <Paper elevation={2} sx={{ maxWidth: 640, mx: "auto" }}>
-                <Stack component="form" autoComplete="off" onSubmit={handleSubmit} spacing={4} p={4} sx={{ width: 1 }}>
-                    <TextField
-                        name="experiment-name"
-                        label="Name"
-                        variant="outlined"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        error={nameError}
-                    />
-
-                    <FormControl error={typeError || typeAuxError}>
-                        <FormLabel>Initial Data</FormLabel>
-                        <Tabs
-                            value={type || false}
-                            onChange={handleTypeChange}
-                            aria-label="Initial data source"
-                            variant="fullWidth"
-                            TabIndicatorProps={{ style: { display: "none" } }}
-                            sx={{ mt: 1 }}
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-1">
+                <Label htmlFor="notebooks-repo">Notebooks Repository</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="notebooks-repo"
+                    value={notebooksRepo}
+                    onChange={(e) => handleNotebooksRepoChange(e.target.value)}
+                    className={notebooksRepoError ? "border-destructive flex-1" : "flex-1"}
+                  />
+                  {notebooksRepo !== DEFAULT_NOTEBOOKS_REPO && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleNotebooksRepoChange(DEFAULT_NOTEBOOKS_REPO)}
+                          aria-label="Reset to default"
                         >
-                            <Tab value="file" label="Upload Files" disableRipple sx={tabStyles} />
-                            <Tab value="pdb" label="PDB ID" disableRipple sx={tabStyles} />
-                            <Tab value="repo" label="DOI / Repository" disableRipple sx={tabStyles} />
-                        </Tabs>
-                        {(typeError || typeAuxError) && (
-                            <FormHelperText>Select a source and fill its required details.</FormHelperText>
-                        )}
-                    </FormControl>
+                          <RotateCcw className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Reset to default</TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+                <p className="text-muted-foreground text-xs">
+                  {notebooksRepoError
+                    ? "Enter a valid git repository"
+                    : "Git repository with notebooks. Supports Binder and standard repos."}
+                </p>
+              </div>
 
-                    {type === "pdb" && (
-                        <TextField
-                            id="pdb-id"
-                            label="PDB ID"
-                            variant="outlined"
-                            value={pdbId}
-                            onChange={(e) => setPdbId(e.target.value)}
-                            error={typeAuxError}
-                        />
-                    )}
-                    {type === "repo" && (
-                        <TextField
-                            id="repo-url"
-                            label="DOI or Repository URL"
-                            variant="outlined"
-                            value={repoUrl}
-                            onChange={(e) => setRepoUrl(e.target.value)}
-                            error={typeAuxError}
-                            helperText="Supports any InvenioRDM repository (e.g. Zenodo, MDRepo) or a DOI link"
-                        />
-                    )}
-                    {type === "file" && <Dropzone inputName="simulation-files" onFilesChange={setFiles} />}
-
-                    <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                        <TextField
-                            id="notebooks-repo"
-                            label="Notebooks Repository"
-                            variant="outlined"
-                            value={notebooksRepo}
-                            onChange={(e) => handleNotebooksRepoChange(e.target.value)}
-                            error={notebooksRepoError}
-                            helperText={
-                                notebooksRepoError
-                                    ? "Enter a valid git repository"
-                                    : "Git repository with notebooks. Supports Binder and standard repos."
-                            }
-                            slotProps={{
-                                input: {
-                                    endAdornment: notebooksRepo !== DEFAULT_NOTEBOOKS_REPO && (
-                                        <InputAdornment position="end">
-                                            <Tooltip title="Reset to default">
-                                                <IconButton
-                                                    edge="end"
-                                                    onClick={() => handleNotebooksRepoChange(DEFAULT_NOTEBOOKS_REPO)}
-                                                    size="small"
-                                                    aria-label="Reset notebooks repo to default"
-                                                >
-                                                    <ReplayIcon />
-                                                </IconButton>
-                                            </Tooltip>
-                                        </InputAdornment>
-                                    ),
-                                },
-                            }}
-                        />
-
-                        {notebooksRepo !== DEFAULT_NOTEBOOKS_REPO && isHttpsRepo && (
-                            <Box>
-                                <Box
-                                    sx={{
-                                        cursor: "pointer",
-                                        display: "inline-block",
-                                    }}
-                                    onClick={() => setShowTokenInput(!showTokenInput)}
-                                >
-                                    <Typography
-                                        variant="body2"
-                                        color="text.secondary"
-                                        sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}
-                                    >
-                                        {showTokenInput ? (
-                                            <ExpandLessIcon fontSize="small" />
-                                        ) : (
-                                            <ExpandMoreIcon fontSize="small" />
-                                        )}
-                                        {showTokenInput ? "Hide access token" : "Provide access token"}
-                                    </Typography>
-                                </Box>
-                                <Collapse in={showTokenInput}>
-                                    <TextField
-                                        id="access-token"
-                                        label="Git Access Token"
-                                        type="password"
-                                        variant="outlined"
-                                        value={accessToken}
-                                        onChange={(e) => setAccessToken(e.target.value)}
-                                        placeholder="e.g. ghp_xxxxx, glpat_xxxxx, github_pat_xxxxx"
-                                        helperText="Required for private HTTPS repositories. Not applicable for SSH URLs. Only used for cloning, not stored."
-                                        sx={{ mt: 1 }}
-                                        fullWidth
-                                    />
-                                </Collapse>
-                            </Box>
-                        )}
-                    </Box>
-
-                    <Button
-                        variant="contained"
-                        type="submit"
-                        disabled={loading}
-                        startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
-                        sx={{ alignSelf: "flex-start" }}
+              {notebooksRepo !== DEFAULT_NOTEBOOKS_REPO && isHttpsRepo && (
+                <Collapsible open={showTokenInput} onOpenChange={setShowTokenInput}>
+                  <CollapsibleTrigger asChild>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors"
                     >
-                        {loading ? "Creating..." : "Create Experiment"}
-                    </Button>
-                </Stack>
-            </Paper>
-        </>
-    );
-};
+                      {showTokenInput ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      {showTokenInput ? "Hide access token" : "Provide access token"}
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2 flex flex-col gap-1">
+                    <Label htmlFor="access-token">Git Access Token</Label>
+                    <Input
+                      id="access-token"
+                      type="password"
+                      value={accessToken}
+                      onChange={(e) => setAccessToken(e.target.value)}
+                      placeholder="e.g. ghp_xxxxx, glpat_xxxxx, github_pat_xxxxx"
+                    />
+                    <p className="text-muted-foreground text-xs">
+                      Required for private HTTPS repositories. Not applicable for SSH URLs. Only used for cloning, not
+                      stored.
+                    </p>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+            </div>
 
-export default New;
+            <Button type="submit" disabled={createExperiment.isPending} className="self-start">
+              {createExperiment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {createExperiment.isPending ? "Creating..." : "Create Experiment"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+export default New

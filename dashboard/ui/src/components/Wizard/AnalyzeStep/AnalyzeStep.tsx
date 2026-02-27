@@ -1,97 +1,91 @@
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react"
 
-import { Stack, Paper, Box, Typography } from "@mui/material";
-import { Category, Timeline } from "@mui/icons-material";
-import { BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory";
-import { BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates";
+import { Activity, Shapes } from "lucide-react"
+import { type BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates"
+import { type BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory"
 
-import { WizardStepProps } from "@/components/Wizard/Stepper";
-import MolStar from "@/components/MolStar";
-import FileSelector from "@/components/FileSelector";
-import NotebookController from "@/components/Wizard/SetupStep/NotebookController";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import FileSelector from "@/components/FileSelector"
+import MolStar from "@/components/MolStar"
+import NotebookController from "@/components/Wizard/SetupStep/NotebookController"
+import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
-const STRUCTURE_FORMATS = ["pdb", "gro"];
-const COORDINATE_FORMATS = ["xtc", "trr"];
-const LEFT_PANEL_MIN_WIDTH = 300;
+const STRUCTURE_FORMATS = ["pdb", "gro"]
+const COORDINATE_FORMATS = ["xtc", "trr"]
 
 const AnalyzeStep = (props: WizardStepProps) => {
-    const { experiment } = props;
+  const { experiment } = props
 
-    const [structureFile, setStructureFile] = useState<string>("");
-    const [coordsFile, setCoordsFile] = useState<string>("");
+  const [structureFile, setStructureFile] = useState<string>("")
+  const [coordsFile, setCoordsFile] = useState<string>("")
 
-    useEffect(() => {
-        // also clear coords file when structure file is cleared
-        if (!structureFile) {
-            setCoordsFile("");
-        }
-    }, [structureFile]);
+  useEffect(() => {
+    if (!structureFile) {
+      setCoordsFile("")
+    }
+  }, [structureFile])
 
-    const molstarViewer = useMemo(() => {
-        if (!structureFile) return null;
-
-        return (
-            <MolStar
-                width="800px"
-                height="600px"
-                structureUrl={structureFile}
-                structureFormat={structureFile.split(".").pop() as BuiltInTrajectoryFormat}
-                coordsUrl={coordsFile || undefined}
-                coordsFormat={coordsFile ? (coordsFile.split(".").pop() as BuiltInCoordinatesFormat) : undefined}
-            />
-        );
-    }, [structureFile, coordsFile]);
+  const molstarViewer = useMemo(() => {
+    if (!structureFile) return null
 
     return (
-        <Stack direction="column" alignItems="center" spacing={2}>
-            <Stack direction="row" width="90%" spacing={2} alignItems="flex-start">
-                <Stack spacing={2} minWidth={LEFT_PANEL_MIN_WIDTH}>
-                    <Paper variant="outlined" sx={{ padding: 4 }}>
-                        <Stack spacing={2}>
-                            <Typography variant="h3">Analyze Files</Typography>
+      <MolStar
+        width="800px"
+        height="600px"
+        structureUrl={structureFile}
+        structureFormat={structureFile.split(".").pop() as BuiltInTrajectoryFormat}
+        coordsUrl={coordsFile || undefined}
+        coordsFormat={coordsFile ? (coordsFile.split(".").pop() as BuiltInCoordinatesFormat) : undefined}
+      />
+    )
+  }, [structureFile, coordsFile])
 
-                            <Stack direction="row" spacing={1} alignItems="center">
-                                <Category fontSize="small" color="action" />
-                                <Typography variant="subtitle1" color="text.secondary">
-                                    Structure
-                                </Typography>
-                            </Stack>
-                            <FileSelector
-                                experimentId={experiment.id}
-                                ext={STRUCTURE_FORMATS}
-                                title="Select structure file"
-                                onFileSelected={setStructureFile}
-                            />
-                            {structureFile && (
-                                <>
-                                    <Stack direction="row" spacing={1} alignItems="center">
-                                        <Timeline fontSize="small" color="action" />
-                                        <Typography variant="subtitle1" color="text.secondary">
-                                            Coordinates
-                                        </Typography>
-                                    </Stack>
-                                    <FileSelector
-                                        experimentId={experiment.id}
-                                        ext={COORDINATE_FORMATS}
-                                        title="Select coordinates file"
-                                        onFileSelected={setCoordsFile}
-                                    />
-                                </>
-                            )}
-                        </Stack>
-                    </Paper>
+  return (
+    <div className="flex w-full flex-col items-center gap-4">
+      <div className="flex w-[90%] flex-row items-start gap-4">
+        <div className="flex min-w-72 flex-col gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Analyze Files</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <div className="text-muted-foreground flex items-center gap-1 text-sm">
+                  <Shapes className="h-4 w-4" />
+                  <span>Structure</span>
+                </div>
+                <FileSelector
+                  experimentId={experiment.id}
+                  ext={STRUCTURE_FORMATS}
+                  title="Select structure file"
+                  onFileSelected={setStructureFile}
+                />
+              </div>
 
-                    <NotebookController experimentId={experiment.id} />
-                </Stack>
+              {structureFile && (
+                <div className="flex flex-col gap-2">
+                  <div className="text-muted-foreground flex items-center gap-1 text-sm">
+                    <Activity className="h-4 w-4" />
+                    <span>Coordinates</span>
+                  </div>
+                  <FileSelector
+                    experimentId={experiment.id}
+                    ext={COORDINATE_FORMATS}
+                    title="Select coordinates file"
+                    onFileSelected={setCoordsFile}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-                <Stack spacing={2} flexGrow={1} alignItems="center">
-                    <Box width="100%" display="flex" justifyContent="center" alignItems="center">
-                        {molstarViewer}
-                    </Box>
-                </Stack>
-            </Stack>
-        </Stack>
-    );
-};
+          <NotebookController experimentId={experiment.id} />
+        </div>
 
-export default AnalyzeStep;
+        <div className="flex flex-1 items-center justify-center">{molstarViewer}</div>
+      </div>
+    </div>
+  )
+}
+
+export default AnalyzeStep

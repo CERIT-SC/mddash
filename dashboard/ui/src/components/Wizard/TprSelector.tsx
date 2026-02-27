@@ -1,114 +1,97 @@
-import { useState } from "react";
+import { useState } from "react"
 
-import { Stack, Paper, Typography, Button, IconButton, CircularProgress, Box } from "@mui/material";
-import { Delete, Add } from "@mui/icons-material";
+import { Loader2, Plus, Trash2 } from "lucide-react"
 
-import FileSelector from "@/components/FileSelector";
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import FileSelector from "@/components/FileSelector"
 
 interface TprSelectorProps {
-    experimentId: string;
-    title?: string;
-    addTitle: string;
-    tprFiles: string[];
-    selectedTpr: string | null;
-    loading?: boolean;
-    onAddTpr: (tpr: string) => void;
-    onDeleteTpr: (tpr: string) => void;
-    onSelectTpr: (tpr: string) => void;
+  experimentId: string
+  title?: string
+  addTitle: string
+  tprFiles: string[]
+  selectedTpr: string | null
+  loading?: boolean
+  onAddTpr: (tpr: string) => void
+  onDeleteTpr: (tpr: string) => void
+  onSelectTpr: (tpr: string | null) => void
 }
 
 const TprSelector = (props: TprSelectorProps) => {
-    const { experimentId, title, addTitle, tprFiles, selectedTpr, loading, onAddTpr, onDeleteTpr, onSelectTpr } = props;
+  const { experimentId, title, addTitle, tprFiles, selectedTpr, loading, onAddTpr, onDeleteTpr, onSelectTpr } = props
 
-    const [fileSelectorTpr, setFileSelectorTpr] = useState<string>("");
+  const [fileSelectorTpr, setFileSelectorTpr] = useState<string>("")
 
-    return (
-        <Paper variant="outlined" sx={{ width: 300, padding: 4 }}>
-            <Stack direction="column" spacing={2}>
-                {title && <Typography variant="h3">{title}</Typography>}
-                <FileSelector
-                    experimentId={experimentId}
-                    ext="tpr"
-                    title="Select TPR file"
-                    onFileSelected={(filePath) => setFileSelectorTpr(filePath.split("/").pop() ?? "")}
-                    ignoreFiles={tprFiles}
-                />
+  return (
+    <Card className="w-72 shrink-0">
+      <CardHeader className="pb-2">{title && <CardTitle className="text-base">{title}</CardTitle>}</CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <FileSelector
+          experimentId={experimentId}
+          ext="tpr"
+          title="Select TPR file"
+          onFileSelected={(filePath) => setFileSelectorTpr(filePath.split("/").pop() ?? "")}
+          ignoreFiles={tprFiles}
+        />
+        <Button
+          variant="default"
+          disabled={!fileSelectorTpr || tprFiles.includes(fileSelectorTpr)}
+          onClick={() => {
+            onAddTpr(fileSelectorTpr)
+            setFileSelectorTpr("")
+          }}
+        >
+          <Plus className="mr-1 h-4 w-4" />
+          {addTitle}
+        </Button>
+
+        <div className="flex flex-col gap-1">
+          {loading ? (
+            <div className="flex justify-center py-2">
+              <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
+            </div>
+          ) : (
+            tprFiles.map((tpr) => (
+              <div
+                key={tpr}
+                className={cn(
+                  "flex cursor-pointer items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
+                  selectedTpr === tpr
+                    ? "border-foreground bg-primary text-primary-foreground"
+                    : "border-border hover:bg-muted"
+                )}
+                onClick={() => {
+                  if (selectedTpr === tpr) onSelectTpr(null)
+                  else onSelectTpr(tpr)
+                }}
+              >
+                <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap" title={tpr}>
+                  {tpr}
+                </span>
                 <Button
-                    variant="contained"
-                    color="primary"
-                    startIcon={<Add />}
-                    disabled={!fileSelectorTpr || tprFiles.includes(fileSelectorTpr)}
-                    onClick={() => {
-                        onAddTpr(fileSelectorTpr);
-                        setFileSelectorTpr("");
-                    }}
+                  variant="ghost"
+                  size="icon"
+                  aria-label="delete"
+                  className={cn(
+                    "h-6 w-6 shrink-0",
+                    selectedTpr === tpr ? "text-primary-foreground hover:bg-primary-foreground/20" : ""
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDeleteTpr(tpr)
+                  }}
                 >
-                    {addTitle}
+                  <Trash2 className="h-3 w-3" />
                 </Button>
+              </div>
+            ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
-                <Stack direction="column" spacing={1}>
-                    {loading ? (
-                        <Box display="flex" justifyContent="center" py={2}>
-                            <CircularProgress size={24} />
-                        </Box>
-                    ) : (
-                        tprFiles.map((tpr) => (
-                            <Stack
-                                key={tpr}
-                                direction="row"
-                                spacing={2}
-                                alignItems="center"
-                                justifyContent="space-between"
-                                sx={{
-                                    padding: "8px 12px",
-                                    cursor: "pointer",
-                                    borderRadius: 1,
-                                    border: 1,
-                                    borderColor: selectedTpr === tpr ? "text.primary" : "divider",
-                                    backgroundColor: selectedTpr === tpr ? "primary.main" : "background.paper",
-                                    "&:hover": {
-                                        backgroundColor: selectedTpr === tpr ? "primary.main" : "action.hover",
-                                    },
-                                    color: selectedTpr === tpr ? "primary.contrastText" : "text.primary",
-                                    transition: "all 0.2s",
-                                }}
-                            >
-                                <Typography
-                                    variant="body1"
-                                    onClick={() => {
-                                        if (selectedTpr === tpr) onSelectTpr("");
-                                        else onSelectTpr(tpr);
-                                    }}
-                                    title={tpr}
-                                    sx={{
-                                        flexGrow: 1,
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap",
-                                    }}
-                                >
-                                    {tpr}
-                                </Typography>
-                                <IconButton
-                                    aria-label="delete"
-                                    size="small"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        onDeleteTpr(tpr);
-                                    }}
-                                    sx={{
-                                        color: selectedTpr === tpr ? "primary.contrastText" : "text.primary",
-                                    }}
-                                >
-                                    <Delete fontSize="small" />
-                                </IconButton>
-                            </Stack>
-                        ))
-                    )}
-                </Stack>
-            </Stack>
-        </Paper>
-    );
-};
-
-export default TprSelector;
+export default TprSelector

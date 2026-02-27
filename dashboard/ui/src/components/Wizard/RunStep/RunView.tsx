@@ -1,145 +1,90 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react"
 
-import {
-    Box,
-    Stack,
-    Typography,
-    CircularProgress,
-    FormControl,
-    MenuItem,
-    InputLabel,
-    Select,
-    Paper,
-    SelectChangeEvent,
-} from "@mui/material";
+import { Loader2 } from "lucide-react"
 
-import { WizardStepProps } from "@/components/Wizard/Stepper";
-import { GromacsJob } from "@/util/types";
-import { gmx_status, gmx_logs } from "@/util/api";
-import { useNotification } from "@/contexts/useNotification";
-import LogsView from "@/components/LogsView";
-import StartForm from "./StartForm";
-import JobStatusDisplay from "./JobStatusDisplay";
+import { SELECT_NONE } from "@/util/const"
+import { useGromacsLogs, useGromacsStatus } from "@/hooks/use-gromacs"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import LogsView from "@/components/LogsView"
+import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
-const POLLING_INTERVAL_MS = 5000;
-const LOG_TAIL_LINES = 100;
+import JobStatusDisplay from "./JobStatusDisplay"
+import StartForm from "./StartForm"
 
-type LogType = "gmx" | "stdout" | "stderr" | "";
+type LogType = "gmx" | "stdout" | "stderr"
 
 interface RunViewProps extends WizardStepProps {
-    tprName: string;
-    onStartJob: () => void;
+  tprName: string
+  onStartJob: () => void
 }
 
 const RunView = (props: RunViewProps) => {
-    const { experiment, tprName, onStartJob } = props;
-    const { showError } = useNotification();
+  const { experiment, tprName, onStartJob } = props
 
-    const [loading, setLoading] = useState(false);
-    const [jobStatus, setJobStatus] = useState<GromacsJob | null>(null);
-    const [logType, setLogType] = useState<LogType>("");
+  const [logType, setLogType] = useState<LogType | "">("")
 
-    const fetchStatus = useCallback(
-        async (displayError: boolean) => {
-            const { data, error } = await gmx_status(experiment.id, tprName);
-            if (displayError && error) {
-                showError(error);
-            }
-            setJobStatus(data || null);
-        },
-        [experiment.id, tprName, showError],
-    );
+  const jobQuery = useGromacsStatus(experiment.id, tprName)
 
-    useEffect(() => {
-        setLoading(true);
-        setLogType("");
-        fetchStatus(false).finally(() => setLoading(false));
-    }, [fetchStatus]);
+  const jobStatus = jobQuery.data ?? null
+  const isRunning = jobStatus?.status === "RUNNING"
 
-    useEffect(() => {
-        if (!jobStatus || jobStatus.status === "TERMINATED" || jobStatus.status === "ERROR") {
-            return;
-        }
+  const logsAvailable = !!jobStatus && jobStatus.nsteps !== null
+  const shouldRefreshLogs = isRunning
 
-        const intervalId = setInterval(() => fetchStatus(true), POLLING_INTERVAL_MS);
-        return () => clearInterval(intervalId);
-    }, [jobStatus, fetchStatus]);
+  const logsQuery = useGromacsLogs(experiment.id, tprName, logType, shouldRefreshLogs)
 
-    const handleJobStarted = () => {
-        fetchStatus(true);
-        onStartJob();
-    };
+  const handleJobStarted = () => {
+    jobQuery.refetch()
+    onStartJob()
+  }
 
-    const getLogs = useCallback(async () => {
-        if (!logType) return "No log type selected";
-
-        const { data, error } = await gmx_logs(experiment.id, tprName, logType, LOG_TAIL_LINES);
-        if (error) showError(error);
-        return data || "";
-    }, [experiment.id, tprName, logType, showError]);
-
-    const handleLogTypeChange = (event: SelectChangeEvent<string>) => {
-        setLogType(event.target.value as LogType);
-    };
-
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-                <CircularProgress />
-            </Box>
-        );
-    }
-
-    if (!jobStatus) {
-        return <StartForm {...props} onStartJob={handleJobStarted} />;
-    }
-
-    const logsAvailable = jobStatus.nsteps !== null;
-    const shouldRefreshLogs = jobStatus.status === "RUNNING";
-
+  if (jobQuery.isLoading) {
     return (
-        <Stack spacing={2} alignItems="flex-start">
-            <JobStatusDisplay jobStatus={jobStatus} />
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+      </div>
+    )
+  }
 
-            {logsAvailable && (
-                <>
-                    <Typography variant="subtitle1">Logs</Typography>
-                    <Paper variant="outlined" sx={{ padding: 2, width: "100%" }}>
-                        <Stack direction="row">
-                            <Typography variant="body1" sx={{ alignSelf: "center", mr: 2 }}>
-                                Select:
-                            </Typography>
+  if (!jobStatus) {
+    return <StartForm {...props} onStartJob={handleJobStarted} />
+  }
 
-                            <FormControl sx={{ minWidth: 200 }}>
-                                <InputLabel id="log-type-selector">Log Type</InputLabel>
-                                <Select
-                                    labelId="log-type-selector"
-                                    label="Log Type"
-                                    value={logType}
-                                    onChange={handleLogTypeChange}
-                                >
-                                    <MenuItem value="">
-                                        <em>None</em>
-                                    </MenuItem>
-                                    <MenuItem value="gmx">Gromacs Log</MenuItem>
-                                    <MenuItem value="stdout">Standard Output</MenuItem>
-                                    <MenuItem value="stderr">Standard Error</MenuItem>
-                                </Select>
-                            </FormControl>
-                        </Stack>
+  return (
+    <div className="flex flex-col gap-4">
+      <JobStatusDisplay jobStatus={jobStatus} />
 
-                        {logType && (
-                            <LogsView
-                                getLogs={getLogs}
-                                refreshInterval={shouldRefreshLogs ? POLLING_INTERVAL_MS : undefined}
-                                sx={{ mt: 2 }}
-                            />
-                        )}
-                    </Paper>
-                </>
-            )}
-        </Stack>
-    );
-};
+      {logsAvailable && (
+        <div className="flex flex-col gap-3">
+          <h3 className="text-sm font-semibold">Logs</h3>
+          <div className="flex flex-col gap-3 rounded-md border p-3">
+            <div className="flex items-center gap-3">
+              <Label htmlFor="log-type-select">Select:</Label>
+              <Select
+                value={logType || SELECT_NONE}
+                onValueChange={(val) => setLogType(val === SELECT_NONE ? "" : (val as LogType))}
+              >
+                <SelectTrigger id="log-type-select" className="w-52">
+                  <SelectValue placeholder="Log Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_NONE}>
+                    <em>None</em>
+                  </SelectItem>
+                  <SelectItem value="gmx">Gromacs Log</SelectItem>
+                  <SelectItem value="stdout">Standard Output</SelectItem>
+                  <SelectItem value="stderr">Standard Error</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-export default RunView;
+            {logType && <LogsView logs={logsQuery.data ?? ""} className="mt-1" />}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default RunView
