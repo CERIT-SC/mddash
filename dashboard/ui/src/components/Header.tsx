@@ -2,7 +2,7 @@ import { useContext } from "react"
 
 import { ThemeContext } from "@/ThemeContext"
 import { Link, useRouterState } from "@tanstack/react-router"
-import { LayoutDashboard, Moon, Sun, Waypoints } from "lucide-react"
+import { House, LayoutDashboard, Moon, Sun } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -22,7 +22,7 @@ const Header = () => {
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon" asChild className="text-primary-foreground hover:bg-foreground/10">
                 <a href="/hub/home" aria-label="Back to JupyterHub">
-                  <Waypoints className="h-5 w-5" />
+                  <House className="h-5 w-5" />
                 </a>
               </Button>
             </TooltipTrigger>
