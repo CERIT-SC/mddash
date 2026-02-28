@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
 
-import { Loader2 } from "lucide-react"
+import { Loader2, Star } from "lucide-react"
 
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
@@ -75,38 +75,48 @@ const TunerTable = (props: TunerTableProps) => {
         <Table>
           <TableHeader>
             <TableRow className="bg-primary hover:bg-primary">
-              <TableHead className="text-primary-foreground">Select</TableHead>
+              <TableHead className="text-primary-foreground text-center">Select</TableHead>
               <TableHead className="text-primary-foreground">Status</TableHead>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <TableHead className="text-primary-foreground cursor-help text-right">Performance</TableHead>
-                </TooltipTrigger>
-                <TooltipContent>Measured performance (ns/day)</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <TableHead className="text-primary-foreground cursor-help text-right">PME</TableHead>
-                </TooltipTrigger>
-                <TooltipContent>Device type for PME calculations</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <TableHead className="text-primary-foreground cursor-help text-right">NB</TableHead>
-                </TooltipTrigger>
-                <TooltipContent>Device type for non-bonded interactions</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <TableHead className="text-primary-foreground cursor-help text-right">NP</TableHead>
-                </TooltipTrigger>
-                <TooltipContent>Number of MPI processes</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <TableHead className="text-primary-foreground cursor-help text-right">NTOMP</TableHead>
-                </TooltipTrigger>
-                <TooltipContent>Number of OpenMP threads per MPI rank</TooltipContent>
-              </Tooltip>
+              <TableHead className="text-primary-foreground text-right">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help">Performance</span>
+                  </TooltipTrigger>
+                  <TooltipContent>Measured performance (ns/day)</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead className="text-primary-foreground text-right">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help">PME</span>
+                  </TooltipTrigger>
+                  <TooltipContent>Device type for PME calculations</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead className="text-primary-foreground text-right">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help">NB</span>
+                  </TooltipTrigger>
+                  <TooltipContent>Device type for non-bonded interactions</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead className="text-primary-foreground text-right">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help">NP</span>
+                  </TooltipTrigger>
+                  <TooltipContent>Number of MPI processes</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead className="text-primary-foreground text-right">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help">NTOMP</span>
+                  </TooltipTrigger>
+                  <TooltipContent>Number of OpenMP threads per MPI rank</TooltipContent>
+                </Tooltip>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -114,20 +124,30 @@ const TunerTable = (props: TunerTableProps) => {
               const isOptimal = idx === 0 && row.performance !== null
               const variant = getJobStatusVariant(row.status as JobStatus)
               return (
-                <TableRow key={row.id}>
-                  <TableCell>
-                    <input
-                      type="radio"
-                      name="selectedTrial"
-                      checked={selectedTrial?.id === row.id}
-                      onChange={() => handleRadioClick(row, isOptimal)}
-                      onClick={() => {
-                        if (selectedTrial?.id === row.id) {
-                          setSelectedTrial(null)
-                        }
-                      }}
-                      className={cn("cursor-pointer", isOptimal ? "accent-primary" : "accent-muted-foreground")}
-                    />
+                <TableRow key={row.id} className={cn(isOptimal && "bg-primary/5 dark:bg-primary/10")}>
+                  <TableCell className="relative">
+                    <div className="flex items-center justify-center">
+                      <input
+                        type="radio"
+                        name="selectedTrial"
+                        checked={selectedTrial?.id === row.id}
+                        onChange={() => handleRadioClick(row, isOptimal)}
+                        onClick={() => {
+                          if (selectedTrial?.id === row.id) {
+                            setSelectedTrial(null)
+                          }
+                        }}
+                        className={"accent-primary cursor-pointer"}
+                      />
+                    </div>
+                    {isOptimal && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Star className="absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 cursor-default fill-yellow-400 text-yellow-400" />
+                        </TooltipTrigger>
+                        <TooltipContent>Best performing trial</TooltipContent>
+                      </Tooltip>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={cn("text-xs", statusBadgeClass(variant))}>

@@ -8,11 +8,13 @@ import Header from "@/components/Header"
 const RootLayout = () => {
   return (
     <TooltipProvider>
-      <Header />
-      <main className="min-h-[90vh] px-12 py-12">
-        <Outlet />
-      </main>
-      <Footer />
+      <div className="flex min-h-screen flex-col">
+        <Header />
+        <main className="flex-1 px-12 py-12">
+          <Outlet />
+        </main>
+        <Footer />
+      </div>
       <Toaster position="top-center" richColors closeButton />
     </TooltipProvider>
   )
