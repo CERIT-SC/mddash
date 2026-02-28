@@ -8,7 +8,7 @@ from flask import Blueprint, Response, request, session
 from models import Experiment
 from schemas import ExperimentSchema
 from token_manager import MDRepoTokenManager
-from utils import validate_git_url
+from validators import validate_git_url
 
 experiments_bp = Blueprint("experiments", __name__, url_prefix=f"{API_PREFIX}/experiments")
 

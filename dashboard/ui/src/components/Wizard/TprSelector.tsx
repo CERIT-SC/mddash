@@ -32,7 +32,7 @@ const TprSelector = (props: TprSelectorProps) => {
           experimentId={experimentId}
           ext="tpr"
           title="Select TPR file"
-          onFileSelected={(filePath) => setFileSelectorTpr(filePath.split("/").pop() ?? "")}
+          onFileSelected={(file) => setFileSelectorTpr(file?.path ?? "")}
           ignoreFiles={tprFiles}
         />
         <Button
@@ -67,8 +67,20 @@ const TprSelector = (props: TprSelectorProps) => {
                   else onSelectTpr(tpr)
                 }}
               >
-                <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap" title={tpr}>
-                  {tpr}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  {tpr.includes("/") && (
+                    <span
+                      className={cn(
+                        "truncate text-xs",
+                        selectedTpr === tpr ? "text-primary-foreground/70" : "text-muted-foreground"
+                      )}
+                    >
+                      {tpr.slice(0, tpr.lastIndexOf("/"))}/
+                    </span>
+                  )}
+                  <span className={cn("overflow-hidden text-ellipsis whitespace-nowrap", tpr.includes("/") && "pl-2")}>
+                    {tpr.split("/").pop()}
+                  </span>
                 </span>
                 <Button
                   variant="ghost"

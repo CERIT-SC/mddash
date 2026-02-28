@@ -4,6 +4,7 @@ from pathlib import Path
 
 from cache import tuner_last_known_status, tuner_status_cache
 from clients import tuner
+from config import DATA_DIR
 from enums import JobStatus
 from extensions import db
 from requests import HTTPError
@@ -105,7 +106,8 @@ class TunerJob(db.Model):  # type: ignore
         """
         response = tuner.run_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
 
-        job: TunerJob = cls(id=response["id"], experiment=experiment, tpr_name=tpr_path.name)  # type: ignore[call-arg]
+        tpr_rel_path = str(tpr_path.relative_to(DATA_DIR / experiment.id))
+        job: TunerJob = cls(id=response["id"], experiment=experiment, tpr_name=tpr_rel_path)  # type: ignore[call-arg]
         db.session.add(job)
         db.session.commit()
 

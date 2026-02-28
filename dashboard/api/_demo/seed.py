@@ -221,7 +221,7 @@ def seed_data() -> None:
     db.session.commit()
 
     ensure_demo_files(setup.id, ["cancer_cure.tpr", "input.pdb", "trajectory.xtc"])
-    ensure_demo_files(tuning.id, ["LSD.tpr", "MDMA.tpr", "Failed.tpr", "input.pdb", "trajectory.xtc"])
+    ensure_demo_files(tuning.id, ["LSD.tpr", "MDMA.tpr", "Failed.tpr", "input.pdb", "trajectory.xtc", "run1/md.tpr", "run2/md.tpr"])
     ensure_demo_files(published.id, ["output.tpr", "input.pdb", "trajectory.xtc"])
     write_running_gmx_log(tuning.id, "LSD")
     write_finished_gmx_log(tuning.id, "MDMA", nsteps=100000, performance=70.158)
@@ -239,7 +239,7 @@ def _rehydrate_runtime_state() -> None:
 
     if tuning is not None:
         demo_state.notebook_status[tuning.id] = PodStatus.RUNNING
-        ensure_demo_files(tuning.id, ["LSD.tpr", "MDMA.tpr", "Failed.tpr", "input.pdb", "trajectory.xtc"])
+        ensure_demo_files(tuning.id, ["LSD.tpr", "MDMA.tpr", "Failed.tpr", "input.pdb", "trajectory.xtc", "run1/md.tpr", "run2/md.tpr"])
         write_running_gmx_log(tuning.id, "LSD")
         write_finished_gmx_log(tuning.id, "MDMA", nsteps=100000, performance=70.158)
 

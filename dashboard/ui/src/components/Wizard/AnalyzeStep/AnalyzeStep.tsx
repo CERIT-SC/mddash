@@ -9,6 +9,7 @@ import FileSelector from "@/components/FileSelector"
 import MolStar from "@/components/MolStar"
 import NotebookController from "@/components/Wizard/SetupStep/NotebookController"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
+import type { FileOption } from "@/util/types"
 
 const STRUCTURE_FORMATS = ["pdb", "gro"]
 const COORDINATE_FORMATS = ["xtc", "trr"]
@@ -16,12 +17,12 @@ const COORDINATE_FORMATS = ["xtc", "trr"]
 const AnalyzeStep = (props: WizardStepProps) => {
   const { experiment } = props
 
-  const [structureFile, setStructureFile] = useState<string>("")
-  const [coordsFile, setCoordsFile] = useState<string>("")
+  const [structureFile, setStructureFile] = useState<FileOption | null>(null)
+  const [coordsFile, setCoordsFile] = useState<FileOption | null>(null)
 
   useEffect(() => {
     if (!structureFile) {
-      setCoordsFile("")
+      setCoordsFile(null)
     }
   }, [structureFile])
 
@@ -32,10 +33,10 @@ const AnalyzeStep = (props: WizardStepProps) => {
       <MolStar
         width="800px"
         height="600px"
-        structureUrl={structureFile}
-        structureFormat={structureFile.split(".").pop() as BuiltInTrajectoryFormat}
-        coordsUrl={coordsFile || undefined}
-        coordsFormat={coordsFile ? (coordsFile.split(".").pop() as BuiltInCoordinatesFormat) : undefined}
+        structureUrl={structureFile.url}
+        structureFormat={structureFile.name.split(".").pop() as BuiltInTrajectoryFormat}
+        coordsUrl={coordsFile?.url}
+        coordsFormat={coordsFile ? (coordsFile.name.split(".").pop() as BuiltInCoordinatesFormat) : undefined}
       />
     )
   }, [structureFile, coordsFile])

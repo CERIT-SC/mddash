@@ -213,9 +213,11 @@ class GromacsJob(db.Model):  # type: ignore
         Raises:
             Exception: If the job cannot be started.
         """
+        tpr_rel_path = str(tpr_path.relative_to(DATA_DIR / experiment.id))
+
         mdrun_job = mdrun.create_job(
             experiment_id=experiment.id,
-            tpr_name=tpr_path.name,
+            tpr_name=tpr_rel_path,
             bucket_name=S3_BUCKET,
             pme=pme.value,
             nb=nb.value,
@@ -226,7 +228,7 @@ class GromacsJob(db.Model):  # type: ignore
 
         job = GromacsJob(
             id=mdrun_job["id"],  # type: ignore[call-arg]
-            tpr_name=tpr_path.name,  # type: ignore[call-arg]
+            tpr_name=tpr_rel_path,  # type: ignore[call-arg]
             pme=pme,  # type: ignore[call-arg]
             nb=nb,  # type: ignore[call-arg]
             np=np,  # type: ignore[call-arg]
@@ -239,7 +241,7 @@ class GromacsJob(db.Model):  # type: ignore
         job._cleanup_previous_results()
 
         db.session.commit()
-        logger.info(f"Started GROMACS job {job.id} for experiment {experiment.id} with TPR {tpr_path.name}")
+        logger.info(f"Started GROMACS job {job.id} for experiment {experiment.id} with TPR {tpr_rel_path}")
 
         return job
 

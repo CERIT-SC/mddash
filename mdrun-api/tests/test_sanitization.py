@@ -41,23 +41,34 @@ def test_sanitize_experiment_id_accepts_normal_value() -> None:
     "tpr_name",
     [
         "../evil.tpr",
-        "dir/evil.tpr",
+        "dir/../evil.tpr",
+        "/abs/path.tpr",
         "evil\\path.tpr",
         "evil.tpr;rm -rf /",
+        "dir//file.tpr",
+        ".hidden/file.tpr",
         "evil",
         "evil.txt",
         "",
     ],
 )
 def test_sanitize_tpr_name_rejects_bad_values(tpr_name: str) -> None:
-    """Reject TPR names that look like paths or contain shell metacharacters."""
+    """Reject TPR names with traversal, shell metacharacters, or wrong extension."""
     with pytest.raises(ValidationError):
         sanitize_tpr_name(tpr_name)
 
 
-def test_sanitize_tpr_name_accepts_normal_value() -> None:
-    """Accept a simple TPR filename ending with .tpr."""
-    assert sanitize_tpr_name("simulation.tpr") == "simulation.tpr"
+@pytest.mark.parametrize(
+    "tpr_name",
+    [
+        "simulation.tpr",
+        "subdir/simulation.tpr",
+        "a/b/c/run.tpr",
+    ],
+)
+def test_sanitize_tpr_name_accepts_valid_values(tpr_name: str) -> None:
+    """Accept plain filenames and relative paths ending with .tpr."""
+    assert sanitize_tpr_name(tpr_name) == tpr_name
 
 
 @pytest.mark.parametrize(

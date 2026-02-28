@@ -4,7 +4,7 @@ import shlex
 from marshmallow import ValidationError
 
 _EXPERIMENT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
-_TPR_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,246}\.tpr$")
+_TPR_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,246}$")
 
 # S3 bucket naming is more nuanced, but this is a safe baseline that also
 # prevents shell injection via whitespace/metacharacters.
@@ -24,12 +24,22 @@ def sanitize_experiment_id(experiment_id: str) -> str:
 
 
 def sanitize_tpr_name(tpr_name: str) -> str:
-    """Validate the TPR filename (must be a plain filename, not a path)."""
+    """Validate a TPR relative path (may include subdirectories)."""
     tpr_name = (tpr_name or "").strip()
-    if "/" in tpr_name or "\\" in tpr_name:
-        raise ValidationError("tpr_name must be a filename, not a path.")
-    if not _TPR_NAME_RE.fullmatch(tpr_name):
-        raise ValidationError("Invalid tpr_name (expected something like 'run.tpr').")
+    if not tpr_name:
+        raise ValidationError("tpr_name cannot be empty.")
+    if "\\" in tpr_name or "\0" in tpr_name:
+        raise ValidationError("tpr_name contains forbidden characters.")
+    if tpr_name.startswith("/"):
+        raise ValidationError("tpr_name must be a relative path.")
+
+    segments = tpr_name.split("/")
+    for segment in segments:
+        if not segment or segment == ".." or not _TPR_SEGMENT_RE.fullmatch(segment):
+            raise ValidationError("Invalid tpr_name.")
+
+    if not tpr_name.endswith(".tpr"):
+        raise ValidationError("tpr_name must end with .tpr.")
     return tpr_name
 
 

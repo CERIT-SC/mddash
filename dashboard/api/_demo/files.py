@@ -26,6 +26,7 @@ def ensure_demo_files(experiment_id: str, filenames: list[str]) -> None:
         file_path = experiment_dir / filename
         if file_path.exists():
             continue
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(_resolve_fixture_path(filename), file_path)
 
 

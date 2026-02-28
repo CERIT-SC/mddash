@@ -8,7 +8,7 @@ from extensions import db
 from flask import Blueprint, Response, request
 from models import Experiment, GromacsJob
 from schemas import GromacsJobSchema
-from utils import check_filename, check_log_type, check_positive_int, find_file
+from validators import check_log_type, check_path, check_positive_int
 
 gmx_bp = Blueprint("gmx", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/gmx")
 
@@ -22,7 +22,7 @@ def get_gmx_jobs(experiment_id: str) -> Response:
     return ApiResponse.success(schema.dump(jobs))
 
 
-@gmx_bp.route("/<tpr_name>", methods=["GET"])
+@gmx_bp.route("/<path:tpr_name>", methods=["GET"])
 @handle_exceptions()
 def get_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     """Get a specific GROMACS job by TPR name."""
@@ -33,19 +33,19 @@ def get_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     return ApiResponse.success(schema.dump(job))
 
 
-@gmx_bp.route("/<tpr_name>", methods=["POST"])
+@gmx_bp.route("/<path:tpr_name>", methods=["POST"])
 @handle_exceptions(rollback=True)
 def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     """Submit a new GROMACS simulation job."""
-    check_filename(tpr_name, allowed_extensions=["tpr"])
+    check_path(tpr_name, DATA_DIR / experiment_id)
     schema = GromacsJobSchema()
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
     job: GromacsJob | None = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first()
-    tpr_path = find_file(DATA_DIR / experiment_id, tpr_name)
+    tpr_path = DATA_DIR / experiment_id / tpr_name
 
-    if not tpr_path:
+    if not tpr_path.is_file():
         return ApiResponse.error(f"TPR file {tpr_name} does not exist.", HTTPStatus.NOT_FOUND)
 
     if not job:
@@ -62,7 +62,7 @@ def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     return ApiResponse.success(schema.dump(job), HTTPStatus.CREATED)
 
 
-@gmx_bp.route("/<tpr_name>", methods=["DELETE"])
+@gmx_bp.route("/<path:tpr_name>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
 def delete_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     """Delete a GROMACS job and its associated Kubernetes resources."""
@@ -75,7 +75,7 @@ def delete_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
 
 
-@gmx_bp.route("/<tpr_name>/log", methods=["GET"])
+@gmx_bp.route("/<path:tpr_name>/log", methods=["GET"])
 @handle_exceptions()
 def get_gmx_job_log(experiment_id: str, tpr_name: str) -> Response:
     """Get log output for a GROMACS job."""

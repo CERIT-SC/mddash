@@ -80,6 +80,7 @@ export interface ResourceUsage {
 
 export interface FileOption {
   name: string
+  path: string
   url: string
   size: number
 }
