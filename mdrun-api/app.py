@@ -10,7 +10,12 @@ from sqlalchemy import text
 
 
 def create_app() -> Flask:
-    """Create and configure the Flask application."""
+    """
+    Create and configure the Flask application.
+
+    Returns:
+        Flask: The configured Flask application instance.
+    """
     app = Flask(__name__)
 
     app_env = os.getenv("APP_ENV", "prod")

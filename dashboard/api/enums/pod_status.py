@@ -13,10 +13,20 @@ class PodStatus(str, Enum):
     TERMINATED = "TERMINATED"
 
     def __str__(self) -> str:
-        """Return the string value of the pod status."""
+        """
+        Return the string value of the pod status.
+
+        Returns:
+            str: The string value of this enum member.
+        """
         return self.value
 
     @classmethod
     def from_string(cls, value: str) -> "PodStatus":
-        """Create a PodStatus from a string value."""
+        """
+        Create a PodStatus from a string value.
+
+        Returns:
+            PodStatus: The matching enum member.
+        """
         return cls(value.upper())

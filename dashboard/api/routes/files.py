@@ -14,7 +14,12 @@ files_bp = Blueprint("files", __name__, url_prefix=f"{API_PREFIX}/experiments/<e
 @files_bp.route("", methods=["GET"])
 @handle_exceptions()
 def get_files(experiment_id: str) -> Response:
-    """List files in an experiment directory, optionally filtered by extension."""
+    """
+    List files in an experiment directory, optionally filtered by extension.
+
+    Returns:
+        Response: JSON response with the list of files and their download URLs.
+    """
     check_experiment_id(experiment_id)
     ext_param = request.args.get("ext", "").lower()
     extensions = [ext.strip() for ext in ext_param.split(",") if ext.strip()] if ext_param else None
@@ -33,7 +38,12 @@ def get_files(experiment_id: str) -> Response:
 @files_bp.route("/<path:path>", methods=["GET"])
 @handle_exceptions()
 def get_file(experiment_id: str, path: str) -> Response:
-    """Download a file from an experiment directory."""
+    """
+    Download a file from an experiment directory.
+
+    Returns:
+        Response: The file contents as an inline response, or a JSON error if the file does not exist.
+    """
     check_experiment_id(experiment_id)
     check_path(path, DATA_DIR / experiment_id)
     file_path = DATA_DIR / experiment_id / path

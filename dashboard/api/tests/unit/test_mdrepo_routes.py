@@ -16,7 +16,12 @@ from token_manager import (
 
 @pytest.fixture
 def app() -> Flask:
-    """Create a test Flask app."""
+    """
+    Create a test Flask app.
+
+    Returns:
+        Flask: A minimal Flask application with the MDRepo blueprint registered.
+    """
     app = Flask(__name__)
     app.config["SECRET_KEY"] = "test_secret_key"
     app.config["TESTING"] = True
@@ -29,7 +34,12 @@ def app() -> Flask:
 
 @pytest.fixture
 def client(app: Flask) -> FlaskClient:
-    """Create a test client."""
+    """
+    Create a test client.
+
+    Returns:
+        FlaskClient: A test client bound to the MDRepo test application.
+    """
     return app.test_client()
 
 

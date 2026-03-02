@@ -48,8 +48,10 @@ class Notebook(db.Model):  # type: ignore
         """
         Start the notebook pod and service, and create a route in Caddy.
 
-        :raises HTTPException: If the pod or service creation fails.
-        :raises Exception: If the route creation fails.
+        Raises:
+            Forbidden: If the resource quota is exceeded when creating the pod.
+            Conflict: If the notebook pod already exists.
+            InternalServerError: If the pod creation fails or the proxy route cannot be created.
         """
         pod_name = f"notebook-{self.experiment_id}"
         svc_name = f"svc-{self.experiment_id}"

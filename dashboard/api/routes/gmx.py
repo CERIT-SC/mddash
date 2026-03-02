@@ -16,7 +16,12 @@ gmx_bp = Blueprint("gmx", __name__, url_prefix=f"{API_PREFIX}/experiments/<exper
 @gmx_bp.route("", methods=["GET"])
 @handle_exceptions()
 def get_gmx_jobs(experiment_id: str) -> Response:
-    """List all GROMACS jobs for an experiment."""
+    """
+    List all GROMACS jobs for an experiment.
+
+    Returns:
+        Response: JSON response with the list of GROMACS jobs.
+    """
     schema = GromacsJobSchema(many=True)
     jobs: list[GromacsJob] = GromacsJob.query.filter_by(experiment_id=experiment_id).all()
     return ApiResponse.success(schema.dump(jobs))
@@ -25,7 +30,12 @@ def get_gmx_jobs(experiment_id: str) -> Response:
 @gmx_bp.route("/<path:tpr_name>", methods=["GET"])
 @handle_exceptions()
 def get_gmx_job(experiment_id: str, tpr_name: str) -> Response:
-    """Get a specific GROMACS job by TPR name."""
+    """
+    Get a specific GROMACS job by TPR name.
+
+    Returns:
+        Response: JSON response with the GROMACS job data.
+    """
     schema = GromacsJobSchema()
     job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
         description=f"GROMACS job for {tpr_name} in experiment {experiment_id} not found"
@@ -36,7 +46,12 @@ def get_gmx_job(experiment_id: str, tpr_name: str) -> Response:
 @gmx_bp.route("/<path:tpr_name>", methods=["POST"])
 @handle_exceptions(rollback=True)
 def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
-    """Submit a new GROMACS simulation job."""
+    """
+    Submit a new GROMACS simulation job.
+
+    Returns:
+        Response: JSON response with the created GROMACS job, or an error if the TPR file does not exist.
+    """
     check_path(tpr_name, DATA_DIR / experiment_id)
     schema = GromacsJobSchema()
     experiment: Experiment = Experiment.query.get_or_404(
@@ -65,7 +80,12 @@ def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
 @gmx_bp.route("/<path:tpr_name>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
 def delete_gmx_job(experiment_id: str, tpr_name: str) -> Response:
-    """Delete a GROMACS job and its associated Kubernetes resources."""
+    """
+    Delete a GROMACS job and its associated Kubernetes resources.
+
+    Returns:
+        Response: Empty JSON response with 204 No Content on success.
+    """
     job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
         description=f"GROMACS job for {tpr_name} in experiment {experiment_id} not found"
     )
@@ -78,7 +98,12 @@ def delete_gmx_job(experiment_id: str, tpr_name: str) -> Response:
 @gmx_bp.route("/<path:tpr_name>/log", methods=["GET"])
 @handle_exceptions()
 def get_gmx_job_log(experiment_id: str, tpr_name: str) -> Response:
-    """Get log output for a GROMACS job."""
+    """
+    Get log output for a GROMACS job.
+
+    Returns:
+        Response: JSON response with the requested log content.
+    """
     job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
         description=f"GROMACS job for {tpr_name} in experiment {experiment_id} not found"
     )

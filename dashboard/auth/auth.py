@@ -54,7 +54,12 @@ def remove_expired_sessions() -> None:
 
 
 def is_valid_session(token: str, user: str) -> bool:
-    """Check if the session token is valid for the given user."""
+    """
+    Check if the session token is valid for the given user.
+
+    Returns:
+        bool: True if the token exists, belongs to the user, and has not expired.
+    """
     if not token:
         return False
     now = time.time()
@@ -63,7 +68,12 @@ def is_valid_session(token: str, user: str) -> bool:
 
 
 def create_session(user: str) -> str:
-    """Create a new session for the user and return the token."""
+    """
+    Create a new session for the user and return the token.
+
+    Returns:
+        str: A URL-safe random session token.
+    """
     token = secrets.token_urlsafe(32)
     expiry = time.time() + SESSION_LIFETIME
     _sessions[token] = (user, expiry)
@@ -71,19 +81,35 @@ def create_session(user: str) -> str:
 
 
 def sign(data: str) -> str:
-    """Create HMAC signature for state."""
+    """
+    Create HMAC signature for state.
+
+    Returns:
+        str: Hex-encoded HMAC-SHA256 digest of the input data.
+    """
     return hmac.new(STATE_SECRET, data.encode(), hashlib.sha256).hexdigest()
 
 
 @app.route("/health")
 def health() -> tuple[str, int]:
-    """Health check endpoint."""
+    """
+    Health check endpoint.
+
+    Returns:
+        tuple[str, int]: A plain-text OK body and a 200 status code.
+    """
     return "OK", HTTPStatus.OK
 
 
 @app.route("/auth")
 def auth() -> tuple[str, int] | Response:
-    """Authenticate user via session cookie or initiate OAuth flow."""
+    """
+    Authenticate user via session cookie or initiate OAuth flow.
+
+    Returns:
+        tuple[str, int] | Response: Empty 200 if already authenticated, or a
+        redirect response to the OAuth authorization URL.
+    """
     remove_expired_sessions()
     token = request.cookies.get(COOKIE_NAME)
     if token and is_valid_session(token, USER):
@@ -101,7 +127,13 @@ def auth() -> tuple[str, int] | Response:
 
 @app.route("/oauth_callback")
 def oauth_callback() -> tuple[str, int] | Response:
-    """Handle OAuth callback, exchange code for token, and create session."""
+    """
+    Handle OAuth callback, exchange code for token, and create session.
+
+    Returns:
+        tuple[str, int] | Response: A redirect to the default URL on success, or
+        an error tuple with a 400/403 status code on failure.
+    """
     code = request.args.get("code")
     state = request.args.get("state")
     signed_state = request.cookies.get(STATE_COOKIE)

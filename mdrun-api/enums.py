@@ -9,12 +9,22 @@ class DeviceType(str, Enum):
     GPU = "gpu"
 
     def __str__(self) -> str:
-        """Return the string value of the enum."""
+        """
+        Return the string value of the enum.
+
+        Returns:
+            str: The string value of this enum member.
+        """
         return self.value
 
     @classmethod
     def from_string(cls, value: str) -> "DeviceType":
-        """Create a DeviceType from a string value."""
+        """
+        Create a DeviceType from a string value.
+
+        Returns:
+            DeviceType: The matching enum member.
+        """
         return cls(value.lower())
 
 
@@ -28,5 +38,10 @@ class JobStatus(str, Enum):
     UNKNOWN = "unknown"
 
     def __str__(self) -> str:
-        """Return the string value of the enum."""
+        """
+        Return the string value of the enum.
+
+        Returns:
+            str: The string value of this enum member.
+        """
         return self.value

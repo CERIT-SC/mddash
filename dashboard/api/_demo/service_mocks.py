@@ -374,18 +374,16 @@ def _advance_tuner_status(status: dict[str, Any]) -> None:
         return
 
     next_id = f"trial-{len(trials):05d}"
-    trials.append(
-        {
-            "id": next_id,
-            "status": JobStatus.RUNNING.value,
-            "np": 2,
-            "ntomp": 4,
-            "nb": "cpu",
-            "pme": "cpu",
-            "performance": None,
-            "started_at": now,
-        }
-    )
+    trials.append({
+        "id": next_id,
+        "status": JobStatus.RUNNING.value,
+        "np": 2,
+        "ntomp": 4,
+        "nb": "cpu",
+        "pme": "cpu",
+        "performance": None,
+        "started_at": now,
+    })
 
 
 def _public_trial(trial: dict[str, object]) -> dict[str, object]:

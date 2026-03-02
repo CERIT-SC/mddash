@@ -31,16 +31,14 @@ logger = logging.getLogger(__name__)
 def _get_namespace_manifest(
     namespace: str, rancher_project_id: str, cpu_limit: str, mem_limit: str, cpu_request: str, mem_request: str
 ) -> dict:
-    resource_quota = json.dumps(
-        {
-            "limit": {
-                "limitsCpu": cpu_limit,
-                "limitsMemory": mem_limit,
-                "requestsCpu": cpu_request,
-                "requestsMemory": mem_request,
-            }
+    resource_quota = json.dumps({
+        "limit": {
+            "limitsCpu": cpu_limit,
+            "limitsMemory": mem_limit,
+            "requestsCpu": cpu_request,
+            "requestsMemory": mem_request,
         }
-    )
+    })
     return {
         "apiVersion": "v1",
         "kind": "Namespace",
@@ -114,7 +112,12 @@ def _get_pvc_manifest(pvc_name: str, storage_size: str = "10Gi", storage_class: 
 
 
 async def _ensure_resource(method: Any, **kwargs: object) -> None:  # noqa: ANN401
-    """Create a Kubernetes resource, ignoring AlreadyExists errors."""
+    """
+    Create a Kubernetes resource, ignoring AlreadyExists errors.
+
+    Raises:
+        ApiException: If the API call fails for any reason other than a 409 Conflict.
+    """
     try:
         await method(**kwargs)
     except ApiException as e:
@@ -123,26 +126,39 @@ async def _ensure_resource(method: Any, **kwargs: object) -> None:  # noqa: ANN4
 
 
 async def _resource_exists(method: Any, **kwargs: object) -> bool:  # noqa: ANN401
-    """Check if a Kubernetes resource exists."""
+    """
+    Check if a Kubernetes resource exists.
+
+    Returns:
+        bool: True if the resource exists, False if a 403 or 404 is returned.
+
+    Raises:
+        ApiException: If the API call fails for any reason other than 403 or 404.
+    """
     try:
         await method(**kwargs)
         return True
     except ApiException as e:
         # In Rancher environments, a 403 Forbidden can occur briefly after resource creation before permissions propagate to the proxy.
-        if e.status in (HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND):
+        if e.status in {HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND}:
             return False
         raise
 
 
-async def _wait_for_resource(method: Any, timeout: float = 30.0, interval: float = 0.1, **kwargs: object) -> None:  # noqa: ANN401
-    """Wait until a Kubernetes resource exists (or time out)."""
-    deadline = time.monotonic() + timeout
+async def _wait_for_resource(method: Any, timeout_s: float = 30.0, interval: float = 0.1, **kwargs: object) -> None:  # noqa: ANN401
+    """
+    Wait until a Kubernetes resource exists (or time out).
+
+    Raises:
+        TimeoutError: If the resource does not become available within timeout_s seconds.
+    """
+    deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         if await _resource_exists(method, **kwargs):
             return
         await asyncio.sleep(interval)
 
-    raise TimeoutError(f"Timed out after {timeout:.1f}s waiting for resource")
+    raise TimeoutError(f"Timed out after {timeout_s:.1f}s waiting for resource")
 
 
 def _ns_has_conditions(annotations: dict[str, str] | None, required: set[str]) -> bool:
@@ -152,6 +168,9 @@ def _ns_has_conditions(annotations: dict[str, str] | None, required: set[str]) -
     Rancher sets `cattle.io/status` JSON with Conditions including:
     - Type: InitialRolesPopulated, Status: True
     - Type: ResourceQuotaInit, Status: True
+
+    Returns:
+        bool: True if all required condition types are present with Status "True".
     """
     if not annotations:
         return False
@@ -185,11 +204,17 @@ async def _wait_for_ns_conditions(
     core_api: CoreV1Api,
     namespace: str,
     required: set[str],
-    timeout: float = 60.0,
+    timeout_s: float = 60.0,
     interval: float = 0.1,
 ) -> None:
-    """Wait until Rancher reports required namespace conditions."""
-    deadline = time.monotonic() + timeout
+    """
+    Wait until Rancher reports required namespace conditions.
+
+    Raises:
+        TimeoutError: If the required conditions are not met within timeout_s seconds.
+        ApiException: If the namespace read fails for any reason other than 403 or 404.
+    """
+    deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         try:
             ns_obj = await core_api.read_namespace(name=namespace)  # type: ignore[misc]
@@ -198,17 +223,22 @@ async def _wait_for_ns_conditions(
                 return
         except ApiException as e:
             # Catch 403/404 during the propagation window
-            if e.status not in (HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND):
+            if e.status not in {HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND}:
                 raise
         await asyncio.sleep(interval)
 
     raise TimeoutError(
-        f"Timed out after {timeout:.1f}s waiting for Rancher namespace conditions {sorted(required)} in {namespace}"
+        f"Timed out after {timeout_s:.1f}s waiting for Rancher namespace conditions {sorted(required)} in {namespace}"
     )
 
 
 def _get_security_context() -> dict:
-    """Return hardened security context for sidecar containers."""
+    """
+    Return hardened security context for sidecar containers.
+
+    Returns:
+        dict: A security context dict enforcing non-root, read-only, and capability drop policies.
+    """
     return {
         "allowPrivilegeEscalation": False,
         "runAsNonRoot": True,
@@ -357,7 +387,12 @@ def _s3_sync_container(bucket_name: str, volume_name: str, security_context: dic
 def _get_sidecar_containers(
     spawner: "KubeSpawner", bucket_name: str, pvc_name: str, volume_name: str, user_namespace: str
 ) -> list[dict]:
-    """Build sidecar container configurations for the user pod."""
+    """
+    Build sidecar container configurations for the user pod.
+
+    Returns:
+        list[dict]: Container spec dicts for all enabled sidecar containers.
+    """
     username: str = spawner.user.name  # type: ignore[union-attr]
     hub_namespace = os.environ.get("POD_NAMESPACE", "default")
     service_prefix = f"/user/{username}"
@@ -388,7 +423,7 @@ def _get_sidecar_containers(
 # =============================================================================
 
 
-async def pre_spawn_hook(spawner: "KubeSpawner") -> None:
+async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
     """
     Prepare user environment before spawning the notebook server.
 
@@ -500,7 +535,12 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:
 
 
 def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:  # noqa: ARG001
-    """Apply security hardening to the notebook container (e-INFRA requirement)."""
+    """
+    Apply security hardening to the notebook container (e-INFRA requirement).
+
+    Returns:
+        V1Pod: The pod with updated security context on the notebook container.
+    """
     if pod.spec is None:
         return pod
     for container in pod.spec.containers:

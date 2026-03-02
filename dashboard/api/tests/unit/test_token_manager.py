@@ -19,7 +19,12 @@ from token_manager import (
 
 @pytest.fixture
 def app() -> Flask:
-    """Create a test Flask app."""
+    """
+    Create a test Flask app.
+
+    Returns:
+        Flask: A minimal Flask application configured for testing.
+    """
     app = Flask(__name__)
     app.config["SECRET_KEY"] = "test_secret_key"
     app.config["TESTING"] = True
@@ -28,7 +33,12 @@ def app() -> Flask:
 
 @pytest.fixture
 def session(app: Flask) -> SessionMixin:
-    """Create a test session."""
+    """
+    Create a test session.
+
+    Returns:
+        SessionMixin: The Flask session proxy within a test request context.
+    """
     with app.test_request_context():
         return flask_session
 

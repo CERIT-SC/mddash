@@ -15,7 +15,12 @@ tuner_bp = Blueprint("tuner", __name__, url_prefix=f"{API_PREFIX}/experiments/<e
 @tuner_bp.route("", methods=["GET"])
 @handle_exceptions()
 def list_tuner_jobs(experiment_id: str) -> Response:
-    """List all tuner jobs for an experiment."""
+    """
+    List all tuner jobs for an experiment.
+
+    Returns:
+        Response: JSON response with the list of tuner jobs.
+    """
     schema = TunerJobSchema(many=True)
     tuner_jobs = TunerJob.query.filter_by(experiment_id=experiment_id).all()
     return ApiResponse.success(schema.dump(tuner_jobs))
@@ -24,7 +29,12 @@ def list_tuner_jobs(experiment_id: str) -> Response:
 @tuner_bp.route("/<path:tpr_name>", methods=["GET"])
 @handle_exceptions()
 def get_tuner_job(experiment_id: str, tpr_name: str) -> Response:
-    """Get a specific tuner job by TPR name."""
+    """
+    Get a specific tuner job by TPR name.
+
+    Returns:
+        Response: JSON response with the tuner job data.
+    """
     schema = TunerJobSchema()
     tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
         description=f"Tuner job for {tpr_name} not found"
@@ -35,7 +45,12 @@ def get_tuner_job(experiment_id: str, tpr_name: str) -> Response:
 @tuner_bp.route("/<path:tpr_name>", methods=["POST"])
 @handle_exceptions(rollback=True)
 def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
-    """Start a tuner job to optimize simulation parameters."""
+    """
+    Start a tuner job to optimize simulation parameters.
+
+    Returns:
+        Response: JSON response with the created or existing tuner job, or an error if the TPR file does not exist.
+    """
     check_path(tpr_name, DATA_DIR / experiment_id)
     schema = TunerJobSchema()
     experiment: Experiment = Experiment.query.get_or_404(
@@ -66,7 +81,12 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
 @tuner_bp.route("/<path:tpr_name>/stop", methods=["POST"])
 @handle_exceptions(rollback=True)
 def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
-    """Stop a running tuner job."""
+    """
+    Stop a running tuner job.
+
+    Returns:
+        Response: Empty JSON response with 204 No Content on success.
+    """
     tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
         description=f"Tuner job for {tpr_name} not found"
     )
@@ -78,7 +98,12 @@ def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
 @tuner_bp.route("/<path:tpr_name>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
 def delete_tuner_job(experiment_id: str, tpr_name: str) -> Response:
-    """Delete a tuner job and its associated resources."""
+    """
+    Delete a tuner job and its associated resources.
+
+    Returns:
+        Response: Empty JSON response with 204 No Content on success.
+    """
     tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
         description=f"Tuner job for {tpr_name} not found"
     )

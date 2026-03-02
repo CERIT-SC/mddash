@@ -209,9 +209,6 @@ class GromacsJob(db.Model):  # type: ignore
 
         Returns:
             The created GromacsJob instance.
-
-        Raises:
-            Exception: If the job cannot be started.
         """
         tpr_rel_path = str(tpr_path.relative_to(DATA_DIR / experiment.id))
 
@@ -246,12 +243,7 @@ class GromacsJob(db.Model):  # type: ignore
         return job
 
     def delete(self) -> None:
-        """
-        Delete the GROMACS job and its associated resources.
-
-        Raises:
-            Exception: If the job cannot be deleted.
-        """
+        """Delete the GROMACS job and its associated resources."""
         mdrun.delete_job(self.id)
         self._stdout_log.unlink(missing_ok=True)
         self._stderr_log.unlink(missing_ok=True)
@@ -269,7 +261,11 @@ class GromacsJob(db.Model):  # type: ignore
             Log content as a string.
 
         Raises:
-            HTTPException: If the log type is invalid or the log file cannot be accessed.
+            BadRequest: If the log type is invalid.
+            NotFound: If the log file does not exist.
+            Forbidden: If access to the log file is denied.
+            UnprocessableEntity: If the log file cannot be decoded.
+            InternalServerError: If a system error occurs while reading the log file.
         """
         match type:
             case "gmx":

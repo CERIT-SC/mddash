@@ -61,6 +61,9 @@ def mock_k8s() -> Generator[MagicMock, None, None]:
     Mock the Kubernetes client for all tests.
 
     This prevents any actual K8s API calls during testing.
+
+    Yields:
+        MagicMock: The mocked CoreV1Api class.
     """
     with (
         patch("kubernetes.config.load_incluster_config"),
@@ -82,6 +85,9 @@ def app(mock_k8s: MagicMock, tmp_path: Path) -> Generator[Flask, None, None]:  #
 
     Uses an in-memory SQLite database and temporary data directory.
     The mock_k8s fixture is required to ensure K8s is mocked before app import.
+
+    Yields:
+        Flask: The configured test application instance.
     """
     # Create a fresh app for each test
     test_app = Flask(__name__)
@@ -112,7 +118,12 @@ def app(mock_k8s: MagicMock, tmp_path: Path) -> Generator[Flask, None, None]:  #
 
 @pytest.fixture
 def client(app: Flask) -> FlaskClient:
-    """Provide a Flask test client for making requests."""
+    """
+    Provide a Flask test client for making requests.
+
+    Returns:
+        FlaskClient: A test client bound to the test application.
+    """
     return app.test_client()
 
 
@@ -122,6 +133,9 @@ def db_session(app: Flask) -> Generator:
     Provide a database session for direct model testing.
 
     Automatically rolls back changes after each test.
+
+    Yields:
+        Generator: The active SQLAlchemy session.
     """
     with app.app_context():
         yield db.session
@@ -138,13 +152,21 @@ def mock_requests(mocker: MockerFixture) -> tuple:
     - Zenodo API
     - mdrun-api
     - Tuner API
+
+    Returns:
+        tuple: A pair of (mock_get, mock_post) patch objects.
     """
     return mocker.patch("requests.get"), mocker.patch("requests.post")
 
 
 @pytest.fixture
 def sample_pdb_content() -> bytes:
-    """Return minimal valid PDB file content for testing."""
+    """
+    Return minimal valid PDB file content for testing.
+
+    Returns:
+        bytes: Minimal valid PDB file bytes for use in upload tests.
+    """
     return b"""HEADER    TEST PROTEIN
 ATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00  0.00           N
 ATOM      2  CA  ALA A   1       1.458   0.000   0.000  1.00  0.00           C

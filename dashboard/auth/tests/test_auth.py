@@ -14,7 +14,7 @@ from auth import (
     HMAC_SHA256_HEX_LENGTH,
     STATE_COOKIE,
     USER,
-    _sessions,
+    _sessions,  # noqa: PLC2701
     create_session,
     is_valid_session,
     remove_expired_sessions,

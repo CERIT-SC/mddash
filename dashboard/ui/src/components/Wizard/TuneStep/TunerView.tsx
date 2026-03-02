@@ -100,9 +100,7 @@ const TunerView = (props: TunerViewProps) => {
             </div>
           )}
 
-          {!tuner?.error_message && (
-            <h3 className="text-lg font-semibold">Configure tuning job for {tprName}</h3>
-          )}
+          {!tuner?.error_message && <h3 className="text-lg font-semibold">Configure tuning job for {tprName}</h3>}
 
           {(!tuner || tuner.error_message) && (
             <Card className="w-fit">

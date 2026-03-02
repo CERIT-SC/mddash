@@ -86,7 +86,7 @@ def check_log_type(log_type: str) -> None:
     Raises:
         BadRequest: If the log type is invalid.
     """
-    if log_type not in ["gmx", "stdout", "stderr"]:
+    if log_type not in {"gmx", "stdout", "stderr"}:
         raise BadRequest("Invalid log type. Use 'gmx', 'stdout', or 'stderr'.")
 
 
@@ -139,7 +139,7 @@ def validate_git_url(git_url: str) -> None:
 
     # HTTPS/HTTP URLs
     parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https"):
+    if parsed.scheme not in {"http", "https"}:
         raise BadRequest("Only http://, https://, or git@ URLs are allowed.")
     if parsed.username or parsed.password:
         raise BadRequest("URLs with embedded credentials are not allowed.")

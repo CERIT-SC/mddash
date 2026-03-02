@@ -4,12 +4,12 @@ import { Activity, Shapes } from "lucide-react"
 import { type BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates"
 import { type BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory"
 
+import type { FileOption } from "@/util/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import FileSelector from "@/components/FileSelector"
 import MolStar from "@/components/MolStar"
 import NotebookController from "@/components/Wizard/SetupStep/NotebookController"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
-import type { FileOption } from "@/util/types"
 
 const STRUCTURE_FORMATS = ["pdb", "gro"]
 const COORDINATE_FORMATS = ["xtc", "trr"]

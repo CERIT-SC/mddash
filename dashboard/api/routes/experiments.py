@@ -16,7 +16,12 @@ experiments_bp = Blueprint("experiments", __name__, url_prefix=f"{API_PREFIX}/ex
 @experiments_bp.route("", methods=["GET"])
 @handle_exceptions()
 def list_experiments() -> Response:
-    """List all experiments."""
+    """
+    List all experiments.
+
+    Returns:
+        Response: JSON response with the list of all experiments.
+    """
     experiments: list[Experiment] = Experiment.query.all()
     schema = ExperimentSchema(many=True)
     return ApiResponse.success(schema.dump(experiments))
@@ -25,7 +30,12 @@ def list_experiments() -> Response:
 @experiments_bp.route("", methods=["POST"])
 @handle_exceptions(rollback=True)
 def create_experiment() -> Response:
-    """Create a new experiment from PDB, repository URL, or uploaded files."""
+    """
+    Create a new experiment from PDB, repository URL, or uploaded files.
+
+    Returns:
+        Response: JSON response with the created experiment on success, or an error response for invalid input.
+    """
     schema = ExperimentSchema()
     form = request.form
 
@@ -56,7 +66,12 @@ def create_experiment() -> Response:
 @experiments_bp.route("/<experiment_id>", methods=["GET"])
 @handle_exceptions()
 def get_experiment(experiment_id: str) -> Response:
-    """Get an experiment by ID."""
+    """
+    Get an experiment by ID.
+
+    Returns:
+        Response: JSON response with the experiment data.
+    """
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
@@ -67,7 +82,12 @@ def get_experiment(experiment_id: str) -> Response:
 @experiments_bp.route("/<experiment_id>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
 def delete_experiment(experiment_id: str) -> Response:
-    """Delete an experiment and all associated resources."""
+    """
+    Delete an experiment and all associated resources.
+
+    Returns:
+        Response: Empty JSON response with 204 No Content on success.
+    """
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
@@ -80,7 +100,12 @@ def delete_experiment(experiment_id: str) -> Response:
 @experiments_bp.route("/<experiment_id>", methods=["PATCH"])
 @handle_exceptions(rollback=True)
 def edit_experiment(experiment_id: str) -> Response:
-    """Update experiment properties."""
+    """
+    Update experiment properties.
+
+    Returns:
+        Response: JSON response with the updated experiment data, or an error response for invalid input.
+    """
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
@@ -105,7 +130,12 @@ def edit_experiment(experiment_id: str) -> Response:
 @experiments_bp.route("/<experiment_id>/publish", methods=["POST"])
 @handle_exceptions(rollback=True)
 def publish_experiment(experiment_id: str) -> Response:
-    """Publish experiment to MDRepo. Requires MDRepo OAuth authentication."""
+    """
+    Publish experiment to MDRepo. Requires MDRepo OAuth authentication.
+
+    Returns:
+        Response: JSON response with the published MDRepo experiment record, or an error if not authenticated.
+    """
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
@@ -126,7 +156,12 @@ def publish_experiment(experiment_id: str) -> Response:
 @experiments_bp.route("/<experiment_id>/step", methods=["GET"])
 @handle_exceptions()
 def get_experiment_step(experiment_id: str) -> Response:
-    """Get the current workflow step for an experiment."""
+    """
+    Get the current workflow step for an experiment.
+
+    Returns:
+        Response: JSON response with the current workflow step value.
+    """
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )

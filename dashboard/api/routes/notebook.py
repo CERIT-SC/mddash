@@ -14,7 +14,12 @@ notebook_bp = Blueprint("notebook", __name__, url_prefix=f"{API_PREFIX}/experime
 @notebook_bp.route("", methods=["GET"])
 @handle_exceptions()
 def get_notebook(experiment_id: str) -> Response:
-    """Get the notebook instance for an experiment."""
+    """
+    Get the notebook instance for an experiment.
+
+    Returns:
+        Response: JSON response with the notebook data.
+    """
     schema = NotebookSchema()
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
@@ -25,7 +30,12 @@ def get_notebook(experiment_id: str) -> Response:
 @notebook_bp.route("", methods=["POST"])
 @handle_exceptions(rollback=True)
 def start_notebook(experiment_id: str) -> Response:
-    """Start the notebook pod for an experiment."""
+    """
+    Start the notebook pod for an experiment.
+
+    Returns:
+        Response: JSON response with the started notebook data.
+    """
     schema = NotebookSchema()
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
@@ -39,7 +49,12 @@ def start_notebook(experiment_id: str) -> Response:
 @notebook_bp.route("", methods=["DELETE"])
 @handle_exceptions()
 def stop_notebook(experiment_id: str) -> Response:
-    """Stop the notebook pod for an experiment."""
+    """
+    Stop the notebook pod for an experiment.
+
+    Returns:
+        Response: Empty JSON response with 204 No Content on success.
+    """
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )

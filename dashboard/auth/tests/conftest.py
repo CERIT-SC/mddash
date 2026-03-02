@@ -28,7 +28,7 @@ os.environ["JUPYTERHUB_DEFAULT_URL"] = "/lab"
 os.environ["JUPYTERHUB_SERVICE_PREFIX"] = "/user/testuser"
 
 # Import after environment is set to prevent validation errors at import time
-from auth import _sessions
+from auth import _sessions  # noqa: PLC2701
 from auth import app as auth_app
 
 
@@ -40,14 +40,24 @@ def setup_env() -> None:
 
 @pytest.fixture
 def app() -> Flask:
-    """Provide the auth Flask app for testing."""
+    """
+    Provide the auth Flask app for testing.
+
+    Returns:
+        Flask: The auth application configured with TESTING=True.
+    """
     auth_app.config["TESTING"] = True
     return auth_app
 
 
 @pytest.fixture
 def client(app: Flask) -> FlaskClient:
-    """Provide a test client for making requests."""
+    """
+    Provide a test client for making requests.
+
+    Returns:
+        FlaskClient: A test client bound to the auth application.
+    """
     return app.test_client()
 
 

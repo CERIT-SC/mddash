@@ -38,4 +38,5 @@ ignore = [
     "PLR0915", # too many statements — complex route handlers shouldn't be force-split artificially
     "PLR0911", # too many return statements — guard clauses produce many early returns by design
     "PLR0917", # too many positional arguments  — Flask view functions often have many path/query parameters that aren't easily refactorable
+    "PLR6301", # method could be static — instance methods stay as such intentionally for consistent API surface and mock-ability in tests
 ]

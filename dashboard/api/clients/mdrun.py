@@ -16,7 +16,6 @@ def get_mdrun_response_data(response: requests.Response) -> dict:
 
     Raises:
         requests.HTTPError: If the request failed.
-        ValueError: If the response does not contain valid JSON.
     """
     data = response.json()
 
@@ -35,9 +34,6 @@ def get_job(job_id: str) -> dict:
 
     Returns:
         Job status data containing id and status.
-
-    Raises:
-        requests.HTTPError: If the request fails.
     """
     response = requests.get(f"{MDRUN_API_URL}/jobs/{job_id}", timeout=5)
     return get_mdrun_response_data(response)
@@ -61,9 +57,6 @@ def create_job(
 
     Returns:
         Created job data containing id and status.
-
-    Raises:
-        requests.HTTPError: If the request fails.
     """
     data = {
         "experiment_id": experiment_id,

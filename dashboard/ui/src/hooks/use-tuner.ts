@@ -20,7 +20,14 @@ export function useTunerStatus(experimentId: string, tprName: string) {
     meta: { suppressError: true },
     refetchInterval: (query) => {
       const data = query.state.data
-      if (!data || data.error_message || data.tuner_status === "ERROR" || data.is_stopped || data.tuner_status === "TERMINATED") return false
+      if (
+        !data ||
+        data.error_message ||
+        data.tuner_status === "ERROR" ||
+        data.is_stopped ||
+        data.tuner_status === "TERMINATED"
+      )
+        return false
       return 5000
     },
   })

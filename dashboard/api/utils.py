@@ -178,9 +178,6 @@ def tail(file: Path | str, n: int = 10) -> str:
 
     Returns:
         str: Last n lines of the file as a string.
-
-    Raises:
-        FileNotFoundError: If the file does not exist.
     """
     file_path = Path(file) if isinstance(file, str) else file
     with file_path.open("rb") as f:
@@ -231,9 +228,6 @@ def duc_index(data_dir: Path) -> None:
 
     Args:
         data_dir: Directory to index.
-
-    Raises:
-        subprocess.CalledProcessError: If duc exits non-zero.
     """
     db_path = data_dir / DUC_DB_FILENAME
     subprocess.run(
@@ -338,7 +332,7 @@ def download_git_repo(git_url: str, target_dir: Path, access_token: str | None =
     if access_token and not git_url.startswith("git@"):
         # Parse and reconstruct URL with token
         parsed = urlparse(git_url)
-        if parsed.scheme in ("http", "https"):
+        if parsed.scheme in {"http", "https"}:
             # Construct authenticated URL: https://token@host/path
             netloc_with_token = f"{access_token}@{parsed.netloc}"
             clone_url = parsed._replace(netloc=netloc_with_token).geturl()

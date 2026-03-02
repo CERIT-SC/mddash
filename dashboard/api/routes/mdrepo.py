@@ -41,14 +41,24 @@ mdrepo_bp = Blueprint("mdrepo", __name__, url_prefix=f"{API_PREFIX}/mdrepo")
 
 
 def get_mdrepo_token() -> str | None:
-    """Get the MDRepo access token from the current session."""
+    """
+    Get the MDRepo access token from the current session.
+
+    Returns:
+        The access token string if present in the session, or None.
+    """
     return session.get(MDREPO_TOKEN_KEY)
 
 
 @mdrepo_bp.route("/status", methods=["GET"])
 @handle_exceptions()
 def get_status() -> Response:
-    """Check if user has a valid MDRepo token."""
+    """
+    Check if user has a valid MDRepo token.
+
+    Returns:
+        Response: JSON response with authentication status and MDRepo URL if authenticated.
+    """
     token = session.get(MDREPO_TOKEN_KEY)
 
     if not token:
@@ -76,6 +86,9 @@ def initiate_auth() -> Response | WerkzeugResponse:
 
     Query params:
         return_url: URL to redirect to after successful authentication.
+
+    Returns:
+        Response: Redirect to the MDRepo authorization URL, or a JSON error if OAuth is not configured.
     """
     if not all([MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET, MDREPO_REDIRECT_URI]):
         return ApiResponse.error(
@@ -105,7 +118,12 @@ def initiate_auth() -> Response | WerkzeugResponse:
 
 @mdrepo_bp.route("/callback", methods=["GET"])
 def oauth_callback() -> WerkzeugResponse:
-    """Handle OAuth2 callback from MDRepo."""
+    """
+    Handle OAuth2 callback from MDRepo.
+
+    Returns:
+        WerkzeugResponse: Redirect to the return URL with a success or error query parameter.
+    """
     code = request.args.get("code")
     state = request.args.get("state")
     error = request.args.get("error")
@@ -176,7 +194,12 @@ def oauth_callback() -> WerkzeugResponse:
 @mdrepo_bp.route("/logout", methods=["POST"])
 @handle_exceptions()
 def logout() -> Response:
-    """Remove all MDRepo tokens from session."""
+    """
+    Remove all MDRepo tokens from session.
+
+    Returns:
+        Response: JSON response confirming successful logout.
+    """
     token_manager = MDRepoTokenManager(session)
     token_manager.clear_tokens()
     return ApiResponse.success({"message": "Logged out from MDRepo"})

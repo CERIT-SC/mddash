@@ -118,9 +118,6 @@ class Experiment(db.Model):  # type: ignore
 
         Returns:
             The unique experiment ID.
-
-        Raises:
-            Exception: If there is an error during environment preparation.
         """
         experiment_id: str = get_unique_id(DATA_DIR)
         experiment_dir = DATA_DIR / experiment_id
@@ -142,9 +139,6 @@ class Experiment(db.Model):  # type: ignore
 
         Returns:
             The created Experiment instance with an associated Notebook.
-
-        Raises:
-            Exception: If there is an error during creation.
         """
         db.session.add(experiment)
         db.session.flush()
@@ -171,7 +165,8 @@ class Experiment(db.Model):  # type: ignore
             The created Experiment instance.
 
         Raises:
-            HTTPException: If the PDB ID is not found or download fails.
+            NotFound: If the PDB ID is not found.
+            InternalServerError: If the PDB file download fails.
         """
         experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
         pdb_id = pdb_id.strip().upper()
@@ -216,7 +211,8 @@ class Experiment(db.Model):  # type: ignore
             The created Experiment instance.
 
         Raises:
-            HTTPException: If the repository link is invalid or download fails.
+            NotFound: If the repository URL cannot be found.
+            InternalServerError: If the repository download fails.
         """
         experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
 
@@ -284,7 +280,7 @@ class Experiment(db.Model):  # type: ignore
             The created Experiment instance.
 
         Raises:
-            HTTPException: If no files are provided or saving fails.
+            BadRequest: If no files are provided.
         """
         if not files:
             raise BadRequest(description="No files provided")
@@ -313,7 +309,13 @@ class Experiment(db.Model):  # type: ignore
 
     @cached(cache=step_status_cache)
     def _step_status(self) -> tuple[int, str]:
-        """Determine (step, status) based on current state."""
+        """
+        Determine (step, status) based on current state.
+
+        Returns:
+            A tuple of (step, status) where step is an integer (0-5) and status
+            is a string describing the current phase.
+        """
         # Step 5: Published (experiment is published in MDRepo)
         if self.mdrepo_published is True:
             return 5, "published"
@@ -414,7 +416,7 @@ class Experiment(db.Model):  # type: ignore
             Metadata of the published experiment from MDRepo.
 
         Raises:
-            HTTPException: If the experiment cannot be published.
+            InternalServerError: If there is no valid access token or MDRepo creation fails.
         """
         metadata: dict = {
             "simulations": [],

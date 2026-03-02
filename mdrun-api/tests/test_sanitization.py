@@ -122,5 +122,5 @@ def test_sanitize_extra_args_normalizes_whitespace_and_quotes() -> None:
 
 def test_sanitize_extra_args_allows_empty() -> None:
     """Empty or whitespace-only extra_args should be accepted as empty string."""
-    assert sanitize_extra_args("") == ""
-    assert sanitize_extra_args("   ") == ""
+    assert not sanitize_extra_args("")
+    assert not sanitize_extra_args("   ")

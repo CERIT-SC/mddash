@@ -20,6 +20,11 @@ class ExperimentSchema(BaseAutoSchema):
 
     @pre_dump
     def sync_mdrepo(self, data: Experiment, **kwargs: dict) -> Experiment:  # noqa: ARG002
-        """Sync MDRepo status before serialization."""
+        """
+        Sync MDRepo status before serialization.
+
+        Returns:
+            Experiment: The same experiment instance after syncing its MDRepo status.
+        """
         data._sync_mdrepo_status()  # noqa: SLF001
         return data

@@ -12,6 +12,9 @@ def handle_exceptions(rollback: bool = False) -> Callable:
 
     Args:
         rollback: Whether to rollback database session on exception (default: False)
+
+    Returns:
+        Callable: A decorator that wraps route functions with exception handling.
     """
 
     def decorator(f: Callable[..., Response]) -> Callable[..., Response]:

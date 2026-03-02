@@ -99,8 +99,6 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         prefix: The base URL prefix for the notebook server.
         token: Authentication token for accessing the notebook.
 
-    Raises:
-        ApiException: If an error occurs while creating the pod.
     """
     if ping_resource("pod", name):
         logger.warning(f"Pod {name} already exists in namespace {NAMESPACE}. Skipping creation.")
@@ -171,8 +169,6 @@ def create_job(name: str, image: str, experiment_id: str, command: str) -> None:
         experiment_id: The ID of the experiment, used to set the working directory.
         command: The shell command to run (will be wrapped in sh -c).
 
-    Raises:
-        ApiException: If an error occurs while creating the job.
     """
     if ping_resource("job", name):
         logger.warning(f"Job {name} already exists in namespace {NAMESPACE}. Skipping creation.")
@@ -213,6 +209,9 @@ def ping_resource(resource_type: str, name: str) -> bool:
 
     Returns:
         bool: True if the resource exists, False if not found or on API error.
+
+    Raises:
+        ValueError: If resource_type is not a supported type.
     """
     try:
         match resource_type:
@@ -242,8 +241,6 @@ def delete_pod(name: str) -> None:
     Args:
         name: The name of the pod to delete.
 
-    Raises:
-        ApiException: If an error occurs while deleting the pod.
     """
     if not ping_resource("pod", name):
         return
@@ -258,8 +255,6 @@ def delete_job(name: str) -> None:
     Args:
         name: The name of the job to delete.
 
-    Raises:
-        ApiException: If an error occurs while deleting the job.
     """
     if not ping_resource("job", name):
         return
@@ -281,8 +276,6 @@ def delete_service(name: str) -> None:
     Args:
         name: The name of the service to delete.
 
-    Raises:
-        ApiException: If an error occurs while deleting the service.
     """
     if not ping_resource("svc", name):
         return
@@ -301,8 +294,6 @@ def create_service(name: str, target_name: str) -> None:
         name: The name of the service to create.
         target_name: The app label value of pods to target.
 
-    Raises:
-        ApiException: If an error occurs while creating the service.
     """
     if ping_resource("svc", name):
         logger.warning(f"Service {name} already exists in namespace {NAMESPACE}. Skipping creation.")
@@ -419,9 +410,6 @@ def get_pod_resource_requests() -> dict:
 
     Returns:
         dict: Dictionary with 'cpu' (millicores) and 'memory' (bytes).
-
-    Raises:
-        ApiException: If an error occurs while listing the pods.
     """
     pods = cast("V1PodList", core_v1.list_namespaced_pod(namespace=NAMESPACE))
 

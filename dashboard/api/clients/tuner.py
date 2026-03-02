@@ -25,7 +25,6 @@ def get_tuner_response_data(response: Response) -> dict:
 
     Raises:
         HTTPError: If the request failed.
-        ValueError: If the response does not contain valid JSON.
     """
     response.raise_for_status()
     data = response.json()
@@ -47,10 +46,6 @@ def run_submit(tpr_path: Path, nsteps: int = 25000, extra_args: str = "") -> dic
 
     Returns:
         The response from the tuner.
-
-    Raises:
-        FileNotFoundError: If the TPR file does not exist.
-        HTTPError: If the request fails.
     """
     with tpr_path.open("rb") as f:
         files = {"file": f}
@@ -71,7 +66,6 @@ def poll_status(job_id: str) -> dict:
 
     Raises:
         TimeoutError: If the request timed out.
-        HTTPError: If the request fails.
     """
     try:
         response = requests.get(f"{TUNER_URL}/tuner_runs/{job_id}/status", auth=AUTH, timeout=POLL_TIMEOUT)
@@ -89,9 +83,6 @@ def delete_job(job_id: str) -> dict:
 
     Returns:
         The response from the tuner.
-
-    Raises:
-        HTTPError: If the request fails.
     """
     response = requests.delete(f"{TUNER_URL}/tuner_runs/{job_id}", auth=AUTH, timeout=DELETE_TIMEOUT)
     return get_tuner_response_data(response)

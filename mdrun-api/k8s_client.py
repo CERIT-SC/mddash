@@ -68,45 +68,41 @@ def create_gromacs_job(
     gromacs_image = "cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2"
     s3_sync_image = "rclone/rclone:latest"  # TODO: lock version
 
-    gromacs_command = "\n".join(
-        [
-            "set -euo pipefail",
-            "trap 'touch /data/job_completed' EXIT TERM INT",
-            (
-                " ".join(
-                    [
-                        "mpirun",
-                        "-np",
-                        str(np),
-                        "gmx",
-                        "mdrun",
-                        "-ntomp",
-                        str(ntomp),
-                        "-nb",
-                        _q(nb),
-                        "-pme",
-                        _q(pme),
-                        "-deffnm",
-                        _q(deffnm),
-                    ]
-                )
-                + extra_part
-                + f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2)"
-            ),
-            "echo 'Processing trajectory for visualization...'",
-            f"gmx select -s {_q(f'{deffnm}.gro')} -on {_q(f'{deffnm}.p.ndx')} -select Protein",
-            (
-                f"gmx trjconv -s {_q(f'{deffnm}.gro')} -f {_q(f'{deffnm}.xtc')} -o {_q(f'{deffnm}.pbc.xtc')} "
-                f"-pbc nojump -n {_q(f'{deffnm}.p.ndx')}"
-            ),
-            (
-                f"gmx trjconv -s {_q(f'{deffnm}.gro')} -f {_q(f'{deffnm}.pbc.xtc')} -o {_q(f'{deffnm}.fit.xtc')} "
-                f"-fit rot+trans -n {_q(f'{deffnm}.p.ndx')}"
-            ),
-            f"rm -f {_q(f'{deffnm}.p.ndx')} {_q(f'{deffnm}.pbc.xtc')}",
-            "echo 'Trajectory processing completed.'",
-        ]
-    )
+    gromacs_command = "\n".join([
+        "set -euo pipefail",
+        "trap 'touch /data/job_completed' EXIT TERM INT",
+        (
+            " ".join([
+                "mpirun",
+                "-np",
+                str(np),
+                "gmx",
+                "mdrun",
+                "-ntomp",
+                str(ntomp),
+                "-nb",
+                _q(nb),
+                "-pme",
+                _q(pme),
+                "-deffnm",
+                _q(deffnm),
+            ])
+            + extra_part
+            + f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2)"
+        ),
+        "echo 'Processing trajectory for visualization...'",
+        f"gmx select -s {_q(f'{deffnm}.gro')} -on {_q(f'{deffnm}.p.ndx')} -select Protein",
+        (
+            f"gmx trjconv -s {_q(f'{deffnm}.gro')} -f {_q(f'{deffnm}.xtc')} -o {_q(f'{deffnm}.pbc.xtc')} "
+            f"-pbc nojump -n {_q(f'{deffnm}.p.ndx')}"
+        ),
+        (
+            f"gmx trjconv -s {_q(f'{deffnm}.gro')} -f {_q(f'{deffnm}.pbc.xtc')} -o {_q(f'{deffnm}.fit.xtc')} "
+            f"-fit rot+trans -n {_q(f'{deffnm}.p.ndx')}"
+        ),
+        f"rm -f {_q(f'{deffnm}.p.ndx')} {_q(f'{deffnm}.pbc.xtc')}",
+        "echo 'Trajectory processing completed.'",
+    ])
 
     # S3 sync commands using rclone - download initially, then continuously sync with final sync on completion
     s3_init_command = f"""

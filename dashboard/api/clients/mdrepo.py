@@ -158,9 +158,6 @@ def check_experiment_status(access_token: str, experiment_id: str) -> bool | Non
 
     Returns:
         True if published, False if draft, None if deleted (404).
-
-    Raises:
-        requests.RequestException: If there's a network error or non-404 HTTP error.
     """
     # Check if published
     response = requests.get(

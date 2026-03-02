@@ -22,14 +22,24 @@ mdrun_bp = Blueprint("mdrun", __name__, url_prefix=f"{API_PREFIX}/jobs")
 @health_bp.route("", methods=["GET"])
 @health_bp.route("/health", methods=["GET"])
 def health_check() -> Response:
-    """Return API health status."""
+    """
+    Return API health status.
+
+    Returns:
+        Response: A JSON success response indicating the API is healthy.
+    """
     return ApiResponse.success("MDRun API is healthy", HTTPStatus.OK)
 
 
 @mdrun_bp.route("/<job_id>", methods=["GET"])
 @handle_exceptions()
 def get_job(job_id: str) -> Response:
-    """Get the status of a specific job."""
+    """
+    Get the status of a specific job.
+
+    Returns:
+        Response: A JSON response containing the job ID and current status.
+    """
     job: MdrunJob = MdrunJob.query.get_or_404(job_id, description=f"Job {job_id} not found")
 
     status_data = {"id": job.id, "status": job.status.value}
@@ -40,7 +50,15 @@ def get_job(job_id: str) -> Response:
 @mdrun_bp.route("", methods=["POST"])
 @handle_exceptions(rollback=True)
 def create_job() -> Response:
-    """Create and start a new GROMACS simulation job."""
+    """
+    Create and start a new GROMACS simulation job.
+
+    Returns:
+        Response: A JSON response with the new job ID and status, with HTTP 201.
+
+    Raises:
+        ValidationError: If any input field fails validation or sanitization.
+    """
     request_schema = JobCreateRequestSchema()
     data = cast("dict[str, Any]", request_schema.load(request.json or {}))
 
@@ -77,7 +95,12 @@ def create_job() -> Response:
 @mdrun_bp.route("/<job_id>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
 def delete_job(job_id: str) -> Response:
-    """Delete a job and its associated Kubernetes resources."""
+    """
+    Delete a job and its associated Kubernetes resources.
+
+    Returns:
+        Response: An empty JSON success response with HTTP 204.
+    """
     job: MdrunJob = MdrunJob.query.get_or_404(job_id, description=f"Job {job_id} not found")
 
     db.session.delete(job)

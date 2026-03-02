@@ -49,6 +49,9 @@ def mock_k8s() -> Generator[MagicMock, None, None]:
     Mock the Kubernetes client for all tests.
 
     Prevents any actual K8s API calls during testing.
+
+    Yields:
+        MagicMock: The mocked CoreV1Api class.
     """
     with (
         patch("kubernetes.config.load_incluster_config"),
@@ -67,6 +70,9 @@ def app(mock_k8s: MagicMock) -> Generator[Flask, None, None]:  # noqa: ARG001
 
     Uses an in-memory SQLite database.
     The mock_k8s fixture is required to ensure K8s is mocked before app import.
+
+    Yields:
+        Flask: The configured test application instance.
     """
     # Mock k8s_client module functions before importing app
     with (
@@ -99,7 +105,12 @@ def app(mock_k8s: MagicMock) -> Generator[Flask, None, None]:  # noqa: ARG001
 
 @pytest.fixture
 def client(app: Flask) -> FlaskClient:
-    """Provide a Flask test client for making requests."""
+    """
+    Provide a Flask test client for making requests.
+
+    Returns:
+        FlaskClient: A test client bound to the test application.
+    """
     return app.test_client()
 
 
@@ -109,6 +120,9 @@ def db_session(app: Flask) -> Generator:
     Provide a database session for direct model testing.
 
     Automatically rolls back changes after each test.
+
+    Yields:
+        Generator: The active SQLAlchemy session.
     """
     with app.app_context():
         yield db.session
@@ -120,7 +134,8 @@ def mock_k8s_client(mocker: MockerFixture) -> dict[str, MagicMock]:
     """
     Mock individual k8s_client functions for fine-grained control.
 
-    Returns dict of mock objects for assertions.
+    Returns:
+        dict[str, MagicMock]: A mapping of function name to mock object for assertions.
     """
     return {
         "create_gromacs_job": mocker.patch("k8s_client.create_gromacs_job"),

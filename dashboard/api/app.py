@@ -23,7 +23,12 @@ logger = logging.getLogger(__name__)
 
 
 def create_app() -> Flask:
-    """Create and configure the Flask application."""
+    """
+    Create and configure the Flask application.
+
+    Returns:
+        Flask: Configured Flask application instance with database, extensions, and blueprints registered.
+    """
     app = Flask(__name__)
 
     # Configuration

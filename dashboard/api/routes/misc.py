@@ -13,14 +13,24 @@ misc_bp = Blueprint("misc", __name__, url_prefix=API_PREFIX)
 @misc_bp.route("/health", methods=["GET"])
 @handle_exceptions()
 def index() -> Response:
-    """Health check endpoint."""
+    """
+    Health check endpoint.
+
+    Returns:
+        Response: JSON response confirming the API is running.
+    """
     return ApiResponse.success("API is up!")
 
 
 @misc_bp.route("/metrics", methods=["GET"])
 @handle_exceptions()
 def get_metrics() -> Response:
-    """Get resource usage metrics for the current user."""
+    """
+    Get resource usage metrics for the current user.
+
+    Returns:
+        Response: JSON response with current resource requests and configured limits for CPU, memory, and storage.
+    """
     if "pod_resources" in metrics_cache:
         requests = metrics_cache["pod_resources"]
     else:

@@ -16,7 +16,15 @@ MAX_EXTRA_ARGS_TOKENS = 80
 
 
 def sanitize_experiment_id(experiment_id: str) -> str:
-    """Validate experiment ID used as a path segment and S3 prefix."""
+    """
+    Validate experiment ID used as a path segment and S3 prefix.
+
+    Returns:
+        str: The validated, stripped experiment ID.
+
+    Raises:
+        ValidationError: If the experiment ID does not match the required pattern.
+    """
     experiment_id = (experiment_id or "").strip()
     if not _EXPERIMENT_ID_RE.fullmatch(experiment_id):
         raise ValidationError("Invalid experiment_id.")
@@ -24,7 +32,16 @@ def sanitize_experiment_id(experiment_id: str) -> str:
 
 
 def sanitize_tpr_name(tpr_name: str) -> str:
-    """Validate a TPR relative path (may include subdirectories)."""
+    """
+    Validate a TPR relative path (may include subdirectories).
+
+    Returns:
+        str: The validated, stripped TPR path.
+
+    Raises:
+        ValidationError: If the path is empty, absolute, contains forbidden characters,
+            has invalid segments, or does not end with .tpr.
+    """
     tpr_name = (tpr_name or "").strip()
     if not tpr_name:
         raise ValidationError("tpr_name cannot be empty.")
@@ -44,7 +61,15 @@ def sanitize_tpr_name(tpr_name: str) -> str:
 
 
 def sanitize_bucket_name(bucket_name: str) -> str:
-    """Validate the S3 bucket name."""
+    """
+    Validate the S3 bucket name.
+
+    Returns:
+        str: The validated, stripped bucket name.
+
+    Raises:
+        ValidationError: If the bucket name does not match the required pattern.
+    """
     bucket_name = (bucket_name or "").strip()
     if not _BUCKET_NAME_RE.fullmatch(bucket_name):
         raise ValidationError("Invalid bucket_name.")
@@ -57,6 +82,13 @@ def sanitize_extra_args(extra_args: str) -> str:
 
     This is used inside a shell script in the K8s job container, so we block
     shell metacharacters and also forbid overriding critical args.
+
+    Returns:
+        str: Canonicalized extra args string, or an empty string if none were provided.
+
+    Raises:
+        ValidationError: If the args contain forbidden characters, forbidden flags,
+            exceed the token limit, or cannot be parsed by shlex.
     """
     extra_args = (extra_args or "").strip()
     if not extra_args:

@@ -37,7 +37,12 @@ def _configure_demo_env() -> None:
 
 
 def create_demo_app() -> "Flask":
-    """Create the real API app configured for local demo with mocked dependencies."""
+    """
+    Create the real API app configured for local demo with mocked dependencies.
+
+    Returns:
+        Flask: Configured Flask application instance with demo profile applied.
+    """
     _configure_demo_env()
 
     with (

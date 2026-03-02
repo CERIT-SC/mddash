@@ -12,12 +12,22 @@ class BaseAutoSchema(ma.SQLAlchemyAutoSchema):  # type: ignore
 
     @post_dump
     def remove_private_fields(self, data: dict[str, Any], **kwargs: object) -> dict[str, Any]:  # noqa: ARG002
-        """Remove any fields that start with underscore."""
+        """
+        Remove any fields that start with underscore.
+
+        Returns:
+            dict[str, Any]: Serialized data with private fields removed.
+        """
         return {key: value for key, value in data.items() if not key.startswith("_")}
 
     @post_dump(pass_original=True)
     def add_computed_properties(self, data: dict[str, Any], obj: object, **kwargs: object) -> dict[str, Any]:  # noqa: ARG002
-        """Automatically add all non-private properties."""
+        """
+        Automatically add all non-private properties.
+
+        Returns:
+            dict[str, Any]: Serialized data augmented with computed property values.
+        """
         if not obj:
             return data
 
@@ -28,7 +38,7 @@ class BaseAutoSchema(ma.SQLAlchemyAutoSchema):  # type: ignore
             if (
                 attr_name.startswith("_")
                 or attr_name in data
-                or attr_name in ["metadata", "query", "query_class", "registry"]
+                or attr_name in {"metadata", "query", "query_class", "registry"}
             ):
                 continue
 

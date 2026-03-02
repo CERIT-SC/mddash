@@ -57,6 +57,13 @@ class TunerJob(db.Model):  # type: ignore
 
         Uses a TTL cache for normal operation and falls back to last known
         status on timeout or other errors to prevent breaking dependent code.
+
+        Returns:
+            Status dict with 'status' and 'trials' keys, or an empty dict if
+            the job is stopped or no status is available.
+
+        Raises:
+            ValueError: If the tuner response is missing required fields.
         """
         if self.is_stopped:
             return {}
