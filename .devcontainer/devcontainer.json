@@ -1,7 +1,5 @@
 // For format details, see https://aka.ms/devcontainer.json. For config options, see the
 {
-	"name": "MDDash Dev",
-
 	"build": {
 		"dockerfile": "./Dockerfile",
 		"context": "."
@@ -12,7 +10,7 @@
 		"ghcr.io/devcontainers/features/docker-in-docker:2": {
 			"moby": false,
 			"dockerDashComposeVersion": "none",
-		    "installDockerComposeSwitch": false
+			"installDockerComposeSwitch": false
 		}
 	},
 
@@ -33,8 +31,24 @@
 				"docker.docker",
 				"ms-kubernetes-tools.vscode-kubernetes-tools",
 				"ms-python.python",
-				"redhat.vscode-yaml"
-			]
+				"redhat.vscode-yaml",
+				"esbenp.prettier-vscode",
+				"charliermarsh.ruff"
+			],
+			"settings": {
+				"[python]": {
+					"editor.formatOnSave": true,
+					"editor.defaultFormatter": "charliermarsh.ruff"
+				},
+				"[typescript]": {
+					"editor.formatOnSave": true,
+					"editor.defaultFormatter": "esbenp.prettier-vscode"
+				},
+				"[typescriptreact]": {
+					"editor.formatOnSave": true,
+					"editor.defaultFormatter": "esbenp.prettier-vscode"
+				}
+			}
 		}
 	}
 

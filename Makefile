@@ -23,6 +23,13 @@ help: ## Show this help
 	@echo ""
 	@echo "Current: BRANCH=$(CURRENT_BRANCH), ENV=$(ENV), TAG=$(IMAGE_TAG), NS=$(namespace)"
 
+# ==================== FORMAT ====================
+
+.PHONY: format
+format: ## Format all code (Python via ruff, frontend via prettier)
+	ruff format . --exclude .venv --exclude node_modules
+	cd dashboard/ui && npm run format
+
 # ==================== TEST ====================
 
 .PHONY: test

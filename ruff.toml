@@ -1,0 +1,41 @@
+target-version = "py312"
+line-length = 120
+preview = true  # required for DOC (pydoclint) rules
+
+# Docs: https://docs.astral.sh/ruff/rules/
+[lint]
+select = [
+    "I",     # isort — enforces consistent import ordering and grouping
+    "D",     # pydocstyle — docstring presence and formatting (see ignores below for style choices)
+    "F",     # Pyflakes — undefined names, unused imports/variables, syntax errors
+    "G",     # flake8-logging-format — discourages eager string formatting in log calls (use lazy % args)
+    "N",     # pep8-naming — class/function/variable naming conventions (PascalCase, snake_case, etc.)
+    "PL",    # Pylint — broad static analysis: complexity, refactoring hints, error-prone patterns
+    "PT",    # flake8-pytest-style — enforces pytest idioms (fixture scope, assert style, raises usage)
+    "TC",    # flake8-type-checking — moves pure type-annotation imports into TYPE_CHECKING blocks
+    "C4",    # flake8-comprehensions — prefers comprehensions/generators over map()/filter()/list() calls
+    "ANN",   # flake8-annotations — requires type annotations on function signatures
+    "DOC",   # pydoclint — validates docstring contents match actual function signature (args, returns)
+    "LOG",   # flake8-logging — detects incorrect logging API usage (e.g. calling logging.warn)
+    "RSE",   # flake8-raise — enforces `raise X` over `raise X()` for bare exception re-raises
+    "RET",   # flake8-return — flags unnecessary else/elif after return, missing explicit return values
+    "ICN",   # flake8-import-conventions — enforces conventional aliases (e.g. `import numpy as np`)
+    "SIM",   # flake8-simplify — suggests simpler equivalents (e.g. `if x == True` → `if x`)
+    "SLF",   # flake8-self — flags access to private members (`_attr`) from outside the class
+    "ARG",   # flake8-unused-arguments — warns on function arguments that are never used
+    "PTH",   # flake8-use-pathlib — prefers pathlib.Path over os.path string manipulation
+    "RUF",   # Ruff-specific — miscellaneous rules unique to Ruff (ambiguous chars, mutable defaults, etc.)
+    "ASYNC", # flake8-async — detects blocking calls (sleep, open, subprocess) inside async functions
+]
+ignore = [
+    "D413",    # no blank line required after the last docstring section
+    "D212",    # multi-line summary on second line (we use D213 style: summary on first line)
+    "D100",    # missing docstring in public module (too noisy for service code)
+    "D104",    # missing docstring in public package (same reason)
+    "D203",    # conflicts with D211 (no-blank-line-before-class)
+    "G004",    # allow f-strings in logging calls (we prefer readability over lazy evaluation here)
+    "PLR0913", # too many arguments — Flask view functions and constructors often need many params
+    "PLR0915", # too many statements — complex route handlers shouldn't be force-split artificially
+    "PLR0911", # too many return statements — guard clauses produce many early returns by design
+    "PLR0917", # too many positional arguments  — Flask view functions often have many path/query parameters that aren't easily refactorable
+]
