@@ -89,7 +89,7 @@ def create_job() -> Response:
         extra_args=extra_args,
     )
 
-    return ApiResponse.success({"id": job.id, "status": job.status.value}, HTTPStatus.CREATED)
+    return ApiResponse.success({"id": job.id, "status": job.last_status.value}, HTTPStatus.CREATED)
 
 
 @mdrun_bp.route("/<job_id>", methods=["DELETE"])
