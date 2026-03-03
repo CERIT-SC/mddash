@@ -8,21 +8,19 @@ jupyterhub:
       JupyterHub:
         authenticator_class: generic-oauth
       GenericOAuthenticator:
-        login_service: "e-INFRA CZ"  # button label
-        authorize_url: https://login.e-infra.cz/oidc/authorize
-        token_url: https://login.e-infra.cz/oidc/token
-        userdata_url: https://login.e-infra.cz/oidc/userinfo
+        login_service: "{{ $cfg.oidc.loginService }}"
+        authorize_url: {{ $cfg.oidc.authorizeUrl }}
+        token_url: {{ $cfg.oidc.tokenUrl }}
+        userdata_url: {{ $cfg.oidc.userdataUrl }}
         oauth_callback_url: https://{{ $cfg.dashboard.hostname }}/hub/oauth_callback
         client_id: null  # gets imported from env OAUTH_CLIENT_ID
         client_secret: null  # gets imported from env OAUTH_CLIENT_SECRET
         userdata_params:
           state: state
         scope:
-          - openid
-          - profile
-          - email
-        username_key: preferred_username
-        allow_all: true
+{{ $cfg.oidc.scope | toYAML | indent 10 }}
+        username_key: {{ $cfg.oidc.usernameKey }}
+        allow_all: {{ $cfg.oidc.allowAll }}
       KubeSpawner:
         services_enabled: true
         events_enabled: false
