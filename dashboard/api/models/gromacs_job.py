@@ -67,6 +67,8 @@ class GromacsJob(db.Model):  # type: ignore
     _nsteps: Mapped[int | None] = mapped_column("nsteps", db.Integer, nullable=True)
     # Performance (ns/day)
     _performance: Mapped[float | None] = mapped_column("performance", db.Float, nullable=True)
+    # Last successfully-fetched non-UNKNOWN status (fallback when MDRun API is being naughty)
+    _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", db.Enum(JobStatus), nullable=True)
 
     # back-reference to the parent experiment
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="gromacs_jobs")
@@ -95,10 +97,19 @@ class GromacsJob(db.Model):  # type: ignore
     @cached(cache=gromacs_status_cache)
     def status(self) -> JobStatus:
         """Current status of the k8s job."""
+        # Terminal states never change — skip fetch
+        if self._last_known_status is not None and self._last_known_status in {JobStatus.TERMINATED, JobStatus.ERROR}:
+            return self._last_known_status
         try:
-            return JobStatus.from_string(mdrun.get_job(self.id)["status"])
+            fetched = JobStatus.from_string(mdrun.get_job(self.id)["status"])
+            if fetched not in {self._last_known_status, JobStatus.UNKNOWN}:
+                self._last_known_status = fetched
+                db.session.commit()
+            return fetched
         except Exception:
             logger.exception(f"Error fetching job status for job {self.id}")
+            if self._last_known_status:
+                return self._last_known_status
             return JobStatus.UNKNOWN
 
     @property
