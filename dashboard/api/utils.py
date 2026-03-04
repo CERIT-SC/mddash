@@ -212,97 +212,65 @@ def tail(file: Path | str, n: int = 10) -> str:
         return b"\n".join(result_lines).decode("utf-8", "replace")
 
 
-# Filename for the duc index database, stored inside DATA_DIR so it persists on the PVC.
-DUC_DB_FILENAME = ".duc.db"
-
-# How often the background indexer re-indexes (seconds).
-DUC_INDEX_INTERVAL = 30 * 60
+DU_SIZE_FILENAME = ".storage_size"
+DU_INTERVAL = 30 * 60  # 30 minutes
 
 
-def duc_index(data_dir: Path) -> None:
+def get_du_size(data_dir: Path) -> int | None:
     """
-    Build or refresh the duc index for data_dir.
-
-    Writes the database to data_dir/.duc.db.  Safe to call while the directory
-    is being written — duc performs an atomic replace of the db file.
+    Read the last measured storage size of data_dir.
 
     Args:
-        data_dir: Directory to index.
-    """
-    db_path = data_dir / DUC_DB_FILENAME
-    subprocess.run(
-        ["duc", "index", "--database", str(db_path), "--exclude", DUC_DB_FILENAME, str(data_dir)],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    logger.debug("duc index completed for %s", data_dir)
-
-
-def duc_query_size(data_dir: Path) -> int | None:
-    """
-    Read the total size of data_dir from an existing duc database.
-
-    Returns None if the database does not yet exist instead of raising, so
-    callers can treat a missing index as "not ready" without error handling.
-
-    Args:
-        data_dir: Directory whose index to query.
+        data_dir: Directory whose size to read.
 
     Returns:
-        Total size in bytes, or None if the database is absent.
+        Total size in bytes, or None if not yet measured.
     """
-    db_path = data_dir / DUC_DB_FILENAME
-    if not db_path.exists():
-        return None
     try:
-        result = subprocess.run(
-            # -D lists the directory entry itself (total size) rather than its contents.
-            ["duc", "ls", "--bytes", "--database", str(db_path), "-D", str(data_dir)],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=10,
-        )
-        return int(result.stdout.split()[0])
-    except Exception as e:
-        logger.warning("duc_query_size failed: %s", e)
+        return int((data_dir / DU_SIZE_FILENAME).read_text().strip())
+    except Exception:
         return None
 
 
-def _duc_indexer_loop(data_dir: Path) -> None:
-    """Background thread body: re-index data_dir every DUC_INDEX_INTERVAL seconds."""
+def _du_loop(data_dir: Path) -> None:
+    """Background thread body: measure data_dir size every DU_INTERVAL seconds."""
+    size_file = data_dir / DU_SIZE_FILENAME
     while True:
         try:
-            duc_index(data_dir)
-            logger.info("duc index refreshed for %s", data_dir)
+            result = subprocess.run(
+                ["du", "-sb", str(data_dir)],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            size = int(result.stdout.split()[0])
+            size_file.write_text(str(size))
+            logger.info("Storage size updated: %d bytes", size)
         except Exception as e:
-            logger.warning("duc indexing failed: %s", e)
-        time.sleep(DUC_INDEX_INTERVAL)
+            stderr = getattr(e, "stderr", "") or ""
+            logger.warning("du failed: %s%s", e, f" | stderr: {stderr.strip()}" if stderr.strip() else "")
+        time.sleep(DU_INTERVAL)
 
 
-def start_duc_indexer(data_dir: Path) -> None:
+def start_du_monitor(data_dir: Path) -> None:
     """
-    Start a daemon thread that re-indexes data_dir every DUC_INDEX_INTERVAL seconds.
-
-    If a .duc.db already exists on the PVC from a previous pod run, duc_query_size
-    will return a value immediately on the first request — no pre-population needed.
+    Start a daemon thread that measures data_dir size every DU_INTERVAL seconds.
 
     Args:
-        data_dir: Directory to index (DATA_DIR).
+        data_dir: Directory to measure (DATA_DIR).
     """
-    if any(t.name == "duc-indexer" for t in threading.enumerate()):
-        logger.debug("duc indexer thread already running, skipping")
+    if any(t.name == "du-monitor" for t in threading.enumerate()):
+        logger.debug("du monitor thread already running, skipping")
         return
 
     thread = threading.Thread(
-        target=_duc_indexer_loop,
+        target=_du_loop,
         args=(data_dir,),
         daemon=True,
-        name="duc-indexer",
+        name="du-monitor",
     )
     thread.start()
-    logger.info("duc indexer thread started (interval: %ds)", DUC_INDEX_INTERVAL)
+    logger.info("du monitor started (interval: %ds)", DU_INTERVAL)
 
 
 # Timeout for git clone operations (seconds)

@@ -7,7 +7,7 @@ WORKDIR /app
 RUN groupadd -g 1000 app && useradd -u 1000 -g 1000 -M -s /usr/sbin/nologin app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl git duc-nox \
+    && apt-get install -y --no-install-recommends curl git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

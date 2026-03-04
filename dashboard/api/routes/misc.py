@@ -4,7 +4,7 @@ from clients import k8s
 from config import API_PREFIX, CPU_REQUEST_QUOTA, DATA_DIR, MEMORY_REQUEST_QUOTA, PVC_SIZE
 from decorators import handle_exceptions
 from flask import Blueprint, Response
-from utils import duc_query_size
+from utils import get_du_size
 
 misc_bp = Blueprint("misc", __name__, url_prefix=API_PREFIX)
 
@@ -37,7 +37,7 @@ def get_metrics() -> Response:
         requests = k8s.get_pod_resource_requests()
         metrics_cache["pod_resources"] = requests
 
-    requests["storage"] = duc_query_size(DATA_DIR)
+    requests["storage"] = get_du_size(DATA_DIR)
 
     limits = {
         "cpu": k8s.parse_cpu(CPU_REQUEST_QUOTA),

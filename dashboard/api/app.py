@@ -17,7 +17,7 @@ from routes import (
     notebook_bp,
     tuner_bp,
 )
-from utils import start_duc_indexer
+from utils import start_du_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ def create_app() -> Flask:
     configure_logging(LOG_FORMAT, LOG_LEVEL)
     enable_loggers()
 
-    start_duc_indexer(DATA_DIR)
+    start_du_monitor(DATA_DIR)
 
     return app
 
