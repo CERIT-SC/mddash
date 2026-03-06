@@ -337,6 +337,7 @@ def _api_container(
             {"name": "POD_NAMESPACE", "value": user_namespace},
             {"name": "HUB_NAMESPACE", "value": hub_namespace},
             {"name": "NOTEBOOK_IMAGE", "value": os.environ.get("NOTEBOOK_IMAGE", "")},
+            {"name": "ANALYSIS_IMAGE", "value": os.environ.get("ANALYSIS_IMAGE", "")},
             {"name": "S3_BUCKET", "value": bucket_name},
             {"name": "S3_ENDPOINT", "value": os.environ.get("S3_ENDPOINT", "")},
             {"name": "S3_ACCESS_KEY", "value": os.environ.get("S3_ACCESS_KEY", "")},

@@ -27,6 +27,7 @@ from werkzeug.utils import secure_filename
 from .notebook import Notebook
 
 if TYPE_CHECKING:
+    from .analysis_job import AnalysisJob
     from .gromacs_job import GromacsJob
     from .tuner_job import TunerJob
 
@@ -86,6 +87,10 @@ class Experiment(db.Model):  # type: ignore
     # GROMACS jobs of the experiment
     gromacs_jobs: Mapped[list["GromacsJob"]] = relationship(
         "GromacsJob", back_populates="experiment", cascade="all, delete-orphan"
+    )
+    # Analysis jobs of the experiment
+    analysis_jobs: Mapped[list["AnalysisJob"]] = relationship(
+        "AnalysisJob", back_populates="experiment", cascade="all, delete-orphan"
     )
 
     @property
