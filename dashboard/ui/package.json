@@ -18,6 +18,8 @@
     "axios": "^1.7.9",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "echarts": "^6.0.0",
+    "echarts-for-react": "^3.0.6",
     "lucide-react": "^0.575.0",
     "molstar": "^4.17.0",
     "radix-ui": "^1.4.3",

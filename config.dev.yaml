@@ -43,6 +43,10 @@ notebook:
   image: cerit.io/xkrasa/mddash-notebook
   platform: linux/amd64
 
+# MD analysis image used for on-demand analysis K8s jobs
+analysis:
+  image: ghcr.io/mmb-irb/mddb_wf:0.0.8
+
 # Sidecar container images for user pod
 sidecars:
   platform: linux/amd64

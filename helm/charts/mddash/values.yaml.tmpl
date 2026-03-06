@@ -81,6 +81,8 @@ jupyterhub:
         value: "{{ $cfg.sidecars.s3sync.image }}:{{ $imageTag }}"
       NOTEBOOK_IMAGE:
         value: "{{ $cfg.notebook.image }}:{{ $imageTag }}"
+      ANALYSIS_IMAGE:
+        value: "{{ $cfg.analysis.image }}"
       DEFAULT_NOTEBOOKS_REPO:
         value: "{{ $cfg.defaultNotebooksRepo }}"
       # MDRepo OAuth for publishing experiments to the repository

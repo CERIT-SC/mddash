@@ -33,3 +33,6 @@ gromacs_nsteps_done_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)
 
 # Cache for GROMACS job estimated time (500ms TTL)
 gromacs_estimated_time_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)
+
+# Cache for analysis job status (2s TTL — analyses are long-running)
+analysis_status_cache: TTLCache = TTLCache(maxsize=100, ttl=2)

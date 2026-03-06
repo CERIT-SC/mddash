@@ -155,7 +155,13 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
     core_v1.create_namespaced_pod(namespace=NAMESPACE, body=pod_manifest)
 
 
-def create_job(name: str, image: str, experiment_id: str, command: str) -> None:
+def create_job(
+    name: str,
+    image: str,
+    experiment_id: str,
+    command: str,
+    resources: dict | None = None,
+) -> None:
     """
     Create a Kubernetes job that runs a command in the experiment directory.
 
@@ -168,6 +174,7 @@ def create_job(name: str, image: str, experiment_id: str, command: str) -> None:
         image: The container image to use for the job.
         experiment_id: The ID of the experiment, used to set the working directory.
         command: The shell command to run (will be wrapped in sh -c).
+        resources: Optional resource requests/limits dict. Defaults to 50m CPU and 64Mi memory.
 
     """
     if ping_resource("job", name):
@@ -176,7 +183,7 @@ def create_job(name: str, image: str, experiment_id: str, command: str) -> None:
 
     volume_name = "shared-data"
 
-    job_container = get_container(name, image, experiment_id, volume_name, ["sh", "-c", command])
+    job_container = get_container(name, image, experiment_id, volume_name, ["sh", "-c", command], resources=resources)
 
     job_manifest = {
         "apiVersion": "batch/v1",
@@ -188,7 +195,7 @@ def create_job(name: str, image: str, experiment_id: str, command: str) -> None:
                 "metadata": {"labels": {"job": name}},
                 "spec": {
                     "restartPolicy": "Never",
-                    "securityContext": {"fsGroup": 1000},
+                    "securityContext": {"fsGroup": 1000, "fsGroupChangePolicy": "OnRootMismatch"},
                     "containers": [job_container],
                     "volumes": [{"name": volume_name, "persistentVolumeClaim": {"claimName": PVC_NAME}}],
                 },

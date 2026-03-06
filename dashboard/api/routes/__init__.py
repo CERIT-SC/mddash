@@ -1,5 +1,6 @@
 """Routes for the dashboard API."""
 
+from .analysis import analysis_bp
 from .experiments import experiments_bp
 from .files import files_bp
 from .gmx import gmx_bp
@@ -9,6 +10,7 @@ from .notebook import notebook_bp
 from .tuner import tuner_bp
 
 __all__ = [
+    "analysis_bp",
     "experiments_bp",
     "files_bp",
     "gmx_bp",
