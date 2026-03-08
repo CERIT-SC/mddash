@@ -513,6 +513,20 @@ def get_job_status(name: str) -> JobStatus:
         return JobStatus.ERROR
 
 
+def get_job_logs(name: str, tail_lines: int = 200) -> str:
+    """Get logs from the pod belonging to a job."""
+    try:
+        pods = core_v1.list_namespaced_pod(namespace=NAMESPACE, label_selector=f"job={name}")
+        if not pods.items:
+            return ""
+        pod_name = pods.items[0].metadata.name
+        return core_v1.read_namespaced_pod_log(
+            name=pod_name, namespace=NAMESPACE, tail_lines=tail_lines
+        )
+    except ApiException:
+        return ""
+
+
 def wait_for_job(
     name: str, on_success: Callable[[], None], on_error: Callable[[Exception], None], timeout: int = 60
 ) -> None:
