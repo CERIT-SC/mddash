@@ -5,14 +5,12 @@ import { type BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/form
 import { type BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory"
 
 import type { FileOption } from "@/util/types"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import FileSelector from "@/components/FileSelector"
 import MolStar from "@/components/MolStar"
 import NotebookController from "@/components/Wizard/SetupStep/NotebookController"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
-import AnalysisControls from "./AnalysisControls"
 import AnalysisPanel from "./AnalysisPanel"
 
 const STRUCTURE_FORMATS = ["pdb", "gro"]
@@ -24,14 +22,11 @@ const AnalyzeStep = (props: WizardStepProps) => {
   const [structureFile, setStructureFile] = useState<FileOption | null>(null)
   const [coordsFile, setCoordsFile] = useState<FileOption | null>(null)
   useEffect(() => {
-    if (!structureFile) {
-      setCoordsFile(null)
-    }
+    if (!structureFile) setCoordsFile(null)
   }, [structureFile])
 
   const molstarViewer = useMemo(() => {
     if (!structureFile) return null
-
     return (
       <MolStar
         width="100%"
@@ -46,77 +41,56 @@ const AnalyzeStep = (props: WizardStepProps) => {
 
   return (
     <div className="flex w-full flex-col items-center gap-4">
-      <div className="flex w-[90%] flex-row items-start gap-4">
-        <div className="flex min-w-72 flex-col gap-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Files</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <div className="text-muted-foreground flex items-center gap-1 text-sm">
-                  <Shapes className="h-4 w-4" />
-                  <span>Structure</span>
-                </div>
+      <div className="w-[90%]">
+        <Tabs defaultValue="viewer">
+          <TabsList>
+            <TabsTrigger value="viewer">Structure Viewer</TabsTrigger>
+            <TabsTrigger value="analysis">Analysis</TabsTrigger>
+            <TabsTrigger value="notebook">Notebook</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="viewer" className="mt-3 flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <Shapes className="text-muted-foreground h-4 w-4 shrink-0" />
                 <FileSelector
                   experimentId={experiment.id}
                   ext={STRUCTURE_FORMATS}
                   title="Select structure file"
                   onFileSelected={setStructureFile}
+                  className="w-52"
                 />
               </div>
-
               {structureFile && (
-                <div className="flex flex-col gap-2">
-                  <div className="text-muted-foreground flex items-center gap-1 text-sm">
-                    <Activity className="h-4 w-4" />
-                    <span>Trajectory</span>
-                  </div>
+                <div className="flex items-center gap-1.5">
+                  <Activity className="text-muted-foreground h-4 w-4 shrink-0" />
                   <FileSelector
                     experimentId={experiment.id}
                     ext={COORDINATE_FORMATS}
                     title="Select trajectory file"
                     onFileSelected={setCoordsFile}
+                    className="w-52"
                   />
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+            <div className="flex items-center justify-center">
+              {molstarViewer ?? (
+                <div className="border-muted-foreground/25 bg-muted text-muted-foreground flex h-150 w-full items-center justify-center rounded-lg border-2 border-dashed text-sm">
+                  Select a structure file to view.
+                </div>
+              )}
+            </div>
+          </TabsContent>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Analysis</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <AnalysisControls experimentId={experiment.id} structureFile={structureFile} coordsFile={coordsFile} />
-            </CardContent>
-          </Card>
+          <TabsContent value="analysis" className="mt-3">
+            <AnalysisPanel experimentId={experiment.id} />
+          </TabsContent>
 
-          <NotebookController experimentId={experiment.id} />
-        </div>
-
-        <div className="flex-1">
-          <Tabs defaultValue="viewer">
-            <TabsList>
-              <TabsTrigger value="viewer">Structure Viewer</TabsTrigger>
-              <TabsTrigger value="analysis">Analysis Results</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="viewer" className="mt-3">
-              <div className="flex items-center justify-center">
-                {molstarViewer ?? (
-                  <div className="border-muted-foreground/25 bg-muted text-muted-foreground flex h-150 w-full items-center justify-center rounded-lg border-2 border-dashed text-sm">
-                    Select a structure file to view.
-                  </div>
-                )}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="analysis" className="mt-3">
-              <AnalysisPanel experimentId={experiment.id} />
-            </TabsContent>
-          </Tabs>
-        </div>
+          <TabsContent value="notebook" className="mt-3">
+            <NotebookController experimentId={experiment.id} />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )

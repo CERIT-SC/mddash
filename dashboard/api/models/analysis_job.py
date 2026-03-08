@@ -1,6 +1,8 @@
 import logging
 import uuid
+from contextlib import suppress
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from cache import analysis_status_cache
@@ -19,6 +21,28 @@ logger = logging.getLogger(__name__)
 
 ANALYSIS_RESULT_PREFIX = "mda."
 ANALYSIS_RESULT_SUFFIX = ".json"
+MWF_DIR = "mwf_analyses"
+
+# Without a topology file, mwf runs these but produces no output.
+TOPOLOGY_REQUIRED_ANALYSES = {AnalysisType.ENERGIES, AnalysisType.INTER}
+
+
+def find_result_file(experiment_id: str, name: str) -> Path | None:
+    """Find a result file by normalized name under the mwf output directory."""
+    filename = f"{ANALYSIS_RESULT_PREFIX}{name.replace('-', '_')}{ANALYSIS_RESULT_SUFFIX}"
+    mwf_dir = DATA_DIR / experiment_id / MWF_DIR
+    if not mwf_dir.is_dir():
+        return None
+    matches = list(mwf_dir.rglob(filename))
+    return matches[0] if matches else None
+
+
+def list_result_files(experiment_id: str) -> list[Path]:
+    """List all mda.*.json result files under the mwf output directory."""
+    mwf_dir = DATA_DIR / experiment_id / MWF_DIR
+    if not mwf_dir.is_dir():
+        return []
+    return sorted(mwf_dir.rglob(f"{ANALYSIS_RESULT_PREFIX}*{ANALYSIS_RESULT_SUFFIX}"))
 
 
 class AnalysisJob(db.Model):  # type: ignore
@@ -63,18 +87,11 @@ class AnalysisJob(db.Model):  # type: ignore
 
     @property
     def results(self) -> list[str]:
-        """List available analysis result names by scanning for mda.*.json files."""
-        experiment_dir = DATA_DIR / self.experiment_id
-        if not experiment_dir.is_dir():
-            return []
-
-        names = []
-        for f in experiment_dir.iterdir():
-            if f.is_file() and f.name.startswith(ANALYSIS_RESULT_PREFIX) and f.name.endswith(ANALYSIS_RESULT_SUFFIX):
-                name = f.name[len(ANALYSIS_RESULT_PREFIX) : -len(ANALYSIS_RESULT_SUFFIX)]
-                names.append(name)
-
-        return sorted(names)
+        """List available analysis result names by scanning mwf output directory."""
+        return [
+            f.name[len(ANALYSIS_RESULT_PREFIX) : -len(ANALYSIS_RESULT_SUFFIX)]
+            for f in list_result_files(self.experiment_id)
+        ]
 
     @classmethod
     def start(
@@ -96,21 +113,26 @@ class AnalysisJob(db.Model):  # type: ignore
         Returns:
             The created AnalysisJob instance.
         """
+        previous_jobs = cls.query.filter_by(experiment_id=experiment.id).all()
+        for prev in previous_jobs:
+            with suppress(Exception):  # job may already be cleaned up by K8s
+                k8s.delete_job(f"analysis-{prev.id}")
+            db.session.delete(prev)
+        db.session.flush()
+
         job_id = str(uuid.uuid4())[:12]
         job_name = f"analysis-{job_id}"
 
-        # create_job wraps with sh -c which overrides the Docker ENTRYPOINT, so we
-        # must activate the conda environment explicitly via conda run.
-        # mwf requires the MD directory to be a subdirectory of the project directory,
-        # so we create mwf_analyses/ and copy results out afterwards.
-        # -i runs only the specified analysis (include-only mode).
+        # conda run needed because create_job uses sh -c which bypasses the ENTRYPOINT.
+        # mwf_analyses/ is the MD dir; mwf forbids MD dir == project dir.
+        # No -k flag: with a single analysis there's nothing to "keep going" to,
+        # and it masks errors (mwf exits 0 even on InputError).
         command = (
             f"mkdir -p mwf_analyses && "
             f"echo 'name: mddash' > inputs.yaml && "
             f"conda run --no-capture-output -n mwf_env "
             f"mwf run -dir . -stru '{structure_file}' -md mwf_analyses '{trajectory_file}' "
-            f"-top no -k -i {analysis_name} -sl; "
-            f"ret=$?; cp mwf_analyses/mda.*.json . 2>/dev/null; exit $ret"
+            f"-top no -i {analysis_name}"
         )
 
         k8s.create_job(

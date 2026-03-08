@@ -31,6 +31,7 @@ export function useSubmitAnalysis(experimentId: string) {
     mutationFn: (data) => api.post(`/experiments/${experimentId}/analysis`, data).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis"] })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-results"] })
       toast.success("Analysis job submitted")
     },
     onError: (error: Error) => toast.error(error.message),
@@ -52,11 +53,12 @@ export function useDeleteAnalysis(experimentId: string) {
   })
 }
 
-export function useAnalysisResults(experimentId: string) {
+export function useAnalysisResults(experimentId: string, hasActiveJob?: boolean) {
   return useQuery<AnalysisResultMeta[]>({
     queryKey: ["experiment", experimentId, "analysis-results"],
     queryFn: () => api.get(`/experiments/${experimentId}/analysis/results`).then((r) => r.data),
     enabled: !!experimentId,
+    refetchInterval: hasActiveJob ? 5000 : false,
   })
 }
 
@@ -65,5 +67,27 @@ export function useAnalysisData(experimentId: string, analysisName: string | nul
     queryKey: ["experiment", experimentId, "analysis-results", analysisName],
     queryFn: () => api.get(`/experiments/${experimentId}/analysis/results/${analysisName}`).then((r) => r.data),
     enabled: !!experimentId && !!analysisName,
+  })
+}
+
+export interface AnalysisVariant {
+  name: string
+  analysis: string
+}
+
+export function useAnalysisLogs(experimentId: string, jobId: string | null) {
+  return useQuery<string>({
+    queryKey: ["experiment", experimentId, "analysis-logs", jobId],
+    queryFn: () => api.get(`/experiments/${experimentId}/analysis/${jobId}/logs`).then((r) => r.data),
+    enabled: !!experimentId && !!jobId,
+  })
+}
+
+export function useAnalysisVariants(experimentId: string, baseResultName: string | null) {
+  return useQuery<AnalysisVariant[]>({
+    queryKey: ["experiment", experimentId, "analysis-variants", baseResultName],
+    queryFn: () =>
+      api.get(`/experiments/${experimentId}/analysis/results/${baseResultName}/variants`).then((r) => r.data),
+    enabled: !!experimentId && !!baseResultName,
   })
 }

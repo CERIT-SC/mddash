@@ -2,13 +2,14 @@ import json
 from http import HTTPStatus
 
 from api_response import ApiResponse
+from clients import k8s
 from config import API_PREFIX, DATA_DIR
 from decorators import handle_exceptions
 from enums import AnalysisType, JobStatus
 from extensions import db
 from flask import Blueprint, Response, request
 from models import AnalysisJob, Experiment
-from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX
+from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, TOPOLOGY_REQUIRED_ANALYSES, find_result_file, list_result_files
 from schemas import AnalysisJobSchema
 from validators import check_path
 
@@ -48,6 +49,12 @@ def submit_analysis_job(experiment_id: str) -> Response:
             HTTPStatus.BAD_REQUEST,
         )
 
+    if analysis_type in TOPOLOGY_REQUIRED_ANALYSES:
+        return ApiResponse.error(
+            f"Analysis '{analysis_name}' requires force field / topology data which is not supported.",
+            HTTPStatus.BAD_REQUEST,
+        )
+
     experiment_dir = DATA_DIR / experiment_id
     check_path(structure_file, experiment_dir)
     check_path(trajectory_file, experiment_dir)
@@ -61,11 +68,9 @@ def submit_analysis_job(experiment_id: str) -> Response:
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
 
-    # Reject if any analysis job is already active
-    active_jobs = AnalysisJob.query.filter_by(experiment_id=experiment_id).all()
-    for job in active_jobs:
-        if job.status in {JobStatus.RUNNING, JobStatus.PENDING}:
-            return ApiResponse.error("An analysis job is already running.", HTTPStatus.CONFLICT)
+    current_job = AnalysisJob.query.filter_by(experiment_id=experiment_id).first()
+    if current_job and current_job.status in {JobStatus.RUNNING, JobStatus.PENDING}:
+        return ApiResponse.error("An analysis job is already running.", HTTPStatus.CONFLICT)
 
     schema = AnalysisJobSchema()
     job = AnalysisJob.start(
@@ -101,34 +106,61 @@ def delete_analysis_job(experiment_id: str, job_id: str) -> Response:
     return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
 
 
+@analysis_bp.route("/<job_id>/logs", methods=["GET"])
+@handle_exceptions()
+def get_analysis_job_logs(experiment_id: str, job_id: str) -> Response:
+    """Get K8s pod logs for an analysis job."""
+    job: AnalysisJob = AnalysisJob.query.filter_by(experiment_id=experiment_id, id=job_id).first_or_404(
+        description=f"Analysis job {job_id} in experiment {experiment_id} not found"
+    )
+    tail = request.args.get("tail", 200, type=int)
+    logs = k8s.get_job_logs(f"analysis-{job.id}", tail_lines=tail)
+    return ApiResponse.success(logs)
+
+
 @analysis_bp.route("/results", methods=["GET"])
 @handle_exceptions()
 def list_analysis_results(experiment_id: str) -> Response:
     """List available analysis result files."""
-    experiment_dir = DATA_DIR / experiment_id
-    if not experiment_dir.is_dir():
+    results = []
+    for f in list_result_files(experiment_id):
+        name = f.name[len(ANALYSIS_RESULT_PREFIX) : -len(ANALYSIS_RESULT_SUFFIX)].replace("_", "-")
+        results.append({"name": name, "file": f.name})
+    return ApiResponse.success(results)
+
+
+@analysis_bp.route("/results/<name>/variants", methods=["GET"])
+@handle_exceptions()
+def get_analysis_variants(experiment_id: str, name: str) -> Response:
+    """
+    Return variant options for a multi-file analysis from its summary JSON.
+
+    The summary file written by mwf for multi-file analyses is a list of
+    {name, analysis} objects — one entry per interaction pair or run variant.
+    """
+    result_file = find_result_file(experiment_id, name)
+    if not result_file:
         return ApiResponse.success([])
 
-    results = []
-    for f in sorted(experiment_dir.iterdir()):
-        if f.is_file() and f.name.startswith(ANALYSIS_RESULT_PREFIX) and f.name.endswith(ANALYSIS_RESULT_SUFFIX):
-            name = f.name[len(ANALYSIS_RESULT_PREFIX) : -len(ANALYSIS_RESULT_SUFFIX)]
-            results.append({"name": name, "file": f.name})
+    try:
+        data = json.loads(result_file.read_text())
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return ApiResponse.success([])
 
-    return ApiResponse.success(results)
+    # Summary format: [{ "name": "Overall", "analysis": "rmsd-pairwise-00" }, …]
+    if isinstance(data, list) and all(isinstance(item, dict) and "analysis" in item and "name" in item for item in data):
+        return ApiResponse.success(data)
+
+    return ApiResponse.success([])
 
 
 @analysis_bp.route("/results/<name>", methods=["GET"])
 @handle_exceptions()
 def get_analysis_result(experiment_id: str, name: str) -> Response:
     """Get the JSON content of a specific analysis result."""
-    result_file = DATA_DIR / experiment_id / f"{ANALYSIS_RESULT_PREFIX}{name}{ANALYSIS_RESULT_SUFFIX}"
-
-    if not result_file.is_file():
+    result_file = find_result_file(experiment_id, name)
+    if not result_file:
         return ApiResponse.error(f"Analysis result '{name}' not found.", HTTPStatus.NOT_FOUND)
-
-    # Validate the path stays within the experiment directory
-    check_path(result_file.name, DATA_DIR / experiment_id)
 
     try:
         data = json.loads(result_file.read_text())

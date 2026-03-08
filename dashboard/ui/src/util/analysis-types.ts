@@ -50,27 +50,46 @@ export interface AnalysisResultMeta {
   file: string
 }
 
-/** mwf task names mapped to user-friendly labels */
-export const AVAILABLE_ANALYSES: { value: AnalysisType; label: string }[] = [
-  { value: AnalysisType.RMSDS, label: "RMSD" },
-  { value: AnalysisType.RGYR, label: "Radius of Gyration" },
-  { value: AnalysisType.RMSF, label: "RMSF (Fluctuation)" },
-  { value: AnalysisType.PCA, label: "PCA" },
-  { value: AnalysisType.CLUSTERS, label: "Clusters" },
-  { value: AnalysisType.PAIRWISE, label: "Pairwise RMSD" },
-  { value: AnalysisType.PERRES, label: "Per-Residue RMSD" },
-  { value: AnalysisType.HBONDS, label: "Hydrogen Bonds" },
-  { value: AnalysisType.SAS, label: "SASA" },
-  { value: AnalysisType.POCKETS, label: "Pockets" },
-  { value: AnalysisType.TMSCORE, label: "TM-Scores" },
-  { value: AnalysisType.ENERGIES, label: "Energies" },
-  { value: AnalysisType.DIST, label: "Distance Per Residue" },
-  { value: AnalysisType.INTER, label: "Interactions" },
-  { value: AnalysisType.DENSITY, label: "Density Profile" },
-  { value: AnalysisType.THICKNESS, label: "Thickness" },
-  { value: AnalysisType.APL, label: "Area Per Lipid" },
-  { value: AnalysisType.LORDER, label: "Lipid Order" },
-  { value: AnalysisType.LINTER, label: "Lipid Interactions" },
+/**
+ * Specifies what additional data an analysis requires beyond structure + trajectory.
+ * - 'topology': needs force field / atomic charges (e.g. energies, interactions)
+ * - 'membrane': only meaningful for lipid membrane systems
+ */
+export type AnalysisRequirement = "topology" | "membrane"
+
+export interface AnalysisInfo {
+  value: AnalysisType
+  label: string
+  /** mwf output file name (after underscore→hyphen normalization). Differs from value when mwf uses different names for task vs output. */
+  resultName: string
+  requires?: AnalysisRequirement
+  /** True when mwf produces both a summary file and numbered variants (base-00, base-01, …). */
+  hasVariants?: boolean
+}
+
+export const AVAILABLE_ANALYSES: AnalysisInfo[] = [
+  // Standard — work with structure + trajectory alone
+  { value: AnalysisType.RMSDS, label: "RMSD", resultName: "rmsds" },
+  { value: AnalysisType.RGYR, label: "Radius of Gyration", resultName: "rgyr" },
+  { value: AnalysisType.RMSF, label: "RMSF (Fluctuation)", resultName: "fluctuation" },
+  { value: AnalysisType.PCA, label: "PCA", resultName: "pca" },
+  { value: AnalysisType.CLUSTERS, label: "Clusters", resultName: "clusters", hasVariants: true },
+  { value: AnalysisType.PAIRWISE, label: "Pairwise RMSD", resultName: "rmsd-pairwise", hasVariants: true },
+  { value: AnalysisType.PERRES, label: "Per-Residue RMSD", resultName: "rmsd-perres" },
+  { value: AnalysisType.HBONDS, label: "Hydrogen Bonds", resultName: "hbonds", hasVariants: true },
+  { value: AnalysisType.SAS, label: "SASA", resultName: "sasa" },
+  { value: AnalysisType.POCKETS, label: "Pockets", resultName: "pockets" },
+  { value: AnalysisType.TMSCORE, label: "TM-Scores", resultName: "tmscores" },
+  { value: AnalysisType.DIST, label: "Distance Per Residue", resultName: "dist-perres", hasVariants: true },
+  // Membrane — only meaningful when the system contains lipid bilayers
+  { value: AnalysisType.DENSITY, label: "Density Profile", resultName: "density", requires: "membrane" },
+  { value: AnalysisType.THICKNESS, label: "Thickness", resultName: "thickness", requires: "membrane" },
+  { value: AnalysisType.APL, label: "Area Per Lipid", resultName: "apl", requires: "membrane" },
+  { value: AnalysisType.LORDER, label: "Lipid Order", resultName: "lipid-order", requires: "membrane" },
+  { value: AnalysisType.LINTER, label: "Lipid Interactions", resultName: "lipid-inter", requires: "membrane" },
+  // Topology — require force field / atomic charges; not supported without a topology file
+  { value: AnalysisType.ENERGIES, label: "Energies", resultName: "energies", requires: "topology" },
+  { value: AnalysisType.INTER, label: "Interactions", resultName: "interactions", requires: "topology" },
 ]
 
 // ============================================================================
