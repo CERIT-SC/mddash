@@ -9,7 +9,10 @@ from enums import AnalysisType, JobStatus
 from extensions import db
 from flask import Blueprint, Response, request
 from models import AnalysisJob, Experiment
-from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, TOPOLOGY_REQUIRED_ANALYSES, find_result_file, list_result_files
+from models.analysis_job import (
+    TOPOLOGY_REQUIRED_ANALYSES,
+    find_result_file,
+)
 from schemas import AnalysisJobSchema
 from validators import check_path
 
@@ -49,9 +52,11 @@ def submit_analysis_job(experiment_id: str) -> Response:
             HTTPStatus.BAD_REQUEST,
         )
 
-    if analysis_type in TOPOLOGY_REQUIRED_ANALYSES:
+    topology_file = data.get("topology_file") or None
+
+    if analysis_type in TOPOLOGY_REQUIRED_ANALYSES and not topology_file:
         return ApiResponse.error(
-            f"Analysis '{analysis_name}' requires force field / topology data which is not supported.",
+            f"Analysis '{analysis_name}' requires a topology file (.tpr, .top, .prmtop, .psf).",
             HTTPStatus.BAD_REQUEST,
         )
 
@@ -63,6 +68,11 @@ def submit_analysis_job(experiment_id: str) -> Response:
         return ApiResponse.error(f"Structure file {structure_file} does not exist.", HTTPStatus.NOT_FOUND)
     if not (experiment_dir / trajectory_file).is_file():
         return ApiResponse.error(f"Trajectory file {trajectory_file} does not exist.", HTTPStatus.NOT_FOUND)
+
+    if topology_file:
+        check_path(topology_file, experiment_dir)
+        if not (experiment_dir / topology_file).is_file():
+            return ApiResponse.error(f"Topology file {topology_file} does not exist.", HTTPStatus.NOT_FOUND)
 
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
@@ -78,6 +88,7 @@ def submit_analysis_job(experiment_id: str) -> Response:
         analysis_name=analysis_type,
         structure_file=structure_file,
         trajectory_file=trajectory_file,
+        topology_file=topology_file,
     )
     return ApiResponse.success(schema.dump(job), HTTPStatus.CREATED)
 
@@ -115,18 +126,10 @@ def get_analysis_job_logs(experiment_id: str, job_id: str) -> Response:
     )
     tail = request.args.get("tail", 200, type=int)
     logs = k8s.get_job_logs(f"analysis-{job.id}", tail_lines=tail)
-    return ApiResponse.success(logs)
-
-
-@analysis_bp.route("/results", methods=["GET"])
-@handle_exceptions()
-def list_analysis_results(experiment_id: str) -> Response:
-    """List available analysis result files."""
-    results = []
-    for f in list_result_files(experiment_id):
-        name = f.name[len(ANALYSIS_RESULT_PREFIX) : -len(ANALYSIS_RESULT_SUFFIX)].replace("_", "-")
-        results.append({"name": name, "file": f.name})
-    return ApiResponse.success(results)
+    # Strip initialization noise to avoid confusing users
+    marker = "Running MDDB workflow"
+    idx = logs.find(marker)
+    return ApiResponse.success(logs[idx:] if idx > 0 else "")
 
 
 @analysis_bp.route("/results/<name>/variants", methods=["GET"])
@@ -148,7 +151,9 @@ def get_analysis_variants(experiment_id: str, name: str) -> Response:
         return ApiResponse.success([])
 
     # Summary format: [{ "name": "Overall", "analysis": "rmsd-pairwise-00" }, …]
-    if isinstance(data, list) and all(isinstance(item, dict) and "analysis" in item and "name" in item for item in data):
+    if isinstance(data, list) and all(
+        isinstance(item, dict) and "analysis" in item and "name" in item for item in data
+    ):
         return ApiResponse.success(data)
 
     return ApiResponse.success([])

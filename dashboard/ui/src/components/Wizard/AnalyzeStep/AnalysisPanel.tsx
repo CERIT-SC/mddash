@@ -1,38 +1,41 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
-import { Activity, BarChart3, CircleAlert, Loader2, Play, RefreshCw, Shapes, Terminal } from "lucide-react"
+import { useQueryClient } from "@tanstack/react-query"
 
-import { AVAILABLE_ANALYSES, type Analysis, type AnalysisType } from "@/util/analysis-types"
-import type { FileOption, JobStatus } from "@/util/types"
-import { getJobStatusVariant } from "@/util/types"
-import { useAnalysisData, useAnalysisJobs, useAnalysisLogs, useAnalysisResults, useAnalysisVariants, useSubmitAnalysis } from "@/hooks/use-analysis"
-import { getAnalysisLabel } from "@/util/analysis-utils"
+import { Activity, BarChart3, CircleAlert, FileKey, Info, Loader2, Play, RefreshCw, Shapes, Terminal } from "lucide-react"
+
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
+import { AVAILABLE_ANALYSES, type Analysis, type AnalysisType } from "@/util/analysis-types"
+import { getAnalysisLabel } from "@/util/analysis-utils"
+import type { FileOption } from "@/util/types"
+import { getJobStatusVariant } from "@/util/types"
+import {
+  useAnalysisData,
+  useAnalysisJobs,
+  useAnalysisLogs,
+  useAnalysisVariants,
+  useSubmitAnalysis,
+} from "@/hooks/use-analysis"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
-import FileSelector from "@/components/FileSelector"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import AnalysisRenderer from "@/components/analysis/renderers"
+import FileSelector from "@/components/FileSelector"
+import LogsView from "@/components/LogsView"
 
 interface AnalysisPanelProps {
   experimentId: string
 }
 
-const JOB_STATUS_LABEL: Record<JobStatus, string> = {
-  PENDING: "Pending",
-  RUNNING: "Running",
-  TERMINATED: "Completed",
-  ERROR: "Failed",
-  UNKNOWN: "Unknown",
-}
-
 const STRUCTURE_FORMATS = ["pdb", "gro"]
 const COORDINATE_FORMATS = ["xtc", "trr"]
+const TOPOLOGY_FORMATS = ["tpr", "top", "prmtop", "psf"]
 
 const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
+  const queryClient = useQueryClient()
   const [structureFile, setStructureFile] = useState<FileOption | null>(null)
   const [coordsFile, setCoordsFile] = useState<FileOption | null>(null)
+  const [topologyFile, setTopologyFile] = useState<FileOption | null>(null)
 
   useEffect(() => {
     if (!structureFile) setCoordsFile(null)
@@ -40,34 +43,50 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
 
   const { data: jobs } = useAnalysisJobs(experimentId)
   const activeJob = useMemo(() => jobs?.find((j) => j.status === "RUNNING" || j.status === "PENDING"), [jobs])
-  const { data: results } = useAnalysisResults(experimentId, !!activeJob)
+
+  // Invalidate cached result data when a job finishes so charts always show fresh output.
+  const hadActiveJobRef = useRef(false)
+  useEffect(() => {
+    const isActive = !!activeJob
+    if (hadActiveJobRef.current && !isActive) {
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-results"] })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-variants"] })
+    }
+    hadActiveJobRef.current = isActive
+  }, [activeJob, queryClient, experimentId])
   const submitAnalysis = useSubmitAnalysis(experimentId)
   const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisType | null>(null)
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null)
 
-  // Reset variant whenever the analysis changes
-  useEffect(() => setSelectedVariant(null), [selectedAnalysis])
+  useEffect(() => {
+    setSelectedVariant(null)
+    setTopologyFile(null)
+  }, [selectedAnalysis])
 
-  const availableResults = useMemo(() => new Set(results?.map((r) => r.name) ?? []), [results])
+  const availableResults = useMemo(() => new Set(jobs?.flatMap((j) => j.results) ?? []), [jobs])
 
   const analysisConfig = useMemo(() => AVAILABLE_ANALYSES.find((a) => a.value === selectedAnalysis), [selectedAnalysis])
   const selectedResultName = analysisConfig?.resultName ?? null
 
-  // For analyses that produce per-interaction numbered variants (base-00, base-01, …)
   const variantResults = useMemo(() => {
     if (!analysisConfig?.hasVariants || !selectedResultName) return []
     const pattern = new RegExp(`^${selectedResultName}-\\d+$`)
     return [...availableResults].filter((r) => pattern.test(r)).sort()
   }, [analysisConfig, selectedResultName, availableResults])
 
-  const hasResult = selectedResultName
-    ? availableResults.has(selectedResultName) || variantResults.length > 0
-    : false
+  // Auto-select first variant for hasVariants analyses once results arrive.
+  // The base result file is the variant index (not renderable), so never fetch it directly.
+  useEffect(() => {
+    if (analysisConfig?.hasVariants && !selectedVariant && variantResults.length > 0) {
+      setSelectedVariant(variantResults[0])
+    }
+  }, [analysisConfig?.hasVariants, variantResults, selectedVariant])
 
-  // Semantic labels for variants (e.g. "Overall", "Protein-Membrane Interaction") from summary JSON
+  const hasResult = selectedResultName ? availableResults.has(selectedResultName) || variantResults.length > 0 : false
+
   const { data: analysisVariants } = useAnalysisVariants(
     experimentId,
-    hasResult && analysisConfig?.hasVariants ? selectedResultName : null,
+    hasResult && analysisConfig?.hasVariants ? selectedResultName : null
   )
   const variantLabelMap = useMemo(() => {
     const map = new Map<string, string>()
@@ -76,15 +95,22 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
   }, [analysisVariants])
   const isRunningThis = activeJob?.analysis_name === selectedAnalysis
 
-  // What to actually fetch and render: selected variant, falling back to summary
-  const effectiveResultName = selectedVariant ?? selectedResultName
+  // For hasVariants analyses the base file is the variant index — never fetch or render it.
+  const effectiveResultName = analysisConfig?.hasVariants ? selectedVariant : (selectedVariant ?? selectedResultName)
 
   const { data: analysisData, isLoading: isLoadingData } = useAnalysisData(
     experimentId,
-    hasResult ? effectiveResultName : null,
+    hasResult ? effectiveResultName : null
   )
 
-  const canSubmit = !!structureFile && !!coordsFile && !!selectedAnalysis && !activeJob && !submitAnalysis.isPending
+  const needsTopology = analysisConfig?.requires === "topology"
+  const canSubmit =
+    !!structureFile &&
+    !!coordsFile &&
+    !!selectedAnalysis &&
+    (!needsTopology || !!topologyFile) &&
+    !activeJob &&
+    !submitAnalysis.isPending
 
   const handleCalculate = () => {
     if (!structureFile || !coordsFile || !selectedAnalysis) return
@@ -92,26 +118,33 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
       analysis: selectedAnalysis,
       structure_file: structureFile.path,
       trajectory_file: coordsFile.path,
+      ...(needsTopology && topologyFile && { topology_file: topologyFile.path }),
     })
   }
 
-  // Most recent job for status display when no active job
   const lastJob = useMemo(() => {
     if (!jobs?.length) return null
-    return jobs.reduce((latest, job) =>
-      new Date(job.created_at) > new Date(latest.created_at) ? job : latest,
-    )
+    return jobs.reduce((latest, job) => (new Date(job.created_at) > new Date(latest.created_at) ? job : latest))
   }, [jobs])
 
+  const lastJobForAnalysis = useMemo(() => {
+    if (!jobs?.length || !selectedAnalysis) return null
+    const filtered = jobs.filter((j) => j.analysis_name === selectedAnalysis)
+    if (!filtered.length) return null
+    return filtered.reduce((latest, job) => (new Date(job.created_at) > new Date(latest.created_at) ? job : latest))
+  }, [jobs, selectedAnalysis])
+
+  const completedWithNoResult = lastJobForAnalysis?.status === "TERMINATED" && !hasResult
+
   const [showLogs, setShowLogs] = useState(false)
-  const { data: jobLogs } = useAnalysisLogs(
-    experimentId,
-    showLogs && lastJob ? lastJob.id : null,
-  )
+  useEffect(() => {
+    if (!activeJob) setShowLogs(false)
+  }, [activeJob])
+  const logJobId = showLogs ? (activeJob?.id ?? lastJob?.id ?? null) : null
+  const { data: jobLogs } = useAnalysisLogs(experimentId, logJobId, !!activeJob)
 
   return (
     <div className="flex flex-col gap-3">
-      {/* File selectors */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5">
           <Shapes className="text-muted-foreground h-4 w-4 shrink-0" />
@@ -135,45 +168,38 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
             />
           </div>
         )}
+        {needsTopology && (
+          <div className="flex items-center gap-1.5">
+            <FileKey className="text-muted-foreground h-4 w-4 shrink-0" />
+            <FileSelector
+              experimentId={experimentId}
+              ext={TOPOLOGY_FORMATS}
+              title="Select topology file"
+              onFileSelected={setTopologyFile}
+              className="w-52"
+            />
+          </div>
+        )}
       </div>
 
-      {/* Analysis controls bar */}
       <div className="flex flex-wrap items-center gap-2">
         <Select value={selectedAnalysis ?? undefined} onValueChange={(v) => setSelectedAnalysis(v as AnalysisType)}>
           <SelectTrigger className="w-64">
             <SelectValue placeholder="Select analysis..." />
           </SelectTrigger>
           <SelectContent>
-            <SelectGroup>
-              <SelectLabel>Standard</SelectLabel>
-              {AVAILABLE_ANALYSES.filter((a) => !a.requires).map((a) => (
-                <SelectItem key={a.value} value={a.value}>
-                  <span className="flex items-center gap-2">
-                    {a.label}
-                    {availableResults.has(a.resultName) && (
-                      <span className="bg-primary/15 text-primary rounded px-1.5 py-0.5 text-[10px] font-medium">
-                        ready
-                      </span>
-                    )}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectGroup>
-            <SelectGroup>
-              <SelectLabel>Membrane systems</SelectLabel>
-              {AVAILABLE_ANALYSES.filter((a) => a.requires === "membrane").map((a) => (
-                <SelectItem key={a.value} value={a.value}>
-                  <span className="flex items-center gap-2">
-                    {a.label}
-                    {availableResults.has(a.resultName) && (
-                      <span className="bg-primary/15 text-primary rounded px-1.5 py-0.5 text-[10px] font-medium">
-                        ready
-                      </span>
-                    )}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectGroup>
+            {AVAILABLE_ANALYSES.map((a) => (
+              <SelectItem key={a.value} value={a.value}>
+                <span className="flex items-center gap-2">
+                  {a.label}
+                  {availableResults.has(a.resultName) && (
+                    <span className="bg-primary/15 text-primary rounded px-1.5 py-0.5 text-[10px] font-medium">
+                      ready
+                    </span>
+                  )}
+                </span>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -198,19 +224,13 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
           </>
         )}
 
-        {/* Variant selector: shown when the analysis produced per-interaction numbered result files */}
+        {/* "All / Summary" is never shown — the base file is the variant index, not independently renderable. */}
         {hasResult && variantResults.length > 0 && (
-          <Select
-            value={selectedVariant ?? "__summary__"}
-            onValueChange={(v) => setSelectedVariant(v === "__summary__" ? null : v)}
-          >
+          <Select value={selectedVariant ?? undefined} onValueChange={setSelectedVariant}>
             <SelectTrigger className="w-44">
-              <SelectValue />
+              <SelectValue placeholder="Select variant..." />
             </SelectTrigger>
             <SelectContent>
-              {availableResults.has(selectedResultName!) && (
-                <SelectItem value="__summary__">All / Summary</SelectItem>
-              )}
               {variantResults.map((v) => (
                 <SelectItem key={v} value={v}>
                   {variantLabelMap.get(v) ?? getAnalysisLabel(v)}
@@ -220,31 +240,38 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
           </Select>
         )}
 
-        {/* Active job status badge */}
         {activeJob && (
-          <span
-            className={cn(
-              "ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-              statusBadgeClass(getJobStatusVariant(activeJob.status)),
-            )}
-          >
-            <Loader2 className="h-3 w-3 animate-spin" />
-            {JOB_STATUS_LABEL[activeJob.status]}
-            {activeJob.analysis_name !== selectedAnalysis && (
-              <span className="opacity-75">
-                ({AVAILABLE_ANALYSES.find((a) => a.value === activeJob.analysis_name)?.label ?? activeJob.analysis_name})
-              </span>
-            )}
-          </span>
+          <>
+            <span
+              className={cn(
+                "ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                statusBadgeClass(getJobStatusVariant(activeJob.status))
+              )}
+            >
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {activeJob.status}
+              {activeJob.analysis_name !== selectedAnalysis && (
+                <span className="opacity-75">
+                  (
+                  {AVAILABLE_ANALYSES.find((a) => a.value === activeJob.analysis_name)?.label ??
+                    activeJob.analysis_name}
+                  )
+                </span>
+              )}
+            </span>
+            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setShowLogs((v) => !v)}>
+              <Terminal className="mr-1 h-3 w-3" />
+              {showLogs ? "Hide logs" : "View logs"}
+            </Button>
+          </>
         )}
 
-        {/* Last job failed indicator */}
         {!activeJob && lastJob?.status === "ERROR" && (
           <>
             <span
               className={cn(
                 "ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                statusBadgeClass("destructive"),
+                statusBadgeClass("destructive")
               )}
             >
               <CircleAlert className="h-3 w-3" />
@@ -262,15 +289,9 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
         <p className="text-muted-foreground text-xs">Select structure and trajectory files to run analyses.</p>
       )}
 
-      {/* Job logs (shown on demand after failure) */}
-      {showLogs && (
-        <pre className="bg-muted max-h-64 overflow-auto rounded-lg p-3 font-mono text-xs whitespace-pre-wrap">
-          {jobLogs || "Loading logs..."}
-        </pre>
-      )}
+      {showLogs && <LogsView logs={jobLogs ?? ""} />}
 
-      {/* Visualization area */}
-      <div className="h-150">
+      <div>
         {!selectedAnalysis && (
           <div className="border-muted-foreground/25 bg-muted flex h-full flex-1 items-center justify-center rounded-lg border-2 border-dashed">
             <div className="space-y-2 text-center">
@@ -290,12 +311,22 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
         )}
 
         {selectedAnalysis && !isRunningThis && !hasResult && (
-          <div className="border-muted-foreground/25 bg-muted flex h-full flex-1 items-center justify-center rounded-lg border-2 border-dashed">
-            <div className="space-y-2 text-center">
-              <BarChart3 className="text-muted-foreground/50 mx-auto h-12 w-12" />
-              <p className="text-muted-foreground text-sm">No results yet.</p>
-              <p className="text-muted-foreground/75 text-xs">Click "Calculate" to run this analysis.</p>
-            </div>
+          <div className="border-muted-foreground/25 bg-muted flex h-full flex-1 items-center justify-center rounded-lg border-2 border-dashed py-5">
+            {completedWithNoResult ? (
+              <div className="space-y-2 text-center">
+                <Info className="text-muted-foreground/50 mx-auto h-12 w-12" />
+                <p className="text-muted-foreground text-sm">Analysis produced no data.</p>
+                <p className="text-muted-foreground/75 text-xs">
+                  This analysis may not apply to your system (e.g., no lipid membrane detected).
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 text-center">
+                <BarChart3 className="text-muted-foreground/50 mx-auto h-12 w-12" />
+                <p className="text-muted-foreground text-sm">No results yet.</p>
+                <p className="text-muted-foreground/75 text-xs">Click "Calculate" to run this analysis.</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -310,16 +341,6 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
           <AnalysisRenderer analysisName={effectiveResultName} data={analysisData as Analysis} />
         )}
       </div>
-
-      {/* Footer metadata */}
-      {selectedAnalysis && hasResult && !isLoadingData && (
-        <>
-          <Separator />
-          <div className="text-muted-foreground text-xs">
-            Experiment: {experimentId} · Analysis: {effectiveResultName}
-          </div>
-        </>
-      )}
     </div>
   )
 }

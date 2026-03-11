@@ -13,6 +13,7 @@ export interface BarChartProps {
   series: BarSeries[] // allow multiple series for comparisons
   horizontal?: boolean
   showLegend?: boolean
+  height?: number | string
 }
 
 const BarChart: React.FC<BarChartProps> = ({
@@ -41,7 +42,7 @@ const BarChart: React.FC<BarChartProps> = ({
       data: s.data,
     })),
   }
-  return <EChartsBase option={option} style={{ width: "100%", height: "100%" }} />
+  return <EChartsBase option={option} />
 }
 
 export default BarChart

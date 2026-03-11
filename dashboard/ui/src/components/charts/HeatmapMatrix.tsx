@@ -24,6 +24,7 @@ export interface HeatmapMatrixProps {
     max?: number
   }
   tooltipFormatter?: (context: TooltipContext) => string
+  height?: number | string
 }
 
 const HeatmapMatrix: React.FC<HeatmapMatrixProps> = ({
@@ -34,6 +35,7 @@ const HeatmapMatrix: React.FC<HeatmapMatrixProps> = ({
   enableFilter = true,
   valueRange,
   tooltipFormatter,
+  height,
 }) => {
   if (data.length === 0) {
     return (
@@ -134,7 +136,7 @@ const HeatmapMatrix: React.FC<HeatmapMatrixProps> = ({
       },
     ],
   }
-  return <EChartsBase option={option} style={{ width: "100%", height: "100%" }} opts={{ renderer: "canvas" }} />
+  return <EChartsBase option={option} height={height} opts={{ renderer: "canvas" }} />
 }
 
 export default HeatmapMatrix

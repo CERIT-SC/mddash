@@ -14,6 +14,7 @@ export interface StackedAreaChartProps {
   yLabel?: string
   showLegend?: boolean
   stackId?: string
+  height?: number | string
 }
 
 const StackedAreaChart: React.FC<StackedAreaChartProps> = ({
@@ -48,7 +49,7 @@ const StackedAreaChart: React.FC<StackedAreaChartProps> = ({
     })),
   }
 
-  return <EChartsBase option={option} style={{ width: "100%", height: "100%" }} />
+  return <EChartsBase option={option} />
 }
 
 export default StackedAreaChart
