@@ -6,6 +6,7 @@ export interface EChartsBaseProps {
   option: EChartsOption
   className?: string
   style?: React.CSSProperties
+  height?: number | string
   // Allow passing through opts like renderer, width/height handling
   opts?: {
     renderer?: "canvas" | "svg"
@@ -15,13 +16,14 @@ export interface EChartsBaseProps {
   }
 }
 
-const EChartsBase: React.FC<EChartsBaseProps> = ({ option, className, style, opts }) => {
+const EChartsBase: React.FC<EChartsBaseProps> = ({ option, className, style, opts, height = 400 }) => {
+  const resolvedHeight = typeof height === "number" ? `${height}px` : height
   return (
     <ReactEChartsCore
       echarts={echarts}
       option={option}
       className={className}
-      style={style}
+      style={{ width: "100%", height: resolvedHeight, ...style }}
       opts={opts}
       notMerge={true}
       lazyUpdate={true}

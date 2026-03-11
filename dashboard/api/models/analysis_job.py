@@ -23,8 +23,8 @@ ANALYSIS_RESULT_PREFIX = "mda."
 ANALYSIS_RESULT_SUFFIX = ".json"
 MWF_DIR = "mwf_analyses"
 
-# Without a topology file, mwf runs these but produces no output.
-TOPOLOGY_REQUIRED_ANALYSES = {AnalysisType.ENERGIES, AnalysisType.INTER}
+# Energies needs atomic charges from a topology file (.tpr, .top, .prmtop, .psf).
+TOPOLOGY_REQUIRED_ANALYSES = {AnalysisType.ENERGIES}
 
 
 def find_result_file(experiment_id: str, name: str) -> Path | None:
@@ -57,6 +57,7 @@ class AnalysisJob(db.Model):  # type: ignore
     analysis_name: Mapped[AnalysisType] = mapped_column(db.Enum(AnalysisType), nullable=False)
     structure_file: Mapped[str] = mapped_column(db.String(255), nullable=False)
     trajectory_file: Mapped[str] = mapped_column(db.String(255), nullable=False)
+    topology_file: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
 
     _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", db.Enum(JobStatus), nullable=True)
 
@@ -89,7 +90,7 @@ class AnalysisJob(db.Model):  # type: ignore
     def results(self) -> list[str]:
         """List available analysis result names by scanning mwf output directory."""
         return [
-            f.name[len(ANALYSIS_RESULT_PREFIX) : -len(ANALYSIS_RESULT_SUFFIX)]
+            f.name[len(ANALYSIS_RESULT_PREFIX) : -len(ANALYSIS_RESULT_SUFFIX)].replace("_", "-")
             for f in list_result_files(self.experiment_id)
         ]
 
@@ -100,6 +101,7 @@ class AnalysisJob(db.Model):  # type: ignore
         analysis_name: AnalysisType,
         structure_file: str,
         trajectory_file: str,
+        topology_file: str | None = None,
     ) -> "AnalysisJob":
         """
         Start an analysis K8s Job for a single analysis type.
@@ -109,6 +111,7 @@ class AnalysisJob(db.Model):  # type: ignore
             analysis_name: The mwf analysis task name (e.g. "rmsds", "pca").
             structure_file: Relative path to the structure file within the experiment dir.
             trajectory_file: Relative path to the trajectory file within the experiment dir.
+            topology_file: Optional topology file for charge-dependent analyses (energies).
 
         Returns:
             The created AnalysisJob instance.
@@ -127,12 +130,13 @@ class AnalysisJob(db.Model):  # type: ignore
         # mwf_analyses/ is the MD dir; mwf forbids MD dir == project dir.
         # No -k flag: with a single analysis there's nothing to "keep going" to,
         # and it masks errors (mwf exits 0 even on InputError).
+        top_flag = f"-top '{topology_file}'" if topology_file else "-top no"
         command = (
             f"mkdir -p mwf_analyses && "
-            f"echo 'name: mddash' > inputs.yaml && "
-            f"conda run --no-capture-output -n mwf_env "
+            f"printf 'name: mddash\\ntype: trajectory\\ninteractions:\\n  - auto\\n' > inputs.yaml && "
+            f"TQDM_DISABLE=1 conda run --no-capture-output -n mwf_env "
             f"mwf run -dir . -stru '{structure_file}' -md mwf_analyses '{trajectory_file}' "
-            f"-top no -i {analysis_name}"
+            f"{top_flag} -i {analysis_name}"
         )
 
         k8s.create_job(
@@ -152,6 +156,7 @@ class AnalysisJob(db.Model):  # type: ignore
             analysis_name=analysis_name,  # type: ignore[call-arg]
             structure_file=structure_file,  # type: ignore[call-arg]
             trajectory_file=trajectory_file,  # type: ignore[call-arg]
+            topology_file=topology_file,  # type: ignore[call-arg]
         )
         db.session.add(job)
         db.session.commit()

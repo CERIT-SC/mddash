@@ -15,6 +15,7 @@ export interface Scatter2DProps {
   yLabel?: string
   colorBy?: "category" | "scalar" // interpret c as category or scalar
   categories?: string[] // for category legend order
+  height?: number | string
 }
 
 const Scatter2D: React.FC<Scatter2DProps> = ({
@@ -57,7 +58,7 @@ const Scatter2D: React.FC<Scatter2DProps> = ({
       },
     ],
   }
-  return <EChartsBase option={option} style={{ width: "100%", height: "100%" }} />
+  return <EChartsBase option={option} />
 }
 
 export default Scatter2D

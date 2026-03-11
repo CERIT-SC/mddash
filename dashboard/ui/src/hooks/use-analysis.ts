@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import { api } from "@/lib/http"
-import type { AnalysisJob, AnalysisResultMeta } from "@/util/analysis-types"
+import type { AnalysisJob } from "@/util/analysis-types"
 
 export function useAnalysisJobs(experimentId: string) {
   return useQuery<AnalysisJob[]>({
@@ -22,6 +22,7 @@ interface SubmitAnalysisVariables {
   analysis: string
   structure_file: string
   trajectory_file: string
+  topology_file?: string
 }
 
 export function useSubmitAnalysis(experimentId: string) {
@@ -31,7 +32,6 @@ export function useSubmitAnalysis(experimentId: string) {
     mutationFn: (data) => api.post(`/experiments/${experimentId}/analysis`, data).then((r) => r.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis"] })
-      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-results"] })
       toast.success("Analysis job submitted")
     },
     onError: (error: Error) => toast.error(error.message),
@@ -47,18 +47,8 @@ export function useDeleteAnalysis(experimentId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis"] })
-      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-results"] })
     },
     onError: (error: Error) => toast.error(error.message),
-  })
-}
-
-export function useAnalysisResults(experimentId: string, hasActiveJob?: boolean) {
-  return useQuery<AnalysisResultMeta[]>({
-    queryKey: ["experiment", experimentId, "analysis-results"],
-    queryFn: () => api.get(`/experiments/${experimentId}/analysis/results`).then((r) => r.data),
-    enabled: !!experimentId,
-    refetchInterval: hasActiveJob ? 5000 : false,
   })
 }
 
@@ -75,11 +65,12 @@ export interface AnalysisVariant {
   analysis: string
 }
 
-export function useAnalysisLogs(experimentId: string, jobId: string | null) {
+export function useAnalysisLogs(experimentId: string, jobId: string | null, polling = false) {
   return useQuery<string>({
     queryKey: ["experiment", experimentId, "analysis-logs", jobId],
     queryFn: () => api.get(`/experiments/${experimentId}/analysis/${jobId}/logs`).then((r) => r.data),
     enabled: !!experimentId && !!jobId,
+    refetchInterval: polling ? 5000 : false,
   })
 }
 

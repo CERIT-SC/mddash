@@ -10,9 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 function FileLabel({ file }: { file: FileOption }) {
   const dir = file.path.includes("/") ? file.path.slice(0, file.path.lastIndexOf("/")) : null
   return (
-    <span className="flex flex-col">
-      {dir && <span className="text-muted-foreground text-xs">{dir}/</span>}
-      <span className={dir ? "pl-2" : undefined}>
+    <span className="flex min-w-0 flex-col overflow-hidden">
+      {dir && <span className="text-muted-foreground truncate text-xs">{dir}/</span>}
+      <span className={dir ? "truncate pl-2" : "truncate"}>
         {file.name} ({formatFileSize(file.size)})
       </span>
     </span>
@@ -66,7 +66,7 @@ const FileSelector = (props: FileSelectorProps) => {
       <Select value={selectedFile || SELECT_NONE} onValueChange={handleChange}>
         <SelectTrigger
           id={id}
-          className="h-auto text-left *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:items-start!"
+          className="h-auto overflow-hidden text-left *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:overflow-hidden *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:items-start!"
         >
           <SelectValue placeholder={title} />
         </SelectTrigger>

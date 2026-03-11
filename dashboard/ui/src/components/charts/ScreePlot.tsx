@@ -6,6 +6,7 @@ import EChartsBase from "./EChartsBase"
 export interface ScreePlotProps {
   eigenvalues: number[]
   labelPrefix?: string // e.g., "PC"
+  height?: number | string
 }
 
 const ScreePlot: React.FC<ScreePlotProps> = ({ eigenvalues, labelPrefix = "PC" }) => {
@@ -22,7 +23,7 @@ const ScreePlot: React.FC<ScreePlotProps> = ({ eigenvalues, labelPrefix = "PC" }
       },
     ],
   }
-  return <EChartsBase option={option} style={{ width: "100%", height: "100%" }} />
+  return <EChartsBase option={option} />
 }
 
 export default ScreePlot

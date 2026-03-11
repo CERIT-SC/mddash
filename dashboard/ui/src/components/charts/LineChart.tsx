@@ -25,6 +25,7 @@ export interface LineChartProps {
   // DataZoom (brush) slider positioning
   zoomSliderBottom?: number // distance from bottom (px), default 8
   zoomSliderHeight?: number // slider height (px), default 26
+  height?: number | string
 }
 
 const LineChart: React.FC<LineChartProps> = ({
@@ -37,6 +38,7 @@ const LineChart: React.FC<LineChartProps> = ({
   yScale = false,
   xMin,
   xMax,
+  height,
   yMin,
   yMax,
   zoomSliderBottom = 10,
@@ -88,7 +90,7 @@ const LineChart: React.FC<LineChartProps> = ({
     })),
   }
 
-  return <EChartsBase option={option} style={{ width: "100%", height: "100%" }} />
+  return <EChartsBase option={option} height={height} />
 }
 
 export default LineChart

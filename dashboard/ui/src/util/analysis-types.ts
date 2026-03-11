@@ -45,17 +45,11 @@ export interface AnalysisJob {
   results: string[]
 }
 
-export interface AnalysisResultMeta {
-  name: string
-  file: string
-}
-
 /**
  * Specifies what additional data an analysis requires beyond structure + trajectory.
- * - 'topology': needs force field / atomic charges (e.g. energies, interactions)
- * - 'membrane': only meaningful for lipid membrane systems
+ * - 'topology': needs force field / atomic charges (e.g. energies)
  */
-export type AnalysisRequirement = "topology" | "membrane"
+export type AnalysisRequirement = "topology"
 
 export interface AnalysisInfo {
   value: AnalysisType
@@ -81,15 +75,15 @@ export const AVAILABLE_ANALYSES: AnalysisInfo[] = [
   { value: AnalysisType.POCKETS, label: "Pockets", resultName: "pockets" },
   { value: AnalysisType.TMSCORE, label: "TM-Scores", resultName: "tmscores" },
   { value: AnalysisType.DIST, label: "Distance Per Residue", resultName: "dist-perres", hasVariants: true },
-  // Membrane — only meaningful when the system contains lipid bilayers
-  { value: AnalysisType.DENSITY, label: "Density Profile", resultName: "density", requires: "membrane" },
-  { value: AnalysisType.THICKNESS, label: "Thickness", resultName: "thickness", requires: "membrane" },
-  { value: AnalysisType.APL, label: "Area Per Lipid", resultName: "apl", requires: "membrane" },
-  { value: AnalysisType.LORDER, label: "Lipid Order", resultName: "lipid-order", requires: "membrane" },
-  { value: AnalysisType.LINTER, label: "Lipid Interactions", resultName: "lipid-inter", requires: "membrane" },
-  // Topology — require force field / atomic charges; not supported without a topology file
+  { value: AnalysisType.INTER, label: "Interactions", resultName: "interactions" },
+  // Membrane — auto-detected from structure; skipped if no lipid bilayer present
+  { value: AnalysisType.DENSITY, label: "Density Profile", resultName: "density" },
+  { value: AnalysisType.THICKNESS, label: "Thickness", resultName: "thickness" },
+  { value: AnalysisType.APL, label: "Area Per Lipid", resultName: "apl" },
+  { value: AnalysisType.LORDER, label: "Lipid Order", resultName: "lipid-order" },
+  { value: AnalysisType.LINTER, label: "Lipid Interactions", resultName: "lipid-inter" },
+  // Energies — requires atomic charges from a topology file
   { value: AnalysisType.ENERGIES, label: "Energies", resultName: "energies", requires: "topology" },
-  { value: AnalysisType.INTER, label: "Interactions", resultName: "interactions", requires: "topology" },
 ]
 
 // ============================================================================
