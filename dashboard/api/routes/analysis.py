@@ -22,7 +22,12 @@ analysis_bp = Blueprint("analysis", __name__, url_prefix=f"{API_PREFIX}/experime
 @analysis_bp.route("", methods=["GET"])
 @handle_exceptions()
 def get_analysis_jobs(experiment_id: str) -> Response:
-    """List all analysis jobs for an experiment."""
+    """
+    List all analysis jobs for an experiment.
+
+    Returns:
+        JSON response with serialized list of analysis jobs.
+    """
     schema = AnalysisJobSchema(many=True)
     jobs: list[AnalysisJob] = AnalysisJob.query.filter_by(experiment_id=experiment_id).all()
     return ApiResponse.success(schema.dump(jobs))
@@ -31,7 +36,12 @@ def get_analysis_jobs(experiment_id: str) -> Response:
 @analysis_bp.route("", methods=["POST"])
 @handle_exceptions(rollback=True)
 def submit_analysis_job(experiment_id: str) -> Response:
-    """Submit a new analysis job. Rejects if a job is already running."""
+    """
+    Submit a new analysis job. Rejects if a job is already running.
+
+    Returns:
+        JSON response with the created job on success, or an error response.
+    """
     data = request.get_json()
     if not data:
         return ApiResponse.error("Request body is required.", HTTPStatus.BAD_REQUEST)
@@ -96,7 +106,12 @@ def submit_analysis_job(experiment_id: str) -> Response:
 @analysis_bp.route("/<job_id>", methods=["GET"])
 @handle_exceptions()
 def get_analysis_job(experiment_id: str, job_id: str) -> Response:
-    """Get a specific analysis job by ID."""
+    """
+    Get a specific analysis job by ID.
+
+    Returns:
+        JSON response with the serialized analysis job.
+    """
     schema = AnalysisJobSchema()
     job: AnalysisJob = AnalysisJob.query.filter_by(experiment_id=experiment_id, id=job_id).first_or_404(
         description=f"Analysis job {job_id} in experiment {experiment_id} not found"
@@ -107,7 +122,12 @@ def get_analysis_job(experiment_id: str, job_id: str) -> Response:
 @analysis_bp.route("/<job_id>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
 def delete_analysis_job(experiment_id: str, job_id: str) -> Response:
-    """Delete an analysis job and its results."""
+    """
+    Delete an analysis job and its results.
+
+    Returns:
+        Empty 204 No Content response on success.
+    """
     job: AnalysisJob = AnalysisJob.query.filter_by(experiment_id=experiment_id, id=job_id).first_or_404(
         description=f"Analysis job {job_id} in experiment {experiment_id} not found"
     )
@@ -120,7 +140,12 @@ def delete_analysis_job(experiment_id: str, job_id: str) -> Response:
 @analysis_bp.route("/<job_id>/logs", methods=["GET"])
 @handle_exceptions()
 def get_analysis_job_logs(experiment_id: str, job_id: str) -> Response:
-    """Get K8s pod logs for an analysis job."""
+    """
+    Get K8s pod logs for an analysis job.
+
+    Returns:
+        JSON response with log text, trimmed to content after the workflow start marker.
+    """
     job: AnalysisJob = AnalysisJob.query.filter_by(experiment_id=experiment_id, id=job_id).first_or_404(
         description=f"Analysis job {job_id} in experiment {experiment_id} not found"
     )
@@ -140,6 +165,9 @@ def get_analysis_variants(experiment_id: str, name: str) -> Response:
 
     The summary file written by mwf for multi-file analyses is a list of
     {name, analysis} objects — one entry per interaction pair or run variant.
+
+    Returns:
+        JSON response with a list of variant objects, or an empty list if not found.
     """
     result_file = find_result_file(experiment_id, name)
     if not result_file:
@@ -162,7 +190,12 @@ def get_analysis_variants(experiment_id: str, name: str) -> Response:
 @analysis_bp.route("/results/<name>", methods=["GET"])
 @handle_exceptions()
 def get_analysis_result(experiment_id: str, name: str) -> Response:
-    """Get the JSON content of a specific analysis result."""
+    """
+    Get the JSON content of a specific analysis result.
+
+    Returns:
+        JSON response with the parsed analysis data, or an error response if not found.
+    """
     result_file = find_result_file(experiment_id, name)
     if not result_file:
         return ApiResponse.error(f"Analysis result '{name}' not found.", HTTPStatus.NOT_FOUND)

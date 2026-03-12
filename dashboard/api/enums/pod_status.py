@@ -13,12 +13,6 @@ class PodStatus(str, Enum):
     TERMINATED = "TERMINATED"
 
     def __str__(self) -> str:
-        """
-        Return the string value of the pod status.
-
-        Returns:
-            str: The string value of this enum member.
-        """
         return self.value
 
     @classmethod

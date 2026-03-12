@@ -514,7 +514,12 @@ def get_job_status(name: str) -> JobStatus:
 
 
 def get_job_logs(name: str, tail_lines: int = 200) -> str:
-    """Get logs from the pod belonging to a job."""
+    """
+    Get logs from the pod belonging to a job.
+
+    Returns:
+        Log text as a string, or empty string if the pod is not found or an error occurs.
+    """
     try:
         pods = core_v1.list_namespaced_pod(namespace=NAMESPACE, label_selector=f"job={name}")
         if not pods.items:
