@@ -32,6 +32,7 @@ ignore = [
     "D212",    # multi-line summary on second line (we use D213 style: summary on first line)
     "D100",    # missing docstring in public module (too noisy for service code)
     "D104",    # missing docstring in public package (same reason)
+    "D105",    # undocumented magic method  (we don't need docstrings on __str__, __dict__ etc. unless they do something non-obvious)
     "D203",    # conflicts with D211 (no-blank-line-before-class)
     "G004",    # allow f-strings in logging calls (we prefer readability over lazy evaluation here)
     "PLR0913", # too many arguments — Flask view functions and constructors often need many params

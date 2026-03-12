@@ -9,12 +9,6 @@ class DeviceType(str, Enum):
     GPU = "gpu"
 
     def __str__(self) -> str:
-        """
-        Return the string value of the device type.
-
-        Returns:
-            str: The string value of this enum member.
-        """
         return self.value
 
     @classmethod

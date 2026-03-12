@@ -11,12 +11,6 @@ class JobStatus(str, Enum):
     ERROR = "ERROR"
 
     def __str__(self) -> str:
-        """
-        Return the string value of the job status.
-
-        Returns:
-            str: The string value of this enum member.
-        """
         return self.value
 
     @classmethod

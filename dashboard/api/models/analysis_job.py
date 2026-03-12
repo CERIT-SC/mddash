@@ -28,7 +28,12 @@ TOPOLOGY_REQUIRED_ANALYSES = {AnalysisType.ENERGIES}
 
 
 def find_result_file(experiment_id: str, name: str) -> Path | None:
-    """Find a result file by normalized name under the mwf output directory."""
+    """
+    Find a result file by normalized name under the mwf output directory.
+
+    Returns:
+        The first matching Path, or None if not found.
+    """
     filename = f"{ANALYSIS_RESULT_PREFIX}{name.replace('-', '_')}{ANALYSIS_RESULT_SUFFIX}"
     mwf_dir = DATA_DIR / experiment_id / MWF_DIR
     if not mwf_dir.is_dir():
@@ -38,7 +43,12 @@ def find_result_file(experiment_id: str, name: str) -> Path | None:
 
 
 def list_result_files(experiment_id: str) -> list[Path]:
-    """List all mda.*.json result files under the mwf output directory."""
+    """
+    List all mda.*.json result files under the mwf output directory.
+
+    Returns:
+        Sorted list of matching Paths, or empty list if directory doesn't exist.
+    """
     mwf_dir = DATA_DIR / experiment_id / MWF_DIR
     if not mwf_dir.is_dir():
         return []
