@@ -1,22 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { useQueryClient } from "@tanstack/react-query"
-import {
-  Activity,
-  BarChart3,
-  CircleAlert,
-  FileKey,
-  Info,
-  Loader2,
-  Play,
-  RefreshCw,
-  Shapes,
-  Terminal,
-} from "lucide-react"
+import { BarChart3, CircleAlert, Info, Loader2, Play, RefreshCw, Terminal, X } from "lucide-react"
 
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
-import { AVAILABLE_ANALYSES, type Analysis, type AnalysisType } from "@/util/analysis-types"
+import {
+  AnalysisPreprocessingMode,
+  AVAILABLE_ANALYSES,
+  type Analysis,
+  type AnalysisPreprocessingMode as AnalysisPreprocessingModeValue,
+  type AnalysisType,
+} from "@/util/analysis-types"
 import { getAnalysisLabel } from "@/util/analysis-utils"
 import type { FileOption } from "@/util/types"
 import { getJobStatusVariant } from "@/util/types"
@@ -25,31 +20,47 @@ import {
   useAnalysisJobs,
   useAnalysisLogs,
   useAnalysisVariants,
+  useDeleteAnalysis,
   useSubmitAnalysis,
 } from "@/hooks/use-analysis"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import AnalysisRenderer from "@/components/analysis/renderers"
-import FileSelector from "@/components/FileSelector"
+import ConfirmDialog from "@/components/ConfirmDialog"
 import LogsView from "@/components/LogsView"
 
 interface AnalysisPanelProps {
   experimentId: string
+  structureFile: FileOption | null
+  coordsFile: FileOption | null
+  topologyFile: FileOption | null
+  topologyRequired: boolean
+  preprocessingMode: AnalysisPreprocessingModeValue
+  setPreprocessingMode: (mode: AnalysisPreprocessingModeValue) => void
+  selectedAnalysis: AnalysisType | null
+  setSelectedAnalysis: (analysis: AnalysisType | null) => void
 }
 
-const STRUCTURE_FORMATS = ["pdb", "gro"]
-const COORDINATE_FORMATS = ["xtc", "trr"]
-const TOPOLOGY_FORMATS = ["tpr", "top", "prmtop", "psf"]
+const PREPROCESSING_OPTIONS: Array<{ value: AnalysisPreprocessingModeValue; label: string }> = [
+  { value: AnalysisPreprocessingMode.AS_IS, label: "Use Files As-Is" },
+  { value: AnalysisPreprocessingMode.IMAGE, label: "Image Only" },
+  { value: AnalysisPreprocessingMode.IMAGE_FIT, label: "Image and Fit" },
+]
 
-const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
+const AnalysisPanel = ({
+  experimentId,
+  structureFile,
+  coordsFile,
+  topologyFile,
+  topologyRequired,
+  preprocessingMode,
+  setPreprocessingMode,
+  selectedAnalysis,
+  setSelectedAnalysis,
+}: AnalysisPanelProps) => {
   const queryClient = useQueryClient()
-  const [structureFile, setStructureFile] = useState<FileOption | null>(null)
-  const [coordsFile, setCoordsFile] = useState<FileOption | null>(null)
-  const [topologyFile, setTopologyFile] = useState<FileOption | null>(null)
-
-  useEffect(() => {
-    if (!structureFile) setCoordsFile(null)
-  }, [structureFile])
+  const [confirmCancelDialog, setConfirmCancelDialog] = useState(false)
 
   const { data: jobs } = useAnalysisJobs(experimentId)
   const activeJob = useMemo(() => jobs?.find((j) => j.status === "RUNNING" || j.status === "PENDING"), [jobs])
@@ -65,17 +76,24 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
     hadActiveJobRef.current = isActive
   }, [activeJob, queryClient, experimentId])
   const submitAnalysis = useSubmitAnalysis(experimentId)
-  const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisType | null>(null)
+  const deleteAnalysis = useDeleteAnalysis(experimentId)
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null)
 
   useEffect(() => {
     setSelectedVariant(null)
-    setTopologyFile(null)
   }, [selectedAnalysis])
 
   const availableResults = useMemo(() => new Set(jobs?.flatMap((j) => j.results) ?? []), [jobs])
 
-  const analysisConfig = useMemo(() => AVAILABLE_ANALYSES.find((a) => a.value === selectedAnalysis), [selectedAnalysis])
+  const resolvedAnalysis = useMemo(() => {
+    if (selectedAnalysis) return selectedAnalysis
+    if (activeJob) return activeJob.analysis_name
+
+    const jobWithResults = jobs?.find((job) => job.results.length > 0)
+    return jobWithResults?.analysis_name ?? null
+  }, [selectedAnalysis, activeJob, jobs])
+
+  const analysisConfig = useMemo(() => AVAILABLE_ANALYSES.find((a) => a.value === resolvedAnalysis), [resolvedAnalysis])
   const selectedResultName = analysisConfig?.resultName ?? null
 
   const variantResults = useMemo(() => {
@@ -103,7 +121,7 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
     for (const v of analysisVariants ?? []) map.set(v.analysis, v.name)
     return map
   }, [analysisVariants])
-  const isRunningThis = activeJob?.analysis_name === selectedAnalysis
+  const isRunningThis = activeJob?.analysis_name === resolvedAnalysis
 
   // For hasVariants analyses the base file is the variant index — never fetch or render it.
   const effectiveResultName = analysisConfig?.hasVariants ? selectedVariant : (selectedVariant ?? selectedResultName)
@@ -113,23 +131,28 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
     hasResult ? effectiveResultName : null
   )
 
-  const needsTopology = analysisConfig?.requires === "topology"
   const canSubmit =
     !!structureFile &&
     !!coordsFile &&
     !!selectedAnalysis &&
-    (!needsTopology || !!topologyFile) &&
+    (!topologyRequired || !!topologyFile) &&
     !activeJob &&
     !submitAnalysis.isPending
 
-  const handleCalculate = () => {
-    if (!structureFile || !coordsFile || !selectedAnalysis) return
+  const submitCurrentAnalysis = () => {
+    if (!structureFile || !coordsFile || !selectedAnalysis || (topologyRequired && !topologyFile)) return
+
     submitAnalysis.mutate({
       analysis: selectedAnalysis,
       structure_file: structureFile.path,
       trajectory_file: coordsFile.path,
-      ...(needsTopology && topologyFile && { topology_file: topologyFile.path }),
+      preprocessing_mode: preprocessingMode,
+      ...(topologyFile && { topology_file: topologyFile.path }),
     })
+  }
+
+  const handleCalculate = () => {
+    submitCurrentAnalysis()
   }
 
   const lastJob = useMemo(() => {
@@ -145,75 +168,68 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
   }, [jobs, selectedAnalysis])
 
   const completedWithNoResult = lastJobForAnalysis?.status === "TERMINATED" && !hasResult
+  const failedJobForAnalysis = !activeJob && lastJobForAnalysis?.status === "ERROR"
 
   const [showLogs, setShowLogs] = useState(false)
   useEffect(() => {
-    if (!activeJob) setShowLogs(false)
+    if (!activeJob || activeJob.status === "PENDING") setShowLogs(false)
   }, [activeJob])
   const logJobId = showLogs ? (activeJob?.id ?? lastJob?.id ?? null) : null
   const { data: jobLogs } = useAnalysisLogs(experimentId, logJobId, !!activeJob)
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center gap-1.5">
-          <Shapes className="text-muted-foreground h-4 w-4 shrink-0" />
-          <FileSelector
-            experimentId={experimentId}
-            ext={STRUCTURE_FORMATS}
-            title="Select structure file"
-            onFileSelected={setStructureFile}
-            className="w-52"
-          />
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-56 flex-1 sm:max-w-sm">
+          <Label htmlFor="analysis-select" className="mb-1.5 block text-sm font-medium">
+            Analysis
+          </Label>
+          <Select
+            value={resolvedAnalysis ?? undefined}
+            onValueChange={(value) => setSelectedAnalysis(value as AnalysisType)}
+          >
+            <SelectTrigger id="analysis-select" className="w-full">
+              <SelectValue placeholder="Select analysis..." />
+            </SelectTrigger>
+            <SelectContent>
+              {AVAILABLE_ANALYSES.map((a) => (
+                <SelectItem key={a.value} value={a.value}>
+                  <span className="flex items-center gap-2">
+                    {a.label}
+                    {availableResults.has(a.resultName) && (
+                      <span className="bg-primary/15 text-primary rounded px-1.5 py-0.5 text-[10px] font-medium">
+                        ready
+                      </span>
+                    )}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        {structureFile && (
-          <div className="flex items-center gap-1.5">
-            <Activity className="text-muted-foreground h-4 w-4 shrink-0" />
-            <FileSelector
-              experimentId={experimentId}
-              ext={COORDINATE_FORMATS}
-              title="Select trajectory file"
-              onFileSelected={setCoordsFile}
-              className="w-52"
-            />
-          </div>
-        )}
-        {needsTopology && (
-          <div className="flex items-center gap-1.5">
-            <FileKey className="text-muted-foreground h-4 w-4 shrink-0" />
-            <FileSelector
-              experimentId={experimentId}
-              ext={TOPOLOGY_FORMATS}
-              title="Select topology file"
-              onFileSelected={setTopologyFile}
-              className="w-52"
-            />
-          </div>
-        )}
-      </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Select value={selectedAnalysis ?? undefined} onValueChange={(v) => setSelectedAnalysis(v as AnalysisType)}>
-          <SelectTrigger className="w-64">
-            <SelectValue placeholder="Select analysis..." />
-          </SelectTrigger>
-          <SelectContent>
-            {AVAILABLE_ANALYSES.map((a) => (
-              <SelectItem key={a.value} value={a.value}>
-                <span className="flex items-center gap-2">
-                  {a.label}
-                  {availableResults.has(a.resultName) && (
-                    <span className="bg-primary/15 text-primary rounded px-1.5 py-0.5 text-[10px] font-medium">
-                      ready
-                    </span>
-                  )}
-                </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="w-full sm:w-60">
+          <Label htmlFor="analysis-preprocessing-mode" className="mb-1.5 block text-sm font-medium">
+            Preprocessing
+          </Label>
+          <Select
+            value={preprocessingMode}
+            onValueChange={(value) => setPreprocessingMode(value as AnalysisPreprocessingModeValue)}
+          >
+            <SelectTrigger id="analysis-preprocessing-mode" className="w-full">
+              <SelectValue placeholder="Select preprocessing..." />
+            </SelectTrigger>
+            <SelectContent>
+              {PREPROCESSING_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        {selectedAnalysis && (
+        {resolvedAnalysis && (
           <>
             {isRunningThis ? (
               <Button size="sm" disabled>
@@ -234,7 +250,6 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
           </>
         )}
 
-        {/* "All / Summary" is never shown — the base file is the variant index, not independently renderable. */}
         {hasResult && variantResults.length > 0 && (
           <Select value={selectedVariant ?? undefined} onValueChange={setSelectedVariant}>
             <SelectTrigger className="w-44">
@@ -260,7 +275,7 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
             >
               <Loader2 className="h-3 w-3 animate-spin" />
               {activeJob.status}
-              {activeJob.analysis_name !== selectedAnalysis && (
+              {activeJob.analysis_name !== resolvedAnalysis && (
                 <span className="opacity-75">
                   (
                   {AVAILABLE_ANALYSES.find((a) => a.value === activeJob.analysis_name)?.label ??
@@ -268,11 +283,26 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
                   )
                 </span>
               )}
+              <button
+                type="button"
+                aria-label="Cancel running analysis"
+                className="hover:bg-background/20 focus-visible:ring-ring rounded-full p-0.5 transition-colors focus-visible:ring-2 focus-visible:outline-hidden"
+                onClick={() => setConfirmCancelDialog(true)}
+              >
+                <X className="h-3 w-3" />
+              </button>
             </span>
-            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setShowLogs((v) => !v)}>
-              <Terminal className="mr-1 h-3 w-3" />
-              {showLogs ? "Hide logs" : "View logs"}
-            </Button>
+            {activeJob.status !== "PENDING" && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 px-2 text-xs"
+                onClick={() => setShowLogs((value) => !value)}
+              >
+                <Terminal className="mr-1 h-3 w-3" />
+                {showLogs ? "Hide logs" : "View logs"}
+              </Button>
+            )}
           </>
         )}
 
@@ -287,7 +317,12 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
               <CircleAlert className="h-3 w-3" />
               Failed
             </span>
-            <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setShowLogs((v) => !v)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-xs"
+              onClick={() => setShowLogs((value) => !value)}
+            >
               <Terminal className="mr-1 h-3 w-3" />
               {showLogs ? "Hide logs" : "View logs"}
             </Button>
@@ -295,14 +330,20 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
         )}
       </div>
 
-      {!structureFile && selectedAnalysis && !hasResult && (
-        <p className="text-muted-foreground text-xs">Select structure and trajectory files to run analyses.</p>
+      {resolvedAnalysis && !hasResult && (!structureFile || !coordsFile || (topologyRequired && !topologyFile)) && (
+        <p className="text-muted-foreground text-xs">
+          {topologyRequired
+            ? preprocessingMode === AnalysisPreprocessingMode.AS_IS
+              ? "Select structure, trajectory, and topology files in the sidebar to run this analysis."
+              : "Select structure, trajectory, and simulation TPR files in the sidebar to run analyses with preprocessing."
+            : "Select structure and trajectory files in the sidebar to run this analysis."}
+        </p>
       )}
 
       {showLogs && <LogsView logs={jobLogs ?? ""} />}
 
       <div>
-        {!selectedAnalysis && (
+        {!resolvedAnalysis && (
           <div className="border-muted-foreground/25 bg-muted flex h-full flex-1 items-center justify-center rounded-lg border-2 border-dashed">
             <div className="space-y-2 text-center">
               <BarChart3 className="text-muted-foreground/50 mx-auto h-12 w-12" />
@@ -311,7 +352,7 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
           </div>
         )}
 
-        {selectedAnalysis && isRunningThis && (
+        {resolvedAnalysis && isRunningThis && (
           <div className="border-muted-foreground/25 bg-muted flex h-full flex-1 items-center justify-center rounded-lg border-2 border-dashed">
             <div className="space-y-2 text-center">
               <Loader2 className="text-muted-foreground/50 mx-auto h-12 w-12 animate-spin" />
@@ -320,9 +361,17 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
           </div>
         )}
 
-        {selectedAnalysis && !isRunningThis && !hasResult && (
+        {resolvedAnalysis && !isRunningThis && !hasResult && (
           <div className="border-muted-foreground/25 bg-muted flex h-full flex-1 items-center justify-center rounded-lg border-2 border-dashed py-5">
-            {completedWithNoResult ? (
+            {failedJobForAnalysis ? (
+              <div className="space-y-2 px-6 text-center">
+                <CircleAlert className="text-destructive/70 mx-auto h-12 w-12" />
+                <p className="text-sm font-medium">Previous analysis run failed.</p>
+                <p className="text-muted-foreground text-xs">
+                  Inspect the logs to understand the failure before retrying.
+                </p>
+              </div>
+            ) : completedWithNoResult ? (
               <div className="space-y-2 text-center">
                 <Info className="text-muted-foreground/50 mx-auto h-12 w-12" />
                 <p className="text-muted-foreground text-sm">Analysis produced no data.</p>
@@ -334,23 +383,42 @@ const AnalysisPanel = ({ experimentId }: AnalysisPanelProps) => {
               <div className="space-y-2 text-center">
                 <BarChart3 className="text-muted-foreground/50 mx-auto h-12 w-12" />
                 <p className="text-muted-foreground text-sm">No results yet.</p>
-                <p className="text-muted-foreground/75 text-xs">Click "Calculate" to run this analysis.</p>
+                <p className="text-muted-foreground/75 text-xs">
+                  {topologyRequired
+                    ? preprocessingMode === AnalysisPreprocessingMode.AS_IS
+                      ? 'Select the required files and click "Calculate" to run this analysis.'
+                      : 'Select the simulation TPR and click "Calculate" to run this analysis.'
+                    : 'Select the required files and click "Calculate" to run this analysis.'}
+                </p>
               </div>
             )}
           </div>
         )}
 
-        {selectedAnalysis && hasResult && isLoadingData && (
+        {resolvedAnalysis && hasResult && isLoadingData && (
           <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             Loading analysis data...
           </div>
         )}
 
-        {selectedAnalysis && hasResult && !isLoadingData && !!analysisData && effectiveResultName && (
+        {resolvedAnalysis && hasResult && !isLoadingData && !!analysisData && effectiveResultName && (
           <AnalysisRenderer analysisName={effectiveResultName} data={analysisData as Analysis} />
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmCancelDialog}
+        setOpen={setConfirmCancelDialog}
+        title="Cancel analysis job"
+        message="Stop the current analysis job? This run will be terminated and any partial output may be incomplete."
+        confirmText="Cancel job"
+        confirmColor="destructive"
+        onConfirm={async () => {
+          if (!activeJob) return
+          await deleteAnalysis.mutateAsync(activeJob.id)
+        }}
+      />
     </div>
   )
 }

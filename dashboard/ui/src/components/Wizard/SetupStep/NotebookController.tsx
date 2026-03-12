@@ -54,9 +54,11 @@ const STATUS_CONFIG = {
 
 interface NotebookControllerProps {
   experimentId: string
+  className?: string
+  compact?: boolean
 }
 
-const NotebookController = ({ experimentId }: NotebookControllerProps) => {
+const NotebookController = ({ experimentId, className, compact = false }: NotebookControllerProps) => {
   const isTransitioning_status = (s: Notebook["status"]) =>
     s === "PENDING" || s === "INITIALIZING" || s === "TERMINATING"
 
@@ -106,12 +108,18 @@ const NotebookController = ({ experimentId }: NotebookControllerProps) => {
   const variant = getPodStatusVariant(displayStatus)
 
   return (
-    <div className="flex min-h-48 w-96 items-center justify-center rounded-md border p-6">
+    <div
+      className={cn(
+        "flex w-96 max-w-full items-center justify-center rounded-md border",
+        compact ? "min-h-0 p-4" : "min-h-48 p-6",
+        className
+      )}
+    >
       {isLoading ? (
         <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
       ) : (
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
+        <div className={cn("flex w-full flex-col gap-4", compact && "items-center text-center")}>
+          <div className={cn("flex items-center gap-2", compact && "justify-center")}>
             {isTransitioning ? (
               <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
             ) : StatusIcon ? (
@@ -123,7 +131,7 @@ const NotebookController = ({ experimentId }: NotebookControllerProps) => {
             </Badge>
           </div>
 
-          <p className="text-muted-foreground text-sm">{message}</p>
+          <p className={cn("text-muted-foreground text-sm", compact && "max-w-xs text-center")}>{message}</p>
 
           <div className="flex flex-wrap justify-center gap-2">
             {(displayStatus === "DOWN" || displayStatus === "TERMINATED") && (

@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import { api } from "@/lib/http"
-import type { AnalysisJob } from "@/util/analysis-types"
+import type { AnalysisJob, AnalysisPreprocessingMode } from "@/util/analysis-types"
 
 export function useAnalysisJobs(experimentId: string) {
   return useQuery<AnalysisJob[]>({
@@ -22,6 +22,7 @@ interface SubmitAnalysisVariables {
   analysis: string
   structure_file: string
   trajectory_file: string
+  preprocessing_mode: AnalysisPreprocessingMode
   topology_file?: string
 }
 

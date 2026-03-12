@@ -2,7 +2,12 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
+from enums import AnalysisType, PreprocessingMode
 from werkzeug.exceptions import BadRequest, Forbidden
+
+AS_IS_TOPOLOGY_SUFFIXES = {".tpr", ".top", ".prmtop", ".psf"}
+PREPROCESSING_TOPOLOGY_SUFFIX = ".tpr"
+TOPOLOGY_REQUIRED_ANALYSES = {AnalysisType.ENERGIES}
 
 
 def check_experiment_id(experiment_id: str) -> None:
@@ -74,6 +79,46 @@ def check_path(path: str, base_dir: Path) -> None:
             raise Forbidden("Path traversal not allowed.")
     except (ValueError, OSError):
         raise BadRequest("Invalid path.")
+
+
+def validate_analysis_topology_path(
+    topology_file: str | None,
+    experiment_dir: Path,
+    analysis_name: str,
+    analysis_type: AnalysisType,
+    preprocessing_mode: PreprocessingMode,
+) -> Path | None:
+    """
+    Validate an optional topology file against the selected analysis mode.
+
+    Returns:
+        The validated topology path, or None when no topology is required.
+
+    Raises:
+        BadRequest: If the topology is missing, invalid, unsupported, or outside the allowed directory.
+    """
+    requires_topology = analysis_type in TOPOLOGY_REQUIRED_ANALYSES
+    requires_preprocessing_topology = preprocessing_mode in {PreprocessingMode.IMAGE, PreprocessingMode.IMAGE_FIT}
+
+    if not topology_file and requires_preprocessing_topology:
+        raise BadRequest("A simulation TPR file is required when trajectory preprocessing is enabled.")
+    if not topology_file and requires_topology:
+        raise BadRequest(f"Analysis '{analysis_name}' requires a topology file (.tpr, .top, .prmtop, .psf).")
+    if not topology_file:
+        return None
+
+    check_path(topology_file, experiment_dir)
+    topology_path = Path(topology_file)
+    suffix = topology_path.suffix.lower()
+
+    if requires_preprocessing_topology and suffix != PREPROCESSING_TOPOLOGY_SUFFIX:
+        raise BadRequest("Trajectory preprocessing requires a simulation TPR file (.tpr).")
+    if not requires_preprocessing_topology and suffix not in AS_IS_TOPOLOGY_SUFFIXES:
+        raise BadRequest("Topology files must use one of: .tpr, .top, .prmtop, .psf.")
+    if not (experiment_dir / topology_path).is_file():
+        raise BadRequest(f"Topology file {topology_path.as_posix()} does not exist.")
+
+    return topology_path
 
 
 def check_log_type(log_type: str) -> None:

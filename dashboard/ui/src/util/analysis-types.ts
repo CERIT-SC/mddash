@@ -34,6 +34,14 @@ export const AnalysisType = {
 
 export type AnalysisType = (typeof AnalysisType)[keyof typeof AnalysisType]
 
+export const AnalysisPreprocessingMode = {
+  AS_IS: "as_is",
+  IMAGE: "image",
+  IMAGE_FIT: "image_fit",
+} as const
+
+export type AnalysisPreprocessingMode = (typeof AnalysisPreprocessingMode)[keyof typeof AnalysisPreprocessingMode]
+
 export interface AnalysisJob {
   id: string
   experiment_id: string
@@ -45,18 +53,12 @@ export interface AnalysisJob {
   results: string[]
 }
 
-/**
- * Specifies what additional data an analysis requires beyond structure + trajectory.
- * - 'topology': needs force field / atomic charges (e.g. energies)
- */
-export type AnalysisRequirement = "topology"
-
 export interface AnalysisInfo {
   value: AnalysisType
   label: string
   /** mwf output file name (after underscore→hyphen normalization). Differs from value when mwf uses different names for task vs output. */
   resultName: string
-  requires?: AnalysisRequirement
+  requiresTopology?: boolean
   /** True when mwf produces both a summary file and numbered variants (base-00, base-01, …). */
   hasVariants?: boolean
 }
@@ -82,8 +84,7 @@ export const AVAILABLE_ANALYSES: AnalysisInfo[] = [
   { value: AnalysisType.APL, label: "Area Per Lipid", resultName: "apl" },
   { value: AnalysisType.LORDER, label: "Lipid Order", resultName: "lipid-order" },
   { value: AnalysisType.LINTER, label: "Lipid Interactions", resultName: "lipid-inter" },
-  // Energies — requires atomic charges from a topology file
-  { value: AnalysisType.ENERGIES, label: "Energies", resultName: "energies", requires: "topology" },
+  { value: AnalysisType.ENERGIES, label: "Energies", resultName: "energies", requiresTopology: true },
 ]
 
 // ============================================================================

@@ -1,20 +1,19 @@
 import json
 from http import HTTPStatus
+from pathlib import Path
 
 from api_response import ApiResponse
 from clients import k8s
 from config import API_PREFIX, DATA_DIR
 from decorators import handle_exceptions
-from enums import AnalysisType, JobStatus
+from enums import AnalysisType, JobStatus, PreprocessingMode
 from extensions import db
 from flask import Blueprint, Response, request
 from models import AnalysisJob, Experiment
-from models.analysis_job import (
-    TOPOLOGY_REQUIRED_ANALYSES,
-    find_result_file,
-)
+from models.analysis_job import find_result_file
 from schemas import AnalysisJobSchema
-from validators import check_path
+from validators import check_path, validate_analysis_topology_path
+from werkzeug.exceptions import BadRequest
 
 analysis_bp = Blueprint("analysis", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/analysis")
 
@@ -49,58 +48,64 @@ def submit_analysis_job(experiment_id: str) -> Response:
     analysis_name = data.get("analysis", "")
     structure_file = data.get("structure_file", "")
     trajectory_file = data.get("trajectory_file", "")
-
     if not analysis_name or not structure_file or not trajectory_file:
         return ApiResponse.error("analysis, structure_file, and trajectory_file are required.", HTTPStatus.BAD_REQUEST)
 
     try:
         analysis_type = AnalysisType(analysis_name)
     except ValueError:
-        available = ", ".join(t.value for t in AnalysisType)
         return ApiResponse.error(
-            f"Unknown analysis '{analysis_name}'. Available: {available}",
+            f"Unknown analysis '{analysis_name}'. Available: {', '.join(t.value for t in AnalysisType)}",
+            HTTPStatus.BAD_REQUEST,
+        )
+
+    preprocessing_mode_name = data.get("preprocessing_mode", PreprocessingMode.AS_IS.value)
+    try:
+        preprocessing_mode = PreprocessingMode(preprocessing_mode_name)
+    except ValueError:
+        return ApiResponse.error(
+            f"Unknown preprocessing_mode '{preprocessing_mode_name}'. Available: {', '.join(mode.value for mode in PreprocessingMode)}",
             HTTPStatus.BAD_REQUEST,
         )
 
     topology_file = data.get("topology_file") or None
 
-    if analysis_type in TOPOLOGY_REQUIRED_ANALYSES and not topology_file:
-        return ApiResponse.error(
-            f"Analysis '{analysis_name}' requires a topology file (.tpr, .top, .prmtop, .psf).",
-            HTTPStatus.BAD_REQUEST,
-        )
-
     experiment_dir = DATA_DIR / experiment_id
     check_path(structure_file, experiment_dir)
     check_path(trajectory_file, experiment_dir)
 
-    if not (experiment_dir / structure_file).is_file():
-        return ApiResponse.error(f"Structure file {structure_file} does not exist.", HTTPStatus.NOT_FOUND)
-    if not (experiment_dir / trajectory_file).is_file():
-        return ApiResponse.error(f"Trajectory file {trajectory_file} does not exist.", HTTPStatus.NOT_FOUND)
+    structure_path = Path(structure_file)
+    trajectory_path = Path(trajectory_file)
 
-    if topology_file:
-        check_path(topology_file, experiment_dir)
-        if not (experiment_dir / topology_file).is_file():
-            return ApiResponse.error(f"Topology file {topology_file} does not exist.", HTTPStatus.NOT_FOUND)
+    if not (experiment_dir / structure_path).is_file():
+        return ApiResponse.error(f"Structure file {structure_path.as_posix()} does not exist.", HTTPStatus.NOT_FOUND)
+    if not (experiment_dir / trajectory_path).is_file():
+        return ApiResponse.error(f"Trajectory file {trajectory_path.as_posix()} does not exist.", HTTPStatus.NOT_FOUND)
 
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
+    try:
+        topology_path = validate_analysis_topology_path(
+            topology_file=topology_file,
+            experiment_dir=experiment_dir,
+            analysis_name=analysis_name,
+            analysis_type=analysis_type,
+            preprocessing_mode=preprocessing_mode,
+        )
+    except BadRequest as error:
+        return ApiResponse.error(error.description, HTTPStatus.BAD_REQUEST)
 
     current_job = AnalysisJob.query.filter_by(experiment_id=experiment_id).first()
     if current_job and current_job.status in {JobStatus.RUNNING, JobStatus.PENDING}:
         return ApiResponse.error("An analysis job is already running.", HTTPStatus.CONFLICT)
 
-    schema = AnalysisJobSchema()
     job = AnalysisJob.start(
-        experiment=experiment,
+        experiment=Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found"),
         analysis_name=analysis_type,
-        structure_file=structure_file,
-        trajectory_file=trajectory_file,
-        topology_file=topology_file,
+        structure_file=structure_path,
+        trajectory_file=trajectory_path,
+        topology_file=topology_path,
+        preprocessing_mode=preprocessing_mode,
     )
-    return ApiResponse.success(schema.dump(job), HTTPStatus.CREATED)
+    return ApiResponse.success(AnalysisJobSchema().dump(job), HTTPStatus.CREATED)
 
 
 @analysis_bp.route("/<job_id>", methods=["GET"])
