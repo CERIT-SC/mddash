@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
 import { useQueryClient } from "@tanstack/react-query"
-
-import { Activity, BarChart3, CircleAlert, FileKey, Info, Loader2, Play, RefreshCw, Shapes, Terminal } from "lucide-react"
+import {
+  Activity,
+  BarChart3,
+  CircleAlert,
+  FileKey,
+  Info,
+  Loader2,
+  Play,
+  RefreshCw,
+  Shapes,
+  Terminal,
+} from "lucide-react"
 
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"

@@ -66,7 +66,7 @@ const FileSelector = (props: FileSelectorProps) => {
       <Select value={selectedFile || SELECT_NONE} onValueChange={handleChange}>
         <SelectTrigger
           id={id}
-          className="h-auto overflow-hidden text-left *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:overflow-hidden *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:items-start!"
+          className="h-auto overflow-hidden text-left *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:items-start! *:data-[slot=select-value]:overflow-hidden"
         >
           <SelectValue placeholder={title} />
         </SelectTrigger>

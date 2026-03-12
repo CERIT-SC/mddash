@@ -134,9 +134,10 @@ class AnalysisJob(db.Model):  # type: ignore
         command = (
             f"mkdir -p mwf_analyses && "
             f"printf 'name: mddash\\ntype: trajectory\\ninteractions:\\n  - auto\\n' > inputs.yaml && "
-            f"TQDM_DISABLE=1 conda run --no-capture-output -n mwf_env "
+            f"conda run --no-capture-output -n mwf_env "
             f"mwf run -dir . -stru '{structure_file}' -md mwf_analyses '{trajectory_file}' "
-            f"{top_flag} -i {analysis_name}"
+            f"{top_flag} -i {analysis_name} && "
+            f"rm -f inputs.yaml"
         )
 
         k8s.create_job(
