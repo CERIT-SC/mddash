@@ -3,12 +3,14 @@
 from pathlib import Path
 
 import pytest
+from enums import AnalysisType, PreprocessingMode
 from validators import (
     check_experiment_id,
     check_filename,
     check_log_type,
     check_path,
     check_positive_int,
+    validate_analysis_topology_path,
     validate_git_url,
 )
 from werkzeug.exceptions import BadRequest, Forbidden
@@ -166,6 +168,64 @@ class TestCheckLogType:
         """Empty log type should be rejected."""
         with pytest.raises(BadRequest):
             check_log_type("")
+
+
+class TestValidateAnalysisTopologyPath:
+    """Tests for analysis topology validation across preprocessing modes."""
+
+    def test_allows_missing_topology_for_as_is_non_topology_analysis(self, tmp_path: Path) -> None:
+        """As-is mode should not require topology for analyses that do not depend on it."""
+        assert (
+            validate_analysis_topology_path(
+                topology_file=None,
+                experiment_dir=tmp_path,
+                analysis_name=AnalysisType.RGYR.value,
+                analysis_type=AnalysisType.RGYR,
+                preprocessing_mode=PreprocessingMode.AS_IS,
+            )
+            is None
+        )
+
+    def test_requires_topology_for_energies_in_as_is_mode(self, tmp_path: Path) -> None:
+        """As-is mode should still require topology for analyses that need it."""
+        with pytest.raises(BadRequest):
+            validate_analysis_topology_path(
+                topology_file=None,
+                experiment_dir=tmp_path,
+                analysis_name=AnalysisType.ENERGIES.value,
+                analysis_type=AnalysisType.ENERGIES,
+                preprocessing_mode=PreprocessingMode.AS_IS,
+            )
+
+    def test_requires_tpr_for_preprocessing_mode(self, tmp_path: Path) -> None:
+        """Image-based preprocessing should reject non-TPR topology files."""
+        topology = tmp_path / "system.top"
+        topology.write_text("[ defaults ]\n", encoding="ascii")
+
+        with pytest.raises(BadRequest):
+            validate_analysis_topology_path(
+                topology_file=topology.name,
+                experiment_dir=tmp_path,
+                analysis_name=AnalysisType.RGYR.value,
+                analysis_type=AnalysisType.RGYR,
+                preprocessing_mode=PreprocessingMode.IMAGE,
+            )
+
+    def test_accepts_top_for_as_is_mode(self, tmp_path: Path) -> None:
+        """As-is mode should accept supported non-TPR topology files."""
+        topology = tmp_path / "system.top"
+        topology.write_text("[ defaults ]\n", encoding="ascii")
+
+        assert (
+            validate_analysis_topology_path(
+                topology_file=topology.name,
+                experiment_dir=tmp_path,
+                analysis_name=AnalysisType.ENERGIES.value,
+                analysis_type=AnalysisType.ENERGIES,
+                preprocessing_mode=PreprocessingMode.AS_IS,
+            )
+            == topology
+        )
 
 
 class TestCheckPositiveInt:

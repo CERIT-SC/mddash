@@ -1,4 +1,5 @@
 import logging
+import shlex
 import uuid
 from contextlib import suppress
 from datetime import datetime
@@ -9,7 +10,7 @@ from cache import analysis_status_cache
 from cachetools import cached
 from clients import k8s
 from config import ANALYSIS_IMAGE, DATA_DIR
-from enums import AnalysisType, JobStatus
+from enums import AnalysisType, JobStatus, PreprocessingMode
 from extensions import db
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,9 +23,60 @@ logger = logging.getLogger(__name__)
 ANALYSIS_RESULT_PREFIX = "mda."
 ANALYSIS_RESULT_SUFFIX = ".json"
 MWF_DIR = "mwf_analyses"
-
-# Energies needs atomic charges from a topology file (.tpr, .top, .prmtop, .psf).
+MWF_INPUTS_DIR = "mwf_inputs"
+MWF_INCOMPLETE_PREFIX = "incomplete_"
 TOPOLOGY_REQUIRED_ANALYSES = {AnalysisType.ENERGIES}
+AUTO_INTERACTION_ANALYSES = {
+    AnalysisType.DIST,
+    AnalysisType.ENERGIES,
+    AnalysisType.HBONDS,
+    AnalysisType.INTER,
+}
+ANALYSIS_RUNTIME_PREP_TASKS = {
+    AnalysisType.CLUSTERS: ("clusters",),
+    AnalysisType.DIST: ("inter",),
+    AnalysisType.ENERGIES: ("inter",),
+    AnalysisType.HBONDS: ("inter",),
+    AnalysisType.INTER: ("inter",),
+}
+
+
+def get_incomplete_task_dirs(task_name: str) -> list[Path]:
+    """
+    Build plausible incomplete-task directories for a third-party mwf task.
+
+    Args:
+        task_name: The mwf task flag, such as ``inter`` or ``clusters``.
+
+    Returns:
+        Candidate project-relative and MD-relative incomplete task directories.
+    """
+    incomplete_dir = f"{MWF_INCOMPLETE_PREFIX}{task_name}"
+    return [Path(incomplete_dir), Path(MWF_DIR) / incomplete_dir]
+
+
+def get_analysis_runtime_prep_commands(analysis_name: AnalysisType) -> list[str]:
+    """
+    Build analysis-specific shell prep for known third-party mwf quirks.
+
+    Args:
+        analysis_name: The requested mwf analysis.
+
+    Returns:
+        Extra shell commands needed before invoking mwf for this analysis.
+    """
+    task_names = ANALYSIS_RUNTIME_PREP_TASKS.get(analysis_name, ())
+    if not task_names:
+        return []
+
+    temp_dirs: list[Path] = []
+    for task_name in task_names:
+        temp_dirs.extend(get_incomplete_task_dirs(task_name))
+
+    # Preserve declaration order while removing duplicates.
+    unique_temp_dirs = list(dict.fromkeys(path.as_posix() for path in temp_dirs))
+    mkdir_args = " ".join(shlex.quote(path) for path in unique_temp_dirs)
+    return [f"mkdir -p {mkdir_args}"]
 
 
 def find_result_file(experiment_id: str, name: str) -> Path | None:
@@ -53,6 +105,89 @@ def list_result_files(experiment_id: str) -> list[Path]:
     if not mwf_dir.is_dir():
         return []
     return sorted(mwf_dir.rglob(f"{ANALYSIS_RESULT_PREFIX}*{ANALYSIS_RESULT_SUFFIX}"))
+
+
+def get_runtime_prelude_commands(analysis_name: AnalysisType) -> list[str]:
+    """
+    Build shell commands that prepare the third-party mwf container runtime.
+
+    Args:
+        analysis_name: The requested mwf analysis.
+
+    Returns:
+        Shell commands that should run before invoking mwf.
+    """
+    commands = [
+        'export HOME="$PWD/.mddash-home"',
+        'mkdir -p "$HOME"',
+        "git config --global --add safe.directory /app/MDDB-workflow >/dev/null 2>&1 || true",
+    ]
+    commands.extend(get_analysis_runtime_prep_commands(analysis_name))
+    return commands
+
+
+def format_mwf_inputs_yaml(analysis_name: AnalysisType) -> str:
+    """
+    Build the minimal inputs.yaml content for an analysis job.
+
+    Args:
+        analysis_name: The requested mwf analysis.
+
+    Returns:
+        The YAML content passed to mwf as inputs.yaml.
+    """
+    lines = ["name: mddash", "type: trajectory"]
+    if analysis_name in AUTO_INTERACTION_ANALYSES:
+        lines.extend(["interactions:", "  - auto"])
+    return "\n".join(lines) + "\n"
+
+
+def format_mwf_analysis_command(
+    analysis_name: AnalysisType,
+    structure_file: Path,
+    trajectory_file: Path,
+    topology_file: Path | None,
+    preprocessing_mode: PreprocessingMode,
+) -> str:
+    """
+    Build the mwf command for a single analysis job.
+
+    Returns:
+        Shell command string used to execute the requested mwf analysis.
+    """
+    structure_snapshot = Path(MWF_INPUTS_DIR) / f"input_structure{structure_file.suffix}"
+    trajectory_snapshot = Path(MWF_INPUTS_DIR) / f"input_trajectory{trajectory_file.suffix}"
+    topology_snapshot = Path(MWF_INPUTS_DIR) / f"input_topology{topology_file.suffix}" if topology_file else None
+
+    snapshot_commands = [
+        f"cp {shlex.quote(structure_file.as_posix())} {shlex.quote(structure_snapshot.as_posix())}",
+        f"cp {shlex.quote(trajectory_file.as_posix())} {shlex.quote(trajectory_snapshot.as_posix())}",
+    ]
+    if topology_file and topology_snapshot:
+        snapshot_commands.append(
+            f"cp {shlex.quote(topology_file.as_posix())} {shlex.quote(topology_snapshot.as_posix())}"
+        )
+
+    flags = [f"-top {shlex.quote(topology_snapshot.as_posix())}" if topology_snapshot else "-top no"]
+    if preprocessing_mode in {PreprocessingMode.IMAGE, PreprocessingMode.IMAGE_FIT}:
+        flags.append("-img")
+    if preprocessing_mode is PreprocessingMode.IMAGE_FIT:
+        flags.append("-fit")
+
+    inputs_yaml = shlex.quote(format_mwf_inputs_yaml(analysis_name))
+    prelude_commands = get_runtime_prelude_commands(analysis_name)
+
+    return (
+        f"mkdir -p {shlex.quote(MWF_INPUTS_DIR)} {shlex.quote(MWF_DIR)} && "
+        f"{' && '.join(prelude_commands)} && "
+        f"{' && '.join(snapshot_commands)} && "
+        f"printf %s {inputs_yaml} > inputs.yaml && "
+        "conda run --no-capture-output -n mwf_env "
+        f"mwf run -dir . -stru {shlex.quote(structure_snapshot.as_posix())} "
+        f"-md {shlex.quote(MWF_DIR)} {shlex.quote(trajectory_snapshot.as_posix())} "
+        f"{' '.join(flags)} -i {analysis_name} && "
+        "rm -f inputs.yaml"
+    )
 
 
 class AnalysisJob(db.Model):  # type: ignore
@@ -109,9 +244,10 @@ class AnalysisJob(db.Model):  # type: ignore
         cls,
         experiment: "Experiment",
         analysis_name: AnalysisType,
-        structure_file: str,
-        trajectory_file: str,
-        topology_file: str | None = None,
+        structure_file: Path,
+        trajectory_file: Path,
+        topology_file: Path | None,
+        preprocessing_mode: PreprocessingMode,
     ) -> "AnalysisJob":
         """
         Start an analysis K8s Job for a single analysis type.
@@ -121,7 +257,8 @@ class AnalysisJob(db.Model):  # type: ignore
             analysis_name: The mwf analysis task name (e.g. "rmsds", "pca").
             structure_file: Relative path to the structure file within the experiment dir.
             trajectory_file: Relative path to the trajectory file within the experiment dir.
-            topology_file: Optional topology file for charge-dependent analyses (energies).
+            topology_file: Relative path to the topology file, when required for preprocessing or analysis.
+            preprocessing_mode: Selected preprocessing mode applied before analysis.
 
         Returns:
             The created AnalysisJob instance.
@@ -140,14 +277,12 @@ class AnalysisJob(db.Model):  # type: ignore
         # mwf_analyses/ is the MD dir; mwf forbids MD dir == project dir.
         # No -k flag: with a single analysis there's nothing to "keep going" to,
         # and it masks errors (mwf exits 0 even on InputError).
-        top_flag = f"-top '{topology_file}'" if topology_file else "-top no"
-        command = (
-            f"mkdir -p mwf_analyses && "
-            f"printf 'name: mddash\\ntype: trajectory\\ninteractions:\\n  - auto\\n' > inputs.yaml && "
-            f"conda run --no-capture-output -n mwf_env "
-            f"mwf run -dir . -stru '{structure_file}' -md mwf_analyses '{trajectory_file}' "
-            f"{top_flag} -i {analysis_name} && "
-            f"rm -f inputs.yaml"
+        command = format_mwf_analysis_command(
+            analysis_name=analysis_name,
+            structure_file=structure_file,
+            trajectory_file=trajectory_file,
+            topology_file=topology_file,
+            preprocessing_mode=preprocessing_mode,
         )
 
         k8s.create_job(
@@ -165,9 +300,9 @@ class AnalysisJob(db.Model):  # type: ignore
             id=job_id,  # type: ignore[call-arg]
             experiment_id=experiment.id,  # type: ignore[call-arg]
             analysis_name=analysis_name,  # type: ignore[call-arg]
-            structure_file=structure_file,  # type: ignore[call-arg]
-            trajectory_file=trajectory_file,  # type: ignore[call-arg]
-            topology_file=topology_file,  # type: ignore[call-arg]
+            structure_file=structure_file.as_posix(),  # type: ignore[call-arg]
+            trajectory_file=trajectory_file.as_posix(),  # type: ignore[call-arg]
+            topology_file=topology_file.as_posix() if topology_file else None,  # type: ignore[call-arg]
         )
         db.session.add(job)
         db.session.commit()
