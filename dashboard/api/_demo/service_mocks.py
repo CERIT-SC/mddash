@@ -395,7 +395,6 @@ def _k8s_get_job_logs(name: str, tail_lines: int = 200) -> str:  # noqa: ARG001
 
 
 def _mdposit_get(path: str) -> requests.Response:
-    """GET a MDposit analysis endpoint, following redirects with JSON acceptance."""
     headers = {"Accept": "application/json"}
     return _real_requests_get(f"{MDPOSIT_ANALYSES_URL}/{path}", headers=headers, timeout=30)
 

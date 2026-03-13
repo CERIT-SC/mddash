@@ -6,7 +6,7 @@ from api_response import ApiResponse
 from clients import k8s
 from config import API_PREFIX, DATA_DIR
 from decorators import handle_exceptions
-from enums import AnalysisType, JobStatus, PreprocessingMode
+from enums import AnalysisType, PreprocessingMode
 from extensions import db
 from flask import Blueprint, Response, request
 from models import AnalysisJob, Experiment
@@ -92,15 +92,6 @@ def submit_analysis_job(experiment_id: str) -> Response:
         )
     except BadRequest as error:
         return ApiResponse.error(error.description, HTTPStatus.BAD_REQUEST)
-
-    active_job = (
-        AnalysisJob.query
-        .filter_by(experiment_id=experiment_id)
-        .filter(AnalysisJob.status.in_([JobStatus.RUNNING, JobStatus.PENDING]))
-        .first()
-    )
-    if active_job:
-        return ApiResponse.error("An analysis job is already running.", HTTPStatus.CONFLICT)
 
     job = AnalysisJob.start(
         experiment=Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found"),
