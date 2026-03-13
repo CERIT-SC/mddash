@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-import app as app_module
 import models.experiment as experiment_model
 import requests
 
@@ -21,8 +20,6 @@ import requests
 _real_requests_get = requests.get
 
 import routes.mdrepo as mdrepo_routes
-import routes.misc as misc_routes
-import utils
 from clients import caddy, k8s, mdrepo, mdrun, tuner
 from config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
 from enums import JobStatus, PodStatus
@@ -115,10 +112,6 @@ def install_mocks() -> None:
     mdrepo_routes.requests.get = _fake_mdrepo_requests_get
     mdrepo_routes.requests.post = _fake_mdrepo_requests_post
 
-    utils.duc_query_size = _duc_query_size
-    utils.start_duc_indexer = _start_duc_indexer
-    misc_routes.duc_query_size = _duc_query_size
-    app_module.start_duc_indexer = _start_duc_indexer  # type: ignore[attr-defined]
 
 
 def _fake_download_git_repo(repo_url: str, output_dir: Path, access_token: str | None = None) -> None:  # noqa: ARG001
@@ -535,9 +528,3 @@ def _public_trial(trial: dict[str, object]) -> dict[str, object]:
     return public_trial
 
 
-def _duc_query_size(data_dir: Path) -> int:  # noqa: ARG001
-    return 10 * 1024 * 1024 * 1024  # 10 GB
-
-
-def _start_duc_indexer(data_dir: Path) -> None:  # noqa: ARG001
-    return
