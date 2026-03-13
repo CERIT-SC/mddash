@@ -34,7 +34,8 @@ EXCLUDED_DIRS: list[str] = [
     "*.cpt",
     "*.gro",
     "*.log",
-    "incomplete_*",
+    "mwf_analyses",
+    "mwf_inputs",
 ]
 
 EXCLUDED_FILES: list[str] = [

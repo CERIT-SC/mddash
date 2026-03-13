@@ -107,6 +107,41 @@ def list_result_files(experiment_id: str) -> list[Path]:
     return sorted(mwf_dir.rglob(f"{ANALYSIS_RESULT_PREFIX}*{ANALYSIS_RESULT_SUFFIX}"))
 
 
+def get_cleanup_commands(analysis_name: AnalysisType) -> list[str]:
+    """
+    Build shell commands to remove temporary files after mwf completes.
+
+    Keeps only mda.*.json result files. Removes input snapshots, incomplete
+    task directories, and all other intermediate mwf output that is not
+    needed for visualization.
+
+    Args:
+        analysis_name: The requested mwf analysis.
+
+    Returns:
+        Shell commands that should run after mwf exits successfully.
+    """
+    task_names = ANALYSIS_RUNTIME_PREP_TASKS.get(analysis_name, ())
+    incomplete_dirs = list(
+        dict.fromkeys(path.as_posix() for task_name in task_names for path in get_incomplete_task_dirs(task_name))
+    )
+
+    result_glob = shlex.quote(f"{ANALYSIS_RESULT_PREFIX}*{ANALYSIS_RESULT_SUFFIX}")
+    commands = [
+        "rm -f inputs.yaml",
+        f"rm -rf {shlex.quote(MWF_INPUTS_DIR)}",
+    ]
+    if incomplete_dirs:
+        commands.append(f"rm -rf {' '.join(shlex.quote(d) for d in incomplete_dirs)}")
+    commands.extend([
+        # Remove all non-result files produced by mwf (screenshots, metadata, intermediates).
+        f"find {shlex.quote(MWF_DIR)} -type f ! -name {result_glob} -delete",
+        # Remove directories left empty after the file sweep (-depth ensures bottom-up order).
+        f"find {shlex.quote(MWF_DIR)} -mindepth 1 -depth -type d -empty -delete",
+    ])
+    return commands
+
+
 def get_runtime_prelude_commands(analysis_name: AnalysisType) -> list[str]:
     """
     Build shell commands that prepare the third-party mwf container runtime.
@@ -142,6 +177,12 @@ def format_mwf_inputs_yaml(analysis_name: AnalysisType) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _safe_copy(src: Path, dst: Path) -> str:
+    src_q = shlex.quote(src.as_posix())
+    dst_q = shlex.quote(dst.as_posix())
+    return f"[ {src_q} -ef {dst_q} ] || cp {src_q} {dst_q}"
+
+
 def format_mwf_analysis_command(
     analysis_name: AnalysisType,
     structure_file: Path,
@@ -160,13 +201,11 @@ def format_mwf_analysis_command(
     topology_snapshot = Path(MWF_INPUTS_DIR) / f"input_topology{topology_file.suffix}" if topology_file else None
 
     snapshot_commands = [
-        f"cp {shlex.quote(structure_file.as_posix())} {shlex.quote(structure_snapshot.as_posix())}",
-        f"cp {shlex.quote(trajectory_file.as_posix())} {shlex.quote(trajectory_snapshot.as_posix())}",
+        _safe_copy(structure_file, structure_snapshot),
+        _safe_copy(trajectory_file, trajectory_snapshot),
     ]
     if topology_file and topology_snapshot:
-        snapshot_commands.append(
-            f"cp {shlex.quote(topology_file.as_posix())} {shlex.quote(topology_snapshot.as_posix())}"
-        )
+        snapshot_commands.append(_safe_copy(topology_file, topology_snapshot))
 
     flags = [f"-top {shlex.quote(topology_snapshot.as_posix())}" if topology_snapshot else "-top no"]
     if preprocessing_mode in {PreprocessingMode.IMAGE, PreprocessingMode.IMAGE_FIT}:
@@ -177,17 +216,20 @@ def format_mwf_analysis_command(
     inputs_yaml = shlex.quote(format_mwf_inputs_yaml(analysis_name))
     prelude_commands = get_runtime_prelude_commands(analysis_name)
 
-    return (
-        f"mkdir -p {shlex.quote(MWF_INPUTS_DIR)} {shlex.quote(MWF_DIR)} && "
-        f"{' && '.join(prelude_commands)} && "
-        f"{' && '.join(snapshot_commands)} && "
-        f"printf %s {inputs_yaml} > inputs.yaml && "
+    cleanup_commands = get_cleanup_commands(analysis_name)
+
+    commands = [
+        f"mkdir -p {shlex.quote(MWF_INPUTS_DIR)} {shlex.quote(MWF_DIR)}",
+        *prelude_commands,
+        *snapshot_commands,
+        f"printf %s {inputs_yaml} > inputs.yaml",
         "conda run --no-capture-output -n mwf_env "
         f"mwf run -dir . -stru {shlex.quote(structure_snapshot.as_posix())} "
         f"-md {shlex.quote(MWF_DIR)} {shlex.quote(trajectory_snapshot.as_posix())} "
-        f"{' '.join(flags)} -i {analysis_name} && "
-        "rm -f inputs.yaml"
-    )
+        f"{' '.join(flags)} -i {analysis_name}",
+        *cleanup_commands,
+    ]
+    return " && ".join(commands)
 
 
 class AnalysisJob(db.Model):  # type: ignore
