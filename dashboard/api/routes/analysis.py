@@ -159,7 +159,7 @@ def get_analysis_job_logs(experiment_id: str, job_id: str) -> Response:
     # Strip initialization noise to avoid confusing users
     marker = "Running MDDB workflow"
     idx = logs.find(marker)
-    return ApiResponse.success(logs[idx:] if idx > 0 else "")
+    return ApiResponse.success(logs[idx:] if idx != -1 else "")
 
 
 @analysis_bp.route("/results", methods=["GET"])
