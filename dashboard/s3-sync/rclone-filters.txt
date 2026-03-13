@@ -30,4 +30,5 @@
 - .binder-env-installed
 - **/.binder-env-installed
 - .duc.db
-- **/mwf_analyses/incomplete_*/**
+- **/mwf_analyses/**
+- **/mwf_inputs/**
