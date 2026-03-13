@@ -46,8 +46,8 @@ const HeatmapMatrix: React.FC<HeatmapMatrixProps> = ({
   }
 
   const values = data.map((d) => d[2])
-  const computedMin = Math.min(...values)
-  const computedMax = Math.max(...values)
+  const computedMin = values.reduce((a, b) => (b < a ? b : a), values[0])
+  const computedMax = values.reduce((a, b) => (b > a ? b : a), values[0])
   const minValue = typeof valueRange?.min === "number" && Number.isFinite(valueRange.min) ? valueRange.min : computedMin
   const maxValue = typeof valueRange?.max === "number" && Number.isFinite(valueRange.max) ? valueRange.max : computedMax
 

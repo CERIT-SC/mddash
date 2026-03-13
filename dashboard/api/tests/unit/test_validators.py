@@ -216,16 +216,13 @@ class TestValidateAnalysisTopologyPath:
         topology = tmp_path / "system.top"
         topology.write_text("[ defaults ]\n", encoding="ascii")
 
-        assert (
-            validate_analysis_topology_path(
-                topology_file=topology.name,
-                experiment_dir=tmp_path,
-                analysis_name=AnalysisType.ENERGIES.value,
-                analysis_type=AnalysisType.ENERGIES,
-                preprocessing_mode=PreprocessingMode.AS_IS,
-            )
-            == topology
-        )
+        assert validate_analysis_topology_path(
+            topology_file=topology.name,
+            experiment_dir=tmp_path,
+            analysis_name=AnalysisType.ENERGIES.value,
+            analysis_type=AnalysisType.ENERGIES,
+            preprocessing_mode=PreprocessingMode.AS_IS,
+        ) == Path(topology.name)
 
 
 class TestCheckPositiveInt:

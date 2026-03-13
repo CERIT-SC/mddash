@@ -30,7 +30,7 @@ const RMSDPairwiseHeatmap: FC<RMSDPairwiseHeatmapProps> = ({ data }) => {
   const triples: Array<[number, number, number]> = []
   for (let i = 0; i < sampledMatrix.length; i++) {
     for (let j = 0; j < sampledMatrix[i].length; j++) {
-      triples.push([i, j, sampledMatrix[i][j] ?? 0])
+      triples.push([j, i, sampledMatrix[i][j] ?? 0])
     }
   }
   const rowCount = sampledMatrix.length
