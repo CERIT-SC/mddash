@@ -93,8 +93,13 @@ def submit_analysis_job(experiment_id: str) -> Response:
     except BadRequest as error:
         return ApiResponse.error(error.description, HTTPStatus.BAD_REQUEST)
 
-    current_job = AnalysisJob.query.filter_by(experiment_id=experiment_id).first()
-    if current_job and current_job.status in {JobStatus.RUNNING, JobStatus.PENDING}:
+    active_job = (
+        AnalysisJob.query
+        .filter_by(experiment_id=experiment_id)
+        .filter(AnalysisJob.status.in_([JobStatus.RUNNING, JobStatus.PENDING]))
+        .first()
+    )
+    if active_job:
         return ApiResponse.error("An analysis job is already running.", HTTPStatus.CONFLICT)
 
     job = AnalysisJob.start(
@@ -160,7 +165,7 @@ def get_analysis_job_logs(experiment_id: str, job_id: str) -> Response:
     # Strip initialization noise to avoid confusing users
     marker = "Running MDDB workflow"
     idx = logs.find(marker)
-    return ApiResponse.success(logs[idx:] if idx != -1 else "")
+    return ApiResponse.success(logs[idx:] if idx != -1 else logs)
 
 
 @analysis_bp.route("/results", methods=["GET"])
