@@ -72,6 +72,7 @@ export function useAnalysisLogs(experimentId: string, jobId: string | null, poll
     queryFn: () => api.get(`/experiments/${experimentId}/analysis/${jobId}/logs`).then((r) => r.data),
     enabled: !!experimentId && !!jobId,
     refetchInterval: polling ? 5000 : false,
+    staleTime: polling ? 0 : Infinity,
   })
 }
 
