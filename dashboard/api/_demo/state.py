@@ -12,6 +12,7 @@ class DemoState:
     notebook_status: dict[str, PodStatus] = field(default_factory=dict)
     mdrun_jobs: dict[str, dict[str, object]] = field(default_factory=dict)
     tuner_jobs: dict[str, dict[str, object]] = field(default_factory=dict)
+    analysis_jobs: dict[str, dict[str, object]] = field(default_factory=dict)
     mdrepo_records: dict[str, bool] = field(default_factory=dict)
     mdrepo_counter: int = 1
 
