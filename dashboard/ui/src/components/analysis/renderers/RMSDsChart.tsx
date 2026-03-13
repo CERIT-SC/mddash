@@ -40,6 +40,9 @@ const RMSDsChart: FC<RMSDsChartProps> = ({ data }) => {
     () =>
       filteredData.map((d) => {
         const values = d.values
+        if (values.length === 0) {
+          return { label: d.group, stats: { average: 0, stddev: 0, min: 0, max: 0 } } as const
+        }
         const avg = values.reduce((a, b) => a + b, 0) / values.length
         const variance = values.reduce((sum, val) => sum + (val - avg) ** 2, 0) / values.length
         const stddev = Math.sqrt(variance)
@@ -48,7 +51,7 @@ const RMSDsChart: FC<RMSDsChartProps> = ({ data }) => {
         return {
           label: d.group,
           stats: { average: avg, stddev, min, max },
-        }
+        } as const
       }),
     [filteredData]
   )

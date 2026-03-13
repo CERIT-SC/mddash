@@ -43,7 +43,7 @@ const LabeledList = ({ label, list, orientation = "horizontal", className, maxVi
       <div className="flex items-center gap-2.5">
         <div id={contentId} className="flex flex-wrap items-center gap-1">
           {visibleItems.map((item, index) => (
-            <span key={item} className="flex items-center gap-1">
+            <span key={index} className="flex items-center gap-1">
               <span className="text-muted-foreground text-sm break-all">{item}</span>
 
               {index < list.length - 1 &&
