@@ -155,6 +155,7 @@ def get_analysis_job_logs(experiment_id: str, job_id: str) -> Response:
         description=f"Analysis job {job_id} in experiment {experiment_id} not found"
     )
     tail = request.args.get("tail", 200, type=int)
+    tail = max(1, min(tail, 10_000))
     logs = k8s.get_job_logs(f"analysis-{job.id}", tail_lines=tail)
     # Strip initialization noise to avoid confusing users
     marker = "Running MDDB workflow"

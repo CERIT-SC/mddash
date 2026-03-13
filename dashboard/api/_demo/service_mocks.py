@@ -113,7 +113,6 @@ def install_mocks() -> None:
     mdrepo_routes.requests.post = _fake_mdrepo_requests_post
 
 
-
 def _fake_download_git_repo(repo_url: str, output_dir: Path, access_token: str | None = None) -> None:  # noqa: ARG001
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "README.md").write_text(
@@ -408,7 +407,9 @@ def _fetch_and_store_analysis(job_name: str, experiment_id: str, analysis_name: 
         mdposit_name = _MDPOSIT_NAME_MAP.get(analysis_name, analysis_name)
         response = _mdposit_get(mdposit_name)
         if not response.ok:
-            logger.warning(f"MDposit returned {response.status_code} for analysis '{analysis_name}' (endpoint: '{mdposit_name}')")
+            logger.warning(
+                f"MDposit returned {response.status_code} for analysis '{analysis_name}' (endpoint: '{mdposit_name}')"
+            )
             demo_state.analysis_jobs[job_name]["status"] = JobStatus.ERROR.value
             return
 
@@ -436,9 +437,7 @@ def _fetch_and_store_analysis(job_name: str, experiment_id: str, analysis_name: 
                     variant_filename = (
                         f"{ANALYSIS_RESULT_PREFIX}{variant_name.replace('-', '_')}{ANALYSIS_RESULT_SUFFIX}"
                     )
-                    (mwf_dir / variant_filename).write_text(
-                        json.dumps(variant_response.json()), encoding="utf-8"
-                    )
+                    (mwf_dir / variant_filename).write_text(json.dumps(variant_response.json()), encoding="utf-8")
 
         demo_state.analysis_jobs[job_name]["status"] = JobStatus.TERMINATED.value
     except Exception:
@@ -526,5 +525,3 @@ def _public_trial(trial: dict[str, object]) -> dict[str, object]:
     public_trial = dict(trial)
     public_trial.pop("started_at", None)
     return public_trial
-
-
