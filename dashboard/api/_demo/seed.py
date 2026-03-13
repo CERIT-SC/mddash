@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 
 from enums import DeviceType, JobStatus, PodStatus
 from extensions import db
-from models import Experiment, GromacsJob, Notebook, TunerJob
+from models import AnalysisJob, Experiment, GromacsJob, Notebook, TunerJob
 
 from .files import ensure_demo_files, write_finished_gmx_log, write_running_gmx_log
 from .state import build_model, demo_state
@@ -13,6 +13,7 @@ def seed_data() -> None:
     demo_state.notebook_status.clear()
     demo_state.mdrun_jobs.clear()
     demo_state.tuner_jobs.clear()
+    demo_state.analysis_jobs.clear()
     demo_state.mdrepo_records.clear()
     demo_state.mdrepo_counter = 1
 
@@ -229,6 +230,15 @@ def seed_data() -> None:
 
 
 def _rehydrate_runtime_state() -> None:
+    # Rehydrate analysis jobs: any job with result files is treated as terminated.
+    for job in AnalysisJob.query.all():
+        job_name = f"analysis-{job.id}"
+        demo_state.analysis_jobs[job_name] = {
+            "status": JobStatus.TERMINATED.value,
+            "experiment_id": job.experiment_id,
+            "analysis_name": job.analysis_name.value,
+        }
+
     tuning = Experiment.query.filter_by(id="bbbbb").first()
     published = Experiment.query.filter_by(id="ccccc").first()
     setup = Experiment.query.filter_by(id="aaaaa").first()

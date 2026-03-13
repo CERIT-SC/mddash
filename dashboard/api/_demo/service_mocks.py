@@ -1,4 +1,6 @@
 import json
+import logging
+import re
 import shutil
 import threading
 import time
@@ -10,14 +12,23 @@ from uuid import uuid4
 
 import app as app_module
 import models.experiment as experiment_model
+import requests
+
+# Capture the real requests.get before install_mocks() replaces it globally.
+# install_mocks() does `experiment_model.requests.get = ...` which mutates the
+# shared requests module object, so any later call to `requests.get` would hit
+# the fake function instead of the real HTTP stack.
+_real_requests_get = requests.get
+
 import routes.mdrepo as mdrepo_routes
 import routes.misc as misc_routes
 import utils
 from clients import caddy, k8s, mdrepo, mdrun, tuner
-from config import MDREPO_RECORD_NAME, MDREPO_URL
+from config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
 from enums import JobStatus, PodStatus
 from extensions import db
 from models import GromacsJob
+from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, MWF_DIR
 
 from .files import (
     DEFAULT_PDB_FILE,
@@ -30,6 +41,25 @@ from .files import (
     write_running_gmx_log,
 )
 from .state import demo_state
+
+logger = logging.getLogger(__name__)
+
+MDPOSIT_ANALYSES_URL = "https://mdposit.mddbr.eu/api/rest/v1/projects/MD-A003ZT.2/analyses"
+ANALYSIS_JOB_DURATION_SEC = 3.0
+
+# MDposit uses different endpoint names for some analysis types.
+# Keys are AnalysisType values; values are the corresponding MDposit path segments.
+_MDPOSIT_NAME_MAP: dict[str, str] = {
+    "dist": "dist-perres",
+    "inter": "interactions",
+    "linter": "lipid-inter",
+    "lorder": "lipid-order",
+    "pairwise": "rmsd-pairwise",
+    "perres": "rmsd-perres",
+    "rmsf": "fluctuation",
+    "sas": "sasa",
+    "tmscore": "tmscores",
+}
 
 DEFAULT_GMX_NSTEPS = 100_000
 DEFAULT_GMX_DURATION_SEC = 30.0
@@ -62,6 +92,10 @@ def install_mocks() -> None:
     k8s.create_service = _k8s_create_service
     k8s.delete_service = _k8s_delete_service
     k8s.get_pod_resource_requests = _k8s_get_pod_resource_requests
+    k8s.create_job = _k8s_create_job
+    k8s.get_job_status = _k8s_get_job_status
+    k8s.delete_job = _k8s_delete_job
+    k8s.get_job_logs = _k8s_get_job_logs
 
     caddy.add_proxy_route = _caddy_add_proxy_route
     caddy.remove_route = _caddy_remove_route
@@ -309,6 +343,115 @@ def _mdrepo_start_upload_worker(access_token: str, experiment_id: str, experimen
     thread = threading.Thread(target=_worker, daemon=True)
     thread.start()
     return thread
+
+
+def _k8s_create_job(
+    name: str,
+    image: str,  # noqa: ARG001
+    experiment_id: str,
+    command: str,
+    resources: dict | None = None,  # noqa: ARG001
+) -> None:
+    # Extract the mwf analysis name from the "-i <name>" flag at the end of the command
+    match = re.search(r"-i\s+(\w+)\s*$", command)
+    analysis_name = match.group(1) if match else ""
+    demo_state.analysis_jobs[name] = {
+        "status": JobStatus.RUNNING.value,
+        "experiment_id": experiment_id,
+        "analysis_name": analysis_name,
+        "created_at": time.time(),
+    }
+    thread = threading.Thread(
+        target=_fetch_and_store_analysis,
+        args=(name, experiment_id, analysis_name),
+        daemon=True,
+    )
+    thread.start()
+
+
+def _k8s_get_job_status(name: str) -> JobStatus:
+    job_data = demo_state.analysis_jobs.get(name)
+    if job_data is None:
+        return JobStatus.UNKNOWN
+    try:
+        return JobStatus(job_data.get("status", JobStatus.UNKNOWN.value))
+    except ValueError:
+        return JobStatus.UNKNOWN
+
+
+def _k8s_delete_job(name: str) -> None:
+    demo_state.analysis_jobs.pop(name, None)
+
+
+def _k8s_get_job_logs(name: str, tail_lines: int = 200) -> str:  # noqa: ARG001
+    job_data = demo_state.analysis_jobs.get(name)
+    if job_data is None:
+        logger.warning("get_job_logs: job '%s' not in demo_state (keys: %s)", name, list(demo_state.analysis_jobs))
+        return ""
+    status = job_data.get("status", "")
+    if status == JobStatus.TERMINATED.value:
+        return (
+            "Running MDDB workflow\n"
+            "Fetching analysis data...\n"
+            "Processing results...\n"
+            "Writing output files...\n"
+            "Analysis completed successfully."
+        )
+    if status == JobStatus.ERROR.value:
+        return "Running MDDB workflow\nError: Failed to fetch analysis data."
+    return "Running MDDB workflow\nFetching analysis data..."
+
+
+def _mdposit_get(path: str) -> requests.Response:
+    """GET a MDposit analysis endpoint, following redirects with JSON acceptance."""
+    headers = {"Accept": "application/json"}
+    return _real_requests_get(f"{MDPOSIT_ANALYSES_URL}/{path}", headers=headers, timeout=30)
+
+
+def _fetch_and_store_analysis(job_name: str, experiment_id: str, analysis_name: str) -> None:
+    """Fetch analysis data from MDposit and write result files, then mark the job done."""
+    time.sleep(ANALYSIS_JOB_DURATION_SEC)
+    try:
+        mdposit_name = _MDPOSIT_NAME_MAP.get(analysis_name, analysis_name)
+        response = _mdposit_get(mdposit_name)
+        if not response.ok:
+            logger.warning(f"MDposit returned {response.status_code} for analysis '{analysis_name}' (endpoint: '{mdposit_name}')")
+            demo_state.analysis_jobs[job_name]["status"] = JobStatus.ERROR.value
+            return
+
+        data = response.json()
+        mwf_dir = DATA_DIR / experiment_id / MWF_DIR
+        mwf_dir.mkdir(parents=True, exist_ok=True)
+
+        # Use the mwf output name (= MDposit endpoint name), not the AnalysisType value.
+        # mwf uses different output file names for some analyses (e.g. "-i inter" produces
+        # mda.interactions.json, "-i rmsf" produces mda.fluctuation.json). This matches
+        # the frontend's resultName values and what find_result_file() looks for.
+        primary_filename = f"{ANALYSIS_RESULT_PREFIX}{mdposit_name.replace('-', '_')}{ANALYSIS_RESULT_SUFFIX}"
+        (mwf_dir / primary_filename).write_text(json.dumps(data), encoding="utf-8")
+
+        # If the result is a summary list pointing to variants, fetch each one
+        if isinstance(data, list):
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+                variant_name = item.get("analysis", "")
+                if not variant_name:
+                    continue
+                variant_response = _mdposit_get(variant_name)
+                if variant_response.ok:
+                    variant_filename = (
+                        f"{ANALYSIS_RESULT_PREFIX}{variant_name.replace('-', '_')}{ANALYSIS_RESULT_SUFFIX}"
+                    )
+                    (mwf_dir / variant_filename).write_text(
+                        json.dumps(variant_response.json()), encoding="utf-8"
+                    )
+
+        demo_state.analysis_jobs[job_name]["status"] = JobStatus.TERMINATED.value
+    except Exception:
+        logger.exception(f"Failed to fetch analysis '{analysis_name}' for demo job {job_name}")
+        if job_name in demo_state.analysis_jobs:
+            demo_state.analysis_jobs[job_name]["status"] = JobStatus.ERROR.value
 
 
 def _advance_gmx_job(job_id: str, job_data: dict[str, Any]) -> None:
