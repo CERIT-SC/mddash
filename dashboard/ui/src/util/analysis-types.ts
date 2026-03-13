@@ -50,6 +50,7 @@ export interface AnalysisJob {
   analysis_name: AnalysisType
   structure_file: string
   trajectory_file: string
+  topology_file: string | null
   results: string[]
 }
 

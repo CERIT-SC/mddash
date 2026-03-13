@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 
 import AnsiToHtml from "ansi-to-html"
 
@@ -68,15 +68,20 @@ export default function LogsView({ logs, className }: LogsViewProps) {
   }, [logs])
 
   const cls = cn("max-h-96 w-full overflow-auto rounded-md border p-3 font-mono text-sm whitespace-pre-wrap", className)
-  const scrollToBottom = (el: HTMLDivElement | null) => el?.scrollTo(0, el.scrollHeight)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (el) el.scrollTo(0, el.scrollHeight)
+  }, [html])
 
   if (html) {
     // ansi-to-html escapes XML/HTML entities before converting color codes, so this is safe
-    return <div className={cls} ref={scrollToBottom} dangerouslySetInnerHTML={{ __html: html }} />
+    return <div className={cls} ref={containerRef} dangerouslySetInnerHTML={{ __html: html }} />
   }
 
   return (
-    <div className={cls} ref={scrollToBottom}>
+    <div className={cls} ref={containerRef}>
       Loading...
     </div>
   )

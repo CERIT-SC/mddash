@@ -1,5 +1,6 @@
 import logging
 import shlex
+import shutil
 import uuid
 from contextlib import suppress
 from datetime import datetime
@@ -25,7 +26,6 @@ ANALYSIS_RESULT_SUFFIX = ".json"
 MWF_DIR = "mwf_analyses"
 MWF_INPUTS_DIR = "mwf_inputs"
 MWF_INCOMPLETE_PREFIX = "incomplete_"
-TOPOLOGY_REQUIRED_ANALYSES = {AnalysisType.ENERGIES}
 AUTO_INTERACTION_ANALYSES = {
     AnalysisType.DIST,
     AnalysisType.ENERGIES,
@@ -107,41 +107,6 @@ def list_result_files(experiment_id: str) -> list[Path]:
     return sorted(mwf_dir.rglob(f"{ANALYSIS_RESULT_PREFIX}*{ANALYSIS_RESULT_SUFFIX}"))
 
 
-def get_cleanup_commands(analysis_name: AnalysisType) -> list[str]:
-    """
-    Build shell commands to remove temporary files after mwf completes.
-
-    Keeps only mda.*.json result files. Removes input snapshots, incomplete
-    task directories, and all other intermediate mwf output that is not
-    needed for visualization.
-
-    Args:
-        analysis_name: The requested mwf analysis.
-
-    Returns:
-        Shell commands that should run after mwf exits successfully.
-    """
-    task_names = ANALYSIS_RUNTIME_PREP_TASKS.get(analysis_name, ())
-    incomplete_dirs = list(
-        dict.fromkeys(path.as_posix() for task_name in task_names for path in get_incomplete_task_dirs(task_name))
-    )
-
-    result_glob = shlex.quote(f"{ANALYSIS_RESULT_PREFIX}*{ANALYSIS_RESULT_SUFFIX}")
-    commands = [
-        "rm -f inputs.yaml",
-        f"rm -rf {shlex.quote(MWF_INPUTS_DIR)}",
-    ]
-    if incomplete_dirs:
-        commands.append(f"rm -rf {' '.join(shlex.quote(d) for d in incomplete_dirs)}")
-    commands.extend([
-        # Remove all non-result files produced by mwf (screenshots, metadata, intermediates).
-        f"find {shlex.quote(MWF_DIR)} -type f ! -name {result_glob} -delete",
-        # Remove directories left empty after the file sweep (-depth ensures bottom-up order).
-        f"find {shlex.quote(MWF_DIR)} -mindepth 1 -depth -type d -empty -delete",
-    ])
-    return commands
-
-
 def get_runtime_prelude_commands(analysis_name: AnalysisType) -> list[str]:
     """
     Build shell commands that prepare the third-party mwf container runtime.
@@ -216,8 +181,6 @@ def format_mwf_analysis_command(
     inputs_yaml = shlex.quote(format_mwf_inputs_yaml(analysis_name))
     prelude_commands = get_runtime_prelude_commands(analysis_name)
 
-    cleanup_commands = get_cleanup_commands(analysis_name)
-
     commands = [
         f"mkdir -p {shlex.quote(MWF_INPUTS_DIR)} {shlex.quote(MWF_DIR)}",
         *prelude_commands,
@@ -227,7 +190,6 @@ def format_mwf_analysis_command(
         f"mwf run -dir . -stru {shlex.quote(structure_snapshot.as_posix())} "
         f"-md {shlex.quote(MWF_DIR)} {shlex.quote(trajectory_snapshot.as_posix())} "
         f"{' '.join(flags)} -i {analysis_name}",
-        *cleanup_commands,
     ]
     return " && ".join(commands)
 
@@ -266,6 +228,8 @@ class AnalysisJob(db.Model):  # type: ignore
             if fetched not in {self._last_known_status, JobStatus.UNKNOWN}:
                 self._last_known_status = fetched
                 db.session.commit()
+                if fetched == JobStatus.TERMINATED:
+                    self.cleanup_temp_files()
             return fetched
         except Exception:
             logger.exception(f"Error fetching analysis job status for {self.id}")
@@ -309,6 +273,7 @@ class AnalysisJob(db.Model):  # type: ignore
         for prev in previous_jobs:
             with suppress(Exception):  # job may already be cleaned up by K8s
                 k8s.delete_job(f"analysis-{prev.id}")
+            prev.cleanup_temp_files()
             db.session.delete(prev)
         db.session.flush()
 
@@ -352,6 +317,36 @@ class AnalysisJob(db.Model):  # type: ignore
         logger.info(f"Started analysis job {job_id} ({analysis_name}) for experiment {experiment.id}")
         return job
 
+    def cleanup_temp_files(self) -> None:
+        """Remove temporary files left in the experiment directory by a job run."""
+        exp_dir = DATA_DIR / self.experiment_id
+
+        with suppress(Exception):
+            (exp_dir / "inputs.yaml").unlink()
+
+        with suppress(Exception):
+            shutil.rmtree(exp_dir / MWF_INPUTS_DIR)
+
+        task_names = ANALYSIS_RUNTIME_PREP_TASKS.get(self.analysis_name, ())
+        for task_name in task_names:
+            for incomplete_dir in get_incomplete_task_dirs(task_name):
+                with suppress(Exception):
+                    shutil.rmtree(exp_dir / incomplete_dir)
+
+        mwf_dir = exp_dir / MWF_DIR
+        if mwf_dir.is_dir():
+            result_pattern = f"{ANALYSIS_RESULT_PREFIX}*{ANALYSIS_RESULT_SUFFIX}"
+            for path in mwf_dir.rglob("*"):
+                if path.is_file() and not path.match(result_pattern):
+                    with suppress(Exception):
+                        path.unlink()
+            # bottom-up so inner empty dirs are removed before their parents
+            for path in sorted(mwf_dir.rglob("*"), reverse=True):
+                if path.is_dir():
+                    with suppress(Exception):
+                        path.rmdir()
+
     def delete(self) -> None:
-        """Delete the K8s job."""
+        """Delete the K8s job and clean up any temporary files it left behind."""
         k8s.delete_job(self._job_name)
+        self.cleanup_temp_files()

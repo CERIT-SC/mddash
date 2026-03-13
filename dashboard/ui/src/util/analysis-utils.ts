@@ -5,8 +5,13 @@
 
 import { AVAILABLE_ANALYSES } from "./analysis-types"
 
-// Human-friendly labels for base result identifiers (built from AVAILABLE_ANALYSES)
-const BASE_LABELS: Record<string, string> = Object.fromEntries(AVAILABLE_ANALYSES.map((a) => [a.value, a.label]))
+// Human-friendly labels for base result identifiers (built from AVAILABLE_ANALYSES).
+// Indexed by both value (e.g. "rmsf") and resultName (e.g. "fluctuation") so that
+// result file names returned by the backend resolve to the correct label.
+const BASE_LABELS: Record<string, string> = Object.fromEntries([
+  ...AVAILABLE_ANALYSES.map((a) => [a.value, a.label]),
+  ...AVAILABLE_ANALYSES.map((a) => [a.resultName, a.label]),
+])
 
 function toTitleCase(id: string): string {
   return id
