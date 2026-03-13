@@ -28,7 +28,7 @@ const AnalyzeSidebar = ({
   onTopologySelected,
 }: AnalyzeSidebarProps) => {
   return (
-    <div className="flex w-full flex-col gap-4 xl:w-80 xl:shrink-0">
+    <div className="flex w-72 shrink-0 flex-col gap-4">
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base">Analysis Inputs</CardTitle>

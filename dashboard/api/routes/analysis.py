@@ -10,7 +10,7 @@ from enums import AnalysisType, JobStatus, PreprocessingMode
 from extensions import db
 from flask import Blueprint, Response, request
 from models import AnalysisJob, Experiment
-from models.analysis_job import find_result_file
+from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, find_result_file, list_result_files
 from schemas import AnalysisJobSchema
 from validators import check_path, validate_analysis_topology_path
 from werkzeug.exceptions import BadRequest
@@ -160,6 +160,24 @@ def get_analysis_job_logs(experiment_id: str, job_id: str) -> Response:
     marker = "Running MDDB workflow"
     idx = logs.find(marker)
     return ApiResponse.success(logs[idx:] if idx > 0 else "")
+
+
+@analysis_bp.route("/results", methods=["GET"])
+@handle_exceptions()
+def list_analysis_results(experiment_id: str) -> Response:
+    """
+    List all available analysis result names for an experiment.
+
+    Scans the mwf output directory directly so results remain visible even when no
+    job records exist in the database (e.g., after deleting a failed job whose prior
+    run had produced results).
+
+    Returns:
+        JSON response with a list of result name strings.
+    """
+    files = list_result_files(experiment_id)
+    names = [f.name[len(ANALYSIS_RESULT_PREFIX) : -len(ANALYSIS_RESULT_SUFFIX)].replace("_", "-") for f in files]
+    return ApiResponse.success(names)
 
 
 @analysis_bp.route("/results/<name>/variants", methods=["GET"])

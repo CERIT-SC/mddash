@@ -76,6 +76,14 @@ export function useAnalysisLogs(experimentId: string, jobId: string | null, poll
   })
 }
 
+export function useAvailableAnalysisResults(experimentId: string) {
+  return useQuery<string[]>({
+    queryKey: ["experiment", experimentId, "analysis-results"],
+    queryFn: () => api.get(`/experiments/${experimentId}/analysis/results`).then((r) => r.data),
+    enabled: !!experimentId,
+  })
+}
+
 export function useAnalysisVariants(experimentId: string, baseResultName: string | null) {
   return useQuery<AnalysisVariant[]>({
     queryKey: ["experiment", experimentId, "analysis-variants", baseResultName],

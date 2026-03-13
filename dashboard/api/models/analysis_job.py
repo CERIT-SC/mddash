@@ -237,14 +237,6 @@ class AnalysisJob(db.Model):  # type: ignore
                 return self._last_known_status
             return JobStatus.UNKNOWN
 
-    @property
-    def results(self) -> list[str]:
-        """List available analysis result names by scanning mwf output directory."""
-        return [
-            f.name[len(ANALYSIS_RESULT_PREFIX) : -len(ANALYSIS_RESULT_SUFFIX)].replace("_", "-")
-            for f in list_result_files(self.experiment_id)
-        ]
-
     @classmethod
     def start(
         cls,
