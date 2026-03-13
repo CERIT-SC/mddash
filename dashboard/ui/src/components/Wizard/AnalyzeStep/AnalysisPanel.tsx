@@ -20,6 +20,7 @@ import {
   useAnalysisJobs,
   useAnalysisLogs,
   useAnalysisVariants,
+  useAvailableAnalysisResults,
   useDeleteAnalysis,
   useSubmitAnalysis,
 } from "@/hooks/use-analysis"
@@ -65,7 +66,9 @@ const AnalysisPanel = ({
   const { data: jobs } = useAnalysisJobs(experimentId)
   const activeJob = useMemo(() => jobs?.find((j) => j.status === "RUNNING" || j.status === "PENDING"), [jobs])
 
-  // Invalidate cached result data when a job finishes so charts always show fresh output.
+  const { data: availableResultsList } = useAvailableAnalysisResults(experimentId)
+
+  // Invalidate the results list and cached chart data when a job finishes.
   const hadActiveJobRef = useRef(false)
   useEffect(() => {
     const isActive = !!activeJob
@@ -83,15 +86,17 @@ const AnalysisPanel = ({
     setSelectedVariant(null)
   }, [selectedAnalysis])
 
-  const availableResults = useMemo(() => new Set(jobs?.flatMap((j) => j.results) ?? []), [jobs])
+  const availableResults = useMemo(() => new Set(availableResultsList ?? []), [availableResultsList])
 
   const resolvedAnalysis = useMemo(() => {
     if (selectedAnalysis) return selectedAnalysis
     if (activeJob) return activeJob.analysis_name
 
-    const jobWithResults = jobs?.find((job) => job.results.length > 0)
-    return jobWithResults?.analysis_name ?? null
-  }, [selectedAnalysis, activeJob, jobs])
+    const analysisWithResults = AVAILABLE_ANALYSES.find(
+      (a) => availableResults.has(a.resultName) || [...availableResults].some((r) => r.startsWith(a.resultName + "-"))
+    )
+    return analysisWithResults?.value ?? null
+  }, [selectedAnalysis, activeJob, availableResults])
 
   const analysisConfig = useMemo(() => AVAILABLE_ANALYSES.find((a) => a.value === resolvedAnalysis), [resolvedAnalysis])
   const selectedResultName = analysisConfig?.resultName ?? null

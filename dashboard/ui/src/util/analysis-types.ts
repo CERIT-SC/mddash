@@ -51,7 +51,6 @@ export interface AnalysisJob {
   structure_file: string
   trajectory_file: string
   topology_file: string | null
-  results: string[]
 }
 
 export interface AnalysisInfo {
