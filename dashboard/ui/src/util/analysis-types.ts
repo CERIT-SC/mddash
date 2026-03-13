@@ -71,7 +71,7 @@ export const AVAILABLE_ANALYSES: AnalysisInfo[] = [
   { value: AnalysisType.PCA, label: "PCA", resultName: "pca" },
   { value: AnalysisType.CLUSTERS, label: "Clusters", resultName: "clusters", hasVariants: true },
   { value: AnalysisType.PAIRWISE, label: "Pairwise RMSD", resultName: "rmsd-pairwise", hasVariants: true },
-  { value: AnalysisType.PERRES, label: "Per-Residue RMSD", resultName: "rmsd-perres" },
+  // { value: AnalysisType.PERRES, label: "Per-Residue RMSD", resultName: "rmsd-perres" }, // TODO: Data loaded for rmsd-perres, but no renderer is implemented yet.
   { value: AnalysisType.HBONDS, label: "Hydrogen Bonds", resultName: "hbonds", hasVariants: true },
   { value: AnalysisType.SAS, label: "SASA", resultName: "sasa" },
   { value: AnalysisType.POCKETS, label: "Pockets", resultName: "pockets" },
@@ -84,7 +84,13 @@ export const AVAILABLE_ANALYSES: AnalysisInfo[] = [
   { value: AnalysisType.APL, label: "Area Per Lipid", resultName: "apl" },
   { value: AnalysisType.LORDER, label: "Lipid Order", resultName: "lipid-order" },
   { value: AnalysisType.LINTER, label: "Lipid Interactions", resultName: "lipid-inter" },
-  { value: AnalysisType.ENERGIES, label: "Energies", resultName: "energies", requiresTopology: true },
+  {
+    value: AnalysisType.ENERGIES,
+    label: "Energies",
+    resultName: "energies",
+    hasVariants: true,
+    requiresTopology: true,
+  },
 ]
 
 // ============================================================================

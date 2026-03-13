@@ -201,7 +201,8 @@ const AnalysisPanel = ({
                 <SelectItem key={a.value} value={a.value}>
                   <span className="flex items-center gap-2">
                     {a.label}
-                    {availableResults.has(a.resultName) && (
+                    {(availableResults.has(a.resultName) ||
+                      (a.hasVariants && [...availableResults].some((r) => r.startsWith(a.resultName + "-")))) && (
                       <span className="bg-primary/15 text-primary rounded px-1.5 py-0.5 text-[10px] font-medium">
                         ready
                       </span>
