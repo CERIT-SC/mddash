@@ -47,6 +47,9 @@ notebook:
 analysis:
   image: ghcr.io/mmb-irb/mddb_wf:0.0.8
 
+# GROMACS image used for MD simulation jobs (dashboard and mdrun-api)
+gmxImage: "cerit.io/ljocha/gromacs:2026-1-plumed-2-10-afed-pytorch-model-cv-2_ray-2-54-0"
+
 # Sidecar container images for user pod
 sidecars:
   platform: linux/amd64
@@ -108,7 +111,7 @@ gromacsTuner:
         cpu: "0.5"
         memory: "1Gi"
   ray:
-    image: "cerit.io/xkrasa/gromacs-tuner-worker"
+    image: "cerit.io/xkrasa/gromacs-tuner-worker:gmx2026.1-ray2.54.0-py3.13"
     head:
       resources:
         limits:
@@ -126,6 +129,6 @@ gromacsTuner:
           memory: "128Gi"
           nvidia.com/mig-1g.10gb: "1"
         requests:
-          cpu: "8"  # should to be same as limit
+          cpu: "8"  # should be same as limit
           memory: "16Gi"
           nvidia.com/mig-1g.10gb: "1"

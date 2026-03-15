@@ -24,7 +24,12 @@ S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
 S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
 S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
 
+GMX_IMAGE = os.environ.get("GMX_IMAGE", "")
+
 logger = logging.getLogger(__name__)
 
 if not all([S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY]):
     logger.error("S3_ACCESS_KEY, S3_SECRET_KEY or S3_ENDPOINT are not set!")
+
+if not GMX_IMAGE:
+    logger.warning("GMX_IMAGE environment variable is not set. GROMACS jobs will not work.")

@@ -21,8 +21,8 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", "/mddash"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 NOTEBOOK_IMAGE = os.environ.get("NOTEBOOK_IMAGE", "quay.io/jupyter/base-notebook")
-GMX_IMAGE = "cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2"
-ANALYSIS_IMAGE = os.environ.get("ANALYSIS_IMAGE", "ghcr.io/mmb-irb/mddb_wf:0.0.8")
+GMX_IMAGE = os.environ.get("GMX_IMAGE", "")
+ANALYSIS_IMAGE = os.environ.get("ANALYSIS_IMAGE", "ghcr.io/mmb-irb/mddb_wf")
 
 IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Always")
 

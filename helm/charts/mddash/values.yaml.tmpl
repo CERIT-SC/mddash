@@ -83,6 +83,8 @@ jupyterhub:
         value: "{{ $cfg.notebook.image }}:{{ $imageTag }}"
       ANALYSIS_IMAGE:
         value: "{{ $cfg.analysis.image }}"
+      GMX_IMAGE:
+        value: "{{ $cfg.gmxImage }}"
       DEFAULT_NOTEBOOKS_REPO:
         value: "{{ $cfg.defaultNotebooksRepo }}"
       # MDRepo OAuth for publishing experiments to the repository
@@ -241,6 +243,8 @@ mdrun-api:
           key: S3_SECRET_KEY
     - name: S3_ENDPOINT
       value: "{{ $cfg.s3.endpoint }}"
+    - name: GMX_IMAGE
+      value: "{{ $cfg.gmxImage }}"
 
 gromacs-tuner:
   image:

@@ -3,7 +3,7 @@ import shlex
 from http import HTTPStatus
 from typing import TYPE_CHECKING, cast
 
-from config import GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
+from config import GMX_IMAGE, GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
 from enums import JobStatus
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
@@ -65,7 +65,7 @@ def create_gromacs_job(
 
     extra_part = f" {extra_args}" if extra_args else ""
 
-    gromacs_image = "cerit.io/ljocha/gromacs:2024-3-plumed-2-10-afed-pytorch-model-cv-2"
+    gromacs_image = GMX_IMAGE
     s3_sync_image = "rclone/rclone:latest"  # TODO: lock version
 
     gromacs_command = "\n".join([
