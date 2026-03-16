@@ -11,6 +11,9 @@
 - contact us, we need lightweight registration to make sure the precious hardware funded by our authorities is used according to AUP
 - go to https://mddash.dyn.cloud.e-infra.cz/
 
+## References
+
+- Krása, F., Rošinec, A., Ondrejka, A., & Křenek, A. MDDash – one stop shop for MD simulations. MDDB Conference, Lausanne, 2026. https://doi.org/10.5281/zenodo.18740266
 
 ## CI/CD Setup
 
