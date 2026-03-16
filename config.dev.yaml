@@ -48,7 +48,7 @@ analysis:
   image: ghcr.io/mmb-irb/mddb_wf:0.0.8
 
 # GROMACS image used for MD simulation jobs (dashboard and mdrun-api)
-gmxImage: "cerit.io/ljocha/gromacs:2026-1-plumed-2-10-afed-pytorch-model-cv-2_ray-2-54-0"
+gmxImage: "cerit.io/ljocha/gromacs:2026-1-plumed-2-10-afed-pytorch-model-cv-2_ray-2-54-0_1"
 
 # Sidecar container images for user pod
 sidecars:
@@ -111,7 +111,7 @@ gromacsTuner:
         cpu: "100m"
         memory: "256Mi"
   ray:
-    image: "cerit.io/xkrasa/gromacs-tuner-worker:gmx2026.1-ray2.54.0-py3.13"
+    image: "cerit.io/xkrasa/gromacs-tuner-worker:gmx-2026.1_ray-2.54.0_py-3.13"
     head:
       resources:
         limits:
