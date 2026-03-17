@@ -68,6 +68,15 @@ def create_gromacs_job(
     gromacs_image = GMX_IMAGE
     s3_sync_image = "rclone/rclone:latest"  # TODO: lock version
 
+    # Rclone env-var based config (no config file needed)
+    rclone_env = [
+        {"name": "RCLONE_CONFIG_S3REMOTE_TYPE", "value": "s3"},
+        {"name": "RCLONE_CONFIG_S3REMOTE_PROVIDER", "value": "Other"},
+        {"name": "RCLONE_CONFIG_S3REMOTE_ACCESS_KEY_ID", "value": S3_ACCESS_KEY or ""},
+        {"name": "RCLONE_CONFIG_S3REMOTE_SECRET_ACCESS_KEY", "value": S3_SECRET_KEY or ""},
+        {"name": "RCLONE_CONFIG_S3REMOTE_ENDPOINT", "value": S3_ENDPOINT or ""},
+    ]
+
     gromacs_command = "\n".join([
         "set -euo pipefail",
         "trap 'touch /data/job_completed' EXIT TERM INT",
@@ -104,43 +113,24 @@ def create_gromacs_job(
         "echo 'Trajectory processing completed.'",
     ])
 
-    # S3 sync commands using rclone - download initially, then continuously sync with final sync on completion
+    # Download experiment data from S3 before the simulation starts
     s3_init_command = f"""
-        mkdir -p /tmp/.config/rclone &&
-        cat > /tmp/.config/rclone/rclone.conf << EOF
-[s3remote]
-type = s3
-provider = Other
-access_key_id = $S3_ACCESS_KEY
-secret_access_key = $S3_SECRET_KEY
-endpoint = $S3_ENDPOINT
-EOF
         echo "Downloading experiment data from object storage..." &&
         mkdir -p {_q(exp_dir)} &&
-        rclone sync --config /tmp/.config/rclone/rclone.conf {remote_q} {exp_dir_q} --progress || echo "No existing data found, starting with empty directory"
+        rclone copy {remote_q} {exp_dir_q} --progress || echo "No existing data found, starting with empty directory"
     """
 
+    # Continuously upload results back to S3 while the job runs
     s3_sync_command = f"""
-        mkdir -p /tmp/.config/rclone &&
-        cat > /tmp/.config/rclone/rclone.conf << EOF
-[s3remote]
-type = s3
-provider = Other
-access_key_id = $S3_ACCESS_KEY
-secret_access_key = $S3_SECRET_KEY
-endpoint = $S3_ENDPOINT
-EOF
-        echo "Starting continuous rclone sync process..." &&
+        echo "Starting continuous rclone copy process..." &&
         while true; do
-            # Check if main job is done
             if [ -f /data/job_completed ]; then
-                echo "Job completed, performing final sync..." &&
-                rclone sync --config /tmp/.config/rclone/rclone.conf {exp_dir_q} {remote_q} --checksum --progress &&
-                echo "Final sync completed, exiting..." &&
+                echo "Job completed, performing final copy to S3..." &&
+                rclone copy {exp_dir_q} {remote_q} --checksum --progress &&
+                echo "Final copy completed, exiting..." &&
                 break
             fi
-            # Regular sync every 10 seconds - allow syncing of changing files
-            rclone sync --config /tmp/.config/rclone/rclone.conf {exp_dir_q} {remote_q} --ignore-checksum --retries 1 --quiet || echo "Sync attempt failed, retrying..."
+            rclone copy {exp_dir_q} {remote_q} --ignore-checksum --retries 1 --quiet || echo "Copy attempt failed, retrying..."
             sleep 10
         done
     """
@@ -170,11 +160,7 @@ EOF
                                 "allowPrivilegeEscalation": False,
                                 "capabilities": {"drop": ["ALL"]},
                             },
-                            "env": [
-                                {"name": "S3_ENDPOINT", "value": S3_ENDPOINT or ""},
-                                {"name": "S3_ACCESS_KEY", "value": S3_ACCESS_KEY or ""},
-                                {"name": "S3_SECRET_KEY", "value": S3_SECRET_KEY or ""},
-                            ],
+                            "env": rclone_env,
                             "volumeMounts": [{"name": "shared-data", "mountPath": "/data"}],
                         }
                     ],
@@ -219,11 +205,7 @@ EOF
                                 "allowPrivilegeEscalation": False,
                                 "capabilities": {"drop": ["ALL"]},
                             },
-                            "env": [
-                                {"name": "S3_ENDPOINT", "value": S3_ENDPOINT or ""},
-                                {"name": "S3_ACCESS_KEY", "value": S3_ACCESS_KEY or ""},
-                                {"name": "S3_SECRET_KEY", "value": S3_SECRET_KEY or ""},
-                            ],
+                            "env": rclone_env,
                             "resources": {
                                 "requests": {"cpu": "100m", "memory": "128Mi"},
                                 "limits": {"cpu": "200m", "memory": "256Mi"},
