@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 
+import { RefreshCw } from "lucide-react"
 import { type BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates"
 import { type BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory"
 
@@ -10,6 +11,7 @@ import {
   type AnalysisType,
 } from "@/util/analysis-types"
 import type { FileOption } from "@/util/types"
+import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import MolStar from "@/components/MolStar"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
@@ -30,6 +32,8 @@ const AnalyzeStep = (props: WizardStepProps) => {
   const [preprocessingMode, setPreprocessingMode] = useState<AnalysisPreprocessingModeValue>(
     AnalysisPreprocessingMode.AS_IS
   )
+  const [reloadKey, setReloadKey] = useState(0)
+  const [activeTab, setActiveTab] = useState("viewer")
 
   useEffect(() => {
     if (!structureFile) setCoordsFile(null)
@@ -70,6 +74,7 @@ const AnalyzeStep = (props: WizardStepProps) => {
     if (!structureFile) return null
     return (
       <MolStar
+        key={reloadKey}
         width="100%"
         height="600px"
         structureUrl={structureFile.url}
@@ -78,7 +83,7 @@ const AnalyzeStep = (props: WizardStepProps) => {
         coordsFormat={coordsFile ? (coordsFile.name.split(".").pop() as BuiltInCoordinatesFormat) : undefined}
       />
     )
-  }, [structureFile, coordsFile])
+  }, [structureFile, coordsFile, reloadKey])
 
   return (
     <div className="flex w-full flex-col items-center gap-4">
@@ -95,11 +100,19 @@ const AnalyzeStep = (props: WizardStepProps) => {
           onTopologySelected={setTopologyFile}
         />
 
-        <Tabs defaultValue="viewer" className="min-w-0 flex-1">
-          <TabsList>
-            <TabsTrigger value="viewer">Structure Viewer</TabsTrigger>
-            <TabsTrigger value="analysis">Analysis</TabsTrigger>
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 flex-1">
+          <div className="flex items-center justify-between">
+            <TabsList>
+              <TabsTrigger value="viewer">Structure Viewer</TabsTrigger>
+              <TabsTrigger value="analysis">Analysis</TabsTrigger>
+            </TabsList>
+            {coordsFile && activeTab === "viewer" && (
+              <Button size="sm" variant="outline" onClick={() => setReloadKey((k) => k + 1)}>
+                <RefreshCw className="mr-1 h-3.5 w-3.5" />
+                Reload
+              </Button>
+            )}
+          </div>
 
           <TabsContent value="viewer" className="mt-3">
             <div className="flex items-center justify-center">
