@@ -232,6 +232,41 @@ async def _wait_for_ns_conditions(
     )
 
 
+async def _wait_for_resource_quota_active(
+    core_api: CoreV1Api,
+    namespace: str,
+    timeout_s: float = 60.0,
+    interval: float = 0.5,
+) -> None:
+    """
+    Wait until the ResourceQuota in the namespace has non-zero limits in status.hard.
+
+    The post_stop_hook zeroes the quota. After the namespace is patched with restored limits,
+    Rancher updates the ResourceQuota spec and the quota controller reconciles status.
+    The admission controller uses status.hard — if still zero or absent, pods are rejected.
+
+    Raises:
+        TimeoutError: If the quota is not active within timeout_s seconds.
+        ApiException: If the API call fails for any reason other than 403 or 404.
+    """
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        try:
+            quotas = await core_api.list_namespaced_resource_quota(namespace=namespace)
+            for quota in quotas.items:
+                status_hard = getattr(getattr(quota, "status", None), "hard", None)
+                if not status_hard:
+                    continue
+                if status_hard.get("requests.cpu", "0") != "0" and status_hard.get("requests.memory", "0") != "0":
+                    return
+        except ApiException as e:
+            if e.status not in {HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND}:
+                raise
+        await asyncio.sleep(interval)
+
+    raise TimeoutError(f"Timed out after {timeout_s:.1f}s waiting for ResourceQuota in {namespace} to become active")
+
+
 def _get_security_context() -> dict:
     """
     Return hardened security context for sidecar containers.
@@ -456,7 +491,6 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
             mem_request=os.environ.get("NS_REQUESTS_MEMORY", "4Gi"),
         )
         await _ensure_resource(core_api.create_namespace, body=namespace_manifest)
-        await _wait_for_resource(core_api.read_namespace, name=user_namespace)
         await _wait_for_ns_conditions(core_api, user_namespace, {"InitialRolesPopulated"})
         await core_api.patch_namespace(name=user_namespace, body=namespace_manifest)  # type: ignore[misc]
 
@@ -514,7 +548,7 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
             _wait_for_resource(rbac_api.read_namespaced_role_binding, name=hub_binding, namespace=user_namespace),
         )
 
-        await _wait_for_ns_conditions(core_api, user_namespace, {"ResourceQuotaInit", "ResourceQuotaValidated"})
+        await _wait_for_resource_quota_active(core_api, user_namespace)
 
         # Configure spawner
         spawner.namespace = user_namespace
