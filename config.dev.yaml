@@ -77,12 +77,42 @@ resources:
     cpu:
       guarantee: 0.2
       limit: 1
+  notebookQuota:
+    # Max concurrent notebook pods per user namespace
+    maxConcurrent: 2
+  notebook:
+    # jupyter container — limits allow burst above scheduling baseline
+    cpuRequest: "200m"
+    memoryRequest: "512Mi"
+    cpuLimit: "2000m"    # 10× request: interactive, prefer throttle over kill
+    memoryLimit: "4Gi"   # 8× request: burst headroom for in-memory analysis
+    # gmx sidecar — limit = request (MPI throttling causes rank starvation)
+    gmxCpuRequest: "100m"
+    gmxMemoryRequest: "256Mi"
+    gmxCpuLimit: "2000m"
+    gmxMemoryLimit: "2Gi"
+  analysisJob:
+    cpuRequest: "1000m"
+    memoryRequest: "2Gi"
+    cpuLimit: "4000m"
+    memoryLimit: "8Gi"
   namespaceQuota:
+    # requests = expected simultaneous usage; formula: see doc/resource-management.md
     requestsCpu: "2000m"
-    requestsMemory: "4Gi"
-    limitsCpu: "8000m"
-    limitsMemory: "16Gi"
+    requestsMemory: "6Gi"
+    # limits = sum of all container limits at full load; formula: 650+1000+(2×4000)+4000=13650m
+    limitsCpu: "16000m"
+    limitsMemory: "28Gi"
   pvcStorageSize: 10Gi
+
+hub:
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "2Gi"
 
 helm:
   package: mddash-dev
@@ -93,6 +123,12 @@ mdrunApi:
   platform: linux/amd64
   storage:  # Persistent storage for mdrun-api database
     size: 2Gi
+  jobHeadroom:
+    # Maximum number of HPC jobs running simultaneously in the hub namespace.
+    # Set cpuPerJob/memoryPerJob to the largest single job you want to allow.
+    maxConcurrentJobs: 2
+    cpuPerJob: "8"
+    memoryPerJob: "16Gi"
 
 # Gromacs Tuner service
 gromacsTuner:

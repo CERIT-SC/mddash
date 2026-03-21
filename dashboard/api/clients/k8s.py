@@ -4,7 +4,17 @@ import time
 from http import HTTPStatus
 from typing import Callable, cast
 
-from config import GMX_IMAGE, IMAGE_PULL_POLICY, NAMESPACE, NOTEBOOK_IMAGE, PVC_NAME
+from config import (
+    CPU_REQUEST_QUOTA,
+    GMX_IMAGE,
+    GMX_RESOURCES,
+    IMAGE_PULL_POLICY,
+    MEMORY_REQUEST_QUOTA,
+    NAMESPACE,
+    NOTEBOOK_IMAGE,
+    NOTEBOOK_RESOURCES,
+    PVC_NAME,
+)
 from enums import JobStatus, PodStatus
 from kubernetes import config
 from kubernetes.client import (
@@ -111,7 +121,7 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         experiment_id,
         volume_name,
         ["sleep", "infinity"],
-        resources={"requests": {"cpu": "100m", "memory": "256Mi"}, "limits": {"cpu": "2000m", "memory": "2Gi"}},
+        resources=GMX_RESOURCES,
     )
 
     jupyter_command = [
@@ -130,7 +140,6 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
             "value": f"/mddash/{experiment_id}/.binder-env/share/jupyter:/opt/conda/share/jupyter",
         },
     ]
-    jupyter_resources = {"requests": {"cpu": "200m", "memory": "512Mi"}, "limits": {"cpu": "2000m", "memory": "4Gi"}}
     jupyter_container = get_container(
         "jupyter",
         NOTEBOOK_IMAGE,
@@ -138,13 +147,13 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         volume_name,
         jupyter_command,
         env=jupyter_env,
-        resources=jupyter_resources,
+        resources=NOTEBOOK_RESOURCES,
     )
 
     pod_manifest = {
         "apiVersion": "v1",
         "kind": "Pod",
-        "metadata": {"name": name, "namespace": NAMESPACE, "labels": {"app": name}},
+        "metadata": {"name": name, "namespace": NAMESPACE, "labels": {"app": name, "type": "notebook"}},
         "spec": {
             "securityContext": {"fsGroup": 1000, "fsGroupChangePolicy": "OnRootMismatch", "supplementalGroups": [1000]},
             "containers": [jupyter_container, gmx_container],
@@ -433,6 +442,47 @@ def get_pod_resource_requests() -> dict:
         requests_total["memory"] += requests["memory"]
 
     return requests_total
+
+
+def count_notebook_pods() -> int:
+    """Return count of Running/Pending notebook pods (excludes terminating)."""
+    pods = core_v1.list_namespaced_pod(namespace=NAMESPACE, label_selector="type=notebook")
+    return sum(
+        1
+        for p in pods.items
+        if p.status and p.status.phase in {"Running", "Pending"} and not p.metadata.deletion_timestamp
+    )
+
+
+def check_quota_headroom(cpu_request: int, memory_request: int) -> str | None:
+    """
+    Return an error message if spawning would exceed the namespace request quota, else None.
+
+    This is a best-effort check before pod/job creation. The existing K8s 403 handler
+    remains the authoritative enforcement gate.
+
+    Args:
+        cpu_request: Additional CPU needed in millicores.
+        memory_request: Additional memory needed in bytes.
+    """
+    current = get_pod_resource_requests()
+    quota_cpu = parse_cpu(CPU_REQUEST_QUOTA)
+    quota_memory = parse_memory(MEMORY_REQUEST_QUOTA)
+
+    if quota_cpu and current["cpu"] + cpu_request > quota_cpu:
+        return (
+            f"CPU quota would be exceeded: {current['cpu']}m used + {cpu_request}m "
+            f"requested > {quota_cpu}m namespace limit."
+        )
+    if quota_memory and current["memory"] + memory_request > quota_memory:
+        used = current["memory"] / 1024**3
+        req = memory_request / 1024**3
+        limit = quota_memory / 1024**3
+        return (
+            f"Memory quota would be exceeded: {used:.1f}Gi used + {req:.1f}Gi "
+            f"requested > {limit:.1f}Gi namespace limit."
+        )
+    return None
 
 
 def get_pod_status(name: str) -> PodStatus:

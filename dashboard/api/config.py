@@ -60,6 +60,41 @@ if not all([CPU_REQUEST_QUOTA, MEMORY_REQUEST_QUOTA]):
         "NS_REQUESTS_CPU or NS_REQUESTS_MEMORY environment variables are not set. Namespace resource requests may not be configured properly."
     )
 
+MAX_NOTEBOOKS = int(os.environ.get("NS_MAX_NOTEBOOKS", "2"))
+
+NOTEBOOK_RESOURCES: dict = {
+    "requests": {
+        "cpu": os.environ.get("NOTEBOOK_CPU_REQUEST", "200m"),
+        "memory": os.environ.get("NOTEBOOK_MEMORY_REQUEST", "512Mi"),
+    },
+    "limits": {
+        "cpu": os.environ.get("NOTEBOOK_CPU_LIMIT", "2000m"),
+        "memory": os.environ.get("NOTEBOOK_MEMORY_LIMIT", "4Gi"),
+    },
+}
+
+GMX_RESOURCES: dict = {
+    "requests": {
+        "cpu": os.environ.get("GMX_CPU_REQUEST", "100m"),
+        "memory": os.environ.get("GMX_MEMORY_REQUEST", "256Mi"),
+    },
+    "limits": {
+        "cpu": os.environ.get("GMX_CPU_LIMIT", "2000m"),
+        "memory": os.environ.get("GMX_MEMORY_LIMIT", "2Gi"),
+    },
+}
+
+ANALYSIS_RESOURCES: dict = {
+    "requests": {
+        "cpu": os.environ.get("ANALYSIS_CPU_REQUEST", "1000m"),
+        "memory": os.environ.get("ANALYSIS_MEMORY_REQUEST", "2Gi"),
+    },
+    "limits": {
+        "cpu": os.environ.get("ANALYSIS_CPU_LIMIT", "4000m"),
+        "memory": os.environ.get("ANALYSIS_MEMORY_LIMIT", "8Gi"),
+    },
+}
+
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
 
 if not S3_BUCKET:

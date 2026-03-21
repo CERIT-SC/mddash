@@ -105,6 +105,12 @@ status: ## Show deployment status
 logs: ## Show deployment logs
 	@$(MAKE) -C helm logs ENV=$(ENV)
 
+mdrun_api_values := $(if $(filter dev,$(ENV)),helm/charts/mdrun-api/values.dev.yaml,helm/charts/mdrun-api/values.yaml)
+
+.PHONY: resources
+resources: ## Show resource budget and recommended namespace quota values (offline)
+	@python3 scripts/resource_summary.py $(config) $(mdrun_api_values)
+
 # ==================== ROLLBACK ====================
 
 .PHONY: history
