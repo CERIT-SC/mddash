@@ -4,6 +4,10 @@
 {{- $imageTag := (getenv "IMAGE_TAG" $cfg.imageTag) -}}
 jupyterhub:
   hub:
+    # custom image that supports access through JWT tokens
+    image:
+      name: eginotebooks/hub
+      tag: "sha-4ffff9e"
     config:
       JupyterHub:
         authenticator_class: generic-oauth
