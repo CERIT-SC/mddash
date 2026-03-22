@@ -82,15 +82,15 @@ resources:
     maxConcurrent: 2
   notebook:
     # jupyter container — limits allow burst above scheduling baseline
-    cpuRequest: "200m"
-    memoryRequest: "512Mi"
-    cpuLimit: "2000m"    # 10× request: interactive, prefer throttle over kill
-    memoryLimit: "4Gi"   # 8× request: burst headroom for in-memory analysis
+    cpuRequest: "500m"
+    memoryRequest: "1Gi"
+    cpuLimit: "5000m"    # 10× request: interactive, prefer throttle over kill
+    memoryLimit: "8Gi"   # 8× request: burst headroom for in-memory analysis
     # gmx sidecar — limit = request (MPI throttling causes rank starvation)
     gmxCpuRequest: "100m"
     gmxMemoryRequest: "256Mi"
-    gmxCpuLimit: "2000m"
-    gmxMemoryLimit: "2Gi"
+    gmxCpuLimit: "4000m"
+    gmxMemoryLimit: "8Gi"
   analysisJob:
     cpuRequest: "1000m"
     memoryRequest: "2Gi"
@@ -101,8 +101,8 @@ resources:
     requestsCpu: "2500m"
     requestsMemory: "8Gi"
     # limits = sum of all container limits at full load (hard ceiling per namespace)
-    limitsCpu: "64000m"
-    limitsMemory: "256Gi"
+    limitsCpu: "32000m"
+    limitsMemory: "64Gi"
   pvcStorageSize: 100Gi
 
 hub:
@@ -126,9 +126,9 @@ mdrunApi:
   jobHeadroom:
     # Maximum number of HPC jobs running simultaneously in the hub namespace.
     # Set cpuPerJob/memoryPerJob to the largest single job you want to allow.
-    maxConcurrentJobs: 4
-    cpuPerJob: "32"
-    memoryPerJob: "128Gi"
+    maxConcurrentJobs: 1  # TODO: increase when more resources are available
+    cpuPerJob: "16"
+    memoryPerJob: "32Gi"
 
 # Gromacs Tuner service
 gromacsTuner:
@@ -157,12 +157,12 @@ gromacsTuner:
           cpu: "500m"
           memory: "4Gi"
     worker:
-      maxReplicas: 1  # TODO: increase when more resources are available
+      maxReplicas: 1  # TODO: increase to 3 when more resources are available
       idleTimeoutSeconds: 3600
       resources:
         limits:
           cpu: "8"  # TODO: ask for more (should be at least 32)
-          memory: "128Gi"
+          memory: "64Gi"
           nvidia.com/mig-1g.10gb: "1"
         requests:
           cpu: "8"  # should be same as limit
