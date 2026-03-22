@@ -450,7 +450,12 @@ def get_pod_resource_requests() -> dict:
 
 
 def count_notebook_pods() -> int:
-    """Return count of Running/Pending notebook pods (excludes terminating)."""
+    """
+    Return count of Running/Pending notebook pods (excludes terminating).
+
+    Returns:
+        int: Number of active (non-terminating) notebook pods.
+    """
     pods = core_v1.list_namespaced_pod(namespace=NAMESPACE, label_selector="type=notebook")
     return sum(
         1
@@ -469,6 +474,9 @@ def check_quota_headroom(cpu_request: int, memory_request: int) -> str | None:
     Args:
         cpu_request: Additional CPU needed in millicores.
         memory_request: Additional memory needed in bytes.
+
+    Returns:
+        str | None: An error message if quota would be exceeded, else None.
     """
     current = get_pod_resource_requests()
     quota_cpu = parse_cpu(CPU_REQUEST_QUOTA)

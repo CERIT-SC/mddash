@@ -1,9 +1,9 @@
 """Unit tests for analysis job mwf command generation."""
 
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from config import ANALYSIS_RESOURCES
 from enums import AnalysisType, PreprocessingMode
 from models.analysis_job import (
