@@ -500,8 +500,8 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
             rancher_project_id,
             cpu_limit=os.environ.get("NS_LIMITS_CPU", "64000m"),
             mem_limit=os.environ.get("NS_LIMITS_MEMORY", "256Gi"),
-            cpu_request=os.environ.get("NS_REQUESTS_CPU", "1000m"),
-            mem_request=os.environ.get("NS_REQUESTS_MEMORY", "4Gi"),
+            cpu_request=os.environ.get("NS_REQUESTS_CPU", "2500m"),
+            mem_request=os.environ.get("NS_REQUESTS_MEMORY", "6Gi"),
         )
         await _ensure_resource(core_api.create_namespace, body=namespace_manifest)
         await _wait_for_ns_conditions(core_api, user_namespace, {"InitialRolesPopulated"})

@@ -19,7 +19,18 @@ import sys
 
 
 def yq(query: str, path: str) -> str:
-    return subprocess.check_output(["yq", "-r", query, path]).decode().strip()
+    try:
+        return subprocess.check_output(["yq", "-r", query, path]).decode().strip()
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "The 'yq' command is required but was not found in PATH. "
+            "Install yq (https://mikefarah.gitbook.io/yq/) and try again."
+        ) from exc
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"Failed to execute yq query {query!r} on {path!r}. "
+            "Ensure the file exists, is valid YAML, and that the query is correct."
+        ) from exc
 
 
 def parse_cpu(s: str) -> int:

@@ -54,7 +54,7 @@ Each notebook pod consists of two containers. Resources are configured via `reso
 | gmx | 100m | 256Mi | 2000m | 2Gi |
 | **Per notebook** | **300m** | **768Mi** | **4000m** | **6Gi** |
 
-**Why gmx limit = request:** GROMACS is run with MPI/OpenMP inside this container. CPU throttling causes rank starvation and produces incorrect simulation results. The limit is intentionally set equal to the request.
+**Why gmx has a high CPU limit:** GROMACS is run with MPI/OpenMP inside this container. CPU throttling causes rank starvation and produces incorrect simulation results. The limit is set high relative to the request to allow full CPU burst during simulations without scheduling burdens from a large guaranteed reservation.
 
 **Why jupyter limits are generous:** Jupyter notebooks run user-written Python code that can spike in memory (e.g. loading a large trajectory). A hard limit of 4Gi prevents a runaway computation from OOMKilling other pods, while still allowing reasonable burst.
 

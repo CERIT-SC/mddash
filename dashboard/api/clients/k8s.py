@@ -437,6 +437,11 @@ def get_pod_resource_requests() -> dict:
     for pod in pods.items:
         if not pod.spec or not pod.spec.containers:
             continue
+        # Skip pods whose resources are already released
+        if pod.status and pod.status.phase in {"Succeeded", "Failed"}:
+            continue
+        if pod.metadata and pod.metadata.deletion_timestamp:
+            continue
         requests = _sum_container_resources(pod.spec.containers, "requests")
         requests_total["cpu"] += requests["cpu"]
         requests_total["memory"] += requests["memory"]
