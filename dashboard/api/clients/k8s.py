@@ -460,7 +460,7 @@ def count_notebook_pods() -> int:
     return sum(
         1
         for p in pods.items
-        if p.status and p.status.phase in {"Running", "Pending"} and not p.metadata.deletion_timestamp
+        if (p.status and p.status.phase in {"Running", "Pending"} and p.metadata and not p.metadata.deletion_timestamp)
     )
 
 
@@ -485,7 +485,7 @@ def check_quota_headroom(cpu_request: int, memory_request: int) -> str | None:
     if quota_cpu and current["cpu"] + cpu_request > quota_cpu:
         return (
             f"CPU quota would be exceeded: {current['cpu']}m used + {cpu_request}m "
-            f"requested > {quota_cpu}m namespace limit."
+            f"requested > {quota_cpu}m namespace requests quota."
         )
     if quota_memory and current["memory"] + memory_request > quota_memory:
         used = current["memory"] / 1024**3
@@ -493,7 +493,7 @@ def check_quota_headroom(cpu_request: int, memory_request: int) -> str | None:
         limit = quota_memory / 1024**3
         return (
             f"Memory quota would be exceeded: {used:.1f}Gi used + {req:.1f}Gi "
-            f"requested > {limit:.1f}Gi namespace limit."
+            f"requested > {limit:.1f}Gi namespace requests quota."
         )
     return None
 

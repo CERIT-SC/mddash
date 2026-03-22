@@ -76,13 +76,12 @@ These are batch jobs (mddb_wf) that run to completion and are then deleted. Only
 The namespace quota values (`NS_REQUESTS_CPU`, `NS_LIMITS_CPU`, etc.) should be set to cover simultaneous full load:
 
 ```
-requests_cpu = sidecar_base (280m)
-             + singleuser (200m)
+# fixed_base = sidecars + JupyterHub singleuser (always-on, 80m+200m = 280m / 272Mi+512Mi = 784Mi)
+requests_cpu = fixed_base (280m)
              + MAX_NOTEBOOKS × 300m
              + analysis_headroom (1000m)
 
-requests_mem = sidecar_base (784Mi)
-             + singleuser (512Mi)
+requests_mem = fixed_base (784Mi)
              + MAX_NOTEBOOKS × 768Mi
              + analysis_headroom (2Gi)
 
@@ -99,12 +98,12 @@ limits_mem   = sidecar_base (928Mi)
 
 ### With `MAX_NOTEBOOKS = 2` (default)
 
-| | Requests | Limits |
+| | Requests (from formula) | Limits (from formula) |
 |---|---|---|
-| CPU | ~2480m → **2500m** | ~13650m → **16000m** |
-| Memory | ~5.8Gi → **6Gi** | ~25Gi → **28Gi** |
+| CPU | ~1880m | ~13650m |
+| Memory | ~4.3Gi | ~25Gi |
 
-These are the values set in `config.dev.yaml`. Production (`config.yaml`) keeps generous limits (`64000m` / `256Gi`) since prod nodes are larger and serve fewer concurrent users per node.
+Set `resources.namespaceQuota.*` in `config.dev.yaml` / `config.yaml` to values ≥ these formula minimums, rounded up to your node size and multi-tenancy requirements.
 
 ---
 
@@ -135,11 +134,11 @@ make resources ENV=prod
 ```
 
 Output shows:
-1. The quota values currently in config
-2. Live pod resource usage in the hub namespace (requires `kubectl` access)
-3. Per-user namespace: ResourceQuota status and running pods
+1. Per-component resource breakdown (user pod, notebooks, analysis jobs, hub services)
+2. Recommended namespace quota minimums from the formula
+3. A comparison against the configured `resources.namespaceQuota.*` values
 
-Use this before setting Rancher quotas to verify the formula values match expectations.
+Use this before setting Rancher quotas to verify the configured values cover the formula minimums.
 
 ---
 
