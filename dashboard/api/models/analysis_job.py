@@ -262,6 +262,9 @@ class AnalysisJob(db.Model):  # type: ignore
 
         Returns:
             The created AnalysisJob instance.
+
+        Raises:
+            Forbidden: If the job cannot be started due to insufficient cluster resources.
         """
         previous_jobs = cls.query.filter_by(experiment_id=experiment.id).all()
         for prev in previous_jobs:

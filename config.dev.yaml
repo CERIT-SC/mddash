@@ -50,6 +50,9 @@ analysis:
 # GROMACS image used for MD simulation jobs (dashboard and mdrun-api)
 gmxImage: "cerit.io/ljocha/gromacs:2026-1-plumed-2-10-afed-pytorch-model-cv-2_ray-2-54-0_1"
 
+# GPU resource type used by mdrun-api jobs and gromacs-tuner workers
+gpuType: "nvidia.com/mig-1g.10gb"
+
 # Sidecar container images for user pod
 sidecars:
   platform: linux/amd64
@@ -100,7 +103,7 @@ resources:
     # requests = expected simultaneous usage; formula: see doc/resource-management.md
     requestsCpu: "2000m"
     requestsMemory: "6Gi"
-    # limits = sum of all container limits at full load; formula: 650+1000+(2×4000)+4000=13650m
+    # limits = sum of all container limits at full load; formula minimum ~13650m, rounded up for headroom
     limitsCpu: "16000m"
     limitsMemory: "28Gi"
   pvcStorageSize: 10Gi

@@ -50,6 +50,9 @@ analysis:
 # GROMACS image used for MD simulation jobs (dashboard and mdrun-api)
 gmxImage: "cerit.io/ljocha/gromacs:2026-1-plumed-2-10-afed-pytorch-model-cv-2_ray-2-54-0_1"
 
+# GPU resource type used by mdrun-api jobs and gromacs-tuner workers
+gpuType: "nvidia.com/mig-1g.10gb"
+
 # Sidecar container images for user pod
 sidecars:
   platform: linux/amd64

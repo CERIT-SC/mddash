@@ -123,6 +123,8 @@ jupyterhub:
         value: "{{ $cfg.analysis.image }}"
       GMX_IMAGE:
         value: "{{ $cfg.gmxImage }}"
+      GPU_TYPE:
+        value: "{{ $cfg.gpuType }}"
       DEFAULT_NOTEBOOKS_REPO:
         value: "{{ $cfg.defaultNotebooksRepo }}"
       # MDRepo OAuth for publishing experiments to the repository
@@ -283,6 +285,8 @@ mdrun-api:
       value: "{{ $cfg.s3.endpoint }}"
     - name: GMX_IMAGE
       value: "{{ $cfg.gmxImage }}"
+    - name: GPU_TYPE
+      value: "{{ $cfg.gpuType }}"
 
 gromacs-tuner:
   image:

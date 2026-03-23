@@ -62,7 +62,7 @@ sequenceDiagram
 - **Auto-Cleanup**: Jobs in TERMINATED or ERROR state are automatically deleted from Kubernetes but preserved in database.
 - **Input Sanitization**: All user inputs MUST pass through `sanitization.py` functions to prevent shell injection in Kubernetes job manifests.
 - **S3 Credentials Required**: `S3_ENDPOINT` must be set or API logs errors on startup.
-- **GPU Type Hardcoded**: GPU resource type is fixed to `nvidia.com/mig-1g.10gb` in `config.py`. Modify if cluster uses different GPU types.
+- **GPU Type**: GPU resource type is read from the `GPU_TYPE` environment variable (set via `gpuType` in config.yaml). Defaults to empty string if unset.
 - **K8s Config Loading**: Uses `config.load_incluster_config()` - assumes running inside Kubernetes cluster. For local dev, use `load_kube_config()`.
 - **Job Naming**: Kubernetes jobs are named `mdrun-{uuid}`. Never manually create jobs with this prefix.
 - **EmptyDir Size Limit**: Shared volume limited to 100Gi in `k8s_client.py`. Adjust for large simulations.

@@ -154,7 +154,7 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
 
     # ── User namespace ─────────────────────────────────────────────────────────
 
-    # Sidecar resources are hardcoded in pre_spawn_hook.py _*_container().
+    # Sidecar resources are hardcoded in pre_spawn_hook.py _*_container() — keep in sync if those change.
     # CPU in millicores, memory in MiB.
     sidecars = [
         ("proxy", 10, 32, 100, 64),
