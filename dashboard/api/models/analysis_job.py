@@ -291,7 +291,9 @@ class AnalysisJob(db.Model):  # type: ignore
 
         an_cpu = parse_cpu(ANALYSIS_RESOURCES["requests"]["cpu"])
         an_mem = parse_memory(ANALYSIS_RESOURCES["requests"]["memory"])
-        if msg := k8s.check_quota_headroom(an_cpu, an_mem):
+        an_cpu_limit = parse_cpu(ANALYSIS_RESOURCES["limits"]["cpu"])
+        an_mem_limit = parse_memory(ANALYSIS_RESOURCES["limits"]["memory"])
+        if msg := k8s.check_quota_headroom(an_cpu, an_mem, an_cpu_limit, an_mem_limit):
             raise Forbidden(description=f"Cannot start analysis: {msg}")
 
         k8s.create_job(

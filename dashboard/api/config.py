@@ -55,10 +55,12 @@ if not all([PVC_NAME, PVC_SIZE]):
 
 CPU_REQUEST_QUOTA = os.environ.get("NS_REQUESTS_CPU", "")
 MEMORY_REQUEST_QUOTA = os.environ.get("NS_REQUESTS_MEMORY", "")
+CPU_LIMIT_QUOTA = os.environ.get("NS_LIMITS_CPU", "")
+MEMORY_LIMIT_QUOTA = os.environ.get("NS_LIMITS_MEMORY", "")
 
-if not all([CPU_REQUEST_QUOTA, MEMORY_REQUEST_QUOTA]):
+if not all([CPU_REQUEST_QUOTA, MEMORY_REQUEST_QUOTA, CPU_LIMIT_QUOTA, MEMORY_LIMIT_QUOTA]):
     logger.warning(
-        "NS_REQUESTS_CPU or NS_REQUESTS_MEMORY environment variables are not set. Namespace resource requests may not be configured properly."
+        "NS_REQUESTS_CPU, NS_REQUESTS_MEMORY, NS_LIMITS_CPU, or NS_LIMITS_MEMORY environment variables are not set. Namespace resource quota checks may not be configured properly."
     )
 
 MAX_NOTEBOOKS = int(os.environ.get("NS_MAX_NOTEBOOKS", "2"))

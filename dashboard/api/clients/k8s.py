@@ -5,10 +5,12 @@ from http import HTTPStatus
 from typing import Callable, cast
 
 from config import (
+    CPU_LIMIT_QUOTA,
     CPU_REQUEST_QUOTA,
     GMX_IMAGE,
     GMX_RESOURCES,
     IMAGE_PULL_POLICY,
+    MEMORY_LIMIT_QUOTA,
     MEMORY_REQUEST_QUOTA,
     NAMESPACE,
     NOTEBOOK_IMAGE,
@@ -417,22 +419,18 @@ def _sum_container_resources(containers: list, resource_type: str) -> dict:
     return {"cpu": total_cpu, "memory": total_memory}
 
 
-def get_pod_resource_requests() -> dict:
+def _get_active_pod_usage() -> dict[str, dict[str, int]]:
     """
-    Calculate total resource requests for all pods in the namespace.
-
-    Iterates through all pods and sums up CPU and memory resource requests.
-    Handles multiple unit formats (m for millicores, Mi/Gi for memory).
+    Calculate total resource requests and limits for all active pods in the namespace.
 
     Returns:
-        dict: Dictionary with 'cpu' (millicores) and 'memory' (bytes).
+        dict: {"requests": {"cpu": millicores, "memory": bytes}, "limits": {...}}
     """
     pods = cast("V1PodList", core_v1.list_namespaced_pod(namespace=NAMESPACE))
-
-    requests_total = {"cpu": 0, "memory": 0}
+    totals: dict[str, dict[str, int]] = {"requests": {"cpu": 0, "memory": 0}, "limits": {"cpu": 0, "memory": 0}}
 
     if not pods.items:
-        return requests_total
+        return totals
 
     for pod in pods.items:
         if not pod.spec or not pod.spec.containers:
@@ -442,11 +440,12 @@ def get_pod_resource_requests() -> dict:
             continue
         if pod.metadata and pod.metadata.deletion_timestamp:
             continue
-        requests = _sum_container_resources(pod.spec.containers, "requests")
-        requests_total["cpu"] += requests["cpu"]
-        requests_total["memory"] += requests["memory"]
+        for resource_type in ("requests", "limits"):
+            usage = _sum_container_resources(pod.spec.containers, resource_type)
+            totals[resource_type]["cpu"] += usage["cpu"]
+            totals[resource_type]["memory"] += usage["memory"]
 
-    return requests_total
+    return totals
 
 
 def count_notebook_pods() -> int:
@@ -464,37 +463,56 @@ def count_notebook_pods() -> int:
     )
 
 
-def check_quota_headroom(cpu_request: int, memory_request: int) -> str | None:
+def check_quota_headroom(cpu_request: int, memory_request: int, cpu_limit: int = 0, memory_limit: int = 0) -> str | None:
     """
-    Return an error message if spawning would exceed the namespace request quota, else None.
+    Return an error message if spawning would exceed the namespace quota, else None.
 
     This is a best-effort check before pod/job creation. The existing K8s 403 handler
     remains the authoritative enforcement gate.
 
     Args:
-        cpu_request: Additional CPU needed in millicores.
-        memory_request: Additional memory needed in bytes.
+        cpu_request: Additional CPU requests needed in millicores.
+        memory_request: Additional memory requests needed in bytes.
+        cpu_limit: Additional CPU limits needed in millicores.
+        memory_limit: Additional memory limits needed in bytes.
 
     Returns:
         str | None: An error message if quota would be exceeded, else None.
     """
-    current = get_pod_resource_requests()
+    usage = _get_active_pod_usage()
+
     quota_cpu = parse_cpu(CPU_REQUEST_QUOTA)
     quota_memory = parse_memory(MEMORY_REQUEST_QUOTA)
-
-    if quota_cpu and current["cpu"] + cpu_request > quota_cpu:
+    if quota_cpu and usage["requests"]["cpu"] + cpu_request > quota_cpu:
         return (
-            f"CPU quota would be exceeded: {current['cpu']}m used + {cpu_request}m "
+            f"CPU quota would be exceeded: {usage['requests']['cpu']}m used + {cpu_request}m "
             f"requested > {quota_cpu}m namespace requests quota."
         )
-    if quota_memory and current["memory"] + memory_request > quota_memory:
-        used = current["memory"] / 1024**3
+    if quota_memory and usage["requests"]["memory"] + memory_request > quota_memory:
+        used = usage["requests"]["memory"] / 1024**3
         req = memory_request / 1024**3
-        limit = quota_memory / 1024**3
+        quota = quota_memory / 1024**3
         return (
             f"Memory quota would be exceeded: {used:.1f}Gi used + {req:.1f}Gi "
-            f"requested > {limit:.1f}Gi namespace requests quota."
+            f"requested > {quota:.1f}Gi namespace requests quota."
         )
+
+    quota_cpu_limit = parse_cpu(CPU_LIMIT_QUOTA)
+    quota_memory_limit = parse_memory(MEMORY_LIMIT_QUOTA)
+    if quota_cpu_limit and usage["limits"]["cpu"] + cpu_limit > quota_cpu_limit:
+        return (
+            f"CPU limits quota would be exceeded: {usage['limits']['cpu']}m used + {cpu_limit}m "
+            f"requested > {quota_cpu_limit}m namespace limits quota."
+        )
+    if quota_memory_limit and usage["limits"]["memory"] + memory_limit > quota_memory_limit:
+        used = usage["limits"]["memory"] / 1024**3
+        req = memory_limit / 1024**3
+        quota = quota_memory_limit / 1024**3
+        return (
+            f"Memory limits quota would be exceeded: {used:.1f}Gi used + {req:.1f}Gi "
+            f"requested > {quota:.1f}Gi namespace limits quota."
+        )
+
     return None
 
 

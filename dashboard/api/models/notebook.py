@@ -64,7 +64,11 @@ class Notebook(db.Model):  # type: ignore
         nb_mem = parse_memory(NOTEBOOK_RESOURCES["requests"]["memory"]) + parse_memory(
             GMX_RESOURCES["requests"]["memory"]
         )
-        if msg := k8s.check_quota_headroom(nb_cpu, nb_mem):
+        nb_cpu_limit = parse_cpu(NOTEBOOK_RESOURCES["limits"]["cpu"]) + parse_cpu(GMX_RESOURCES["limits"]["cpu"])
+        nb_mem_limit = parse_memory(NOTEBOOK_RESOURCES["limits"]["memory"]) + parse_memory(
+            GMX_RESOURCES["limits"]["memory"]
+        )
+        if msg := k8s.check_quota_headroom(nb_cpu, nb_mem, nb_cpu_limit, nb_mem_limit):
             raise Forbidden(description=msg)
 
         try:
