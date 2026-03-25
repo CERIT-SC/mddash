@@ -11,7 +11,11 @@
 			"moby": false,
 			"dockerDashComposeVersion": "none",
 			"installDockerComposeSwitch": false
-		}
+		},
+		"ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
+			"minikube": "none"  // don't install minikube
+		},
+		"ghcr.io/devcontainers/features/github-cli:1": {}
 	},
 
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.

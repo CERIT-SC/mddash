@@ -14,16 +14,11 @@ RUN apt-get update \
  && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
  && rm -rf /var/lib/apt/lists/* \
- # Docker is installed by the DiD feature in devcontainer.json
+ # Docker, kubectl, helm are installed by the features in devcontainer.json
  # Install gomplate
  && GOMPLATE_VERSION=4.3.3 \
  && curl -fsSL -o /usr/local/bin/gomplate https://github.com/hairyhenderson/gomplate/releases/download/v${GOMPLATE_VERSION}/gomplate_linux-amd64 \
- && chmod +x /usr/local/bin/gomplate \
- # Install kubectl
- && curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt | xargs -I {} curl -fsSL -o /usr/local/bin/kubectl https://dl.k8s.io/release/{}/bin/linux/amd64/kubectl \
- && chmod +x /usr/local/bin/kubectl \
- # Install helm
- && curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+ && chmod +x /usr/local/bin/gomplate
 
 WORKDIR /workspaces/mddash
 
