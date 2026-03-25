@@ -4,6 +4,13 @@
 {{- $imageTag := (getenv "IMAGE_TAG" $cfg.imageTag) -}}
 jupyterhub:
   hub:
+    resources:
+      requests:
+        cpu: {{ $cfg.hub.resources.requests.cpu }}
+        memory: {{ $cfg.hub.resources.requests.memory }}
+      limits:
+        cpu: {{ $cfg.hub.resources.limits.cpu }}
+        memory: {{ $cfg.hub.resources.limits.memory }}
     # custom image that supports access through JWT tokens
     image:
       name: eginotebooks/hub
@@ -70,6 +77,33 @@ jupyterhub:
         value: "{{ $cfg.resources.namespaceQuota.limitsCpu }}"
       NS_LIMITS_MEMORY:
         value: "{{ $cfg.resources.namespaceQuota.limitsMemory }}"
+      NS_MAX_NOTEBOOKS:
+        value: "{{ $cfg.resources.notebookQuota.maxConcurrent }}"
+      # Notebook pod resource configuration
+      NOTEBOOK_CPU_REQUEST:
+        value: "{{ $cfg.resources.notebook.cpuRequest }}"
+      NOTEBOOK_MEMORY_REQUEST:
+        value: "{{ $cfg.resources.notebook.memoryRequest }}"
+      NOTEBOOK_CPU_LIMIT:
+        value: "{{ $cfg.resources.notebook.cpuLimit }}"
+      NOTEBOOK_MEMORY_LIMIT:
+        value: "{{ $cfg.resources.notebook.memoryLimit }}"
+      GMX_CPU_REQUEST:
+        value: "{{ $cfg.resources.notebook.gmxCpuRequest }}"
+      GMX_MEMORY_REQUEST:
+        value: "{{ $cfg.resources.notebook.gmxMemoryRequest }}"
+      GMX_CPU_LIMIT:
+        value: "{{ $cfg.resources.notebook.gmxCpuLimit }}"
+      GMX_MEMORY_LIMIT:
+        value: "{{ $cfg.resources.notebook.gmxMemoryLimit }}"
+      ANALYSIS_CPU_REQUEST:
+        value: "{{ $cfg.resources.analysisJob.cpuRequest }}"
+      ANALYSIS_MEMORY_REQUEST:
+        value: "{{ $cfg.resources.analysisJob.memoryRequest }}"
+      ANALYSIS_CPU_LIMIT:
+        value: "{{ $cfg.resources.analysisJob.cpuLimit }}"
+      ANALYSIS_MEMORY_LIMIT:
+        value: "{{ $cfg.resources.analysisJob.memoryLimit }}"
       PVC_STORAGE_SIZE:
         value: "{{ $cfg.resources.pvcStorageSize }}"
       PVC_STORAGE_CLASS:
@@ -89,6 +123,8 @@ jupyterhub:
         value: "{{ $cfg.analysis.image }}"
       GMX_IMAGE:
         value: "{{ $cfg.gmxImage }}"
+      GPU_TYPE:
+        value: "{{ $cfg.gpuType }}"
       DEFAULT_NOTEBOOKS_REPO:
         value: "{{ $cfg.defaultNotebooksRepo }}"
       # MDRepo OAuth for publishing experiments to the repository
@@ -249,6 +285,8 @@ mdrun-api:
       value: "{{ $cfg.s3.endpoint }}"
     - name: GMX_IMAGE
       value: "{{ $cfg.gmxImage }}"
+    - name: GPU_TYPE
+      value: "{{ $cfg.gpuType }}"
 
 gromacs-tuner:
   image:

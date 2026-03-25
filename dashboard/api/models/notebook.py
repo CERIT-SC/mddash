@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from clients import caddy, k8s
-from config import NAMESPACE, PREFIX
+from clients.k8s import parse_cpu, parse_memory
+from config import GMX_RESOURCES, MAX_NOTEBOOKS, NAMESPACE, NOTEBOOK_RESOURCES, PREFIX
 from enums import PodStatus
 from extensions import db
 from kubernetes.client.rest import ApiException  # type: ignore
@@ -55,6 +56,20 @@ class Notebook(db.Model):  # type: ignore
         """
         pod_name = f"notebook-{self.experiment_id}"
         svc_name = f"svc-{self.experiment_id}"
+
+        if k8s.count_notebook_pods() >= MAX_NOTEBOOKS:
+            raise Forbidden(description=f"Maximum of {MAX_NOTEBOOKS} concurrent notebook(s) reached. Stop one first.")
+
+        nb_cpu = parse_cpu(NOTEBOOK_RESOURCES["requests"]["cpu"]) + parse_cpu(GMX_RESOURCES["requests"]["cpu"])
+        nb_mem = parse_memory(NOTEBOOK_RESOURCES["requests"]["memory"]) + parse_memory(
+            GMX_RESOURCES["requests"]["memory"]
+        )
+        nb_cpu_limit = parse_cpu(NOTEBOOK_RESOURCES["limits"]["cpu"]) + parse_cpu(GMX_RESOURCES["limits"]["cpu"])
+        nb_mem_limit = parse_memory(NOTEBOOK_RESOURCES["limits"]["memory"]) + parse_memory(
+            GMX_RESOURCES["limits"]["memory"]
+        )
+        if msg := k8s.check_quota_headroom(nb_cpu, nb_mem, nb_cpu_limit, nb_mem_limit):
+            raise Forbidden(description=msg)
 
         try:
             k8s.create_notebook_pod(pod_name, self.experiment_id, f"{PREFIX}/notebook/{self.experiment_id}", self.token)

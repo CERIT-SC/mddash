@@ -10,10 +10,12 @@ from typing import TYPE_CHECKING
 from cache import analysis_status_cache
 from cachetools import cached
 from clients import k8s
-from config import ANALYSIS_IMAGE, DATA_DIR
+from clients.k8s import parse_cpu, parse_memory
+from config import ANALYSIS_IMAGE, ANALYSIS_RESOURCES, DATA_DIR
 from enums import AnalysisType, JobStatus, PreprocessingMode
 from extensions import db
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from werkzeug.exceptions import Forbidden
 
 if TYPE_CHECKING:
     from .experiment import Experiment
@@ -260,6 +262,9 @@ class AnalysisJob(db.Model):  # type: ignore
 
         Returns:
             The created AnalysisJob instance.
+
+        Raises:
+            Forbidden: If the job cannot be started due to insufficient cluster resources.
         """
         previous_jobs = cls.query.filter_by(experiment_id=experiment.id).all()
         for prev in previous_jobs:
@@ -284,15 +289,19 @@ class AnalysisJob(db.Model):  # type: ignore
             preprocessing_mode=preprocessing_mode,
         )
 
+        an_cpu = parse_cpu(ANALYSIS_RESOURCES["requests"]["cpu"])
+        an_mem = parse_memory(ANALYSIS_RESOURCES["requests"]["memory"])
+        an_cpu_limit = parse_cpu(ANALYSIS_RESOURCES["limits"]["cpu"])
+        an_mem_limit = parse_memory(ANALYSIS_RESOURCES["limits"]["memory"])
+        if msg := k8s.check_quota_headroom(an_cpu, an_mem, an_cpu_limit, an_mem_limit):
+            raise Forbidden(description=f"Cannot start analysis: {msg}")
+
         k8s.create_job(
             name=job_name,
             image=ANALYSIS_IMAGE,
             experiment_id=experiment.id,
             command=command,
-            resources={
-                "requests": {"cpu": "1000m", "memory": "2Gi"},
-                "limits": {"cpu": "4000m", "memory": "8Gi"},
-            },
+            resources=ANALYSIS_RESOURCES,
         )
 
         job = AnalysisJob(

@@ -22,6 +22,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 NOTEBOOK_IMAGE = os.environ.get("NOTEBOOK_IMAGE", "quay.io/jupyter/base-notebook")
 GMX_IMAGE = os.environ.get("GMX_IMAGE", "")
+GPU_TYPE = os.environ.get("GPU_TYPE", "")
 ANALYSIS_IMAGE = os.environ.get("ANALYSIS_IMAGE", "ghcr.io/mmb-irb/mddb_wf")
 
 IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Always")
@@ -54,11 +55,39 @@ if not all([PVC_NAME, PVC_SIZE]):
 
 CPU_REQUEST_QUOTA = os.environ.get("NS_REQUESTS_CPU", "")
 MEMORY_REQUEST_QUOTA = os.environ.get("NS_REQUESTS_MEMORY", "")
+CPU_LIMIT_QUOTA = os.environ.get("NS_LIMITS_CPU", "")
+MEMORY_LIMIT_QUOTA = os.environ.get("NS_LIMITS_MEMORY", "")
 
-if not all([CPU_REQUEST_QUOTA, MEMORY_REQUEST_QUOTA]):
+if not all([CPU_REQUEST_QUOTA, MEMORY_REQUEST_QUOTA, CPU_LIMIT_QUOTA, MEMORY_LIMIT_QUOTA]):
     logger.warning(
-        "NS_REQUESTS_CPU or NS_REQUESTS_MEMORY environment variables are not set. Namespace resource requests may not be configured properly."
+        "NS_REQUESTS_CPU, NS_REQUESTS_MEMORY, NS_LIMITS_CPU, or NS_LIMITS_MEMORY environment variables are not set. Namespace resource quota checks may not be configured properly."
     )
+
+MAX_NOTEBOOKS = int(os.environ.get("NS_MAX_NOTEBOOKS", "2"))
+
+NOTEBOOK_RESOURCES: dict[str, dict[str, str]] = {
+    "requests": {
+        "cpu": os.environ.get("NOTEBOOK_CPU_REQUEST", ""),
+        "memory": os.environ.get("NOTEBOOK_MEMORY_REQUEST", ""),
+    },
+    "limits": {"cpu": os.environ.get("NOTEBOOK_CPU_LIMIT", ""), "memory": os.environ.get("NOTEBOOK_MEMORY_LIMIT", "")},
+}
+
+GMX_RESOURCES: dict[str, dict[str, str]] = {
+    "requests": {"cpu": os.environ.get("GMX_CPU_REQUEST", ""), "memory": os.environ.get("GMX_MEMORY_REQUEST", "")},
+    "limits": {"cpu": os.environ.get("GMX_CPU_LIMIT", ""), "memory": os.environ.get("GMX_MEMORY_LIMIT", "")},
+}
+
+ANALYSIS_RESOURCES: dict[str, dict[str, str]] = {
+    "requests": {
+        "cpu": os.environ.get("ANALYSIS_CPU_REQUEST", ""),
+        "memory": os.environ.get("ANALYSIS_MEMORY_REQUEST", ""),
+    },
+    "limits": {"cpu": os.environ.get("ANALYSIS_CPU_LIMIT", ""), "memory": os.environ.get("ANALYSIS_MEMORY_LIMIT", "")},
+}
+
+if not all(v for r in (NOTEBOOK_RESOURCES, GMX_RESOURCES, ANALYSIS_RESOURCES) for d in r.values() for v in d.values()):
+    logger.warning("Pod resource env vars are not fully set. Pods may be created without resource constraints.")
 
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
 

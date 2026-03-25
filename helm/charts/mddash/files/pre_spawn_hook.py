@@ -1,9 +1,9 @@
 import asyncio
 import json
 import logging
-import os
 import time
 from http import HTTPStatus
+from os import getenv
 from typing import TYPE_CHECKING, Any
 
 from kubernetes_asyncio import config
@@ -290,14 +290,14 @@ def _get_security_context() -> dict:
 
 
 def _proxy_container(service_prefix: str, username: str, security_context: dict) -> dict | None:
-    image = os.environ.get("PROXY_IMAGE")
+    image = getenv("PROXY_IMAGE")
     if not image:
         return None
 
     return {
         "name": "proxy",
         "image": image,
-        "imagePullPolicy": os.environ.get("IMAGE_PULL_POLICY", "Always"),
+        "imagePullPolicy": getenv("IMAGE_PULL_POLICY", "Always"),
         "command": [
             "sh",
             "-c",
@@ -312,7 +312,7 @@ def _proxy_container(service_prefix: str, username: str, security_context: dict)
             {"name": "NOTEBOOK_HOST", "value": "localhost"},
             {
                 "name": "DEFAULT_NOTEBOOKS_REPO",
-                "value": os.environ.get("DEFAULT_NOTEBOOKS_REPO", "https://github.com/CERIT-SC/mddash-notebooks.git"),
+                "value": getenv("DEFAULT_NOTEBOOKS_REPO", "https://github.com/CERIT-SC/mddash-notebooks.git"),
             },
         ],
         "resources": {"requests": {"cpu": "10m", "memory": "32Mi"}, "limits": {"cpu": "100m", "memory": "64Mi"}},
@@ -323,14 +323,14 @@ def _proxy_container(service_prefix: str, username: str, security_context: dict)
 def _auth_container(
     service_prefix: str, username: str, hub_namespace: str, jupyterhub_env: dict, security_context: dict
 ) -> dict | None:
-    image = os.environ.get("AUTH_IMAGE")
+    image = getenv("AUTH_IMAGE")
     if not image:
         return None
 
     return {
         "name": "auth",
         "image": image,
-        "imagePullPolicy": os.environ.get("IMAGE_PULL_POLICY", "Always"),
+        "imagePullPolicy": getenv("IMAGE_PULL_POLICY", "Always"),
         "ports": [{"containerPort": 5001, "name": "auth"}],
         "env": [
             {"name": "JUPYTERHUB_USER", "value": username},
@@ -346,6 +346,44 @@ def _auth_container(
     }
 
 
+_API_PASSTHROUGH_ENV = [
+    "IMAGE_PULL_POLICY",
+    "NOTEBOOK_IMAGE",
+    "ANALYSIS_IMAGE",
+    "GMX_IMAGE",
+    "GPU_TYPE",
+    "S3_ENDPOINT",
+    "S3_ACCESS_KEY",
+    "S3_SECRET_KEY",
+    "PVC_STORAGE_SIZE",
+    "NS_REQUESTS_CPU",
+    "NS_REQUESTS_MEMORY",
+    "NS_LIMITS_CPU",
+    "NS_LIMITS_MEMORY",
+    "NS_MAX_NOTEBOOKS",
+    "NOTEBOOK_CPU_REQUEST",
+    "NOTEBOOK_MEMORY_REQUEST",
+    "NOTEBOOK_CPU_LIMIT",
+    "NOTEBOOK_MEMORY_LIMIT",
+    "GMX_CPU_REQUEST",
+    "GMX_MEMORY_REQUEST",
+    "GMX_CPU_LIMIT",
+    "GMX_MEMORY_LIMIT",
+    "ANALYSIS_CPU_REQUEST",
+    "ANALYSIS_MEMORY_REQUEST",
+    "ANALYSIS_CPU_LIMIT",
+    "ANALYSIS_MEMORY_LIMIT",
+    "HOSTNAME",
+    "MDREPO_URL",
+    "MDREPO_SCOPES",
+    "MDREPO_CLIENT_ID",
+    "MDREPO_CLIENT_SECRET",
+    "TUNER_USER",
+    "TUNER_PASSWORD",
+    "DEFAULT_NOTEBOOKS_REPO",
+]
+
+
 def _api_container(
     service_prefix: str,
     username: str,
@@ -356,43 +394,23 @@ def _api_container(
     volume_name: str,
     security_context: dict,
 ) -> dict | None:
-    image = os.environ.get("API_IMAGE")
+    image = getenv("API_IMAGE")
     if not image:
         return None
 
     return {
         "name": "api",
         "image": image,
-        "imagePullPolicy": os.environ.get("IMAGE_PULL_POLICY", "Always"),
+        "imagePullPolicy": getenv("IMAGE_PULL_POLICY", "Always"),
         "ports": [{"containerPort": 5000, "name": "api"}],
         "env": [
             {"name": "JUPYTERHUB_USER", "value": username},
             {"name": "JUPYTERHUB_SERVICE_PREFIX", "value": service_prefix},
-            {"name": "IMAGE_PULL_POLICY", "value": os.environ.get("IMAGE_PULL_POLICY", "Always")},
             {"name": "POD_NAMESPACE", "value": user_namespace},
             {"name": "HUB_NAMESPACE", "value": hub_namespace},
-            {"name": "NOTEBOOK_IMAGE", "value": os.environ.get("NOTEBOOK_IMAGE", "")},
-            {"name": "ANALYSIS_IMAGE", "value": os.environ.get("ANALYSIS_IMAGE", "")},
-            {"name": "GMX_IMAGE", "value": os.environ.get("GMX_IMAGE", "")},
             {"name": "S3_BUCKET", "value": bucket_name},
-            {"name": "S3_ENDPOINT", "value": os.environ.get("S3_ENDPOINT", "")},
-            {"name": "S3_ACCESS_KEY", "value": os.environ.get("S3_ACCESS_KEY", "")},
-            {"name": "S3_SECRET_KEY", "value": os.environ.get("S3_SECRET_KEY", "")},
             {"name": "PVC_NAME", "value": pvc_name},
-            {"name": "PVC_STORAGE_SIZE", "value": os.environ.get("PVC_STORAGE_SIZE", "10Gi")},
-            {"name": "NS_REQUESTS_CPU", "value": os.environ.get("NS_REQUESTS_CPU", "1000m")},
-            {"name": "NS_REQUESTS_MEMORY", "value": os.environ.get("NS_REQUESTS_MEMORY", "4Gi")},
-            {"name": "HOSTNAME", "value": os.environ.get("HOSTNAME", "")},
-            {"name": "MDREPO_URL", "value": os.environ.get("MDREPO_URL", "")},
-            {"name": "MDREPO_SCOPES", "value": os.environ.get("MDREPO_SCOPES", "")},
-            {"name": "MDREPO_CLIENT_ID", "value": os.environ.get("MDREPO_CLIENT_ID", "")},
-            {"name": "MDREPO_CLIENT_SECRET", "value": os.environ.get("MDREPO_CLIENT_SECRET", "")},
-            {"name": "TUNER_USER", "value": os.environ.get("TUNER_USER", "")},
-            {"name": "TUNER_PASSWORD", "value": os.environ.get("TUNER_PASSWORD", "")},
-            {
-                "name": "DEFAULT_NOTEBOOKS_REPO",
-                "value": os.environ.get("DEFAULT_NOTEBOOKS_REPO", "https://github.com/CERIT-SC/mddash-notebooks.git"),
-            },
+            *[{"name": k, "value": getenv(k, "")} for k in _API_PASSTHROUGH_ENV],
         ],
         "volumeMounts": [{"name": volume_name, "mountPath": "/mddash"}],
         "resources": {"requests": {"cpu": "50m", "memory": "128Mi"}, "limits": {"cpu": "250m", "memory": "512Mi"}},
@@ -401,19 +419,19 @@ def _api_container(
 
 
 def _s3_sync_container(bucket_name: str, volume_name: str, security_context: dict) -> dict | None:
-    image = os.environ.get("S3_SYNC_IMAGE")
+    image = getenv("S3_SYNC_IMAGE")
     if not image:
         return None
 
     return {
         "name": "s3-sync",
         "image": image,
-        "imagePullPolicy": os.environ.get("IMAGE_PULL_POLICY", "Always"),
+        "imagePullPolicy": getenv("IMAGE_PULL_POLICY", "Always"),
         "env": [
             {"name": "S3_BUCKET", "value": bucket_name},
-            {"name": "S3_ENDPOINT", "value": os.environ.get("S3_ENDPOINT", "")},
-            {"name": "S3_ACCESS_KEY", "value": os.environ.get("S3_ACCESS_KEY", "")},
-            {"name": "S3_SECRET_KEY", "value": os.environ.get("S3_SECRET_KEY", "")},
+            {"name": "S3_ENDPOINT", "value": getenv("S3_ENDPOINT", "")},
+            {"name": "S3_ACCESS_KEY", "value": getenv("S3_ACCESS_KEY", "")},
+            {"name": "S3_SECRET_KEY", "value": getenv("S3_SECRET_KEY", "")},
         ],
         "volumeMounts": [{"name": volume_name, "mountPath": "/mddash"}],
         "resources": {"requests": {"cpu": "10m", "memory": "64Mi"}, "limits": {"cpu": "200m", "memory": "256Mi"}},
@@ -431,7 +449,7 @@ def _get_sidecar_containers(
         list[dict]: Container spec dicts for all enabled sidecar containers.
     """
     username: str = spawner.user.name  # type: ignore[union-attr]
-    hub_namespace = os.environ.get("POD_NAMESPACE", "default")
+    hub_namespace = getenv("POD_NAMESPACE", "default")
     service_prefix = f"/user/{username}"
     jupyterhub_env = spawner.get_env()
     security_context = _get_security_context()
@@ -472,9 +490,9 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
 
     try:
         username: str = spawner.user.name  # type: ignore[union-attr]
-        helm_package = os.environ.get("HELM_PACKAGE", "mddash")
-        hub_namespace = os.environ.get("POD_NAMESPACE", "default")
-        rancher_project_id = os.environ.get("RANCHER_PROJECT_ID", "")
+        helm_package = getenv("HELM_PACKAGE", "mddash")
+        hub_namespace = getenv("POD_NAMESPACE", "default")
+        rancher_project_id = getenv("RANCHER_PROJECT_ID", "")
 
         user_namespace = f"{helm_package}-user-{username}-ns"
         bucket_name = f"{helm_package}-user-{username}"
@@ -485,10 +503,10 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
         namespace_manifest = _get_namespace_manifest(
             user_namespace,
             rancher_project_id,
-            cpu_limit=os.environ.get("NS_LIMITS_CPU", "64000m"),
-            mem_limit=os.environ.get("NS_LIMITS_MEMORY", "256Gi"),
-            cpu_request=os.environ.get("NS_REQUESTS_CPU", "1000m"),
-            mem_request=os.environ.get("NS_REQUESTS_MEMORY", "4Gi"),
+            cpu_limit=getenv("NS_LIMITS_CPU", "32000m"),
+            mem_limit=getenv("NS_LIMITS_MEMORY", "64Gi"),
+            cpu_request=getenv("NS_REQUESTS_CPU", "2500m"),
+            mem_request=getenv("NS_REQUESTS_MEMORY", "6Gi"),
         )
         await _ensure_resource(core_api.create_namespace, body=namespace_manifest)
         await _wait_for_ns_conditions(core_api, user_namespace, {"InitialRolesPopulated"})
@@ -501,8 +519,8 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
         hub_binding = f"{helm_package}-hub-binding"
         pvc_manifest = _get_pvc_manifest(
             pvc_name,
-            storage_size=os.environ.get("PVC_STORAGE_SIZE", "10Gi"),
-            storage_class=os.environ.get("PVC_STORAGE_CLASS", "nfs-csi"),
+            storage_size=getenv("PVC_STORAGE_SIZE", "10Gi"),
+            storage_class=getenv("PVC_STORAGE_CLASS", "nfs-csi"),
         )
 
         # Create Roles first, then RoleBindings.
@@ -604,9 +622,9 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # n
 
     try:
         username: str = spawner.user.name  # type: ignore[union-attr]
-        helm_package = os.environ.get("HELM_PACKAGE", "mddash")
+        helm_package = getenv("HELM_PACKAGE", "mddash")
         user_namespace = f"{helm_package}-user-{username}-ns"
-        rancher_project_id = os.environ.get("RANCHER_PROJECT_ID", "")
+        rancher_project_id = getenv("RANCHER_PROJECT_ID", "")
 
         zero_quota_manifest = _get_namespace_manifest(user_namespace, rancher_project_id, "0", "0", "0", "0")
         await core_api.patch_namespace(name=user_namespace, body=zero_quota_manifest)  # type: ignore[misc]

@@ -1,15 +1,20 @@
 """Unit tests for analysis job mwf command generation."""
 
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
+import pytest
+from config import ANALYSIS_RESOURCES
 from enums import AnalysisType, PreprocessingMode
 from models.analysis_job import (
+    AnalysisJob,
     format_mwf_analysis_command,
     format_mwf_inputs_yaml,
     get_analysis_runtime_prep_commands,
     get_incomplete_task_dirs,
     get_runtime_prelude_commands,
 )
+from werkzeug.exceptions import Forbidden
 
 
 class TestFormatMwfInputsYaml:
@@ -86,3 +91,66 @@ class TestFormatMwfAnalysisCommand:
         assert "  - auto" in command
         assert "mkdir -p incomplete_inter mwf_analyses/incomplete_inter" in command
         assert "-i hbonds" in command
+
+
+class TestAnalysisJobStartQuotaCheck:
+    """Tests for the quota-headroom guard in AnalysisJob.start()."""
+
+    def _mock_experiment(self) -> MagicMock:
+        exp = MagicMock()
+        exp.id = "exp-test"
+        return exp
+
+    def test_raises_forbidden_when_quota_exceeded(self, app: object, tmp_path: Path) -> None:  # noqa: ARG002
+        """start() must raise Forbidden and not create a job when quota is insufficient."""
+        with (
+            patch("models.analysis_job.k8s.check_quota_headroom", return_value="CPU quota exceeded"),
+            patch("models.analysis_job.k8s.create_job") as mock_create_job,
+            patch("models.analysis_job.k8s.delete_job"),
+            patch.object(AnalysisJob, "query") as mock_query,
+            patch("models.analysis_job.db.session"),
+        ):
+            mock_query.filter_by.return_value.all.return_value = []
+            structure_file = tmp_path / "input.gro"
+            structure_file.touch()
+            trajectory_file = tmp_path / "traj.xtc"
+            trajectory_file.touch()
+
+            with pytest.raises(Forbidden):
+                AnalysisJob.start(
+                    experiment=self._mock_experiment(),
+                    analysis_name=AnalysisType.RMSDS,
+                    structure_file=structure_file,
+                    trajectory_file=trajectory_file,
+                    topology_file=None,
+                    preprocessing_mode=PreprocessingMode.AS_IS,
+                )
+
+            mock_create_job.assert_not_called()
+
+    def test_creates_job_with_analysis_resources_when_headroom_sufficient(self, app: object, tmp_path: Path) -> None:  # noqa: ARG002
+        """start() must pass ANALYSIS_RESOURCES to create_job when quota has headroom."""
+        with (
+            patch("models.analysis_job.k8s.check_quota_headroom", return_value=None),
+            patch("models.analysis_job.k8s.create_job") as mock_create_job,
+            patch("models.analysis_job.k8s.delete_job"),
+            patch.object(AnalysisJob, "query") as mock_query,
+            patch("models.analysis_job.db.session"),
+        ):
+            mock_query.filter_by.return_value.all.return_value = []
+            structure_file = tmp_path / "input.gro"
+            structure_file.touch()
+            trajectory_file = tmp_path / "traj.xtc"
+            trajectory_file.touch()
+
+            AnalysisJob.start(
+                experiment=self._mock_experiment(),
+                analysis_name=AnalysisType.RMSDS,
+                structure_file=structure_file,
+                trajectory_file=trajectory_file,
+                topology_file=None,
+                preprocessing_mode=PreprocessingMode.AS_IS,
+            )
+
+            mock_create_job.assert_called_once()
+            assert mock_create_job.call_args.kwargs["resources"] == ANALYSIS_RESOURCES
