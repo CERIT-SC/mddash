@@ -18,13 +18,13 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
+def upgrade() -> None:
     with op.batch_alter_table("notebooks") as batch_op:
         batch_op.add_column(sa.Column("tier", sa.Enum("1x", "2x", "4x", name="notebooktier"), nullable=True))
         batch_op.add_column(sa.Column("gpu", sa.Boolean(), server_default=sa.text("0"), nullable=False))
 
 
-def downgrade():
+def downgrade() -> None:
     with op.batch_alter_table("notebooks") as batch_op:
         batch_op.drop_column("gpu")
         batch_op.drop_column("tier")

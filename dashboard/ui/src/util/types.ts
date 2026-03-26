@@ -33,7 +33,6 @@ export interface TierInfo {
 export interface NotebookConfig {
   tiers: TierInfo[]
   defaultTier: string
-  gpuAvailable: boolean
 }
 
 export interface TunerJob {

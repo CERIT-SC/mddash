@@ -78,8 +78,11 @@ function formatCpu(cpu: string): string {
 }
 
 function formatMemory(mem: string): string {
-  if (mem.endsWith("Gi")) return `${parseFloat(mem)} GB`
-  if (mem.endsWith("Mi")) return `${Math.round(parseFloat(mem) / 1024)} GB`
+  if (mem.endsWith("Gi")) return `${parseFloat(mem)} GiB`
+  if (mem.endsWith("Mi")) {
+    const gib = parseFloat(mem) / 1024
+    return `${gib.toFixed(1)} GiB`
+  }
   return mem
 }
 
@@ -189,18 +192,16 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
                     ))}
                   </SelectContent>
                 </Select>
-                {config.gpuAvailable && (
-                  <label className="flex cursor-pointer items-center gap-1.5 text-sm select-none">
-                    <input
-                      type="checkbox"
-                      checked={gpuEnabled}
-                      onChange={(e) => setGpuEnabled(e.target.checked)}
-                      className="rounded"
-                    />
-                    <Cpu className="h-3.5 w-3.5" />
-                    GPU
-                  </label>
-                )}
+                <label className="flex cursor-pointer items-center gap-1.5 text-sm select-none">
+                  <input
+                    type="checkbox"
+                    checked={gpuEnabled}
+                    onChange={(e) => setGpuEnabled(e.target.checked)}
+                    className="rounded"
+                  />
+                  <Cpu className="h-3.5 w-3.5" />
+                  GPU
+                </label>
               </div>
               <Button
                 variant="default"

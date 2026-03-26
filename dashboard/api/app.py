@@ -21,6 +21,7 @@ from routes import (
     notebook_config_bp,
     tuner_bp,
 )
+from sqlalchemy import inspect as sa_inspect
 from utils import start_du_monitor
 
 logger = logging.getLogger(__name__)
@@ -67,13 +68,19 @@ def create_app() -> Flask:
     with app.app_context():
         try:
             logger.info("Running database migrations...")
-            # Restamp DB if it carries a revision from old auto-generated migrations
             with db.engine.connect() as conn:
                 current_rev = MigrationContext.configure(conn).get_current_revision()
-            if current_rev is not None:
+            if current_rev is None:
+                # Unversioned DB that already has tables: stamp baseline so upgrade() doesn't
+                # try to re-create them (which would fail on existing tables).
+                if sa_inspect(db.engine).get_table_names():
+                    logger.info("Unversioned DB with tables; stamping to migration baseline...")
+                    stamp(directory=str(MIGRATIONS_DIR), revision="001", purge=True)
+            else:
                 try:
                     ScriptDirectory(str(MIGRATIONS_DIR)).get_revision(current_rev)
                 except CommandError:
+                    # Revision from old auto-generated migrations that no longer exist
                     logger.info("Unknown DB revision; restamping to migration baseline...")
                     stamp(directory=str(MIGRATIONS_DIR), revision="001", purge=True)
             upgrade(directory=str(MIGRATIONS_DIR))
