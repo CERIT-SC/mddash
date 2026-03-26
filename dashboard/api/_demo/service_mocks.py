@@ -161,7 +161,7 @@ def _k8s_get_pod_status(name: str) -> PodStatus:
     return demo_state.notebook_status.get(experiment_id, PodStatus.DOWN)
 
 
-def _k8s_create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) -> None:  # noqa: ARG001
+def _k8s_create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str, **kwargs: object) -> None:  # noqa: ARG001
     demo_state.notebook_status[experiment_id] = PodStatus.RUNNING
 
 
