@@ -20,4 +20,5 @@ def run_migrations_online() -> None:
             context.run_migrations()
 
 
-run_migrations_online()
+if not context.is_offline_mode():
+    run_migrations_online()

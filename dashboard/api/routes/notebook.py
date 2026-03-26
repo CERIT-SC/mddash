@@ -19,10 +19,10 @@ notebook_config_bp = Blueprint("notebook_config", __name__, url_prefix=API_PREFI
 @handle_exceptions()
 def get_notebook_config() -> Response:
     """
-    Get available notebook resource tiers and GPU availability.
+    Get available notebook resource tiers and the default tier.
 
     Returns:
-        Response: JSON response with tiers list, default tier, and GPU availability flag.
+        Response: JSON response with tiers list and default tier.
     """
     tiers = []
     for t in NotebookTier:

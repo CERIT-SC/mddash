@@ -176,7 +176,7 @@ def create_notebook_pod(
     labels = {"app": name, "type": "notebook"}
     if tier is not None:
         labels["tier"] = str(tier)
-    labels["gpu"] = str(gpu).lower()
+    labels["gpu"] = "true" if gpu and GPU_TYPE else "false"
 
     pod_manifest = {
         "apiVersion": "v1",
