@@ -14,25 +14,27 @@ export interface Experiment {
   gromacs_jobs: GromacsJob[]
 }
 
+export type NotebookTier = "1x" | "2x" | "4x"
+
 export interface Notebook {
   id: number
   experiment_id: string
   token: string
   path: string
   status: PodStatus
-  tier: string | null
+  tier: NotebookTier | null
   gpu: boolean
 }
 
 export interface TierInfo {
-  value: string
+  value: NotebookTier
   cpuLimit: string
   memoryLimit: string
 }
 
 export interface NotebookConfig {
   tiers: TierInfo[]
-  defaultTier: string
+  defaultTier: NotebookTier
 }
 
 export interface TunerJob {
