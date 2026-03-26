@@ -19,6 +19,7 @@ depends_on = None
 
 
 def upgrade() -> None:
+    """Apply the migration."""
     op.create_table(
         "experiments",
         sa.Column("id", sa.String(5), primary_key=True),
@@ -105,6 +106,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Revert the migration."""
     op.drop_table("analysis_jobs")
     op.drop_table("tuner_jobs")
     op.drop_table("gromacs_jobs")

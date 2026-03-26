@@ -1,13 +1,15 @@
 from http import HTTPStatus
 
 from api_response import ApiResponse
-from config import API_PREFIX, get_tier_resources
+from config import API_PREFIX
 from decorators import handle_exceptions
 from enums import NotebookTier
 from extensions import db
 from flask import Blueprint, Response, request
 from models import Experiment
+from models.notebook import get_tier_resources
 from schemas import NotebookSchema
+from werkzeug.exceptions import BadRequest
 
 notebook_bp = Blueprint("notebook", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/notebook")
 notebook_config_bp = Blueprint("notebook_config", __name__, url_prefix=API_PREFIX)
@@ -62,6 +64,9 @@ def start_notebook(experiment_id: str) -> Response:
 
     Returns:
         Response: JSON response with the started notebook data.
+
+    Raises:
+        BadRequest: If the tier value is not a valid NotebookTier.
     """
     schema = NotebookSchema()
     experiment: Experiment = Experiment.query.get_or_404(

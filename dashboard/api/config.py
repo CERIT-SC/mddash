@@ -2,7 +2,6 @@ import logging
 import os
 from pathlib import Path
 
-from enums import NotebookTier
 from logging_utils import configure_logging
 
 LOG_FORMAT = "[%(asctime)s] %(levelname)s\t%(name)s: %(message)s"
@@ -90,41 +89,6 @@ ANALYSIS_RESOURCES: dict[str, dict[str, str]] = {
 
 if not all(v for r in (NOTEBOOK_RESOURCES, GMX_RESOURCES, ANALYSIS_RESOURCES) for d in r.values() for v in d.values()):
     logger.warning("Pod resource env vars are not fully set. Pods may be created without resource constraints.")
-
-
-def _multiply_resource(value: str, factor: int) -> str:
-    """Multiply a Kubernetes resource string by an integer factor."""
-    if not value:
-        return value
-    value = value.strip()
-    if value.endswith("m"):
-        return f"{int(value[:-1]) * factor}m"
-    if value.endswith("Gi"):
-        return f"{int(float(value[:-2]) * factor)}Gi"
-    if value.endswith("Mi"):
-        return f"{int(float(value[:-2]) * factor)}Mi"
-    # Plain number (CPU cores)
-    return str(float(value) * factor)
-
-
-def get_tier_resources(tier: NotebookTier) -> tuple[dict, dict]:
-    """
-    Return (notebook_resources, gmx_resources) scaled by the tier multiplier.
-
-    The base values come from the NOTEBOOK_RESOURCES and GMX_RESOURCES env vars (1x tier).
-    Higher tiers multiply all CPU and memory values by the tier factor.
-    """
-    factor = tier.multiplier
-    if factor == 1:
-        return NOTEBOOK_RESOURCES, GMX_RESOURCES
-
-    def scale(res: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
-        return {
-            category: {key: _multiply_resource(val, factor) for key, val in values.items()}
-            for category, values in res.items()
-        }
-
-    return scale(NOTEBOOK_RESOURCES), scale(GMX_RESOURCES)
 
 
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
