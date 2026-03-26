@@ -10,7 +10,7 @@ logger = logging.getLogger("alembic.env")
 target_metadata = current_app.extensions["migrate"].db.metadata
 
 
-def run_migrations_online():
+def run_migrations_online() -> None:
     """Run migrations in 'online' mode with a database connection."""
     connectable = current_app.extensions["migrate"].db.engine
 

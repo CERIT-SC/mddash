@@ -1,5 +1,6 @@
 """Unit tests for Notebook.start() quota enforcement."""
 
+from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -60,7 +61,7 @@ class TestNotebookStartQuotaCheck:
 class TestNotebookStartTierAndGpu:
     """Tests for tier selection, GPU attachment, and invalid tier handling in Notebook.start()."""
 
-    _MOCK_RESOURCES: dict = {
+    _MOCK_RESOURCES: ClassVar[dict] = {
         "requests": {"cpu": "200m", "memory": "512Mi"},
         "limits": {"cpu": "2", "memory": "4Gi"},
     }

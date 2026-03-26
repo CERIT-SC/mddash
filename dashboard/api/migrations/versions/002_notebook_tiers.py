@@ -19,12 +19,14 @@ depends_on = None
 
 
 def upgrade() -> None:
+    """Apply the migration."""
     with op.batch_alter_table("notebooks") as batch_op:
         batch_op.add_column(sa.Column("tier", sa.Enum("1x", "2x", "4x", name="notebooktier"), nullable=True))
         batch_op.add_column(sa.Column("gpu", sa.Boolean(), server_default=sa.text("0"), nullable=False))
 
 
 def downgrade() -> None:
+    """Revert the migration."""
     with op.batch_alter_table("notebooks") as batch_op:
         batch_op.drop_column("gpu")
         batch_op.drop_column("tier")
