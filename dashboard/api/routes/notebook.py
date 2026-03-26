@@ -3,8 +3,9 @@ from http import HTTPStatus
 from api_response import ApiResponse
 from config import API_PREFIX
 from decorators import handle_exceptions
+from enums import NotebookTier
 from extensions import db
-from flask import Blueprint, Response
+from flask import Blueprint, Response, request
 from models import Experiment
 from schemas import NotebookSchema
 
@@ -33,6 +34,8 @@ def start_notebook(experiment_id: str) -> Response:
     """
     Start the notebook pod for an experiment.
 
+    Accepts optional JSON body with ``tier`` (e.g. "1x", "2x", "4x") and ``gpu`` (boolean).
+
     Returns:
         Response: JSON response with the started notebook data.
     """
@@ -40,8 +43,14 @@ def start_notebook(experiment_id: str) -> Response:
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
+
+    body = request.get_json(silent=True) or {}
+    tier_str = body.get("tier")
+    tier = NotebookTier(tier_str) if tier_str else None
+    gpu = bool(body.get("gpu", False))
+
     notebook = experiment.notebook
-    notebook.start()
+    notebook.start(tier=tier, gpu=gpu)
     db.session.commit()
     return ApiResponse.success(schema.dump(notebook), HTTPStatus.CREATED)
 

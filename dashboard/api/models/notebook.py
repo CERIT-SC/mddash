@@ -5,12 +5,12 @@ from uuid import uuid4
 
 from clients import caddy, k8s
 from clients.k8s import parse_cpu, parse_memory
-from config import GMX_RESOURCES, MAX_NOTEBOOKS, NAMESPACE, NOTEBOOK_RESOURCES, PREFIX
-from enums import PodStatus
+from config import GPU_TYPE, MAX_NOTEBOOKS, NAMESPACE, NOTEBOOK_GPU_COUNT, PREFIX, get_tier_resources
+from enums import NotebookTier, PodStatus
 from extensions import db
 from kubernetes.client.rest import ApiException  # type: ignore
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from werkzeug.exceptions import Conflict, Forbidden, InternalServerError
+from werkzeug.exceptions import BadRequest, Conflict, Forbidden, InternalServerError
 
 if TYPE_CHECKING:
     from .experiment import Experiment
@@ -30,6 +30,13 @@ class Notebook(db.Model):  # type: ignore
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
     # token for accessing jupyter notebook
     token: Mapped[str] = mapped_column(db.String(36), nullable=False, default=lambda: str(uuid4()))
+    # resource tier (1x, 2x, 4x) — NULL for notebooks created before tiers were introduced
+    tier: Mapped[NotebookTier | None] = mapped_column(
+        db.Enum(NotebookTier, values_callable=lambda e: [m.value for m in e]),
+        nullable=True,
+    )
+    # whether GPU is attached to the gmx sidecar
+    gpu: Mapped[bool] = mapped_column(db.Boolean, default=False, server_default=db.text("0"))
 
     # back-reference to the parent experiment
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="notebook")
@@ -45,11 +52,16 @@ class Notebook(db.Model):  # type: ignore
         pod_name = f"notebook-{self.experiment_id}"
         return k8s.get_pod_status(pod_name)
 
-    def start(self) -> None:
+    def start(self, tier: NotebookTier | None = None, gpu: bool = False) -> None:
         """
         Start the notebook pod and service, and create a route in Caddy.
 
+        Args:
+            tier: Resource tier for the notebook (1x, 2x, 4x). Defaults to 1x.
+            gpu: Whether to attach a GPU to the gmx sidecar container.
+
         Raises:
+            BadRequest: If the tier is not a valid NotebookTier value.
             Forbidden: If the resource quota is exceeded when creating the pod.
             Conflict: If the notebook pod already exists.
             InternalServerError: If the pod creation fails or the proxy route cannot be created.
@@ -57,22 +69,40 @@ class Notebook(db.Model):  # type: ignore
         pod_name = f"notebook-{self.experiment_id}"
         svc_name = f"svc-{self.experiment_id}"
 
+        tier = tier or NotebookTier.SMALL
+        if not isinstance(tier, NotebookTier):
+            try:
+                tier = NotebookTier(tier)
+            except ValueError:
+                valid = ", ".join(t.value for t in NotebookTier)
+                raise BadRequest(description=f"Unknown notebook tier: {tier}. Available: {valid}")
+
+        self.tier = tier
+        self.gpu = gpu and NOTEBOOK_GPU_COUNT > 0
+
+        nb_res, gmx_res = get_tier_resources(tier)
+
         if k8s.count_notebook_pods() >= MAX_NOTEBOOKS:
             raise Forbidden(description=f"Maximum of {MAX_NOTEBOOKS} concurrent notebook(s) reached. Stop one first.")
 
-        nb_cpu = parse_cpu(NOTEBOOK_RESOURCES["requests"]["cpu"]) + parse_cpu(GMX_RESOURCES["requests"]["cpu"])
-        nb_mem = parse_memory(NOTEBOOK_RESOURCES["requests"]["memory"]) + parse_memory(
-            GMX_RESOURCES["requests"]["memory"]
-        )
-        nb_cpu_limit = parse_cpu(NOTEBOOK_RESOURCES["limits"]["cpu"]) + parse_cpu(GMX_RESOURCES["limits"]["cpu"])
-        nb_mem_limit = parse_memory(NOTEBOOK_RESOURCES["limits"]["memory"]) + parse_memory(
-            GMX_RESOURCES["limits"]["memory"]
-        )
+        nb_cpu = parse_cpu(nb_res["requests"]["cpu"]) + parse_cpu(gmx_res["requests"]["cpu"])
+        nb_mem = parse_memory(nb_res["requests"]["memory"]) + parse_memory(gmx_res["requests"]["memory"])
+        nb_cpu_limit = parse_cpu(nb_res["limits"]["cpu"]) + parse_cpu(gmx_res["limits"]["cpu"])
+        nb_mem_limit = parse_memory(nb_res["limits"]["memory"]) + parse_memory(gmx_res["limits"]["memory"])
         if msg := k8s.check_quota_headroom(nb_cpu, nb_mem, nb_cpu_limit, nb_mem_limit):
             raise Forbidden(description=msg)
 
         try:
-            k8s.create_notebook_pod(pod_name, self.experiment_id, f"{PREFIX}/notebook/{self.experiment_id}", self.token)
+            k8s.create_notebook_pod(
+                pod_name,
+                self.experiment_id,
+                f"{PREFIX}/notebook/{self.experiment_id}",
+                self.token,
+                notebook_resources=nb_res,
+                gmx_resources=gmx_res,
+                gpu=self.gpu,
+                tier=tier,
+            )
         except ApiException as e:
             if e.status == HTTPStatus.FORBIDDEN:
                 logger.debug("Quota exceeded when creating notebook pod.", exc_info=True)
