@@ -16,7 +16,7 @@ from config import (
     MEMORY_LIMIT_QUOTA,
     MEMORY_REQUEST_QUOTA,
     NAMESPACE,
-    NOTEBOOK_GPU_COUNT,
+    NOTEBOOK_GPU_ENABLED,
     NOTEBOOK_IMAGE,
     PVC_NAME,
 )
@@ -135,10 +135,9 @@ def create_notebook_pod(
 
     # Deep copy gmx resources to avoid mutating the original when adding GPU
     effective_gmx = {k: dict(v) for k, v in (gmx_resources or {}).items()}
-    if gpu and GPU_TYPE and NOTEBOOK_GPU_COUNT > 0:
-        gpu_str = str(NOTEBOOK_GPU_COUNT)
-        effective_gmx.setdefault("requests", {})[GPU_TYPE] = gpu_str
-        effective_gmx.setdefault("limits", {})[GPU_TYPE] = gpu_str
+    if gpu and GPU_TYPE and NOTEBOOK_GPU_ENABLED:
+        effective_gmx.setdefault("requests", {})[GPU_TYPE] = "1"
+        effective_gmx.setdefault("limits", {})[GPU_TYPE] = "1"
 
     gmx_container = get_container(
         "gmx",
