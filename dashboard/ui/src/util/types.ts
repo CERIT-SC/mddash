@@ -20,6 +20,14 @@ export interface Notebook {
   token: string
   path: string
   status: PodStatus
+  tier: string | null
+  gpu: boolean
+}
+
+export interface NotebookConfig {
+  tiers: string[]
+  defaultTier: string
+  gpuAvailable: boolean
 }
 
 export interface TunerJob {

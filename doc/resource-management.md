@@ -142,38 +142,59 @@ Use this before setting Rancher quotas to verify the configured values cover the
 
 ---
 
-## Future: notebook resource tiers
+## Notebook resource tiers
 
-When users need to choose between resource sizes (e.g. "small / standard / large"), the configuration will extend to:
+Users can choose between three resource tiers when starting a notebook: **1x** (base), **2x**, and **4x**. Tiers are multipliers applied to the base resource values defined in `config.yaml`. An optional **GPU toggle** attaches a single GPU to the gmx sidecar container.
+
+### How tiers work
+
+The base resources in `resources.notebook` (cpuRequest, memoryRequest, etc.) represent the 1x tier. The API multiplies all CPU and memory values by the tier factor at runtime. No per-tier configuration in config.yaml is needed.
+
+| Tier | CPU multiplier | Memory multiplier |
+|------|---------------|------------------|
+| 1x | 1× | 1× |
+| 2x | 2× | 2× |
+| 4x | 4× | 4× |
+
+### GPU support
+
+When `resources.notebook.gpu.gpuCount` is set to 1 (and `gpuType` is configured), the UI shows a GPU checkbox. When enabled, the GPU resource (e.g. `nvidia.com/mig-1g.10gb: "1"`) is added to the gmx container's requests and limits. GPU is independent of the tier selection.
+
+Set `gpuCount: 0` to hide the GPU option entirely (e.g. in dev environments without GPUs).
+
+### Updated quota formula
+
+The namespace quota must cover the **worst case**: all `MAX_NOTEBOOKS` at the highest tier (4x):
+
+```
+requests_cpu = fixed_base (280m)
+             + MAX_NOTEBOOKS × 4 × (base_nb_req + base_gmx_req)
+             + analysis_headroom (1000m)
+
+limits_cpu   = sidecar_base (650m)
+             + singleuser (1000m)
+             + MAX_NOTEBOOKS × 4 × (base_nb_lim + base_gmx_lim)
+             + analysis_limit (4000m)
+```
+
+GPU resources use a separate Kubernetes resource name and do not count toward CPU/memory quota.
+
+### Pod labels
+
+Notebook pods carry `tier` and `gpu` labels alongside the existing `type: notebook`:
 
 ```yaml
-resources:
-  notebook:
-    defaultTier: standard
-    tiers:
-      standard:
-        cpuRequest: "200m"
-        memoryRequest: "512Mi"
-        cpuLimit: "2000m"
-        memoryLimit: "4Gi"
-        gmxCpuRequest: "100m"
-        gmxMemoryRequest: "256Mi"
-        gmxCpuLimit: "2000m"
-        gmxMemoryLimit: "2Gi"
-      large:
-        cpuRequest: "500m"
-        memoryRequest: "2Gi"
-        cpuLimit: "4000m"
-        memoryLimit: "16Gi"
-        gmxCpuRequest: "500m"
-        gmxMemoryRequest: "1Gi"
-        gmxCpuLimit: "4000m"
-        gmxMemoryLimit: "4Gi"
+labels:
+  type: notebook
+  tier: "2x"
+  gpu: "false"
 ```
 
-The namespace quota formula then becomes:
-```
-limits_cpu = base + MAX_NOTEBOOKS × max(tier.cpuLimit) + analysis_limit
-```
+### Database columns
 
-Pod labels will gain a `tier` key (alongside the existing `type: notebook`) so operators can see tier distribution in `make resources` output.
+The `notebooks` table has `tier` (enum: 1x, 2x, 4x) and `gpu` (boolean) columns so the frontend can display the active tier for a running notebook.
+
+### API endpoints
+
+- `POST /api/.../notebook` — accepts optional `{"tier": "2x", "gpu": true}` JSON body
+- `GET /api/.../notebook-config` — returns available tiers and GPU availability

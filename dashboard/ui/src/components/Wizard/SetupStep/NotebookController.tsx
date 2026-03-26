@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
-import { AlertCircle, ExternalLink, HelpCircle, Loader2, Play, Power, RefreshCw, Rocket, Square } from "lucide-react"
+import { AlertCircle, Cpu, ExternalLink, HelpCircle, Loader2, Play, Power, RefreshCw, Rocket, Square } from "lucide-react"
 
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
 import { getPodStatusVariant, type Notebook } from "@/util/types"
-import { useNotebook, useSpawnNotebook, useStopNotebook } from "@/hooks/use-notebook"
+import { useNotebook, useNotebookConfig, useSpawnNotebook, useStopNotebook } from "@/hooks/use-notebook"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 const UNKNOWN_NOTEBOOK: Notebook = {
   id: -1,
@@ -67,8 +68,19 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
   const shouldPoll = isTransitioning_status(displayStatus)
 
   const { data: notebook = UNKNOWN_NOTEBOOK, isLoading } = useNotebook(experimentId, shouldPoll ? 1000 : false)
+  const { data: config } = useNotebookConfig()
   const spawnNotebook = useSpawnNotebook(experimentId)
   const stopNotebook = useStopNotebook(experimentId)
+
+  const [selectedTier, setSelectedTier] = useState<string>("")
+  const [gpuEnabled, setGpuEnabled] = useState(false)
+
+  // Initialize selectedTier from config when it loads
+  useEffect(() => {
+    if (config && !selectedTier) {
+      setSelectedTier(config.defaultTier)
+    }
+  }, [config, selectedTier])
 
   const probeNotebook = useCallback(async (path: string): Promise<boolean> => {
     try {
@@ -133,20 +145,74 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
 
           <p className={cn("text-muted-foreground text-sm", compact && "max-w-xs text-center")}>{message}</p>
 
-          <div className="flex flex-wrap justify-center gap-2">
-            {(displayStatus === "DOWN" || displayStatus === "TERMINATED") && (
-              <Button variant="default" onClick={() => spawnNotebook.mutate()} disabled={spawnNotebook.isPending}>
+          {(displayStatus === "DOWN" || displayStatus === "TERMINATED") && config && (
+            <div className="flex flex-col items-center gap-3 w-full">
+              <div className="flex items-center gap-3">
+                <span className="text-muted-foreground text-sm">Size:</span>
+                <Select value={selectedTier} onValueChange={setSelectedTier}>
+                  <SelectTrigger size="sm" className="w-20">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {config.tiers.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {config.gpuAvailable && (
+                  <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={gpuEnabled}
+                      onChange={(e) => setGpuEnabled(e.target.checked)}
+                      className="rounded"
+                    />
+                    <Cpu className="h-3.5 w-3.5" />
+                    GPU
+                  </label>
+                )}
+              </div>
+              <Button
+                variant="default"
+                onClick={() => spawnNotebook.mutate({ tier: selectedTier, gpu: gpuEnabled })}
+                disabled={spawnNotebook.isPending}
+              >
                 <Play className="mr-1 h-4 w-4" />
                 Start
               </Button>
-            )}
+            </div>
+          )}
+
+          {(displayStatus === "DOWN" || displayStatus === "TERMINATED") && !config && (
+            <Button variant="default" onClick={() => spawnNotebook.mutate({})} disabled={spawnNotebook.isPending}>
+              <Play className="mr-1 h-4 w-4" />
+              Start
+            </Button>
+          )}
+
+          <div className="flex flex-wrap justify-center gap-2">
             {displayStatus === "RUNNING" && (
-              <Button variant="default" asChild>
-                <a href={notebook.path} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="mr-1 h-4 w-4" />
-                  Open
-                </a>
-              </Button>
+              <>
+                <Button variant="default" asChild>
+                  <a href={notebook.path} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="mr-1 h-4 w-4" />
+                    Open
+                  </a>
+                </Button>
+                {notebook.tier && (
+                  <Badge variant="outline" className="text-xs">
+                    {notebook.tier}
+                  </Badge>
+                )}
+                {notebook.gpu && (
+                  <Badge variant="outline" className="text-xs">
+                    <Cpu className="mr-0.5 h-3 w-3" />
+                    GPU
+                  </Badge>
+                )}
+              </>
             )}
             {(displayStatus === "RUNNING" || displayStatus === "PENDING" || displayStatus === "INITIALIZING") && (
               <Button

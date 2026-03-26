@@ -94,6 +94,8 @@ resources:
     gmxMemoryRequest: "256Mi"
     gmxCpuLimit: "4000m"
     gmxMemoryLimit: "8Gi"
+    gpu:
+      gpuCount: 1   # 0 = GPU disabled, 1 = GPU available as toggle
   analysisJob:
     cpuRequest: "1000m"
     memoryRequest: "2Gi"
@@ -101,10 +103,10 @@ resources:
     memoryLimit: "8Gi"
   namespaceQuota:
     # requests = expected simultaneous usage; formula: see doc/resource-management.md
-    requestsCpu: "2500m"
-    requestsMemory: "8Gi"
-    # limits = sum of all container limits at full load (hard ceiling per namespace)
-    limitsCpu: "32000m"
+    requestsCpu: "4000m"
+    requestsMemory: "10Gi"
+    # limits = sum of all container limits at full load (worst-case: all notebooks at 4x tier)
+    limitsCpu: "38000m"
     limitsMemory: "64Gi"
   pvcStorageSize: 100Gi
 

@@ -2,19 +2,22 @@ import logging
 import threading
 import time
 from http import HTTPStatus
-from typing import Callable, cast
+from typing import TYPE_CHECKING, Callable, cast
+
+if TYPE_CHECKING:
+    from enums import NotebookTier
 
 from config import (
     CPU_LIMIT_QUOTA,
     CPU_REQUEST_QUOTA,
     GMX_IMAGE,
-    GMX_RESOURCES,
+    GPU_TYPE,
     IMAGE_PULL_POLICY,
     MEMORY_LIMIT_QUOTA,
     MEMORY_REQUEST_QUOTA,
     NAMESPACE,
+    NOTEBOOK_GPU_COUNT,
     NOTEBOOK_IMAGE,
-    NOTEBOOK_RESOURCES,
     PVC_NAME,
 )
 from enums import JobStatus, PodStatus
@@ -97,19 +100,31 @@ def get_container(
     return container
 
 
-def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) -> None:
+def create_notebook_pod(
+    name: str,
+    experiment_id: str,
+    prefix: str,
+    token: str,
+    notebook_resources: dict | None = None,
+    gmx_resources: dict | None = None,
+    gpu: bool = False,
+    tier: "NotebookTier | None" = None,
+) -> None:
     """
     Create a JupyterLab notebook pod with GROMACS tools for experiment setup.
 
-    Creates a pod with three containers: a Jupyter notebook server, a GROMACS container,
-    and an init container that sets up the working directory. The pod uses a PVC for
-    persistent storage.
+    Creates a pod with two containers: a Jupyter notebook server and a GROMACS container.
+    The pod uses a PVC for persistent storage.
 
     Args:
         name: The name of the pod to create.
         experiment_id: The ID of the experiment (used for directory path).
         prefix: The base URL prefix for the notebook server.
         token: Authentication token for accessing the notebook.
+        notebook_resources: Resource requests/limits for the Jupyter container.
+        gmx_resources: Resource requests/limits for the GROMACS sidecar container.
+        gpu: Whether to attach a GPU to the gmx container.
+        tier: The resource tier for pod labeling.
 
     """
     if ping_resource("pod", name):
@@ -117,13 +132,21 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         return
 
     volume_name = "shared-data"
+
+    # Deep copy gmx resources to avoid mutating the original when adding GPU
+    effective_gmx = {k: dict(v) for k, v in (gmx_resources or {}).items()}
+    if gpu and GPU_TYPE and NOTEBOOK_GPU_COUNT > 0:
+        gpu_str = str(NOTEBOOK_GPU_COUNT)
+        effective_gmx.setdefault("requests", {})[GPU_TYPE] = gpu_str
+        effective_gmx.setdefault("limits", {})[GPU_TYPE] = gpu_str
+
     gmx_container = get_container(
         "gmx",
         GMX_IMAGE,
         experiment_id,
         volume_name,
         ["sleep", "infinity"],
-        resources=GMX_RESOURCES,
+        resources=effective_gmx,
     )
 
     jupyter_command = [
@@ -149,13 +172,18 @@ def create_notebook_pod(name: str, experiment_id: str, prefix: str, token: str) 
         volume_name,
         jupyter_command,
         env=jupyter_env,
-        resources=NOTEBOOK_RESOURCES,
+        resources=notebook_resources,
     )
+
+    labels = {"app": name, "type": "notebook"}
+    if tier is not None:
+        labels["tier"] = str(tier)
+    labels["gpu"] = str(gpu).lower()
 
     pod_manifest = {
         "apiVersion": "v1",
         "kind": "Pod",
-        "metadata": {"name": name, "namespace": NAMESPACE, "labels": {"app": name, "type": "notebook"}},
+        "metadata": {"name": name, "namespace": NAMESPACE, "labels": labels},
         "spec": {
             "securityContext": {"fsGroup": 1000, "fsGroupChangePolicy": "OnRootMismatch", "supplementalGroups": [1000]},
             "containers": [jupyter_container, gmx_container],
