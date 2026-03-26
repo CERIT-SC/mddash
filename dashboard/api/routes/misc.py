@@ -32,12 +32,12 @@ def get_metrics() -> Response:
         Response: JSON response with current resource requests and configured limits for CPU, memory, and storage.
     """
     if "pod_resources" in metrics_cache:
-        requests = metrics_cache["pod_resources"]
+        pod_requests = metrics_cache["pod_resources"]
     else:
-        requests = k8s.get_pod_resource_requests()
-        metrics_cache["pod_resources"] = requests
+        pod_requests = k8s.get_pod_resource_requests()
+        metrics_cache["pod_resources"] = pod_requests
 
-    requests["storage"] = get_du_size(DATA_DIR)
+    requests: dict[str, int | None] = {**pod_requests, "storage": get_du_size(DATA_DIR)}
 
     limits = {
         "cpu": k8s.parse_cpu(CPU_REQUEST_QUOTA),

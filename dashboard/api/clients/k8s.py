@@ -448,6 +448,16 @@ def _get_active_pod_usage() -> dict[str, dict[str, int]]:
     return totals
 
 
+def get_pod_resource_requests() -> dict[str, int]:
+    """
+    Return total CPU and memory requests for all active pods in the namespace.
+
+    Returns:
+        dict: Dictionary with 'cpu' (millicores) and 'memory' (bytes) totals.
+    """
+    return _get_active_pod_usage()["requests"]
+
+
 def count_notebook_pods() -> int:
     """
     Return count of Running/Pending notebook pods (excludes terminating).
