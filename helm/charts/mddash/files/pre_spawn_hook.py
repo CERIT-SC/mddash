@@ -8,10 +8,12 @@ from typing import TYPE_CHECKING, Any
 
 from kubernetes_asyncio import config
 from kubernetes_asyncio.client import (
+    ApiClient,
     CoreV1Api,
     RbacAuthorizationV1Api,
     V1Capabilities,
     V1Pod,
+    V1SeccompProfile,
     V1SecurityContext,
 )
 from kubernetes_asyncio.client.rest import ApiException
@@ -485,8 +487,9 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
     Creates user namespace, RBAC, PVC, S3 bucket, and configures sidecar containers.
     """
     await config.load_kube_config(config_file="/home/jovyan/.kube/config")  # type: ignore[misc]
-    core_api = CoreV1Api()
-    rbac_api = RbacAuthorizationV1Api()
+    api_client = ApiClient()
+    core_api = CoreV1Api(api_client)
+    rbac_api = RbacAuthorizationV1Api(api_client)
 
     try:
         username: str = spawner.user.name  # type: ignore[union-attr]
@@ -575,8 +578,6 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
 
         # Override hub URLs for cross-namespace access
         hub_api_base = f"http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api"
-        if not hasattr(spawner, "environment"):
-            spawner.environment = {}
         spawner.environment["JUPYTERHUB_API_URL"] = hub_api_base
         spawner.environment["JUPYTERHUB_ACTIVITY_URL"] = f"{hub_api_base}/users/{username}/activity"
 
@@ -584,8 +585,7 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
         if sidecar_containers:
             spawner.extra_containers = sidecar_containers
     finally:
-        await rbac_api.api_client.close()
-        await core_api.api_client.close()
+        await api_client.close()
 
 
 def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:  # noqa: ARG001
@@ -601,12 +601,13 @@ def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:  # noqa: ARG00
         if container.name == "notebook":
             sc = container.security_context
             if isinstance(sc, dict):
-                allowed = {k: v for k, v in sc.items() if k in V1SecurityContext.openapi_types}
+                allowed = {k: v for k, v in sc.items() if k in V1SecurityContext.openapi_types}  # type: ignore[attr-defined]
                 sc = V1SecurityContext(**allowed)
             if sc is None:
                 sc = V1SecurityContext()
             sc.capabilities = V1Capabilities(drop=["ALL"])
             sc.allow_privilege_escalation = False
+            sc.seccomp_profile = V1SeccompProfile(type="RuntimeDefault")
             container.security_context = sc
     return pod
 
@@ -618,7 +619,8 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # n
     Sets namespace quota to zero and deletes all pods to free resources.
     """
     await config.load_kube_config(config_file="/home/jovyan/.kube/config")  # type: ignore[misc]
-    core_api = CoreV1Api()
+    api_client = ApiClient()
+    core_api = CoreV1Api(api_client)
 
     try:
         username: str = spawner.user.name  # type: ignore[union-attr]
@@ -634,7 +636,7 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # n
         except ApiException as e:
             logger.exception("Error deleting pods in namespace %s: %s", user_namespace, e)
     finally:
-        await core_api.api_client.close()
+        await api_client.close()
 
 
 # =============================================================================
