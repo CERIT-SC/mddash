@@ -158,9 +158,7 @@ The base resources in `resources.notebook` (cpuRequest, memoryRequest, etc.) rep
 
 ### GPU support
 
-When `resources.notebook.gpu.gpuCount` is set to 1 (and `gpuType` is configured), the UI shows a GPU checkbox. When enabled, the GPU resource (e.g. `nvidia.com/mig-1g.10gb: "1"`) is added to the gmx container's requests and limits. GPU is independent of the tier selection.
-
-Set `gpuCount: 0` to hide the GPU option entirely (e.g. in dev environments without GPUs).
+The UI always shows a GPU checkbox. When enabled, the GPU resource defined by the `gpuType` config key (rendered to the `GPU_TYPE` environment variable, e.g. `nvidia.com/mig-1g.10gb`) is added to the gmx container's requests and limits as `"1"`. GPU is independent of the tier selection.
 
 ### Updated quota formula
 

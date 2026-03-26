@@ -2,6 +2,7 @@ import logging
 import os
 from pathlib import Path
 
+from enums import NotebookTier
 from logging_utils import configure_logging
 
 LOG_FORMAT = "[%(asctime)s] %(levelname)s\t%(name)s: %(message)s"
@@ -106,15 +107,13 @@ def _multiply_resource(value: str, factor: int) -> str:
     return str(float(value) * factor)
 
 
-def get_tier_resources(tier: "NotebookTier") -> tuple[dict, dict]:
+def get_tier_resources(tier: NotebookTier) -> tuple[dict, dict]:
     """
     Return (notebook_resources, gmx_resources) scaled by the tier multiplier.
 
     The base values come from the NOTEBOOK_RESOURCES and GMX_RESOURCES env vars (1x tier).
     Higher tiers multiply all CPU and memory values by the tier factor.
     """
-    from enums import NotebookTier  # noqa: F811
-
     factor = tier.multiplier
     if factor == 1:
         return NOTEBOOK_RESOURCES, GMX_RESOURCES

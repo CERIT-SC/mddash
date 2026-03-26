@@ -1,7 +1,7 @@
 from http import HTTPStatus
 
 from api_response import ApiResponse
-from config import API_PREFIX, GPU_TYPE, get_tier_resources
+from config import API_PREFIX, get_tier_resources
 from decorators import handle_exceptions
 from enums import NotebookTier
 from extensions import db
@@ -33,7 +33,6 @@ def get_notebook_config() -> Response:
     return ApiResponse.success({
         "tiers": tiers,
         "defaultTier": NotebookTier.SMALL.value,
-        "gpuAvailable": bool(GPU_TYPE),
     })
 
 
@@ -71,8 +70,13 @@ def start_notebook(experiment_id: str) -> Response:
 
     body = request.get_json(silent=True) or {}
     tier_str = body.get("tier")
-    tier = NotebookTier(tier_str) if tier_str else None
     gpu = bool(body.get("gpu", False))
+
+    try:
+        tier = NotebookTier(tier_str) if tier_str else None
+    except ValueError:
+        valid = ", ".join(t.value for t in NotebookTier)
+        raise BadRequest(description=f"Unknown notebook tier '{tier_str}'. Valid tiers: {valid}")
 
     notebook = experiment.notebook
     notebook.start(tier=tier, gpu=gpu)
