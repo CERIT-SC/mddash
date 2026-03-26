@@ -95,7 +95,7 @@ resources:
     gmxCpuLimit: "2000m"
     gmxMemoryLimit: "2Gi"
     gpu:
-      gpuCount: 0   # 0 = GPU disabled in dev (no GPUs in dev cluster)
+      gpuEnabled: false
   analysisJob:
     cpuRequest: "1000m"
     memoryRequest: "2Gi"

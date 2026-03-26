@@ -1,7 +1,7 @@
 from api_response import ApiResponse
 from cache import metrics_cache
 from clients import k8s
-from config import API_PREFIX, CPU_REQUEST_QUOTA, DATA_DIR, GPU_TYPE, MEMORY_REQUEST_QUOTA, NOTEBOOK_GPU_COUNT, PVC_SIZE
+from config import API_PREFIX, CPU_REQUEST_QUOTA, DATA_DIR, GPU_TYPE, MEMORY_REQUEST_QUOTA, NOTEBOOK_GPU_ENABLED, PVC_SIZE
 from decorators import handle_exceptions
 from enums import NotebookTier
 from flask import Blueprint, Response
@@ -61,5 +61,5 @@ def get_notebook_config() -> Response:
     return ApiResponse.success({
         "tiers": [t.value for t in NotebookTier],
         "defaultTier": NotebookTier.SMALL.value,
-        "gpuAvailable": bool(GPU_TYPE) and NOTEBOOK_GPU_COUNT > 0,
+        "gpuAvailable": bool(GPU_TYPE) and NOTEBOOK_GPU_ENABLED,
     })

@@ -179,7 +179,7 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
     gmx_mem_lim = parse_memory(yq(".resources.notebook.gmxMemoryLimit", config))
     max_nb = int(yq(".resources.notebookQuota.maxConcurrent", config))
 
-    gpu_count = int(yq(".resources.notebook.gpu.gpuCount // 0", config))
+    gpu_enabled = yq(".resources.notebook.gpu.gpuEnabled // \"false\"", config).lower() == "true"
     gpu_type = yq(".gpuType // \"\"", config)
 
     an_cpu_req = parse_cpu(yq(".resources.analysisJob.cpuRequest", config))
@@ -225,8 +225,8 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
         row("gmx", t_gmx_cr, t_gmx_mr, t_gmx_cl, t_gmx_ml, indent=2)
         subtotal(f"Per notebook ({t}x)", t_nb_cr + t_gmx_cr, t_nb_mr + t_gmx_mr, t_nb_cl + t_gmx_cl, t_nb_ml + t_gmx_ml)
 
-    if gpu_count > 0 and gpu_type:
-        print(f"\n  GPU: {gpu_count}x {gpu_type} (optional, added to gmx container when enabled)")
+    if gpu_enabled and gpu_type:
+        print(f"\n  GPU: 1x {gpu_type} (optional, added to gmx container when enabled)")
 
     # Worst-case per notebook (highest tier)
     per_nb_cr = (nb_cpu_req + gmx_cpu_req) * max_tier

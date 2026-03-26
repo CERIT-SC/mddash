@@ -95,7 +95,7 @@ resources:
     gmxCpuLimit: "4000m"
     gmxMemoryLimit: "8Gi"
     gpu:
-      gpuCount: 1   # 0 = GPU disabled, 1 = GPU available as toggle
+      gpuEnabled: true
   analysisJob:
     cpuRequest: "1000m"
     memoryRequest: "2Gi"
