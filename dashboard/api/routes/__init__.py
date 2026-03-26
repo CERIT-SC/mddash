@@ -6,7 +6,7 @@ from .files import files_bp
 from .gmx import gmx_bp
 from .mdrepo import mdrepo_bp
 from .misc import misc_bp
-from .notebook import notebook_bp
+from .notebook import notebook_bp, notebook_config_bp
 from .tuner import tuner_bp
 
 __all__ = [
@@ -17,5 +17,6 @@ __all__ = [
     "mdrepo_bp",
     "misc_bp",
     "notebook_bp",
+    "notebook_config_bp",
     "tuner_bp",
 ]

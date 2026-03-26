@@ -18,6 +18,7 @@ from routes import (
     mdrepo_bp,
     misc_bp,
     notebook_bp,
+    notebook_config_bp,
     tuner_bp,
 )
 from utils import start_du_monitor
@@ -56,6 +57,7 @@ def create_app() -> Flask:
     app.register_blueprint(analysis_bp)
     app.register_blueprint(experiments_bp)
     app.register_blueprint(notebook_bp)
+    app.register_blueprint(notebook_config_bp)
     app.register_blueprint(tuner_bp)
     app.register_blueprint(gmx_bp)
     app.register_blueprint(files_bp)

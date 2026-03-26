@@ -16,7 +16,6 @@ from config import (
     MEMORY_LIMIT_QUOTA,
     MEMORY_REQUEST_QUOTA,
     NAMESPACE,
-    NOTEBOOK_GPU_ENABLED,
     NOTEBOOK_IMAGE,
     PVC_NAME,
 )
@@ -135,7 +134,7 @@ def create_notebook_pod(
 
     # Deep copy gmx resources to avoid mutating the original when adding GPU
     effective_gmx = {k: dict(v) for k, v in (gmx_resources or {}).items()}
-    if gpu and GPU_TYPE and NOTEBOOK_GPU_ENABLED:
+    if gpu and GPU_TYPE:
         effective_gmx.setdefault("requests", {})[GPU_TYPE] = "1"
         effective_gmx.setdefault("limits", {})[GPU_TYPE] = "1"
 
@@ -500,7 +499,9 @@ def count_notebook_pods() -> int:
     )
 
 
-def check_quota_headroom(cpu_request: int, memory_request: int, cpu_limit: int = 0, memory_limit: int = 0) -> str | None:
+def check_quota_headroom(
+    cpu_request: int, memory_request: int, cpu_limit: int = 0, memory_limit: int = 0
+) -> str | None:
     """
     Return an error message if spawning would exceed the namespace quota, else None.
 

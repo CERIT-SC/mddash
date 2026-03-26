@@ -94,8 +94,7 @@ resources:
     gmxMemoryRequest: "256Mi"
     gmxCpuLimit: "2000m"
     gmxMemoryLimit: "2Gi"
-    gpu:
-      gpuEnabled: false
+
   analysisJob:
     cpuRequest: "1000m"
     memoryRequest: "2Gi"

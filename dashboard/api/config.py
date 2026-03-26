@@ -78,7 +78,6 @@ GMX_RESOURCES: dict[str, dict[str, str]] = {
     "limits": {"cpu": os.environ.get("GMX_CPU_LIMIT", ""), "memory": os.environ.get("GMX_MEMORY_LIMIT", "")},
 }
 
-NOTEBOOK_GPU_ENABLED: bool = os.environ.get("NOTEBOOK_GPU_ENABLED", "false").lower() in ("true", "1")
 
 ANALYSIS_RESOURCES: dict[str, dict[str, str]] = {
     "requests": {
@@ -127,6 +126,7 @@ def get_tier_resources(tier: "NotebookTier") -> tuple[dict, dict]:
         }
 
     return scale(NOTEBOOK_RESOURCES), scale(GMX_RESOURCES)
+
 
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
 

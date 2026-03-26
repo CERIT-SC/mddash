@@ -47,7 +47,8 @@ All routes use standardized response handling:
 from api_response import ApiResponse
 from decorators import handle_exceptions
 
-@experiments_bp.route('/<id>', methods=['GET'])
+
+@experiments_bp.route("/<id>", methods=["GET"])
 @handle_exceptions()  # Use rollback=True for mutations
 def get_experiment(id: str):
     experiment = Experiment.query.get_or_404(id)

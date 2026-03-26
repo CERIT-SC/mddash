@@ -24,8 +24,14 @@ export interface Notebook {
   gpu: boolean
 }
 
+export interface TierInfo {
+  value: string
+  cpuLimit: string
+  memoryLimit: string
+}
+
 export interface NotebookConfig {
-  tiers: string[]
+  tiers: TierInfo[]
   defaultTier: string
   gpuAvailable: boolean
 }

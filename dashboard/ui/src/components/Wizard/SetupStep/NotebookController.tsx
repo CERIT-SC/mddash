@@ -1,10 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
-import { AlertCircle, Cpu, ExternalLink, HelpCircle, Loader2, Play, Power, RefreshCw, Rocket, Square } from "lucide-react"
+import {
+  AlertCircle,
+  Cpu,
+  ExternalLink,
+  HelpCircle,
+  Loader2,
+  Play,
+  Power,
+  RefreshCw,
+  Rocket,
+  Square,
+} from "lucide-react"
 
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
-import { getPodStatusVariant, type Notebook } from "@/util/types"
+import { getPodStatusVariant, type Notebook, type TierInfo } from "@/util/types"
 import { useNotebook, useNotebookConfig, useSpawnNotebook, useStopNotebook } from "@/hooks/use-notebook"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -59,6 +70,21 @@ interface NotebookControllerProps {
   experimentId: string
   className?: string
   compact?: boolean
+}
+
+function formatCpu(cpu: string): string {
+  const cores = cpu.endsWith("m") ? parseInt(cpu) / 1000 : parseFloat(cpu)
+  return `${cores} cores`
+}
+
+function formatMemory(mem: string): string {
+  if (mem.endsWith("Gi")) return `${parseFloat(mem)} GB`
+  if (mem.endsWith("Mi")) return `${Math.round(parseFloat(mem) / 1024)} GB`
+  return mem
+}
+
+function tierLabel(t: TierInfo): string {
+  return `${t.value}: ${formatCpu(t.cpuLimit)} / ${formatMemory(t.memoryLimit)}`
 }
 
 const NotebookController = ({ experimentId, className, compact = false }: NotebookControllerProps) => {
@@ -148,23 +174,23 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
           <p className={cn("text-muted-foreground text-sm", compact && "max-w-xs text-center")}>{message}</p>
 
           {(displayStatus === "DOWN" || displayStatus === "TERMINATED") && config && (
-            <div className="flex flex-col items-center gap-3 w-full">
-              <div className="flex items-center gap-3">
+            <div className="flex w-full flex-col items-center gap-3">
+              <div className="flex flex-wrap items-center justify-center gap-3">
                 <span className="text-muted-foreground text-sm">Size:</span>
                 <Select value={selectedTier} onValueChange={setSelectedTier}>
-                  <SelectTrigger size="sm" className="w-20">
+                  <SelectTrigger size="sm" className="w-48">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {config.tiers.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
+                      <SelectItem key={t.value} value={t.value}>
+                        {tierLabel(t)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {config.gpuAvailable && (
-                  <label className="flex items-center gap-1.5 text-sm cursor-pointer select-none">
+                  <label className="flex cursor-pointer items-center gap-1.5 text-sm select-none">
                     <input
                       type="checkbox"
                       checked={gpuEnabled}
@@ -194,27 +220,30 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
             </Button>
           )}
 
+          {displayStatus === "RUNNING" && (notebook.tier || notebook.gpu) && (
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {notebook.tier && (
+                <Badge variant="outline" className="text-xs">
+                  {notebook.tier}
+                </Badge>
+              )}
+              {notebook.gpu && (
+                <Badge variant="outline" className="text-xs">
+                  <Cpu className="mr-0.5 h-3 w-3" />
+                  GPU
+                </Badge>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-wrap justify-center gap-2">
             {displayStatus === "RUNNING" && (
-              <>
-                <Button variant="default" asChild>
-                  <a href={notebook.path} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="mr-1 h-4 w-4" />
-                    Open
-                  </a>
-                </Button>
-                {notebook.tier && (
-                  <Badge variant="outline" className="text-xs">
-                    {notebook.tier}
-                  </Badge>
-                )}
-                {notebook.gpu && (
-                  <Badge variant="outline" className="text-xs">
-                    <Cpu className="mr-0.5 h-3 w-3" />
-                    GPU
-                  </Badge>
-                )}
-              </>
+              <Button variant="default" asChild>
+                <a href={notebook.path} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-1 h-4 w-4" />
+                  Open
+                </a>
+              </Button>
             )}
             {(displayStatus === "RUNNING" || displayStatus === "PENDING" || displayStatus === "INITIALIZING") && (
               <Button

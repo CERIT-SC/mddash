@@ -1,4 +1,5 @@
-"""Initial schema baseline.
+"""
+Initial schema baseline.
 
 Revision ID: 001
 Revises: None
@@ -8,8 +9,8 @@ Captures the existing database schema so that Alembic can track future changes.
 Existing databases are stamped to this revision without running the upgrade.
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 revision = "001"
 down_revision = None
@@ -78,8 +79,16 @@ def upgrade():
         sa.Column(
             "analysis_name",
             sa.Enum(
-                "pca", "rmsds", "rgyr", "rmsf", "fluctuation", "dist",
-                "energies", "hbonds", "inter", "clusters",
+                "pca",
+                "rmsds",
+                "rgyr",
+                "rmsf",
+                "fluctuation",
+                "dist",
+                "energies",
+                "hbonds",
+                "inter",
+                "clusters",
                 name="analysistype",
             ),
             nullable=False,
