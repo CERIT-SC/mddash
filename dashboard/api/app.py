@@ -5,7 +5,7 @@ from pathlib import Path
 from config import DATA_DIR, LOG_FORMAT, LOG_LEVEL
 from extensions import db, ma, migrate
 from flask import Flask
-from flask_migrate import upgrade
+from flask_migrate import stamp, upgrade
 from logging_utils import configure_logging, enable_loggers
 from routes import (
     analysis_bp,
@@ -64,8 +64,14 @@ def create_app() -> Flask:
             logger.info("Running database migrations...")
             upgrade(directory=str(MIGRATIONS_DIR))
         except (Exception, SystemExit) as e:
-            logger.warning(f"Migration upgrade failed: {e}, falling back to create_all()")
-            db.create_all()
+            if "Can't locate revision" in str(e):
+                # DB was stamped by old auto-generated migrations; restamp to our baseline and upgrade
+                logger.info("Unknown revision in DB; restamping to migration baseline...")
+                stamp(directory=str(MIGRATIONS_DIR), revision="001")
+                upgrade(directory=str(MIGRATIONS_DIR))
+            else:
+                logger.warning(f"Migration upgrade failed: {e}, falling back to create_all()")
+                db.create_all()
 
     # Alembic may tweak logging handlers; restore our configuration afterwards
     configure_logging(LOG_FORMAT, LOG_LEVEL)
