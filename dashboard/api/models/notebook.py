@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from clients import caddy, k8s
 from clients.k8s import parse_cpu, parse_memory
-from config import MAX_NOTEBOOKS, NAMESPACE, NOTEBOOK_GPU_ENABLED, PREFIX, get_tier_resources
+from config import MAX_NOTEBOOKS, NAMESPACE, PREFIX, get_tier_resources
 from enums import NotebookTier, PodStatus
 from extensions import db
 from kubernetes.client.rest import ApiException  # type: ignore
@@ -78,7 +78,7 @@ class Notebook(db.Model):  # type: ignore
                 raise BadRequest(description=f"Unknown notebook tier: {tier}. Available: {valid}")
 
         self.tier = tier
-        self.gpu = gpu and NOTEBOOK_GPU_ENABLED
+        self.gpu = bool(gpu)
 
         nb_res, gmx_res = get_tier_resources(tier)
 

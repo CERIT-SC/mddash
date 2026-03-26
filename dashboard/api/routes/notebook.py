@@ -1,7 +1,7 @@
 from http import HTTPStatus
 
 from api_response import ApiResponse
-from config import API_PREFIX
+from config import API_PREFIX, GPU_TYPE, get_tier_resources
 from decorators import handle_exceptions
 from enums import NotebookTier
 from extensions import db
@@ -10,6 +10,31 @@ from models import Experiment
 from schemas import NotebookSchema
 
 notebook_bp = Blueprint("notebook", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/notebook")
+notebook_config_bp = Blueprint("notebook_config", __name__, url_prefix=API_PREFIX)
+
+
+@notebook_config_bp.route("/notebook-config", methods=["GET"])
+@handle_exceptions()
+def get_notebook_config() -> Response:
+    """
+    Get available notebook resource tiers and GPU availability.
+
+    Returns:
+        Response: JSON response with tiers list, default tier, and GPU availability flag.
+    """
+    tiers = []
+    for t in NotebookTier:
+        nb_res, _ = get_tier_resources(t)
+        tiers.append({
+            "value": t.value,
+            "cpuLimit": nb_res["limits"]["cpu"],
+            "memoryLimit": nb_res["limits"]["memory"],
+        })
+    return ApiResponse.success({
+        "tiers": tiers,
+        "defaultTier": NotebookTier.SMALL.value,
+        "gpuAvailable": bool(GPU_TYPE),
+    })
 
 
 @notebook_bp.route("", methods=["GET"])

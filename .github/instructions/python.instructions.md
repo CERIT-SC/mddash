@@ -12,6 +12,7 @@ Use `pathlib` instead of `os.path`.
 **Bad:**
 ```python
 import os
+
 path = os.path.join(data_dir, "file.txt")
 if os.path.exists(path):
     ...
@@ -20,6 +21,7 @@ if os.path.exists(path):
 **Good:**
 ```python
 from pathlib import Path
+
 path = Path(data_dir) / "file.txt"
 if path.exists():
     ...
@@ -108,6 +110,7 @@ Use built-in types instead of `typing` imports.
 ```python
 from typing import List, Dict, Optional
 
+
 def process(data: Dict[str, Any]) -> Optional[int]:
     return data.get("id")
 ```
@@ -115,6 +118,7 @@ def process(data: Dict[str, Any]) -> Optional[int]:
 **Good:**
 ```python
 from typing import Any
+
 
 def process(data: dict[str, Any]) -> int | None:
     return data.get("id")
@@ -126,6 +130,7 @@ Use `|` instead of `Union` or `Optional`.
 **Bad:**
 ```python
 from typing import Union, Optional
+
 
 def find(id: int) -> Optional[User]: ...
 def parse(value: Union[str, int]) -> str: ...
@@ -165,6 +170,7 @@ Use `@dataclass` for data containers. It automatically has `__init__`, `__repr__
 **Good:**
 ```python
 from dataclasses import dataclass
+
 
 @dataclass(frozen=True)
 class User:
@@ -230,6 +236,7 @@ print(f"Processing user {user_id}")
 **Good:**
 ```python
 import logging
+
 logger = logging.getLogger(__name__)
 
 logger.info("Processing user %s", user_id)
@@ -323,6 +330,7 @@ DB_URL = "postgres://user:pass@localhost:5432/db"
 **Good:**
 ```python
 import os
+
 DB_URL = os.environ.get("DB_URL")
 ```
 
