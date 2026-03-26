@@ -16,6 +16,8 @@ const UNKNOWN_NOTEBOOK: Notebook = {
   token: "",
   status: "UNKNOWN",
   path: "",
+  tier: null,
+  gpu: false,
 }
 
 const STATUS_CONFIG = {
@@ -111,7 +113,7 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
 
   const respawnNotebook = async () => {
     await stopNotebook.mutateAsync()
-    await spawnNotebook.mutateAsync()
+    await spawnNotebook.mutateAsync({})
   }
 
   const statusConfig = useMemo(() => STATUS_CONFIG[displayStatus] || STATUS_CONFIG.UNKNOWN, [displayStatus])
