@@ -2,6 +2,9 @@ import logging
 import os
 from pathlib import Path
 
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
+from alembic.util.exc import CommandError
 from config import DATA_DIR, LOG_FORMAT, LOG_LEVEL
 from extensions import db, ma, migrate
 from flask import Flask
@@ -62,16 +65,19 @@ def create_app() -> Flask:
     with app.app_context():
         try:
             logger.info("Running database migrations...")
+            # Restamp DB if it carries a revision from old auto-generated migrations
+            with db.engine.connect() as conn:
+                current_rev = MigrationContext.configure(conn).get_current_revision()
+            if current_rev is not None:
+                try:
+                    ScriptDirectory(str(MIGRATIONS_DIR)).get_revision(current_rev)
+                except CommandError:
+                    logger.info("Unknown DB revision; restamping to migration baseline...")
+                    stamp(directory=str(MIGRATIONS_DIR), revision="001", purge=True)
             upgrade(directory=str(MIGRATIONS_DIR))
         except (Exception, SystemExit) as e:
-            if "Can't locate revision" in str(e):
-                # DB was stamped by old auto-generated migrations; restamp to our baseline and upgrade
-                logger.info("Unknown revision in DB; restamping to migration baseline...")
-                stamp(directory=str(MIGRATIONS_DIR), revision="001")
-                upgrade(directory=str(MIGRATIONS_DIR))
-            else:
-                logger.warning(f"Migration upgrade failed: {e}, falling back to create_all()")
-                db.create_all()
+            logger.warning(f"Migration upgrade failed: {e}, falling back to create_all()")
+            db.create_all()
 
     # Alembic may tweak logging handlers; restore our configuration afterwards
     configure_logging(LOG_FORMAT, LOG_LEVEL)
