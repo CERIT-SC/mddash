@@ -15,7 +15,7 @@ import {
 
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
-import { getPodStatusVariant, type Notebook, type TierInfo } from "@/util/types"
+import { getPodStatusVariant, type Notebook, type NotebookTier, type TierInfo } from "@/util/types"
 import { useNotebook, useNotebookConfig, useSpawnNotebook, useStopNotebook } from "@/hooks/use-notebook"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -103,7 +103,7 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
   const spawnNotebook = useSpawnNotebook(experimentId)
   const stopNotebook = useStopNotebook(experimentId)
 
-  const [selectedTier, setSelectedTier] = useState<string>("")
+  const [selectedTier, setSelectedTier] = useState<NotebookTier | "">("")
   const [gpuEnabled, setGpuEnabled] = useState(false)
 
   // Initialize selectedTier from config when it loads
@@ -180,7 +180,7 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
             <div className="flex w-full flex-col items-center gap-3">
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <span className="text-muted-foreground text-sm">Size:</span>
-                <Select value={selectedTier} onValueChange={setSelectedTier}>
+                <Select value={selectedTier} onValueChange={(v) => setSelectedTier(v as NotebookTier)}>
                   <SelectTrigger size="sm" className="w-48">
                     <SelectValue />
                   </SelectTrigger>
@@ -205,7 +205,7 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
               </div>
               <Button
                 variant="default"
-                onClick={() => spawnNotebook.mutate({ tier: selectedTier, gpu: gpuEnabled })}
+                onClick={() => spawnNotebook.mutate({ tier: selectedTier || undefined, gpu: gpuEnabled })}
                 disabled={spawnNotebook.isPending}
               >
                 <Play className="mr-1 h-4 w-4" />
