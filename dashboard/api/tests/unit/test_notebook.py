@@ -108,6 +108,7 @@ class TestNotebookStartTierAndGpu:
         with (
             patch("models.notebook.k8s.count_notebook_pods", return_value=0),
             patch("models.notebook.MAX_NOTEBOOKS", 2),
+            patch("models.notebook.GPU_TYPE", "nvidia.com/gpu"),
             patch("models.notebook.k8s.check_quota_headroom", return_value=None),
             patch("models.notebook.get_tier_resources", return_value=(resources, resources)),
             patch("models.notebook.k8s.create_notebook_pod") as mock_create,
