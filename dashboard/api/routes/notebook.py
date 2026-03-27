@@ -75,7 +75,10 @@ def start_notebook(experiment_id: str) -> Response:
 
     body = request.get_json(silent=True) or {}
     tier_str = body.get("tier")
-    gpu = bool(body.get("gpu", False))
+    gpu_value = body.get("gpu", False)
+    if "gpu" in body and not isinstance(gpu_value, bool):
+        raise BadRequest(description="Field 'gpu' must be a JSON boolean.")
+    gpu = gpu_value
 
     try:
         tier = NotebookTier(tier_str) if tier_str else None
