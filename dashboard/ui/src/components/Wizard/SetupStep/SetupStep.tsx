@@ -5,9 +5,8 @@ import { SkipForward } from "lucide-react"
 import { formatDateTime } from "@/util/helpers"
 import { Button } from "@/components/ui/button"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import NotebookController from "@/components/NotebookController"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
-
-import NotebookController from "./NotebookController"
 
 const SetupStep = (props: WizardStepProps) => {
   const { experiment, nextStep } = props

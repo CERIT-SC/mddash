@@ -6,6 +6,7 @@ import {
   ExternalLink,
   HelpCircle,
   Loader2,
+  MemoryStick,
   Play,
   Power,
   RefreshCw,
@@ -15,7 +16,7 @@ import {
 
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
-import { getPodStatusVariant, type Notebook, type NotebookTier, type TierInfo } from "@/util/types"
+import { getPodStatusVariant, type Notebook, type NotebookTier } from "@/util/types"
 import { useNotebook, useNotebookConfig, useSpawnNotebook, useStopNotebook } from "@/hooks/use-notebook"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -78,16 +79,12 @@ function formatCpu(cpu: string): string {
 }
 
 function formatMemory(mem: string): string {
-  if (mem.endsWith("Gi")) return `${parseFloat(mem)} GiB`
+  if (mem.endsWith("Gi")) return `${parseFloat(mem)} GB`
   if (mem.endsWith("Mi")) {
-    const gib = parseFloat(mem) / 1024
-    return `${gib.toFixed(1)} GiB`
+    const gb = parseFloat(mem) / 1024
+    return `${gb.toFixed(1)} GB`
   }
   return mem
-}
-
-function tierLabel(t: TierInfo): string {
-  return `${t.value}: ${formatCpu(t.cpuLimit)} / ${formatMemory(t.memoryLimit)}`
 }
 
 const NotebookController = ({ experimentId, className, compact = false }: NotebookControllerProps) => {
@@ -150,6 +147,8 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
   const isTransitioning = isTransitioning_status(displayStatus)
   const variant = getPodStatusVariant(displayStatus)
 
+  const runningTierInfo = notebook.tier ? config?.tiers.find((t) => t.value === notebook.tier) : null
+
   return (
     <div
       className={cn(
@@ -187,7 +186,9 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
                   <SelectContent>
                     {config.tiers.map((t) => (
                       <SelectItem key={t.value} value={t.value}>
-                        {tierLabel(t)}
+                        <span className="text-muted-foreground font-mono text-xs">{t.value}</span>
+                        {" · "}
+                        {formatCpu(t.cpuLimit)} / {formatMemory(t.memoryLimit)}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -221,15 +222,22 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
             </Button>
           )}
 
-          {displayStatus === "RUNNING" && (notebook.tier || notebook.gpu) && (
+          {displayStatus === "RUNNING" && (runningTierInfo || notebook.gpu) && (
             <div className="flex flex-wrap justify-center gap-1.5">
-              {notebook.tier && (
-                <Badge variant="outline" className="text-xs">
-                  {notebook.tier}
-                </Badge>
+              {runningTierInfo && (
+                <>
+                  <Badge variant="outline" className="text-xs">
+                    <Cpu className="mr-0.5 h-3 w-3" />
+                    {formatCpu(runningTierInfo.cpuLimit)}
+                  </Badge>
+                  <Badge variant="outline" className="text-xs">
+                    <MemoryStick className="mr-0.5 h-3 w-3" />
+                    {formatMemory(runningTierInfo.memoryLimit)}
+                  </Badge>
+                </>
               )}
               {notebook.gpu && (
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="secondary" className="text-xs">
                   <Cpu className="mr-0.5 h-3 w-3" />
                   GPU
                 </Badge>

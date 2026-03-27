@@ -2,7 +2,7 @@ import type { AnalysisPreprocessingMode as AnalysisPreprocessingModeValue } from
 import type { FileOption } from "@/util/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import FileSelector from "@/components/FileSelector"
-import NotebookController from "@/components/Wizard/SetupStep/NotebookController"
+import NotebookController from "@/components/NotebookController"
 
 interface AnalyzeSidebarProps {
   experimentId: string
