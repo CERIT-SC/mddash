@@ -1,5 +1,6 @@
 #!/bin/bash
-# Wrapper that activates binder environment before starting jupyter
+set -euo pipefail
+# Activates the binder environment (if installed) then starts Jupyter.
 
 WORKDIR="${WORKDIR:?Error: WORKDIR not set}"
 BINDER_ENV="${WORKDIR}/.binder-env"
@@ -17,5 +18,4 @@ else
     echo "Binder environment not found or incomplete, using base image Python"
 fi
 
-# Start jupyter with the original arguments
 exec start-notebook.py "$@"

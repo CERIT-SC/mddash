@@ -16,6 +16,7 @@ from config import (
     MEMORY_LIMIT_QUOTA,
     MEMORY_REQUEST_QUOTA,
     NAMESPACE,
+    NOTEBOOK_IDLE_TIMEOUT,
     NOTEBOOK_IMAGE,
     PVC_NAME,
 )
@@ -149,11 +150,15 @@ def create_notebook_pod(
 
     jupyter_command = [
         "start.sh",
-        "start-with-binder.sh",
+        "run-notebook.sh",
         f"--ServerApp.base_url={prefix}",
         f"--ServerApp.root_dir=/mddash/{experiment_id}",
         f"--ServerApp.token={token}",
         f"--NotebookApp.token={token}",
+        f"--MappingKernelManager.cull_idle_timeout={NOTEBOOK_IDLE_TIMEOUT}",
+        "--MappingKernelManager.cull_interval=120",
+        "--MappingKernelManager.cull_connected=True",
+        f"--ServerApp.shutdown_no_activity_timeout={NOTEBOOK_IDLE_TIMEOUT}",
     ]
     jupyter_env = [
         {"name": "WORKDIR", "value": f"/mddash/{experiment_id}"},
@@ -162,6 +167,7 @@ def create_notebook_pod(
             "name": "JUPYTER_PATH",
             "value": f"/mddash/{experiment_id}/.binder-env/share/jupyter:/opt/conda/share/jupyter",
         },
+        {"name": "MY_POD_NAME", "valueFrom": {"fieldRef": {"fieldPath": "metadata.name"}}},
     ]
     jupyter_container = get_container(
         "jupyter",
