@@ -124,3 +124,33 @@ class TestNotebookStartTierAndGpu:
             with pytest.raises(BadRequest):
                 Notebook.start(self._make_notebook(), tier="99x")
             mock_create.assert_not_called()
+
+
+class TestCreateNotebookPodLifecycleFlags:
+    """Verify that create_notebook_pod() injects idle-culling flags and MY_POD_NAME into the pod spec."""
+
+    def test_lifecycle_flags_in_pod_spec(self) -> None:
+        """create_notebook_pod() must include cull_idle_timeout, shutdown_no_activity_timeout, and MY_POD_NAME."""
+        from clients.k8s import create_notebook_pod
+
+        with (
+            patch("clients.k8s.ping_resource", return_value=False),
+            patch("clients.k8s.core_v1") as mock_core,
+        ):
+            create_notebook_pod(
+                name="notebook-test",
+                experiment_id="test",
+                prefix="/notebook/test",
+                token="tok",
+            )
+
+        body = mock_core.create_namespaced_pod.call_args.kwargs["body"]
+        jupyter_container = next(c for c in body["spec"]["containers"] if c["name"] == "jupyter")
+
+        assert any("--MappingKernelManager.cull_idle_timeout=" in arg for arg in jupyter_container["command"])
+        assert any("--ServerApp.shutdown_no_activity_timeout=" in arg for arg in jupyter_container["command"])
+        assert any(
+            env.get("name") == "MY_POD_NAME"
+            and env.get("valueFrom", {}).get("fieldRef", {}).get("fieldPath") == "metadata.name"
+            for env in jupyter_container["env"]
+        )
