@@ -1,6 +1,7 @@
 import json
 import logging
 import uuid
+from http import HTTPStatus
 
 import requests
 from requests.exceptions import RequestException
@@ -49,7 +50,8 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
             3,
         )
 
-        # Insert new route
+        # Remove stale route with the same ID (e.g. left behind after idle culling), then insert fresh
+        routes[:] = [r for r in routes if r.get("@id") != route_id]
         routes.insert(dash_index, new_route)
 
         # Update Caddy config
@@ -77,6 +79,8 @@ def remove_route(route_id: str) -> bool:
 
     try:
         response = requests.delete(url, timeout=5)
+        if response.status_code == HTTPStatus.NOT_FOUND:
+            return True  # already gone — idempotent
         response.raise_for_status()
         return True
     except RequestException:
