@@ -96,6 +96,8 @@ jupyterhub:
         value: "{{ $cfg.resources.notebook.gmxCpuLimit }}"
       GMX_MEMORY_LIMIT:
         value: "{{ $cfg.resources.notebook.gmxMemoryLimit }}"
+      NOTEBOOK_IDLE_TIMEOUT:
+        value: "{{ $cfg.resources.notebook.idleTimeoutSeconds }}"
 
       ANALYSIS_CPU_REQUEST:
         value: "{{ $cfg.resources.analysisJob.cpuRequest }}"

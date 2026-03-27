@@ -174,8 +174,8 @@ class Notebook(db.Model):  # type: ignore
 
     def stop(self) -> None:
         """Stop the notebook pod and service, and remove the route from Caddy."""
-        if self.status not in {PodStatus.RUNNING, PodStatus.PENDING}:
-            logger.warning(f"Notebook {self.experiment_id} is not running. No action taken.")
+        if self.status == PodStatus.UNKNOWN:
+            logger.warning(f"Notebook {self.experiment_id} status unknown. No action taken.")
             return
 
         pod_name = f"notebook-{self.experiment_id}"
@@ -183,7 +183,7 @@ class Notebook(db.Model):  # type: ignore
         route_id = f"route-{self.experiment_id}-notebook"
 
         try:
-            k8s.delete_pod(pod_name)
+            k8s.delete_pod(pod_name)  # noop if pod already gone (e.g. idle-culled)
         except Exception:
             logger.exception("Failed to delete notebook pod.")
 

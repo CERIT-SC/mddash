@@ -84,6 +84,8 @@ resources:
     # Max concurrent notebook pods per user namespace
     maxConcurrent: 1
   notebook:
+    # Idle timeout in seconds: kernels are culled and the server shuts down after this period
+    idleTimeoutSeconds: 600
     # jupyter container — limits allow burst above scheduling baseline
     cpuRequest: "200m"
     memoryRequest: "512Mi"

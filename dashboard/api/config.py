@@ -21,6 +21,7 @@ DATA_DIR = Path(os.environ.get("DATA_DIR", "/mddash"))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 NOTEBOOK_IMAGE = os.environ.get("NOTEBOOK_IMAGE", "quay.io/jupyter/base-notebook")
+NOTEBOOK_IDLE_TIMEOUT = int(os.environ.get("NOTEBOOK_IDLE_TIMEOUT", "3600"))
 GMX_IMAGE = os.environ.get("GMX_IMAGE", "")
 GPU_TYPE = os.environ.get("GPU_TYPE", "")
 ANALYSIS_IMAGE = os.environ.get("ANALYSIS_IMAGE", "ghcr.io/mmb-irb/mddb_wf")
