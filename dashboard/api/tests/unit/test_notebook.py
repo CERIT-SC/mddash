@@ -4,6 +4,7 @@ from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
+from clients.k8s import create_notebook_pod
 from enums import NotebookTier
 from models.notebook import Notebook
 from werkzeug.exceptions import BadRequest, Forbidden
@@ -131,8 +132,6 @@ class TestCreateNotebookPodLifecycleFlags:
 
     def test_lifecycle_flags_in_pod_spec(self) -> None:
         """create_notebook_pod() must include cull_idle_timeout, shutdown_no_activity_timeout, and MY_POD_NAME."""
-        from clients.k8s import create_notebook_pod
-
         with (
             patch("clients.k8s.ping_resource", return_value=False),
             patch("clients.k8s.core_v1") as mock_core,

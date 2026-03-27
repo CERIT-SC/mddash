@@ -40,7 +40,10 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
 
         routes = config["apps"]["http"]["servers"]["srv0"]["routes"]
 
-        # Find dash route index
+        # Remove stale route with the same ID (e.g. left behind after idle culling)
+        routes[:] = [r for r in routes if r.get("@id") != route_id]
+
+        # Find dash route index after filtering so the insert position is correct
         dash_index = next(
             (
                 i
@@ -49,9 +52,6 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
             ),
             3,
         )
-
-        # Remove stale route with the same ID (e.g. left behind after idle culling), then insert fresh
-        routes[:] = [r for r in routes if r.get("@id") != route_id]
         routes.insert(dash_index, new_route)
 
         # Update Caddy config
