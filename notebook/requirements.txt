@@ -1,3 +1,4 @@
+setuptools
 GromacsWrapper
 mdtraj
 nglview<4.0  # TODO: update once `nglview-js-widgets>=4.0` is released on npm
