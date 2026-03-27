@@ -1,7 +1,5 @@
 # Resource Management
 
-This document explains the resource budget model for user namespaces, how to calculate the correct quota values, and how to configure them.
-
 ## Namespace structure
 
 Each user gets an isolated Kubernetes namespace (`{helm-package}-user-{username}-ns`) managed by JupyterHub's pre-spawn hook. Two categories of workload run there:
@@ -11,13 +9,11 @@ Each user gets an isolated Kubernetes namespace (`{helm-package}-user-{username}
 | Always-on | While the user is logged in | JupyterHub singleuser pod + sidecars (proxy, auth, api, s3sync) |
 | On-demand | User-initiated, short to long-lived | Notebook pods, analysis jobs |
 
-All resource quotas below refer to this **user namespace**. The hub namespace (`md-dashboard-ns`) hosts JupyterHub itself, mdrun-api, and the GROMACS tuner — those are not covered by per-user quotas.
+The hub namespace (`md-dashboard-ns`) hosts JupyterHub itself, mdrun-api, and the GROMACS tuner — those are not covered by per-user quotas.
 
 ---
 
 ## Fixed overhead (always-on)
-
-These containers are present for every logged-in user.
 
 ### JupyterHub singleuser container
 
@@ -46,19 +42,19 @@ Configured via `resources.singleuser` in `config.yaml`.
 
 ### Notebook pods
 
-Each notebook pod consists of two containers. Resources are configured via `resources.notebook` in `config.yaml` and flow through the Helm chart into the API sidecar's environment.
+Resources are configured via `resources.notebook` in `config.yaml`.
 
 | Container | CPU req | Mem req | CPU lim | Mem lim |
 |---|---|---|---|---|
-| jupyter | 200m | 512Mi | 2000m | 4Gi |
-| gmx | 100m | 256Mi | 2000m | 2Gi |
-| **Per notebook** | **300m** | **768Mi** | **4000m** | **6Gi** |
+| jupyter | 500m | 1Gi | 5000m | 8Gi |
+| gmx | 100m | 256Mi | 4000m | 8Gi |
+| **Per notebook** | **600m** | **~1.25Gi** | **9000m** | **16Gi** |
 
-**Why gmx has a high CPU limit:** GROMACS is run with MPI/OpenMP inside this container. CPU throttling causes rank starvation and produces incorrect simulation results. The limit is set high relative to the request to allow full CPU burst during simulations without scheduling burdens from a large guaranteed reservation.
+**Why gmx has a high CPU limit:** GROMACS is run with MPI/OpenMP inside this container. CPU throttling causes rank starvation and produces incorrect simulation results.
 
-**Why jupyter limits are generous:** Jupyter notebooks run user-written Python code that can spike in memory (e.g. loading a large trajectory). A hard limit of 4Gi prevents a runaway computation from OOMKilling other pods, while still allowing reasonable burst.
+**Why jupyter limits are generous:** User notebooks can spike in memory (e.g. loading a large trajectory). The 8Gi limit prevents a runaway computation from OOMKilling other pods.
 
-The maximum number of concurrent notebook pods per user is controlled by `resources.notebookQuota.maxConcurrent` in `config.yaml`. The API enforces this limit proactively before attempting pod creation.
+`resources.notebookQuota.maxConcurrent` sets the API-enforced count limit on concurrent notebook pods. It is sized so that `maxConcurrent` notebooks at the **4x tier** fit within the namespace quota — the same quota headroom fits `maxConcurrent × 4` notebooks at 1x tier.
 
 ### Analysis jobs
 
@@ -67,119 +63,57 @@ The maximum number of concurrent notebook pods per user is controlled by `resour
 | Request | 1000m | 2Gi |
 | Limit | 4000m | 8Gi |
 
-These are batch jobs (mddb_wf) that run to completion and are then deleted. Only one analysis job per experiment can be active at a time (enforced by job naming).
+Batch jobs (mddb_wf). Only one analysis job per experiment can be active at a time (enforced by job naming).
 
 ---
 
 ## Quota formula
 
-The namespace quota values (`NS_REQUESTS_CPU`, `NS_LIMITS_CPU`, etc.) should be set to cover simultaneous full load:
-
 ```
-# fixed_base = sidecars + JupyterHub singleuser (always-on, 80m+200m = 280m / 272Mi+512Mi = 784Mi)
-requests_cpu = fixed_base (280m)
-             + MAX_NOTEBOOKS × 300m
-             + analysis_headroom (1000m)
-
-requests_mem = fixed_base (784Mi)
-             + MAX_NOTEBOOKS × 768Mi
-             + analysis_headroom (2Gi)
-
-limits_cpu   = sidecar_base (650m)
-             + singleuser (1000m)
-             + MAX_NOTEBOOKS × 4000m
-             + analysis_limit (4000m)
-
-limits_mem   = sidecar_base (928Mi)
-             + singleuser (4Gi)
-             + MAX_NOTEBOOKS × 6Gi
-             + analysis_limit (8Gi)
+# fixed_base = sidecars + singleuser = 280m CPU / 784Mi memory
+requests_cpu = fixed_base (280m)     + MAX_NOTEBOOKS × 600m    + analysis (1000m)
+requests_mem = fixed_base (784Mi)    + MAX_NOTEBOOKS × 1280Mi  + analysis (2Gi)
+limits_cpu   = fixed_base (1650m)    + MAX_NOTEBOOKS × 9000m   + analysis (4000m)
+limits_mem   = fixed_base (~4.9Gi)   + MAX_NOTEBOOKS × 16Gi    + analysis (8Gi)
 ```
 
-### With `MAX_NOTEBOOKS = 2` (default)
+Tiers multiply the per-notebook values linearly (2x tier → ×2, 4x → ×4). Size the quota for the worst case: `MAX_NOTEBOOKS` all at 4x.
 
-| | Requests (from formula) | Limits (from formula) |
-|---|---|---|
-| CPU | ~1880m | ~13650m |
-| Memory | ~4.3Gi | ~25Gi |
+### With `MAX_NOTEBOOKS = 1` (default)
 
-Set `resources.namespaceQuota.*` in `config.dev.yaml` / `config.yaml` to values ≥ these formula minimums, rounded up to your node size and multi-tenancy requirements.
+| | Requests | Limits (1x tier) | Limits (4x tier — quota target) |
+|---|---|---|---|
+| CPU | ~1880m | ~14650m | ~41650m |
+| Memory | ~4Gi | ~29Gi | ~77Gi |
 
----
+**Namespace limits quota must be ≥ sum of all container limits at full load.** If smaller, users hit 403 errors even when individual pods are within their own limits.
 
-## Requests vs limits
-
-| Concept | Purpose | Behavior on breach |
-|---|---|---|
-| Request | Scheduler placement; proportional CPU share under contention | Pod not scheduled if node lacks capacity |
-| Limit | Hard per-container ceiling | CPU → throttled (silent slowdown); Memory → OOMKill |
-| Namespace requests quota | Cluster-level scheduling budget | Pod creation rejected (403) if quota exhausted |
-| Namespace limits quota | Hard ceiling across all containers | Pod creation rejected (403) if quota exhausted |
-
-**Key insight:** Namespace limits quota must be ≥ sum of all container limits at full load. If it is smaller than this sum, users will hit 403 errors even when pods are within their individual limits. The formula above ensures consistency.
+Set `resources.namespaceQuota.*` in `config.yaml` (or `config.dev.yaml`) to values ≥ the 4x tier column, rounded up to your node size.
 
 ---
 
 ## Setting quotas in Rancher
 
-1. Edit `resources.namespaceQuota.*` in `config.yaml` (or `config.dev.yaml` for dev).
-2. Run `make deploy` — the template renders these values into the hub's `extraEnv`, which the pre-spawn hook reads when creating user namespaces.
-3. **Existing user namespaces** are only updated when the user logs out and back in (the pre-spawn hook recreates the namespace quota annotation on next login). To force immediate update, patch the namespace annotation manually or delete the namespace (it will be recreated on next login).
+1. Edit `resources.namespaceQuota.*` in `config.yaml`.
+2. Run `make deploy` — renders values into the hub's `extraEnv`; the pre-spawn hook applies them when creating user namespaces.
+3. **Existing namespaces** are only updated on next login. To force an immediate update, patch the namespace annotation manually or delete the namespace.
 
 ### Using `make resources`
 
 ```
-make resources        # uses ENV=dev (current branch)
+make resources  # uses ENV=dev
 make resources ENV=prod
 ```
 
-Output shows:
-1. Per-component resource breakdown (user pod, notebooks, analysis jobs, hub services)
-2. Recommended namespace quota minimums from the formula
-3. A comparison against the configured `resources.namespaceQuota.*` values
-
-Use this before setting Rancher quotas to verify the configured values cover the formula minimums.
+Prints per-component breakdown, formula minimums, and a comparison against the configured quota values. Run this before setting Rancher quotas.
 
 ---
 
 ## Notebook resource tiers
 
-Users can choose between three resource tiers when starting a notebook: **1x** (base), **2x**, and **4x**. Tiers are multipliers applied to the base resource values defined in `config.yaml`. An optional **GPU toggle** attaches a single GPU to the gmx sidecar container.
-
-### How tiers work
-
-The base resources in `resources.notebook` (cpuRequest, memoryRequest, etc.) represent the 1x tier. The API multiplies all CPU and memory values by the tier factor at runtime. No per-tier configuration in config.yaml is needed.
-
-| Tier | CPU multiplier | Memory multiplier |
-|------|---------------|------------------|
-| 1x | 1× | 1× |
-| 2x | 2× | 2× |
-| 4x | 4× | 4× |
-
-### GPU support
-
-The UI always shows a GPU checkbox. When enabled, the GPU resource defined by the `gpuType` config key (rendered to the `GPU_TYPE` environment variable, e.g. `nvidia.com/mig-1g.10gb`) is added to the gmx container's requests and limits as `"1"`. GPU is independent of the tier selection.
-
-### Updated quota formula
-
-The namespace quota must cover the **worst case**: all `MAX_NOTEBOOKS` at the highest tier (4x):
-
-```
-requests_cpu = fixed_base (280m)
-             + MAX_NOTEBOOKS × 4 × (base_nb_req + base_gmx_req)
-             + analysis_headroom (1000m)
-
-limits_cpu   = sidecar_base (650m)
-             + singleuser (1000m)
-             + MAX_NOTEBOOKS × 4 × (base_nb_lim + base_gmx_lim)
-             + analysis_limit (4000m)
-```
-
-GPU resources use a separate Kubernetes resource name and do not count toward CPU/memory quota.
+Users choose between **1x**, **2x**, and **4x** tiers when starting a notebook. The API multiplies all CPU and memory values in `resources.notebook` by the tier factor at runtime — no per-tier config needed. An optional **GPU toggle** attaches a single GPU (`gpuType` config key → `GPU_TYPE` env var, e.g. `nvidia.com/mig-1g.10gb`) to the gmx container, independent of tier. GPU resources use a separate Kubernetes resource name and do not count toward CPU/memory quota.
 
 ### Pod labels
-
-Notebook pods carry `tier` and `gpu` labels alongside the existing `type: notebook`:
 
 ```yaml
 labels:
@@ -190,7 +124,7 @@ labels:
 
 ### Database columns
 
-The `notebooks` table has `tier` (enum: 1x, 2x, 4x) and `gpu` (boolean) columns so the frontend can display the active tier for a running notebook.
+The `notebooks` table has `tier` (enum: 1x, 2x, 4x) and `gpu` (boolean) columns.
 
 ### API endpoints
 
