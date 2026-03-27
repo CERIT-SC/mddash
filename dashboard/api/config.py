@@ -78,6 +78,7 @@ GMX_RESOURCES: dict[str, dict[str, str]] = {
     "limits": {"cpu": os.environ.get("GMX_CPU_LIMIT", ""), "memory": os.environ.get("GMX_MEMORY_LIMIT", "")},
 }
 
+
 ANALYSIS_RESOURCES: dict[str, dict[str, str]] = {
     "requests": {
         "cpu": os.environ.get("ANALYSIS_CPU_REQUEST", ""),
@@ -88,6 +89,7 @@ ANALYSIS_RESOURCES: dict[str, dict[str, str]] = {
 
 if not all(v for r in (NOTEBOOK_RESOURCES, GMX_RESOURCES, ANALYSIS_RESOURCES) for d in r.values() for v in d.values()):
     logger.warning("Pod resource env vars are not fully set. Pods may be created without resource constraints.")
+
 
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
 

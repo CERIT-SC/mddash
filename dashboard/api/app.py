@@ -1,12 +1,14 @@
 import logging
 import os
-import shutil
+from pathlib import Path
 
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
+from alembic.util.exc import CommandError
 from config import DATA_DIR, LOG_FORMAT, LOG_LEVEL
 from extensions import db, ma, migrate
 from flask import Flask
-from flask_migrate import init, upgrade
-from flask_migrate import migrate as flask_migrate
+from flask_migrate import stamp, upgrade
 from logging_utils import configure_logging, enable_loggers
 from routes import (
     analysis_bp,
@@ -16,11 +18,15 @@ from routes import (
     mdrepo_bp,
     misc_bp,
     notebook_bp,
+    notebook_config_bp,
     tuner_bp,
 )
+from sqlalchemy import inspect as sa_inspect
 from utils import start_du_monitor
 
 logger = logging.getLogger(__name__)
+
+MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
 def create_app() -> Flask:
@@ -34,7 +40,6 @@ def create_app() -> Flask:
 
     # Configuration
     db_path = DATA_DIR / "experiments.db"
-    migrations_dir = DATA_DIR / "migrations"
     app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
@@ -48,11 +53,12 @@ def create_app() -> Flask:
     # Initialize extensions
     db.init_app(app)
     ma.init_app(app)
-    migrate.init_app(app, db, directory=str(migrations_dir))
+    migrate.init_app(app, db, directory=str(MIGRATIONS_DIR))
 
     app.register_blueprint(analysis_bp)
     app.register_blueprint(experiments_bp)
     app.register_blueprint(notebook_bp)
+    app.register_blueprint(notebook_config_bp)
     app.register_blueprint(tuner_bp)
     app.register_blueprint(gmx_bp)
     app.register_blueprint(files_bp)
@@ -60,37 +66,24 @@ def create_app() -> Flask:
     app.register_blueprint(mdrepo_bp)
 
     with app.app_context():
-        alembic_ini = migrations_dir / "alembic.ini"
-        if not alembic_ini.exists():
-            logger.info("Initializing database migrations...")
-            try:
-                # Remove incomplete migrations directory if it exists without alembic.ini
-                if migrations_dir.exists():
-                    logger.warning("Removing incomplete migrations directory...")
-                    shutil.rmtree(migrations_dir)
-                init(directory=str(migrations_dir))
-                logger.info("Creating initial migration...")
-                flask_migrate(message="Initial migration")
-            except (Exception, SystemExit) as e:
-                logger.error(f"Failed to initialize migrations: {e}")
-                logger.info("Creating tables manually as a fallback...")
-                db.create_all()
-        else:
-            # Auto-generate migration if models have changed
-            try:
-                logger.info("Checking for model changes...")
-                flask_migrate(message="Auto-generated migration")
-                logger.info("New migration generated")
-            except (Exception, SystemExit) as e:
-                # Flask-Migrate returns error if no changes, so we log at debug
-                logger.debug(f"Migration check finished: {e}")
-
         try:
-            if alembic_ini.exists():
-                logger.info("Running database migrations...")
-                upgrade(directory=str(migrations_dir))
+            logger.info("Running database migrations...")
+            with db.engine.connect() as conn:
+                current_rev = MigrationContext.configure(conn).get_current_revision()
+            if current_rev is None:
+                # Unversioned DB that already has tables: stamp baseline so upgrade() doesn't
+                # try to re-create them (which would fail on existing tables).
+                if sa_inspect(db.engine).get_table_names():
+                    logger.info("Unversioned DB with tables; stamping to migration baseline...")
+                    stamp(directory=str(MIGRATIONS_DIR), revision="001", purge=True)
             else:
-                logger.warning("No migrations found, skipping upgrade")
+                try:
+                    ScriptDirectory(str(MIGRATIONS_DIR)).get_revision(current_rev)
+                except CommandError:
+                    # Revision from old auto-generated migrations that no longer exist
+                    logger.info("Unknown DB revision; restamping to migration baseline...")
+                    stamp(directory=str(MIGRATIONS_DIR), revision="001", purge=True)
+            upgrade(directory=str(MIGRATIONS_DIR))
         except (Exception, SystemExit) as e:
             logger.warning(f"Migration upgrade failed: {e}, falling back to create_all()")
             db.create_all()

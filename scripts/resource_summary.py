@@ -168,6 +168,7 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
     su_cpu_lim = parse_cpu(yq(".resources.singleuser.cpu.limit", config))
     su_mem_lim = parse_memory(yq(".resources.singleuser.memory.limit", config))
 
+    # Base notebook resources (1x tier)
     nb_cpu_req = parse_cpu(yq(".resources.notebook.cpuRequest", config))
     nb_mem_req = parse_memory(yq(".resources.notebook.memoryRequest", config))
     nb_cpu_lim = parse_cpu(yq(".resources.notebook.cpuLimit", config))
@@ -178,10 +179,16 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
     gmx_mem_lim = parse_memory(yq(".resources.notebook.gmxMemoryLimit", config))
     max_nb = int(yq(".resources.notebookQuota.maxConcurrent", config))
 
+    gpu_type = yq('.gpuType // ""', config)
+
     an_cpu_req = parse_cpu(yq(".resources.analysisJob.cpuRequest", config))
     an_mem_req = parse_memory(yq(".resources.analysisJob.memoryRequest", config))
     an_cpu_lim = parse_cpu(yq(".resources.analysisJob.cpuLimit", config))
     an_mem_lim = parse_memory(yq(".resources.analysisJob.memoryLimit", config))
+
+    # Tier multipliers
+    tiers = [1, 2, 4]
+    max_tier = max(tiers)
 
     print(f"\n  ── User namespace (per user, MAX_NOTEBOOKS={max_nb}) ──")
 
@@ -202,14 +209,29 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
     pod_mem_lim += su_mem_lim
     subtotal("User pod total", pod_cpu_req, pod_mem_req, pod_cpu_lim, pod_mem_lim)
 
-    section(f"Notebook pod  (on-demand, up to {max_nb} pods)")
-    row("jupyter", nb_cpu_req, nb_mem_req, nb_cpu_lim, nb_mem_lim, indent=1)
-    row("gmx", gmx_cpu_req, gmx_mem_req, gmx_cpu_lim, gmx_mem_lim, indent=1)
-    per_nb_cr = nb_cpu_req + gmx_cpu_req
-    per_nb_mr = nb_mem_req + gmx_mem_req
-    per_nb_cl = nb_cpu_lim + gmx_cpu_lim
-    per_nb_ml = nb_mem_lim + gmx_mem_lim
-    subtotal("Per notebook total", per_nb_cr, per_nb_mr, per_nb_cl, per_nb_ml)
+    print(f"\n  Notebook pod  (on-demand, up to {max_nb} pods, tiers: {', '.join(f'{t}x' for t in tiers)})")
+    for t in tiers:
+        section(f"  Tier {t}x")
+        t_nb_cr = nb_cpu_req * t
+        t_nb_mr = nb_mem_req * t
+        t_nb_cl = nb_cpu_lim * t
+        t_nb_ml = nb_mem_lim * t
+        t_gmx_cr = gmx_cpu_req * t
+        t_gmx_mr = gmx_mem_req * t
+        t_gmx_cl = gmx_cpu_lim * t
+        t_gmx_ml = gmx_mem_lim * t
+        row("jupyter", t_nb_cr, t_nb_mr, t_nb_cl, t_nb_ml, indent=2)
+        row("gmx", t_gmx_cr, t_gmx_mr, t_gmx_cl, t_gmx_ml, indent=2)
+        subtotal(f"Per notebook ({t}x)", t_nb_cr + t_gmx_cr, t_nb_mr + t_gmx_mr, t_nb_cl + t_gmx_cl, t_nb_ml + t_gmx_ml)
+
+    if gpu_type:
+        print(f"\n  GPU: 1x {gpu_type} (optional, added to gmx container when enabled)")
+
+    # Worst-case per notebook (highest tier)
+    per_nb_cr = (nb_cpu_req + gmx_cpu_req) * max_tier
+    per_nb_mr = (nb_mem_req + gmx_mem_req) * max_tier
+    per_nb_cl = (nb_cpu_lim + gmx_cpu_lim) * max_tier
+    per_nb_ml = (nb_mem_lim + gmx_mem_lim) * max_tier
 
     section("Analysis job  (on-demand, 1 at a time)")
     row("analysis", an_cpu_req, an_mem_req, an_cpu_lim, an_mem_lim, indent=1)
@@ -221,10 +243,10 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
 
     print()
     print("  " + "═" * (COL + W * 4 + 4))
-    row("USER NAMESPACE TOTAL", total_u_cr, total_u_mr, total_u_cl, total_u_ml)
+    row(f"USER NAMESPACE TOTAL (worst-case: {max_tier}x)", total_u_cr, total_u_mr, total_u_cl, total_u_ml)
 
     print()
-    print("  User namespace quota comparison:")
+    print("  User namespace quota comparison (worst-case: all notebooks at highest tier):")
     ok_u = all([
         compare_quota("NS_REQUESTS_CPU", total_u_cr, yq(".resources.namespaceQuota.requestsCpu", config), True),
         compare_quota("NS_REQUESTS_MEMORY", total_u_mr, yq(".resources.namespaceQuota.requestsMemory", config), False),

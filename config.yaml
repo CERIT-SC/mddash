@@ -82,7 +82,7 @@ resources:
       limit: 1
   notebookQuota:
     # Max concurrent notebook pods per user namespace
-    maxConcurrent: 2
+    maxConcurrent: 1
   notebook:
     # jupyter container — limits allow burst above scheduling baseline
     cpuRequest: "500m"
@@ -94,6 +94,7 @@ resources:
     gmxMemoryRequest: "256Mi"
     gmxCpuLimit: "4000m"
     gmxMemoryLimit: "8Gi"
+
   analysisJob:
     cpuRequest: "1000m"
     memoryRequest: "2Gi"
@@ -101,11 +102,11 @@ resources:
     memoryLimit: "8Gi"
   namespaceQuota:
     # requests = expected simultaneous usage; formula: see doc/resource-management.md
-    requestsCpu: "2500m"
+    requestsCpu: "4000m"
     requestsMemory: "8Gi"
-    # limits = sum of all container limits at full load (hard ceiling per namespace)
-    limitsCpu: "32000m"
-    limitsMemory: "64Gi"
+    # limits = sum of all container limits at full load (1 notebook at 4x tier)
+    limitsCpu: "42000m"
+    limitsMemory: "80Gi"
   pvcStorageSize: 100Gi
 
 hub:
