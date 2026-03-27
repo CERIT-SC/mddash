@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 import { api } from "@/lib/http"
-import type { Notebook, NotebookConfig } from "@/util/types"
+import type { Notebook, NotebookConfig, NotebookTier } from "@/util/types"
 
 export function useNotebook(experimentId: string, refetchInterval: number | false = false) {
   return useQuery<Notebook>({
@@ -21,7 +21,7 @@ export function useNotebookConfig() {
   })
 }
 
-type SpawnParams = { tier?: string; gpu?: boolean }
+type SpawnParams = { tier?: NotebookTier; gpu?: boolean }
 
 export function useSpawnNotebook(experimentId: string) {
   const queryClient = useQueryClient()

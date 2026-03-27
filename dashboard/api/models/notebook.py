@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from clients import caddy, k8s
 from clients.k8s import parse_cpu, parse_memory
-from config import GMX_RESOURCES, MAX_NOTEBOOKS, NAMESPACE, NOTEBOOK_RESOURCES, PREFIX
+from config import GMX_RESOURCES, GPU_TYPE, MAX_NOTEBOOKS, NAMESPACE, NOTEBOOK_RESOURCES, PREFIX
 from enums import NotebookTier, PodStatus
 from extensions import db
 from kubernetes.client.rest import ApiException  # type: ignore
@@ -25,10 +25,12 @@ def _multiply_resource(value: str, factor: int) -> str:
     value = value.strip()
     if value.endswith("m"):
         return f"{int(value[:-1]) * factor}m"
-    if value.endswith("Gi"):
-        return f"{int(float(value[:-2]) * factor)}Gi"
-    if value.endswith("Mi"):
-        return f"{int(float(value[:-2]) * factor)}Mi"
+    if value.endswith("Gi") or value.endswith("Mi"):
+        # Use parse_memory to avoid int() truncating fractional Gi/Mi values
+        bytes_val = parse_memory(value) * factor
+        if bytes_val % (1024**3) == 0:
+            return f"{bytes_val // (1024**3)}Gi"
+        return f"{bytes_val // (1024**2)}Mi"
     # Plain number (CPU cores)
     return str(float(value) * factor)
 
@@ -113,6 +115,9 @@ class Notebook(db.Model):  # type: ignore
             except ValueError:
                 valid = ", ".join(t.value for t in NotebookTier)
                 raise BadRequest(description=f"Unknown notebook tier: {tier}. Available: {valid}")
+
+        if gpu and not GPU_TYPE:
+            raise BadRequest(description="GPU is not available in this environment.")
 
         self.tier = tier
         self.gpu = bool(gpu)

@@ -195,4 +195,4 @@ The `notebooks` table has `tier` (enum: 1x, 2x, 4x) and `gpu` (boolean) columns 
 ### API endpoints
 
 - `POST /api/.../notebook` — accepts optional `{"tier": "2x", "gpu": true}` JSON body
-- `GET /api/.../notebook-config` — returns available tiers and GPU availability
+- `GET /api/.../notebook-config` — returns available tiers and the default tier
