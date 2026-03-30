@@ -124,10 +124,9 @@ kubectl create secret generic oidc-credentials \
   --from-literal=client_secret="YOUR_CLIENT_SECRET" \
   -n ${NAMESPACE}
 
-# Kubeconfig for the cluster (used by the app to spawn resources)
-kubectl create secret generic ${PACKAGE}-kubeconfig-secret \
-  --from-file=config=$HOME/.kube/config \
-  -n ${NAMESPACE}
+# Hub service account RBAC (applied once by cluster admin, cluster-admin privileges required)
+kubectl apply -f helm/rbac/clusterrole.yaml
+kubectl apply -f helm/rbac/clusterrolebinding.yaml
 
 # S3 Credentials
 kubectl create secret generic ${PACKAGE}-s3-creds \

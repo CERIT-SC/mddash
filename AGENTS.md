@@ -112,7 +112,7 @@ sequenceDiagram
 - **MDRepo OAuth**: Separate OAuth flow managed by Dashboard API with tokens stored in Flask session (not database).
 
 ### Kubernetes Integration
-- **In-cluster Config Only**: Both Dashboard API and MDRun API call `config.load_incluster_config()` at module import. For local dev, use `load_kube_config()`.
+- **In-cluster Config Only**: Dashboard API, MDRun API, and the pre_spawn_hook all use `config.load_incluster_config()`. The hub pod's service account requires the ClusterRole defined in `helm/rbac/` to be applied by the cluster admin.
 - **Shared PVC**: All containers in user pod mount `/mddash` directory to a persistent volume for user data.
 - **Non-root Containers**: All containers run as UID 1000 with security context for e-INFRA compliance.
 - **Rancher-Specific Annotations**: User namespaces require `field.cattle.io/projectId` and `field.cattle.io/resourceQuota` annotations. Pre-spawn hook waits for Rancher conditions.

@@ -487,7 +487,7 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
 
     Creates user namespace, RBAC, PVC, S3 bucket, and configures sidecar containers.
     """
-    await config.load_kube_config(config_file="/home/jovyan/.kube/config")  # type: ignore[misc]
+    config.load_incluster_config()
     api_client = ApiClient()
     core_api = CoreV1Api(api_client)
     rbac_api = RbacAuthorizationV1Api(api_client)
@@ -619,7 +619,7 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # n
 
     Sets namespace quota to zero and deletes all pods to free resources.
     """
-    await config.load_kube_config(config_file="/home/jovyan/.kube/config")  # type: ignore[misc]
+    config.load_incluster_config()
     api_client = ApiClient()
     core_api = CoreV1Api(api_client)
 

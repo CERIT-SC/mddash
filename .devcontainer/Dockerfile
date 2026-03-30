@@ -28,5 +28,5 @@ USER vscode
 RUN python3 -m venv /home/vscode/.venv
 ENV PATH="/home/vscode/.venv/bin:$PATH"
 
-# Notify user to set up kubeconfig if not configured
+# Notify user to set up kubeconfig for local kubectl access (the deployed app uses in-cluster config)
 RUN echo '\n# Notify if kubeconfig is missing\nif ! kubectl config current-context >/dev/null 2>&1; then\n  echo "⚠️  No kubeconfig detected. Copy your kubeconfig to ~/.kube/config or set KUBECONFIG."\n  echo "    Example: mkdir -p ~/.kube && cp /path/to/your/kubeconfig ~/.kube/config"\nfi\n' >> /home/vscode/.bashrc

@@ -10,9 +10,10 @@ This Helm chart deploys JupyterHub with minimal configuration suitable for devel
 
 ## Quick Start
 
-1. **Get the kubeconfig from rancher and install it as a secret:**
+1. **Apply hub service account RBAC (requires cluster admin):**
    ```bash
-   make kubeconfig
+   kubectl apply -f helm/rbac/clusterrole.yaml
+   kubectl apply -f helm/rbac/clusterrolebinding.yaml
    ```
 
 2. **Deploy JupyterHub:**

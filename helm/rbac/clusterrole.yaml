@@ -1,0 +1,29 @@
+# Apply this file manually as a cluster admin before deploying the helm chart:
+#   kubectl apply -f helm/rbac/clusterrole.yaml
+#
+# This grants the JupyterHub hub service account the permissions it needs to
+# create per-user namespaces, RBAC, and PVCs at spawn time.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: mddash-hub
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["create", "get", "patch"]
+  - apiGroups: [""]
+    resources: ["resourcequotas"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create", "get", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles"]
+    # escalate is required to create roles that grant permissions the hub itself holds
+    verbs: ["create", "get", "list", "escalate"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["rolebindings"]
+    verbs: ["create", "get", "list"]

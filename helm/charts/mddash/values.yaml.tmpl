@@ -157,16 +157,10 @@ jupyterhub:
             key: password
 
     extraVolumes:
-      - name: kubeconfig
-        secret:
-          secretName: {{ $helmPackage }}-kubeconfig-secret
       - name: custom-templates
         configMap:
           name: {{ $helmPackage }}-custom-templates  # created in Makefile
     extraVolumeMounts:
-      - name: kubeconfig
-        mountPath: /home/jovyan/.kube
-        readOnly: true
       - name: custom-templates
         mountPath: /opt/jupyterhub/custom-templates
 
