@@ -157,23 +157,12 @@ jupyterhub:
             key: password
 
     extraVolumes:
-      - name: kubeconfig
-        secret:
-          secretName: {{ $helmPackage }}-kubeconfig-secret
       - name: custom-templates
         configMap:
           name: {{ $helmPackage }}-custom-templates  # created in Makefile
-      - name: jwt-cert
-        configMap:
-          name: {{ $helmPackage }}-jwt-cert # created in Makefile
     extraVolumeMounts:
-      - name: kubeconfig
-        mountPath: /home/jovyan/.kube
-        readOnly: true
       - name: custom-templates
         mountPath: /opt/jupyterhub/custom-templates
-      - name: jwt-cert
-        mountPath: /opt/jupyterhub/jwt-cert
 
     extraConfig:
       oauth-client-secret: |
@@ -275,7 +264,7 @@ jupyterhub:
 mdrun-api:
   image:
     repository: {{ $cfg.mdrunApi.image }}
-    tag: "{{ $imageTag }}"
+    tag: "{{ $cfg.mdrunApi.tag | default $imageTag }}"
     pullPolicy: Always
   storage:
     size: {{ $cfg.mdrunApi.storage.size }}

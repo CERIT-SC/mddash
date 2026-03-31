@@ -1,7 +1,6 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-ns ?= md-dashboard-ns
 package = mddash
 chart_path = charts/mddash
 kubeconfig_path = ../private/kuba-cluster.yaml
@@ -15,7 +14,8 @@ else
   IMAGE_TAG ?= $(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD)
 endif
 
-config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
+# config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
+config := $(if $(wildcard ../config.${ENV}.yaml),../config.${ENV}.yaml,../config.yaml)
 package := $(shell yq .helm.package $(config))
 namespace := $(shell yq '.namespace' $(config))
 chart_path := charts/mddash
@@ -35,13 +35,25 @@ render: ## Render Helm values template
 	@echo "✓ Rendered $(chart_path)/values.yaml"
 
 .PHONY: install
-install: render update hub-templates ## Install Helm chart
+install: render update hub-templates tuner-auth ## Install Helm chart
 	helm install $(package) $(chart_path) --namespace $(namespace) \
 		$(values_file) \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 
+.PHONY: tuner-auth
+tuner-auth: ## Create tuner-auth secret if it does not exist
+	@if kubectl get secret tuner-auth -n $(namespace) --ignore-not-found=true -o name | grep -q tuner-auth; then \
+		echo "Secret tuner-auth already exists in $(namespace)"; \
+	else \
+		echo "Creating tuner-auth secret in $(namespace)..."; \
+		kubectl -n $(namespace) create secret generic tuner-auth \
+			--from-literal=user=tuner \
+			--from-literal=password=$(shell openssl rand -base64 32) \
+			--dry-run=client -o yaml | kubectl apply -f -; \
+	fi
+
 .PHONY: upgrade
-upgrade: render hub-templates ## Upgrade Helm release
+upgrade: render hub-templates tuner-auth ## Upgrade Helm release
 	helm upgrade $(package) $(chart_path) --namespace $(namespace) \
 		$(values_file) \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
@@ -67,35 +79,24 @@ hub-templates: ## Create hub templates ConfigMap
 		--from-file=$(chart_path)/files/hub-templates \
 		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
 
-# XXX: make cert, cf. ../jwt-auth
-jwt-cert: venv
-	. venv/bin/activate && venv/bin/python3 get_cert.py $(shell yq '.keyCloak.base' $(config))
-	kubectl create configmap $(package)-jwt-cert \
-		--from-file=cert.pem \
-		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
-
-
 .PHONY: port-forward
 port-forward: ## Forward port 8000 to proxy-public service
 	kubectl port-forward svc/proxy-public 8000:80 -n $(namespace)
 
-.PHONY: test
-test: ## Test Helm template rendering
-	helm template $(package) $(chart_path) --debug --namespace $(namespace) $(values_file)
-
 # provide ID= and SECRET= on command line
 oidcsecret:
-	kubectl -n ${ns} create secret generic oidc-credentials \
+	kubectl -n ${namespace} create secret generic oidc-credentials \
 		--from-literal=client_id=${ID} \
 		--from-literal=client_secret=${SECRET}
 
-port-forward:
-	kubectl port-forward svc/proxy-public 8000:80 -n $(ns)
+.PHONY: hub-rbac
+hub-rbac: ## Create ClusterRole and binding for hub to manage namespaces
+	kubectl apply -f hub-rbac.yaml
 
-kubeconfig:
-	kubectl create secret generic ${package}-kubeconfig-secret \
-		--from-file=config=$(kubeconfig_path) \
-		-n $(ns)
+#kubeconfig:
+#	kubectl create secret generic ${package}-kubeconfig-secret \
+#		--from-file=config=$(kubeconfig_path) \
+#		-n $(ns)
 
 venv:
 	python3 -m venv venv
