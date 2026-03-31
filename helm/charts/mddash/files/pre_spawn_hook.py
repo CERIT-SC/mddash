@@ -217,25 +217,16 @@ async def _wait_for_ns_conditions(
         ApiException: If the namespace read fails for any reason other than 403 or 404.
     """
     deadline = time.monotonic() + timeout_s
-    iteration = 0
-    debug_file = "/tmp/debug-ns-wait.log"
     while time.monotonic() < deadline:
         try:
             ns_obj = await core_api.read_namespace(name=namespace)  # type: ignore[misc]
             metadata = getattr(ns_obj, "metadata", None)
             annotations = getattr(metadata, "annotations", None) if metadata else None
-            with open(debug_file, "a") as f:
-                f.write(f"iter={iteration} ns={namespace} meta={metadata is not None} annos={list(annotations.keys()) if annotations else None}\n")
             if _ns_has_conditions(annotations, required):
-                with open(debug_file, "a") as f:
-                    f.write(f"SUCCESS ns={namespace} conditions={required}\n")
                 return
         except ApiException as e:
-            with open(debug_file, "a") as f:
-                f.write(f"APIEXCEPTION status={e.status}\n")
             if e.status not in {HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND}:
                 raise
-        iteration += 1
         await asyncio.sleep(interval)
 
     raise TimeoutError(
@@ -261,29 +252,18 @@ async def _wait_for_resource_quota_active(
         ApiException: If the API call fails for any reason other than 403 or 404.
     """
     deadline = time.monotonic() + timeout_s
-    iteration = 0
-    debug_file = "/tmp/debug-quota-wait.log"
     while time.monotonic() < deadline:
         try:
             quotas = await core_api.list_namespaced_resource_quota(namespace=namespace)
-            with open(debug_file, "a") as f:
-                f.write(f"quota iter={iteration} ns={namespace} items={len(quotas.items)}\n")
             for quota in quotas.items:
                 status_hard = getattr(getattr(quota, "status", None), "hard", None)
-                with open(debug_file, "a") as f:
-                    f.write(f"  quota {quota.metadata.name} status_hard={status_hard}\n")
                 if not status_hard:
                     continue
                 if status_hard.get("requests.cpu", "0") != "0" and status_hard.get("requests.memory", "0") != "0":
-                    with open(debug_file, "a") as f:
-                        f.write(f"  SUCCESS quota active\n")
                     return
         except ApiException as e:
-            with open(debug_file, "a") as f:
-                f.write(f"  APIEXCEPTION status={e.status}\n")
             if e.status not in {HTTPStatus.FORBIDDEN, HTTPStatus.NOT_FOUND}:
                 raise
-        iteration += 1
         await asyncio.sleep(interval)
 
     raise TimeoutError(f"Timed out after {timeout_s:.1f}s waiting for ResourceQuota in {namespace} to become active")
@@ -518,10 +498,6 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
     core_api = CoreV1Api()
     rbac_api = RbacAuthorizationV1Api()
 
-    debug_file = "/tmp/debug-spawn.log"
-    with open(debug_file, "a") as f:
-        f.write(f"pre_spawn_hook START\n")
-
     try:
         username: str = spawner.user.name  # type: ignore[union-attr]
         helm_package = getenv("HELM_PACKAGE", "mddash")
@@ -534,8 +510,6 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
         volume_name = "mddash-volume"
 
         # Create namespace with resource quotas
-        with open(debug_file, "a") as f:
-            f.write(f"creating namespace {user_namespace}\n")
         namespace_manifest = _get_namespace_manifest(
             user_namespace,
             rancher_project_id,
@@ -545,11 +519,7 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
             mem_request=getenv("NS_REQUESTS_MEMORY", "6Gi"),
         )
         await _ensure_resource(core_api.create_namespace, body=namespace_manifest)
-        with open(debug_file, "a") as f:
-            f.write(f"namespace created/exists, waiting for conditions\n")
         await _wait_for_ns_conditions(core_api, user_namespace, {"InitialRolesPopulated"})
-        with open(debug_file, "a") as f:
-            f.write(f"conditions met, patching namespace\n")
         await core_api.patch_namespace(name=user_namespace, body=namespace_manifest)  # type: ignore[misc]
 
         # Prepare resource names and manifests
@@ -565,8 +535,6 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
 
         # Create Roles first, then RoleBindings.
         # Some clusters (or admission webhooks) reject RoleBindings that reference Roles that haven't been created yet.
-        with open(debug_file, "a") as f:
-            f.write(f"creating roles and pvc\n")
         await asyncio.gather(
             _ensure_resource(
                 rbac_api.create_namespaced_role,
@@ -584,17 +552,11 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
                 body=pvc_manifest,
             ),
         )
-        with open(debug_file, "a") as f:
-            f.write(f"roles and pvc created\n")
 
-        with open(debug_file, "a") as f:
-            f.write(f"waiting for roles\n")
         await asyncio.gather(
             _wait_for_resource(rbac_api.read_namespaced_role, name=user_role, namespace=user_namespace),
             _wait_for_resource(rbac_api.read_namespaced_role, name=hub_role, namespace=user_namespace),
         )
-        with open(debug_file, "a") as f:
-            f.write(f"roles ready, creating rolebindings\n")
 
         await asyncio.gather(
             _ensure_resource(
@@ -608,21 +570,13 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
                 body=_get_role_binding_manifest(hub_binding, "hub", hub_role, namespace=hub_namespace),
             ),
         )
-        with open(debug_file, "a") as f:
-            f.write(f"rolebindings created\n")
 
-        with open(debug_file, "a") as f:
-            f.write(f"waiting for rolebindings\n")
         await asyncio.gather(
             _wait_for_resource(rbac_api.read_namespaced_role_binding, name=user_binding, namespace=user_namespace),
             _wait_for_resource(rbac_api.read_namespaced_role_binding, name=hub_binding, namespace=user_namespace),
         )
-        with open(debug_file, "a") as f:
-            f.write(f"rolebindings ready, waiting for quota\n")
 
         await _wait_for_resource_quota_active(core_api, user_namespace)
-        with open(debug_file, "a") as f:
-            f.write(f"quota active\n")
 
         # Configure spawner
         spawner.namespace = user_namespace
