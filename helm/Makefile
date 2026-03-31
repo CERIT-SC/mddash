@@ -10,9 +10,10 @@ else
   IMAGE_TAG ?= $(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD)
 endif
 
-config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
-package := $(shell yq .helm.package $(config))
-namespace := $(shell yq '.namespace' $(config))
+config = $(if $(filter dev,$(ENV)),../config.dev.yaml,$(if $(filter minikube,$(ENV)),../config.minikube.yaml,../config.yaml))
+package = $(shell yq .helm.package $(config))
+namespace = $(shell yq '.namespace' $(config))
+minikube_extra = $(if $(filter minikube,$(ENV)),-f $(chart_path)/values.minikube-overrides.yaml,)
 chart_path := charts/mddash
 values_file := -f $(chart_path)/values.yaml
 
@@ -32,13 +33,42 @@ render: ## Render Helm values template
 .PHONY: install
 install: render update hub-templates ## Install Helm chart
 	helm install $(package) $(chart_path) --namespace $(namespace) \
-		$(values_file) \
+		$(values_file) $(minikube_extra) \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 
 .PHONY: upgrade
 upgrade: render hub-templates ## Upgrade Helm release
 	helm upgrade $(package) $(chart_path) --namespace $(namespace) \
-		$(values_file) \
+		$(values_file) $(minikube_extra) \
+		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
+
+.PHONY: setup-minikube
+setup-minikube: ENV := minikube
+setup-minikube: ## One-time setup for minikube: kuberay, namespace, RBAC, and dummy secrets
+	helm repo add kuberay https://ray-project.github.io/kuberay-helm/ || true
+	helm install kuberay-operator kuberay/kuberay-operator || true
+	kubectl create namespace $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+	kubectl apply -f rbac/clusterrole.yaml
+	kubectl create clusterrolebinding mddash-hub --clusterrole=mddash-hub \
+		--serviceaccount=$(namespace):hub --dry-run=client -o yaml | kubectl apply -f -
+	kubectl create secret generic oidc-credentials \
+		--from-literal=client_id=dummy --from-literal=client_secret=dummy \
+		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+	kubectl create secret generic $(package)-s3-creds \
+		--from-literal=S3_ACCESS_KEY=dummy --from-literal=S3_SECRET_KEY=dummy \
+		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+	kubectl create secret generic $(package)-mdrepo-credentials \
+		--from-literal=client_id=dummy --from-literal=client_secret=dummy \
+		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+	kubectl create secret generic tuner-auth \
+		--from-literal=user=dummy --from-literal=password=dummy \
+		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
+
+.PHONY: install-minikube
+install-minikube: ENV := minikube
+install-minikube: render setup-minikube hub-templates ## Install on minikube for RBAC testing (skips chart dependency download)
+	helm install $(package) $(chart_path) --namespace $(namespace) \
+		$(values_file) -f $(chart_path)/values.minikube-overrides.yaml \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 
 .PHONY: deploy
@@ -55,6 +85,12 @@ update: ## Update Helm dependencies
 uninstall: ## Uninstall Helm release
 	helm uninstall $(package) --namespace $(namespace)
 	helm uninstall kuberay-operator || true
+
+.PHONY: uninstall-minikube
+uninstall-minikube: ENV := minikube
+uninstall-minikube: uninstall ## Uninstall minikube deployment and clean up namespace and RBAC
+	kubectl delete namespace $(namespace) --ignore-not-found
+	kubectl delete clusterrole mddash-hub clusterrolebinding mddash-hub --ignore-not-found
 
 .PHONY: hub-templates
 hub-templates: ## Create hub templates ConfigMap

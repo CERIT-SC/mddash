@@ -19,11 +19,16 @@ rules:
     verbs: ["create", "get", "watch"]
   - apiGroups: [""]
     resources: ["pods"]
-    verbs: ["get", "list", "delete"]
+    # deletecollection is required for delete_collection_namespaced_pod (post_stop_hook)
+    verbs: ["get", "list", "delete", "deletecollection"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create", "get"]
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles"]
-    # escalate is required to create roles that grant permissions the hub itself holds
-    verbs: ["create", "get", "list", "escalate"]
+    # escalate: create roles with permissions the hub doesn't hold
+    # bind: create rolebindings referencing those roles without holding all their permissions
+    verbs: ["create", "get", "list", "escalate", "bind"]
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["rolebindings"]
     verbs: ["create", "get", "list"]

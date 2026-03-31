@@ -1,0 +1,149 @@
+# Deploy: cd helm && make install-minikube
+
+namespace: mddash-test
+
+# Empty disables the Rancher-specific waits in pre_spawn_hook (_wait_for_ns_conditions, _wait_for_resource_quota_active), which never resolve on plain Kubernetes.
+rancherProjectId: ""
+
+storageClassName: standard  # minikube default (hostpath provisioner)
+
+registry: cerit.io/xkrasa
+imageTag: dev
+
+dashboard:
+  hostname: localhost
+
+oidc:
+  # Not used — DummyAuthenticator is configured in values.minikube-overrides.yaml
+  loginService: "local"
+  authorizeUrl: http://localhost/auth
+  tokenUrl: http://localhost/token
+  userdataUrl: http://localhost/userinfo
+  usernameKey: preferred_username
+  allowAll: true
+  scope:
+    - openid
+
+mdrepo:
+  url: https://workflow-repo.test.du.cesnet.cz
+  scopes: user:email
+
+defaultNotebooksRepo: https://github.com/sb-ncbr/mddash-notebooks.git
+
+notebook:
+  image: cerit.io/xkrasa/mddash-notebook
+  platform: linux/amd64
+
+analysis:
+  image: ghcr.io/mmb-irb/mddb_wf:0.0.8
+
+gmxImage: "cerit.io/ljocha/gromacs:2026-1-plumed-2-10-afed-pytorch-model-cv-2_ray-2-54-0_1"
+
+gpuType: ""
+
+sidecars:
+  platform: linux/amd64
+  pullPolicy: IfNotPresent
+  ui:
+    image: cerit.io/xkrasa/mddash-ui
+  proxy:
+    image: cerit.io/xkrasa/mddash-proxy
+  auth:
+    image: cerit.io/xkrasa/mddash-auth
+  api:
+    image: cerit.io/xkrasa/mddash-api
+  s3sync:
+    image: cerit.io/xkrasa/mddash-s3sync
+
+s3:
+  endpoint: ""
+
+resources:
+  singleuser:
+    memory:
+      guarantee: 512M
+      limit: 2G
+    cpu:
+      guarantee: 0.1
+      limit: 1
+  notebookQuota:
+    maxConcurrent: 1
+  notebook:
+    idleTimeoutSeconds: 600
+    cpuRequest: "100m"
+    memoryRequest: "256Mi"
+    cpuLimit: "1000m"
+    memoryLimit: "2Gi"
+    gmxCpuRequest: "100m"
+    gmxMemoryRequest: "128Mi"
+    gmxCpuLimit: "500m"
+    gmxMemoryLimit: "512Mi"
+  analysisJob:
+    cpuRequest: "100m"
+    memoryRequest: "256Mi"
+    cpuLimit: "1000m"
+    memoryLimit: "2Gi"
+  namespaceQuota:
+    requestsCpu: "500m"
+    requestsMemory: "1Gi"
+    limitsCpu: "4000m"
+    limitsMemory: "8Gi"
+  pvcStorageSize: 1Gi
+
+hub:
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+
+helm:
+  package: mddash-test
+
+mdrunApi:
+  image: cerit.io/xkrasa/mdrun-api
+  platform: linux/amd64
+  storage:
+    size: 1Gi
+  jobHeadroom:
+    maxConcurrentJobs: 1
+    cpuPerJob: "1"
+    memoryPerJob: "2Gi"
+
+gromacsTuner:
+  image:
+    repository: cerit.io/xkrasa/gromacs-tuner-api
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  storage:
+    size: 1Gi
+  api:
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+  ray:
+    image: "cerit.io/xkrasa/gromacs-tuner-worker:gmx-2026.1_ray-2.54.0_py-3.13"
+    head:
+      resources:
+        limits:
+          cpu: "500m"
+          memory: "2Gi"
+        requests:
+          cpu: "100m"
+          memory: "512Mi"
+    worker:
+      maxReplicas: 1
+      idleTimeoutSeconds: 3600
+      resources:
+        limits:
+          cpu: "1"
+          memory: "4Gi"
+        requests:
+          cpu: "100m"
+          memory: "512Mi"

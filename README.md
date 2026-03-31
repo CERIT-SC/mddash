@@ -56,6 +56,35 @@ Configure in Harbor UI (Project → Policy → Tag Retention):
 
 - `config.yaml` - Production environment configuration
 - `config.dev.yaml` - Development environment configuration
+- `config.minikube.yaml` - Local minikube testing configuration (DummyAuthenticator, standard storage class, no Rancher)
+
+
+## Local Testing with Minikube
+
+Use minikube to locally test minimal functionality (not even recommended for demos).
+
+```bash
+# Start minikube (if not already running)
+minikube start
+
+# One-time setup: kuberay, namespace, RBAC, and dummy secrets
+make -C helm setup-minikube
+
+# Deploy JupyterHub (uses DummyAuthenticator — any username/password works)
+make -C helm install-minikube
+
+# Access JupyterHub at http://localhost:8000
+make -C helm port-forward ENV=minikube
+
+# Watch hub logs for RBAC errors during spawn
+make -C helm logs ENV=minikube
+
+# Tear down
+make -C helm uninstall-minikube
+```
+
+> The minikube config skips Rancher-specific waits (`rancherProjectId: ""`), uses the `standard` storage class, and deploys a lightweight resource footprint.
+> Sidecar images still pull from `cerit.io` — internet access required.
 
 
 ## Development Setup
@@ -126,7 +155,8 @@ kubectl create secret generic oidc-credentials \
 
 # Hub service account RBAC (applied once by cluster admin, cluster-admin privileges required)
 kubectl apply -f helm/rbac/clusterrole.yaml
-kubectl apply -f helm/rbac/clusterrolebinding.yaml
+kubectl create clusterrolebinding mddash-hub --clusterrole=mddash-hub \
+  --serviceaccount=${NAMESPACE}:hub --dry-run=client -o yaml | kubectl apply -f -
 
 # S3 Credentials
 kubectl create secret generic ${PACKAGE}-s3-creds \
