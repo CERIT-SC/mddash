@@ -13,22 +13,20 @@ rules:
     verbs: ["create", "get", "patch"]
   - apiGroups: [""]
     resources: ["resourcequotas"]
-    verbs: ["get", "list"]
+    verbs: ["list"]
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
-    verbs: ["create", "get", "watch"]
+    verbs: ["create"]
   - apiGroups: [""]
     resources: ["pods"]
-    # deletecollection is required for delete_collection_namespaced_pod (post_stop_hook)
-    verbs: ["get", "list", "delete", "deletecollection"]
-  - apiGroups: [""]
-    resources: ["pods/exec"]
-    verbs: ["create", "get"]
+    # get/list/watch: KubeSpawner reflector tracks pod state across all user namespaces
+    # deletecollection: post_stop_hook bulk-deletes pods on server stop
+    verbs: ["get", "list", "watch", "deletecollection"]
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles"]
     # escalate: create roles with permissions the hub doesn't hold
     # bind: create rolebindings referencing those roles without holding all their permissions
-    verbs: ["create", "get", "list", "escalate", "bind"]
+    verbs: ["create", "get", "escalate", "bind"]
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["rolebindings"]
-    verbs: ["create", "get", "list"]
+    verbs: ["create", "get"]
