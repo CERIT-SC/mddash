@@ -1,32 +1,45 @@
-# Apply this file manually as a cluster admin before deploying the helm chart:
-#   kubectl apply -f helm/rbac/clusterrole.yaml
-#
-# This grants the JupyterHub hub service account the permissions it needs to
-# create per-user namespaces, RBAC, and PVCs at spawn time.
-apiVersion: rbac.authorization.k8s.io/v1
+# Hub service account RBAC — applied once by a cluster admin, cluster-wide.
+# ClusterRole is required (not Role) because the hub creates user namespaces at spawn time,
+# which are outside its own namespace.
+# On Rancher clusters, also apply rancher-clusterrole.yaml.
+---
 kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: mddash-hub
+  name: mddash-hub-cluster-role
 rules:
   - apiGroups: [""]
     resources: ["namespaces"]
-    verbs: ["create", "get", "patch"]
+    verbs: ["create", "patch", "list", "get", "watch"]
   - apiGroups: [""]
     resources: ["resourcequotas"]
     verbs: ["list"]
   - apiGroups: [""]
-    resources: ["persistentvolumeclaims"]
-    verbs: ["create"]
+    resources: ["events", "services", "pods/exec", "persistentvolumeclaims"]
+    verbs: ["get", "watch", "list", "create", "delete"]
   - apiGroups: [""]
     resources: ["pods"]
-    # get/list/watch: KubeSpawner reflector tracks pod state across all user namespaces
-    # deletecollection: post_stop_hook bulk-deletes pods on server stop
-    verbs: ["get", "list", "watch", "deletecollection"]
+    # deletecollection: post_stop_hook bulk-deletes all pods in the user namespace on server stop
+    verbs: ["create", "delete", "get", "list", "watch", "deletecollection"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "watch", "list", "create", "delete", "update", "patch"]
   - apiGroups: ["rbac.authorization.k8s.io"]
-    resources: ["roles"]
-    # escalate: create roles with permissions the hub doesn't hold
-    # bind: create rolebindings referencing those roles without holding all their permissions
-    verbs: ["create", "get", "escalate", "bind"]
-  - apiGroups: ["rbac.authorization.k8s.io"]
-    resources: ["rolebindings"]
-    verbs: ["create", "get"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["create", "get", "list"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: mddash-hub-cluster-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: hub
+    namespace: <NAMESPACE>
+roleRef:
+  kind: ClusterRole
+  name: mddash-hub-cluster-role
+  apiGroup: rbac.authorization.k8s.io

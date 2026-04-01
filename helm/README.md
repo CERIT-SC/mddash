@@ -11,10 +11,8 @@ This Helm chart deploys JupyterHub with minimal configuration suitable for devel
 ## Quick Start
 
 1. **Apply hub service account RBAC (requires cluster admin):**
-   ```bash
-   kubectl apply -f helm/rbac/clusterrole.yaml
-   kubectl apply -f helm/rbac/clusterrolebinding.yaml
-   ```
+
+   Fill in `<NAMESPACE>` in `helm/rbac/clusterrole.yaml` and apply it. On Rancher clusters, also apply `helm/rbac/rancher-clusterrole.yaml` (fill in `<NAMESPACE>` and `<PROJECT_ID>`). See the files for details on why each permission is needed.
 
 2. **Deploy JupyterHub:**
    ```bash

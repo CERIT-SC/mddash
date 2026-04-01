@@ -153,10 +153,8 @@ kubectl create secret generic oidc-credentials \
   --from-literal=client_secret="YOUR_CLIENT_SECRET" \
   -n ${NAMESPACE}
 
-# Hub service account RBAC (applied once by cluster admin, cluster-admin privileges required)
-kubectl apply -f helm/rbac/clusterrole.yaml
-kubectl create clusterrolebinding mddash-hub --clusterrole=mddash-hub \
-  --serviceaccount=${NAMESPACE}:hub --dry-run=client -o yaml | kubectl apply -f -
+# Hub service account RBAC (applied once by cluster admin; see helm/rbac/ for details)
+kubectl apply -f helm/rbac/clusterrole.yaml  # set namespace in the ClusterRoleBinding first
 
 # S3 Credentials
 kubectl create secret generic ${PACKAGE}-s3-creds \
