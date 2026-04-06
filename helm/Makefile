@@ -11,8 +11,8 @@ else
 endif
 
 config = $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
-package = $(shell yq .helm.package $(config))
-namespace = $(shell yq '.namespace' $(config))
+package := $(shell yq .helm.package $(config))
+namespace := $(shell yq '.namespace' $(config))
 chart_path := charts/mddash
 values_file := -f $(chart_path)/values.yaml
 
