@@ -1,0 +1,45 @@
+# Hub service account RBAC — applied once by a cluster admin, cluster-wide.
+# ClusterRole is required (not Role) because the hub creates user namespaces at spawn time,
+# which are outside its own namespace.
+# On Rancher clusters, also apply rancher-clusterrole.yaml.
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: mddash-hub-cluster-role
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["create", "patch", "list", "get", "watch"]
+  - apiGroups: [""]
+    resources: ["resourcequotas"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["events", "services", "pods/exec", "persistentvolumeclaims"]
+    verbs: ["get", "watch", "list", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    # deletecollection: post_stop_hook bulk-deletes all pods in the user namespace on server stop
+    verbs: ["create", "delete", "get", "list", "watch", "deletecollection"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "watch", "list", "create", "delete", "update", "patch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["create", "get", "list"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: mddash-hub-cluster-role-binding
+subjects:
+  - kind: ServiceAccount
+    name: hub
+    namespace: <NAMESPACE>
+roleRef:
+  kind: ClusterRole
+  name: mddash-hub-cluster-role
+  apiGroup: rbac.authorization.k8s.io

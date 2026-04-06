@@ -487,7 +487,7 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
 
     Creates user namespace, RBAC, PVC, S3 bucket, and configures sidecar containers.
     """
-    await config.load_kube_config(config_file="/home/jovyan/.kube/config")  # type: ignore[misc]
+    config.load_incluster_config()
     api_client = ApiClient()
     core_api = CoreV1Api(api_client)
     rbac_api = RbacAuthorizationV1Api(api_client)
@@ -513,7 +513,8 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
             mem_request=getenv("NS_REQUESTS_MEMORY", "6Gi"),
         )
         await _ensure_resource(core_api.create_namespace, body=namespace_manifest)
-        await _wait_for_ns_conditions(core_api, user_namespace, {"InitialRolesPopulated"})
+        if rancher_project_id:
+            await _wait_for_ns_conditions(core_api, user_namespace, {"InitialRolesPopulated"})
         await core_api.patch_namespace(name=user_namespace, body=namespace_manifest)  # type: ignore[misc]
 
         # Prepare resource names and manifests
@@ -570,7 +571,8 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
             _wait_for_resource(rbac_api.read_namespaced_role_binding, name=hub_binding, namespace=user_namespace),
         )
 
-        await _wait_for_resource_quota_active(core_api, user_namespace)
+        if rancher_project_id:
+            await _wait_for_resource_quota_active(core_api, user_namespace)
 
         # Configure spawner
         spawner.namespace = user_namespace
@@ -619,7 +621,7 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # n
 
     Sets namespace quota to zero and deletes all pods to free resources.
     """
-    await config.load_kube_config(config_file="/home/jovyan/.kube/config")  # type: ignore[misc]
+    config.load_incluster_config()
     api_client = ApiClient()
     core_api = CoreV1Api(api_client)
 

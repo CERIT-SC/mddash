@@ -10,10 +10,9 @@ This Helm chart deploys JupyterHub with minimal configuration suitable for devel
 
 ## Quick Start
 
-1. **Get the kubeconfig from rancher and install it as a secret:**
-   ```bash
-   make kubeconfig
-   ```
+1. **Apply hub service account RBAC (requires cluster admin):**
+
+   Fill in `<NAMESPACE>` in `helm/rbac/clusterrole.yaml` and apply it. On Rancher clusters, also apply `helm/rbac/rancher-clusterrole.yaml` (fill in `<NAMESPACE>` and `<PROJECT_ID>`). See the files for details on why each permission is needed.
 
 2. **Deploy JupyterHub:**
    ```bash
@@ -76,7 +75,7 @@ kubectl get svc proxy-public -n fida-ns
 
 Wait for the `EXTERNAL-IP` to be assigned, then access JupyterHub using that IP.
 
-### Method 3: NodePort (For local clusters like minikube)
+### Method 3: NodePort (For clusters without LoadBalancer support)
 If LoadBalancer is not available, you can change the service type to NodePort:
 
 ```yaml
