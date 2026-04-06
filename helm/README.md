@@ -75,7 +75,7 @@ kubectl get svc proxy-public -n fida-ns
 
 Wait for the `EXTERNAL-IP` to be assigned, then access JupyterHub using that IP.
 
-### Method 3: NodePort (For local clusters like minikube)
+### Method 3: NodePort (For clusters without LoadBalancer support)
 If LoadBalancer is not available, you can change the service type to NodePort:
 
 ```yaml
