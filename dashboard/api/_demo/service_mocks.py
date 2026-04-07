@@ -101,9 +101,9 @@ def install_mocks() -> None:
     mdrun.get_job = _mdrun_get_job
     mdrun.delete_job = _mdrun_delete_job
 
-    tuner.run_submit = _tuner_run_submit
-    tuner.poll_status = _tuner_poll_status
-    tuner.delete_job = _tuner_delete_job
+    tuner.gmx_submit = _tuner_run_submit
+    tuner.gmx_poll_status = _tuner_poll_status
+    tuner.gmx_delete_job = _tuner_delete_job
 
     mdrepo.create_experiment = _mdrepo_create_experiment
     mdrepo.check_experiment_status = _mdrepo_check_experiment_status

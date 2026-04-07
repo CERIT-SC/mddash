@@ -75,7 +75,7 @@ class TunerJob(db.Model):  # type: ignore
             return tuner_status_cache[cache_key]
 
         try:
-            status = tuner.poll_status(self.id)
+            status = tuner.gmx_poll_status(self.id)
             if err_msg := status.get("error"):
                 self.error_message = err_msg
                 db.session.commit()
@@ -111,7 +111,7 @@ class TunerJob(db.Model):  # type: ignore
         Returns:
             The created TunerJob instance.
         """
-        response = tuner.run_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
+        response = tuner.gmx_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
 
         tpr_rel_path = str(tpr_path.relative_to(DATA_DIR / experiment.id))
         job: TunerJob = cls(id=response["id"], experiment=experiment, tpr_name=tpr_rel_path)  # type: ignore[call-arg]
@@ -139,7 +139,7 @@ class TunerJob(db.Model):  # type: ignore
         self.is_stopped = True
 
         try:
-            tuner.delete_job(self.id)
+            tuner.gmx_delete_job(self.id)
         except HTTPError:
             logger.exception(f"Failed to delete tuner job {self.id}")
 
@@ -157,6 +157,6 @@ class TunerJob(db.Model):  # type: ignore
             return
 
         try:
-            tuner.delete_job(self.id)
+            tuner.gmx_delete_job(self.id)
         except HTTPError:
             logger.exception(f"Failed to delete tuner job {self.id}")
