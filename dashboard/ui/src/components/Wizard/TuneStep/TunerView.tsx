@@ -66,6 +66,8 @@ const TunerView = (props: TunerViewProps) => {
             selectedTrial={selectedTrial}
             setSelectedTrial={setSelectedTrial}
             tunerStopped={displayStopped}
+            experimentId={experiment.id}
+            tprName={tprName}
           />
 
           {!displayStopped && (
@@ -138,7 +140,7 @@ const TunerView = (props: TunerViewProps) => {
         onConfirm={async () => {
           await stopJob(tprName)
         }}
-        message="Are you sure you want to stop the tuning job? You cannot resume it, but data will be preserved."
+        message="Are you sure you want to stop the tuning job? Results collected so far will be saved, but any trials still in progress will be lost. This cannot be undone."
       />
     </>
   )

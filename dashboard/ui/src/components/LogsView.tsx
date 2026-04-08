@@ -56,10 +56,11 @@ function processTerminalOutput(text: string): string {
 
 export interface LogsViewProps {
   logs: string
+  isLoading?: boolean
   className?: string
 }
 
-export default function LogsView({ logs, className }: LogsViewProps) {
+export default function LogsView({ logs, isLoading = false, className }: LogsViewProps) {
   const html = useMemo(() => {
     if (!logs) return ""
     // Instantiated inside useMemo to avoid module-level CJS interop issues crashing the app
@@ -80,9 +81,17 @@ export default function LogsView({ logs, className }: LogsViewProps) {
     return <div className={cls} ref={containerRef} dangerouslySetInnerHTML={{ __html: html }} />
   }
 
+  if (isLoading) {
+    return (
+      <div className={cn(cls, "animate-pulse text-muted-foreground select-none")}>
+        waiting for output...
+      </div>
+    )
+  }
+
   return (
-    <div className={cls} ref={containerRef}>
-      Loading...
+    <div className={cn(cls, "text-muted-foreground/50 select-none italic")}>
+      (no output)
     </div>
   )
 }

@@ -1,6 +1,7 @@
 from http import HTTPStatus
 
 from api_response import ApiResponse
+from clients import tuner
 from config import API_PREFIX, DATA_DIR
 from decorators import handle_exceptions
 from extensions import db
@@ -93,6 +94,38 @@ def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     tuner_job.stop()
     db.session.commit()
     return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+
+
+@tuner_bp.route("/<path:tpr_name>/trials/<trial_id>/stdout", methods=["GET"])
+@handle_exceptions()
+def get_trial_stdout(experiment_id: str, tpr_name: str, trial_id: str) -> Response:
+    """
+    Get stdout log for a specific tuning trial.
+
+    Returns:
+        Response: JSON response with the stdout text.
+    """
+    tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
+        description=f"Tuner job for {tpr_name} not found"
+    )
+    stdout = tuner.gmx_get_trial_stdout(tuner_job.id, trial_id)
+    return ApiResponse.success(stdout)
+
+
+@tuner_bp.route("/<path:tpr_name>/trials/<trial_id>/stderr", methods=["GET"])
+@handle_exceptions()
+def get_trial_stderr(experiment_id: str, tpr_name: str, trial_id: str) -> Response:
+    """
+    Get stderr log for a specific tuning trial.
+
+    Returns:
+        Response: JSON response with the stderr text.
+    """
+    tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
+        description=f"Tuner job for {tpr_name} not found"
+    )
+    stderr = tuner.gmx_get_trial_stderr(tuner_job.id, trial_id)
+    return ApiResponse.success(stderr)
 
 
 @tuner_bp.route("/<path:tpr_name>", methods=["DELETE"])

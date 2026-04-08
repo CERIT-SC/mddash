@@ -70,6 +70,26 @@ export function useStopTuner(experimentId: string) {
   })
 }
 
+export function useTunerTrialLogs(experimentId: string, tprName: string, trialId: string | null) {
+  const enabled = !!experimentId && !!tprName && !!trialId
+
+  const stdout = useQuery<string>({
+    queryKey: ["experiment", experimentId, "tuner", tprName, "trials", trialId, "stdout"],
+    queryFn: () =>
+      api.get(`/experiments/${experimentId}/tuner/${tprName}/trials/${trialId}/stdout`).then((r) => r.data),
+    enabled,
+  })
+
+  const stderr = useQuery<string>({
+    queryKey: ["experiment", experimentId, "tuner", tprName, "trials", trialId, "stderr"],
+    queryFn: () =>
+      api.get(`/experiments/${experimentId}/tuner/${tprName}/trials/${trialId}/stderr`).then((r) => r.data),
+    enabled,
+  })
+
+  return { stdout, stderr }
+}
+
 export function useDeleteTuner(experimentId: string) {
   const queryClient = useQueryClient()
 

@@ -79,7 +79,7 @@ const RunView = (props: RunViewProps) => {
               </Select>
             </div>
 
-            {logType && <LogsView logs={logsQuery.data ?? ""} className="mt-1" />}
+            {logType && <LogsView logs={logsQuery.data ?? ""} isLoading={logsQuery.isLoading} className="mt-1" />}
           </div>
         </div>
       )}

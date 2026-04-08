@@ -137,6 +137,78 @@ def amber_delete_job(job_id: str) -> dict:
     return _extract_response_data(response)
 
 
+def gmx_get_trial_stdout(job_id: str, trial_id: str) -> str:
+    """
+    Get the stdout log for a GMX tuning trial.
+
+    Args:
+        job_id: The ID of the job.
+        trial_id: The ID of the trial.
+
+    Returns:
+        The stdout content (empty string if not yet written).
+    """
+    response = requests.get(
+        f"{TUNER_URL}/gmx/tuning-jobs/{job_id}/trials/{trial_id}/stdout", auth=AUTH, timeout=POLL_TIMEOUT
+    )
+    response.raise_for_status()
+    return response.text
+
+
+def gmx_get_trial_stderr(job_id: str, trial_id: str) -> str:
+    """
+    Get the stderr log for a GMX tuning trial.
+
+    Args:
+        job_id: The ID of the job.
+        trial_id: The ID of the trial.
+
+    Returns:
+        The stderr content (empty string if not yet written).
+    """
+    response = requests.get(
+        f"{TUNER_URL}/gmx/tuning-jobs/{job_id}/trials/{trial_id}/stderr", auth=AUTH, timeout=POLL_TIMEOUT
+    )
+    response.raise_for_status()
+    return response.text
+
+
+def amber_get_trial_stdout(job_id: str, trial_id: str) -> str:
+    """
+    Get the stdout log for an AMBER tuning trial.
+
+    Args:
+        job_id: The ID of the job.
+        trial_id: The ID of the trial.
+
+    Returns:
+        The stdout content (empty string if not yet written).
+    """
+    response = requests.get(
+        f"{TUNER_URL}/amber/tuning-jobs/{job_id}/trials/{trial_id}/stdout", auth=AUTH, timeout=POLL_TIMEOUT
+    )
+    response.raise_for_status()
+    return response.text
+
+
+def amber_get_trial_stderr(job_id: str, trial_id: str) -> str:
+    """
+    Get the stderr log for an AMBER tuning trial.
+
+    Args:
+        job_id: The ID of the job.
+        trial_id: The ID of the trial.
+
+    Returns:
+        The stderr content (empty string if not yet written).
+    """
+    response = requests.get(
+        f"{TUNER_URL}/amber/tuning-jobs/{job_id}/trials/{trial_id}/stderr", auth=AUTH, timeout=POLL_TIMEOUT
+    )
+    response.raise_for_status()
+    return response.text
+
+
 # DEMO
 if __name__ == "__main__":
     tpr_path = Path(__file__).parent.parent / "_demo" / "data" / "md.tpr"

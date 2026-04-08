@@ -180,7 +180,7 @@ const AnalysisPanel = ({
     if (!activeJob || activeJob.status === "PENDING") setShowLogs(false)
   }, [activeJob])
   const logJobId = showLogs ? (activeJob?.id ?? lastJob?.id ?? null) : null
-  const { data: jobLogs } = useAnalysisLogs(experimentId, logJobId, !!activeJob)
+  const { data: jobLogs, isLoading: jobLogsLoading } = useAnalysisLogs(experimentId, logJobId, !!activeJob)
 
   return (
     <div className="flex flex-col gap-3">
@@ -346,7 +346,7 @@ const AnalysisPanel = ({
         </p>
       )}
 
-      {showLogs && <LogsView logs={jobLogs ?? ""} />}
+      {showLogs && <LogsView logs={jobLogs ?? ""} isLoading={jobLogsLoading} />}
 
       <div>
         {!resolvedAnalysis && (

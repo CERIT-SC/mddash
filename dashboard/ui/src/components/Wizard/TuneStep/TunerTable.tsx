@@ -1,26 +1,36 @@
 import { useCallback, useMemo, useState } from "react"
 
-import { Loader2, Star } from "lucide-react"
+import { Loader2, Star, Terminal } from "lucide-react"
 
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
 import { getJobStatusVariant, type JobStatus, type TunerTrial } from "@/util/types"
+import { useTunerTrialLogs } from "@/hooks/use-tuner"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import LogsView from "@/components/LogsView"
 
 interface TunerTableProps {
   rows: TunerTrial[]
   selectedTrial: TunerTrial | null
   setSelectedTrial: (trial: TunerTrial | null) => void
   tunerStopped?: boolean
+  experimentId: string
+  tprName: string
 }
 
 const TunerTable = (props: TunerTableProps) => {
-  const { rows, selectedTrial, setSelectedTrial, tunerStopped = false } = props
+  const { rows, selectedTrial, setSelectedTrial, tunerStopped = false, experimentId, tprName } = props
 
   const [confirmChoiceDialog, setConfirmChoiceDialog] = useState(false)
+  const [logsTrialId, setLogsTrialId] = useState<string | null>(null)
+
+  const { stdout, stderr } = useTunerTrialLogs(experimentId, tprName, logsTrialId)
 
   const sortedRows = useMemo(() => {
     const statusRank: Record<JobStatus, number> = {
@@ -150,9 +160,26 @@ const TunerTable = (props: TunerTableProps) => {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={cn("text-xs", statusBadgeClass(variant))}>
-                      {row.status}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline" className={cn("text-xs", statusBadgeClass(variant))}>
+                        {row.status}
+                      </Badge>
+                      {row.status === "ERROR" && !tunerStopped && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-muted-foreground hover:text-foreground h-5 w-5"
+                              onClick={() => setLogsTrialId(row.id)}
+                            >
+                              <Terminal className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>View trial logs</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     {row.performance !== null ? row.performance.toFixed(2) : "N/A"}
@@ -167,6 +194,26 @@ const TunerTable = (props: TunerTableProps) => {
           </TableBody>
         </Table>
       </div>
+      <Dialog open={logsTrialId !== null} onOpenChange={(open) => !open && setLogsTrialId(null)}>
+        <DialogContent className="sm:max-w-[50vw]">
+          <DialogHeader>
+            <DialogTitle>Trial Logs — Trial {logsTrialId}</DialogTitle>
+          </DialogHeader>
+          <Tabs defaultValue="stdout">
+            <TabsList>
+              <TabsTrigger value="stdout">stdout</TabsTrigger>
+              <TabsTrigger value="stderr">stderr</TabsTrigger>
+            </TabsList>
+            <TabsContent value="stdout">
+              <LogsView logs={stdout.data ?? ""} isLoading={stdout.isLoading} />
+            </TabsContent>
+            <TabsContent value="stderr">
+              <LogsView logs={stderr.data ?? ""} isLoading={stderr.isLoading} />
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
+
       <ConfirmDialog
         open={confirmChoiceDialog}
         setOpen={setConfirmChoiceDialog}
