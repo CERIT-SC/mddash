@@ -153,7 +153,7 @@ gromacsTuner:
         cpu: "100m"
         memory: "256Mi"
   ray:
-    image: "cerit.io/xkrasa/gromacs-tuner-worker:gmx-2026.1_ray-2.54.0_py-3.13"
+    image: "cerit.io/xkrasa/gromacs-tuner-worker:gmx-2026.1_amber-24_ray-2.54.0_py-3.13"
     head:
       resources:
         limits:
