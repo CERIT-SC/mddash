@@ -28,7 +28,7 @@ ANALYSIS_IMAGE = os.environ.get("ANALYSIS_IMAGE", "ghcr.io/mmb-irb/mddb_wf")
 
 IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Always")
 
-DEFAULT_NOTEBOOKS_REPO = os.environ.get("DEFAULT_NOTEBOOKS_REPO", "https://github.com/CERIT-SC/mddash-notebooks.git")
+DEFAULT_NOTEBOOKS_REPO = os.environ.get("DEFAULT_NOTEBOOKS_REPO", "https://github.com/sb-ncbr/mddash-notebooks.git")
 
 NAMESPACE = os.environ.get("POD_NAMESPACE", "default")
 

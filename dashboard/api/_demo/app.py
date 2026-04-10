@@ -1,13 +1,24 @@
-"""Demo harness that runs the real API with deterministic seeded data and mocked integrations."""
+"""
+Demo harness that runs the real API with deterministic seeded data and mocked integrations.
+
+This module provides a Flask application factory that:
+- Sets up demo environment variables
+- Activates HTTP response mocking via the responses library
+- Patches Kubernetes client at module level
+- Seeds the database with deterministic test data
+
+Usage:
+    # Run directly for development
+    python -m _demo.app
+
+    # Or in Flask development mode
+    FLASK_APP=_demo.app flask run
+"""
 
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
 from unittest.mock import patch
-
-if TYPE_CHECKING:
-    from flask import Flask
 
 API_DIR = Path(__file__).resolve().parents[1]
 
@@ -16,6 +27,7 @@ if str(API_DIR) not in sys.path:
 
 
 def _configure_demo_env() -> None:
+    """Configure environment variables for demo mode."""
     demo_data_dir = os.environ.get("MDDASH_DEMO_DATA_DIR", "/tmp/mddash")
     os.environ.setdefault("DATA_DIR", demo_data_dir)
     os.environ.setdefault("HOSTNAME", "localhost")
@@ -45,30 +57,50 @@ def _configure_demo_env() -> None:
     os.environ.setdefault("MDREPO_SCOPES", "openid profile")
     os.environ.setdefault("MDREPO_CLIENT_ID", "demo-client")
     os.environ.setdefault("MDREPO_CLIENT_SECRET", "demo-secret")
+    os.environ.setdefault("DEFAULT_NOTEBOOKS_REPO", "https://github.com/sb-ncbr/mddash-notebooks.git")
 
 
 def create_demo_app() -> "Flask":
     """
     Create the real API app configured for local demo with mocked dependencies.
 
+    This function:
+    1. Configures environment variables for demo mode
+    2. Activates HTTP response mocking via responses library
+    3. Installs Kubernetes client mocks via module mutation
+    4. Imports and configures the real Flask application
+    5. Seeds deterministic test data
+
     Returns:
         Flask: Configured Flask application instance with demo profile applied.
     """
     _configure_demo_env()
 
+    # Patch Kubernetes BEFORE importing anything that uses it
+    # The k8s module calls config.load_incluster_config() at import time
     with (
         patch("kubernetes.config.load_incluster_config"),
         patch("kubernetes.client.CoreV1Api"),
         patch("kubernetes.client.BatchV1Api"),
     ):
+        # Import mock installation and setup
+        from _demo.mocks import install_all_mocks
+        from _demo.profile import setup_demo_profile
+
+        # Install all mocks - this activates responses globally
+        install_all_mocks()
+
+        # Import the real app - this triggers kubernetes config loading
+        # but it's already patched above
         from app import app  # noqa: PLC0415
 
-        from _demo.profile import setup_demo_profile  # noqa: PLC0415
+        # Set up demo profile (seeding, MDRepo auth bypass)
+        setup_demo_profile(app)
 
-    setup_demo_profile(app)
-    return app
+        return app
 
 
+# Create the demo app instance
 app = create_demo_app()
 
 

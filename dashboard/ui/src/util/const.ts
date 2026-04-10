@@ -19,7 +19,7 @@ export const API_BASE = window.MDDASH_CONFIG?.apiPath ?? "/dash/api"
 export const HUB_API_BASE = "/hub/api"
 export const USER = window.MDDASH_CONFIG?.user ?? "dev-user"
 export const DEFAULT_NOTEBOOKS_REPO =
-  window.MDDASH_CONFIG?.defaultNotebooksRepo ?? "https://github.com/CERIT-SC/mddash-notebooks.git"
+  window.MDDASH_CONFIG?.defaultNotebooksRepo ?? "https://github.com/sb-ncbr/mddash-notebooks.git"
 
 // Sentinel value for ShadCN Select components that require non-empty string values
 export const SELECT_NONE = "__none__"
