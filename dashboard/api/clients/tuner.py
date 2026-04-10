@@ -13,14 +13,17 @@ SUBMIT_TIMEOUT = 60
 DELETE_TIMEOUT = 15
 
 
-def _extract_response_data(response: Response) -> dict:
-    response.raise_for_status()
-    data = response.json()
+def _handle_response(response: Response) -> dict:
+    if response.ok:
+        return response.json()
 
-    if not data["success"]:
-        raise HTTPError(data["message"], request=None, response=response)
+    # Extract error detail from tuner response
+    try:
+        detail = response.json().get("detail", response.text)
+    except Exception:
+        detail = response.text or f"{response.status_code} {response.reason}"
 
-    return data["data"]
+    raise HTTPError(detail, response=response)
 
 
 def gmx_submit(tpr_path: Path, nsteps: int = 25_000, extra_args: str = "") -> dict:
@@ -39,9 +42,9 @@ def gmx_submit(tpr_path: Path, nsteps: int = 25_000, extra_args: str = "") -> di
         files = {"file": f}
         data = {"nsteps": nsteps, "extra_args": extra_args}
         response = requests.post(
-            f"{TUNER_URL}/gmx/tuning-jobs", files=files, data=data, auth=AUTH, timeout=SUBMIT_TIMEOUT
+            f"{TUNER_URL}/tuning-jobs/gmx", files=files, data=data, auth=AUTH, timeout=SUBMIT_TIMEOUT
         )
-    return _extract_response_data(response)
+    return _handle_response(response)
 
 
 def gmx_poll_status(job_id: str) -> dict:
@@ -58,8 +61,8 @@ def gmx_poll_status(job_id: str) -> dict:
         TimeoutError: If the request timed out.
     """
     try:
-        response = requests.get(f"{TUNER_URL}/gmx/tuning-jobs/{job_id}/status", auth=AUTH, timeout=POLL_TIMEOUT)
-        return _extract_response_data(response)
+        response = requests.get(f"{TUNER_URL}/tuning-jobs/gmx/{job_id}/status", auth=AUTH, timeout=POLL_TIMEOUT)
+        return _handle_response(response)
     except Timeout as e:
         raise TimeoutError(f"Tuner poll status timed out for job {job_id}") from e
 
@@ -74,8 +77,8 @@ def gmx_delete_job(job_id: str) -> dict:
     Returns:
         The response from the tuner.
     """
-    response = requests.delete(f"{TUNER_URL}/gmx/tuning-jobs/{job_id}", auth=AUTH, timeout=DELETE_TIMEOUT)
-    return _extract_response_data(response)
+    response = requests.delete(f"{TUNER_URL}/tuning-jobs/gmx/{job_id}", auth=AUTH, timeout=DELETE_TIMEOUT)
+    return _handle_response(response)
 
 
 def amber_submit(
@@ -98,9 +101,9 @@ def amber_submit(
         files = {"prmtop": prmtop, "inpcrd": inpcrd, "mdin": mdin}
         data = {"nsteps": nsteps, "extra_args": extra_args}
         response = requests.post(
-            f"{TUNER_URL}/amber/tuning-jobs", files=files, data=data, auth=AUTH, timeout=SUBMIT_TIMEOUT
+            f"{TUNER_URL}/tuning-jobs/amber", files=files, data=data, auth=AUTH, timeout=SUBMIT_TIMEOUT
         )
-    return _extract_response_data(response)
+    return _handle_response(response)
 
 
 def amber_poll_status(job_id: str) -> dict:
@@ -117,8 +120,8 @@ def amber_poll_status(job_id: str) -> dict:
         TimeoutError: If the request timed out.
     """
     try:
-        response = requests.get(f"{TUNER_URL}/amber/tuning-jobs/{job_id}/status", auth=AUTH, timeout=POLL_TIMEOUT)
-        return _extract_response_data(response)
+        response = requests.get(f"{TUNER_URL}/tuning-jobs/amber/{job_id}/status", auth=AUTH, timeout=POLL_TIMEOUT)
+        return _handle_response(response)
     except Timeout as e:
         raise TimeoutError(f"Tuner poll status timed out for job {job_id}") from e
 
@@ -133,8 +136,8 @@ def amber_delete_job(job_id: str) -> dict:
     Returns:
         The response from the tuner.
     """
-    response = requests.delete(f"{TUNER_URL}/amber/tuning-jobs/{job_id}", auth=AUTH, timeout=DELETE_TIMEOUT)
-    return _extract_response_data(response)
+    response = requests.delete(f"{TUNER_URL}/tuning-jobs/amber/{job_id}", auth=AUTH, timeout=DELETE_TIMEOUT)
+    return _handle_response(response)
 
 
 def gmx_get_trial_stdout(job_id: str, trial_id: str) -> str:
@@ -149,7 +152,7 @@ def gmx_get_trial_stdout(job_id: str, trial_id: str) -> str:
         The stdout content (empty string if not yet written).
     """
     response = requests.get(
-        f"{TUNER_URL}/gmx/tuning-jobs/{job_id}/trials/{trial_id}/stdout", auth=AUTH, timeout=POLL_TIMEOUT
+        f"{TUNER_URL}/tuning-jobs/gmx/{job_id}/trials/{trial_id}/stdout", auth=AUTH, timeout=POLL_TIMEOUT
     )
     response.raise_for_status()
     return response.text
@@ -167,7 +170,7 @@ def gmx_get_trial_stderr(job_id: str, trial_id: str) -> str:
         The stderr content (empty string if not yet written).
     """
     response = requests.get(
-        f"{TUNER_URL}/gmx/tuning-jobs/{job_id}/trials/{trial_id}/stderr", auth=AUTH, timeout=POLL_TIMEOUT
+        f"{TUNER_URL}/tuning-jobs/gmx/{job_id}/trials/{trial_id}/stderr", auth=AUTH, timeout=POLL_TIMEOUT
     )
     response.raise_for_status()
     return response.text
@@ -185,7 +188,7 @@ def amber_get_trial_stdout(job_id: str, trial_id: str) -> str:
         The stdout content (empty string if not yet written).
     """
     response = requests.get(
-        f"{TUNER_URL}/amber/tuning-jobs/{job_id}/trials/{trial_id}/stdout", auth=AUTH, timeout=POLL_TIMEOUT
+        f"{TUNER_URL}/tuning-jobs/amber/{job_id}/trials/{trial_id}/stdout", auth=AUTH, timeout=POLL_TIMEOUT
     )
     response.raise_for_status()
     return response.text
@@ -203,7 +206,7 @@ def amber_get_trial_stderr(job_id: str, trial_id: str) -> str:
         The stderr content (empty string if not yet written).
     """
     response = requests.get(
-        f"{TUNER_URL}/amber/tuning-jobs/{job_id}/trials/{trial_id}/stderr", auth=AUTH, timeout=POLL_TIMEOUT
+        f"{TUNER_URL}/tuning-jobs/amber/{job_id}/trials/{trial_id}/stderr", auth=AUTH, timeout=POLL_TIMEOUT
     )
     response.raise_for_status()
     return response.text
