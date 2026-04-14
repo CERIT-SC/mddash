@@ -105,8 +105,7 @@ resources:
     memoryLimit: "8Gi"
   namespaceQuota:
     # requests = expected simultaneous usage; formula: see doc/resource-management.md
-    #  edc test: requestsCpu: "4000m"
-    requestsCpu: "500m"
+    requestsCpu: "4000m"
     requestsMemory: "8Gi"
     # limits = sum of all container limits at full load (1 notebook at 4x tier)
     limitsCpu: "42000m"
