@@ -10,8 +10,11 @@ else
   IMAGE_TAG ?= $(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD)
 endif
 
-config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
-image := $(shell yq .notebook.image $(config))
+#config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
+config := $(if $(wildcard ../config.${ENV}.yaml),../config.${ENV}.yaml,../config.yaml)
+
+registry := $(shell yq .registry $(config))
+image := $(registry)/$(shell yq .notebook.image $(config))
 platform := --platform $(shell yq .notebook.platform $(config))
 
 ifeq ($(ENV),dev)

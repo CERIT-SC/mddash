@@ -1,0 +1,180 @@
+# Production environment configuration
+
+# Kubernetes namespace
+namespace: mddash-ljocha-dev-ns
+
+# Rancher project ID for user namespace annotation
+rancherProjectId: "c-m-qvndqhf6:p-hshk2"
+
+# Global storage class for all persistent volumes
+storageClassName: nfs-csi
+
+# Container and helm chart registry
+registry: cerit.io/ljocha
+imageTag: latest  # Overridden by CI/CD or make deploy, see README.md
+
+# Dashboard hostname
+dashboard:
+  hostname: mddash-edc.dyn.cloud.e-infra.cz
+
+# OIDC provider for JupyterHub authentication
+oidc:
+  loginService: "EGI CheckIn Development"  # the button label in UI
+  authorizeUrl: https://aai-dev.egi.eu/auth/realms/egi/protocol/openid-connect/auth
+  tokenUrl: https://aai-dev.egi.eu/auth/realms/egi/protocol/openid-connect/token
+  userdataUrl: https://aai-dev.egi.eu/auth/realms/egi/protocol/openid-connect/userinfo
+  usernameKey: preferred_username
+  allowAll: true
+  scope:
+    - openid
+    - profile
+    - email
+
+# MDRepo integration for publishing experiments
+mdrepo:
+  url: https://workflow-repo.test.du.cesnet.cz
+  scopes: user:email
+
+# Default notebooks repository (setup and analysis notebooks)
+defaultNotebooksRepo: https://github.com/sb-ncbr/mddash-notebooks.git
+
+# Notebook image (spawned by Dashboard pod)
+notebook:
+  image: mddash-notebook
+  platform: linux/amd64
+
+# MD analysis image used for on-demand analysis K8s jobs
+analysis:
+  image: ghcr.io/mmb-irb/mddb_wf:0.0.8
+
+# GROMACS image used for MD simulation jobs (dashboard and mdrun-api)
+gmxImage: "cerit.io/ljocha/gromacs:2026-1-plumed-2-10-afed-pytorch-model-cv-2_ray-2-54-0_1"
+
+# GPU resource type used by mdrun-api jobs and gromacs-tuner workers
+gpuType: "nvidia.com/mig-1g.10gb"
+
+# Sidecar container images for user pod
+sidecars:
+  platform: linux/amd64
+  pullPolicy: IfNotPresent
+  ui:
+    image: mddash-ui
+  proxy:
+    image: mddash-proxy
+  auth:
+    image: mddash-auth
+  api:
+    image: mddash-api
+  s3sync:
+    image: mddash-s3sync
+
+# S3 object storage configuration
+s3:
+  endpoint: https://s3.cl4.du.cesnet.cz
+
+resources:
+  singleuser:
+    memory:
+      guarantee: 512M
+      limit: 4G
+    cpu:
+      guarantee: 0.2
+      limit: 1
+  notebookQuota:
+    # Max concurrent notebook pods per user namespace
+    maxConcurrent: 1
+  notebook:
+    # Idle timeout in seconds: kernels are culled and the server shuts down after this period
+    idleTimeoutSeconds: 3600
+    # jupyter container — limits allow burst above scheduling baseline
+    cpuRequest: "500m"
+    memoryRequest: "1Gi"
+    cpuLimit: "5000m"    # 10× request: interactive, prefer throttle over kill
+    memoryLimit: "8Gi"   # 8× request: burst headroom for in-memory analysis
+    # gmx sidecar — high CPU limit prevents MPI rank starvation from throttling
+    gmxCpuRequest: "100m"
+    gmxMemoryRequest: "256Mi"
+    gmxCpuLimit: "4000m"
+    gmxMemoryLimit: "8Gi"
+
+  analysisJob:
+    #  edc test: cpuRequest: "1000m"
+    cpuRequest: "100m"
+    memoryRequest: "2Gi"
+    cpuLimit: "4000m"
+    memoryLimit: "8Gi"
+  namespaceQuota:
+    # requests = expected simultaneous usage; formula: see doc/resource-management.md
+    #  edc test: requestsCpu: "4000m"
+    requestsCpu: "500m"
+    requestsMemory: "8Gi"
+    # limits = sum of all container limits at full load (1 notebook at 4x tier)
+    limitsCpu: "42000m"
+    limitsMemory: "80Gi"
+  pvcStorageSize: 100Gi
+
+hub:
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "1"
+      memory: "2Gi"
+
+helm:
+  package: mdedc
+
+# mdrun-api service
+mdrunApi:
+  image: mdrun-api
+  platform: linux/amd64
+  storage:  # Persistent storage for mdrun-api database
+    size: 20Gi
+  jobHeadroom:
+    # Maximum number of HPC jobs running simultaneously in the hub namespace.
+    # Set cpuPerJob/memoryPerJob to the largest single job you want to allow.
+    maxConcurrentJobs: 1  # TODO: increase when more resources are available
+    # edc test: cpuPerJob: "16"
+    # edc test: memoryPerJob: "32Gi"
+    cpuPerJob: "2"
+    memoryPerJob: "12Gi"
+
+# Gromacs Tuner service
+gromacsTuner:
+  image:
+    repository: cerit.io/xkrasa/gromacs-tuner-api
+    tag: "latest"  # TODO: lock version
+    pullPolicy: Always
+  storage:
+    size: 100Gi
+  api:
+    resources:
+      limits:
+        cpu: "1"
+        memory: "2Gi"
+      requests:
+        cpu: "0.5"
+        memory: "1Gi"
+  ray:
+    image: "cerit.io/xkrasa/gromacs-tuner-worker:gmx-2026.1_amber-24_ray-2.54.0_py-3.13"
+    head:
+      resources:
+        limits:
+          cpu: "1"
+          memory: "8Gi"
+        requests:
+          cpu: "500m"
+          memory: "4Gi"
+    worker:
+      maxReplicas: 1  # TODO: increase to 3 when more resources are available
+      idleTimeoutSeconds: 3600
+      resources:
+        limits:
+          cpu: "2"  # TODO: ask for more (should be at least 32)
+          memory: "64Gi"
+          nvidia.com/mig-1g.10gb: "1"
+        requests:
+          cpu: "2"  # should be same as limit
+          memory: "16Gi"
+          nvidia.com/mig-1g.10gb: "1"

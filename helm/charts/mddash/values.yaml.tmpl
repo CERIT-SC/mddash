@@ -2,6 +2,7 @@
 {{- $namespace := $cfg.namespace -}}
 {{- $helmPackage := $cfg.helm.package -}}
 {{- $imageTag := (getenv "IMAGE_TAG" $cfg.imageTag) -}}
+{{- $registry := $cfg.registry -}}
 jupyterhub:
   hub:
     resources:
@@ -113,17 +114,17 @@ jupyterhub:
         value: "{{ $cfg.storageClassName }}"
       # Sidecar container images - used by pre_spawn_hook.py to configure extra_containers
       PROXY_IMAGE:
-        value: "{{ $cfg.sidecars.proxy.image }}:{{ $imageTag }}"
+        value: "{{ $registry }}/{{ $cfg.sidecars.proxy.image }}:{{ $imageTag }}"
       AUTH_IMAGE:
-        value: "{{ $cfg.sidecars.auth.image }}:{{ $imageTag }}"
+        value: "{{ $registry }}/{{ $cfg.sidecars.auth.image }}:{{ $imageTag }}"
       API_IMAGE:
-        value: "{{ $cfg.sidecars.api.image }}:{{ $imageTag }}"
+        value: "{{ $registry }}/{{ $cfg.sidecars.api.image }}:{{ $imageTag }}"
       S3_SYNC_IMAGE:
-        value: "{{ $cfg.sidecars.s3sync.image }}:{{ $imageTag }}"
+        value: "{{ $registry }}/{{ $cfg.sidecars.s3sync.image }}:{{ $imageTag }}"
       NOTEBOOK_IMAGE:
-        value: "{{ $cfg.notebook.image }}:{{ $imageTag }}"
+        value: "{{ $registry }}/{{ $cfg.notebook.image }}:{{ $imageTag }}"
       ANALYSIS_IMAGE:
-        value: "{{ $cfg.analysis.image }}"
+        value: "{{ $registry }}/{{ $cfg.analysis.image }}"
       GMX_IMAGE:
         value: "{{ $cfg.gmxImage }}"
       GPU_TYPE:
@@ -258,7 +259,7 @@ jupyterhub:
 
 mdrun-api:
   image:
-    repository: {{ $cfg.mdrunApi.image }}
+    repository: "{{ $cfg.registry }}/{{ $cfg.mdrunApi.image }}"
     tag: "{{ $imageTag }}"
     pullPolicy: Always
   storage:
