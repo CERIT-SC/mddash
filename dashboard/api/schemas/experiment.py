@@ -9,7 +9,7 @@ class ExperimentSchema(BaseAutoSchema):
 
     notebook = fields.Nested("NotebookSchema", allow_none=False)
     tuner_jobs = fields.Nested("TunerJobSchema", many=True)
-    gromacs_jobs = fields.Nested("GromacsJobSchema", many=True)
+    simulation_jobs = fields.Nested("SimulationJobSchema", many=True)
 
     class Meta:
         """Schema configuration."""
