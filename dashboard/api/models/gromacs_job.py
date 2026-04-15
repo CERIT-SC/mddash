@@ -8,14 +8,14 @@ from cache import (
     gromacs_estimated_time_cache,
     gromacs_nsteps_done_cache,
     gromacs_performance_cache,
-    gromacs_status_cache,
 )
 from cachetools import cached
 from clients import mdrun
 from config import DATA_DIR, S3_BUCKET
-from enums import DeviceType, JobStatus
+from enums import DeviceType, Engine, JobStatus
 from extensions import db
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import Mapped, mapped_column
 from utils import tail
 from werkzeug.exceptions import (
     BadRequest,
@@ -25,6 +25,8 @@ from werkzeug.exceptions import (
     UnprocessableEntity,
 )
 
+from .simulation_job import SimulationJob
+
 if TYPE_CHECKING:
     from .experiment import Experiment
 
@@ -32,46 +34,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class GromacsJob(db.Model):  # type: ignore
+class GromacsJob(SimulationJob):
     """GROMACS molecular dynamics simulation job."""
 
     __tablename__ = "gromacs_jobs"
+    __mapper_args__ = {"polymorphic_identity": Engine.GMX}
 
     # TODO: verify if files with these extensions should really be deleted
     RESULT_EXTENSIONS: ClassVar[list[str]] = ["edr", "gro", "log", "trr", "xtc", "cpt", "fit.xtc"]
 
-    # ID of the job inside the database
-    id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
-    # ID of the experiment this job belongs to
-    experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
-    # creation time
-    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
+    id: Mapped[str] = mapped_column(ForeignKey("simulation_jobs.id"), primary_key=True)
+
     # Name of the TPR file
     tpr_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # Device type for PME calculations
     pme: Mapped["DeviceType"] = mapped_column(db.Enum(DeviceType), nullable=False)
     # Device type for non-bonded interactions
     nb: Mapped["DeviceType"] = mapped_column(db.Enum(DeviceType), nullable=False)
-    # Number of MPI processes
-    np: Mapped[int] = mapped_column(db.Integer, nullable=False)
-    # Number of OpenMP threads per MPI rank to start (0 is guess)
-    ntomp: Mapped[int] = mapped_column(db.Integer, nullable=False)
-    # Extra arguments for the job
-    extra_args: Mapped[str] = mapped_column(db.Text, default="")
-
-    # Unix timestamp when the job started
-    _start_timestamp: Mapped[int | None] = mapped_column("start_timestamp", db.Integer, nullable=True)
-    # Unix timestamp when the job finished
-    _finish_timestamp: Mapped[int | None] = mapped_column("finish_timestamp", db.Integer, nullable=True)
-    # Total steps of the job
-    _nsteps: Mapped[int | None] = mapped_column("nsteps", db.Integer, nullable=True)
-    # Performance (ns/day)
-    _performance: Mapped[float | None] = mapped_column("performance", db.Float, nullable=True)
-    # Last successfully-fetched non-UNKNOWN status (fallback when MDRun API is being naughty)
-    _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", db.Enum(JobStatus), nullable=True)
-
-    # back-reference to the parent experiment
-    experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="gromacs_jobs")
 
     @property
     def _deffnm(self) -> str:
@@ -92,25 +71,6 @@ class GromacsJob(db.Model):  # type: ignore
     def _stderr_log(self) -> Path:
         """Path to the stderr log file."""
         return DATA_DIR / self.experiment_id / f"mdrun-{self.id}.err"
-
-    @property
-    @cached(cache=gromacs_status_cache)
-    def status(self) -> JobStatus:
-        """Current status of the k8s job."""
-        # Terminal states never change — skip fetch
-        if self._last_known_status is not None and self._last_known_status in {JobStatus.TERMINATED, JobStatus.ERROR}:
-            return self._last_known_status
-        try:
-            fetched = JobStatus.from_string(mdrun.get_job(self.id)["status"])
-            if fetched not in {self._last_known_status, JobStatus.UNKNOWN}:
-                self._last_known_status = fetched
-                db.session.commit()
-            return fetched
-        except Exception:
-            logger.exception(f"Error fetching job status for job {self.id}")
-            if self._last_known_status:
-                return self._last_known_status
-            return JobStatus.UNKNOWN
 
     @property
     def nsteps(self) -> int | None:
@@ -243,22 +203,16 @@ class GromacsJob(db.Model):  # type: ignore
             ntomp=ntomp,  # type: ignore[call-arg]
             extra_args=extra_args,  # type: ignore[call-arg]
             experiment_id=experiment.id,  # type: ignore[call-arg]
+            engine=Engine.GMX,  # type: ignore[call-arg]
         )
         db.session.add(job)
 
-        job._cleanup_previous_results()
+        job._cleanup_files()
 
         db.session.commit()
         logger.info(f"Started GROMACS job {job.id} for experiment {experiment.id} with TPR {tpr_rel_path}")
 
         return job
-
-    def delete(self) -> None:
-        """Delete the GROMACS job and its associated resources."""
-        mdrun.delete_job(self.id)
-        self._stdout_log.unlink(missing_ok=True)
-        self._stderr_log.unlink(missing_ok=True)
-        self._cleanup_previous_results()
 
     def get_log(self, type: str = "gmx", tail_lines: int | None = None) -> str:
         """
@@ -302,17 +256,21 @@ class GromacsJob(db.Model):  # type: ignore
         except OSError as e:
             raise InternalServerError(description=f"System error reading log file: {e}")
 
-    def _cleanup_previous_results(self) -> None:
+    def _cleanup_files(self) -> None:
         """
-        Clean up previous results for this job.
+        Clean up files associated with this GROMACS job.
 
-        Deletes files with extensions defined in RESULT_EXTENSIONS.
+        Deletes files with extensions defined in RESULT_EXTENSIONS and removes
+        stdout/stderr log files.
         """
         for ext in self.RESULT_EXTENSIONS:
             file = DATA_DIR / self.experiment_id / f"{self._deffnm}.{ext}"
             if file.exists():
                 file.unlink()
                 logger.info(f"Deleted previous result file: {file}")
+
+        self._stdout_log.unlink(missing_ok=True)
+        self._stderr_log.unlink(missing_ok=True)
 
     def _parse_nsteps(self) -> int | None:
         """

@@ -29,6 +29,7 @@ from .notebook import Notebook
 if TYPE_CHECKING:
     from .analysis_job import AnalysisJob
     from .gromacs_job import GromacsJob
+    from .simulation_job import SimulationJob
     from .tuner_job import TunerJob
 
 
@@ -84,9 +85,13 @@ class Experiment(db.Model):  # type: ignore
     tuner_jobs: Mapped[list["TunerJob"]] = relationship(
         "TunerJob", back_populates="experiment", cascade="all, delete-orphan"
     )
+    # Simulation jobs of the experiment (base relationship for JTI)
+    simulation_jobs: Mapped[list["SimulationJob"]] = relationship(
+        "SimulationJob", back_populates="experiment", cascade="all, delete-orphan"
+    )
     # GROMACS jobs of the experiment
     gromacs_jobs: Mapped[list["GromacsJob"]] = relationship(
-        "GromacsJob", back_populates="experiment", cascade="all, delete-orphan"
+        "GromacsJob", back_populates="experiment", cascade="all, delete-orphan", overlaps="simulation_jobs"
     )
     # Analysis jobs of the experiment
     analysis_jobs: Mapped[list["AnalysisJob"]] = relationship(
