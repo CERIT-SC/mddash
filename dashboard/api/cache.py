@@ -39,3 +39,9 @@ analysis_status_cache: TTLCache = TTLCache(maxsize=100, ttl=2)
 
 # Cache for simulation job status (1s TTL)
 simulation_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
+
+# Cache for AMBER job performance metrics (1s TTL)
+amber_performance_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
+
+# Cache for AMBER job nsteps done (500ms TTL)
+amber_nsteps_done_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)
