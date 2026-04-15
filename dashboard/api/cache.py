@@ -36,3 +36,6 @@ gromacs_estimated_time_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)
 
 # Cache for analysis job status (2s TTL — analyses are long-running)
 analysis_status_cache: TTLCache = TTLCache(maxsize=100, ttl=2)
+
+# Cache for simulation job status (1s TTL)
+simulation_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
