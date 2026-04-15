@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from cache import simulation_status_cache
 from cachetools import cached
+from clients import mdrun
 from enums import Engine, JobStatus
 from extensions import db
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -77,26 +78,22 @@ class SimulationJob(db.Model):  # type: ignore
         }:
             return self._last_known_status
 
-        # TODO: wire up mdrun client after Task 13
-        # try:
-        #     match self.engine:
-        #         case Engine.GMX:
-        #             fetched = JobStatus.from_string(mdrun.get_gmx_job(self.id)["status"])
-        #         case Engine.AMBER:
-        #             fetched = JobStatus.from_string(mdrun.get_amber_job(self.id)["status"])
-        #
-        #     if fetched not in {self._last_known_status, JobStatus.UNKNOWN}:
-        #         self._last_known_status = fetched
-        #         db.session.commit()
-        #     return fetched
-        # except Exception:
-        #     logger.exception(f"Error fetching job status for job {self.id}")
-        #     if self._last_known_status:
-        #         return self._last_known_status
-        #     return JobStatus.UNKNOWN
+        try:
+            match self.engine:
+                case Engine.GMX:
+                    fetched = JobStatus.from_string(mdrun.get_gmx_job(self.id)["status"])
+                case Engine.AMBER:
+                    fetched = JobStatus.from_string(mdrun.get_amber_job(self.id)["status"])
 
-        # Fallback to last known status or UNKNOWN until mdrun client is wired
-        return self._last_known_status or JobStatus.UNKNOWN
+            if fetched not in {self._last_known_status, JobStatus.UNKNOWN}:
+                self._last_known_status = fetched
+                db.session.commit()
+            return fetched
+        except Exception:
+            logger.exception(f"Error fetching job status for job {self.id}")
+            if self._last_known_status:
+                return self._last_known_status
+            return JobStatus.UNKNOWN
 
     def delete(self) -> None:
         """
@@ -105,12 +102,11 @@ class SimulationJob(db.Model):  # type: ignore
         Dispatches to the appropriate mdrun client method based on engine type,
         then cleans up local files.
         """
-        # TODO: wire up mdrun client after Task 13
-        # match self.engine:
-        #     case Engine.GMX:
-        #         mdrun.delete_gmx_job(self.id)
-        #     case Engine.AMBER:
-        #         mdrun.delete_amber_job(self.id)
+        match self.engine:
+            case Engine.GMX:
+                mdrun.delete_gmx_job(self.id)
+            case Engine.AMBER:
+                mdrun.delete_amber_job(self.id)
 
         self._cleanup_files()
 

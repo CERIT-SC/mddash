@@ -8,6 +8,7 @@ from cache import (
     amber_performance_cache,
 )
 from cachetools import cached
+from clients import mdrun
 from config import DATA_DIR, S3_BUCKET
 from enums import AmberBinary, Engine, EwaldPreset
 from extensions import db
@@ -116,22 +117,21 @@ class AmberJob(SimulationJob):
         inpcrd_rel_path = str(inpcrd_path.relative_to(DATA_DIR / experiment.id))
         mdin_rel_path = str(mdin_path.relative_to(DATA_DIR / experiment.id))
 
-        # TODO: wire up mdrun client after Task 13
-        # mdrun_job = mdrun.create_amber_job(
-        #     experiment_id=experiment.id,
-        #     prmtop_name=prmtop_rel_path,
-        #     inpcrd_name=inpcrd_rel_path,
-        #     mdin_name=mdin_rel_path,
-        #     bucket_name=S3_BUCKET,
-        #     binary=binary.value,
-        #     ewald=ewald.value,
-        #     np=np,
-        #     ntomp=ntomp,
-        #     extra_args=extra_args,
-        # )
+        mdrun_job = mdrun.create_amber_job(
+            experiment_id=experiment.id,
+            prmtop_name=prmtop_rel_path,
+            inpcrd_name=inpcrd_rel_path,
+            mdin_name=mdin_rel_path,
+            bucket_name=S3_BUCKET,
+            binary=binary.value,
+            ewald=ewald.value,
+            np=np,
+            ntomp=ntomp,
+            extra_args=extra_args,
+        )
 
         job = AmberJob(
-            id="TODO",  # mdrun_job["id"],
+            id=mdrun_job["id"],
             prmtop_name=prmtop_rel_path,
             inpcrd_name=inpcrd_rel_path,
             mdin_name=mdin_rel_path,
