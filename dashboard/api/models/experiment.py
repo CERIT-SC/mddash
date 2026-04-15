@@ -14,7 +14,7 @@ from cache import mdrepo_status_cache, step_status_cache
 from cachetools import cached
 from clients import mdrepo
 from config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
-from enums import JobStatus, PodStatus
+from enums import Engine, JobStatus, PodStatus
 from extensions import db
 from flask import session
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -28,7 +28,6 @@ from .notebook import Notebook
 
 if TYPE_CHECKING:
     from .analysis_job import AnalysisJob
-    from .gromacs_job import GromacsJob
     from .simulation_job import SimulationJob
     from .tuner_job import TunerJob
 
@@ -52,10 +51,11 @@ class Experiment(db.Model):  # type: ignore
         source_message: Description of how the experiment was created.
         notebooks_repo: Git repository URL containing setup notebooks.
         mdrepo_id: MDRepo record ID if the experiment has been published.
+        engine: Molecular dynamics engine (GMX or AMBER).
         notebook: Associated setup notebook for this experiment.
         tuner_jobs: List of tuner jobs associated with this experiment.
-        gromacs_jobs: List of GROMACS simulation jobs for this experiment.
-    """
+        simulation_jobs: List of simulation jobs for this experiment.
+"""
 
     __tablename__ = "experiments"
 
@@ -76,6 +76,8 @@ class Experiment(db.Model):  # type: ignore
     mdrepo_id: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
     # Whether the experiment is published in MDRepo (True=published, False=draft, None=not in MDRepo)
     mdrepo_published: Mapped[bool | None] = mapped_column(db.Boolean, nullable=True)
+    # Molecular dynamics engine (GMX or AMBER)
+    engine: Mapped[Engine] = mapped_column(db.Enum(Engine), nullable=False, default=Engine.GMX)
 
     # Setup notebook status
     notebook: Mapped["Notebook"] = relationship(
@@ -88,10 +90,6 @@ class Experiment(db.Model):  # type: ignore
     # Simulation jobs of the experiment (base relationship for JTI)
     simulation_jobs: Mapped[list["SimulationJob"]] = relationship(
         "SimulationJob", back_populates="experiment", cascade="all, delete-orphan"
-    )
-    # GROMACS jobs of the experiment
-    gromacs_jobs: Mapped[list["GromacsJob"]] = relationship(
-        "GromacsJob", back_populates="experiment", cascade="all, delete-orphan", overlaps="simulation_jobs"
     )
     # Analysis jobs of the experiment
     analysis_jobs: Mapped[list["AnalysisJob"]] = relationship(
@@ -334,16 +332,16 @@ class Experiment(db.Model):  # type: ignore
         if self.mdrepo_published is False:
             return 5, "publishing"
 
-        # Step 4: Analyzing (experiment has terminated GROMACS job)
-        if any(j.status == JobStatus.TERMINATED for j in self.gromacs_jobs):
+        # Step 4: Analyzing (experiment has terminated simulation job)
+        if any(j.status == JobStatus.TERMINATED for j in self.simulation_jobs):
             return 4, "analyzing"
 
         # Step 3: Allow user to analyze a running simulation
-        if any(j.status == JobStatus.RUNNING for j in self.gromacs_jobs):
+        if any(j.status == JobStatus.RUNNING for j in self.simulation_jobs):
             return 3, "simulating"
 
-        # Step 2: Running simulation (experiment has a GROMACS job)
-        if self.gromacs_jobs:
+        # Step 2: Running simulation (experiment has a simulation job)
+        if self.simulation_jobs:
             return 2, "simulating"
 
         # Step 2: Tuning (experiment has terminated tuner trial)
@@ -398,12 +396,12 @@ class Experiment(db.Model):  # type: ignore
             except Exception:
                 logger.exception(f"Failed to delete tuner job {tuner_job.id}")
 
-        # Delete GROMACS jobs
-        for gmx_job in self.gromacs_jobs:
+        # Delete simulation jobs
+        for sim_job in self.simulation_jobs:
             try:
-                gmx_job.delete()
+                sim_job.delete()
             except Exception:
-                logger.exception(f"Failed to delete GROMACS job {gmx_job.id}")
+                logger.exception(f"Failed to delete simulation job {sim_job.id}")
 
         def del_dir(dir: Path) -> None:
             try:
