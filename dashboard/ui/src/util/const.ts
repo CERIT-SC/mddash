@@ -1,3 +1,7 @@
+// MD Engine types
+export const Engine = { GMX: "gmx", AMBER: "amber" } as const
+export type Engine = (typeof Engine)[keyof typeof Engine]
+
 // Runtime configuration injected by Caddy via config.js
 declare global {
   interface Window {

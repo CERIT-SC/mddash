@@ -1,3 +1,5 @@
+import type { Engine } from "./const"
+
 export interface Experiment {
   id: string
   created_at: string
@@ -9,9 +11,10 @@ export interface Experiment {
   mdrepo_record_url: string | null
   step: number
   status: string
+  engine: Engine
   notebook: Notebook
   tuner_jobs: TunerJob[]
-  gromacs_jobs: GromacsJob[]
+  simulation_jobs: SimulationJob[]
 }
 
 export type NotebookTier = "1x" | "2x" | "4x"
@@ -40,15 +43,16 @@ export interface NotebookConfig {
 export interface TunerJob {
   id: string
   experiment_id: string
+  engine: Engine
   tpr_name: string
   tuner_status: JobStatus | null
   error_message: string | null
   created_at: string
   is_stopped: boolean
-  trials: TunerTrial[]
+  trials: GmxTunerTrial[] | AmberTunerTrial[]
 }
 
-export interface TunerTrial {
+export interface GmxTunerTrial {
   id: string
   status: JobStatus
   np: number
@@ -58,14 +62,29 @@ export interface TunerTrial {
   performance: number | null
 }
 
+export interface AmberTunerTrial {
+  id: string
+  status: JobStatus
+  np: number
+  ntomp: number
+  binary: AmberBinary
+  ewald: EwaldPreset
+  performance: number | null
+}
+
 export type DeviceType = "auto" | "cpu" | "gpu"
+export type AmberBinary = "pmemd.cuda" | "pmemd.MPI"
+export type EwaldPreset = "default" | "optimized"
+
+// Discriminated union for simulation jobs
+export type SimulationJob = GromacsJob | AmberJob
 
 export interface GromacsJob {
-  id: number
+  id: string
   experiment_id: string
   created_at: string
+  engine: "gmx"
   tpr_name: string
-  job_name: string
   pme: DeviceType
   nb: DeviceType
   np: number
@@ -78,6 +97,27 @@ export interface GromacsJob {
   performance: number | null
   nsteps_done: number | null
   estimated_time: number | null
+}
+
+export interface AmberJob {
+  id: string
+  experiment_id: string
+  created_at: string
+  engine: "amber"
+  prmtop_name: string
+  inpcrd_name: string
+  mdin_name: string
+  binary: AmberBinary
+  ewald: EwaldPreset
+  np: number
+  ntomp: number
+  extra_args: string
+  status: JobStatus
+  start_timestamp: number | null
+  finish_timestamp: number | null
+  nsteps: number | null
+  performance: number | null
+  nsteps_done: number | null
 }
 
 export interface ResourceUsage {
