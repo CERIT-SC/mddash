@@ -45,6 +45,7 @@ with (
 ):
     from extensions import db, ma
     from routes import (
+        amber_bp,
         experiments_bp,
         files_bp,
         gmx_bp,
@@ -106,6 +107,7 @@ def app(mock_k8s: MagicMock, tmp_path: Path) -> Generator[Flask, None, None]:  #
         test_app.register_blueprint(notebook_bp)
         test_app.register_blueprint(tuner_bp)
         test_app.register_blueprint(gmx_bp)
+        test_app.register_blueprint(amber_bp)
         test_app.register_blueprint(files_bp)
         test_app.register_blueprint(misc_bp)
         test_app.register_blueprint(mdrepo_bp)

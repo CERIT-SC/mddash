@@ -159,7 +159,14 @@ class Experiment(db.Model):  # type: ignore
         return experiment
 
     @classmethod
-    def from_pdb(cls, name: str, pdb_id: str, notebooks_repo: str, access_token: str | None = None) -> "Experiment":
+    def from_pdb(
+        cls,
+        name: str,
+        pdb_id: str,
+        notebooks_repo: str,
+        access_token: str | None = None,
+        engine: Engine = Engine.GMX,
+    ) -> "Experiment":
         """
         Create experiment from PDB ID with database persistence.
 
@@ -168,6 +175,7 @@ class Experiment(db.Model):  # type: ignore
             pdb_id: PDB ID to download (e.g., 1A2B).
             notebooks_repo: Git repository URL containing setup notebooks.
             access_token: Optional GitHub access token for private repositories.
+            engine: Molecular dynamics engine (default: GMX).
 
         Returns:
             The created Experiment instance.
@@ -193,7 +201,9 @@ class Experiment(db.Model):  # type: ignore
                 f.write(response.content)
 
             message: str = f"Created by downloading '{pdb_id}' from RCSB PDB."
-            experiment = cls(id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo)  # type: ignore[call-arg]
+            experiment = cls(
+                id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo, engine=engine
+            )
 
             return cls._create_with_notebook(experiment)
 
@@ -204,7 +214,14 @@ class Experiment(db.Model):  # type: ignore
             raise
 
     @classmethod
-    def from_repo(cls, name: str, repo_link: str, notebooks_repo: str, access_token: str | None = None) -> "Experiment":
+    def from_repo(
+        cls,
+        name: str,
+        repo_link: str,
+        notebooks_repo: str,
+        access_token: str | None = None,
+        engine: Engine = Engine.GMX,
+    ) -> "Experiment":
         """
         Create experiment from an InvenioRDM-compatible repository (Zenodo, MDRepo, etc.).
 
@@ -214,6 +231,7 @@ class Experiment(db.Model):  # type: ignore
                        or https://workflow-repo.test.du.cesnet.cz/datasets/records/8gahj-dh519).
             notebooks_repo: Git repository URL containing setup notebooks.
             access_token: Optional GitHub access token for private repositories.
+            engine: Molecular dynamics engine (default: GMX).
 
         Returns:
             The created Experiment instance.
@@ -261,7 +279,9 @@ class Experiment(db.Model):  # type: ignore
 
             # Create experiment instance
             message: str = f"Created by downloading repository from '{repo_link}'."
-            experiment = cls(id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo)  # type: ignore[call-arg]
+            experiment = cls(
+                id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo, engine=engine
+            )
 
             return cls._create_with_notebook(experiment)
 
@@ -273,7 +293,12 @@ class Experiment(db.Model):  # type: ignore
 
     @classmethod
     def from_files(
-        cls, name: str, files: list[FileStorage], notebooks_repo: str, access_token: str | None = None
+        cls,
+        name: str,
+        files: list[FileStorage],
+        notebooks_repo: str,
+        access_token: str | None = None,
+        engine: Engine = Engine.GMX,
     ) -> "Experiment":
         """
         Create experiment from file uploads with database persistence.
@@ -283,6 +308,7 @@ class Experiment(db.Model):  # type: ignore
             files: List of uploaded files.
             notebooks_repo: Git repository URL containing setup notebooks.
             access_token: Optional GitHub access token for private repositories.
+            engine: Molecular dynamics engine (default: GMX).
 
         Returns:
             The created Experiment instance.
@@ -305,7 +331,9 @@ class Experiment(db.Model):  # type: ignore
                 filenames.append(filename)
 
             message: str = f"Created by uploading files: {', '.join(filenames)}."
-            experiment = cls(id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo)  # type: ignore[call-arg]
+            experiment = cls(
+                id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo, engine=engine
+            )
 
             return cls._create_with_notebook(experiment)
 
