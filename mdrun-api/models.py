@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import k8s_client
 from config import NAMESPACE
-from enums import DeviceType, JobStatus
+from enums import AmberBinary, DeviceType, EwaldPreset, JobStatus
 from extensions import db
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -89,6 +89,66 @@ class MdrunJob(db.Model):  # type: ignore
         db.session.add(job)
         db.session.commit()
         logger.info(f"Started MDRun job {job_name} with ID {job_id} in experiment {experiment_id}")
+
+        return job
+
+    @classmethod
+    def create_and_start_amber(
+        cls,
+        experiment_id: str,
+        prmtop_name: str,
+        inpcrd_name: str,
+        mdin_name: str,
+        bucket_name: str,
+        binary: AmberBinary,
+        ewald: EwaldPreset,
+        np: int,
+        ntomp: int,
+        extra_args: str = "",
+    ) -> "MdrunJob":
+        """
+        Create a new job record and start the AMBER simulation in Kubernetes.
+
+        Args:
+            experiment_id: Unique experiment identifier.
+            prmtop_name: Name of the PRMTOP input file.
+            inpcrd_name: Name of the INPCRD coordinate file.
+            mdin_name: Name of the MDIN input file.
+            bucket_name: S3 bucket for data storage.
+            binary: AMBER binary type (pmemd.cuda or pmemd.MPI).
+            ewald: Ewald summation preset.
+            np: Number of MPI processes.
+            ntomp: Number of OpenMP threads per process.
+            extra_args: Additional arguments for pmemd.
+
+        Returns:
+            MdrunJob: The created MdrunJob instance.
+        """
+        job_id = str(uuid4())
+        job_name = f"mdrun-{job_id}"
+
+        # Create Kubernetes job
+        k8s_client.create_amber_job(
+            ns=NAMESPACE,
+            bucket_name=bucket_name,
+            name=job_name,
+            experiment_id=experiment_id,
+            prmtop_name=prmtop_name,
+            inpcrd_name=inpcrd_name,
+            mdin_name=mdin_name,
+            binary=binary.value,
+            np=np,
+            ntomp=ntomp,
+            ewald=ewald.value,
+            extra_args=extra_args,
+        )
+
+        # Only create DB record if K8s job creation succeeded
+        job = cls(id=job_id, job_name=job_name, experiment_id=experiment_id)
+
+        db.session.add(job)
+        db.session.commit()
+        logger.info(f"Started AMBER job {job_name} with ID {job_id} in experiment {experiment_id}")
 
         return job
 

@@ -40,7 +40,7 @@ with (
 ):
     from enums import JobStatus
     from extensions import db
-    from routes import health_bp, mdrun_bp
+    from routes import amber_bp, gmx_bp, health_bp
 
 
 @pytest.fixture(scope="session")
@@ -77,10 +77,12 @@ def app(mock_k8s: MagicMock) -> Generator[Flask, None, None]:  # noqa: ARG001
     # Mock k8s_client module functions before importing app
     with (
         patch("k8s_client.create_gromacs_job") as mock_create,
+        patch("k8s_client.create_amber_job") as mock_create_amber,
         patch("k8s_client.delete_job") as mock_delete,
         patch("k8s_client.get_job_status") as mock_status,
     ):
         mock_create.return_value = None
+        mock_create_amber.return_value = None
         mock_delete.return_value = None
         mock_status.return_value = JobStatus.PENDING
 
@@ -95,7 +97,8 @@ def app(mock_k8s: MagicMock) -> Generator[Flask, None, None]:  # noqa: ARG001
 
         # Register blueprints
         test_app.register_blueprint(health_bp)
-        test_app.register_blueprint(mdrun_bp)
+        test_app.register_blueprint(gmx_bp)
+        test_app.register_blueprint(amber_bp)
 
         with test_app.app_context():
             db.create_all()
@@ -139,6 +142,7 @@ def mock_k8s_client(mocker: MockerFixture) -> dict[str, MagicMock]:
     """
     return {
         "create_gromacs_job": mocker.patch("k8s_client.create_gromacs_job"),
+        "create_amber_job": mocker.patch("k8s_client.create_amber_job"),
         "delete_job": mocker.patch("k8s_client.delete_job"),
         "get_job_status": mocker.patch("k8s_client.get_job_status", return_value=JobStatus.PENDING),
     }

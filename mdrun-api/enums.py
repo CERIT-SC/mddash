@@ -22,6 +22,36 @@ class DeviceType(str, Enum):
         return cls(value.lower())
 
 
+class AmberBinary(str, Enum):
+    """Enumeration of AMBER binary types."""
+
+    PMEMD_CUDA = "pmemd.cuda"
+    PMEMD_MPI = "pmemd.MPI"
+
+    def __str__(self) -> str:
+        return self.value
+
+    @classmethod
+    def from_string(cls, value: str) -> "AmberBinary":
+        """Create an AmberBinary from a string value."""
+        return cls(value)
+
+
+class EwaldPreset(str, Enum):
+    """Enumeration of Ewald summation presets for AMBER."""
+
+    DEFAULT = "default"
+    OPTIMIZED = "optimized"
+
+    def __str__(self) -> str:
+        return self.value
+
+    @classmethod
+    def from_string(cls, value: str) -> "EwaldPreset":
+        """Create an EwaldPreset from a string value."""
+        return cls(value.lower())
+
+
 class JobStatus(str, Enum):
     """Enumeration of possible job statuses."""
 
