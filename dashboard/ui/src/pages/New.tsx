@@ -4,7 +4,8 @@ import { useNavigate } from "@tanstack/react-router"
 import { ChevronDown, ChevronUp, Loader2, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 
-import { DEFAULT_NOTEBOOKS_REPO } from "@/util/const"
+import { DEFAULT_NOTEBOOKS_REPO, Engine } from "@/util/const"
+import type { Engine as EngineType } from "@/util/const"
 import { useCreateExperiment } from "@/hooks/use-experiments"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -34,6 +35,7 @@ const New = () => {
   const createExperiment = useCreateExperiment()
 
   const [name, setName] = useState("")
+  const [engine, setEngine] = useState<EngineType>(Engine.GMX)
   const [type, setType] = useState("")
   const [pdbId, setPdbId] = useState("")
   const [repoUrl, setRepoUrl] = useState("")
@@ -83,6 +85,7 @@ const New = () => {
 
     const formData = new FormData()
     formData.append("experiment-name", name)
+    formData.append("engine", engine)
     formData.append("type", type)
     formData.append("notebooks-repo", notebooksRepo)
     if (type === "pdb") formData.append("pdb-id", pdbId)
@@ -123,6 +126,20 @@ const New = () => {
                 onChange={(e) => setName(e.target.value)}
                 className={nameError ? "border-destructive" : ""}
               />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label>MD Engine</Label>
+              <Tabs value={engine} onValueChange={(v) => setEngine(v as EngineType)}>
+                <TabsList className="w-full">
+                  <TabsTrigger value={Engine.GMX} className="flex-1">
+                    GROMACS
+                  </TabsTrigger>
+                  <TabsTrigger value={Engine.AMBER} className="flex-1">
+                    AMBER
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             </div>
 
             <div className="flex flex-col gap-2">
