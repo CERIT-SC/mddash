@@ -18,12 +18,12 @@ jupyterhub:
       tag: "sha-4ffff9e"
     config:
       JupyterHub:
-        authenticator_class: generic-oauth
+        authenticator_class: "{{ $cfg.oidc.authenticator_class }}"
       GenericOAuthenticator:
         login_service: "{{ $cfg.oidc.loginService }}"
-        authorize_url: {{ $cfg.oidc.authorizeUrl }}
-        token_url: {{ $cfg.oidc.tokenUrl }}
-        userdata_url: {{ $cfg.oidc.userdataUrl }}
+        authorize_url: "https://{{ $cfg.oidc.oauth_server }}/{{ $cfg.oidc.authorizePath }}"
+        token_url: "https://{{ $cfg.oidc.oauth_server }}/{{ $cfg.oidc.tokenPath }}"
+        userdata_url: "https://{{ $cfg.oidc.oauth_server }}/{{ $cfg.oidc.userdataPath }}"
         oauth_callback_url: https://{{ $cfg.dashboard.hostname }}/hub/oauth_callback
         client_id: null  # gets imported from env OAUTH_CLIENT_ID
         client_secret: null  # gets imported from env OAUTH_CLIENT_SECRET
@@ -39,6 +39,8 @@ jupyterhub:
         http_timeout: 120
 
     extraEnv:
+      EGICHECKIN_HOST:
+        value: "{{ $cfg.oidc.oauth_server }}"
       HOSTNAME:
         value: "{{ $cfg.dashboard.hostname }}"
       HELM_PACKAGE:

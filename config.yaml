@@ -19,10 +19,12 @@ dashboard:
 
 # OIDC provider for JupyterHub authentication
 oidc:
+  authenticator_class: "generic-oauth"
+  oauth_server: "login.e-infra.cz"
   loginService: "e-INFRA CZ"  # the button label in UI
-  authorizeUrl: https://login.e-infra.cz/oidc/authorize
-  tokenUrl: https://login.e-infra.cz/oidc/token
-  userdataUrl: https://login.e-infra.cz/oidc/userinfo
+  authorizePath: /oidc/authorize
+  tokenPath: /oidc/token
+  userdataPath: /oidc/userinfo
   usernameKey: preferred_username
   allowAll: true
   scope:
