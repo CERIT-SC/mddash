@@ -3,6 +3,7 @@ import logging
 import time
 from datetime import datetime, timedelta
 
+import requests
 from config import DATA_DIR
 from enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus, PodStatus
 from extensions import db
@@ -15,7 +16,7 @@ from .state import build_model, demo_state
 logger = logging.getLogger(__name__)
 
 
-def seed_data() -> None:
+def seed_data() -> None:  # noqa: PLR0914
     demo_state.notebook_status.clear()
     demo_state.mdrun_jobs.clear()
     demo_state.tuner_jobs.clear()
@@ -456,9 +457,7 @@ def seed_data() -> None:
 
 def _fetch_and_write_analysis_results(experiment_id: str, analysis_names: list[str]) -> None:
     """Fetch analysis data from MDposit and write result files for seeding."""
-    import requests
-
-    MDPOSIT_ANALYSES_URL = "https://mdposit.mddbr.eu/api/rest/v1/projects/MD-A003ZT.2/analyses"
+    mdposit_analyses_url = "https://mdposit.mddbr.eu/api/rest/v1/projects/MD-A003ZT.2/analyses"
 
     # MDposit uses different endpoint names for some analysis types
     mdposit_name_map: dict[str, str] = {
@@ -482,7 +481,7 @@ def _fetch_and_write_analysis_results(experiment_id: str, analysis_names: list[s
         mdposit_name = mdposit_name_map.get(analysis_name, analysis_name)
         try:
             response = requests.get(
-                f"{MDPOSIT_ANALYSES_URL}/{mdposit_name}",
+                f"{mdposit_analyses_url}/{mdposit_name}",
                 headers=headers,
                 timeout=30,
             )
@@ -503,7 +502,7 @@ def _fetch_and_write_analysis_results(experiment_id: str, analysis_names: list[s
                     if not variant_name:
                         continue
                     variant_response = requests.get(
-                        f"{MDPOSIT_ANALYSES_URL}/{variant_name}",
+                        f"{mdposit_analyses_url}/{variant_name}",
                         headers=headers,
                         timeout=30,
                     )
@@ -519,10 +518,8 @@ def _fetch_and_write_analysis_results(experiment_id: str, analysis_names: list[s
             logger.exception("Failed to fetch analysis %s for seeding", mdposit_name)
 
 
-def _rehydrate_runtime_state() -> None:
+def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
     """Rehydrate runtime state from existing database records."""
-    import time as time_module
-
     # Rehydrate analysis jobs: any job with result files is treated as terminated.
     for job in AnalysisJob.query.all():
         job_name = f"analysis-{job.id}"
@@ -540,7 +537,7 @@ def _rehydrate_runtime_state() -> None:
             "experiment_id": gmx_job.experiment_id,
             "tpr_name": gmx_job.tpr_name,
             "nsteps": gmx_job._nsteps or 100000,  # noqa: SLF001
-            "created_at": float(gmx_job._start_timestamp or time_module.time()),  # noqa: SLF001
+            "created_at": float(gmx_job._start_timestamp or time.time()),  # noqa: SLF001
             "duration_sec": 30.0,
             "log_line_index": 0,
             "log_total_lines": 500,
@@ -556,7 +553,7 @@ def _rehydrate_runtime_state() -> None:
             "inpcrd_name": amber_job.inpcrd_name,
             "mdin_name": amber_job.mdin_name,
             "nsteps": amber_job._nsteps or 100000,  # noqa: SLF001
-            "created_at": float(amber_job._start_timestamp or time_module.time()),  # noqa: SLF001
+            "created_at": float(amber_job._start_timestamp or time.time()),  # noqa: SLF001
             "duration_sec": 30.0,
             "log_line_index": 0,
             "log_total_lines": 500,
@@ -568,7 +565,7 @@ def _rehydrate_runtime_state() -> None:
             # Stopped jobs use preserved trials
             demo_state.tuner_jobs[tuner_job.id] = {
                 "status": JobStatus.TERMINATED.value,
-                "created_at": time_module.time() - 3600,
+                "created_at": time.time() - 3600,
                 "max_trials": len(tuner_job._preserved_trials or []),  # noqa: SLF001
                 "trials": [
                     {
@@ -587,13 +584,13 @@ def _rehydrate_runtime_state() -> None:
             # Error jobs are marked as ERROR
             demo_state.tuner_jobs[tuner_job.id] = {
                 "status": JobStatus.ERROR.value,
-                "created_at": time_module.time() - 3600,
+                "created_at": time.time() - 3600,
                 "max_trials": 1,
                 "trials": [],
             }
         else:
             # Running jobs get simulated trials with TERMINATED, ERROR, RUNNING pattern
-            started_at = time_module.time() - 4
+            started_at = time.time() - 4
             demo_state.tuner_jobs[tuner_job.id] = {
                 "status": JobStatus.RUNNING.value,
                 "created_at": started_at,

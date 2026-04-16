@@ -140,7 +140,7 @@ class DemoState:
 demo_state = DemoState()
 
 
-def build_model(model_cls: type[ModelType], **attrs: Any) -> ModelType:
+def build_model(model_cls: type[ModelType], **attrs: Any) -> ModelType:  # noqa: ANN401
     """
     Build a model instance for demo seeding.
 

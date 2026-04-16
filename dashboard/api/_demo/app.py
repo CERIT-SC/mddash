@@ -88,8 +88,8 @@ def create_demo_app() -> "Flask":
         patch("kubernetes.client.BatchV1Api"),
     ):
         # Import mock installation and setup
-        from _demo.mocks import install_all_mocks
-        from _demo.profile import setup_demo_profile
+        from _demo.mocks import install_all_mocks  # noqa: PLC0415
+        from _demo.profile import setup_demo_profile  # noqa: PLC0415
 
         # Install all mocks - this activates responses globally
         install_all_mocks()

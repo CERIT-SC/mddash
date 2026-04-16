@@ -231,7 +231,7 @@ def create_gromacs_job(
     logger.info(f"Created GROMACS job {name} in namespace {ns}")
 
 
-def create_amber_job(
+def create_amber_job(  # noqa: PLR0914
     ns: str,
     bucket_name: str,
     name: str,

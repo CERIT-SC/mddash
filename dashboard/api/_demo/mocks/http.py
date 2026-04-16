@@ -16,7 +16,6 @@ from uuid import uuid4
 import responses
 from clients.caddy import CADDY_ADMIN_API_URL
 from config import (
-    DATA_DIR,
     MDREPO_API_URL,
     MDREPO_RECORD_NAME,
     MDREPO_TOKEN_URL,
@@ -261,7 +260,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
 def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
     """Install GROMACS Tuner API response mocks."""
 
-    def submit_tuner_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def submit_tuner_job(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
         """
         Submit a GROMACS tuning job.
 
@@ -377,7 +376,7 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
 def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
     """Install MDRepo (InvenioRDM) API response mocks."""
 
-    def create_mdrepo_experiment(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def create_mdrepo_experiment(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
         """
         Create a draft record in MDRepo.
 
@@ -449,7 +448,7 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
             return (HTTPStatus.OK, {}, json.dumps({"id": record_id, "state": "draft"}))
         return (HTTPStatus.NOT_FOUND, {}, json.dumps({"message": "Not found"}))
 
-    def mdrepo_token_exchange(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def mdrepo_token_exchange(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
         """
         Exchange OAuth code for token.
 
@@ -483,7 +482,7 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
 def _install_caddy_mocks(rsps: responses.RequestsMock) -> None:
     """Install Caddy admin API response mocks."""
 
-    def get_caddy_config(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_caddy_config(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
         """
         Get current Caddy configuration.
 
@@ -507,7 +506,7 @@ def _install_caddy_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
-    def update_caddy_config(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def update_caddy_config(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
         """
         Update Caddy configuration.
 
@@ -516,7 +515,7 @@ def _install_caddy_mocks(rsps: responses.RequestsMock) -> None:
         """
         return (HTTPStatus.OK, {}, "")
 
-    def delete_caddy_route(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def delete_caddy_route(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
         """
         Delete a Caddy route.
 
@@ -537,7 +536,7 @@ def _install_caddy_mocks(rsps: responses.RequestsMock) -> None:
 def _install_external_download_mocks(rsps: responses.RequestsMock) -> None:
     """Install mocks for external file downloads (PDB, Zenodo)."""
 
-    def download_pdb_file(request: "ResponsesProxy") -> tuple[int, dict[str, str], bytes]:
+    def download_pdb_file(_request: "ResponsesProxy") -> tuple[int, dict[str, str], bytes]:
         """
         Download a PDB file from RCSB.
 
@@ -548,7 +547,7 @@ def _install_external_download_mocks(rsps: responses.RequestsMock) -> None:
             return (HTTPStatus.OK, {}, DEFAULT_PDB_FILE.read_bytes())
         return (HTTPStatus.NOT_FOUND, {}, b"")
 
-    def download_zenodo_archive(request: "ResponsesProxy") -> tuple[int, dict[str, str], bytes]:
+    def download_zenodo_archive(_request: "ResponsesProxy") -> tuple[int, dict[str, str], bytes]:
         """
         Download a Zenodo files archive.
 
@@ -557,7 +556,7 @@ def _install_external_download_mocks(rsps: responses.RequestsMock) -> None:
         """
         return (HTTPStatus.OK, {}, build_demo_archive_bytes())
 
-    def head_request(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def head_request(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
         """
         Handle HEAD requests for URL validation.
 
@@ -602,8 +601,8 @@ def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
         job_data["performance"] = 62.5
 
         try:
-            from extensions import db
-            from models import AmberJob, GromacsJob
+            from extensions import db  # noqa: PLC0415
+            from models import AmberJob, GromacsJob  # noqa: PLC0415
 
             # Determine job type by checking for engine-specific fields
             if job_data.get("prmtop_name"):
@@ -625,7 +624,8 @@ def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
 
 
 def _advance_tuner_status(status: dict) -> None:
-    """Advance tuner job state based on elapsed time.
+    """
+    Advance tuner job state based on elapsed time.
 
     Deterministic pattern: even-indexed trials TERMINATE, odd-indexed trials ERROR.
     This creates a predictable mix of successful and failed runs.
