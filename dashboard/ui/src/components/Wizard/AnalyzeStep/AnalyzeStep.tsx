@@ -18,12 +18,12 @@ import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import AnalysisPanel from "./AnalysisPanel"
 import AnalyzeSidebar from "./AnalyzeSidebar"
-
-const PREPROCESSED_TOPOLOGY_FORMATS = ["tpr", "top", "prmtop", "psf"]
-const PREPROCESSING_TPR_FORMATS = ["tpr"]
+import { ANALYZE_CONFIG } from "./engine-analyze-config"
 
 const AnalyzeStep = (props: WizardStepProps) => {
   const { experiment } = props
+
+  const engineConfig = ANALYZE_CONFIG[experiment.engine]
 
   const [structureFile, setStructureFile] = useState<FileOption | null>(null)
   const [coordsFile, setCoordsFile] = useState<FileOption | null>(null)
@@ -45,13 +45,15 @@ const AnalyzeStep = (props: WizardStepProps) => {
   )
   const topologyRequired = preprocessingMode !== AnalysisPreprocessingMode.AS_IS || !!analysisConfig?.requiresTopology
   const topologyFormats =
-    preprocessingMode === AnalysisPreprocessingMode.AS_IS ? PREPROCESSED_TOPOLOGY_FORMATS : PREPROCESSING_TPR_FORMATS
+    preprocessingMode === AnalysisPreprocessingMode.AS_IS
+      ? engineConfig.topologyExts
+      : engineConfig.preprocessingTopologyExts
   const topologyTitle =
     preprocessingMode === AnalysisPreprocessingMode.AS_IS
       ? analysisConfig?.requiresTopology
         ? "Select topology file"
         : "Select topology file (optional)"
-      : "Select simulation TPR file"
+      : "Select simulation topology file"
 
   useEffect(() => {
     if (!topologyRequired) {
@@ -63,12 +65,14 @@ const AnalyzeStep = (props: WizardStepProps) => {
 
     const suffix = topologyFile.path.split(".").pop()?.toLowerCase() ?? ""
     const allowedSuffixes =
-      preprocessingMode === AnalysisPreprocessingMode.AS_IS ? PREPROCESSED_TOPOLOGY_FORMATS : PREPROCESSING_TPR_FORMATS
+      preprocessingMode === AnalysisPreprocessingMode.AS_IS
+        ? engineConfig.topologyExts
+        : engineConfig.preprocessingTopologyExts
 
     if (!allowedSuffixes.includes(suffix)) {
       setTopologyFile(null)
     }
-  }, [preprocessingMode, topologyFile, topologyRequired])
+  }, [preprocessingMode, topologyFile, topologyRequired, engineConfig])
 
   const molstarViewer = useMemo(() => {
     if (!structureFile) return null
@@ -90,6 +94,8 @@ const AnalyzeStep = (props: WizardStepProps) => {
       <div className="flex w-[90%] flex-col gap-4 xl:flex-row">
         <AnalyzeSidebar
           experimentId={experiment.id}
+          structureExts={engineConfig.structureExts}
+          trajectoryExts={engineConfig.trajectoryExts}
           structureFile={structureFile}
           topologyRequired={topologyRequired}
           topologyFormats={topologyFormats}

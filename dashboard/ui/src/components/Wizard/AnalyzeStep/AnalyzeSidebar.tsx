@@ -6,6 +6,8 @@ import NotebookController from "@/components/NotebookController"
 
 interface AnalyzeSidebarProps {
   experimentId: string
+  structureExts: string[]
+  trajectoryExts: string[]
   structureFile: FileOption | null
   topologyRequired: boolean
   topologyFormats: string[]
@@ -18,6 +20,8 @@ interface AnalyzeSidebarProps {
 
 const AnalyzeSidebar = ({
   experimentId,
+  structureExts,
+  trajectoryExts,
   structureFile,
   topologyRequired,
   topologyFormats,
@@ -36,7 +40,7 @@ const AnalyzeSidebar = ({
         <CardContent className="flex flex-col gap-3">
           <FileSelector
             experimentId={experimentId}
-            ext={["pdb", "gro"]}
+            ext={structureExts}
             title="Structure file"
             onFileSelected={onStructureSelected}
             className="w-full"
@@ -44,7 +48,7 @@ const AnalyzeSidebar = ({
           <FileSelector
             key={`coords-${structureFile?.path ?? "none"}`}
             experimentId={experimentId}
-            ext={["xtc", "trr"]}
+            ext={trajectoryExts}
             title="Trajectory file"
             onFileSelected={onCoordsSelected}
             className="w-full"
