@@ -104,3 +104,28 @@ export function useDeleteTuner(experimentId: string) {
     onError: (error: Error) => toast.error(error.message),
   })
 }
+
+interface RunAmberTunerVariables {
+  prmtopName: string
+  inpcrdName: string
+  mdinName: string
+  nsteps?: number
+}
+
+export function useRunAmberTuner(experimentId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation<TunerJob, Error, RunAmberTunerVariables>({
+    mutationFn: ({ prmtopName, inpcrdName, mdinName, nsteps = 25000 }) =>
+      api
+        .post(`/experiments/${experimentId}/tuner/${prmtopName}`, null, {
+          params: { inpcrd_name: inpcrdName, mdin_name: mdinName, nsteps },
+        })
+        .then((r) => r.data),
+    onSuccess: (job) => {
+      queryClient.setQueryData(["experiment", experimentId, "tuner", job.tpr_name], job)
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner"], exact: true })
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+}
