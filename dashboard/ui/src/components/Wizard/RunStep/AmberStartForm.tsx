@@ -1,0 +1,106 @@
+import React, { useCallback, useState } from "react"
+
+import { Rocket } from "lucide-react"
+
+import { SELECT_NONE } from "@/util/const"
+import { useSubmitAmber } from "@/hooks/use-amber"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { type WizardStepProps } from "@/components/Wizard/Stepper"
+import type { AmberBinary, EwaldPreset } from "@/util/types"
+
+interface AmberStartFormProps extends WizardStepProps {
+  prmtopName: string
+  inpcrdName: string
+  mdinName: string
+  onStartJob: () => void
+}
+
+const AmberStartForm = (props: AmberStartFormProps) => {
+  const { experiment, prmtopName, inpcrdName, mdinName, onStartJob } = props
+
+  const submitAmber = useSubmitAmber(experiment.id)
+
+  const handleSubmit = useCallback(
+    async (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault()
+
+      const formData = new FormData(event.currentTarget)
+
+      submitAmber.mutate({ prmtopName, formData }, { onSuccess: () => onStartJob() })
+    },
+    [prmtopName, onStartJob, submitAmber]
+  )
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base">Start AMBER simulation</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="binary-select">Binary</Label>
+              <Select name="binary" defaultValue={SELECT_NONE} required>
+                <SelectTrigger id="binary-select">
+                  <SelectValue placeholder="Select binary" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_NONE} disabled>
+                    <em>Select...</em>
+                  </SelectItem>
+                  <SelectItem value="pmemd.cuda">pmemd.cuda (GPU)</SelectItem>
+                  <SelectItem value="pmemd.MPI">pmemd.MPI (CPU)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="ewald-select">Ewald Preset</Label>
+              <Select name="ewald" defaultValue={SELECT_NONE} required>
+                <SelectTrigger id="ewald-select">
+                  <SelectValue placeholder="Select preset" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SELECT_NONE} disabled>
+                    <em>Select...</em>
+                  </SelectItem>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="optimized">Optimized</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="np-input">Number of MPI processes (np)</Label>
+              <Input id="np-input" name="np" type="number" min={1} step={1} required defaultValue={1} />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <Label htmlFor="ntomp-input">OpenMP threads per MPI rank (ntomp)</Label>
+              <Input id="ntomp-input" name="ntomp" type="number" min={1} step={1} required defaultValue={1} />
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="extra-args-input">Extra Arguments (optional)</Label>
+            <Input id="extra-args-input" name="extra_args" placeholder="Additional arguments for pmemd" />
+          </div>
+
+          <div className="mt-2 flex justify-end">
+            <Button type="submit" disabled={submitAmber.isPending}>
+              <Rocket className="mr-1 h-4 w-4" />
+              Run
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
+export default AmberStartForm
