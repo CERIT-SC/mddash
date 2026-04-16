@@ -69,8 +69,8 @@ const Experiments = () => {
                   <span>{experiment.tuner_jobs.length}</span>
                 </div>
                 <div className="flex items-center gap-1 text-sm">
-                  <span className="text-muted-foreground font-medium">Gromacs jobs:</span>
-                  <span>{experiment.gromacs_jobs.length}</span>
+                  <span className="text-muted-foreground font-medium">Simulation jobs:</span>
+                  <span>{experiment.simulation_jobs.length}</span>
                 </div>
               </CardContent>
               <CardFooter className="flex justify-center gap-2 pt-0">

@@ -135,6 +135,7 @@ export function statToSeries(
     ? downsampleSeries(stat.data, { start, step, targetPoints })
     : buildTimeSeries(stat.data, { start, step })
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { data: _, ...stats } = stat
 
   return {

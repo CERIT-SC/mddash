@@ -4,7 +4,7 @@ import { Loader2, Star, Terminal } from "lucide-react"
 
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
-import { getJobStatusVariant, type JobStatus, type TunerTrial } from "@/util/types"
+import { getJobStatusVariant, type JobStatus, type GmxTunerTrial as TunerTrial } from "@/util/types"
 import { useTunerTrialLogs } from "@/hooks/use-tuner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -41,7 +41,7 @@ const TunerTable = (props: TunerTableProps) => {
       UNKNOWN: 4,
     }
 
-    return [...rows].sort((a, b) => {
+    return [...rows].sort((a: TunerTrial, b: TunerTrial) => {
       if (a.performance === null && b.performance === null) return statusRank[a.status] - statusRank[b.status]
       if (a.performance === null) return 1
       if (b.performance === null) return -1

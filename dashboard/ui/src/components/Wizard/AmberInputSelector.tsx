@@ -4,24 +4,13 @@ import FileSelector from "@/components/FileSelector"
 
 interface AmberInputSelectorProps {
   experimentId: string
-  selectedPrmtop: string | null
-  selectedInpcrd: string | null
-  selectedMdin: string | null
   onPrmtopSelected: (file: FileOption | null) => void
   onInpcrdSelected: (file: FileOption | null) => void
   onMdinSelected: (file: FileOption | null) => void
 }
 
 const AmberInputSelector = (props: AmberInputSelectorProps) => {
-  const {
-    experimentId,
-    selectedPrmtop,
-    selectedInpcrd,
-    selectedMdin,
-    onPrmtopSelected,
-    onInpcrdSelected,
-    onMdinSelected,
-  } = props
+  const { experimentId, onPrmtopSelected, onInpcrdSelected, onMdinSelected } = props
 
   return (
     <Card className="w-80 shrink-0">

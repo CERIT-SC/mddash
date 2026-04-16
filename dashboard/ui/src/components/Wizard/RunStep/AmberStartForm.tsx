@@ -1,9 +1,8 @@
-import React, { useCallback, useState } from "react"
+import { useCallback } from "react"
 
 import { Rocket } from "lucide-react"
 
 import { SELECT_NONE } from "@/util/const"
-import type { AmberBinary, EwaldPreset } from "@/util/types"
 import { useSubmitAmber } from "@/hooks/use-amber"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,13 +13,11 @@ import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 interface AmberStartFormProps extends WizardStepProps {
   prmtopName: string
-  inpcrdName: string
-  mdinName: string
   onStartJob: () => void
 }
 
 const AmberStartForm = (props: AmberStartFormProps) => {
-  const { experiment, prmtopName, inpcrdName, mdinName, onStartJob } = props
+  const { experiment, prmtopName, onStartJob } = props
 
   const submitAmber = useSubmitAmber(experiment.id)
 

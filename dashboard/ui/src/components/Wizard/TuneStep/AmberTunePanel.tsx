@@ -3,7 +3,7 @@ import { useState } from "react"
 import { SkipForward } from "lucide-react"
 
 import type { FileOption } from "@/util/types"
-import { useDeleteTuner, useStopTuner } from "@/hooks/use-tuner"
+import { useStopTuner } from "@/hooks/use-tuner"
 import { Button } from "@/components/ui/button"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
@@ -15,32 +15,16 @@ const AmberTunePanel = (props: WizardStepProps) => {
   const { experiment } = props
 
   const stopTuner = useStopTuner(experiment.id)
-  const deleteTuner = useDeleteTuner(experiment.id)
 
   const [selectedPrmtop, setSelectedPrmtop] = useState<FileOption | null>(null)
   const [selectedInpcrd, setSelectedInpcrd] = useState<FileOption | null>(null)
   const [selectedMdin, setSelectedMdin] = useState<FileOption | null>(null)
-  const [deletePrmtop, setDeletePrmtop] = useState<string | null>(null)
-  const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false)
   const [skipDialog, setSkipDialog] = useState(false)
 
   const allFilesSelected = selectedPrmtop && selectedInpcrd && selectedMdin
 
-  const handleConfirmDelete = async () => {
-    if (!deletePrmtop) return
-    await deleteTuner.mutateAsync(deletePrmtop)
-    setSelectedPrmtop(null)
-    refetchJobs()
-  }
-
   const handleStop = async (prmtopName: string) => {
     await stopTuner.mutateAsync(prmtopName)
-    refetchJobs()
-  }
-
-  // Placeholder for refetchJobs - will be called by child components
-  const refetchJobs = () => {
-    // The tuner status query will be refetched by the child TunerView component
   }
 
   return (
@@ -48,9 +32,6 @@ const AmberTunePanel = (props: WizardStepProps) => {
       <div className="flex w-[90%] flex-row gap-4">
         <AmberInputSelector
           experimentId={experiment.id}
-          selectedPrmtop={selectedPrmtop?.name ?? null}
-          selectedInpcrd={selectedInpcrd?.name ?? null}
-          selectedMdin={selectedMdin?.name ?? null}
           onPrmtopSelected={setSelectedPrmtop}
           onInpcrdSelected={setSelectedInpcrd}
           onMdinSelected={setSelectedMdin}
@@ -63,7 +44,7 @@ const AmberTunePanel = (props: WizardStepProps) => {
               inpcrdName={selectedInpcrd.name}
               mdinName={selectedMdin.name}
               stopJob={handleStop}
-              onStartTuner={refetchJobs}
+              onStartTuner={() => {}}
               {...props}
             />
           </div>
@@ -87,13 +68,6 @@ const AmberTunePanel = (props: WizardStepProps) => {
         title="Skip Tuning?"
         message="Are you sure you want to skip tuning? Your simulation may run slowly without tuning."
         onConfirm={props.nextStep}
-      />
-
-      <ConfirmDialog
-        open={confirmDeleteDialog}
-        setOpen={setConfirmDeleteDialog}
-        onConfirm={handleConfirmDelete}
-        message="Are you sure you want to delete this tuning job? The data will be lost."
       />
     </div>
   )

@@ -3,8 +3,6 @@ import type { ComponentType } from "react"
 import { Engine } from "@/util/const"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
-// AmberRunPanel will be created in Task 20
-// @ts-expect-error AmberRunPanel will be created in Task 20
 import AmberRunPanel from "./AmberRunPanel"
 import GmxRunPanel from "./GmxRunPanel"
 

@@ -22,6 +22,7 @@ function processTerminalOutput(text: string): string {
 
     while (i < raw.length) {
       // Consume an ANSI escape sequence (zero visual width).
+      // eslint-disable-next-line no-control-regex
       const ansiMatch = raw.slice(i).match(/^\x1b\[[0-9;]*[A-Za-z]/)
       if (ansiMatch) {
         pendingAnsi += ansiMatch[0]
