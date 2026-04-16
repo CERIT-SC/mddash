@@ -10,7 +10,7 @@ import LogsView from "@/components/LogsView"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import JobStatusDisplay from "./JobStatusDisplay"
-import StartForm from "./StartForm"
+import GmxStartForm from "./GmxStartForm"
 
 type LogType = "gmx" | "stdout" | "stderr"
 
@@ -48,7 +48,7 @@ const RunView = (props: RunViewProps) => {
   }
 
   if (!jobStatus) {
-    return <StartForm {...props} onStartJob={handleJobStarted} />
+    return <GmxStartForm {...props} onStartJob={handleJobStarted} />
   }
 
   return (
