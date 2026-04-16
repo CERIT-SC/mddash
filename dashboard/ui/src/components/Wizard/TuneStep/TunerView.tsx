@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import ConfirmDialog from "@/components/ConfirmDialog"
-import StartForm from "@/components/Wizard/RunStep/StartForm"
+import { StartForm } from "@/components/Wizard/RunStep/GmxStartForm"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import TunerTable from "./TunerTable"
