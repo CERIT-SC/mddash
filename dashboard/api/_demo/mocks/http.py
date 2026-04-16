@@ -58,8 +58,8 @@ def install_http_mocks(rsps: responses.RequestsMock) -> None:
 def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
     """Install MDRun API response mocks."""
 
-    def create_mdrun_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Create a new MDRun job."""
+    def create_gmx_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        """Create a new GROMACS MDRun job."""
         try:
             body = json.loads(request.body or "{}")
         except json.JSONDecodeError:
@@ -101,9 +101,56 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
-    def get_mdrun_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Get MDRun job status."""
-        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/(?P<job_id>[^/]+)", request.url)
+    def create_amber_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        """Create a new AMBER MDRun job."""
+        try:
+            body = json.loads(request.body or "{}")
+        except json.JSONDecodeError:
+            body = {}
+
+        experiment_id = body.get("experiment_id", "unknown")
+        prmtop_name = body.get("prmtop_name", "md.prmtop")
+        inpcrd_name = body.get("inpcrd_name", "md.inpcrd")
+        mdin_name = body.get("mdin_name", "md.mdin")
+        binary = body.get("binary", "pmemd.MPI")
+        ewald = body.get("ewald", "default")
+        np_val = body.get("np", 2)
+        ntomp = body.get("ntomp", 4)
+
+        job_id = f"demo-amber-{uuid4()}"
+        started_at = time.time()
+
+        demo_state.mdrun_jobs[job_id] = {
+            "status": "RUNNING",
+            "experiment_id": experiment_id,
+            "prmtop_name": prmtop_name,
+            "inpcrd_name": inpcrd_name,
+            "mdin_name": mdin_name,
+            "nsteps": DEFAULT_GMX_NSTEPS,
+            "created_at": started_at,
+            "duration_sec": DEFAULT_GMX_DURATION_SEC,
+            "log_line_index": 0,
+            "log_total_lines": 500,
+        }
+
+        response_body = {
+            "success": True,
+            "data": {
+                "id": job_id,
+                "status": "RUNNING",
+                "bucket_name": body.get("bucket_name", "demo-bucket"),
+                "binary": binary,
+                "ewald": ewald,
+                "np": np_val,
+                "ntomp": ntomp,
+                "extra_args": body.get("extra_args", ""),
+            },
+        }
+        return (HTTPStatus.CREATED, {}, json.dumps(response_body))
+
+    def get_gmx_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        """Get GROMACS job status."""
+        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/(?P<job_id>[^/]+)", request.url)
         if not match:
             return (HTTPStatus.NOT_FOUND, {}, json.dumps({"success": False, "message": "Job not found"}))
 
@@ -121,16 +168,54 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
-    def delete_mdrun_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Delete an MDRun job."""
-        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/(?P<job_id>[^/]+)", request.url)
+    def get_amber_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        """Get AMBER job status."""
+        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/(?P<job_id>[^/]+)", request.url)
+        if not match:
+            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"success": False, "message": "Job not found"}))
+
+        job_id = match.group("job_id")
+        job_data = demo_state.mdrun_jobs.get(job_id)
+
+        if job_data is None:
+            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"success": False, "message": f"Job {job_id} not found"}))
+
+        _advance_mdrun_job(job_id, job_data)
+
+        response_body = {
+            "success": True,
+            "data": {"id": job_id, "status": job_data["status"]},
+        }
+        return (HTTPStatus.OK, {}, json.dumps(response_body))
+
+    def delete_gmx_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        """Delete a GROMACS job."""
+        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/(?P<job_id>[^/]+)", request.url)
         if match:
             demo_state.mdrun_jobs.pop(match.group("job_id"), None)
         return (HTTPStatus.NO_CONTENT, {}, "")
 
-    rsps.add_callback(responses.POST, f"{MDRUN_API_URL}/jobs", callback=create_mdrun_job)
-    rsps.add_callback(responses.GET, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/[^/]+"), callback=get_mdrun_job)
-    rsps.add_callback(responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/[^/]+"), callback=delete_mdrun_job)
+    def delete_amber_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        """Delete an AMBER job."""
+        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/(?P<job_id>[^/]+)", request.url)
+        if match:
+            demo_state.mdrun_jobs.pop(match.group("job_id"), None)
+        return (HTTPStatus.NO_CONTENT, {}, "")
+
+    # Legacy endpoints (for backward compatibility)
+    rsps.add_callback(responses.POST, f"{MDRUN_API_URL}/jobs", callback=create_gmx_job)
+    rsps.add_callback(responses.GET, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/(?!gmx|amber)[^/]+"), callback=get_gmx_job)
+    rsps.add_callback(responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/(?!gmx|amber)[^/]+"), callback=delete_gmx_job)
+
+    # GROMACS-specific endpoints
+    rsps.add_callback(responses.POST, f"{MDRUN_API_URL}/jobs/gmx", callback=create_gmx_job)
+    rsps.add_callback(responses.GET, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+"), callback=get_gmx_job)
+    rsps.add_callback(responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+"), callback=delete_gmx_job)
+
+    # AMBER-specific endpoints
+    rsps.add_callback(responses.POST, f"{MDRUN_API_URL}/jobs/amber", callback=create_amber_job)
+    rsps.add_callback(responses.GET, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=get_amber_job)
+    rsps.add_callback(responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=delete_amber_job)
 
 
 def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
@@ -382,13 +467,23 @@ def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
 
         try:
             from extensions import db
-            from models import GromacsJob
+            from models import AmberJob, GromacsJob
 
-            gmx_job = GromacsJob.query.filter_by(id=job_id).first()
-            if gmx_job is not None:
-                gmx_job._performance = 62.5  # noqa: SLF001
-                gmx_job._finish_timestamp = int(time.time())  # noqa: SLF001
-                db.session.commit()
+            # Determine job type by checking for engine-specific fields
+            if job_data.get("prmtop_name"):
+                # AMBER job
+                amber_job = AmberJob.query.filter_by(id=job_id).first()
+                if amber_job is not None:
+                    amber_job._performance = 62.5  # noqa: SLF001
+                    amber_job._finish_timestamp = int(time.time())  # noqa: SLF001
+                    db.session.commit()
+            else:
+                # GROMACS job (default)
+                gmx_job = GromacsJob.query.filter_by(id=job_id).first()
+                if gmx_job is not None:
+                    gmx_job._performance = 62.5  # noqa: SLF001
+                    gmx_job._finish_timestamp = int(time.time())  # noqa: SLF001
+                    db.session.commit()
         except Exception:
             pass
 

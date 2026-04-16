@@ -4,12 +4,12 @@ import time
 from datetime import datetime, timedelta
 
 from config import DATA_DIR
-from enums import AnalysisType, DeviceType, JobStatus, PodStatus
+from enums import AmberBinary, AnalysisType, DeviceType, EwaldPreset, Engine, JobStatus, PodStatus
 from extensions import db
-from models import AnalysisJob, Experiment, GromacsJob, Notebook, TunerJob
+from models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook, TunerJob
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, MWF_DIR
 
-from .files import ensure_demo_files, write_finished_gmx_log, write_running_gmx_log
+from .files import ensure_amber_demo_files, ensure_demo_files, write_finished_gmx_log, write_running_gmx_log
 from .state import build_model, demo_state
 
 logger = logging.getLogger(__name__)
@@ -267,6 +267,123 @@ def seed_data() -> None:
         topology_file=None,
     )
 
+    # Experiment 4: AMBER protein folding study (currently running AMBER simulation)
+    amber_folding = build_model(
+        Experiment,
+        id="dddd",
+        name="AMBER villin headpiece folding",
+        source_message="Created by uploading files: villin.prmtop, villin.inpcrd, production.mdin.",
+        notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
+        engine=Engine.AMBER,
+        created_at=now - timedelta(hours=6),
+        updated_at=now - timedelta(hours=2),
+    )
+    amber_folding_notebook = build_model(Notebook, experiment_id=amber_folding.id, token="demo-token-amber")
+    demo_state.notebook_status[amber_folding.id] = PodStatus.RUNNING
+
+    # Running AMBER job
+    running_amber = build_model(
+        AmberJob,
+        id="demo-amber-running",
+        experiment=amber_folding,
+        prmtop_name="villin.prmtop",
+        inpcrd_name="villin.inpcrd",
+        mdin_name="production.mdin",
+        binary=AmberBinary.PMEMD_CUDA,
+        ewald=EwaldPreset.OPTIMIZED,
+        np=1,
+        ntomp=8,
+        extra_args="",
+        _nsteps=500000,
+        _start_timestamp=int((now - timedelta(hours=2)).timestamp()),
+        _finish_timestamp=None,
+        _performance=None,
+        created_at=now - timedelta(hours=2),
+        engine=Engine.AMBER,
+    )
+    demo_state.mdrun_jobs[running_amber.id] = {
+        "status": JobStatus.RUNNING.value,
+        "experiment_id": amber_folding.id,
+        "prmtop_name": "villin.prmtop",
+        "inpcrd_name": "villin.inpcrd",
+        "mdin_name": "production.mdin",
+        "nsteps": 500000,
+        "created_at": time.time(),
+        "duration_sec": 7200,
+    }
+
+    # Finished AMBER job (equilibration complete)
+    finished_amber = build_model(
+        AmberJob,
+        id="demo-amber-finished",
+        experiment=amber_folding,
+        prmtop_name="villin.prmtop",
+        inpcrd_name="villin.inpcrd",
+        mdin_name="equilibration.mdin",
+        binary=AmberBinary.PMEMD_MPI,
+        ewald=EwaldPreset.DEFAULT,
+        np=4,
+        ntomp=2,
+        extra_args="",
+        _nsteps=100000,
+        _start_timestamp=int((now - timedelta(hours=5)).timestamp()),
+        _finish_timestamp=int((now - timedelta(hours=3)).timestamp()),
+        _performance=28.7,
+        created_at=now - timedelta(hours=5),
+        engine=Engine.AMBER,
+    )
+    demo_state.mdrun_jobs[finished_amber.id] = {
+        "status": JobStatus.TERMINATED.value,
+        "experiment_id": amber_folding.id,
+        "prmtop_name": "villin.prmtop",
+        "inpcrd_name": "villin.inpcrd",
+        "mdin_name": "equilibration.mdin",
+        "nsteps": 100000,
+    }
+
+    # Experiment 5: Published AMBER DNA simulation
+    amber_dna = build_model(
+        Experiment,
+        id="eeeee",
+        name="AMBER DNA duplex stability",
+        source_message="Created by uploading files: dna.prmtop, dna.inpcrd, simulation.mdin.",
+        notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
+        engine=Engine.AMBER,
+        created_at=now - timedelta(days=7),
+        updated_at=now - timedelta(days=5),
+    )
+    amber_dna_notebook = build_model(Notebook, experiment_id=amber_dna.id, token="demo-token-dna")
+    demo_state.notebook_status[amber_dna.id] = PodStatus.DOWN
+
+    # Finished AMBER DNA job
+    finished_amber_dna = build_model(
+        AmberJob,
+        id="demo-amber-dna",
+        experiment=amber_dna,
+        prmtop_name="dna.prmtop",
+        inpcrd_name="dna.inpcrd",
+        mdin_name="simulation.mdin",
+        binary=AmberBinary.PMEMD_CUDA,
+        ewald=EwaldPreset.OPTIMIZED,
+        np=1,
+        ntomp=4,
+        extra_args="",
+        _nsteps=2000000,
+        _start_timestamp=int((now - timedelta(days=6)).timestamp()),
+        _finish_timestamp=int((now - timedelta(days=5)).timestamp()),
+        _performance=156.2,
+        created_at=now - timedelta(days=6),
+        engine=Engine.AMBER,
+    )
+    demo_state.mdrun_jobs[finished_amber_dna.id] = {
+        "status": JobStatus.TERMINATED.value,
+        "experiment_id": amber_dna.id,
+        "prmtop_name": "dna.prmtop",
+        "inpcrd_name": "dna.inpcrd",
+        "mdin_name": "simulation.mdin",
+        "nsteps": 2000000,
+    }
+
     db.session.add_all([
         membrane,
         membrane_notebook,
@@ -283,6 +400,13 @@ def seed_data() -> None:
         rmsd_analysis,
         sasa_analysis,
         hbonds_analysis,
+        amber_folding,
+        amber_folding_notebook,
+        running_amber,
+        finished_amber,
+        amber_dna,
+        amber_dna_notebook,
+        finished_amber_dna,
     ])
     db.session.commit()
 
@@ -308,6 +432,22 @@ def seed_data() -> None:
     # Published study: simple structure
     ensure_demo_files(published.id, ["lysozyme_hewl.tpr", "structure.pdb", "trajectory.xtc"])
     write_finished_gmx_log(published.id, "lysozyme_hewl", nsteps=1000000, performance=45.3)
+
+    # AMBER villin folding study: uses AMBER file format
+    ensure_amber_demo_files(
+        amber_folding.id,
+        prmtop_name="villin.prmtop",
+        inpcrd_name="villin.inpcrd",
+        mdin_names=["production.mdin", "equilibration.mdin"],
+    )
+
+    # AMBER DNA study: uses AMBER file format
+    ensure_amber_demo_files(
+        amber_dna.id,
+        prmtop_name="dna.prmtop",
+        inpcrd_name="dna.inpcrd",
+        mdin_names=["simulation.mdin"],
+    )
 
     # Write analysis result files (fetched from MDposit)
     _fetch_and_write_analysis_results(published.id, ["rmsds", "sasa"])
@@ -406,6 +546,22 @@ def _rehydrate_runtime_state() -> None:
             "log_total_lines": 500,
         }
 
+    # Rehydrate AMBER jobs from database
+    for amber_job in AmberJob.query.all():
+        status = JobStatus.TERMINATED.value if amber_job._finish_timestamp else JobStatus.RUNNING.value  # noqa: SLF001
+        demo_state.mdrun_jobs[amber_job.id] = {
+            "status": status,
+            "experiment_id": amber_job.experiment_id,
+            "prmtop_name": amber_job.prmtop_name,
+            "inpcrd_name": amber_job.inpcrd_name,
+            "mdin_name": amber_job.mdin_name,
+            "nsteps": amber_job._nsteps or 100000,  # noqa: SLF001
+            "created_at": float(amber_job._start_timestamp or time_module.time()),  # noqa: SLF001
+            "duration_sec": 30.0,
+            "log_line_index": 0,
+            "log_total_lines": 500,
+        }
+
     # Rehydrate tuner jobs from database
     for tuner_job in TunerJob.query.all():
         if tuner_job.is_stopped:
@@ -477,6 +633,8 @@ def _rehydrate_runtime_state() -> None:
     membrane = Experiment.query.filter_by(id="aaaaa").first()
     enzyme = Experiment.query.filter_by(id="bbbbb").first()
     published = Experiment.query.filter_by(id="ccccc").first()
+    amber_folding = Experiment.query.filter_by(id="dddd").first()
+    amber_dna = Experiment.query.filter_by(id="eeeee").first()
 
     if membrane is not None:
         demo_state.notebook_status[membrane.id] = PodStatus.DOWN
@@ -504,3 +662,21 @@ def _rehydrate_runtime_state() -> None:
         write_finished_gmx_log(published.id, "lysozyme_hewl", nsteps=1000000, performance=45.3)
         if published.mdrepo_id:
             demo_state.mdrepo_records[published.mdrepo_id] = True
+
+    if amber_folding is not None:
+        demo_state.notebook_status[amber_folding.id] = PodStatus.RUNNING
+        ensure_amber_demo_files(
+            amber_folding.id,
+            prmtop_name="villin.prmtop",
+            inpcrd_name="villin.inpcrd",
+            mdin_names=["production.mdin", "equilibration.mdin"],
+        )
+
+    if amber_dna is not None:
+        demo_state.notebook_status[amber_dna.id] = PodStatus.DOWN
+        ensure_amber_demo_files(
+            amber_dna.id,
+            prmtop_name="dna.prmtop",
+            inpcrd_name="dna.inpcrd",
+            mdin_names=["simulation.mdin"],
+        )

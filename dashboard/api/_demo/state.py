@@ -19,13 +19,18 @@ class MdrunJobState:
 
     status: str
     experiment_id: str
-    tpr_name: str
     nsteps: int
     created_at: float
     duration_sec: float
     log_line_index: int
     log_total_lines: int
     performance: float | None = None
+    # GROMACS-specific
+    tpr_name: str | None = None
+    # AMBER-specific
+    prmtop_name: str | None = None
+    inpcrd_name: str | None = None
+    mdin_name: str | None = None
 
 
 @dataclass
