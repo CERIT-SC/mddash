@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import LogsView from "@/components/LogsView"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
-import JobStatusDisplay from "./JobStatusDisplay"
 import GmxStartForm from "./GmxStartForm"
+import JobStatusDisplay from "./JobStatusDisplay"
 
 type LogType = "gmx" | "stdout" | "stderr"
 

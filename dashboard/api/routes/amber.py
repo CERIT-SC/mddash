@@ -8,7 +8,7 @@ from extensions import db
 from flask import Blueprint, Response, request
 from models import AmberJob, Experiment
 from schemas import AmberJobSchema
-from validators import check_positive_int, check_path
+from validators import check_path, check_positive_int
 
 amber_bp = Blueprint("amber", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/amber")
 

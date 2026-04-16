@@ -59,7 +59,12 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
     """Install MDRun API response mocks."""
 
     def create_gmx_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Create a new GROMACS MDRun job."""
+        """
+        Create a new GROMACS MDRun job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         try:
             body = json.loads(request.body or "{}")
         except json.JSONDecodeError:
@@ -102,7 +107,12 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
     def create_amber_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Create a new AMBER MDRun job."""
+        """
+        Create a new AMBER MDRun job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         try:
             body = json.loads(request.body or "{}")
         except json.JSONDecodeError:
@@ -149,7 +159,12 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
     def get_gmx_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Get GROMACS job status."""
+        """
+        Get GROMACS job status.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/(?P<job_id>[^/]+)", request.url)
         if not match:
             return (HTTPStatus.NOT_FOUND, {}, json.dumps({"success": False, "message": "Job not found"}))
@@ -169,7 +184,12 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
     def get_amber_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Get AMBER job status."""
+        """
+        Get AMBER job status.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/(?P<job_id>[^/]+)", request.url)
         if not match:
             return (HTTPStatus.NOT_FOUND, {}, json.dumps({"success": False, "message": "Job not found"}))
@@ -189,14 +209,24 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
     def delete_gmx_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Delete a GROMACS job."""
+        """
+        Delete a GROMACS job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/(?P<job_id>[^/]+)", request.url)
         if match:
             demo_state.mdrun_jobs.pop(match.group("job_id"), None)
         return (HTTPStatus.NO_CONTENT, {}, "")
 
     def delete_amber_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Delete an AMBER job."""
+        """
+        Delete an AMBER job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/(?P<job_id>[^/]+)", request.url)
         if match:
             demo_state.mdrun_jobs.pop(match.group("job_id"), None)
@@ -204,25 +234,40 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
 
     # Legacy endpoints (for backward compatibility)
     rsps.add_callback(responses.POST, f"{MDRUN_API_URL}/jobs", callback=create_gmx_job)
-    rsps.add_callback(responses.GET, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/(?!gmx|amber)[^/]+"), callback=get_gmx_job)
-    rsps.add_callback(responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/(?!gmx|amber)[^/]+"), callback=delete_gmx_job)
+    rsps.add_callback(
+        responses.GET, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/(?!gmx|amber)[^/]+"), callback=get_gmx_job
+    )
+    rsps.add_callback(
+        responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/(?!gmx|amber)[^/]+"), callback=delete_gmx_job
+    )
 
     # GROMACS-specific endpoints
     rsps.add_callback(responses.POST, f"{MDRUN_API_URL}/jobs/gmx", callback=create_gmx_job)
     rsps.add_callback(responses.GET, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+"), callback=get_gmx_job)
-    rsps.add_callback(responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+"), callback=delete_gmx_job)
+    rsps.add_callback(
+        responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+"), callback=delete_gmx_job
+    )
 
     # AMBER-specific endpoints
     rsps.add_callback(responses.POST, f"{MDRUN_API_URL}/jobs/amber", callback=create_amber_job)
-    rsps.add_callback(responses.GET, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=get_amber_job)
-    rsps.add_callback(responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=delete_amber_job)
+    rsps.add_callback(
+        responses.GET, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=get_amber_job
+    )
+    rsps.add_callback(
+        responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=delete_amber_job
+    )
 
 
 def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
     """Install GROMACS Tuner API response mocks."""
 
     def submit_tuner_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Submit a GROMACS tuning job."""
+        """
+        Submit a GROMACS tuning job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         job_id = f"demo-tuner-{uuid4()}"
         started_at = time.time()
 
@@ -272,7 +317,12 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
     def get_tuner_status(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Get GROMACS tuning job status."""
+        """
+        Get GROMACS tuning job status.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         match = re.search(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/(?P<job_id>[^/]+)/status", request.url)
         job_id = match.group("job_id") if match else ""
         job_state = demo_state.tuner_jobs.get(job_id)
@@ -304,22 +354,36 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
     def delete_tuner_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Delete a GROMACS tuning job."""
+        """
+        Delete a GROMACS tuning job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         match = re.search(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/(?P<job_id>[^/]+)", request.url)
         if match:
             demo_state.tuner_jobs.pop(match.group("job_id"), None)
         return (HTTPStatus.NO_CONTENT, {}, "")
 
     rsps.add_callback(responses.POST, f"{TUNER_URL}/tuning-jobs/gmx", callback=submit_tuner_job)
-    rsps.add_callback(responses.GET, re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+/status"), callback=get_tuner_status)
-    rsps.add_callback(responses.DELETE, re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+"), callback=delete_tuner_job)
+    rsps.add_callback(
+        responses.GET, re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+/status"), callback=get_tuner_status
+    )
+    rsps.add_callback(
+        responses.DELETE, re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+"), callback=delete_tuner_job
+    )
 
 
 def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
     """Install MDRepo (InvenioRDM) API response mocks."""
 
     def create_mdrepo_experiment(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Create a draft record in MDRepo."""
+        """
+        Create a draft record in MDRepo.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         record_id = "8gahj-dh519"
         demo_state.mdrepo_counter += 1
         demo_state.mdrepo_records[record_id] = False
@@ -338,15 +402,27 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
     def get_mdrepo_user(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Get current MDRepo user info."""
+        """
+        Get current MDRepo user info.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer demo"):
             return (HTTPStatus.OK, {}, json.dumps({"user": "demo"}))
         return (HTTPStatus.UNAUTHORIZED, {}, json.dumps({"message": "Unauthorized"}))
 
     def get_mdrepo_published_record(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Check if record is published."""
-        match = re.search(rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/(?P<record_id>[^/]+)$", request.url)
+        """
+        Check if record is published.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(
+            rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/(?P<record_id>[^/]+)$", request.url
+        )
         if not match:
             return (HTTPStatus.NOT_FOUND, {}, json.dumps({"message": "Not found"}))
 
@@ -356,8 +432,15 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.NOT_FOUND, {}, json.dumps({"message": "Not found"}))
 
     def get_mdrepo_draft_record(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Check if record exists as draft."""
-        match = re.search(rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/(?P<record_id>[^/]+)/draft", request.url)
+        """
+        Check if record exists as draft.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(
+            rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/(?P<record_id>[^/]+)/draft", request.url
+        )
         if not match:
             return (HTTPStatus.NOT_FOUND, {}, json.dumps({"message": "Not found"}))
 
@@ -367,7 +450,12 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.NOT_FOUND, {}, json.dumps({"message": "Not found"}))
 
     def mdrepo_token_exchange(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Exchange OAuth code for token."""
+        """
+        Exchange OAuth code for token.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         response_body = {
             "access_token": "demo-access-token",
             "refresh_token": "demo-refresh-token",
@@ -378,8 +466,16 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
 
     rsps.add_callback(responses.POST, f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}", callback=create_mdrepo_experiment)
     rsps.add_callback(responses.GET, f"{MDREPO_URL}/api/me", callback=get_mdrepo_user)
-    rsps.add_callback(responses.GET, re.compile(rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/[^/]+$"), callback=get_mdrepo_published_record)
-    rsps.add_callback(responses.GET, re.compile(rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/[^/]+/draft"), callback=get_mdrepo_draft_record)
+    rsps.add_callback(
+        responses.GET,
+        re.compile(rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/[^/]+$"),
+        callback=get_mdrepo_published_record,
+    )
+    rsps.add_callback(
+        responses.GET,
+        re.compile(rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/[^/]+/draft"),
+        callback=get_mdrepo_draft_record,
+    )
     if MDREPO_TOKEN_URL:
         rsps.add_callback(responses.POST, MDREPO_TOKEN_URL, callback=mdrepo_token_exchange)
 
@@ -388,7 +484,12 @@ def _install_caddy_mocks(rsps: responses.RequestsMock) -> None:
     """Install Caddy admin API response mocks."""
 
     def get_caddy_config(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Get current Caddy configuration."""
+        """
+        Get current Caddy configuration.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         response_body = {
             "apps": {
                 "http": {
@@ -407,37 +508,72 @@ def _install_caddy_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
     def update_caddy_config(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Update Caddy configuration."""
+        """
+        Update Caddy configuration.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         return (HTTPStatus.OK, {}, "")
 
     def delete_caddy_route(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Delete a Caddy route."""
+        """
+        Delete a Caddy route.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         return (HTTPStatus.OK, {}, "")
 
     rsps.add_callback(responses.GET, f"{CADDY_ADMIN_API_URL}/config/", callback=get_caddy_config)
     rsps.add_callback(responses.POST, f"{CADDY_ADMIN_API_URL}/load", callback=update_caddy_config)
-    rsps.add_callback(responses.DELETE, re.compile(rf"{re.escape(CADDY_ADMIN_API_URL)}/id/[a-zA-Z0-9_-]+"), callback=delete_caddy_route)
+    rsps.add_callback(
+        responses.DELETE,
+        re.compile(rf"{re.escape(CADDY_ADMIN_API_URL)}/id/[a-zA-Z0-9_-]+"),
+        callback=delete_caddy_route,
+    )
 
 
 def _install_external_download_mocks(rsps: responses.RequestsMock) -> None:
     """Install mocks for external file downloads (PDB, Zenodo)."""
 
     def download_pdb_file(request: "ResponsesProxy") -> tuple[int, dict[str, str], bytes]:
-        """Download a PDB file from RCSB."""
+        """
+        Download a PDB file from RCSB.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         if DEFAULT_PDB_FILE.exists():
             return (HTTPStatus.OK, {}, DEFAULT_PDB_FILE.read_bytes())
         return (HTTPStatus.NOT_FOUND, {}, b"")
 
     def download_zenodo_archive(request: "ResponsesProxy") -> tuple[int, dict[str, str], bytes]:
-        """Download a Zenodo files archive."""
+        """
+        Download a Zenodo files archive.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         return (HTTPStatus.OK, {}, build_demo_archive_bytes())
 
     def head_request(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """Handle HEAD requests for URL validation."""
+        """
+        Handle HEAD requests for URL validation.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
         return (HTTPStatus.OK, {}, "")
 
-    rsps.add_callback(responses.GET, re.compile(r"https://files\.rcsb\.org/download/[A-Za-z0-9]+\.pdb"), callback=download_pdb_file)
-    rsps.add_callback(responses.GET, re.compile(r"https://zenodo\.org/api/records/[0-9]+/files-archive"), callback=download_zenodo_archive)
+    rsps.add_callback(
+        responses.GET, re.compile(r"https://files\.rcsb\.org/download/[A-Za-z0-9]+\.pdb"), callback=download_pdb_file
+    )
+    rsps.add_callback(
+        responses.GET,
+        re.compile(r"https://zenodo\.org/api/records/[0-9]+/files-archive"),
+        callback=download_zenodo_archive,
+    )
     rsps.add_callback(responses.HEAD, re.compile(r"https://.*"), callback=head_request)
 
 

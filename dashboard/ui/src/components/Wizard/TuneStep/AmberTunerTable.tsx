@@ -4,7 +4,7 @@ import { Loader2, Star, Terminal } from "lucide-react"
 
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
-import { getJobStatusVariant, type JobStatus, type AmberTunerTrial } from "@/util/types"
+import { getJobStatusVariant, type AmberTunerTrial, type JobStatus } from "@/util/types"
 import { useTunerTrialLogs } from "@/hooks/use-tuner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"

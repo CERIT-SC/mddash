@@ -76,7 +76,12 @@ def health_check() -> Response:
 @gmx_bp.route("/<job_id>", methods=["GET"])
 @handle_exceptions()
 def get_gmx_job(job_id: str) -> Response:
-    """Get GROMACS job status."""
+    """
+    Get GROMACS job status.
+
+    Returns:
+        JSON response with job ID and status.
+    """
     return _get_job(job_id)
 
 
@@ -128,7 +133,12 @@ def create_gmx_job() -> Response:
 @gmx_bp.route("/<job_id>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
 def delete_gmx_job(job_id: str) -> Response:
-    """Delete a GROMACS job."""
+    """
+    Delete a GROMACS job.
+
+    Returns:
+        Empty success response with HTTP 204.
+    """
     return _delete_job(job_id)
 
 
@@ -136,7 +146,12 @@ def delete_gmx_job(job_id: str) -> Response:
 @amber_bp.route("/<job_id>", methods=["GET"])
 @handle_exceptions()
 def get_amber_job(job_id: str) -> Response:
-    """Get AMBER job status."""
+    """
+    Get AMBER job status.
+
+    Returns:
+        JSON response with job ID and status.
+    """
     return _get_job(job_id)
 
 
@@ -192,5 +207,10 @@ def create_amber_job() -> Response:
 @amber_bp.route("/<job_id>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
 def delete_amber_job(job_id: str) -> Response:
-    """Delete an AMBER job."""
+    """
+    Delete an AMBER job.
+
+    Returns:
+        Empty success response with HTTP 204.
+    """
     return _delete_job(job_id)

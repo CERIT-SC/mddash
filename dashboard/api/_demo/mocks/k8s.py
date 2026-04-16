@@ -12,20 +12,14 @@ import logging
 import re
 import threading
 import time
-from pathlib import Path
-from typing import TYPE_CHECKING
 
 import requests
-
 from clients import k8s
 from config import DATA_DIR
 from enums import JobStatus, PodStatus
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, MWF_DIR
 
 from ..state import demo_state
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +93,7 @@ def _create_service(name: str, target_name: str) -> None:  # noqa: ARG001
     logger.debug("Mock creating service %s", name)
 
 
-def _delete_service(name: str) -> None:  # noqa: ARG001
+def _delete_service(name: str) -> None:
     """Delete a mock service (no-op)."""
     logger.debug("Mock deleting service %s", name)
 

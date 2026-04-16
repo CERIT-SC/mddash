@@ -82,16 +82,8 @@ export default function LogsView({ logs, isLoading = false, className }: LogsVie
   }
 
   if (isLoading) {
-    return (
-      <div className={cn(cls, "animate-pulse text-muted-foreground select-none")}>
-        waiting for output...
-      </div>
-    )
+    return <div className={cn(cls, "text-muted-foreground animate-pulse select-none")}>waiting for output...</div>
   }
 
-  return (
-    <div className={cn(cls, "text-muted-foreground/50 select-none italic")}>
-      (no output)
-    </div>
-  )
+  return <div className={cn(cls, "text-muted-foreground/50 italic select-none")}>(no output)</div>
 }

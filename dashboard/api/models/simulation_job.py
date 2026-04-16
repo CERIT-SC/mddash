@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from cache import simulation_status_cache
 from cachetools import cached
@@ -25,7 +25,7 @@ class SimulationJob(db.Model):  # type: ignore
     """
 
     __tablename__ = "simulation_jobs"
-    __mapper_args__ = {"polymorphic_on": "engine"}
+    __mapper_args__: ClassVar[dict[str, Any]] = {"polymorphic_on": "engine"}
 
     # ID of the job inside the database
     id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
@@ -52,9 +52,7 @@ class SimulationJob(db.Model):  # type: ignore
     # Performance (ns/day)
     _performance: Mapped[float | None] = mapped_column("performance", db.Float, nullable=True)
     # Last successfully-fetched non-UNKNOWN status (fallback when MDRun API is unavailable)
-    _last_known_status: Mapped[JobStatus | None] = mapped_column(
-        "last_known_status", db.Enum(JobStatus), nullable=True
-    )
+    _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", db.Enum(JobStatus), nullable=True)
 
     # Back-reference to the parent experiment
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="simulation_jobs")

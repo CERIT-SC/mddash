@@ -67,9 +67,6 @@ def delete_job(job_id: str) -> None:
 
     Args:
         job_id: The ID of the job to delete.
-
-    Raises:
-        requests.HTTPError: If the request fails.
     """
     delete_gmx_job(job_id)
 

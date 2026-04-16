@@ -2,7 +2,7 @@ import logging
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from cache import (
     gromacs_estimated_time_cache,
@@ -38,7 +38,7 @@ class GromacsJob(SimulationJob):
     """GROMACS molecular dynamics simulation job."""
 
     __tablename__ = "gromacs_jobs"
-    __mapper_args__ = {"polymorphic_identity": Engine.GMX}
+    __mapper_args__: ClassVar[dict[str, Any]] = {"polymorphic_identity": Engine.GMX}
 
     # TODO: verify if files with these extensions should really be deleted
     RESULT_EXTENSIONS: ClassVar[list[str]] = ["edr", "gro", "log", "trr", "xtc", "cpt", "fit.xtc"]

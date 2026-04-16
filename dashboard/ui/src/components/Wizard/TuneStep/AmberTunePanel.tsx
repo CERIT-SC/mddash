@@ -2,11 +2,11 @@ import { useState } from "react"
 
 import { SkipForward } from "lucide-react"
 
+import type { FileOption } from "@/util/types"
 import { useDeleteTuner, useStopTuner } from "@/hooks/use-tuner"
 import { Button } from "@/components/ui/button"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
-import type { FileOption } from "@/util/types"
 
 import AmberInputSelector from "../AmberInputSelector"
 import AmberTunerView from "./AmberTunerView"

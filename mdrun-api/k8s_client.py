@@ -1,6 +1,7 @@
 import logging
 import shlex
 from http import HTTPStatus
+from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from config import AMBER_IMAGE, GMX_IMAGE, GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
@@ -433,9 +434,7 @@ def create_amber_job(
                     "volumes": [
                         {
                             "name": "shared-data",
-                            "emptyDir": {
-                                "sizeLimit": "100Gi"
-                            },
+                            "emptyDir": {"sizeLimit": "100Gi"},
                         }
                     ],
                 },

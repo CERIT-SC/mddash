@@ -33,7 +33,12 @@ class AmberBinary(str, Enum):
 
     @classmethod
     def from_string(cls, value: str) -> "AmberBinary":
-        """Create an AmberBinary from a string value."""
+        """
+        Create an AmberBinary from a string value.
+
+        Returns:
+            The matching enum member.
+        """
         return cls(value)
 
 
@@ -48,7 +53,12 @@ class EwaldPreset(str, Enum):
 
     @classmethod
     def from_string(cls, value: str) -> "EwaldPreset":
-        """Create an EwaldPreset from a string value."""
+        """
+        Create an EwaldPreset from a string value.
+
+        Returns:
+            The matching enum member.
+        """
         return cls(value.lower())
 
 

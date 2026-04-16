@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timedelta
 
 from config import DATA_DIR
-from enums import AmberBinary, AnalysisType, DeviceType, EwaldPreset, Engine, JobStatus, PodStatus
+from enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus, PodStatus
 from extensions import db
 from models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook, TunerJob
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, MWF_DIR

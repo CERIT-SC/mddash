@@ -55,7 +55,7 @@ class Experiment(db.Model):  # type: ignore
         notebook: Associated setup notebook for this experiment.
         tuner_jobs: List of tuner jobs associated with this experiment.
         simulation_jobs: List of simulation jobs for this experiment.
-"""
+    """
 
     __tablename__ = "experiments"
 

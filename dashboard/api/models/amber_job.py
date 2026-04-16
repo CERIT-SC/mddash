@@ -1,11 +1,10 @@
 import logging
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from cache import (
     amber_nsteps_done_cache,
-    amber_performance_cache,
 )
 from cachetools import cached
 from clients import mdrun
@@ -30,7 +29,7 @@ class AmberJob(SimulationJob):
     """AMBER molecular dynamics simulation job."""
 
     __tablename__ = "amber_jobs"
-    __mapper_args__ = {"polymorphic_identity": Engine.AMBER}
+    __mapper_args__: ClassVar[dict[str, Any]] = {"polymorphic_identity": Engine.AMBER}
 
     RESULT_EXTENSIONS: ClassVar[list[str]] = ["nc", "rst7", "mdinfo", "out"]
 

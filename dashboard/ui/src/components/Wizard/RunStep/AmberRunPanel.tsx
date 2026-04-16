@@ -1,9 +1,9 @@
 import { useState } from "react"
 
+import type { FileOption } from "@/util/types"
 import { useAmberStatuses, useDeleteAmber } from "@/hooks/use-amber"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
-import type { FileOption } from "@/util/types"
 
 import AmberInputSelector from "../AmberInputSelector"
 import AmberRunView from "./AmberRunView"

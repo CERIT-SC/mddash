@@ -3,6 +3,7 @@ import React, { useCallback, useState } from "react"
 import { Rocket } from "lucide-react"
 
 import { SELECT_NONE } from "@/util/const"
+import type { AmberBinary, EwaldPreset } from "@/util/types"
 import { useSubmitAmber } from "@/hooks/use-amber"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,7 +11,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
-import type { AmberBinary, EwaldPreset } from "@/util/types"
 
 interface AmberStartFormProps extends WizardStepProps {
   prmtopName: string

@@ -18,7 +18,11 @@ Usage:
 import os
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import patch
+
+if TYPE_CHECKING:
+    from flask import Flask
 
 API_DIR = Path(__file__).resolve().parents[1]
 
@@ -72,7 +76,7 @@ def create_demo_app() -> "Flask":
     5. Seeds deterministic test data
 
     Returns:
-        Flask: Configured Flask application instance with demo profile applied.
+        Configured Flask application instance with demo profile applied.
     """
     _configure_demo_env()
 

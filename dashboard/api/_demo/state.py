@@ -96,7 +96,12 @@ class DemoState:
         self.initialized = False
 
     def get_notebook_status(self, experiment_id: str) -> PodStatus:
-        """Get notebook pod status for an experiment."""
+        """
+        Get notebook pod status for an experiment.
+
+        Returns:
+            The pod status, defaults to DOWN if not found.
+        """
         return self.notebook_status.get(experiment_id, PodStatus.DOWN)
 
     def set_notebook_status(self, experiment_id: str, status: PodStatus) -> None:
@@ -104,11 +109,21 @@ class DemoState:
         self.notebook_status[experiment_id] = status
 
     def get_mdrun_job(self, job_id: str) -> dict[str, Any] | None:
-        """Get MDRun job state by ID."""
+        """
+        Get MDRun job state by ID.
+
+        Returns:
+            Job state dict or None if not found.
+        """
         return self.mdrun_jobs.get(job_id)
 
     def get_tuner_job(self, job_id: str) -> dict[str, Any] | None:
-        """Get tuner job state by ID."""
+        """
+        Get tuner job state by ID.
+
+        Returns:
+            Job state dict or None if not found.
+        """
         return self.tuner_jobs.get(job_id)
 
     def is_mdrepo_published(self, record_id: str) -> bool | None:

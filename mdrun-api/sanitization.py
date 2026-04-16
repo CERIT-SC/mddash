@@ -148,15 +148,30 @@ def _sanitize_filename_with_ext(filename: str, name_field: str, allowed_exts: tu
 
 
 def sanitize_prmtop_name(prmtop_name: str) -> str:
-    """Validate AMBER topology file name (.prmtop or .parm7)."""
+    """
+    Validate AMBER topology file name (.prmtop or .parm7).
+
+    Returns:
+        The validated, stripped filename.
+    """
     return _sanitize_filename_with_ext(prmtop_name, "prmtop_name", (".prmtop", ".parm7"))
 
 
 def sanitize_inpcrd_name(inpcrd_name: str) -> str:
-    """Validate AMBER coordinate file name (.inpcrd, .rst7, or .nc)."""
+    """
+    Validate AMBER coordinate file name (.inpcrd, .rst7, or .nc).
+
+    Returns:
+        The validated, stripped filename.
+    """
     return _sanitize_filename_with_ext(inpcrd_name, "inpcrd_name", (".inpcrd", ".rst7", ".nc"))
 
 
 def sanitize_mdin_name(mdin_name: str) -> str:
-    """Validate AMBER input file name (.mdin or .in)."""
+    """
+    Validate AMBER input file name (.mdin or .in).
+
+    Returns:
+        The validated, stripped filename.
+    """
     return _sanitize_filename_with_ext(mdin_name, "mdin_name", (".mdin", ".in"))
