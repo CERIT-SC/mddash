@@ -23,9 +23,9 @@ oidc:
   oauth_server: aai-dev.egi.eu
   loginService: "EGI CheckIn Development"  # the button label in UI
 
-  authorizePath: /auth/realms/egi/protocol/openid-connect/auth
-  tokenPath: /auth/realms/egi/protocol/openid-connect/token
-  userdataPath: /auth/realms/egi/protocol/openid-connect/userinfo
+  authorizePath: auth/realms/egi/protocol/openid-connect/auth
+  tokenPath: auth/realms/egi/protocol/openid-connect/token
+  userdataPath: auth/realms/egi/protocol/openid-connect/userinfo
   usernameKey: preferred_username
   allowAll: true
   scope:
