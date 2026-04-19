@@ -259,9 +259,10 @@ async function loadStructureWithCoordinates(
 
   // Trajectory formats (pdb, gro) yield { trajectory } → create a model from it
   // Topology formats (prmtop, psf, top) yield { topology } → use directly
-  const model = "trajectory" in structureParsed
-    ? (await plugin.builders.structure.createModel(structureParsed.trajectory))
-    : structureParsed.topology
+  const model =
+    "trajectory" in structureParsed
+      ? await plugin.builders.structure.createModel(structureParsed.trajectory)
+      : structureParsed.topology
 
   if (!model || !model.isOk) {
     throw new Error(`Failed to create model from ${structureFormat}`)
@@ -309,6 +310,8 @@ async function loadStructureWithCoordinates(
 
     await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default")
   } catch (e) {
-    throw new Error(`Failed to create trajectory from structure and coordinates: ${e instanceof Error ? e.message : String(e)}`)
+    throw new Error(
+      `Failed to create trajectory from structure and coordinates: ${e instanceof Error ? e.message : String(e)}`
+    )
   }
 }

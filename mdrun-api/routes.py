@@ -52,9 +52,9 @@ def _delete_job(job_id: str) -> Response:
     """
     job: MdrunJob = MdrunJob.query.get_or_404(job_id, description=f"Job {job_id} not found")
 
+    job.delete()
     db.session.delete(job)
     db.session.commit()
-    job.delete()
 
     return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
 

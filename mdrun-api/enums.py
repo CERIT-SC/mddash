@@ -34,11 +34,15 @@ class AmberBinary(str, Enum):
     @classmethod
     def from_string(cls, value: str) -> "AmberBinary":
         """
-        Create an AmberBinary from a string value.
+        Create an AmberBinary from a string value (case-insensitive).
 
         Returns:
             The matching enum member.
         """
+        value_lower = value.lower()
+        for member in cls:
+            if member.value.lower() == value_lower:
+                return member
         return cls(value)
 
 

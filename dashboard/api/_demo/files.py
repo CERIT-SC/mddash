@@ -55,7 +55,8 @@ def ensure_amber_demo_files(
     inpcrd_name: str,
     mdin_names: list[str],
 ) -> None:
-    """Ensure AMBER demo files exist for an experiment.
+    """
+    Ensure AMBER demo files exist for an experiment.
 
     Creates AMBER topology, coordinate, input, structure, trajectory, and parm7
     files using default fixture files if they don't already exist.
