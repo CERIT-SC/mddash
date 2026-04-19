@@ -11,17 +11,21 @@ DEFAULT_TPR_FILE = DEMO_DATA_DIR / "md.tpr"
 DEFAULT_XTC_FILE = DEMO_DATA_DIR / "trajectory.xtc"
 DEFAULT_PDB_FILE = DEMO_DATA_DIR / "structure.pdb"
 DEFAULT_GMX_LOG_FILE = DEMO_DATA_DIR / "md.log"
-DEFAULT_PRMTOP_FILE = DEMO_DATA_DIR / "md.prmtop"
+DEFAULT_PARM7_FILE = DEMO_DATA_DIR / "md.parm7"
 DEFAULT_INPCRD_FILE = DEMO_DATA_DIR / "md.inpcrd"
 DEFAULT_MDIN_FILE = DEMO_DATA_DIR / "md.mdin"
+DEFAULT_NC_FILE = DEMO_DATA_DIR / "trajectory.nc"
+DEFAULT_AMBER_PDB_FILE = DEMO_DATA_DIR / "amber_structure.pdb"
 
 FIXTURE_BY_SUFFIX = {
     ".tpr": DEFAULT_TPR_FILE,
     ".xtc": DEFAULT_XTC_FILE,
     ".pdb": DEFAULT_PDB_FILE,
-    ".prmtop": DEFAULT_PRMTOP_FILE,
+    ".prmtop": DEFAULT_PARM7_FILE,
+    ".parm7": DEFAULT_PARM7_FILE,
     ".inpcrd": DEFAULT_INPCRD_FILE,
     ".mdin": DEFAULT_MDIN_FILE,
+    ".nc": DEFAULT_NC_FILE,
 }
 
 
@@ -51,11 +55,10 @@ def ensure_amber_demo_files(
     inpcrd_name: str,
     mdin_names: list[str],
 ) -> None:
-    """
-    Ensure AMBER demo files exist for an experiment.
+    """Ensure AMBER demo files exist for an experiment.
 
-    Creates AMBER topology (prmtop), coordinate (inpcrd), and input (mdin) files
-    using default fixture files if they don't already exist.
+    Creates AMBER topology, coordinate, input, structure, trajectory, and parm7
+    files using default fixture files if they don't already exist.
 
     Args:
         experiment_id: The experiment ID.
@@ -84,6 +87,17 @@ def ensure_amber_demo_files(
         if not mdin_path.exists():
             mdin_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(_resolve_fixture_path(mdin_name), mdin_path)
+
+    # Analysis files: matching structure PDB + NetCDF trajectory + parm7 topology
+    _copy_if_missing(experiment_dir / "structure.pdb", DEFAULT_AMBER_PDB_FILE)
+    _copy_if_missing(experiment_dir / "trajectory.nc", DEFAULT_NC_FILE)
+    _copy_if_missing(experiment_dir / f"{Path(prmtop_name).stem}.parm7", DEFAULT_PARM7_FILE)
+
+
+def _copy_if_missing(dest: Path, src: Path) -> None:
+    if not dest.exists() and src.exists():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
 
 
 def _resolve_fixture_path(filename: str) -> Path:

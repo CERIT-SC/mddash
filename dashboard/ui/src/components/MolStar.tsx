@@ -6,21 +6,61 @@ import { toast } from "sonner"
 
 import "molstar/lib/mol-plugin-ui/skin/light.scss"
 
-import { type BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates"
-import { type BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory"
 import { StateTransforms } from "molstar/lib/mol-plugin-state/transforms"
 import { PluginUIContext } from "molstar/lib/mol-plugin-ui/context"
 import { Plugin } from "molstar/lib/mol-plugin-ui/plugin"
 import { DefaultPluginUISpec, type PluginUISpec } from "molstar/lib/mol-plugin-ui/spec"
+
+type StructureFormat = string
+type CoordsFormat = string
+
+/** Map file extensions to MolStar structure/topology format IDs. */
+const STRUCTURE_FORMAT_MAP: Record<string, StructureFormat> = {
+  pdb: "pdb",
+  gro: "gro",
+  mmcif: "mmcif",
+  cifcore: "cifCore",
+  pdbqt: "pdbqt",
+  xyz: "xyz",
+  mol: "mol",
+  sdf: "sdf",
+  mol2: "mol2",
+  psf: "psf",
+  prmtop: "prmtop",
+  parm7: "prmtop",
+  top: "top",
+}
+
+/** Map file extensions to MolStar coordinates format IDs. */
+const COORDS_FORMAT_MAP: Record<string, CoordsFormat> = {
+  xtc: "xtc",
+  trr: "trr",
+  dcd: "dcd",
+  nc: "nctraj",
+  nctraj: "nctraj",
+  lammpstrj: "lammpstrj",
+}
+
+/** Resolve a file extension to a MolStar structure/topology format. */
+export function resolveStructureFormat(filename: string): StructureFormat {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? ""
+  return STRUCTURE_FORMAT_MAP[ext] ?? "pdb"
+}
+
+/** Resolve a file extension to a MolStar coordinates format. */
+export function resolveCoordsFormat(filename: string): CoordsFormat {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? ""
+  return COORDS_FORMAT_MAP[ext] ?? "xtc"
+}
 
 interface MolStarProps {
   width?: React.CSSProperties["width"]
   height?: React.CSSProperties["height"]
   pdbId?: string
   structureUrl?: string
-  structureFormat?: BuiltInTrajectoryFormat
+  structureFormat?: StructureFormat
   coordsUrl?: string
-  coordsFormat?: BuiltInCoordinatesFormat
+  coordsFormat?: CoordsFormat
 }
 
 export default function MolStar(props: MolStarProps) {
@@ -36,6 +76,7 @@ export default function MolStar(props: MolStarProps) {
     isMountedRef.current = true
     let plugin: PluginUIContext | null = null
     let root: Root | null = null
+    let cancelled = false
 
     const init = async () => {
       if (!containerRef.current || !isMountedRef.current) return
@@ -57,29 +98,39 @@ export default function MolStar(props: MolStarProps) {
         plugin = new PluginUIContext(spec)
         await plugin.init()
 
-        if (!isMountedRef.current) {
+        if (!isMountedRef.current || cancelled) {
           plugin.dispose()
           return
         }
 
-        containerRef.current.innerHTML = ""
-        root = createRoot(containerRef.current)
+        // Defer DOM reset so any in-progress React 19 unmount from the
+        // Strict Mode double-invocation finishes before we reuse the container.
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+        if (!isMountedRef.current || cancelled) {
+          plugin.dispose()
+          return
+        }
+
+        const container = containerRef.current
+        container.innerHTML = ""
+        root = createRoot(container)
         root.render(<Plugin plugin={plugin} />)
 
         pluginRef.current = plugin
         rootRef.current = root
 
-        if (coordsUrl && structureUrl) {
-          await loadTrajectoryWithCoordinates(plugin, {
+        if (structureUrl && coordsUrl) {
+          await loadStructureWithCoordinates(plugin, {
             structureUrl,
-            structureFormat: structureFormat || "gro",
+            structureFormat: structureFormat ?? "pdb",
             coordsUrl,
-            coordsFormat: coordsFormat || "xtc",
+            coordsFormat: coordsFormat ?? "xtc",
           })
         } else if (structureUrl) {
           await loadSingleStructure(plugin, {
             url: structureUrl,
-            format: structureFormat || "pdb",
+            format: structureFormat ?? "pdb",
           })
         } else if (pdbId) {
           await loadSingleStructure(plugin, {
@@ -88,16 +139,16 @@ export default function MolStar(props: MolStarProps) {
             isBinary: true,
           })
         } else {
-          throw new Error("No structure source provided (pdbId, structureUrl, or coordsUrl+structureUrl)")
+          throw new Error("No structure source provided (pdbId, structureUrl, or structureUrl+coordsUrl)")
         }
       } catch (error) {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && !cancelled) {
           console.error("MolStar initialization error:", error)
           const errorMessage = error instanceof Error ? error.message : String(error)
           toast.error(errorMessage)
         }
       } finally {
-        if (isMountedRef.current) {
+        if (isMountedRef.current && !cancelled) {
           setLoading(false)
         }
       }
@@ -106,6 +157,7 @@ export default function MolStar(props: MolStarProps) {
     init()
 
     return () => {
+      cancelled = true
       isMountedRef.current = false
       if (pluginRef.current) {
         pluginRef.current.dispose()
@@ -142,11 +194,11 @@ async function loadSingleStructure(
   plugin: PluginUIContext,
   options: {
     url: string
-    format: BuiltInTrajectoryFormat | "mmcif"
+    format: StructureFormat
     isBinary?: boolean
   }
 ) {
-  const { url, format, isBinary = format !== "pdb" && format !== "gro" } = options
+  const { url, format, isBinary = !["pdb", "gro", "psf", "prmtop", "top"].includes(format) } = options
 
   const data = await plugin.builders.data.download({ url, isBinary }, { state: { isGhost: true } })
 
@@ -154,53 +206,75 @@ async function loadSingleStructure(
     throw new Error(`Failed to download structure from ${url}`)
   }
 
-  const trajectory = await plugin.builders.structure.parseTrajectory(data, format)
-
-  if (!trajectory || !trajectory.isOk) {
-    throw new Error(`Failed to parse structure file as ${format}`)
+  const provider = plugin.dataFormats.get(format)
+  if (!provider) {
+    throw new Error(`Unsupported structure format: ${format}`)
   }
 
-  await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default")
+  const parsed = await provider.parse(plugin, data)
+  // Trajectory formats yield { trajectory }; topology formats yield { topology }
+  if ("trajectory" in parsed) {
+    await plugin.builders.structure.hierarchy.applyPreset(parsed.trajectory, "default")
+  } else {
+    await plugin.builders.structure.hierarchy.applyPreset(parsed.topology, "default")
+  }
 }
 
-async function loadTrajectoryWithCoordinates(
+/**
+ * Load a structure/topology + coordinates pair as a trajectory.
+ * Mirrors MolStar's own LoadTrajectory action:
+ * - Parses structure via dataFormats registry (handles both trajectory and topology formats)
+ * - Parses coordinates via dataFormats registry (handles all coordinate formats)
+ * - Combines them with TrajectoryFromModelAndCoordinates
+ */
+async function loadStructureWithCoordinates(
   plugin: PluginUIContext,
   options: {
     structureUrl: string
-    structureFormat: BuiltInTrajectoryFormat
+    structureFormat: StructureFormat
     coordsUrl: string
-    coordsFormat: BuiltInCoordinatesFormat
+    coordsFormat: CoordsFormat
   }
 ) {
   const { structureUrl, structureFormat, coordsUrl, coordsFormat } = options
   const state = plugin.state.data
 
-  const structureIsBinary = structureFormat !== "pdb" && structureFormat !== "gro"
-  const coordsIsBinary = coordsFormat !== "lammpstrj"
-
+  // Download and parse structure/topology
+  const structureIsBinary = !["pdb", "gro", "psf", "prmtop", "top"].includes(structureFormat)
   const structureData = await plugin.builders.data.download(
     { url: structureUrl, isBinary: structureIsBinary },
     { state: { isGhost: true } }
   )
 
   if (!structureData || !structureData.isOk) {
-    throw new Error(`Failed to download topology file from ${structureUrl}`)
+    throw new Error(`Failed to download structure file from ${structureUrl}`)
   }
 
-  const structureTrajectory = await plugin.builders.structure.parseTrajectory(structureData, structureFormat)
-
-  if (!structureTrajectory || !structureTrajectory.isOk) {
-    throw new Error(`Failed to parse topology file as ${structureFormat}`)
+  const structureProvider = plugin.dataFormats.get(structureFormat)
+  if (!structureProvider) {
+    throw new Error(`Unsupported structure format: ${structureFormat}`)
   }
 
-  const model = await plugin.builders.structure.createModel(structureTrajectory)
+  const structureParsed = await structureProvider.parse(plugin, structureData)
+
+  // Trajectory formats (pdb, gro) yield { trajectory } → create a model from it
+  // Topology formats (prmtop, psf, top) yield { topology } → use directly
+  const model = "trajectory" in structureParsed
+    ? (await plugin.builders.structure.createModel(structureParsed.trajectory))
+    : structureParsed.topology
 
   if (!model || !model.isOk) {
-    throw new Error("Failed to create model from topology")
+    throw new Error(`Failed to create model from ${structureFormat}`)
+  }
+
+  // Download and parse coordinates via dataFormats registry
+  const coordsProvider = plugin.dataFormats.get(coordsFormat)
+  if (!coordsProvider) {
+    throw new Error(`Unsupported coordinates format: ${coordsFormat}`)
   }
 
   const coordsData = await plugin.builders.data.download(
-    { url: coordsUrl, isBinary: coordsIsBinary },
+    { url: coordsUrl, isBinary: true },
     { state: { isGhost: true } }
   )
 
@@ -208,53 +282,33 @@ async function loadTrajectoryWithCoordinates(
     throw new Error(`Failed to download coordinates file from ${coordsUrl}`)
   }
 
-  let coordsTransform
-  switch (coordsFormat) {
-    case "xtc":
-      coordsTransform = StateTransforms.Model.CoordinatesFromXtc
-      break
-    case "dcd":
-      coordsTransform = StateTransforms.Model.CoordinatesFromDcd
-      break
-    case "trr":
-      coordsTransform = StateTransforms.Model.CoordinatesFromTrr
-      break
-    case "nctraj":
-      coordsTransform = StateTransforms.Model.CoordinatesFromNctraj
-      break
-    case "lammpstrj":
-      coordsTransform = StateTransforms.Model.CoordinatesFromLammpstraj
-      break
-    default:
-      throw new Error(`Unsupported coordinates format: ${coordsFormat}`)
-  }
-
-  const coords = await state
-    .build()
-    .to(coordsData)
-    .apply(coordsTransform, {}, { state: { isGhost: true } })
-    .commit({ revertOnError: true })
+  const coords = await coordsProvider.parse(plugin, coordsData)
 
   if (!coords || !coords.isOk) {
     throw new Error(`Failed to parse coordinates file as ${coordsFormat}`)
   }
 
-  const trajectory = await state
-    .build()
-    .toRoot()
-    .apply(
-      StateTransforms.Model.TrajectoryFromModelAndCoordinates,
-      {
-        modelRef: model.ref,
-        coordinatesRef: coords.ref,
-      },
-      { dependsOn: [model.ref, coords.ref] }
-    )
-    .commit({ revertOnError: true })
+  // Combine structure/topology model with coordinates
+  try {
+    const trajectory = await state
+      .build()
+      .toRoot()
+      .apply(
+        StateTransforms.Model.TrajectoryFromModelAndCoordinates,
+        {
+          modelRef: model.ref,
+          coordinatesRef: coords.ref,
+        },
+        { dependsOn: [model.ref, coords.ref] }
+      )
+      .commit({ revertOnError: true })
 
-  if (!trajectory || !trajectory.isOk) {
-    throw new Error("Failed to create trajectory from topology and coordinates")
+    if (!trajectory || !trajectory.isOk) {
+      throw new Error("Failed to create trajectory from structure and coordinates")
+    }
+
+    await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default")
+  } catch (e) {
+    throw new Error(`Failed to create trajectory from structure and coordinates: ${e instanceof Error ? e.message : String(e)}`)
   }
-
-  await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default")
 }

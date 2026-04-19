@@ -271,7 +271,7 @@ def seed_data() -> None:  # noqa: PLR0914
     # Experiment 4: AMBER protein folding study (currently running AMBER simulation)
     amber_folding = build_model(
         Experiment,
-        id="dddd",
+        id="ddddd",
         name="AMBER villin headpiece folding",
         source_message="Created by uploading files: villin.prmtop, villin.inpcrd, production.mdin.",
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
@@ -630,7 +630,7 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
     membrane = Experiment.query.filter_by(id="aaaaa").first()
     enzyme = Experiment.query.filter_by(id="bbbbb").first()
     published = Experiment.query.filter_by(id="ccccc").first()
-    amber_folding = Experiment.query.filter_by(id="dddd").first()
+    amber_folding = Experiment.query.filter_by(id="ddddd").first()
     amber_dna = Experiment.query.filter_by(id="eeeee").first()
 
     if membrane is not None:

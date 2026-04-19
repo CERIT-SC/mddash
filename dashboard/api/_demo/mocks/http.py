@@ -258,9 +258,9 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
 
 
 def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
-    """Install GROMACS Tuner API response mocks."""
+    """Install Tuner API response mocks for GMX and AMBER engines."""
 
-    def submit_tuner_job(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def submit_gmx_tuner_job(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
         """
         Submit a GROMACS tuning job.
 
@@ -270,12 +270,9 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
         job_id = f"demo-tuner-{uuid4()}"
         started_at = time.time()
 
-        # Create initial trials with deterministic outcomes:
-        # - Trial 0: TERMINATED successfully (good config)
-        # - Trial 1: ERROR (failed execution)
-        # - Trial 2: RUNNING (currently in progress)
         demo_state.tuner_jobs[job_id] = {
             "status": "RUNNING",
+            "engine": "gmx",
             "created_at": started_at,
             "max_trials": DEFAULT_TUNER_MAX_TRIALS,
             "trials": [
@@ -315,7 +312,59 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
         response_body = {"id": job_id, "status": "PENDING"}
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
-    def get_tuner_status(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def submit_amber_tuner_job(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        """
+        Submit an AMBER tuning job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        job_id = f"demo-amber-tuner-{uuid4()}"
+        started_at = time.time()
+
+        demo_state.tuner_jobs[job_id] = {
+            "status": "RUNNING",
+            "engine": "amber",
+            "created_at": started_at,
+            "max_trials": DEFAULT_TUNER_MAX_TRIALS,
+            "trials": [
+                {
+                    "id": f"{job_id[:10]}-00000",
+                    "status": "TERMINATED",
+                    "np": 4,
+                    "ntomp": 1,
+                    "binary": "pmemd.cuda",
+                    "ewald": "optimized",
+                    "performance": 72.3,
+                    "started_at": started_at - TUNER_TRIAL_DURATION_SEC * 2,
+                },
+                {
+                    "id": f"{job_id[:10]}-00001",
+                    "status": "ERROR",
+                    "np": 1,
+                    "ntomp": 4,
+                    "binary": "pmemd.MPI",
+                    "ewald": "default",
+                    "performance": None,
+                    "started_at": started_at - TUNER_TRIAL_DURATION_SEC,
+                },
+                {
+                    "id": f"{job_id[:10]}-00002",
+                    "status": "RUNNING",
+                    "np": 4,
+                    "ntomp": 1,
+                    "binary": "pmemd.cuda",
+                    "ewald": "default",
+                    "performance": None,
+                    "started_at": started_at,
+                },
+            ],
+        }
+
+        response_body = {"id": job_id, "status": "PENDING"}
+        return (HTTPStatus.CREATED, {}, json.dumps(response_body))
+
+    def get_gmx_tuner_status(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
         """
         Get GROMACS tuning job status.
 
@@ -329,20 +378,21 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
         if job_state is None:
             return (HTTPStatus.OK, {}, json.dumps({"id": job_id, "status": "UNKNOWN", "trials": []}))
 
-        _advance_tuner_status(job_state)
+        _advance_gmx_tuner_status(job_state)
 
-        public_trials = []
-        for trial in job_state.get("trials", []):
-            if isinstance(trial, dict):
-                public_trials.append({
-                    "id": trial.get("id", ""),
-                    "status": trial.get("status", "UNKNOWN"),
-                    "np": trial.get("np", 2),
-                    "ntomp": trial.get("ntomp", 4),
-                    "nb": trial.get("nb", "cpu"),
-                    "pme": trial.get("pme", "cpu"),
-                    "performance": trial.get("performance"),
-                })
+        public_trials = [
+            {
+                "id": trial.get("id", ""),
+                "status": trial.get("status", "UNKNOWN"),
+                "np": trial.get("np", 2),
+                "ntomp": trial.get("ntomp", 4),
+                "nb": trial.get("nb", "cpu"),
+                "pme": trial.get("pme", "cpu"),
+                "performance": trial.get("performance"),
+            }
+            for trial in job_state.get("trials", [])
+            if isinstance(trial, dict)
+        ]
 
         response_body = {
             "id": job_id,
@@ -352,7 +402,45 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
-    def delete_tuner_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_amber_tuner_status(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        """
+        Get AMBER tuning job status.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(rf"{re.escape(TUNER_URL)}/tuning-jobs/amber/(?P<job_id>[^/]+)/status", request.url)
+        job_id = match.group("job_id") if match else ""
+        job_state = demo_state.tuner_jobs.get(job_id)
+
+        if job_state is None:
+            return (HTTPStatus.OK, {}, json.dumps({"id": job_id, "status": "UNKNOWN", "trials": []}))
+
+        _advance_amber_tuner_status(job_state)
+
+        public_trials = [
+            {
+                "id": trial.get("id", ""),
+                "status": trial.get("status", "UNKNOWN"),
+                "np": trial.get("np", 1),
+                "ntomp": trial.get("ntomp", 1),
+                "binary": trial.get("binary", "pmemd.MPI"),
+                "ewald": trial.get("ewald", "default"),
+                "performance": trial.get("performance"),
+            }
+            for trial in job_state.get("trials", [])
+            if isinstance(trial, dict)
+        ]
+
+        response_body = {
+            "id": job_id,
+            "status": job_state.get("status", "UNKNOWN"),
+            "error": None,
+            "trials": public_trials,
+        }
+        return (HTTPStatus.OK, {}, json.dumps(response_body))
+
+    def delete_gmx_tuner_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
         """
         Delete a GROMACS tuning job.
 
@@ -364,12 +452,37 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
             demo_state.tuner_jobs.pop(match.group("job_id"), None)
         return (HTTPStatus.NO_CONTENT, {}, "")
 
-    rsps.add_callback(responses.POST, f"{TUNER_URL}/tuning-jobs/gmx", callback=submit_tuner_job)
+    def delete_amber_tuner_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        """
+        Delete an AMBER tuning job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(rf"{re.escape(TUNER_URL)}/tuning-jobs/amber/(?P<job_id>[^/]+)", request.url)
+        if match:
+            demo_state.tuner_jobs.pop(match.group("job_id"), None)
+        return (HTTPStatus.NO_CONTENT, {}, "")
+
+    rsps.add_callback(responses.POST, f"{TUNER_URL}/tuning-jobs/gmx", callback=submit_gmx_tuner_job)
     rsps.add_callback(
-        responses.GET, re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+/status"), callback=get_tuner_status
+        responses.GET,
+        re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+/status"),
+        callback=get_gmx_tuner_status,
     )
     rsps.add_callback(
-        responses.DELETE, re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+"), callback=delete_tuner_job
+        responses.DELETE, re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+"), callback=delete_gmx_tuner_job
+    )
+    rsps.add_callback(responses.POST, f"{TUNER_URL}/tuning-jobs/amber", callback=submit_amber_tuner_job)
+    rsps.add_callback(
+        responses.GET,
+        re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/amber/[^/]+/status"),
+        callback=get_amber_tuner_status,
+    )
+    rsps.add_callback(
+        responses.DELETE,
+        re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/amber/[^/]+"),
+        callback=delete_amber_tuner_job,
     )
 
 
@@ -623,12 +736,11 @@ def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
             pass
 
 
-def _advance_tuner_status(status: dict) -> None:
+def _advance_gmx_tuner_status(status: dict) -> None:
     """
-    Advance tuner job state based on elapsed time.
+    Advance GMX tuner job state based on elapsed time.
 
     Deterministic pattern: even-indexed trials TERMINATE, odd-indexed trials ERROR.
-    This creates a predictable mix of successful and failed runs.
     """
     if status.get("status") != "RUNNING":
         return
@@ -645,7 +757,6 @@ def _advance_tuner_status(status: dict) -> None:
         started_at = float(running_trial.get("started_at", now))
         if now - started_at >= TUNER_TRIAL_DURATION_SEC:
             trial_idx = trials.index(running_trial)
-            # Deterministic: even indices TERMINATE, odd indices ERROR
             if trial_idx % 2 == 0:
                 running_trial["status"] = "TERMINATED"
                 base_perf = 55.0
@@ -664,7 +775,6 @@ def _advance_tuner_status(status: dict) -> None:
         status["status"] = "TERMINATED"
         return
 
-    # Generate varied configurations for new trials
     trial_configs = [
         {"np": 8, "ntomp": 1, "nb": "cpu", "pme": "cpu"},
         {"np": 4, "ntomp": 2, "nb": "cpu", "pme": "cpu"},
@@ -673,9 +783,62 @@ def _advance_tuner_status(status: dict) -> None:
         {"np": 4, "ntomp": 2, "nb": "gpu", "pme": "gpu"},
         {"np": 2, "ntomp": 4, "nb": "gpu", "pme": "gpu"},
     ]
-    config_idx = len(trials) % len(trial_configs)
-    config = trial_configs[config_idx]
+    config = trial_configs[len(trials) % len(trial_configs)]
+    trials.append({
+        "id": f"trial-{len(trials):05d}",
+        "status": "RUNNING",
+        **config,
+        "performance": None,
+        "started_at": now,
+    })
 
+
+def _advance_amber_tuner_status(status: dict) -> None:
+    """
+    Advance AMBER tuner job state based on elapsed time.
+
+    Deterministic pattern: even-indexed trials TERMINATE, odd-indexed trials ERROR.
+    """
+    if status.get("status") != "RUNNING":
+        return
+
+    trials = status.get("trials")
+    if not isinstance(trials, list):
+        trials = []
+        status["trials"] = trials
+
+    running_trial = next((t for t in trials if t.get("status") == "RUNNING"), None)
+    now = time.time()
+
+    if running_trial is not None:
+        started_at = float(running_trial.get("started_at", now))
+        if now - started_at >= TUNER_TRIAL_DURATION_SEC:
+            trial_idx = trials.index(running_trial)
+            if trial_idx % 2 == 0:
+                running_trial["status"] = "TERMINATED"
+                base_perf = 60.0
+                if running_trial.get("binary") == "pmemd.cuda":
+                    base_perf += 20.0
+                if running_trial.get("ewald") == "optimized":
+                    base_perf += 5.0
+                running_trial["performance"] = base_perf + trial_idx
+            else:
+                running_trial["status"] = "ERROR"
+                running_trial["performance"] = None
+        return
+
+    max_trials = int(status.get("max_trials", DEFAULT_TUNER_MAX_TRIALS))
+    if len(trials) >= max_trials:
+        status["status"] = "TERMINATED"
+        return
+
+    trial_configs = [
+        {"np": 4, "ntomp": 1, "binary": "pmemd.cuda", "ewald": "default"},
+        {"np": 1, "ntomp": 4, "binary": "pmemd.MPI", "ewald": "default"},
+        {"np": 4, "ntomp": 1, "binary": "pmemd.cuda", "ewald": "optimized"},
+        {"np": 2, "ntomp": 2, "binary": "pmemd.MPI", "ewald": "optimized"},
+    ]
+    config = trial_configs[len(trials) % len(trial_configs)]
     trials.append({
         "id": f"trial-{len(trials):05d}",
         "status": "RUNNING",

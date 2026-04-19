@@ -25,8 +25,6 @@ class TunerJob(db.Model):  # type: ignore
     id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
     # ID of the experiment this job belongs to
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
-    # MD engine (GMX or AMBER)
-    engine: Mapped[Engine] = mapped_column(db.String(10), nullable=False, default=Engine.GMX)
     # name of the TPR file (GMX) or prmtop file (AMBER) being tuned
     tpr_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # name of the inpcrd file (AMBER only)
@@ -44,6 +42,11 @@ class TunerJob(db.Model):  # type: ignore
 
     # back-reference to the parent experiment
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="tuner_jobs")
+
+    @property
+    def engine(self) -> Engine:
+        """MD engine inferred from the parent experiment."""
+        return self.experiment.engine
 
     @property
     def tuner_status(self) -> JobStatus:
@@ -115,7 +118,6 @@ class TunerJob(db.Model):  # type: ignore
         cls,
         experiment: Experiment,
         tpr_path: Path,
-        engine: Engine = Engine.GMX,
         inpcrd_path: Path | None = None,
         mdin_path: Path | None = None,
         nsteps: int = 25000,
@@ -127,7 +129,6 @@ class TunerJob(db.Model):  # type: ignore
         Args:
             experiment: The parent experiment.
             tpr_path: Path to the TPR file (GMX) or prmtop file (AMBER).
-            engine: MD engine to use (default: GMX).
             inpcrd_path: Path to the inpcrd file (AMBER only).
             mdin_path: Path to the mdin file (AMBER only).
             nsteps: Number of steps for tuning runs (default: 25000, which is 50 ps).
@@ -139,7 +140,7 @@ class TunerJob(db.Model):  # type: ignore
         Raises:
             ValueError: If AMBER engine is selected but required files are missing.
         """
-        match engine:
+        match experiment.engine:
             case Engine.GMX:
                 response = tuner.gmx_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
             case Engine.AMBER:
@@ -147,7 +148,7 @@ class TunerJob(db.Model):  # type: ignore
                     raise ValueError("AMBER engine requires inpcrd_path and mdin_path")
                 response = tuner.amber_submit(tpr_path, inpcrd_path, mdin_path, nsteps=nsteps, extra_args=extra_args)
             case _:
-                raise ValueError(f"Unknown engine: {engine}")
+                raise ValueError(f"Unknown engine: {experiment.engine}")
 
         tpr_rel_path = str(tpr_path.relative_to(DATA_DIR / experiment.id))
         inpcrd_rel_path = str(inpcrd_path.relative_to(DATA_DIR / experiment.id)) if inpcrd_path else None
@@ -156,7 +157,6 @@ class TunerJob(db.Model):  # type: ignore
         job: TunerJob = cls(
             id=response["id"],
             experiment=experiment,
-            engine=engine,
             tpr_name=tpr_rel_path,
             inpcrd_name=inpcrd_rel_path,
             mdin_name=mdin_rel_path,
@@ -164,7 +164,9 @@ class TunerJob(db.Model):  # type: ignore
         db.session.add(job)
         db.session.commit()
 
-        logger.info(f"Tuner job {response['id']} started for experiment {experiment.id} with engine {engine}")
+        logger.info(
+            f"Tuner job {response['id']} started for experiment {experiment.id} with engine {experiment.engine}"
+        )
         return job
 
     def stop(self) -> None:

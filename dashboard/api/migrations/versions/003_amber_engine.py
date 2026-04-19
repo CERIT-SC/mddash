@@ -102,7 +102,6 @@ def upgrade() -> None:
 
     # Step 6: Add AMBER columns to tuner_jobs
     with op.batch_alter_table("tuner_jobs") as batch_op:
-        batch_op.add_column(sa.Column("engine", sa.String(10), nullable=False, server_default="gmx"))
         batch_op.add_column(sa.Column("inpcrd_name", sa.String(255), nullable=True))
         batch_op.add_column(sa.Column("mdin_name", sa.String(255), nullable=True))
 
@@ -113,7 +112,6 @@ def downgrade() -> None:
     with op.batch_alter_table("tuner_jobs") as batch_op:
         batch_op.drop_column("mdin_name")
         batch_op.drop_column("inpcrd_name")
-        batch_op.drop_column("engine")
 
     # Step 5: Remove engine column from experiments
     with op.batch_alter_table("experiments") as batch_op:

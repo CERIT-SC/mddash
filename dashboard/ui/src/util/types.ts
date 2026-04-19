@@ -45,6 +45,8 @@ export interface TunerJob {
   experiment_id: string
   engine: Engine
   tpr_name: string
+  inpcrd_name: string | null
+  mdin_name: string | null
   tuner_status: JobStatus | null
   error_message: string | null
   created_at: string

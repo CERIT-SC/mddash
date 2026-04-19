@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import AmberStartForm from "@/components/Wizard/RunStep/AmberStartForm"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import AmberTunerTable from "./AmberTunerTable"
@@ -60,8 +61,6 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
 
   const displayStarted = tunerStarted_condition(tuner)
   const displayStopped = tuner?.is_stopped || false
-
-  // Cast trials to AmberTunerTrial[] since we know this is AMBER engine
   const trials = (tuner?.trials || []) as AmberTunerTrial[]
 
   return (
@@ -91,34 +90,19 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
           )}
 
           {selectedTrial && (
-            <Card className="w-fit">
-              <CardContent className="flex flex-col gap-3 pt-4">
-                <h3 className="text-sm font-semibold">Selected Configuration</h3>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Binary:</span> {selectedTrial.binary}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Ewald:</span> {selectedTrial.ewald}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">NP:</span> {selectedTrial.np}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">NTOMP:</span> {selectedTrial.ntomp}
-                  </div>
-                  {selectedTrial.performance !== null && (
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">Performance:</span> {selectedTrial.performance.toFixed(2)}{" "}
-                      ns/day
-                    </div>
-                  )}
-                </div>
-                <Button onClick={goToRunStep} className="w-full">
-                  Proceed to Run Step
-                </Button>
-              </CardContent>
-            </Card>
+            <AmberStartForm
+              experiment={experiment}
+              nextStep={nextStep}
+              changeStep={changeStep}
+              prmtopName={prmtopName}
+              inpcrdName={inpcrdName}
+              mdinName={mdinName}
+              onStartJob={goToRunStep}
+              binary={selectedTrial.binary}
+              ewald={selectedTrial.ewald}
+              np={selectedTrial.np}
+              ntomp={selectedTrial.ntomp}
+            />
           )}
         </div>
       ) : (

@@ -87,7 +87,6 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     tuner_job = TunerJob.start(
         experiment,
         tpr_path,
-        engine=experiment.engine,
         inpcrd_path=inpcrd_path,
         mdin_path=mdin_path,
         nsteps=nsteps,

@@ -16,11 +16,13 @@ type LogType = "stdout" | "stderr"
 
 interface AmberRunViewProps extends WizardStepProps {
   prmtopName: string
+  inpcrdName: string
+  mdinName: string
   onStartJob: () => void
 }
 
 const AmberRunView = (props: AmberRunViewProps) => {
-  const { experiment, prmtopName, onStartJob } = props
+  const { experiment, prmtopName, inpcrdName, mdinName, onStartJob } = props
 
   const [logType, setLogType] = useState<LogType | "">("")
 
@@ -48,7 +50,7 @@ const AmberRunView = (props: AmberRunViewProps) => {
   }
 
   if (!jobStatus) {
-    return <AmberStartForm {...props} onStartJob={handleJobStarted} />
+    return <AmberStartForm {...props} inpcrdName={inpcrdName} mdinName={mdinName} onStartJob={handleJobStarted} />
   }
 
   return (

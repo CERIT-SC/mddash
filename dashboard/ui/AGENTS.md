@@ -106,8 +106,10 @@ graph TD
 ### MolStar Integration
 - **Manual cleanup required**: Must call `plugin.dispose()` and `root.unmount()` on unmount
 - **Mount ref management**: Uses `isMountedRef` to prevent state updates after unmount
-- **Binary format detection**: Automatically determines if format is binary based on file extension
-- **Supported formats**: PDB, GRO, mmCIF for structures; XTC, DCD, TRR, NCTraj, Lammpstrj for trajectories
+- **Format resolution**: Use `resolveStructureFormat(filename)` and `resolveCoordsFormat(filename)` from MolStar.tsx — maps file extensions to MolStar format IDs (e.g. `.parm7` → `"prmtop"`, `.nc` → `"nctraj"`)
+- **Unified loading**: `loadStructureWithCoordinates` handles both trajectory formats (PDB, GRO) and topology formats (PRMTOP, PSF, TOP) as structure sources via `plugin.dataFormats.get(format).parse()`
+- **Supported structure formats**: PDB, GRO, mmCIF, PDBqt, XYZ, MOL, SDF, MOL2, PRMTOP/PARM7, PSF, TOP
+- **Supported coordinates formats**: XTC, DCD, TRR, NC/NCTraj, LAMMPSTRJ
 
 ### File Operations
 - **Dropzone component**: Use `Dropzone.tsx` for all file uploads

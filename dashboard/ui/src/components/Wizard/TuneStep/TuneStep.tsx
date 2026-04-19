@@ -3,7 +3,6 @@ import type { ComponentType } from "react"
 import { Engine } from "@/util/const"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
-// AmberTunePanel will be created in Task 21
 import AmberTunePanel from "./AmberTunePanel"
 import GmxTunePanel from "./GmxTunePanel"
 

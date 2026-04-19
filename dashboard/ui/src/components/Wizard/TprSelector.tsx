@@ -1,11 +1,12 @@
 import { useState } from "react"
 
-import { Loader2, Plus, Trash2 } from "lucide-react"
+import { Plus } from "lucide-react"
 
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import FileSelector from "@/components/FileSelector"
+
+import JobSelectorList from "./JobSelectorList"
 
 interface TprSelectorProps {
   experimentId: string
@@ -47,60 +48,13 @@ const TprSelector = (props: TprSelectorProps) => {
           {addTitle}
         </Button>
 
-        <div className="flex flex-col gap-1">
-          {loading ? (
-            <div className="flex justify-center py-2">
-              <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
-            </div>
-          ) : (
-            tprFiles.map((tpr) => (
-              <div
-                key={tpr}
-                className={cn(
-                  "flex cursor-pointer items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
-                  selectedTpr === tpr
-                    ? "border-foreground bg-primary text-primary-foreground"
-                    : "border-border hover:bg-muted"
-                )}
-                onClick={() => {
-                  if (selectedTpr === tpr) onSelectTpr(null)
-                  else onSelectTpr(tpr)
-                }}
-              >
-                <span className="flex min-w-0 flex-1 flex-col">
-                  {tpr.includes("/") && (
-                    <span
-                      className={cn(
-                        "truncate text-xs",
-                        selectedTpr === tpr ? "text-primary-foreground/70" : "text-muted-foreground"
-                      )}
-                    >
-                      {tpr.slice(0, tpr.lastIndexOf("/"))}/
-                    </span>
-                  )}
-                  <span className={cn("overflow-hidden text-ellipsis whitespace-nowrap", tpr.includes("/") && "pl-2")}>
-                    {tpr.split("/").pop()}
-                  </span>
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="delete"
-                  className={cn(
-                    "h-6 w-6 shrink-0",
-                    selectedTpr === tpr ? "text-primary-foreground hover:bg-primary-foreground/20" : ""
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onDeleteTpr(tpr)
-                  }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            ))
-          )}
-        </div>
+        <JobSelectorList
+          files={tprFiles}
+          selectedFile={selectedTpr}
+          loading={loading}
+          onSelect={onSelectTpr}
+          onDelete={onDeleteTpr}
+        />
       </CardContent>
     </Card>
   )
