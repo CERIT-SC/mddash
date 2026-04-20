@@ -85,7 +85,7 @@ export interface GromacsJob {
   id: string
   experiment_id: string
   created_at: string
-  engine: "gmx"
+  engine: "GMX"
   tpr_name: string
   pme: DeviceType
   nb: DeviceType
@@ -105,7 +105,7 @@ export interface AmberJob {
   id: string
   experiment_id: string
   created_at: string
-  engine: "amber"
+  engine: "AMBER"
   prmtop_name: string
   inpcrd_name: string
   mdin_name: string

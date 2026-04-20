@@ -7,7 +7,7 @@ Manage GROMACS and AMBER molecular dynamics simulation jobs on Kubernetes with a
 ## Architecture & Patterns
 
 - **Flask Blueprint Pattern**: Routes organized into `health_bp`, `gmx_bp`, and `amber_bp` blueprints for modularity
-- **Active Record Pattern**: `MdrunJob` model encapsulates both data persistence and Kubernetes orchestration logic
+- **Active Record Pattern**: `MdrunJob` model encapsulates data persistence; Kubernetes orchestration lives in route handlers
 - **Background Polling**: Daemon thread periodically queries Kubernetes for job status updates (15-minute intervals)
 - **Decorator Pattern**: `@handle_exceptions` provides centralized error handling with optional database rollback
 - **Property-Based Status**: `MdrunJob.status` property dynamically fetches current status from Kubernetes and updates database
@@ -83,6 +83,6 @@ sequenceDiagram
 
 - **`app.py`**: Flask application factory, database initialization, and polling thread startup
 - **`routes.py`**: API endpoints — `GET/POST/DELETE /api/jobs/gmx/{id}`, `GET/POST/DELETE /api/jobs/amber/{id}`
-- **`models.py`**: `MdrunJob.create_and_start()` and `MdrunJob.create_and_start_amber()` classmethods orchestrate job creation and Kubernetes submission
+- **`models.py`**: `MdrunJob` model with `create()` classmethod for persistence; `status` property polls K8s; `delete()` cleans up K8s resources
 - **`enums.py`**: `DeviceType`, `AmberBinary`, `EwaldPreset`, `JobStatus` enumerations with case-insensitive `from_string`
 - **`schemas.py`**: Marshmallow schemas for GROMACS (`GmxJobCreateRequestSchema`) and AMBER (`AmberJobCreateRequestSchema`) request validation

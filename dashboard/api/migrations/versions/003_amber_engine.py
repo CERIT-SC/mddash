@@ -31,7 +31,7 @@ def upgrade() -> None:
         sa.Column("id", sa.String(36), primary_key=True),
         sa.Column("experiment_id", sa.String(5), sa.ForeignKey("experiments.id"), nullable=False),
         sa.Column("created_at", sa.DateTime, nullable=True),
-        sa.Column("engine", sa.Enum("gmx", "amber", name="engine"), nullable=False, server_default="gmx"),
+        sa.Column("engine", sa.Enum("GMX", "AMBER", name="engine"), nullable=False, server_default="GMX"),
         sa.Column("np", sa.Integer, nullable=False),
         sa.Column("ntomp", sa.Integer, nullable=False),
         sa.Column("extra_args", sa.Text, nullable=True, server_default=""),
@@ -54,7 +54,7 @@ def upgrade() -> None:
             start_timestamp, finish_timestamp, nsteps, performance, last_known_status
         )
         SELECT
-            id, experiment_id, created_at, 'gmx', np, ntomp, extra_args,
+            id, experiment_id, created_at, 'GMX', np, ntomp, extra_args,
             start_timestamp, finish_timestamp, nsteps, performance, last_known_status
         FROM gromacs_jobs
         """
@@ -97,7 +97,7 @@ def upgrade() -> None:
     # Step 5: Add engine column to experiments
     with op.batch_alter_table("experiments") as batch_op:
         batch_op.add_column(
-            sa.Column("engine", sa.Enum("gmx", "amber", name="engine"), nullable=False, server_default="gmx")
+            sa.Column("engine", sa.Enum("GMX", "AMBER", name="engine"), nullable=False, server_default="GMX")
         )
 
     # Step 6: Add AMBER columns to tuner_jobs

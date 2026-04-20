@@ -4,8 +4,8 @@ from enum import Enum
 class Engine(str, Enum):
     """Molecular dynamics engine types."""
 
-    GMX = "gmx"
-    AMBER = "amber"
+    GMX = "GMX"
+    AMBER = "AMBER"
 
     def __str__(self) -> str:
         return self.value
@@ -18,13 +18,12 @@ class Engine(str, Enum):
         Returns:
             Engine: The matching enum member.
         """
-        # Case-insensitive lookup: compare lowercased value against lowercased member values
-        value_lower = value.lower()
+        # Case-insensitive lookup: legacy data may use lowercase
+        value_upper = value.upper()
         for member in cls:
-            if member.value.lower() == value_lower:
+            if member.value == value_upper:
                 return member
-        # Fall back to standard constructor (will raise ValueError)
-        return cls(value)
+        raise ValueError(f"Invalid Engine: {value}")
 
 
 class AmberBinary(str, Enum):
@@ -44,13 +43,12 @@ class AmberBinary(str, Enum):
         Returns:
             AmberBinary: The matching enum member.
         """
-        # Case-insensitive lookup: compare lowercased value against lowercased member values
+        # Case-insensitive lookup: inputs like 'PMEMD.CUDA' and 'pmemd.cuda' are equivalent
         value_lower = value.lower()
         for member in cls:
             if member.value.lower() == value_lower:
                 return member
-        # Fall back to standard constructor (will raise ValueError)
-        return cls(value)
+        raise ValueError(f"Invalid AmberBinary: {value}")
 
 
 class EwaldPreset(str, Enum):
@@ -70,10 +68,4 @@ class EwaldPreset(str, Enum):
         Returns:
             EwaldPreset: The matching enum member.
         """
-        # Case-insensitive lookup: compare lowercased value against lowercased member values
-        value_lower = value.lower()
-        for member in cls:
-            if member.value.lower() == value_lower:
-                return member
-        # Fall back to standard constructor (will raise ValueError)
-        return cls(value)
+        return cls(value.lower())

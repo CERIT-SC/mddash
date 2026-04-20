@@ -7,7 +7,7 @@ from clients import caddy, k8s
 from clients.k8s import parse_cpu, parse_memory
 from config import GMX_RESOURCES, GPU_TYPE, MAX_NOTEBOOKS, NAMESPACE, NOTEBOOK_RESOURCES, PREFIX
 from enums import NotebookTier, PodStatus
-from extensions import db
+from extensions import db, enum_values
 from kubernetes.client.rest import ApiException  # type: ignore
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.exceptions import BadRequest, Conflict, Forbidden, InternalServerError
@@ -71,7 +71,7 @@ class Notebook(db.Model):  # type: ignore
     token: Mapped[str] = mapped_column(db.String(36), nullable=False, default=lambda: str(uuid4()))
     # resource tier (1x, 2x, 4x) — NULL for notebooks created before tiers were introduced
     tier: Mapped[NotebookTier | None] = mapped_column(
-        db.Enum(NotebookTier, values_callable=lambda e: [m.value for m in e]),
+        db.Enum(NotebookTier, values_callable=enum_values),
         nullable=True,
     )
     # whether GPU is attached to the gmx sidecar

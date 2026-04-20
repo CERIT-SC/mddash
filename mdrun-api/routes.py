@@ -1,9 +1,11 @@
 import logging
 from http import HTTPStatus
 from typing import Any, cast
+from uuid import uuid4
 
+import k8s_client
 from api_response import ApiResponse
-from config import API_PREFIX
+from config import API_PREFIX, NAMESPACE
 from decorators import handle_exceptions
 from enums import AmberBinary, DeviceType, EwaldPreset
 from extensions import db
@@ -116,16 +118,25 @@ def create_gmx_job() -> Response:
     except ValueError as e:
         raise ValidationError(str(e)) from e
 
-    job: MdrunJob = MdrunJob.create_and_start(
-        experiment_id=experiment_id,
-        tpr_name=tpr_name,
+    job_id = str(uuid4())
+    job_name = f"mdrun-{job_id}"
+    deffnm = tpr_name.removesuffix(".tpr")
+
+    k8s_client.create_gromacs_job(
+        ns=NAMESPACE,
         bucket_name=bucket_name,
-        pme=pme,
-        nb=nb,
+        name=job_name,
+        experiment_id=experiment_id,
+        deffnm=deffnm,
+        nb=nb.value,
+        pme=pme.value,
         np=np,
         ntomp=ntomp,
         extra_args=extra_args,
     )
+
+    job = MdrunJob.create(job_name=job_name, experiment_id=experiment_id)
+    logger.info(f"Started GROMACS job {job_name} with ID {job_id} in experiment {experiment_id}")
 
     return ApiResponse.success({"id": job.id, "status": job.last_status.value}, HTTPStatus.CREATED)
 
@@ -188,18 +199,26 @@ def create_amber_job() -> Response:
     except ValueError as e:
         raise ValidationError(str(e)) from e
 
-    job: MdrunJob = MdrunJob.create_and_start_amber(
+    job_id = str(uuid4())
+    job_name = f"mdrun-{job_id}"
+
+    k8s_client.create_amber_job(
+        ns=NAMESPACE,
+        bucket_name=bucket_name,
+        name=job_name,
         experiment_id=experiment_id,
         prmtop_name=prmtop_name,
         inpcrd_name=inpcrd_name,
         mdin_name=mdin_name,
-        bucket_name=bucket_name,
-        binary=binary,
-        ewald=ewald,
+        binary=binary.value,
         np=np,
         ntomp=ntomp,
+        ewald=ewald.value,
         extra_args=extra_args,
     )
+
+    job = MdrunJob.create(job_name=job_name, experiment_id=experiment_id)
+    logger.info(f"Started AMBER job {job_name} with ID {job_id} in experiment {experiment_id}")
 
     return ApiResponse.success({"id": job.id, "status": job.last_status.value}, HTTPStatus.CREATED)
 

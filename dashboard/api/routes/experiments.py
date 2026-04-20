@@ -48,9 +48,9 @@ def create_experiment() -> Response:
     simulation_files = request.files.getlist("simulation-files")
 
     # Get engine from form, default to GMX
-    engine_str = form.get("engine", "gmx")
+    engine_str = form.get("engine", "GMX")
     try:
-        engine = Engine(engine_str)
+        engine = Engine.from_string(engine_str)
     except ValueError:
         return ApiResponse.error(f"Invalid engine: {engine_str}", HTTPStatus.BAD_REQUEST)
 
