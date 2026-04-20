@@ -17,6 +17,9 @@ class Engine(str, Enum):
 
         Returns:
             Engine: The matching enum member.
+
+        Raises:
+            ValueError: If no matching engine is found.
         """
         # Case-insensitive lookup: legacy data may use lowercase
         value_upper = value.upper()
@@ -42,6 +45,9 @@ class AmberBinary(str, Enum):
 
         Returns:
             AmberBinary: The matching enum member.
+
+        Raises:
+            ValueError: If no matching binary is found.
         """
         # Case-insensitive lookup: inputs like 'PMEMD.CUDA' and 'pmemd.cuda' are equivalent
         value_lower = value.lower()

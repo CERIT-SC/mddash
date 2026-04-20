@@ -6,7 +6,12 @@ from flask_sqlalchemy import SQLAlchemy
 
 
 def enum_values(enum_class: type[Enum]) -> list[str]:
-    """Extract .value from each member — use when enum values differ from names."""
+    """
+    Extract .value from each member — use when enum values differ from names.
+
+    Returns:
+        list[str]: The values of all enum members.
+    """
     return [m.value for m in enum_class]
 
 

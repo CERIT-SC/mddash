@@ -8,13 +8,13 @@ interface AnalyzeConfig {
 }
 
 export const ANALYZE_CONFIG: Record<Engine, AnalyzeConfig> = {
-  gmx: {
+  GMX: {
     structureExts: ["pdb", "gro"],
     trajectoryExts: ["xtc", "trr"],
     topologyExts: ["tpr", "top", "prmtop", "psf"],
     preprocessingTopologyExts: ["tpr"],
   },
-  amber: {
+  AMBER: {
     structureExts: ["pdb"],
     trajectoryExts: ["nc"],
     topologyExts: ["prmtop", "parm7"],
