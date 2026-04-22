@@ -13,7 +13,7 @@ from clients import k8s
 from clients.k8s import parse_cpu, parse_memory
 from config import ANALYSIS_IMAGE, ANALYSIS_RESOURCES, DATA_DIR
 from enums import AnalysisType, JobStatus, PreprocessingMode
-from extensions import db, enum_values
+from extensions import db
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.exceptions import Forbidden
 
@@ -205,9 +205,7 @@ class AnalysisJob(db.Model):  # type: ignore
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
 
-    analysis_name: Mapped[AnalysisType] = mapped_column(
-        db.Enum(AnalysisType, values_callable=enum_values), nullable=False
-    )
+    analysis_name: Mapped[AnalysisType] = mapped_column(db.Enum(AnalysisType), nullable=False)
     structure_file: Mapped[str] = mapped_column(db.String(255), nullable=False)
     trajectory_file: Mapped[str] = mapped_column(db.String(255), nullable=False)
     topology_file: Mapped[str | None] = mapped_column(db.String(255), nullable=True)

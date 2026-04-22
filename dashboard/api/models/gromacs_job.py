@@ -13,7 +13,7 @@ from cachetools import cached
 from clients import mdrun
 from config import DATA_DIR, S3_BUCKET
 from enums import DeviceType, Engine, JobStatus
-from extensions import db, enum_values
+from extensions import db
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from utils import tail
@@ -48,9 +48,9 @@ class GromacsJob(SimulationJob):
     # Name of the TPR file
     tpr_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # Device type for PME calculations
-    pme: Mapped["DeviceType"] = mapped_column(db.Enum(DeviceType, values_callable=enum_values), nullable=False)
+    pme: Mapped["DeviceType"] = mapped_column(db.Enum(DeviceType), nullable=False)
     # Device type for non-bonded interactions
-    nb: Mapped["DeviceType"] = mapped_column(db.Enum(DeviceType, values_callable=enum_values), nullable=False)
+    nb: Mapped["DeviceType"] = mapped_column(db.Enum(DeviceType), nullable=False)
 
     @property
     def _deffnm(self) -> str:

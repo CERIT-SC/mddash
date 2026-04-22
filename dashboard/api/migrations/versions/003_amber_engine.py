@@ -67,8 +67,8 @@ def upgrade() -> None:
         "gromacs_jobs_new",
         sa.Column("id", sa.String(36), sa.ForeignKey("simulation_jobs.id"), primary_key=True),
         sa.Column("tpr_name", sa.String(255), nullable=False),
-        sa.Column("pme", sa.Enum("auto", "cpu", "gpu", name="devicetype"), nullable=False),
-        sa.Column("nb", sa.Enum("auto", "cpu", "gpu", name="devicetype"), nullable=False),
+        sa.Column("pme", sa.Enum("AUTO", "CPU", "GPU", name="devicetype"), nullable=False),
+        sa.Column("nb", sa.Enum("AUTO", "CPU", "GPU", name="devicetype"), nullable=False),
     )
 
     # Copy data from old gromacs_jobs to new table

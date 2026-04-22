@@ -1,14 +1,37 @@
+import functools
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from extensions import ma
-from marshmallow import post_dump
+from marshmallow import fields, post_dump
+from marshmallow_sqlalchemy.convert import ModelConverter
+
+if TYPE_CHECKING:
+    from sqlalchemy.types import TypeEngine
 
 logger = logging.getLogger(__name__)
 
 
+class MDDashModelConverter(ModelConverter):
+    """Serialize enum columns by their .value, not .name."""
+
+    def _get_field_class_for_data_type(  # type: ignore[override]
+        self, data_type: "TypeEngine"
+    ) -> type[fields.Field] | functools.partial[type[fields.Field]]:
+        result = super()._get_field_class_for_data_type(data_type)
+        if isinstance(result, functools.partial) and result.func is fields.Enum:
+            keywords = dict(result.keywords, by_value=True)
+            return functools.partial(result.func, *result.args, **keywords)
+        return result
+
+
 class BaseAutoSchema(ma.SQLAlchemyAutoSchema):  # type: ignore
     """Base schema that automatically includes all non-private properties."""
+
+    class Meta:
+        """Metadata for the BaseAutoSchema."""
+
+        model_converter = MDDashModelConverter
 
     @post_dump
     def remove_private_fields(self, data: dict[str, Any], **kwargs: object) -> dict[str, Any]:  # noqa: ARG002

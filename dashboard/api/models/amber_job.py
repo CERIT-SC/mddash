@@ -10,7 +10,7 @@ from cachetools import cached
 from clients import mdrun
 from config import DATA_DIR, S3_BUCKET
 from enums import AmberBinary, Engine, EwaldPreset
-from extensions import db, enum_values
+from extensions import db
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from utils import tail
@@ -42,9 +42,9 @@ class AmberJob(SimulationJob):
     # AMBER input file
     mdin_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # AMBER binary type
-    binary: Mapped["AmberBinary"] = mapped_column(db.Enum(AmberBinary, values_callable=enum_values), nullable=False)
+    binary: Mapped["AmberBinary"] = mapped_column(db.Enum(AmberBinary), nullable=False)
     # Ewald summation preset
-    ewald: Mapped["EwaldPreset"] = mapped_column(db.Enum(EwaldPreset, values_callable=enum_values), nullable=False)
+    ewald: Mapped["EwaldPreset"] = mapped_column(db.Enum(EwaldPreset), nullable=False)
 
     @property
     def _stdout_log(self) -> Path:
