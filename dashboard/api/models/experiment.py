@@ -343,6 +343,28 @@ class Experiment(db.Model):  # type: ignore
             db.session.rollback()
             raise
 
+    def _has_setup_files(self) -> bool:
+        """
+        Check if the experiment directory contains required setup files for the configured engine.
+
+        Returns:
+            True if all required files for the engine are present, False otherwise.
+        """
+        exp_dir = DATA_DIR / self.id
+        if not exp_dir.exists():
+            return False
+
+        if self.engine == Engine.GMX:
+            return bool(get_files_with_extensions(exp_dir, "tpr"))
+
+        if self.engine == Engine.AMBER:
+            has_mdin = get_files_with_extensions(exp_dir, "mdin")
+            has_prmtop = get_files_with_extensions(exp_dir, ["prmtop", "parm7"])
+            has_inpcrd = get_files_with_extensions(exp_dir, ["inpcrd", "rst7", "nc"])
+            return bool(has_mdin and has_prmtop and has_inpcrd)
+
+        return False
+
     @cached(cache=step_status_cache)
     def _step_status(self) -> tuple[int, str]:
         """
@@ -380,8 +402,8 @@ class Experiment(db.Model):  # type: ignore
         if self.tuner_jobs:
             return 1, "tuning"
 
-        # Step 1: Setup complete (directory contains a TPR file)
-        if get_files_with_extensions(DATA_DIR / self.id, "tpr"):
+        # Step 1: Setup complete (directory contains required files for the engine)
+        if self._has_setup_files():
             return 1, "setup complete"
 
         return 0, "setup"
