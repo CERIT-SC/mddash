@@ -10,15 +10,18 @@ else
   IMAGE_TAG ?= $(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD)
 endif
 
-config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
+#config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
+config := $(if $(wildcard ../config.${ENV}.yaml),../config.${ENV}.yaml,../config.yaml)
+
 platform := --platform $(shell yq '.sidecars.platform' $(config))
 
 # Image names from config
-ui_image := $(shell yq '.sidecars.ui.image' $(config))
-proxy_image := $(shell yq '.sidecars.proxy.image' $(config))
-auth_image := $(shell yq '.sidecars.auth.image' $(config))
-api_image := $(shell yq '.sidecars.api.image' $(config))
-s3sync_image := $(shell yq '.sidecars.s3sync.image' $(config))
+registry := $(shell yq '.registry' $(config))
+ui_image := $(registry)/$(shell yq '.sidecars.ui.image' $(config))
+proxy_image := $(registry)/$(shell yq '.sidecars.proxy.image' $(config))
+auth_image := $(registry)/$(shell yq '.sidecars.auth.image' $(config))
+api_image := $(registry)/$(shell yq '.sidecars.api.image' $(config))
+s3sync_image := $(registry)/$(shell yq '.sidecars.s3sync.image' $(config))
 
 ifeq ($(ENV),dev)
 	tag := dev

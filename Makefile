@@ -12,7 +12,9 @@ else
 endif
 export IMAGE_TAG
 
-config := $(if $(filter dev,$(ENV)),config.dev.yaml,config.yaml)
+#config := $(if $(filter dev,$(ENV)),config.dev.yaml,config.yaml)
+config := $(if $(wildcard config.${ENV}.yaml),config.${ENV}.yaml,config.yaml)
+
 namespace := $(shell yq '.namespace' $(config))
 registry := $(shell yq '.registry' $(config))
 

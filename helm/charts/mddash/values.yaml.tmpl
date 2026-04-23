@@ -2,6 +2,7 @@
 {{- $namespace := $cfg.namespace -}}
 {{- $helmPackage := $cfg.helm.package -}}
 {{- $imageTag := (getenv "IMAGE_TAG" $cfg.imageTag) -}}
+{{- $registry := $cfg.registry -}}
 jupyterhub:
   hub:
     resources:
@@ -17,12 +18,12 @@ jupyterhub:
       tag: "sha-4ffff9e"
     config:
       JupyterHub:
-        authenticator_class: generic-oauth
+        authenticator_class: "{{ $cfg.oidc.authenticator_class }}"
       GenericOAuthenticator:
         login_service: "{{ $cfg.oidc.loginService }}"
-        authorize_url: {{ $cfg.oidc.authorizeUrl }}
-        token_url: {{ $cfg.oidc.tokenUrl }}
-        userdata_url: {{ $cfg.oidc.userdataUrl }}
+        authorize_url: "https://{{ $cfg.oidc.oauth_server }}/{{ $cfg.oidc.authorizePath }}"
+        token_url: "https://{{ $cfg.oidc.oauth_server }}/{{ $cfg.oidc.tokenPath }}"
+        userdata_url: "https://{{ $cfg.oidc.oauth_server }}/{{ $cfg.oidc.userdataPath }}"
         oauth_callback_url: https://{{ $cfg.dashboard.hostname }}/hub/oauth_callback
         client_id: null  # gets imported from env OAUTH_CLIENT_ID
         client_secret: null  # gets imported from env OAUTH_CLIENT_SECRET
@@ -38,6 +39,8 @@ jupyterhub:
         http_timeout: 120
 
     extraEnv:
+      EGICHECKIN_HOST:
+        value: "{{ $cfg.oidc.oauth_server }}"
       HOSTNAME:
         value: "{{ $cfg.dashboard.hostname }}"
       HELM_PACKAGE:
@@ -113,17 +116,17 @@ jupyterhub:
         value: "{{ $cfg.storageClassName }}"
       # Sidecar container images - used by pre_spawn_hook.py to configure extra_containers
       PROXY_IMAGE:
-        value: "{{ $cfg.sidecars.proxy.image }}:{{ $imageTag }}"
+        value: "{{ $registry }}/{{ $cfg.sidecars.proxy.image }}:{{ $imageTag }}"
       AUTH_IMAGE:
-        value: "{{ $cfg.sidecars.auth.image }}:{{ $imageTag }}"
+        value: "{{ $registry }}/{{ $cfg.sidecars.auth.image }}:{{ $imageTag }}"
       API_IMAGE:
-        value: "{{ $cfg.sidecars.api.image }}:{{ $imageTag }}"
+        value: "{{ $registry }}/{{ $cfg.sidecars.api.image }}:{{ $imageTag }}"
       S3_SYNC_IMAGE:
-        value: "{{ $cfg.sidecars.s3sync.image }}:{{ $imageTag }}"
+        value: "{{ $registry }}/{{ $cfg.sidecars.s3sync.image }}:{{ $imageTag }}"
       NOTEBOOK_IMAGE:
-        value: "{{ $cfg.notebook.image }}:{{ $imageTag }}"
+        value: "{{ $registry }}/{{ $cfg.notebook.image }}:{{ $imageTag }}"
       ANALYSIS_IMAGE:
-        value: "{{ $cfg.analysis.image }}"
+        value: "{{ $registry }}/{{ $cfg.analysis.image }}"
       GMX_IMAGE:
         value: "{{ $cfg.gmxImage }}"
       GPU_TYPE:
@@ -258,7 +261,7 @@ jupyterhub:
 
 mdrun-api:
   image:
-    repository: {{ $cfg.mdrunApi.image }}
+    repository: "{{ $cfg.registry }}/{{ $cfg.mdrunApi.image }}"
     tag: "{{ $imageTag }}"
     pullPolicy: Always
   storage:

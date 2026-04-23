@@ -10,7 +10,9 @@ else
   IMAGE_TAG ?= $(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD)
 endif
 
-config = $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
+#config = $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
+config := $(if $(wildcard ../config.${ENV}.yaml),../config.${ENV}.yaml,../config.yaml)
+
 package := $(shell yq .helm.package $(config))
 namespace := $(shell yq '.namespace' $(config))
 chart_path := charts/mddash
