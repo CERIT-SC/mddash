@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
+"""
+Verify end-to-end login and dashboard API accessibility.
 
-import os
-import sys
-import time
-import requests
+A standalone manual test script that:
+1. Logs in via EGI JWT authentication,
+2. Waits for the singleuser server to be ready,
+3. Completes the OAuth flow for mddash session,
+4. Calls the dashboard API health endpoint.
+
+Requires a `TOKEN` environment variable containing a valid EGI JWT access token.
+"""
+
 import json
+import os
+import time
+
+import requests
+
 
 def log_request(method, url, headers=None, params=None):
     """Log outgoing request details."""
@@ -14,6 +26,7 @@ def log_request(method, url, headers=None, params=None):
         print(f"  Headers: {safe_headers}")
     if params:
         print(f"  Params: {params}")
+
 
 def log_response(resp, prefix=""):
     """Log response details."""
@@ -25,6 +38,7 @@ def log_response(resp, prefix=""):
     except:
         print(f"  Body: {resp.text}")
     print()
+
 
 def wait_for_server():
     token = os.getenv("TOKEN")
@@ -45,7 +59,7 @@ def wait_for_server():
     log_response(login_resp, "LOGIN")
 
     if login_resp.status_code != 200:
-        print(f"Login failed!")
+        print("Login failed!")
         return
 
     xsrf_token = session.cookies.get("_xsrf")
@@ -79,7 +93,7 @@ def wait_for_server():
     server_state = default_server.get("state", default_server.get("ready", "unknown"))
     server_url_path = default_server.get("url", "")
 
-    print(f"Server info from API:")
+    print("Server info from API:")
     print(f"  ready: {default_server.get('ready', 'N/A')}")
     print(f"  stopped: {default_server.get('stopped', 'N/A')}")
     print(f"  url: {server_url_path}")
@@ -91,7 +105,7 @@ def wait_for_server():
     server_ready = False
 
     for i in range(max_retries):
-        print(f"\n--- Poll attempt {i+1}/{max_retries} ---")
+        print(f"\n--- Poll attempt {i + 1}/{max_retries} ---")
 
         log_request("GET", user_api_url, {"Authorization": "token ***"})
         resp = session.get(user_api_url, headers={"Authorization": f"token {token}"})
@@ -156,6 +170,7 @@ def wait_for_server():
         print("\nSuccess! Dash API is accessible.")
     else:
         print(f"\nWarning: Got status {resp.status_code}")
+
 
 if __name__ == "__main__":
     wait_for_server()

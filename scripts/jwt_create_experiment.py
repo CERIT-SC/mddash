@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
+"""
+Create a test experiment end-to-end via the MDDash API.
 
-import os
-import sys
-import time
-import requests
+A standalone manual test script that:
+1. Logs in via EGI JWT authentication,
+2. Waits for the singleuser server to be ready,
+3. Completes the OAuth flow for mddash session,
+4. Creates a molecular dynamics experiment (PDB: 1L2Y) via the dashboard API.
+
+Requires a `TOKEN` environment variable containing a valid EGI JWT access token.
+"""
+
 import json
+import os
+import time
+
+import requests
+
 
 def log_request(method, url, headers=None, data=None):
     """Log outgoing request details."""
@@ -14,6 +26,7 @@ def log_request(method, url, headers=None, data=None):
         print(f"  Headers: {safe_headers}")
     if data:
         print(f"  Data: {data}")
+
 
 def log_response(resp, prefix=""):
     """Log response details."""
@@ -25,6 +38,7 @@ def log_response(resp, prefix=""):
     except:
         print(f"  Body: {resp.text}")
     print()
+
 
 def create_experiment():
     token = os.getenv("TOKEN")
@@ -50,7 +64,7 @@ def create_experiment():
     log_response(login_resp, "LOGIN")
 
     if login_resp.status_code != 200:
-        print(f"Login failed!")
+        print("Login failed!")
         return
 
     xsrf_token = session.cookies.get("_xsrf")
@@ -83,7 +97,7 @@ def create_experiment():
     default_server = servers.get("", {})
     server_url_path = default_server.get("url", "")
 
-    print(f"Server info from API:")
+    print("Server info from API:")
     print(f"  ready: {default_server.get('ready', 'N/A')}")
     print(f"  stopped: {default_server.get('stopped', 'N/A')}")
     print(f"  url: {server_url_path}")
@@ -95,7 +109,7 @@ def create_experiment():
     server_ready = False
 
     for i in range(max_retries):
-        print(f"\n--- Poll attempt {i+1}/{max_retries} ---")
+        print(f"\n--- Poll attempt {i + 1}/{max_retries} ---")
 
         log_request("GET", user_api_url, {"Authorization": "token ***"})
         resp = session.get(user_api_url, headers={"Authorization": f"token {token}"})
@@ -148,7 +162,7 @@ def create_experiment():
         "experiment-name": EXPERIMENT_NAME,
         "type": "pdb",
         "pdb-id": PDB_ID,
-        "notebooks-repo": NOTEBOOKS_REPO
+        "notebooks-repo": NOTEBOOKS_REPO,
     }
 
     print(f"Target URL: {create_url}")
@@ -166,6 +180,7 @@ def create_experiment():
             print(f"Experiment ID: {exp_id}")
     else:
         print(f"\nFailed to create experiment. Status: {resp.status_code}")
+
 
 if __name__ == "__main__":
     create_experiment()

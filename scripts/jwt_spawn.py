@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
+"""
+Start a JupyterHub singleuser server using JWT token authentication.
+
+A standalone manual test script for exercising the EGI authenticator JWT
+callback flow against the MDDash EDC deployment.
+"""
 
 import os
+
 import requests
+
 
 def start_server():
     token = os.getenv("TOKEN")
@@ -20,7 +28,7 @@ def start_server():
 
     print("--- Step 1: JWT Login ---")
     login_resp = session.get(login_url, headers={"Authorization": f"bearer {token}"})
-    
+
     if login_resp.status_code != 200:
         print(f"Login failed: {login_resp.text}")
         return
@@ -51,13 +59,14 @@ def start_server():
             "Authorization": f"token {token}",
             "X-XSRFToken": xsrf_token,
             "Content-Type": "application/json",
-            "Referer": f"{base_url}/hub/home"
+            "Referer": f"{base_url}/hub/home",
         },
-        json={"_xsrf": xsrf_token}
+        json={"_xsrf": xsrf_token},
     )
 
     print(f"Status: {post_resp.status_code}")
     print(f"Body: {post_resp.text}")
+
 
 if __name__ == "__main__":
     # Label: Ljocha 2026
