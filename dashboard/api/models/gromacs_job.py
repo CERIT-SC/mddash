@@ -285,13 +285,17 @@ class GromacsJob(SimulationJob):
         try:
             with self._gmx_log.open("r") as f:
                 for line in f:
-                    if "nsteps" not in line:
+                    if "nsteps" not in line or "=" not in line:
                         continue
 
                     parts = line.split("=")
-                    return int(parts[-1].strip())
+                    value = parts[-1].strip()
+                    try:
+                        return int(value)
+                    except ValueError:
+                        continue
 
-        except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
+        except (FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
             logger.exception("Error reading nsteps from log file.")
 
         return None
