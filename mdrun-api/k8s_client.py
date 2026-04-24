@@ -174,15 +174,18 @@ def _mdin_patch_command(mdin_name: str, ewald: str) -> str:
             netfrc, skin_permit = "1", "1.0"
 
     return (
-        f"NETFRC={netfrc} SKIN_PERMIT={skin_permit} "
-        f'awk -v netfrc="$NETFRC" -v skin_permit="$SKIN_PERMIT" \''
-        "/^ *&ewald/ { in_ewald=1; print; next } "
-        'in_ewald && /^[[:space:]]*\\// { print "  netfrc = " netfrc ","; print "  skin_permit = " skin_permit ","; print; in_ewald=0; next } '
-        "in_ewald && /netfrc/ { next } "
-        "in_ewald && /skin_permit/ { next } "
-        '!in_ewald && /^[[:space:]]*\\// && !found_ewald { print " &ewald"; print "  netfrc = " netfrc ","; print "  skin_permit = " skin_permit ","; print " /"; found_ewald=1; next } '
-        "{ print } "
-        f"' {_q(mdin_name)} > {_q(mdin_name)}.tmp && mv {_q(mdin_name)}.tmp {_q(mdin_name)}"
+        f"awk '\n"
+        "BEGIN { skip=0 }\n"
+        "{ orig=$0; $0=tolower($0); gsub(/^[[:space:]]+/, \"\", $0); gsub(/[[:space:]]+$/, \"\", $0) }\n"
+        '$0 ~ /^&ewald/ { skip=1; next }\n'
+        'skip && ($0 == "/" || $0 == "&end") { skip=0; next }\n'
+        "{ if (!skip) print orig }\n"
+        "END {\n"
+        '    print ""; print "&ewald";\n'
+        f'    print "  netfrc = {netfrc},";\n'
+        f'    print "  skin_permit = {skin_permit},";\n'
+        '    print " /"\n'
+        f"}}' < {_q(mdin_name)} > {_q(mdin_name)}.tmp && mv {_q(mdin_name)}.tmp {_q(mdin_name)}"
     )
 
 
@@ -428,6 +431,21 @@ def get_job_status(ns: str, name: str) -> JobStatus:
         if job.status and job.status.failed and job.status.failed > 0:
             return JobStatus.ERROR
         if job.status and job.status.active and job.status.active > 0:
+            # active > 0 means K8s created a pod, but it may still be pulling image or scheduling.
+            # Check pod phase to distinguish PENDING (unscheduled/image-pull) from actual RUNNING.
+            try:
+                pods = core_v1.list_namespaced_pod(
+                    namespace=ns, label_selector=f"job-name={name}", limit=1
+                )
+                if pods.items:
+                    phase = pods.items[0].status.phase
+                    if phase == "Running":
+                        return JobStatus.RUNNING
+                    # Pod exists but not running yet (Pending, ContainerCreating, etc.)
+                    return JobStatus.PENDING
+            except ApiException:
+                pass
+            # Can't determine pod phase — fall back to RUNNING since job is active
             return JobStatus.RUNNING
         return JobStatus.PENDING
 

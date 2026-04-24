@@ -130,7 +130,7 @@ def get_amber_log(experiment_id: str, prmtop_name: str) -> Response:
         description=f"AMBER job for {prmtop_name} in experiment {experiment_id} not found"
     )
 
-    log_type = request.args.get("type", "amber").lower()
+    log_type = request.args.get("type", "mdout").lower()
     tail_lines = request.args.get("tail", "10000")
 
     check_positive_int(tail_lines, "Tail lines", max_value=100000)

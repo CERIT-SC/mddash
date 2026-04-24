@@ -29,7 +29,7 @@ const RunView = (props: RunViewProps) => {
   const jobStatus = jobQuery.data ?? null
   const isRunning = jobStatus?.status === "RUNNING"
 
-  const logsAvailable = !!jobStatus && jobStatus.nsteps !== null
+  const logsAvailable = !!jobStatus && jobStatus.status !== "PENDING"
   const shouldRefreshLogs = isRunning
 
   const logsQuery = useGromacsLogs(experiment.id, tprName, logType, shouldRefreshLogs)

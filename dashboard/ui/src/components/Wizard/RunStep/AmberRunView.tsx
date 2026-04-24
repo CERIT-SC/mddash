@@ -12,7 +12,7 @@ import { type WizardStepProps } from "@/components/Wizard/Stepper"
 import AmberJobStatusDisplay from "./AmberJobStatusDisplay"
 import AmberStartForm from "./AmberStartForm"
 
-type LogType = "amber" | "mdinfo" | "stdout" | "stderr"
+type LogType = "mdout" | "mdinfo" | "stdout" | "stderr"
 
 interface AmberRunViewProps extends WizardStepProps {
   prmtopName: string
@@ -31,7 +31,7 @@ const AmberRunView = (props: AmberRunViewProps) => {
   const jobStatus = jobQuery.data ?? null
   const isRunning = jobStatus?.status === "RUNNING"
 
-  const logsAvailable = !!jobStatus && jobStatus.nsteps !== null
+  const logsAvailable = !!jobStatus && jobStatus.status !== "PENDING"
   const shouldRefreshLogs = isRunning
 
   const logsQuery = useAmberLogs(experiment.id, prmtopName, logType, shouldRefreshLogs)
@@ -74,8 +74,8 @@ const AmberRunView = (props: AmberRunViewProps) => {
                   <SelectItem value={SELECT_NONE}>
                     <em>None</em>
                   </SelectItem>
-                  <SelectItem value="amber">AMBER Log</SelectItem>
-                  <SelectItem value="mdinfo">Progress Info</SelectItem>
+                  <SelectItem value="mdout">mdout</SelectItem>
+                  <SelectItem value="mdinfo">mdinfo</SelectItem>
                   <SelectItem value="stdout">Standard Output</SelectItem>
                   <SelectItem value="stderr">Standard Error</SelectItem>
                 </SelectContent>

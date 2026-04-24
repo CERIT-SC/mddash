@@ -135,7 +135,7 @@ def create_gmx_job() -> Response:
         extra_args=extra_args,
     )
 
-    job = MdrunJob.create(job_name=job_name, experiment_id=experiment_id)
+    job = MdrunJob.create(job_id=job_id, job_name=job_name, experiment_id=experiment_id)
     logger.info(f"Started GROMACS job {job_name} with ID {job_id} in experiment {experiment_id}")
 
     return ApiResponse.success({"id": job.id, "status": job.last_status.value}, HTTPStatus.CREATED)
@@ -217,7 +217,7 @@ def create_amber_job() -> Response:
         extra_args=extra_args,
     )
 
-    job = MdrunJob.create(job_name=job_name, experiment_id=experiment_id)
+    job = MdrunJob.create(job_id=job_id, job_name=job_name, experiment_id=experiment_id)
     logger.info(f"Started AMBER job {job_name} with ID {job_id} in experiment {experiment_id}")
 
     return ApiResponse.success({"id": job.id, "status": job.last_status.value}, HTTPStatus.CREATED)

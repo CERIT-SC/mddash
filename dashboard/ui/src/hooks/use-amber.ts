@@ -63,7 +63,7 @@ export function useDeleteAmber(experimentId: string) {
 export function useAmberLogs(
   experimentId: string,
   prmtopName: string,
-  logType: "amber" | "mdinfo" | "stdout" | "stderr" | "",
+  logType: "mdout" | "mdinfo" | "stdout" | "stderr" | "",
   shouldPoll: boolean,
   tail = 100
 ) {

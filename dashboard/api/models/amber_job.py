@@ -228,12 +228,12 @@ class AmberJob(SimulationJob):
 
         return job
 
-    def get_log(self, type: str = "amber", tail_lines: int | None = None) -> str:
+    def get_log(self, type: str = "mdout", tail_lines: int | None = None) -> str:
         """
         Get the log of the job.
 
         Args:
-            type: Type of log to retrieve ('amber', 'mdinfo', 'stdout', or 'stderr').
+            type: Type of log to retrieve ('mdout', 'mdinfo', 'stdout', or 'stderr').
             tail_lines: Number of lines to retrieve from the end of the log file.
 
         Returns:
@@ -247,7 +247,7 @@ class AmberJob(SimulationJob):
             InternalServerError: If a system error occurs while reading the log file.
         """
         match type:
-            case "amber":
+            case "mdout":
                 log_file = self._mdout_log
             case "mdinfo":
                 log_file = self._mdinfo_log

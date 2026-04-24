@@ -23,18 +23,19 @@ class MdrunJob(db.Model):  # type: ignore
     last_status: Mapped[JobStatus] = mapped_column(db.Enum(JobStatus), default=JobStatus.PENDING, nullable=False)
 
     @classmethod
-    def create(cls, job_name: str, experiment_id: str) -> "MdrunJob":
+    def create(cls, job_id: str, job_name: str, experiment_id: str) -> "MdrunJob":
         """
         Persist a new job record.
 
         Args:
+            job_id: Unique identifier for the job (matches the uuid in job_name).
             job_name: Kubernetes job name (format: mdrun-{uuid}).
             experiment_id: Experiment this job belongs to.
 
         Returns:
             The created MdrunJob instance.
         """
-        job = cls(job_name=job_name, experiment_id=experiment_id)  # type: ignore[call-arg]
+        job = cls(id=job_id, job_name=job_name, experiment_id=experiment_id)  # type: ignore[call-arg]
         db.session.add(job)
         db.session.commit()
         logger.info(f"Created job {job_name} for experiment {experiment_id}")
