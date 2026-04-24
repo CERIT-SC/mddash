@@ -72,7 +72,7 @@ export function useAmberLogs(
     queryFn: () =>
       api
         .get(`/experiments/${experimentId}/amber/${prmtopName}/log`, { params: { type: logType, tail } })
-        .then((r) => "...\n" + r.data),
+        .then((r) => r.data),
     enabled: !!experimentId && !!prmtopName && !!logType,
     refetchInterval: shouldPoll ? 5000 : false,
   })
