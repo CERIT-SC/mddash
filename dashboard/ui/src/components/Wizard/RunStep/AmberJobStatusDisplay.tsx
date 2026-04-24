@@ -35,6 +35,11 @@ const AmberJobStatusDisplay = ({ jobStatus }: AmberJobStatusDisplayProps) => {
             <span className="text-muted-foreground text-xs">
               {jobStatus.nsteps_done!.toLocaleString()} / {jobStatus.nsteps!.toLocaleString()} steps
             </span>
+            {jobStatus.estimated_time !== null && (
+              <span className="text-muted-foreground text-xs">
+                Estimated time remaining: {formatDuration(jobStatus.estimated_time)}
+              </span>
+            )}
           </div>
         )}
       </div>

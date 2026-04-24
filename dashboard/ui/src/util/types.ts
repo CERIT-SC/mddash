@@ -120,6 +120,7 @@ export interface AmberJob {
   nsteps: number | null
   performance: number | null
   nsteps_done: number | null
+  estimated_time: number | null
 }
 
 export interface ResourceUsage {

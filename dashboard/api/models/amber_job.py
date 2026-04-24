@@ -1,15 +1,17 @@
 import logging
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cache import (
+    amber_estimated_time_cache,
     amber_nsteps_done_cache,
 )
 from cachetools import cached
 from clients import mdrun
 from config import DATA_DIR, S3_BUCKET
-from enums import AmberBinary, Engine, EwaldPreset
+from enums import AmberBinary, Engine, EwaldPreset, JobStatus
 from extensions import db
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
@@ -44,7 +46,24 @@ class AmberJob(SimulationJob):
     # AMBER binary type
     binary: Mapped["AmberBinary"] = mapped_column(db.Enum(AmberBinary), nullable=False)
     # Ewald summation preset
-    ewald: Mapped["EwaldPreset"] = mapped_column(db.Enum(EwaldPreset), nullable=False)
+    ewald: Mapped["EwaldPreset"] = mapped_column(db.Enum(EwaldPreset))
+
+    @property
+    def _mdin_path(self) -> Path:
+        """Path to the mdin input file."""
+        return DATA_DIR / self.experiment_id / self.mdin_name
+
+    @property
+    def _mdout_log(self) -> Path:
+        """Path to the AMBER mdout file (primary structured log)."""
+        base_name = Path(self.mdin_name).stem
+        return DATA_DIR / self.experiment_id / f"{base_name}.out"
+
+    @property
+    def _mdinfo_log(self) -> Path:
+        """Path to the AMBER mdinfo file (real-time progress info)."""
+        base_name = Path(self.mdin_name).stem
+        return DATA_DIR / self.experiment_id / f"{base_name}.mdinfo"
 
     @property
     def _stdout_log(self) -> Path:
@@ -59,6 +78,13 @@ class AmberJob(SimulationJob):
     @property
     def nsteps(self) -> int | None:
         """Total number of steps for the job."""
+        if self._nsteps:
+            return self._nsteps
+
+        if val := self._parse_nsteps():
+            self._nsteps = val
+            db.session.commit()
+
         return self._nsteps
 
     @property
@@ -69,6 +95,54 @@ class AmberJob(SimulationJob):
             return self._nsteps
 
         return self._parse_nsteps_done()
+
+    @property
+    def start_timestamp(self) -> int | None:
+        """Unix timestamp when the job started."""
+        if self._start_timestamp:
+            return self._start_timestamp
+
+        if val := self._parse_start_timestamp():
+            self._start_timestamp = val
+            db.session.commit()
+
+        return self._start_timestamp
+
+    @property
+    def finish_timestamp(self) -> int | None:
+        """Unix timestamp when the job finished."""
+        if self._finish_timestamp:
+            return self._finish_timestamp
+
+        if self.status != JobStatus.TERMINATED:
+            return None
+
+        if val := self._parse_finish_timestamp():
+            self._finish_timestamp = val
+            db.session.commit()
+
+        return self._finish_timestamp
+
+    @property
+    @cached(cache=amber_estimated_time_cache)
+    def estimated_time(self) -> int | None:
+        """Estimated time until completion in seconds."""
+        if self.start_timestamp is None or self.nsteps is None or self.nsteps_done is None or self.nsteps_done == 0:
+            return None
+
+        remaining_steps = self.nsteps - self.nsteps_done
+        if remaining_steps <= 0:
+            return 0
+
+        try:
+            last_updated = self._mdinfo_log.stat().st_mtime
+        except OSError:
+            last_updated = datetime.now().timestamp()
+
+        time_per_step = (last_updated - self.start_timestamp) / self.nsteps_done
+        base_estimate = remaining_steps * time_per_step
+        time_since_update = datetime.now().timestamp() - last_updated
+        return max(0, int(base_estimate - time_since_update))
 
     @property
     def performance(self) -> float | None:
@@ -89,8 +163,8 @@ class AmberJob(SimulationJob):
         prmtop_path: Path,
         inpcrd_path: Path,
         mdin_path: Path,
-        binary: AmberBinary,
-        ewald: EwaldPreset,
+        binary: "AmberBinary",
+        ewald: "EwaldPreset",
         np: int,
         ntomp: int,
         extra_args: str = "",
@@ -154,12 +228,12 @@ class AmberJob(SimulationJob):
 
         return job
 
-    def get_log(self, type: str = "stdout", tail_lines: int | None = None) -> str:
+    def get_log(self, type: str = "amber", tail_lines: int | None = None) -> str:
         """
         Get the log of the job.
 
         Args:
-            type: Type of log to retrieve ('stdout' or 'stderr').
+            type: Type of log to retrieve ('amber', 'mdinfo', 'stdout', or 'stderr').
             tail_lines: Number of lines to retrieve from the end of the log file.
 
         Returns:
@@ -173,6 +247,10 @@ class AmberJob(SimulationJob):
             InternalServerError: If a system error occurs while reading the log file.
         """
         match type:
+            case "amber":
+                log_file = self._mdout_log
+            case "mdinfo":
+                log_file = self._mdinfo_log
             case "stdout":
                 log_file = self._stdout_log
             case "stderr":
@@ -213,27 +291,25 @@ class AmberJob(SimulationJob):
         self._stdout_log.unlink(missing_ok=True)
         self._stderr_log.unlink(missing_ok=True)
 
-    def _parse_performance(self) -> float | None:
+    def _parse_nsteps(self) -> int | None:
         """
-        Get the performance of the job in ns/day.
+        Parse total steps from the nstlim parameter in the mdin file.
 
         Returns:
-            Performance in ns/day or None if not available.
+            Total number of steps or None if not available.
         """
-        if not self._stdout_log.exists():
+        if not self._mdin_path.exists():
             return None
 
         try:
-            log = tail(self._stdout_log, 50)
-            pattern = r"ns/day\s*=\s*([\d.]+)"
-            for line in reversed(log.splitlines()):
-                match = re.search(pattern, line)
-                if match:
-                    return float(match.group(1))
+            with self._mdin_path.open("r") as f:
+                for line in f:
+                    match = re.search(r"nstlim\s*=\s*(\d+)", line, re.IGNORECASE)
+                    if match:
+                        return int(match.group(1))
 
         except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
-            logger.exception("Error reading performance from log file.")
-            return None
+            logger.exception("Error reading nsteps from mdin file.")
 
         return None
 
@@ -241,25 +317,122 @@ class AmberJob(SimulationJob):
         """
         Get the number of steps completed so far.
 
+        Reads from mdinfo (updated in real-time by pmemd), falls back to mdout.
+
         Returns:
             Number of steps completed or None if not available.
         """
-        if not self._stdout_log.exists():
+        if self._mdinfo_log.exists():
+            try:
+                log = tail(self._mdinfo_log, 20)
+                match = re.search(r"Nstep\s*=\s*(\d+)", log, re.IGNORECASE)
+                if match:
+                    return int(match.group(1))
+            except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
+                logger.exception("Error reading nsteps_done from mdinfo file.")
+
+        # Fall back to mdout for completed jobs where mdinfo may be gone
+        if not self._mdout_log.exists():
             return None
 
         try:
-            log = tail(self._stdout_log, 100)
-            pattern = r"NSTEP\s*=\s*(\d+)"
+            log = tail(self._mdout_log, 200)
             last_match = None
             for line in log.splitlines():
-                match = re.search(pattern, line)
+                match = re.search(r"^\s*NSTEP\s*=\s*(\d+)", line)
                 if match:
-                    last_match = match
+                    last_match = int(match.group(1))
 
-            if last_match:
-                return int(last_match.group(1))
+            if last_match is not None:
+                return last_match
 
         except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
-            logger.exception("Error reading nsteps_done from log file.")
+            logger.exception("Error reading nsteps_done from mdout file.")
 
         return None
+
+    def _parse_performance(self) -> float | None:
+        """
+        Get the performance of the job in ns/day.
+
+        Returns:
+            Performance in ns/day or None if not available.
+        """
+        if not self._mdout_log.exists():
+            return None
+
+        try:
+            log = tail(self._mdout_log, 50)
+            pattern = r"ns/day\s*=\s*([\d.]+)"
+            for line in reversed(log.splitlines()):
+                match = re.search(pattern, line)
+                if match:
+                    return float(match.group(1))
+
+        except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
+            logger.exception("Error reading performance from mdout file.")
+            return None
+
+        return None
+
+    def _parse_start_timestamp(self) -> int | None:
+        """
+        Parse the start timestamp from the mdout file.
+
+        AMBER writes: "| Run on MM/DD/YYYY at HH:MM:SS"
+
+        Returns:
+            Start timestamp or None if not available.
+        """
+        if not self._mdout_log.exists():
+            return None
+
+        try:
+            with self._mdout_log.open("r") as f:
+                for line in f:
+                    if "Run on" not in line:
+                        continue
+
+                    match = re.search(r"Run on\s+(\d{2}/\d{2}/\d{4})\s+at\s+(\d{2}:\d{2}:\d{2})", line)
+                    if match:
+                        dt = datetime.strptime(f"{match.group(1)} {match.group(2)}", "%m/%d/%Y %H:%M:%S")
+                        return int(dt.timestamp())
+
+        except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
+            logger.exception("Error reading start time from mdout file.")
+
+        return None
+
+    def _parse_finish_timestamp(self) -> int | None:
+        """
+        Compute the finish timestamp from mdout file.
+
+        AMBER does not write an explicit completion line. We derive the finish
+        time by parsing the "Master Total wall time" and adding it to the start
+        timestamp. Falls back to the mdout file's mtime.
+
+        Returns:
+            Finish timestamp or None if not available.
+        """
+        if not self._mdout_log.exists() or not self.start_timestamp:
+            return None
+
+        try:
+            log = tail(self._mdout_log, 30)
+            for line in reversed(log.splitlines()):
+                if "Master Total wall time" not in line:
+                    continue
+
+                # Format: "|  Master Total wall time:       1094    seconds     0.30 hours"
+                match = re.search(r"Master Total wall time:\s+(\d+)\s+seconds", line)
+                if match:
+                    return self.start_timestamp + int(match.group(1))
+
+        except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
+            logger.exception("Error reading finish time from mdout file.")
+
+        # Fall back to file modification time
+        try:
+            return int(self._mdout_log.stat().st_mtime)
+        except OSError:
+            return None

@@ -116,6 +116,7 @@ def _build_job_manifest(
                         {
                             "name": name,
                             "image": sim_image,
+                            "imagePullPolicy": "Always",
                             "workingDir": exp_dir,
                             "command": ["bash", "-c", sim_command],
                             "securityContext": _SECURITY_CONTEXT,
@@ -164,29 +165,48 @@ def _gmx_resources(np: int, ntomp: int, nb: str, pme: str) -> dict[str, Any]:
     }
 
 
-def _amber_command(binary: str, np: int, ewald: str, extra_args: str, base_flags: str, name: str) -> tuple[str, bool]:
+def _mdin_patch_command(mdin_name: str, ewald: str) -> str:
+    """Build an awk command that patches the &ewald namelist in the mdin file."""
+    match ewald:
+        case "optimized":
+            netfrc, skin_permit = "0", "0.75"
+        case _:
+            netfrc, skin_permit = "1", "1.0"
+
+    return (
+        f"NETFRC={netfrc} SKIN_PERMIT={skin_permit} "
+        f'awk -v netfrc="$NETFRC" -v skin_permit="$SKIN_PERMIT" \''
+        "/^ *&ewald/ { in_ewald=1; print; next } "
+        'in_ewald && /^[[:space:]]*\\// { print "  netfrc = " netfrc ","; print "  skin_permit = " skin_permit ","; print; in_ewald=0; next } '
+        "in_ewald && /netfrc/ { next } "
+        "in_ewald && /skin_permit/ { next } "
+        '!in_ewald && /^[[:space:]]*\\// && !found_ewald { print " &ewald"; print "  netfrc = " netfrc ","; print "  skin_permit = " skin_permit ","; print " /"; found_ewald=1; next } '
+        "{ print } "
+        f"' {_q(mdin_name)} > {_q(mdin_name)}.tmp && mv {_q(mdin_name)}.tmp {_q(mdin_name)}"
+    )
+
+
+def _amber_command(
+    binary: str, np: int, ewald: str, extra_args: str, base_flags: str, mdin_name: str, name: str
+) -> tuple[str, bool]:
     extra_part = f" {extra_args}" if extra_args else ""
+    patch_step = _mdin_patch_command(mdin_name, ewald)
+    tee_redirect = f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2)"
+
     if binary == "pmemd.cuda":
-        ewald_flag = "" if ewald == "default" else f" -ewald {ewald}"
         command = "\n".join([
             "set -euo pipefail",
             "trap 'touch /data/job_completed' EXIT TERM INT",
-            (
-                " ".join(["pmemd.cuda", base_flags, ewald_flag]).rstrip()
-                + extra_part
-                + f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2)"
-            ),
+            patch_step,
+            " ".join(["pmemd.cuda", base_flags]).rstrip() + extra_part + tee_redirect,
         ])
         return command, True
 
     command = "\n".join([
         "set -euo pipefail",
         "trap 'touch /data/job_completed' EXIT TERM INT",
-        (
-            " ".join(["mpirun", "-np", str(np), "pmemd.MPI", base_flags])
-            + extra_part
-            + f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2)"
-        ),
+        patch_step,
+        " ".join(["mpirun", "-np", str(np), "pmemd.MPI", base_flags]) + extra_part + tee_redirect,
     ])
     return command, False
 
@@ -308,10 +328,11 @@ def create_amber_job(
     base_flags = (
         f"-O -i {_q(mdin_name)} -o {_q(f'{output_prefix}.out')} "
         f"-p {_q(prmtop_name)} -c {_q(inpcrd_name)} "
-        f"-r {_q(f'{output_prefix}.rst7')} -x {_q(f'{output_prefix}.nc')}"
+        f"-r {_q(f'{output_prefix}.rst7')} -x {_q(f'{output_prefix}.nc')} "
+        f"-inf {_q(f'{output_prefix}.mdinfo')}"
     )
 
-    amber_command, use_gpu = _amber_command(binary, np, ewald, extra_args, base_flags, name)
+    amber_command, use_gpu = _amber_command(binary, np, ewald, extra_args, base_flags, mdin_name, name)
 
     manifest = _build_job_manifest(
         name=name,

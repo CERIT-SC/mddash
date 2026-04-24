@@ -45,3 +45,6 @@ amber_performance_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
 
 # Cache for AMBER job nsteps done (500ms TTL)
 amber_nsteps_done_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)
+
+# Cache for AMBER job estimated time (500ms TTL)
+amber_estimated_time_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)

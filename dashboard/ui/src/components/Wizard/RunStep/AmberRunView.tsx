@@ -12,7 +12,7 @@ import { type WizardStepProps } from "@/components/Wizard/Stepper"
 import AmberJobStatusDisplay from "./AmberJobStatusDisplay"
 import AmberStartForm from "./AmberStartForm"
 
-type LogType = "stdout" | "stderr"
+type LogType = "amber" | "mdinfo" | "stdout" | "stderr"
 
 interface AmberRunViewProps extends WizardStepProps {
   prmtopName: string
@@ -74,6 +74,8 @@ const AmberRunView = (props: AmberRunViewProps) => {
                   <SelectItem value={SELECT_NONE}>
                     <em>None</em>
                   </SelectItem>
+                  <SelectItem value="amber">AMBER Log</SelectItem>
+                  <SelectItem value="mdinfo">Progress Info</SelectItem>
                   <SelectItem value="stdout">Standard Output</SelectItem>
                   <SelectItem value="stderr">Standard Error</SelectItem>
                 </SelectContent>
