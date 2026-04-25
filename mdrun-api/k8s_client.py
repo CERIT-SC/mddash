@@ -176,8 +176,8 @@ def _mdin_patch_command(mdin_name: str, ewald: str) -> str:
     return (
         f"awk '\n"
         "BEGIN { skip=0 }\n"
-        "{ orig=$0; $0=tolower($0); gsub(/^[[:space:]]+/, \"\", $0); gsub(/[[:space:]]+$/, \"\", $0) }\n"
-        '$0 ~ /^&ewald/ { skip=1; next }\n'
+        '{ orig=$0; $0=tolower($0); gsub(/^[[:space:]]+/, "", $0); gsub(/[[:space:]]+$/, "", $0) }\n'
+        "$0 ~ /^&ewald/ { skip=1; next }\n"
         'skip && ($0 == "/" || $0 == "&end") { skip=0; next }\n'
         "{ if (!skip) print orig }\n"
         "END {\n"
@@ -434,9 +434,7 @@ def get_job_status(ns: str, name: str) -> JobStatus:
             # active > 0 means K8s created a pod, but it may still be pulling image or scheduling.
             # Check pod phase to distinguish PENDING (unscheduled/image-pull) from actual RUNNING.
             try:
-                pods = core_v1.list_namespaced_pod(
-                    namespace=ns, label_selector=f"job-name={name}", limit=1
-                )
+                pods = core_v1.list_namespaced_pod(namespace=ns, label_selector=f"job-name={name}", limit=1)
                 if pods.items:
                     phase = pods.items[0].status.phase
                     if phase == "Running":

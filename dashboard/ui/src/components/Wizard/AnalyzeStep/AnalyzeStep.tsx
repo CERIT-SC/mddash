@@ -34,8 +34,8 @@ const AnalyzeStep = (props: WizardStepProps) => {
   const [activeTab, setActiveTab] = useState("viewer")
 
   useEffect(() => {
-    if (!structureFile) setCoordsFile(null)
-  }, [structureFile])
+    if (!structureFile && !topologyFile) setCoordsFile(null)
+  }, [structureFile, topologyFile])
 
   const analysisConfig = useMemo(
     () => AVAILABLE_ANALYSES.find((analysis) => analysis.value === selectedAnalysis),
@@ -142,6 +142,7 @@ const AnalyzeStep = (props: WizardStepProps) => {
           <TabsContent value="analysis" className="mt-3">
             <AnalysisPanel
               experimentId={experiment.id}
+              engine={experiment.engine}
               structureFile={structureFile}
               coordsFile={coordsFile}
               topologyFile={topologyFile}

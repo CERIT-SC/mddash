@@ -20,7 +20,7 @@ export function useAnalysisJobs(experimentId: string) {
 
 interface SubmitAnalysisVariables {
   analysis: string
-  structure_file: string
+  structure_file?: string
   trajectory_file: string
   preprocessing_mode: AnalysisPreprocessingMode
   topology_file?: string

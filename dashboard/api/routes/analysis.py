@@ -12,7 +12,7 @@ from flask import Blueprint, Response, request
 from models import AnalysisJob, Experiment
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, find_result_file, list_result_files
 from schemas import AnalysisJobSchema
-from validators import check_path, validate_analysis_topology_path
+from validators import check_path, validate_analysis_structure_path, validate_analysis_topology_path
 from werkzeug.exceptions import BadRequest
 
 analysis_bp = Blueprint("analysis", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/analysis")
@@ -46,10 +46,10 @@ def submit_analysis_job(experiment_id: str) -> Response:
         return ApiResponse.error("Request body is required.", HTTPStatus.BAD_REQUEST)
 
     analysis_name = data.get("analysis", "")
-    structure_file = data.get("structure_file", "")
+    structure_file = data.get("structure_file") or None
     trajectory_file = data.get("trajectory_file", "")
-    if not analysis_name or not structure_file or not trajectory_file:
-        return ApiResponse.error("analysis, structure_file, and trajectory_file are required.", HTTPStatus.BAD_REQUEST)
+    if not analysis_name or not trajectory_file:
+        return ApiResponse.error("analysis and trajectory_file are required.", HTTPStatus.BAD_REQUEST)
 
     try:
         analysis_type = AnalysisType(analysis_name)
@@ -71,14 +71,18 @@ def submit_analysis_job(experiment_id: str) -> Response:
     topology_file = data.get("topology_file") or None
 
     experiment_dir = DATA_DIR / experiment_id
-    check_path(structure_file, experiment_dir)
+
+    try:
+        structure_path = validate_analysis_structure_path(
+            structure_file=structure_file,
+            topology_file=topology_file,
+            experiment_dir=experiment_dir,
+        )
+    except BadRequest as error:
+        return ApiResponse.error(error.description, HTTPStatus.BAD_REQUEST)
+
     check_path(trajectory_file, experiment_dir)
-
-    structure_path = Path(structure_file)
     trajectory_path = Path(trajectory_file)
-
-    if not (experiment_dir / structure_path).is_file():
-        return ApiResponse.error(f"Structure file {structure_path.as_posix()} does not exist.", HTTPStatus.NOT_FOUND)
     if not (experiment_dir / trajectory_path).is_file():
         return ApiResponse.error(f"Trajectory file {trajectory_path.as_posix()} does not exist.", HTTPStatus.NOT_FOUND)
 

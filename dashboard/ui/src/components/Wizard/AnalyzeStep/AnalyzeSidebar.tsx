@@ -53,7 +53,7 @@ const AnalyzeSidebar = ({
             onFileSelected={onCoordsSelected}
             className="w-full"
           />
-          {topologyRequired && (
+          {topologyRequired && topologyFormats.length > 0 && (
             <FileSelector
               key={`topology-${preprocessingMode}-${topologyRequired ? "required" : "optional"}`}
               experimentId={experimentId}

@@ -12,6 +12,7 @@ import {
   type AnalysisPreprocessingMode as AnalysisPreprocessingModeValue,
   type AnalysisType,
 } from "@/util/analysis-types"
+import { Engine } from "@/util/const"
 import { getAnalysisLabel } from "@/util/analysis-utils"
 import type { FileOption } from "@/util/types"
 import { getJobStatusVariant } from "@/util/types"
@@ -33,6 +34,7 @@ import LogsView from "@/components/LogsView"
 
 interface AnalysisPanelProps {
   experimentId: string
+  engine: Engine
   structureFile: FileOption | null
   coordsFile: FileOption | null
   topologyFile: FileOption | null
@@ -51,6 +53,7 @@ const PREPROCESSING_OPTIONS: Array<{ value: AnalysisPreprocessingModeValue; labe
 
 const AnalysisPanel = ({
   experimentId,
+  engine,
   structureFile,
   coordsFile,
   topologyFile,
@@ -60,6 +63,19 @@ const AnalysisPanel = ({
   selectedAnalysis,
   setSelectedAnalysis,
 }: AnalysisPanelProps) => {
+  const preprocessingOptions = useMemo(() => {
+    if (engine === Engine.AMBER) {
+      return PREPROCESSING_OPTIONS.filter((o) => o.value === AnalysisPreprocessingMode.AS_IS)
+    }
+    return PREPROCESSING_OPTIONS
+  }, [engine])
+
+  useEffect(() => {
+    if (engine === Engine.AMBER && preprocessingMode !== AnalysisPreprocessingMode.AS_IS) {
+      setPreprocessingMode(AnalysisPreprocessingMode.AS_IS)
+    }
+  }, [engine, preprocessingMode, setPreprocessingMode])
+
   const queryClient = useQueryClient()
   const [confirmCancelDialog, setConfirmCancelDialog] = useState(false)
 
@@ -137,7 +153,7 @@ const AnalysisPanel = ({
   )
 
   const canSubmit =
-    !!structureFile &&
+    (!!structureFile || !!topologyFile) &&
     !!coordsFile &&
     !!selectedAnalysis &&
     (!topologyRequired || !!topologyFile) &&
@@ -145,13 +161,14 @@ const AnalysisPanel = ({
     !submitAnalysis.isPending
 
   const submitCurrentAnalysis = () => {
-    if (!structureFile || !coordsFile || !selectedAnalysis || (topologyRequired && !topologyFile)) return
+    if ((!structureFile && !topologyFile) || !coordsFile || !selectedAnalysis || (topologyRequired && !topologyFile))
+      return
 
     submitAnalysis.mutate({
       analysis: selectedAnalysis,
-      structure_file: structureFile.path,
       trajectory_file: coordsFile.path,
       preprocessing_mode: preprocessingMode,
+      ...(structureFile && { structure_file: structureFile.path }),
       ...(topologyFile && { topology_file: topologyFile.path }),
     })
   }
@@ -226,7 +243,7 @@ const AnalysisPanel = ({
               <SelectValue placeholder="Select preprocessing..." />
             </SelectTrigger>
             <SelectContent>
-              {PREPROCESSING_OPTIONS.map((option) => (
+              {preprocessingOptions.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
                 </SelectItem>
@@ -336,15 +353,21 @@ const AnalysisPanel = ({
         )}
       </div>
 
-      {resolvedAnalysis && !hasResult && (!structureFile || !coordsFile || (topologyRequired && !topologyFile)) && (
-        <p className="text-muted-foreground text-xs">
-          {topologyRequired
-            ? preprocessingMode === AnalysisPreprocessingMode.AS_IS
-              ? "Select structure, trajectory, and topology files in the sidebar to run this analysis."
-              : "Select structure, trajectory, and simulation TPR files in the sidebar to run analyses with preprocessing."
-            : "Select structure and trajectory files in the sidebar to run this analysis."}
-        </p>
-      )}
+      {resolvedAnalysis &&
+        !hasResult &&
+        ((!structureFile && !topologyFile) || !coordsFile || (topologyRequired && !topologyFile)) && (
+          <p className="text-muted-foreground text-xs">
+            {topologyRequired
+              ? preprocessingMode === AnalysisPreprocessingMode.AS_IS
+                ? "Select structure, trajectory, and topology files in the sidebar to run this analysis."
+                : "Select structure, trajectory, and simulation TPR files in the sidebar to run analyses with preprocessing."
+              : !structureFile && !topologyFile
+                ? "Select a structure file or a topology file and a trajectory file in the sidebar to run this analysis."
+                : !coordsFile
+                  ? "Select trajectory file in the sidebar to run this analysis."
+                  : "Select structure and trajectory files in the sidebar to run this analysis."}
+          </p>
+        )}
 
       {showLogs && <LogsView logs={jobLogs ?? ""} isLoading={jobLogsLoading} />}
 

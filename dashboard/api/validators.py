@@ -81,6 +81,31 @@ def check_path(path: str, base_dir: Path) -> None:
         raise BadRequest("Invalid path.")
 
 
+def validate_analysis_structure_path(
+    structure_file: str | None,
+    topology_file: str | None,
+    experiment_dir: Path,
+) -> Path | None:
+    """
+    Validate that at least one of structure or topology is provided.
+
+    Returns:
+        Validated structure path, or None when structure is absent.
+
+    Raises:
+        BadRequest: If neither structure nor topology is provided.
+    """
+    if not structure_file and not topology_file:
+        raise BadRequest("Either a structure file or a topology file is required for analysis.")
+    if not structure_file:
+        return None
+    check_path(structure_file, experiment_dir)
+    structure_path = Path(structure_file)
+    if not (experiment_dir / structure_path).is_file():
+        raise BadRequest(f"Structure file {structure_path.as_posix()} does not exist.")
+    return structure_path
+
+
 def validate_analysis_topology_path(
     topology_file: str | None,
     experiment_dir: Path,
