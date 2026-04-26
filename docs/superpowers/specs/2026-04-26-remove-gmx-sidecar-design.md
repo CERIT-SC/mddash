@@ -111,6 +111,9 @@ No change. `setup-binder-env` still prepends binder env to PATH. Biobb repos tha
 ### `config.yaml` + `config.dev.yaml`
 - Remove gmx resource fields under `resources.notebook`
 
+### `helm/charts/mddash/files/pre_spawn_hook.py`
+- Remove `GMX_IMAGE`, `GMX_CPU_REQUEST`, `GMX_MEMORY_REQUEST`, `GMX_CPU_LIMIT`, `GMX_MEMORY_LIMIT` from `_API_PASSTHROUGH_ENV` list
+
 ### `notebook/run-notebook.sh`
 - Update comment: remove reference to "gmx sidecar"
 
