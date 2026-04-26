@@ -51,6 +51,8 @@ class GromacsJob(SimulationJob):
     pme: Mapped["DeviceType"] = mapped_column(db.Enum(DeviceType), nullable=False)
     # Device type for non-bonded interactions
     nb: Mapped["DeviceType"] = mapped_column(db.Enum(DeviceType), nullable=False)
+    # Step at which the simulation started (non-zero when resuming from checkpoint)
+    _init_step: Mapped[int | None] = mapped_column("init_step", db.Integer, nullable=True)
 
     @property
     def _deffnm(self) -> str:
@@ -83,6 +85,18 @@ class GromacsJob(SimulationJob):
             db.session.commit()
 
         return self._nsteps
+
+    @property
+    def init_step(self) -> int:
+        """Step at which the simulation started (0 for fresh runs, non-zero for checkpoint restarts)."""
+        if self._init_step is not None:
+            return self._init_step
+
+        if val := self._parse_init_step():
+            self._init_step = val
+            db.session.commit()
+
+        return self._init_step or 0
 
     @property
     @cached(cache=gromacs_nsteps_done_cache)
@@ -125,19 +139,23 @@ class GromacsJob(SimulationJob):
     @cached(cache=gromacs_estimated_time_cache)
     def estimated_time(self) -> int | None:
         """Estimated time until completion in seconds."""
-        if self.start_timestamp is None or self.nsteps is None or self.nsteps_done is None or self.nsteps_done == 0:
+        if self.start_timestamp is None or self.nsteps is None or self.nsteps_done is None:
             return None
 
         remaining_steps = self.nsteps - self.nsteps_done
         if remaining_steps <= 0:
             return 0
 
+        steps_done_in_run = self.nsteps_done - self.init_step
+        if steps_done_in_run <= 0:
+            return None
+
         try:
             last_updated = self._gmx_log.stat().st_mtime
         except OSError:
             last_updated = datetime.now().timestamp()
 
-        time_per_step = (last_updated - self.start_timestamp) / self.nsteps_done
+        time_per_step = (last_updated - self.start_timestamp) / steps_done_in_run
         base_estimate = remaining_steps * time_per_step
         time_since_update = datetime.now().timestamp() - last_updated
         return max(0, int(base_estimate - time_since_update))
@@ -297,6 +315,34 @@ class GromacsJob(SimulationJob):
 
         except (FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
             logger.exception("Error reading nsteps from log file.")
+
+        return None
+
+    def _parse_init_step(self) -> int | None:
+        """
+        Get the initial step of the job (non-zero when resuming from a checkpoint).
+
+        Returns:
+            Initial step or None if not available.
+        """
+        if not self._gmx_log.exists():
+            return None
+
+        try:
+            with self._gmx_log.open("r") as f:
+                for line in f:
+                    if "init-step" not in line or "=" not in line:
+                        continue
+
+                    parts = line.split("=")
+                    value = parts[-1].strip()
+                    try:
+                        return int(value)
+                    except ValueError:
+                        continue
+
+        except (FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
+            logger.exception("Error reading init-step from log file.")
 
         return None
 

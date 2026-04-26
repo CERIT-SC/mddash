@@ -69,10 +69,10 @@ graph TD
 ## The "Gotchas"
 
 ### Database Migrations
-- **Auto-generated on startup**: `create_app()` automatically generates and runs migrations on every startup
+- **Run on startup**: `create_app()` runs `flask_migrate.upgrade()` against `dashboard/api/migrations/versions/` on every startup
 - Fallback to `db.create_all()` if migration fails
-- Migrations stored in `DATA_DIR/migrations` (not in source control)
-- Do NOT manually run `flask db upgrade` - the app handles it
+- Migrations are in source control under `dashboard/api/migrations/versions/` — add a new file when adding columns
+- Do NOT manually run `flask db upgrade` — the app handles it on startup
 
 ### Authentication & Sessions
 - **MDRepo OAuth**: Tokens stored in Flask session, NOT database

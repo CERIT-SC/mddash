@@ -119,8 +119,8 @@ sequenceDiagram
 - **Binder Repository Support**: Notebook image automatically detects and installs Binder-compatible repositories (`environment.yml`, `requirements.txt`, `postBuild`). Conda environments are created at `/mddash/{experiment_id}/.binder-env` on the PVC for persistence across pod restarts.
 
 ### Database & Migrations
-- **Auto-generated on Startup**: Both Dashboard API and MDRun API automatically generate and run migrations on every startup. Fallback to `db.create_all()` if migration fails.
-- **Migrations Stored in DATA_DIR**: Not in source control. Do NOT manually run `flask db upgrade` - the app handles it.
+- **Dashboard API**: Runs `flask_migrate.upgrade()` on startup against versioned migrations in `dashboard/api/migrations/versions/` (source-controlled). Fallback to `db.create_all()` if migration fails. Add a new migration file when adding columns — do NOT manually run `flask db upgrade`.
+- **MDRun API**: Uses `db.create_all()` only — no Alembic migrations.
 - **SQLite WAL Mode**: MDRun API uses Write-Ahead Logging for concurrent reads/writes.
 
 ### Deployment Pipeline
