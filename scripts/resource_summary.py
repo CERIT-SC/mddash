@@ -173,10 +173,6 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
     nb_mem_req = parse_memory(yq(".resources.notebook.memoryRequest", config))
     nb_cpu_lim = parse_cpu(yq(".resources.notebook.cpuLimit", config))
     nb_mem_lim = parse_memory(yq(".resources.notebook.memoryLimit", config))
-    gmx_cpu_req = parse_cpu(yq(".resources.notebook.gmxCpuRequest", config))
-    gmx_mem_req = parse_memory(yq(".resources.notebook.gmxMemoryRequest", config))
-    gmx_cpu_lim = parse_cpu(yq(".resources.notebook.gmxCpuLimit", config))
-    gmx_mem_lim = parse_memory(yq(".resources.notebook.gmxMemoryLimit", config))
     max_nb = int(yq(".resources.notebookQuota.maxConcurrent", config))
 
     gpu_type = yq('.gpuType // ""', config)
@@ -216,22 +212,17 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
         t_nb_mr = nb_mem_req * t
         t_nb_cl = nb_cpu_lim * t
         t_nb_ml = nb_mem_lim * t
-        t_gmx_cr = gmx_cpu_req * t
-        t_gmx_mr = gmx_mem_req * t
-        t_gmx_cl = gmx_cpu_lim * t
-        t_gmx_ml = gmx_mem_lim * t
         row("jupyter", t_nb_cr, t_nb_mr, t_nb_cl, t_nb_ml, indent=2)
-        row("gmx", t_gmx_cr, t_gmx_mr, t_gmx_cl, t_gmx_ml, indent=2)
-        subtotal(f"Per notebook ({t}x)", t_nb_cr + t_gmx_cr, t_nb_mr + t_gmx_mr, t_nb_cl + t_gmx_cl, t_nb_ml + t_gmx_ml)
+        subtotal(f"Per notebook ({t}x)", t_nb_cr, t_nb_mr, t_nb_cl, t_nb_ml)
 
     if gpu_type:
-        print(f"\n  GPU: 1x {gpu_type} (optional, added to gmx container when enabled)")
+        print(f"\n  GPU: 1x {gpu_type} (optional, added to notebook container when enabled)")
 
     # Worst-case per notebook (highest tier)
-    per_nb_cr = (nb_cpu_req + gmx_cpu_req) * max_tier
-    per_nb_mr = (nb_mem_req + gmx_mem_req) * max_tier
-    per_nb_cl = (nb_cpu_lim + gmx_cpu_lim) * max_tier
-    per_nb_ml = (nb_mem_lim + gmx_mem_lim) * max_tier
+    per_nb_cr = nb_cpu_req * max_tier
+    per_nb_mr = nb_mem_req * max_tier
+    per_nb_cl = nb_cpu_lim * max_tier
+    per_nb_ml = nb_mem_lim * max_tier
 
     section("Analysis job  (on-demand, 1 at a time)")
     row("analysis", an_cpu_req, an_mem_req, an_cpu_lim, an_mem_lim, indent=1)

@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from clients import caddy, k8s
 from clients.k8s import parse_cpu, parse_memory
-from config import GMX_RESOURCES, GPU_TYPE, MAX_NOTEBOOKS, NAMESPACE, NOTEBOOK_RESOURCES, PREFIX
+from config import GPU_TYPE, MAX_NOTEBOOKS, NAMESPACE, NOTEBOOK_RESOURCES, PREFIX
 from enums import NotebookTier, PodStatus
 from extensions import db
 from kubernetes.client.rest import ApiException  # type: ignore
@@ -35,19 +35,19 @@ def _multiply_resource(value: str, factor: int) -> str:
     return str(float(value) * factor)
 
 
-def get_tier_resources(tier: NotebookTier) -> tuple[dict, dict]:
+def get_tier_resources(tier: NotebookTier) -> dict:
     """
-    Return (notebook_resources, gmx_resources) scaled by the tier multiplier.
+    Return notebook_resources scaled by the tier multiplier.
 
-    The base values come from the NOTEBOOK_RESOURCES and GMX_RESOURCES env vars (1x tier).
+    The base values come from the NOTEBOOK_RESOURCES env vars (1x tier).
     Higher tiers multiply all CPU and memory values by the tier factor.
 
     Returns:
-        A (notebook_resources, gmx_resources) tuple with CPU/memory scaled by the tier factor.
+        A notebook_resources dict with CPU/memory scaled by the tier factor.
     """
     factor = tier.multiplier
     if factor == 1:
-        return NOTEBOOK_RESOURCES, GMX_RESOURCES
+        return NOTEBOOK_RESOURCES
 
     def scale(res: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
         return {
@@ -55,7 +55,7 @@ def get_tier_resources(tier: NotebookTier) -> tuple[dict, dict]:
             for category, values in res.items()
         }
 
-    return scale(NOTEBOOK_RESOURCES), scale(GMX_RESOURCES)
+    return scale(NOTEBOOK_RESOURCES)
 
 
 class Notebook(db.Model):  # type: ignore
@@ -74,7 +74,7 @@ class Notebook(db.Model):  # type: ignore
         db.Enum(NotebookTier),
         nullable=True,
     )
-    # whether GPU is attached to the gmx sidecar
+    # whether GPU is attached to the notebook container
     gpu: Mapped[bool] = mapped_column(db.Boolean, default=False, server_default=db.text("0"))
 
     # back-reference to the parent experiment
@@ -97,7 +97,7 @@ class Notebook(db.Model):  # type: ignore
 
         Args:
             tier: Resource tier for the notebook (1x, 2x, 4x). Defaults to 1x.
-            gpu: Whether to attach a GPU to the gmx sidecar container.
+            gpu: Whether to attach a GPU to the notebook container.
 
         Raises:
             BadRequest: If the tier is not a valid NotebookTier value.
@@ -122,15 +122,15 @@ class Notebook(db.Model):  # type: ignore
         self.tier = tier
         self.gpu = bool(gpu)
 
-        nb_res, gmx_res = get_tier_resources(tier)
+        nb_res = get_tier_resources(tier)
 
         if k8s.count_notebook_pods() >= MAX_NOTEBOOKS:
             raise Forbidden(description=f"Maximum of {MAX_NOTEBOOKS} concurrent notebook(s) reached. Stop one first.")
 
-        nb_cpu = parse_cpu(nb_res["requests"]["cpu"]) + parse_cpu(gmx_res["requests"]["cpu"])
-        nb_mem = parse_memory(nb_res["requests"]["memory"]) + parse_memory(gmx_res["requests"]["memory"])
-        nb_cpu_limit = parse_cpu(nb_res["limits"]["cpu"]) + parse_cpu(gmx_res["limits"]["cpu"])
-        nb_mem_limit = parse_memory(nb_res["limits"]["memory"]) + parse_memory(gmx_res["limits"]["memory"])
+        nb_cpu = parse_cpu(nb_res["requests"]["cpu"])
+        nb_mem = parse_memory(nb_res["requests"]["memory"])
+        nb_cpu_limit = parse_cpu(nb_res["limits"]["cpu"])
+        nb_mem_limit = parse_memory(nb_res["limits"]["memory"])
         if msg := k8s.check_quota_headroom(nb_cpu, nb_mem, nb_cpu_limit, nb_mem_limit):
             raise Forbidden(description=msg)
 
@@ -141,7 +141,6 @@ class Notebook(db.Model):  # type: ignore
                 f"{PREFIX}/notebook/{self.experiment_id}",
                 self.token,
                 notebook_resources=nb_res,
-                gmx_resources=gmx_res,
                 gpu=self.gpu,
                 tier=tier,
             )

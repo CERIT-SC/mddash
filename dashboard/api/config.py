@@ -22,7 +22,6 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 NOTEBOOK_IMAGE = os.environ.get("NOTEBOOK_IMAGE", "quay.io/jupyter/base-notebook")
 NOTEBOOK_IDLE_TIMEOUT = int(os.environ.get("NOTEBOOK_IDLE_TIMEOUT", "3600"))
-GMX_IMAGE = os.environ.get("GMX_IMAGE", "")
 GPU_TYPE = os.environ.get("GPU_TYPE", "")
 ANALYSIS_IMAGE = os.environ.get("ANALYSIS_IMAGE", "ghcr.io/mmb-irb/mddb_wf")
 
@@ -74,12 +73,6 @@ NOTEBOOK_RESOURCES: dict[str, dict[str, str]] = {
     "limits": {"cpu": os.environ.get("NOTEBOOK_CPU_LIMIT", ""), "memory": os.environ.get("NOTEBOOK_MEMORY_LIMIT", "")},
 }
 
-GMX_RESOURCES: dict[str, dict[str, str]] = {
-    "requests": {"cpu": os.environ.get("GMX_CPU_REQUEST", ""), "memory": os.environ.get("GMX_MEMORY_REQUEST", "")},
-    "limits": {"cpu": os.environ.get("GMX_CPU_LIMIT", ""), "memory": os.environ.get("GMX_MEMORY_LIMIT", "")},
-}
-
-
 ANALYSIS_RESOURCES: dict[str, dict[str, str]] = {
     "requests": {
         "cpu": os.environ.get("ANALYSIS_CPU_REQUEST", ""),
@@ -88,7 +81,7 @@ ANALYSIS_RESOURCES: dict[str, dict[str, str]] = {
     "limits": {"cpu": os.environ.get("ANALYSIS_CPU_LIMIT", ""), "memory": os.environ.get("ANALYSIS_MEMORY_LIMIT", "")},
 }
 
-if not all(v for r in (NOTEBOOK_RESOURCES, GMX_RESOURCES, ANALYSIS_RESOURCES) for d in r.values() for v in d.values()):
+if not all(v for r in (NOTEBOOK_RESOURCES, ANALYSIS_RESOURCES) for d in r.values() for v in d.values()):
     logger.warning("Pod resource env vars are not fully set. Pods may be created without resource constraints.")
 
 

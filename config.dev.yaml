@@ -47,9 +47,6 @@ notebook:
 analysis:
   image: ghcr.io/mmb-irb/mddb_wf:0.0.8
 
-# GROMACS image used for MD simulation jobs (dashboard and mdrun-api)
-gmxImage: "cerit.io/ljocha/gromacs:2026-1-plumed-2-10-afed-pytorch-model-cv-2_ray-2-54-0_1"
-
 # GPU resource type used by mdrun-api jobs and gromacs-tuner workers
 gpuType: "nvidia.com/mig-1g.10gb"
 
@@ -91,11 +88,6 @@ resources:
     memoryRequest: "512Mi"
     cpuLimit: "2000m"    # 10× request: interactive, prefer throttle over kill
     memoryLimit: "4Gi"   # 8× request: burst headroom for in-memory analysis
-    # gmx sidecar — high CPU limit prevents MPI rank starvation from throttling
-    gmxCpuRequest: "100m"
-    gmxMemoryRequest: "256Mi"
-    gmxCpuLimit: "2000m"
-    gmxMemoryLimit: "2Gi"
 
   analysisJob:
     cpuRequest: "1000m"
