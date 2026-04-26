@@ -108,8 +108,9 @@ No change. `setup-binder-env` still prepends binder env to PATH. Biobb repos tha
 - Remove `gmxCpuRequest`, `gmxCpuLimit`, `gmxMemoryRequest`, `gmxMemoryLimit` from `resources.notebook`
 - Remove `GMX_IMAGE` from API container env
 
-### `config.yaml` + `config.dev.yaml`
-- Remove gmx resource fields under `resources.notebook`
+### `config.yaml` + `config.dev.yaml` + `config.edc.yaml`
+- Remove `gmxImage` top-level field
+- Remove `gmxCpuRequest`, `gmxMemoryRequest`, `gmxCpuLimit`, `gmxMemoryLimit` under `resources.notebook`
 
 ### `helm/charts/mddash/files/pre_spawn_hook.py`
 - Remove `GMX_IMAGE`, `GMX_CPU_REQUEST`, `GMX_MEMORY_REQUEST`, `GMX_CPU_LIMIT`, `GMX_MEMORY_LIMIT` from `_API_PASSTHROUGH_ENV` list
