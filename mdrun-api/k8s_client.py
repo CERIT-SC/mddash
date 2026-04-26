@@ -1,9 +1,10 @@
 import logging
 import shlex
 from http import HTTPStatus
-from typing import TYPE_CHECKING, cast
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, cast
 
-from config import GMX_IMAGE, GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
+from config import AMBER_IMAGE, GMX_IMAGE, GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
 from enums import JobStatus
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
@@ -18,9 +19,208 @@ config.load_incluster_config()
 core_v1 = client.CoreV1Api()
 batch_v1 = client.BatchV1Api()
 
+_S3_SYNC_IMAGE = "rclone/rclone:latest"  # TODO: lock version
+_SHARED_VOLUME_NAME = "shared-data"
+_RUN_AS = {"runAsUser": 1000, "runAsGroup": 1000, "runAsNonRoot": True}
+_SECURITY_CONTEXT = {
+    **_RUN_AS,
+    "seccompProfile": {"type": "RuntimeDefault"},
+    "allowPrivilegeEscalation": False,
+    "capabilities": {"drop": ["ALL"]},
+}
+
 
 def _q(value: str) -> str:
     return shlex.quote(value)
+
+
+def _rclone_env() -> list[dict[str, str]]:
+    return [
+        {"name": "RCLONE_CONFIG_S3REMOTE_TYPE", "value": "s3"},
+        {"name": "RCLONE_CONFIG_S3REMOTE_PROVIDER", "value": "Other"},
+        {"name": "RCLONE_CONFIG_S3REMOTE_ACCESS_KEY_ID", "value": S3_ACCESS_KEY or ""},
+        {"name": "RCLONE_CONFIG_S3REMOTE_SECRET_ACCESS_KEY", "value": S3_SECRET_KEY or ""},
+        {"name": "RCLONE_CONFIG_S3REMOTE_ENDPOINT", "value": S3_ENDPOINT or ""},
+    ]
+
+
+def _s3_init_command(exp_dir: str, remote: str) -> str:
+    return (
+        f'echo "Downloading experiment data from object storage..." && '
+        f"mkdir -p {_q(exp_dir)} && "
+        f"rclone copy {_q(remote)} {_q(exp_dir + '/')} --progress || "
+        f'echo "No existing data found, starting with empty directory"'
+    )
+
+
+def _s3_sync_command(exp_dir: str, remote: str) -> str:
+    return (
+        f'echo "Starting continuous rclone copy process..." && '
+        "while true; do\n"
+        "    if [ -f /data/job_completed ]; then\n"
+        '        echo "Job completed, performing final copy to S3..." &&\n'
+        f"        rclone copy {_q(exp_dir + '/')} {_q(remote)} --checksum --progress &&\n"
+        '        echo "Final copy completed, exiting..." &&\n'
+        "        break\n"
+        "    fi\n"
+        f"    rclone copy {_q(exp_dir + '/')} {_q(remote)} --ignore-checksum --retries 1 --quiet || "
+        'echo "Copy attempt failed, retrying..."\n'
+        "    sleep 10\n"
+        "done\n"
+    )
+
+
+def _volume_mount(path: str = "/data") -> dict[str, str]:
+    return {"name": _SHARED_VOLUME_NAME, "mountPath": path}
+
+
+def _build_job_manifest(
+    *,
+    name: str,
+    ns: str,
+    exp_dir: str,
+    remote: str,
+    sim_image: str,
+    sim_command: str,
+    sim_resources: dict[str, Any],
+    sim_env: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    s3_init = _s3_init_command(exp_dir, remote)
+    s3_sync = _s3_sync_command(exp_dir, remote)
+    vol_mount = _volume_mount()
+    rclone_env = _rclone_env()
+
+    return {
+        "apiVersion": "batch/v1",
+        "kind": "Job",
+        "metadata": {"name": name, "namespace": ns, "labels": {"app": name}},
+        "spec": {
+            "backoffLimit": 0,
+            "ttlSecondsAfterFinished": 3600,
+            "template": {
+                "metadata": {"labels": {"job": name}},
+                "spec": {
+                    "restartPolicy": "Never",
+                    "securityContext": {"fsGroup": 1000},
+                    "initContainers": [
+                        {
+                            "name": "s3-init",
+                            "image": _S3_SYNC_IMAGE,
+                            "command": ["sh", "-c", s3_init],
+                            "securityContext": _SECURITY_CONTEXT,
+                            "env": rclone_env,
+                            "volumeMounts": [vol_mount],
+                        }
+                    ],
+                    "containers": [
+                        {
+                            "name": name,
+                            "image": sim_image,
+                            "imagePullPolicy": "Always",
+                            "workingDir": exp_dir,
+                            "command": ["bash", "-c", sim_command],
+                            "securityContext": _SECURITY_CONTEXT,
+                            "env": sim_env or [],
+                            "resources": sim_resources,
+                            "volumeMounts": [vol_mount],
+                        },
+                        {
+                            "name": "s3-sync",
+                            "image": _S3_SYNC_IMAGE,
+                            "command": ["sh", "-c", s3_sync],
+                            "securityContext": _SECURITY_CONTEXT,
+                            "env": rclone_env,
+                            "resources": {
+                                "requests": {"cpu": "100m", "memory": "128Mi"},
+                                "limits": {"cpu": "200m", "memory": "256Mi"},
+                            },
+                            "volumeMounts": [vol_mount],
+                        },
+                    ],
+                    "volumes": [
+                        {
+                            "name": _SHARED_VOLUME_NAME,
+                            "emptyDir": {"sizeLimit": "100Gi"},
+                        }
+                    ],
+                },
+            },
+        },
+    }
+
+
+def _gmx_resources(np: int, ntomp: int, nb: str, pme: str) -> dict[str, Any]:
+    use_gpu = nb == "gpu" or pme == "gpu"
+    return {
+        "requests": {
+            "cpu": str(np * ntomp),
+            "memory": f"{4 * np}Gi",
+            GPU_TYPE: "1" if use_gpu else "0",
+        },
+        "limits": {
+            "cpu": str(np * ntomp),
+            "memory": f"{4 * np}Gi",
+            GPU_TYPE: "1" if use_gpu else "0",
+        },
+    }
+
+
+def _mdin_patch_command(mdin_name: str, ewald: str) -> str:
+    """Build an awk command that patches the &ewald namelist in the mdin file."""
+    match ewald:
+        case "optimized":
+            netfrc, skin_permit = "0", "0.75"
+        case _:
+            netfrc, skin_permit = "1", "1.0"
+
+    return (
+        f"awk '\n"
+        "BEGIN { skip=0 }\n"
+        '{ orig=$0; $0=tolower($0); gsub(/^[[:space:]]+/, "", $0); gsub(/[[:space:]]+$/, "", $0) }\n'
+        "$0 ~ /^&ewald/ { skip=1; next }\n"
+        'skip && ($0 == "/" || $0 == "&end") { skip=0; next }\n'
+        "{ if (!skip) print orig }\n"
+        "END {\n"
+        '    print ""; print "&ewald";\n'
+        f'    print "  netfrc = {netfrc},";\n'
+        f'    print "  skin_permit = {skin_permit},";\n'
+        '    print " /"\n'
+        f"}}' < {_q(mdin_name)} > {_q(mdin_name)}.tmp && mv {_q(mdin_name)}.tmp {_q(mdin_name)}"
+    )
+
+
+def _amber_command(
+    binary: str, np: int, ewald: str, extra_args: str, base_flags: str, mdin_name: str, name: str
+) -> tuple[str, bool]:
+    extra_part = f" {extra_args}" if extra_args else ""
+    patch_step = _mdin_patch_command(mdin_name, ewald)
+    tee_redirect = f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2)"
+
+    if binary == "pmemd.cuda":
+        command = "\n".join([
+            "set -euo pipefail",
+            "trap 'touch /data/job_completed' EXIT TERM INT",
+            patch_step,
+            " ".join(["pmemd.cuda", base_flags]).rstrip() + extra_part + tee_redirect,
+        ])
+        return command, True
+
+    command = "\n".join([
+        "set -euo pipefail",
+        "trap 'touch /data/job_completed' EXIT TERM INT",
+        patch_step,
+        " ".join(["mpirun", "-np", str(np), "pmemd.MPI", base_flags]) + extra_part + tee_redirect,
+    ])
+    return command, False
+
+
+def _amber_resources(binary: str, np: int, ntomp: int, use_gpu: bool) -> dict[str, Any]:
+    cpu = str(np * ntomp) if binary == "pmemd.mpi" else str(ntomp)
+    memory = f"{4 * np}Gi" if binary == "pmemd.mpi" else "4Gi"
+    return {
+        "requests": {"cpu": cpu, "memory": memory, GPU_TYPE: "1" if use_gpu else "0"},
+        "limits": {"cpu": cpu, "memory": memory, GPU_TYPE: "1" if use_gpu else "0"},
+    }
 
 
 def create_gromacs_job(
@@ -35,21 +235,7 @@ def create_gromacs_job(
     pme: str,
     extra_args: str,
 ) -> None:
-    """
-    Create a GROMACS MD simulation job in Kubernetes.
-
-    Args:
-        ns: Kubernetes namespace for the job.
-        bucket_name: S3 bucket name for data storage.
-        name: Unique name for the Kubernetes job.
-        experiment_id: Experiment identifier for data organization.
-        deffnm: GROMACS default filename prefix (without .tpr extension).
-        np: Number of MPI processes.
-        ntomp: Number of OpenMP threads per process.
-        nb: Non-bonded interaction device type ('cpu' or 'gpu').
-        pme: PME calculation device type ('cpu' or 'gpu').
-        extra_args: Additional arguments to pass to gmx mdrun.
-    """
+    """Create a GROMACS MD simulation job in Kubernetes."""
     if ping_resource("job", name, ns):
         logger.warning(f"Job {name} already exists in namespace {ns}. Skipping creation.")
         return
@@ -60,22 +246,8 @@ def create_gromacs_job(
     pme = pme.lower()
 
     exp_dir = f"/data/{experiment_id}"
-    exp_dir_q = _q(f"{exp_dir}/")
-    remote_q = _q(f"s3remote:{bucket_name}/{experiment_id}/")
-
+    remote = f"s3remote:{bucket_name}/{experiment_id}/"
     extra_part = f" {extra_args}" if extra_args else ""
-
-    gromacs_image = GMX_IMAGE
-    s3_sync_image = "rclone/rclone:latest"  # TODO: lock version
-
-    # Rclone env-var based config (no config file needed)
-    rclone_env = [
-        {"name": "RCLONE_CONFIG_S3REMOTE_TYPE", "value": "s3"},
-        {"name": "RCLONE_CONFIG_S3REMOTE_PROVIDER", "value": "Other"},
-        {"name": "RCLONE_CONFIG_S3REMOTE_ACCESS_KEY_ID", "value": S3_ACCESS_KEY or ""},
-        {"name": "RCLONE_CONFIG_S3REMOTE_SECRET_ACCESS_KEY", "value": S3_SECRET_KEY or ""},
-        {"name": "RCLONE_CONFIG_S3REMOTE_ENDPOINT", "value": S3_ENDPOINT or ""},
-    ]
 
     gromacs_command = "\n".join([
         "set -euo pipefail",
@@ -113,131 +285,75 @@ def create_gromacs_job(
         "echo 'Trajectory processing completed.'",
     ])
 
-    # Download experiment data from S3 before the simulation starts
-    s3_init_command = f"""
-        echo "Downloading experiment data from object storage..." &&
-        mkdir -p {_q(exp_dir)} &&
-        rclone copy {remote_q} {exp_dir_q} --progress || echo "No existing data found, starting with empty directory"
-    """
+    manifest = _build_job_manifest(
+        name=name,
+        ns=ns,
+        exp_dir=exp_dir,
+        remote=remote,
+        sim_image=GMX_IMAGE,
+        sim_command=gromacs_command,
+        sim_resources=_gmx_resources(np, ntomp, nb, pme),
+        sim_env=[{"name": "OMP_NUM_THREADS", "value": str(ntomp)}],
+    )
 
-    # Continuously upload results back to S3 while the job runs
-    s3_sync_command = f"""
-        echo "Starting continuous rclone copy process..." &&
-        while true; do
-            if [ -f /data/job_completed ]; then
-                echo "Job completed, performing final copy to S3..." &&
-                rclone copy {exp_dir_q} {remote_q} --checksum --progress &&
-                echo "Final copy completed, exiting..." &&
-                break
-            fi
-            rclone copy {exp_dir_q} {remote_q} --ignore-checksum --retries 1 --quiet || echo "Copy attempt failed, retrying..."
-            sleep 10
-        done
-    """
-
-    job_manifest = {
-        "apiVersion": "batch/v1",
-        "kind": "Job",
-        "metadata": {"name": name, "namespace": ns, "labels": {"app": name}},
-        "spec": {
-            "backoffLimit": 0,
-            "ttlSecondsAfterFinished": 3600,  # 1 hour
-            "template": {
-                "metadata": {"labels": {"job": name}},
-                "spec": {
-                    "restartPolicy": "Never",
-                    "securityContext": {"fsGroup": 1000},
-                    "initContainers": [
-                        {
-                            "name": "s3-init",
-                            "image": s3_sync_image,
-                            "command": ["sh", "-c", s3_init_command],
-                            "securityContext": {
-                                "runAsUser": 1000,
-                                "runAsGroup": 1000,
-                                "runAsNonRoot": True,
-                                "seccompProfile": {"type": "RuntimeDefault"},
-                                "allowPrivilegeEscalation": False,
-                                "capabilities": {"drop": ["ALL"]},
-                            },
-                            "env": rclone_env,
-                            "volumeMounts": [{"name": "shared-data", "mountPath": "/data"}],
-                        }
-                    ],
-                    "containers": [
-                        {
-                            "name": name,
-                            "image": gromacs_image,
-                            "workingDir": exp_dir,
-                            "command": ["bash", "-c", gromacs_command],
-                            "securityContext": {
-                                "runAsUser": 1000,
-                                "runAsGroup": 1000,
-                                "runAsNonRoot": True,
-                                "seccompProfile": {"type": "RuntimeDefault"},
-                                "allowPrivilegeEscalation": False,
-                                "capabilities": {"drop": ["ALL"]},
-                            },
-                            "env": [{"name": "OMP_NUM_THREADS", "value": str(ntomp)}],
-                            "resources": {
-                                "requests": {
-                                    "cpu": str(np * ntomp),
-                                    "memory": f"{4 * np}Gi",
-                                    GPU_TYPE: "1" if nb == "gpu" or pme == "gpu" else "0",
-                                },
-                                "limits": {
-                                    "cpu": str(np * ntomp),
-                                    "memory": f"{4 * np}Gi",
-                                    GPU_TYPE: "1" if nb == "gpu" or pme == "gpu" else "0",
-                                },
-                            },
-                            "volumeMounts": [{"name": "shared-data", "mountPath": "/data"}],
-                        },
-                        {
-                            "name": "s3-sync",
-                            "image": s3_sync_image,
-                            "command": ["sh", "-c", s3_sync_command],
-                            "securityContext": {
-                                "runAsUser": 1000,
-                                "runAsGroup": 1000,
-                                "runAsNonRoot": True,
-                                "seccompProfile": {"type": "RuntimeDefault"},
-                                "allowPrivilegeEscalation": False,
-                                "capabilities": {"drop": ["ALL"]},
-                            },
-                            "env": rclone_env,
-                            "resources": {
-                                "requests": {"cpu": "100m", "memory": "128Mi"},
-                                "limits": {"cpu": "200m", "memory": "256Mi"},
-                            },
-                            "volumeMounts": [{"name": "shared-data", "mountPath": "/data"}],
-                        },
-                    ],
-                    "volumes": [
-                        {
-                            "name": "shared-data",
-                            "emptyDir": {
-                                "sizeLimit": "100Gi"  # TODO: adjust based on our needs
-                            },
-                        }
-                    ],
-                },
-            },
-        },
-    }
-
-    batch_v1.create_namespaced_job(namespace=ns, body=job_manifest)
+    batch_v1.create_namespaced_job(namespace=ns, body=manifest)
     logger.info(f"Created GROMACS job {name} in namespace {ns}")
 
 
-def delete_job(ns: str, name: str) -> None:
-    """
-    Delete a Kubernetes job by name.
+def create_amber_job(
+    ns: str,
+    bucket_name: str,
+    name: str,
+    experiment_id: str,
+    prmtop_name: str,
+    inpcrd_name: str,
+    mdin_name: str,
+    binary: str,
+    np: int,
+    ntomp: int,
+    ewald: str,
+    extra_args: str,
+) -> None:
+    """Create an AMBER MD simulation job in Kubernetes."""
+    if ping_resource("job", name, ns):
+        logger.warning(f"Job {name} already exists in namespace {ns}. Skipping creation.")
+        return
 
-    Args:
-        ns: Kubernetes namespace containing the job.
-        name: Name of the job to delete.
-    """
+    np = int(np)
+    ntomp = int(ntomp)
+    binary = binary.lower()
+    ewald = ewald.lower()
+
+    exp_dir = f"/data/{experiment_id}"
+    remote = f"s3remote:{bucket_name}/{experiment_id}/"
+    output_prefix = Path(mdin_name).stem
+
+    base_flags = (
+        f"-O -i {_q(mdin_name)} -o {_q(f'{output_prefix}.out')} "
+        f"-p {_q(prmtop_name)} -c {_q(inpcrd_name)} "
+        f"-r {_q(f'{output_prefix}.rst7')} -x {_q(f'{output_prefix}.nc')} "
+        f"-inf {_q(f'{output_prefix}.mdinfo')}"
+    )
+
+    amber_command, use_gpu = _amber_command(binary, np, ewald, extra_args, base_flags, mdin_name, name)
+
+    manifest = _build_job_manifest(
+        name=name,
+        ns=ns,
+        exp_dir=exp_dir,
+        remote=remote,
+        sim_image=AMBER_IMAGE,
+        sim_command=amber_command,
+        sim_resources=_amber_resources(binary, np, ntomp, use_gpu),
+        sim_env=[{"name": "OMP_NUM_THREADS", "value": str(ntomp)}],
+    )
+
+    batch_v1.create_namespaced_job(namespace=ns, body=manifest)
+    logger.info(f"Created AMBER job {name} in namespace {ns}")
+
+
+def delete_job(ns: str, name: str) -> None:
+    """Delete a Kubernetes job by name."""
     if not ping_resource("job", name, ns):
         logger.warning(f"Job {name} does not exist in namespace {ns}. Skipping deletion.")
         return
@@ -263,7 +379,7 @@ def ping_resource(resource_type: str, name: str, ns: str) -> bool:
         ns: Kubernetes namespace to check.
 
     Returns:
-        bool: True if the resource exists, False otherwise.
+        True if the resource exists, False otherwise.
 
     Raises:
         ValueError: If an unsupported resource type is provided.
@@ -298,7 +414,7 @@ def get_job_status(ns: str, name: str) -> JobStatus:
         name: Name of the job to check.
 
     Returns:
-        JobStatus: Current status of the job (PENDING, RUNNING, TERMINATED, ERROR, or UNKNOWN).
+        Current status of the job (PENDING, RUNNING, TERMINATED, ERROR, or UNKNOWN).
     """
     try:
         job = cast("V1Job", batch_v1.read_namespaced_job(name=name, namespace=ns))
@@ -315,6 +431,19 @@ def get_job_status(ns: str, name: str) -> JobStatus:
         if job.status and job.status.failed and job.status.failed > 0:
             return JobStatus.ERROR
         if job.status and job.status.active and job.status.active > 0:
+            # active > 0 means K8s created a pod, but it may still be pulling image or scheduling.
+            # Check pod phase to distinguish PENDING (unscheduled/image-pull) from actual RUNNING.
+            try:
+                pods = core_v1.list_namespaced_pod(namespace=ns, label_selector=f"job-name={name}", limit=1)
+                if pods.items:
+                    phase = pods.items[0].status.phase
+                    if phase == "Running":
+                        return JobStatus.RUNNING
+                    # Pod exists but not running yet (Pending, ContainerCreating, etc.)
+                    return JobStatus.PENDING
+            except ApiException:
+                pass
+            # Can't determine pod phase — fall back to RUNNING since job is active
             return JobStatus.RUNNING
         return JobStatus.PENDING
 

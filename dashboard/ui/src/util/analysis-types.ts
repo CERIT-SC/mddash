@@ -48,7 +48,7 @@ export interface AnalysisJob {
   created_at: string
   status: JobStatus
   analysis_name: AnalysisType
-  structure_file: string
+  structure_file: string | null
   trajectory_file: string
   topology_file: string | null
 }

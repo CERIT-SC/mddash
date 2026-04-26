@@ -9,8 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import LogsView from "@/components/LogsView"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
+import GmxStartForm from "./GmxStartForm"
 import JobStatusDisplay from "./JobStatusDisplay"
-import StartForm from "./StartForm"
 
 type LogType = "gmx" | "stdout" | "stderr"
 
@@ -29,7 +29,7 @@ const RunView = (props: RunViewProps) => {
   const jobStatus = jobQuery.data ?? null
   const isRunning = jobStatus?.status === "RUNNING"
 
-  const logsAvailable = !!jobStatus && jobStatus.nsteps !== null
+  const logsAvailable = !!jobStatus && jobStatus.status !== "PENDING"
   const shouldRefreshLogs = isRunning
 
   const logsQuery = useGromacsLogs(experiment.id, tprName, logType, shouldRefreshLogs)
@@ -48,7 +48,7 @@ const RunView = (props: RunViewProps) => {
   }
 
   if (!jobStatus) {
-    return <StartForm {...props} onStartJob={handleJobStarted} />
+    return <GmxStartForm {...props} onStartJob={handleJobStarted} />
   }
 
   return (

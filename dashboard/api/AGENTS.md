@@ -7,7 +7,7 @@ Flask-based REST API that orchestrates molecular dynamics experiments across Kub
 ## Architecture & Patterns
 
 ### Design Patterns
-- **Blueprint Pattern**: Routes organized into modular Flask blueprints (`experiments_bp`, `notebook_bp`, `tuner_bp`, `gmx_bp`, `files_bp`, `misc_bp`, `mdrepo_bp`)
+- **Blueprint Pattern**: Routes organized into modular Flask blueprints (`experiments_bp`, `notebook_bp`, `tuner_bp`, `gmx_bp`, `amber_bp`, `analysis_bp`, `files_bp`, `misc_bp`, `mdrepo_bp`)
 - **Active Record Pattern**: SQLAlchemy models encapsulate business logic (e.g., `Experiment.from_pdb()`, `Experiment.publish()`)
 - **Schema Pattern**: Marshmallow schemas for serialization with `@pre_dump` hooks for side effects
 - **Decorator Pattern**: `@handle_exceptions(rollback=True)` for consistent error handling and transaction management
@@ -135,6 +135,8 @@ graph TD
 - `routes/notebook.py` - Jupyter notebook pod management
 - `routes/tuner.py` - GROMACS tuner job orchestration
 - `routes/gmx.py` - GROMACS simulation job management
+- `routes/amber.py` - AMBER simulation job management
+- `routes/analysis.py` - AMBER analysis job management
 - `routes/files.py` - File listing and download
 - `routes/mdrepo.py` - MDRepo OAuth flow and callbacks
 - `routes/misc.py` - Health check and metrics endpoints
@@ -143,6 +145,9 @@ graph TD
 - `models/experiment.py` - Core experiment lifecycle (`from_pdb`, `from_repo`, `from_files`, `publish`, `delete`)
 - `models/notebook.py` - Notebook pod lifecycle
 - `models/gromacs_job.py` - GROMACS job lifecycle
+- `models/amber_job.py` - AMBER job lifecycle
+- `models/simulation_job.py` - Shared simulation job base model
+- `models/analysis_job.py` - AMBER analysis job lifecycle
 - `models/tuner_job.py` - Tuner job lifecycle
 
 ### Client Entry Points

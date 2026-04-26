@@ -25,6 +25,7 @@ S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
 S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
 
 GMX_IMAGE = os.environ.get("GMX_IMAGE", "")
+AMBER_IMAGE = os.environ.get("AMBER_IMAGE", "cerit.io/xkrasa/amber:24")
 
 logger = logging.getLogger(__name__)
 
@@ -33,3 +34,6 @@ if not all([S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY]):
 
 if not GMX_IMAGE:
     logger.warning("GMX_IMAGE environment variable is not set. GROMACS jobs will not work.")
+
+if not AMBER_IMAGE:
+    logger.warning("AMBER_IMAGE environment variable is not set. AMBER jobs will not work.")

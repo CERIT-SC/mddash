@@ -5,7 +5,7 @@ from extensions import db, ma
 from flask import Flask
 from flask_cors import CORS
 from polling import start_polling
-from routes import health_bp, mdrun_bp
+from routes import amber_bp, gmx_bp, health_bp
 from sqlalchemy import text
 
 
@@ -34,7 +34,8 @@ def create_app() -> Flask:
     db.init_app(app)
     ma.init_app(app)
 
-    app.register_blueprint(mdrun_bp)
+    app.register_blueprint(gmx_bp)
+    app.register_blueprint(amber_bp)
     app.register_blueprint(health_bp)
 
     with app.app_context():

@@ -12,7 +12,7 @@ from cachetools import cached
 from clients import k8s
 from clients.k8s import parse_cpu, parse_memory
 from config import ANALYSIS_IMAGE, ANALYSIS_RESOURCES, DATA_DIR
-from enums import AnalysisType, JobStatus, PreprocessingMode
+from enums import AnalysisType, Engine, JobStatus, PreprocessingMode
 from extensions import db
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.exceptions import Forbidden
@@ -152,25 +152,42 @@ def _safe_copy(src: Path, dst: Path) -> str:
 
 def format_mwf_analysis_command(
     analysis_name: AnalysisType,
-    structure_file: Path,
+    structure_file: Path | None,
     trajectory_file: Path,
     topology_file: Path | None,
     preprocessing_mode: PreprocessingMode,
+    engine: Engine = Engine.GMX,
 ) -> str:
     """
     Build the mwf command for a single analysis job.
 
+    When structure_file is absent, omit the -stru flag so mwf derives the
+    structure from the topology + trajectory itself (required for AMBER .prmtop
+    which has no coordinates).
+
+    AMBER trajectories are typically un-imaged, so stable-bonds checking is
+    skipped via -t stabonds to avoid spurious failures.
+
     Returns:
         Shell command string used to execute the requested mwf analysis.
     """
-    structure_snapshot = Path(MWF_INPUTS_DIR) / f"input_structure{structure_file.suffix}"
+    if structure_file is None and topology_file is None:
+        raise ValueError("At least one of structure_file or topology_file must be provided.")
+
     trajectory_snapshot = Path(MWF_INPUTS_DIR) / f"input_trajectory{trajectory_file.suffix}"
     topology_snapshot = Path(MWF_INPUTS_DIR) / f"input_topology{topology_file.suffix}" if topology_file else None
 
-    snapshot_commands = [
-        _safe_copy(structure_file, structure_snapshot),
+    snapshot_commands: list[str] = [
         _safe_copy(trajectory_file, trajectory_snapshot),
     ]
+
+    # -stru only when a separate structure file is provided
+    stru_flag = ""
+    if structure_file is not None:
+        structure_snapshot = Path(MWF_INPUTS_DIR) / f"input_structure{structure_file.suffix}"
+        snapshot_commands.insert(0, _safe_copy(structure_file, structure_snapshot))
+        stru_flag = f"-stru {shlex.quote(structure_snapshot.as_posix())} "
+
     if topology_file and topology_snapshot:
         snapshot_commands.append(_safe_copy(topology_file, topology_snapshot))
 
@@ -179,6 +196,10 @@ def format_mwf_analysis_command(
         flags.append("-img")
     if preprocessing_mode is PreprocessingMode.IMAGE_FIT:
         flags.append("-fit")
+
+    # AMBER topologies often have non-standard residues or bonds that mwf
+    # considers "incoherent"; skip both checks that are overzealous for AMBER.
+    trust_flags = "-t stabonds cohbonds" if engine is Engine.AMBER else ""
 
     inputs_yaml = shlex.quote(format_mwf_inputs_yaml(analysis_name))
     prelude_commands = get_runtime_prelude_commands(analysis_name)
@@ -189,9 +210,9 @@ def format_mwf_analysis_command(
         *snapshot_commands,
         f"printf %s {inputs_yaml} > inputs.yaml",
         "conda run --no-capture-output -n mwf_env "
-        f"mwf run -dir . -stru {shlex.quote(structure_snapshot.as_posix())} "
+        f"mwf run -dir . {stru_flag}"
         f"-md {shlex.quote(MWF_DIR)} {shlex.quote(trajectory_snapshot.as_posix())} "
-        f"{' '.join(flags)} -i {analysis_name}",
+        f"{' '.join(flags)} -i {analysis_name} {trust_flags}",
     ]
     return " && ".join(commands)
 
@@ -206,7 +227,7 @@ class AnalysisJob(db.Model):  # type: ignore
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
 
     analysis_name: Mapped[AnalysisType] = mapped_column(db.Enum(AnalysisType), nullable=False)
-    structure_file: Mapped[str] = mapped_column(db.String(255), nullable=False)
+    structure_file: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
     trajectory_file: Mapped[str] = mapped_column(db.String(255), nullable=False)
     topology_file: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
 
@@ -244,7 +265,7 @@ class AnalysisJob(db.Model):  # type: ignore
         cls,
         experiment: "Experiment",
         analysis_name: AnalysisType,
-        structure_file: Path,
+        structure_file: Path | None,
         trajectory_file: Path,
         topology_file: Path | None,
         preprocessing_mode: PreprocessingMode,
@@ -256,6 +277,7 @@ class AnalysisJob(db.Model):  # type: ignore
             experiment: The experiment to run analysis on.
             analysis_name: The mwf analysis task name (e.g. "rmsds", "pca").
             structure_file: Relative path to the structure file within the experiment dir.
+                May be None when topology_file serves as the structure source.
             trajectory_file: Relative path to the trajectory file within the experiment dir.
             topology_file: Relative path to the topology file, when required for preprocessing or analysis.
             preprocessing_mode: Selected preprocessing mode applied before analysis.
@@ -287,6 +309,7 @@ class AnalysisJob(db.Model):  # type: ignore
             trajectory_file=trajectory_file,
             topology_file=topology_file,
             preprocessing_mode=preprocessing_mode,
+            engine=experiment.engine,
         )
 
         an_cpu = parse_cpu(ANALYSIS_RESOURCES["requests"]["cpu"])
@@ -308,7 +331,7 @@ class AnalysisJob(db.Model):  # type: ignore
             id=job_id,  # type: ignore[call-arg]
             experiment_id=experiment.id,  # type: ignore[call-arg]
             analysis_name=analysis_name,  # type: ignore[call-arg]
-            structure_file=structure_file.as_posix(),  # type: ignore[call-arg]
+            structure_file=structure_file.as_posix() if structure_file else None,  # type: ignore[call-arg]
             trajectory_file=trajectory_file.as_posix(),  # type: ignore[call-arg]
             topology_file=topology_file.as_posix() if topology_file else None,  # type: ignore[call-arg]
         )

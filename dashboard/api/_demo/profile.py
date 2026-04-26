@@ -4,6 +4,7 @@ Demo profile setup for local development.
 Installs all mocks and seeds deterministic test data for UI development.
 """
 
+import contextlib
 import logging
 import time
 from typing import TYPE_CHECKING
@@ -41,7 +42,7 @@ def setup_demo_profile(app: "Flask") -> None:
     Args:
         app: The Flask application instance.
     """
-    global _responses_mock
+    global _responses_mock  # noqa: PLW0603
 
     if demo_state.initialized:
         return
@@ -67,19 +68,17 @@ def setup_demo_profile(app: "Flask") -> None:
 
 def activate_responses() -> None:
     """Activate the responses mock for the current request context."""
-    global _responses_mock
+    global _responses_mock  # noqa: PLW0602
     if _responses_mock is not None:
-        _responses_mock.__enter__()
+        _responses_mock.__enter__()  # noqa: PLC2801
 
 
 def deactivate_responses() -> None:
     """Deactivate the responses mock after request completion."""
-    global _responses_mock
+    global _responses_mock  # noqa: PLW0602
     if _responses_mock is not None:
-        try:
+        with contextlib.suppress(Exception):
             _responses_mock.__exit__(None, None, None)
-        except Exception:
-            pass
 
 
 def _install_demo_mdrepo_auth(app: "Flask") -> None:
@@ -94,7 +93,12 @@ def _install_demo_mdrepo_auth(app: "Flask") -> None:
         return
 
     def _demo_mdrepo_auth() -> "WerkzeugResponse":
-        """Bypass MDRepo OAuth and set demo token directly."""
+        """
+        Bypass MDRepo OAuth and set demo token directly.
+
+        Returns:
+            Redirect response to the return URL.
+        """
         return_url = request.args.get("return_url", "/")
         session[MDREPO_TOKEN_KEY] = "demo-access-token"
         session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + 3600
@@ -104,7 +108,12 @@ def _install_demo_mdrepo_auth(app: "Flask") -> None:
 
 
 def _with_query_param(url: str, key: str, value: str) -> str:
-    """Add or update a query parameter in a URL."""
+    """
+    Add or update a query parameter in a URL.
+
+    Returns:
+        URL with the query parameter added or updated.
+    """
     parts = urlsplit(url)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
     query[key] = value

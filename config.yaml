@@ -42,7 +42,7 @@ defaultNotebooksRepo: https://github.com/sb-ncbr/mddash-notebooks.git
 
 # Notebook image (spawned by Dashboard pod)
 notebook:
-  image: cerit.io/xkrasa/mddash-notebook
+  image: mddash-notebook
   platform: linux/amd64
 
 # MD analysis image used for on-demand analysis K8s jobs
@@ -60,15 +60,15 @@ sidecars:
   platform: linux/amd64
   pullPolicy: IfNotPresent
   ui:
-    image: cerit.io/xkrasa/mddash-ui
+    image: mddash-ui
   proxy:
-    image: cerit.io/xkrasa/mddash-proxy
+    image: mddash-proxy
   auth:
-    image: cerit.io/xkrasa/mddash-auth
+    image: mddash-auth
   api:
-    image: cerit.io/xkrasa/mddash-api
+    image: mddash-api
   s3sync:
-    image: cerit.io/xkrasa/mddash-s3sync
+    image: mddash-s3sync
 
 # S3 object storage configuration
 s3:
@@ -127,7 +127,7 @@ helm:
 
 # mdrun-api service
 mdrunApi:
-  image: cerit.io/xkrasa/mdrun-api
+  image: mdrun-api
   platform: linux/amd64
   storage:  # Persistent storage for mdrun-api database
     size: 20Gi

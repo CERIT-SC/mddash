@@ -32,12 +32,12 @@ class TestHealthEndpoint:
         assert data["success"] is True
 
 
-class TestGetJob:
-    """Tests for GET /api/jobs/<job_id>."""
+class TestGetGmxJob:
+    """Tests for GET /api/jobs/gmx/<job_id>."""
 
     def test_returns_404_for_missing_job(self, client: FlaskClient) -> None:
         """Should return 404 for non-existent job ID."""
-        response = client.get("/api/jobs/nonexistent-id")
+        response = client.get("/api/jobs/gmx/nonexistent-id")
 
         assert response.status_code == HTTPStatus.NOT_FOUND
 
@@ -57,7 +57,7 @@ class TestGetJob:
         # Mock K8s status check
         mock_k8s_client["get_job_status"].return_value = JobStatus.RUNNING
 
-        response = client.get("/api/jobs/test-job-123")
+        response = client.get("/api/jobs/gmx/test-job-123")
 
         assert response.status_code == HTTPStatus.OK
         data = json.loads(response.data)
@@ -65,13 +65,13 @@ class TestGetJob:
         assert data["data"]["status"] == "running"
 
 
-class TestCreateJob:
-    """Tests for POST /api/jobs."""
+class TestCreateGmxJob:
+    """Tests for POST /api/jobs/gmx."""
 
     def test_create_job_success(self, client: FlaskClient, mock_k8s_client: dict[str, Any]) -> None:
         """Should create job and return 201."""
         response = client.post(
-            "/api/jobs",
+            "/api/jobs/gmx",
             json={
                 "experiment_id": "exp123",
                 "tpr_name": "simulation.tpr",
@@ -96,7 +96,7 @@ class TestCreateJob:
     def test_create_job_with_extra_args(self, client: FlaskClient, mock_k8s_client: dict[str, Any]) -> None:
         """Should pass extra_args to job creation."""
         response = client.post(
-            "/api/jobs",
+            "/api/jobs/gmx",
             json={
                 "experiment_id": "exp456",
                 "tpr_name": "run.tpr",
@@ -119,7 +119,7 @@ class TestCreateJob:
     def test_create_job_missing_required_fields(self, client: FlaskClient) -> None:
         """Should return error for missing required fields."""
         response = client.post(
-            "/api/jobs",
+            "/api/jobs/gmx",
             json={"experiment_id": "exp123"},
             content_type="application/json",
         )
@@ -129,8 +129,8 @@ class TestCreateJob:
         assert data["success"] is False
 
 
-class TestDeleteJob:
-    """Tests for DELETE /api/jobs/<job_id>."""
+class TestDeleteGmxJob:
+    """Tests for DELETE /api/jobs/gmx/<job_id>."""
 
     def test_delete_existing_job(
         self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]
@@ -145,7 +145,7 @@ class TestDeleteJob:
         db_session.add(job)
         db_session.commit()
 
-        response = client.delete("/api/jobs/delete-me")
+        response = client.delete("/api/jobs/gmx/delete-me")
 
         assert response.status_code == HTTPStatus.NO_CONTENT
 
@@ -154,6 +154,57 @@ class TestDeleteJob:
 
     def test_delete_nonexistent_job(self, client: FlaskClient) -> None:
         """Should return 404 for non-existent job."""
-        response = client.delete("/api/jobs/not-found")
+        response = client.delete("/api/jobs/gmx/not-found")
+
+        assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+class TestGetAmberJob:
+    """Tests for GET /api/jobs/amber/<job_id>."""
+
+    def test_returns_404_for_missing_job(self, client: FlaskClient) -> None:
+        """Should return 404 for non-existent job ID."""
+        response = client.get("/api/jobs/amber/nonexistent-id")
+
+        assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+class TestCreateAmberJob:
+    """Tests for POST /api/jobs/amber."""
+
+    def test_create_amber_job_success(self, client: FlaskClient, mock_k8s_client: dict[str, Any]) -> None:
+        """Should create AMBER job and return 201."""
+        response = client.post(
+            "/api/jobs/amber",
+            json={
+                "experiment_id": "exp123",
+                "prmtop_name": "system.prmtop",
+                "inpcrd_name": "system.rst7",
+                "mdin_name": "prod.in",
+                "bucket_name": "test-bucket",
+                "binary": "pmemd.cuda",
+                "np": 1,
+                "ntomp": 4,
+                "ewald": "default",
+            },
+            content_type="application/json",
+        )
+
+        assert response.status_code == HTTPStatus.CREATED
+        data = json.loads(response.data)
+        assert data["success"] is True
+        assert "id" in data["data"]
+        assert data["data"]["status"] == "pending"
+
+        # Verify K8s job was created
+        mock_k8s_client["create_amber_job"].assert_called_once()
+
+
+class TestDeleteAmberJob:
+    """Tests for DELETE /api/jobs/amber/<job_id>."""
+
+    def test_delete_nonexistent_job(self, client: FlaskClient) -> None:
+        """Should return 404 for non-existent job."""
+        response = client.delete("/api/jobs/amber/not-found")
 
         assert response.status_code == HTTPStatus.NOT_FOUND

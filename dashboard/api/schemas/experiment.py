@@ -1,3 +1,4 @@
+from enums import Engine
 from marshmallow import fields, pre_dump
 from models import Experiment
 
@@ -7,9 +8,10 @@ from .base import BaseAutoSchema
 class ExperimentSchema(BaseAutoSchema):
     """Schema for serializing Experiment model instances."""
 
+    engine = fields.Enum(Engine, by_value=True)
     notebook = fields.Nested("NotebookSchema", allow_none=False)
     tuner_jobs = fields.Nested("TunerJobSchema", many=True)
-    gromacs_jobs = fields.Nested("GromacsJobSchema", many=True)
+    simulation_jobs = fields.Nested("SimulationJobSchema", many=True)
 
     class Meta:
         """Schema configuration."""

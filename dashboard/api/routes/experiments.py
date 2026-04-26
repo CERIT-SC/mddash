@@ -3,6 +3,7 @@ from http import HTTPStatus
 from api_response import ApiResponse
 from config import API_PREFIX, DEFAULT_NOTEBOOKS_REPO
 from decorators import handle_exceptions
+from enums import Engine
 from extensions import db
 from flask import Blueprint, Response, request, session
 from models import Experiment
@@ -46,15 +47,22 @@ def create_experiment() -> Response:
     access_token = form.get("access-token")
     simulation_files = request.files.getlist("simulation-files")
 
+    # Get engine from form, default to GMX
+    engine_str = form.get("engine", "GMX")
+    try:
+        engine = Engine.from_string(engine_str)
+    except ValueError:
+        return ApiResponse.error(f"Invalid engine: {engine_str}", HTTPStatus.BAD_REQUEST)
+
     validate_git_url(notebooks_repo)
 
     match form["type"]:
         case "pdb" if pdb_id:
-            experiment = Experiment.from_pdb(name, pdb_id, notebooks_repo, access_token)
+            experiment = Experiment.from_pdb(name, pdb_id, notebooks_repo, access_token, engine=engine)
         case "repo" if repo_url:
-            experiment = Experiment.from_repo(name, repo_url, notebooks_repo, access_token)
+            experiment = Experiment.from_repo(name, repo_url, notebooks_repo, access_token, engine=engine)
         case "file" if simulation_files:
-            experiment = Experiment.from_files(name, simulation_files, notebooks_repo, access_token)
+            experiment = Experiment.from_files(name, simulation_files, notebooks_repo, access_token, engine=engine)
         case _:
             return ApiResponse.error("Invalid experiment type or missing data.", HTTPStatus.BAD_REQUEST)
 

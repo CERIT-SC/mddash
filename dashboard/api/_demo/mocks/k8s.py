@@ -12,20 +12,14 @@ import logging
 import re
 import threading
 import time
-from pathlib import Path
-from typing import TYPE_CHECKING
 
 import requests
-
 from clients import k8s
 from config import DATA_DIR
 from enums import JobStatus, PodStatus
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, MWF_DIR
 
 from ..state import demo_state
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +58,12 @@ def install_k8s_mocks() -> None:
 
 
 def _get_pod_status(name: str) -> PodStatus:
-    """Get mock pod status."""
+    """
+    Get mock pod status.
+
+    Returns:
+        The pod status for the given notebook name.
+    """
     if not name.startswith("notebook-"):
         return PodStatus.DOWN
     experiment_id = name.removeprefix("notebook-")
@@ -74,8 +73,8 @@ def _get_pod_status(name: str) -> PodStatus:
 def _create_notebook_pod(
     name: str,
     experiment_id: str,
-    prefix: str,
-    token: str,
+    _prefix: str,
+    _token: str,
     notebook_resources: dict | None = None,  # noqa: ARG001
     gmx_resources: dict | None = None,  # noqa: ARG001
     gpu: bool = False,  # noqa: ARG001
@@ -99,13 +98,18 @@ def _create_service(name: str, target_name: str) -> None:  # noqa: ARG001
     logger.debug("Mock creating service %s", name)
 
 
-def _delete_service(name: str) -> None:  # noqa: ARG001
+def _delete_service(name: str) -> None:
     """Delete a mock service (no-op)."""
     logger.debug("Mock deleting service %s", name)
 
 
 def _get_pod_resource_requests() -> dict[str, int]:
-    """Get mock pod resource requests."""
+    """
+    Get mock pod resource requests.
+
+    Returns:
+        Dict with cpu and memory values.
+    """
     return {
         "cpu": 768,  # millicores
         "memory": 7_500_000_000,  # bytes (~7.5 GiB)
@@ -141,7 +145,12 @@ def _create_job(
 
 
 def _get_job_status(name: str) -> JobStatus:
-    """Get mock job status."""
+    """
+    Get mock job status.
+
+    Returns:
+        The job status for the given job name.
+    """
     job_data = demo_state.analysis_jobs.get(name)
     if job_data is None:
         return JobStatus.UNKNOWN
@@ -157,7 +166,12 @@ def _delete_job(name: str) -> None:
 
 
 def _get_job_logs(name: str, tail_lines: int = 200) -> str:  # noqa: ARG001
-    """Get mock job logs."""
+    """
+    Get mock job logs.
+
+    Returns:
+        Mock log output for the job.
+    """
     job_data = demo_state.analysis_jobs.get(name)
     if job_data is None:
         logger.warning("get_job_logs: job '%s' not in demo_state", name)
@@ -178,7 +192,12 @@ def _get_job_logs(name: str, tail_lines: int = 200) -> str:  # noqa: ARG001
 
 
 def _mdposit_get(path: str) -> requests.Response:
-    """Fetch analysis data from MDposit API."""
+    """
+    Fetch analysis data from MDposit API.
+
+    Returns:
+        The HTTP response from MDposit.
+    """
     headers = {"Accept": "application/json"}
     return requests.get(f"{MDPOSIT_ANALYSES_URL}/{path}", headers=headers, timeout=30)
 

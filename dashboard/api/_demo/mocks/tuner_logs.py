@@ -32,11 +32,105 @@ Simulation completed successfully.
 # Simulated GROMACS stderr template (usually empty or warnings)
 _GMX_STDERR_TEMPLATE = ""
 
+# Simulated AMBER stdout template
+_AMBER_STDOUT_TEMPLATE = """\
+AMBER pmemd - Molecular Dynamics Simulation
+
+Running {np} MPI tasks, {ntomp} OpenMP threads per task
+Input: {mdin}
+Topology: {prmtop}
+Coordinate: {inpcrd}
+Number of steps: {nsteps}
+
+NSTEP = {nsteps}  TIME(PS) = {time:.3f}  TEMP(K) = 300.00  PRESS = 0.0
+Etot = -12345.00  EKtot = 1234.00  EPtot = -13579.00
+
+Performance: {performance:.3f} ns/day
+"""
+
+_AMBER_STDERR_TEMPLATE = ""
+
 
 def install_tuner_log_mocks() -> None:
     """Install tuner trial log mocks via module mutation."""
     tuner.gmx_get_trial_stdout = _get_trial_stdout
     tuner.gmx_get_trial_stderr = _get_trial_stderr
+    tuner.amber_get_trial_stdout = _get_amber_trial_stdout
+    tuner.amber_get_trial_stderr = _get_amber_trial_stderr
+
+
+def _get_amber_trial_stdout(job_id: str, trial_id: str) -> str:
+    """
+    Get mock stdout for an AMBER tuner trial.
+
+    Args:
+        job_id: The tuning job ID.
+        trial_id: The trial ID within the job.
+
+    Returns:
+        Simulated pmemd stdout output.
+    """
+    job_state = demo_state.tuner_jobs.get(job_id)
+
+    if job_state is None:
+        logger.warning("AMBER trial stdout requested for unknown job %s", job_id)
+        return ""
+
+    trials = job_state.get("trials", [])
+    trial = next((t for t in trials if isinstance(t, dict) and t.get("id") == trial_id), None)
+
+    if trial is None:
+        logger.warning("AMBER trial stdout requested for unknown trial %s in job %s", trial_id, job_id)
+        return ""
+
+    if trial.get("status") == "RUNNING":
+        return ""
+
+    performance = trial.get("performance") or 50.0
+    np = trial.get("np", 1)
+    ntomp = trial.get("ntomp", 1)
+    nsteps = 25000
+
+    return _AMBER_STDOUT_TEMPLATE.format(
+        np=np,
+        ntomp=ntomp,
+        mdin="simulation.mdin",
+        prmtop="md.prmtop",
+        inpcrd="md.inpcrd",
+        nsteps=nsteps,
+        time=nsteps * 0.002,
+        performance=performance,
+    )
+
+
+def _get_amber_trial_stderr(job_id: str, trial_id: str) -> str:
+    """
+    Get mock stderr for an AMBER tuner trial.
+
+    Args:
+        job_id: The tuning job ID.
+        trial_id: The trial ID within the job.
+
+    Returns:
+        Simulated pmemd stderr output (typically empty).
+    """
+    job_state = demo_state.tuner_jobs.get(job_id)
+
+    if job_state is None:
+        logger.warning("AMBER trial stderr requested for unknown job %s", job_id)
+        return ""
+
+    trials = job_state.get("trials", [])
+    trial = next((t for t in trials if isinstance(t, dict) and t.get("id") == trial_id), None)
+
+    if trial is None:
+        logger.warning("AMBER trial stderr requested for unknown trial %s in job %s", trial_id, job_id)
+        return ""
+
+    if trial.get("status") == "ERROR":
+        return "Error: pmemd exited with non-zero status. Check input files.\n"
+
+    return _AMBER_STDERR_TEMPLATE
 
 
 def _get_trial_stdout(job_id: str, trial_id: str) -> str:

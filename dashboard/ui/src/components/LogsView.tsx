@@ -22,6 +22,7 @@ function processTerminalOutput(text: string): string {
 
     while (i < raw.length) {
       // Consume an ANSI escape sequence (zero visual width).
+      // eslint-disable-next-line no-control-regex
       const ansiMatch = raw.slice(i).match(/^\x1b\[[0-9;]*[A-Za-z]/)
       if (ansiMatch) {
         pendingAnsi += ansiMatch[0]
@@ -82,16 +83,8 @@ export default function LogsView({ logs, isLoading = false, className }: LogsVie
   }
 
   if (isLoading) {
-    return (
-      <div className={cn(cls, "animate-pulse text-muted-foreground select-none")}>
-        waiting for output...
-      </div>
-    )
+    return <div className={cn(cls, "text-muted-foreground animate-pulse select-none")}>waiting for output...</div>
   }
 
-  return (
-    <div className={cn(cls, "text-muted-foreground/50 select-none italic")}>
-      (no output)
-    </div>
-  )
+  return <div className={cn(cls, "text-muted-foreground/50 italic select-none")}>(no output)</div>
 }

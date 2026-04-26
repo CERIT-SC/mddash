@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { RefreshCw } from "lucide-react"
-import { type BuiltInCoordinatesFormat } from "molstar/lib/mol-plugin-state/formats/coordinates"
-import { type BuiltInTrajectoryFormat } from "molstar/lib/mol-plugin-state/formats/trajectory"
 
 import {
   AnalysisPreprocessingMode,
@@ -13,17 +11,17 @@ import {
 import type { FileOption } from "@/util/types"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import MolStar from "@/components/MolStar"
+import MolStar, { resolveCoordsFormat, resolveStructureFormat } from "@/components/MolStar"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import AnalysisPanel from "./AnalysisPanel"
 import AnalyzeSidebar from "./AnalyzeSidebar"
-
-const PREPROCESSED_TOPOLOGY_FORMATS = ["tpr", "top", "prmtop", "psf"]
-const PREPROCESSING_TPR_FORMATS = ["tpr"]
+import { ANALYZE_CONFIG } from "./engine-analyze-config"
 
 const AnalyzeStep = (props: WizardStepProps) => {
   const { experiment } = props
+
+  const engineConfig = ANALYZE_CONFIG[experiment.engine]
 
   const [structureFile, setStructureFile] = useState<FileOption | null>(null)
   const [coordsFile, setCoordsFile] = useState<FileOption | null>(null)
@@ -36,22 +34,31 @@ const AnalyzeStep = (props: WizardStepProps) => {
   const [activeTab, setActiveTab] = useState("viewer")
 
   useEffect(() => {
-    if (!structureFile) setCoordsFile(null)
-  }, [structureFile])
+    if (!structureFile && !topologyFile) setCoordsFile(null)
+  }, [structureFile, topologyFile])
 
   const analysisConfig = useMemo(
     () => AVAILABLE_ANALYSES.find((analysis) => analysis.value === selectedAnalysis),
     [selectedAnalysis]
   )
-  const topologyRequired = preprocessingMode !== AnalysisPreprocessingMode.AS_IS || !!analysisConfig?.requiresTopology
+  // Topology is required when preprocessing demands it, an analysis needs it,
+  // or a trajectory is selected for an engine that provides topology formats
+  // (e.g. AMBER .nc trajectories need .prmtop/.parm7 to render in MolStar).
+  const topologyRequired =
+    preprocessingMode !== AnalysisPreprocessingMode.AS_IS ||
+    !!analysisConfig?.requiresTopology ||
+    (!!coordsFile && engineConfig.topologyExts.length > 0)
   const topologyFormats =
-    preprocessingMode === AnalysisPreprocessingMode.AS_IS ? PREPROCESSED_TOPOLOGY_FORMATS : PREPROCESSING_TPR_FORMATS
-  const topologyTitle =
     preprocessingMode === AnalysisPreprocessingMode.AS_IS
-      ? analysisConfig?.requiresTopology
+      ? engineConfig.topologyExts
+      : engineConfig.preprocessingTopologyExts
+  const topologyForTrajectory = !!coordsFile && engineConfig.topologyExts.length > 0
+  const topologyTitle =
+    preprocessingMode !== AnalysisPreprocessingMode.AS_IS
+      ? "Select simulation topology file"
+      : analysisConfig?.requiresTopology || topologyForTrajectory
         ? "Select topology file"
         : "Select topology file (optional)"
-      : "Select simulation TPR file"
 
   useEffect(() => {
     if (!topologyRequired) {
@@ -63,33 +70,41 @@ const AnalyzeStep = (props: WizardStepProps) => {
 
     const suffix = topologyFile.path.split(".").pop()?.toLowerCase() ?? ""
     const allowedSuffixes =
-      preprocessingMode === AnalysisPreprocessingMode.AS_IS ? PREPROCESSED_TOPOLOGY_FORMATS : PREPROCESSING_TPR_FORMATS
+      preprocessingMode === AnalysisPreprocessingMode.AS_IS
+        ? engineConfig.topologyExts
+        : engineConfig.preprocessingTopologyExts
 
     if (!allowedSuffixes.includes(suffix)) {
       setTopologyFile(null)
     }
-  }, [preprocessingMode, topologyFile, topologyRequired])
+  }, [preprocessingMode, topologyFile, topologyRequired, engineConfig])
+
+  // When coords are selected with a topology file, use the topology as MolStar's
+  // structure source (prmtop+nc = trajectory). Without coords, show the PDB only.
+  const viewerStructure = coordsFile && topologyFile ? topologyFile : structureFile
 
   const molstarViewer = useMemo(() => {
-    if (!structureFile) return null
+    if (!viewerStructure) return null
     return (
       <MolStar
         key={reloadKey}
         width="100%"
         height="600px"
-        structureUrl={structureFile.url}
-        structureFormat={structureFile.name.split(".").pop() as BuiltInTrajectoryFormat}
+        structureUrl={viewerStructure.url}
+        structureFormat={resolveStructureFormat(viewerStructure.name)}
         coordsUrl={coordsFile?.url}
-        coordsFormat={coordsFile ? (coordsFile.name.split(".").pop() as BuiltInCoordinatesFormat) : undefined}
+        coordsFormat={coordsFile ? resolveCoordsFormat(coordsFile.name) : undefined}
       />
     )
-  }, [structureFile, coordsFile, reloadKey])
+  }, [viewerStructure, coordsFile, reloadKey])
 
   return (
     <div className="flex w-full flex-col items-center gap-4">
       <div className="flex w-[90%] flex-col gap-4 xl:flex-row">
         <AnalyzeSidebar
           experimentId={experiment.id}
+          structureExts={engineConfig.structureExts}
+          trajectoryExts={engineConfig.trajectoryExts}
           structureFile={structureFile}
           topologyRequired={topologyRequired}
           topologyFormats={topologyFormats}
@@ -127,6 +142,7 @@ const AnalyzeStep = (props: WizardStepProps) => {
           <TabsContent value="analysis" className="mt-3">
             <AnalysisPanel
               experimentId={experiment.id}
+              engine={experiment.engine}
               structureFile={structureFile}
               coordsFile={coordsFile}
               topologyFile={topologyFile}

@@ -4,6 +4,7 @@ from api_response import ApiResponse
 from clients import tuner
 from config import API_PREFIX, DATA_DIR
 from decorators import handle_exceptions
+from enums import Engine
 from extensions import db
 from flask import Blueprint, Response, request
 from models import Experiment, TunerJob
@@ -74,7 +75,23 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     # Get parameters from request
     nsteps = request.args.get("nsteps", default=25000, type=int)
     extra_args = request.args.get("extra_args", default="", type=str)
-    tuner_job = TunerJob.start(experiment, tpr_path, nsteps=nsteps, extra_args=extra_args)
+
+    # Get AMBER-specific parameters from request
+    inpcrd_name = request.args.get("inpcrd_name")
+    mdin_name = request.args.get("mdin_name")
+
+    # Build paths for AMBER-specific files
+    inpcrd_path = DATA_DIR / experiment_id / inpcrd_name if inpcrd_name else None
+    mdin_path = DATA_DIR / experiment_id / mdin_name if mdin_name else None
+
+    tuner_job = TunerJob.start(
+        experiment,
+        tpr_path,
+        inpcrd_path=inpcrd_path,
+        mdin_path=mdin_path,
+        nsteps=nsteps,
+        extra_args=extra_args,
+    )
 
     return ApiResponse.success(schema.dump(tuner_job), HTTPStatus.CREATED)
 
@@ -108,7 +125,13 @@ def get_trial_stdout(experiment_id: str, tpr_name: str, trial_id: str) -> Respon
     tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
         description=f"Tuner job for {tpr_name} not found"
     )
-    stdout = tuner.gmx_get_trial_stdout(tuner_job.id, trial_id)
+    match tuner_job.engine:
+        case Engine.GMX:
+            stdout = tuner.gmx_get_trial_stdout(tuner_job.id, trial_id)
+        case Engine.AMBER:
+            stdout = tuner.amber_get_trial_stdout(tuner_job.id, trial_id)
+        case _:
+            return ApiResponse.error(f"Unknown engine: {tuner_job.engine}", HTTPStatus.INTERNAL_SERVER_ERROR)
     return ApiResponse.success(stdout)
 
 
@@ -124,7 +147,13 @@ def get_trial_stderr(experiment_id: str, tpr_name: str, trial_id: str) -> Respon
     tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
         description=f"Tuner job for {tpr_name} not found"
     )
-    stderr = tuner.gmx_get_trial_stderr(tuner_job.id, trial_id)
+    match tuner_job.engine:
+        case Engine.GMX:
+            stderr = tuner.gmx_get_trial_stderr(tuner_job.id, trial_id)
+        case Engine.AMBER:
+            stderr = tuner.amber_get_trial_stderr(tuner_job.id, trial_id)
+        case _:
+            return ApiResponse.error(f"Unknown engine: {tuner_job.engine}", HTTPStatus.INTERNAL_SERVER_ERROR)
     return ApiResponse.success(stderr)
 
 

@@ -14,7 +14,7 @@ from cache import mdrepo_status_cache, step_status_cache
 from cachetools import cached
 from clients import mdrepo
 from config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
-from enums import JobStatus, PodStatus
+from enums import Engine, JobStatus, PodStatus
 from extensions import db
 from flask import session
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -28,7 +28,7 @@ from .notebook import Notebook
 
 if TYPE_CHECKING:
     from .analysis_job import AnalysisJob
-    from .gromacs_job import GromacsJob
+    from .simulation_job import SimulationJob
     from .tuner_job import TunerJob
 
 
@@ -51,9 +51,10 @@ class Experiment(db.Model):  # type: ignore
         source_message: Description of how the experiment was created.
         notebooks_repo: Git repository URL containing setup notebooks.
         mdrepo_id: MDRepo record ID if the experiment has been published.
+        engine: Molecular dynamics engine (GMX or AMBER).
         notebook: Associated setup notebook for this experiment.
         tuner_jobs: List of tuner jobs associated with this experiment.
-        gromacs_jobs: List of GROMACS simulation jobs for this experiment.
+        simulation_jobs: List of simulation jobs for this experiment.
     """
 
     __tablename__ = "experiments"
@@ -75,6 +76,8 @@ class Experiment(db.Model):  # type: ignore
     mdrepo_id: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
     # Whether the experiment is published in MDRepo (True=published, False=draft, None=not in MDRepo)
     mdrepo_published: Mapped[bool | None] = mapped_column(db.Boolean, nullable=True)
+    # Molecular dynamics engine (GMX or AMBER)
+    engine: Mapped[Engine] = mapped_column(db.Enum(Engine), nullable=False, default=Engine.GMX)
 
     # Setup notebook status
     notebook: Mapped["Notebook"] = relationship(
@@ -84,9 +87,9 @@ class Experiment(db.Model):  # type: ignore
     tuner_jobs: Mapped[list["TunerJob"]] = relationship(
         "TunerJob", back_populates="experiment", cascade="all, delete-orphan"
     )
-    # GROMACS jobs of the experiment
-    gromacs_jobs: Mapped[list["GromacsJob"]] = relationship(
-        "GromacsJob", back_populates="experiment", cascade="all, delete-orphan"
+    # Simulation jobs of the experiment (base relationship for JTI)
+    simulation_jobs: Mapped[list["SimulationJob"]] = relationship(
+        "SimulationJob", back_populates="experiment", cascade="all, delete-orphan"
     )
     # Analysis jobs of the experiment
     analysis_jobs: Mapped[list["AnalysisJob"]] = relationship(
@@ -156,7 +159,14 @@ class Experiment(db.Model):  # type: ignore
         return experiment
 
     @classmethod
-    def from_pdb(cls, name: str, pdb_id: str, notebooks_repo: str, access_token: str | None = None) -> "Experiment":
+    def from_pdb(
+        cls,
+        name: str,
+        pdb_id: str,
+        notebooks_repo: str,
+        access_token: str | None = None,
+        engine: Engine = Engine.GMX,
+    ) -> "Experiment":
         """
         Create experiment from PDB ID with database persistence.
 
@@ -165,6 +175,7 @@ class Experiment(db.Model):  # type: ignore
             pdb_id: PDB ID to download (e.g., 1A2B).
             notebooks_repo: Git repository URL containing setup notebooks.
             access_token: Optional GitHub access token for private repositories.
+            engine: Molecular dynamics engine (default: GMX).
 
         Returns:
             The created Experiment instance.
@@ -190,7 +201,9 @@ class Experiment(db.Model):  # type: ignore
                 f.write(response.content)
 
             message: str = f"Created by downloading '{pdb_id}' from RCSB PDB."
-            experiment = cls(id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo)  # type: ignore[call-arg]
+            experiment = cls(
+                id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo, engine=engine
+            )
 
             return cls._create_with_notebook(experiment)
 
@@ -201,7 +214,14 @@ class Experiment(db.Model):  # type: ignore
             raise
 
     @classmethod
-    def from_repo(cls, name: str, repo_link: str, notebooks_repo: str, access_token: str | None = None) -> "Experiment":
+    def from_repo(
+        cls,
+        name: str,
+        repo_link: str,
+        notebooks_repo: str,
+        access_token: str | None = None,
+        engine: Engine = Engine.GMX,
+    ) -> "Experiment":
         """
         Create experiment from an InvenioRDM-compatible repository (Zenodo, MDRepo, etc.).
 
@@ -211,6 +231,7 @@ class Experiment(db.Model):  # type: ignore
                        or https://workflow-repo.test.du.cesnet.cz/datasets/records/8gahj-dh519).
             notebooks_repo: Git repository URL containing setup notebooks.
             access_token: Optional GitHub access token for private repositories.
+            engine: Molecular dynamics engine (default: GMX).
 
         Returns:
             The created Experiment instance.
@@ -258,7 +279,9 @@ class Experiment(db.Model):  # type: ignore
 
             # Create experiment instance
             message: str = f"Created by downloading repository from '{repo_link}'."
-            experiment = cls(id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo)  # type: ignore[call-arg]
+            experiment = cls(
+                id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo, engine=engine
+            )
 
             return cls._create_with_notebook(experiment)
 
@@ -270,7 +293,12 @@ class Experiment(db.Model):  # type: ignore
 
     @classmethod
     def from_files(
-        cls, name: str, files: list[FileStorage], notebooks_repo: str, access_token: str | None = None
+        cls,
+        name: str,
+        files: list[FileStorage],
+        notebooks_repo: str,
+        access_token: str | None = None,
+        engine: Engine = Engine.GMX,
     ) -> "Experiment":
         """
         Create experiment from file uploads with database persistence.
@@ -280,6 +308,7 @@ class Experiment(db.Model):  # type: ignore
             files: List of uploaded files.
             notebooks_repo: Git repository URL containing setup notebooks.
             access_token: Optional GitHub access token for private repositories.
+            engine: Molecular dynamics engine (default: GMX).
 
         Returns:
             The created Experiment instance.
@@ -302,7 +331,9 @@ class Experiment(db.Model):  # type: ignore
                 filenames.append(filename)
 
             message: str = f"Created by uploading files: {', '.join(filenames)}."
-            experiment = cls(id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo)  # type: ignore[call-arg]
+            experiment = cls(
+                id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo, engine=engine
+            )
 
             return cls._create_with_notebook(experiment)
 
@@ -311,6 +342,28 @@ class Experiment(db.Model):  # type: ignore
             rmtree(DATA_DIR / experiment_id, ignore_errors=True)
             db.session.rollback()
             raise
+
+    def _has_setup_files(self) -> bool:
+        """
+        Check if the experiment directory contains required setup files for the configured engine.
+
+        Returns:
+            True if all required files for the engine are present, False otherwise.
+        """
+        exp_dir = DATA_DIR / self.id
+        if not exp_dir.exists():
+            return False
+
+        if self.engine == Engine.GMX:
+            return bool(get_files_with_extensions(exp_dir, "tpr"))
+
+        if self.engine == Engine.AMBER:
+            has_mdin = get_files_with_extensions(exp_dir, "mdin")
+            has_prmtop = get_files_with_extensions(exp_dir, ["prmtop", "parm7"])
+            has_inpcrd = get_files_with_extensions(exp_dir, ["inpcrd", "rst7", "nc"])
+            return bool(has_mdin and has_prmtop and has_inpcrd)
+
+        return False
 
     @cached(cache=step_status_cache)
     def _step_status(self) -> tuple[int, str]:
@@ -329,16 +382,16 @@ class Experiment(db.Model):  # type: ignore
         if self.mdrepo_published is False:
             return 5, "publishing"
 
-        # Step 4: Analyzing (experiment has terminated GROMACS job)
-        if any(j.status == JobStatus.TERMINATED for j in self.gromacs_jobs):
+        # Step 4: Analyzing (experiment has terminated simulation job)
+        if any(j.status == JobStatus.TERMINATED for j in self.simulation_jobs):
             return 4, "analyzing"
 
         # Step 3: Allow user to analyze a running simulation
-        if any(j.status == JobStatus.RUNNING for j in self.gromacs_jobs):
+        if any(j.status == JobStatus.RUNNING for j in self.simulation_jobs):
             return 3, "simulating"
 
-        # Step 2: Running simulation (experiment has a GROMACS job)
-        if self.gromacs_jobs:
+        # Step 2: Running simulation (experiment has a simulation job)
+        if self.simulation_jobs:
             return 2, "simulating"
 
         # Step 2: Tuning (experiment has terminated tuner trial)
@@ -349,8 +402,8 @@ class Experiment(db.Model):  # type: ignore
         if self.tuner_jobs:
             return 1, "tuning"
 
-        # Step 1: Setup complete (directory contains a TPR file)
-        if get_files_with_extensions(DATA_DIR / self.id, "tpr"):
+        # Step 1: Setup complete (directory contains required files for the engine)
+        if self._has_setup_files():
             return 1, "setup complete"
 
         return 0, "setup"
@@ -393,12 +446,12 @@ class Experiment(db.Model):  # type: ignore
             except Exception:
                 logger.exception(f"Failed to delete tuner job {tuner_job.id}")
 
-        # Delete GROMACS jobs
-        for gmx_job in self.gromacs_jobs:
+        # Delete simulation jobs
+        for sim_job in self.simulation_jobs:
             try:
-                gmx_job.delete()
+                sim_job.delete()
             except Exception:
-                logger.exception(f"Failed to delete GROMACS job {gmx_job.id}")
+                logger.exception(f"Failed to delete simulation job {sim_job.id}")
 
         def del_dir(dir: Path) -> None:
             try:

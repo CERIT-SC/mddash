@@ -19,13 +19,18 @@ class MdrunJobState:
 
     status: str
     experiment_id: str
-    tpr_name: str
     nsteps: int
     created_at: float
     duration_sec: float
     log_line_index: int
     log_total_lines: int
     performance: float | None = None
+    # GROMACS-specific
+    tpr_name: str | None = None
+    # AMBER-specific
+    prmtop_name: str | None = None
+    inpcrd_name: str | None = None
+    mdin_name: str | None = None
 
 
 @dataclass
@@ -91,7 +96,12 @@ class DemoState:
         self.initialized = False
 
     def get_notebook_status(self, experiment_id: str) -> PodStatus:
-        """Get notebook pod status for an experiment."""
+        """
+        Get notebook pod status for an experiment.
+
+        Returns:
+            The pod status, defaults to DOWN if not found.
+        """
         return self.notebook_status.get(experiment_id, PodStatus.DOWN)
 
     def set_notebook_status(self, experiment_id: str, status: PodStatus) -> None:
@@ -99,11 +109,21 @@ class DemoState:
         self.notebook_status[experiment_id] = status
 
     def get_mdrun_job(self, job_id: str) -> dict[str, Any] | None:
-        """Get MDRun job state by ID."""
+        """
+        Get MDRun job state by ID.
+
+        Returns:
+            Job state dict or None if not found.
+        """
         return self.mdrun_jobs.get(job_id)
 
     def get_tuner_job(self, job_id: str) -> dict[str, Any] | None:
-        """Get tuner job state by ID."""
+        """
+        Get tuner job state by ID.
+
+        Returns:
+            Job state dict or None if not found.
+        """
         return self.tuner_jobs.get(job_id)
 
     def is_mdrepo_published(self, record_id: str) -> bool | None:
@@ -120,7 +140,7 @@ class DemoState:
 demo_state = DemoState()
 
 
-def build_model(model_cls: type[ModelType], **attrs: Any) -> ModelType:
+def build_model(model_cls: type[ModelType], **attrs: Any) -> ModelType:  # noqa: ANN401
     """
     Build a model instance for demo seeding.
 

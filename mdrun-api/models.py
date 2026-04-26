@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import k8s_client
 from config import NAMESPACE
-from enums import DeviceType, JobStatus
+from enums import JobStatus
 from extensions import db
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class MdrunJob(db.Model):  # type: ignore
-    """SQLAlchemy model representing a GROMACS MD simulation job."""
+    """SQLAlchemy model representing a simulation job."""
 
     __tablename__ = "mdrun_jobs"
 
@@ -21,6 +21,25 @@ class MdrunJob(db.Model):  # type: ignore
     job_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     experiment_id: Mapped[str] = mapped_column(db.String(255), nullable=False)
     last_status: Mapped[JobStatus] = mapped_column(db.Enum(JobStatus), default=JobStatus.PENDING, nullable=False)
+
+    @classmethod
+    def create(cls, job_id: str, job_name: str, experiment_id: str) -> "MdrunJob":
+        """
+        Persist a new job record.
+
+        Args:
+            job_id: Unique identifier for the job (matches the uuid in job_name).
+            job_name: Kubernetes job name (format: mdrun-{uuid}).
+            experiment_id: Experiment this job belongs to.
+
+        Returns:
+            The created MdrunJob instance.
+        """
+        job = cls(id=job_id, job_name=job_name, experiment_id=experiment_id)  # type: ignore[call-arg]
+        db.session.add(job)
+        db.session.commit()
+        logger.info(f"Created job {job_name} for experiment {experiment_id}")
+        return job
 
     @property
     def status(self) -> JobStatus:
@@ -37,61 +56,6 @@ class MdrunJob(db.Model):  # type: ignore
 
         return job_status
 
-    @classmethod
-    def create_and_start(
-        cls,
-        experiment_id: str,
-        tpr_name: str,
-        bucket_name: str,
-        pme: DeviceType,
-        nb: DeviceType,
-        np: int,
-        ntomp: int,
-        extra_args: str = "",
-    ) -> "MdrunJob":
-        """
-        Create a new job record and start the GROMACS simulation in Kubernetes.
-
-        Args:
-            experiment_id: Unique experiment identifier.
-            tpr_name: Name of the TPR input file.
-            bucket_name: S3 bucket for data storage.
-            pme: Device type for PME calculations.
-            nb: Device type for non-bonded interactions.
-            np: Number of MPI processes.
-            ntomp: Number of OpenMP threads per process.
-            extra_args: Additional arguments for gmx mdrun.
-
-        Returns:
-            MdrunJob: The created MdrunJob instance.
-        """
-        job_id = str(uuid4())
-        job_name = f"mdrun-{job_id}"
-
-        # Create Kubernetes job - this should fail if it can't be created
-        deffnm = tpr_name.removesuffix(".tpr")
-        k8s_client.create_gromacs_job(
-            ns=NAMESPACE,
-            bucket_name=bucket_name,
-            name=job_name,
-            experiment_id=experiment_id,
-            deffnm=deffnm,
-            nb=nb.value,
-            pme=pme.value,
-            np=np,
-            ntomp=ntomp,
-            extra_args=extra_args,
-        )
-
-        # Only create DB record if K8s job creation succeeded
-        job = cls(id=job_id, job_name=job_name, experiment_id=experiment_id)  # type: ignore[call-arg]
-
-        db.session.add(job)
-        db.session.commit()
-        logger.info(f"Started MDRun job {job_name} with ID {job_id} in experiment {experiment_id}")
-
-        return job
-
     def delete(self) -> None:
         """Delete the Kubernetes job resource."""
         k8s_client.delete_job(ns=NAMESPACE, name=self.job_name)
@@ -100,6 +64,5 @@ class MdrunJob(db.Model):  # type: ignore
         """Handle job status transitions and cleanup finalized jobs."""
         logger.info(f"MDRun job {self.job_name} status changed from {old} to {new}")
 
-        # Automatically delete finalized jobs (status is preserved in DB)
         if new in {JobStatus.TERMINATED, JobStatus.ERROR}:
             self.delete()

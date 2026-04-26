@@ -71,7 +71,7 @@ class Notebook(db.Model):  # type: ignore
     token: Mapped[str] = mapped_column(db.String(36), nullable=False, default=lambda: str(uuid4()))
     # resource tier (1x, 2x, 4x) — NULL for notebooks created before tiers were introduced
     tier: Mapped[NotebookTier | None] = mapped_column(
-        db.Enum(NotebookTier, values_callable=lambda e: [m.value for m in e]),
+        db.Enum(NotebookTier),
         nullable=True,
     )
     # whether GPU is attached to the gmx sidecar

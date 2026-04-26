@@ -11,6 +11,7 @@ from flask import Flask
 from flask_migrate import stamp, upgrade
 from logging_utils import configure_logging, enable_loggers
 from routes import (
+    amber_bp,
     analysis_bp,
     experiments_bp,
     files_bp,
@@ -55,6 +56,7 @@ def create_app() -> Flask:
     ma.init_app(app)
     migrate.init_app(app, db, directory=str(MIGRATIONS_DIR))
 
+    app.register_blueprint(amber_bp)
     app.register_blueprint(analysis_bp)
     app.register_blueprint(experiments_bp)
     app.register_blueprint(notebook_bp)

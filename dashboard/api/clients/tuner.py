@@ -15,6 +15,8 @@ DELETE_TIMEOUT = 15
 
 def _handle_response(response: Response) -> dict:
     if response.ok:
+        if not response.text:
+            return {}
         return response.json()
 
     # Extract error detail from tuner response

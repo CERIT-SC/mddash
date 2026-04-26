@@ -111,3 +111,67 @@ def sanitize_extra_args(extra_args: str) -> str:
 
     # Canonicalize spacing/quoting.
     return shlex.join(tokens)
+
+
+def _sanitize_filename_with_ext(filename: str, name_field: str, allowed_exts: tuple[str, ...]) -> str:
+    """
+    Validate a filename with allowed extensions (may include subdirectories).
+
+    Args:
+        filename: The filename to validate.
+        name_field: Field name for error messages.
+        allowed_exts: Tuple of allowed file extensions (with leading dot).
+
+    Returns:
+        str: The validated, stripped filename.
+
+    Raises:
+        ValidationError: If the filename is invalid.
+    """
+    filename = (filename or "").strip()
+    if not filename:
+        raise ValidationError(f"{name_field} cannot be empty.")
+    if "\\" in filename or "\0" in filename:
+        raise ValidationError(f"{name_field} contains forbidden characters.")
+    if filename.startswith("/"):
+        raise ValidationError(f"{name_field} must be a relative path.")
+
+    segments = filename.split("/")
+    for segment in segments:
+        if not segment or segment == ".." or not _TPR_SEGMENT_RE.fullmatch(segment):
+            raise ValidationError(f"Invalid {name_field}.")
+
+    if not any(filename.endswith(ext) for ext in allowed_exts):
+        exts = ", ".join(allowed_exts)
+        raise ValidationError(f"{name_field} must end with one of: {exts}.")
+    return filename
+
+
+def sanitize_prmtop_name(prmtop_name: str) -> str:
+    """
+    Validate AMBER topology file name (.prmtop or .parm7).
+
+    Returns:
+        The validated, stripped filename.
+    """
+    return _sanitize_filename_with_ext(prmtop_name, "prmtop_name", (".prmtop", ".parm7"))
+
+
+def sanitize_inpcrd_name(inpcrd_name: str) -> str:
+    """
+    Validate AMBER coordinate file name (.inpcrd, .rst7, or .nc).
+
+    Returns:
+        The validated, stripped filename.
+    """
+    return _sanitize_filename_with_ext(inpcrd_name, "inpcrd_name", (".inpcrd", ".rst7", ".nc"))
+
+
+def sanitize_mdin_name(mdin_name: str) -> str:
+    """
+    Validate AMBER input file name (.mdin or .in).
+
+    Returns:
+        The validated, stripped filename.
+    """
+    return _sanitize_filename_with_ext(mdin_name, "mdin_name", (".mdin", ".in"))

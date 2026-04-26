@@ -11,11 +11,21 @@ DEFAULT_TPR_FILE = DEMO_DATA_DIR / "md.tpr"
 DEFAULT_XTC_FILE = DEMO_DATA_DIR / "trajectory.xtc"
 DEFAULT_PDB_FILE = DEMO_DATA_DIR / "structure.pdb"
 DEFAULT_GMX_LOG_FILE = DEMO_DATA_DIR / "md.log"
+DEFAULT_PARM7_FILE = DEMO_DATA_DIR / "md.parm7"
+DEFAULT_INPCRD_FILE = DEMO_DATA_DIR / "md.inpcrd"
+DEFAULT_MDIN_FILE = DEMO_DATA_DIR / "md.mdin"
+DEFAULT_NC_FILE = DEMO_DATA_DIR / "trajectory.nc"
+DEFAULT_AMBER_PDB_FILE = DEMO_DATA_DIR / "amber_structure.pdb"
 
 FIXTURE_BY_SUFFIX = {
     ".tpr": DEFAULT_TPR_FILE,
     ".xtc": DEFAULT_XTC_FILE,
     ".pdb": DEFAULT_PDB_FILE,
+    ".prmtop": DEFAULT_PARM7_FILE,
+    ".parm7": DEFAULT_PARM7_FILE,
+    ".inpcrd": DEFAULT_INPCRD_FILE,
+    ".mdin": DEFAULT_MDIN_FILE,
+    ".nc": DEFAULT_NC_FILE,
 }
 
 
@@ -37,6 +47,58 @@ def build_demo_archive_bytes() -> bytes:
         zf.writestr("trajectory.xtc", _read_fixture(DEFAULT_XTC_FILE))
         zf.writestr("input.pdb", _read_fixture(DEFAULT_PDB_FILE))
     return buffer.getvalue()
+
+
+def ensure_amber_demo_files(
+    experiment_id: str,
+    prmtop_name: str,
+    inpcrd_name: str,
+    mdin_names: list[str],
+) -> None:
+    """
+    Ensure AMBER demo files exist for an experiment.
+
+    Creates AMBER topology, coordinate, input, structure, trajectory, and parm7
+    files using default fixture files if they don't already exist.
+
+    Args:
+        experiment_id: The experiment ID.
+        prmtop_name: Name of the PRMTOP file.
+        inpcrd_name: Name of the INPCRD file.
+        mdin_names: List of MDIN file names to create.
+    """
+    experiment_dir = DATA_DIR / experiment_id
+    experiment_dir.mkdir(parents=True, exist_ok=True)
+
+    # Copy prmtop file
+    prmtop_path = experiment_dir / prmtop_name
+    if not prmtop_path.exists():
+        prmtop_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_resolve_fixture_path(prmtop_name), prmtop_path)
+
+    # Copy inpcrd file
+    inpcrd_path = experiment_dir / inpcrd_name
+    if not inpcrd_path.exists():
+        inpcrd_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(_resolve_fixture_path(inpcrd_name), inpcrd_path)
+
+    # Copy each mdin file
+    for mdin_name in mdin_names:
+        mdin_path = experiment_dir / mdin_name
+        if not mdin_path.exists():
+            mdin_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(_resolve_fixture_path(mdin_name), mdin_path)
+
+    # Analysis files: matching structure PDB + NetCDF trajectory + parm7 topology
+    _copy_if_missing(experiment_dir / "structure.pdb", DEFAULT_AMBER_PDB_FILE)
+    _copy_if_missing(experiment_dir / "trajectory.nc", DEFAULT_NC_FILE)
+    _copy_if_missing(experiment_dir / f"{Path(prmtop_name).stem}.parm7", DEFAULT_PARM7_FILE)
+
+
+def _copy_if_missing(dest: Path, src: Path) -> None:
+    if not dest.exists() and src.exists():
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
 
 
 def _resolve_fixture_path(filename: str) -> Path:
