@@ -2,7 +2,7 @@ import logging
 import tempfile
 import threading
 import zipfile
-from datetime import datetime
+from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 from shutil import rmtree
@@ -62,9 +62,13 @@ class Experiment(db.Model):  # type: ignore
     # unique ID of the experiment, also used as the directory name
     id: Mapped[str] = mapped_column(db.String(5), primary_key=True)
     # creation time
-    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
+    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
     # last modification time
-    updated_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    updated_at: Mapped[datetime] = mapped_column(
+        db.DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
 
     # name of the experiment
     name: Mapped[str] = mapped_column(db.String(255), nullable=False)

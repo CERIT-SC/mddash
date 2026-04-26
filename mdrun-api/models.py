@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import k8s_client
@@ -17,7 +17,7 @@ class MdrunJob(db.Model):  # type: ignore
     __tablename__ = "mdrun_jobs"
 
     id: Mapped[str] = mapped_column(db.String(36), primary_key=True, default=lambda: str(uuid4()))
-    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
+    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
     job_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     experiment_id: Mapped[str] = mapped_column(db.String(255), nullable=False)
     last_status: Mapped[JobStatus] = mapped_column(db.Enum(JobStatus), default=JobStatus.PENDING, nullable=False)

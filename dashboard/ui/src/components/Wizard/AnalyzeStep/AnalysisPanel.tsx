@@ -12,8 +12,8 @@ import {
   type AnalysisPreprocessingMode as AnalysisPreprocessingModeValue,
   type AnalysisType,
 } from "@/util/analysis-types"
-import { Engine } from "@/util/const"
 import { getAnalysisLabel } from "@/util/analysis-utils"
+import { Engine } from "@/util/const"
 import type { FileOption } from "@/util/types"
 import { getJobStatusVariant } from "@/util/types"
 import {

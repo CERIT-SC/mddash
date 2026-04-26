@@ -413,6 +413,7 @@ def _api_container(
             {"name": "HUB_NAMESPACE", "value": hub_namespace},
             {"name": "S3_BUCKET", "value": bucket_name},
             {"name": "PVC_NAME", "value": pvc_name},
+            {"name": "TZ", "value": "UTC"},
             *[{"name": k, "value": getenv(k, "")} for k in _API_PASSTHROUGH_ENV],
         ],
         "volumeMounts": [{"name": volume_name, "mountPath": "/mddash"}],

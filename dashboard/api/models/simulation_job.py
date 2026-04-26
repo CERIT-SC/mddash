@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cache import simulation_status_cache
@@ -32,7 +32,7 @@ class SimulationJob(db.Model):  # type: ignore
     # ID of the experiment this job belongs to
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
     # Creation time
-    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
+    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
     # Engine discriminator for JTI
     engine: Mapped[Engine] = mapped_column(db.Enum(Engine), nullable=False)
 

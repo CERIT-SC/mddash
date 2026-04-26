@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from cache import tuner_last_known_status, tuner_status_cache
@@ -34,7 +34,7 @@ class TunerJob(db.Model):  # type: ignore
     # error message if job creation failed
     error_message: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
     # creation time
-    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
+    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
     # whether the job was stopped (preserves data but job is deleted from tuner)
     is_stopped: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
     # preserved trials when job is stopped

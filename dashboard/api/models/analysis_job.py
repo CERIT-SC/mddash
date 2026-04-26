@@ -3,7 +3,7 @@ import shlex
 import shutil
 import uuid
 from contextlib import suppress
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -224,7 +224,7 @@ class AnalysisJob(db.Model):  # type: ignore
 
     id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
-    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=datetime.now)
+    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
 
     analysis_name: Mapped[AnalysisType] = mapped_column(db.Enum(AnalysisType), nullable=False)
     structure_file: Mapped[str | None] = mapped_column(db.String(255), nullable=True)

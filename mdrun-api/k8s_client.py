@@ -293,7 +293,10 @@ def create_gromacs_job(
         sim_image=GMX_IMAGE,
         sim_command=gromacs_command,
         sim_resources=_gmx_resources(np, ntomp, nb, pme),
-        sim_env=[{"name": "OMP_NUM_THREADS", "value": str(ntomp)}],
+        sim_env=[
+            {"name": "OMP_NUM_THREADS", "value": str(ntomp)},
+            {"name": "TZ", "value": "UTC"},
+        ],
     )
 
     batch_v1.create_namespaced_job(namespace=ns, body=manifest)
@@ -345,7 +348,10 @@ def create_amber_job(
         sim_image=AMBER_IMAGE,
         sim_command=amber_command,
         sim_resources=_amber_resources(binary, np, ntomp, use_gpu),
-        sim_env=[{"name": "OMP_NUM_THREADS", "value": str(ntomp)}],
+        sim_env=[
+            {"name": "OMP_NUM_THREADS", "value": str(ntomp)},
+            {"name": "TZ", "value": "UTC"},
+        ],
     )
 
     batch_v1.create_namespaced_job(namespace=ns, body=manifest)

@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -137,11 +137,11 @@ class AmberJob(SimulationJob):
         try:
             last_updated = self._mdinfo_log.stat().st_mtime
         except OSError:
-            last_updated = datetime.now().timestamp()
+            last_updated = datetime.now(UTC).timestamp()
 
         time_per_step = (last_updated - self.start_timestamp) / self.nsteps_done
         base_estimate = remaining_steps * time_per_step
-        time_since_update = datetime.now().timestamp() - last_updated
+        time_since_update = datetime.now(UTC).timestamp() - last_updated
         return max(0, int(base_estimate - time_since_update))
 
     @property
@@ -395,7 +395,10 @@ class AmberJob(SimulationJob):
 
                     match = re.search(r"Run on\s+(\d{2}/\d{2}/\d{4})\s+at\s+(\d{2}:\d{2}:\d{2})", line)
                     if match:
-                        dt = datetime.strptime(f"{match.group(1)} {match.group(2)}", "%m/%d/%Y %H:%M:%S")
+                        dt = datetime.strptime(
+                            f"{match.group(1)} {match.group(2)}",
+                            "%m/%d/%Y %H:%M:%S",
+                        ).replace(tzinfo=UTC)
                         return int(dt.timestamp())
 
         except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):

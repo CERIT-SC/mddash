@@ -46,6 +46,8 @@ spec:
           value: "{{ .Values.uwsgi.processes }}"
         - name: UWSGI_THREADS
           value: "{{ .Values.uwsgi.threads }}"
+        - name: TZ
+          value: "UTC"
         {{- if .Values.env }}
         {{- toYaml .Values.env | nindent 8 }}
         {{- end }}

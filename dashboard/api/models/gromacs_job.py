@@ -1,6 +1,6 @@
 import logging
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -153,11 +153,11 @@ class GromacsJob(SimulationJob):
         try:
             last_updated = self._gmx_log.stat().st_mtime
         except OSError:
-            last_updated = datetime.now().timestamp()
+            last_updated = datetime.now(UTC).timestamp()
 
         time_per_step = (last_updated - self.start_timestamp) / steps_done_in_run
         base_estimate = remaining_steps * time_per_step
-        time_since_update = datetime.now().timestamp() - last_updated
+        time_since_update = datetime.now(UTC).timestamp() - last_updated
         return max(0, int(base_estimate - time_since_update))
 
     @property
@@ -393,7 +393,7 @@ class GromacsJob(SimulationJob):
 
                     parts = line.split()
                     date_str = " ".join(parts[-5:])
-                    dt = datetime.strptime(date_str, "%a %b %d %H:%M:%S %Y")
+                    dt = datetime.strptime(date_str, "%a %b %d %H:%M:%S %Y").replace(tzinfo=UTC)
                     return int(dt.timestamp())
 
         except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
@@ -419,7 +419,7 @@ class GromacsJob(SimulationJob):
 
                 parts = line.split()
                 date_str = " ".join(parts[-5:])
-                dt = datetime.strptime(date_str, "%a %b %d %H:%M:%S %Y")
+                dt = datetime.strptime(date_str, "%a %b %d %H:%M:%S %Y").replace(tzinfo=UTC)
                 return int(dt.timestamp())
 
         except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
