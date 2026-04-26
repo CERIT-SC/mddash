@@ -22,9 +22,9 @@ oidc:
   authenticator_class: "generic-oauth"
   oauth_server: "login.e-infra.cz"
   loginService: "e-INFRA CZ"  # the button label in UI
-  authorizePath: /oidc/authorize
-  tokenPath: /oidc/token
-  userdataPath: /oidc/userinfo
+  authorizePath: oidc/authorize
+  tokenPath: oidc/token
+  userdataPath: oidc/userinfo
   usernameKey: preferred_username
   allowAll: true
   scope:
