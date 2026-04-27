@@ -182,6 +182,14 @@ sequenceDiagram
 4. **Deployment**: Run `make deploy ENV=dev` or `make deploy ENV=prod` to deploy via Helm
 5. **Rollback**: Run `make rollback ENV=prod REVISION=N` to rollback to specific revision
 
+## Feedback Loop
+
+Run from the component directory (`dashboard/api/`, `dashboard/auth/`, `mdrun-api/`) before claiming any Python code is correct:
+
+```bash
+uv run ty check . && ruff check . && ruff format --check . && uv run pytest
+```
+
 ## CI/CD Pipeline
 
 - **Push to `dev`**: Deploys to dev environment with `dev` tag
