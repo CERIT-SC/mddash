@@ -35,7 +35,7 @@ ENV PATH="/opt/pmemd24/bin:/opt/ambertools25/bin:/opt/conda/envs/gromacs/bin:${P
 ENV LD_LIBRARY_PATH=/opt/ambertools25/lib:/opt/pmemd24/lib
 
 # Install uv
-COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /bin/uv
 
 COPY pyproject.toml /tmp/
 RUN uv pip install --system --no-cache -r /tmp/pyproject.toml && rm /tmp/pyproject.toml
