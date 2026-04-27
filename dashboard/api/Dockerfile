@@ -2,6 +2,8 @@
 
 FROM python:3.12-slim
 
+COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /uvx /bin/
+
 WORKDIR /app
 
 RUN groupadd -g 1000 app && useradd -u 1000 -g 1000 -M -s /usr/sbin/nologin app
@@ -10,8 +12,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl git \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt gunicorn
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
 COPY --chown=app:app . .
 
@@ -20,6 +22,7 @@ RUN mkdir -p /mddash && chown app:app /mddash
 USER app
 
 ENV DATA_DIR=/mddash
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 5000
 
