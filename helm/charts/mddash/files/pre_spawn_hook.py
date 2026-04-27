@@ -4,7 +4,7 @@ import logging
 import time
 from http import HTTPStatus
 from os import getenv
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from kubernetes_asyncio import config
 from kubernetes_asyncio.client import (
@@ -16,10 +16,8 @@ from kubernetes_asyncio.client import (
     V1SeccompProfile,
     V1SecurityContext,
 )
+from kubespawner import KubeSpawner
 from kubernetes_asyncio.client.rest import ApiException
-
-if TYPE_CHECKING:
-    from kubespawner import KubeSpawner
 
 
 logger = logging.getLogger(__name__)
@@ -684,4 +682,7 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # n
 c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore # noqa: F821
 c.KubeSpawner.modify_pod_hook = modify_pod_hook  # type: ignore # noqa: F821
 c.KubeSpawner.post_stop_hook = post_stop_hook  # type: ignore # noqa: F821
-c.KubeSpawner.progress = _spawn_progress  # type: ignore # noqa: F821
+
+# progress is a plain method (not a traitlet), so c.KubeSpawner.progress is silently ignored.
+# Direct monkey-patch is required to override it.
+KubeSpawner.progress = _spawn_progress  # type: ignore[method-assign]
