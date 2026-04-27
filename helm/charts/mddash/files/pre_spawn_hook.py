@@ -473,6 +473,35 @@ def _get_sidecar_containers(
 
 
 # =============================================================================
+# Progress Reporting
+# =============================================================================
+
+
+def _get_or_create_progress_queue(spawner: "KubeSpawner") -> asyncio.Queue:
+    if not hasattr(spawner, "_mddash_progress_queue"):
+        spawner._mddash_progress_queue = asyncio.Queue()  # type: ignore[attr-defined]
+    return spawner._mddash_progress_queue  # type: ignore[attr-defined]
+
+
+async def _report_progress(spawner: "KubeSpawner", message: str, progress: int) -> None:
+    await _get_or_create_progress_queue(spawner).put({"message": message, "progress": progress})
+
+
+async def _spawn_progress(self: "KubeSpawner"):  # type: ignore[override]  # noqa: ANN201
+    """Yield spawn progress messages sourced from the pre_spawn_hook via an asyncio.Queue."""
+    queue = _get_or_create_progress_queue(self)
+    while True:
+        try:
+            item = await asyncio.wait_for(queue.get(), timeout=2.0)
+        except asyncio.TimeoutError:
+            continue
+        if item is None:
+            break
+        yield item
+    yield {"progress": 85, "message": "Waiting for MDDash to start..."}
+
+
+# =============================================================================
 # JupyterHub Spawner Hooks
 # =============================================================================
 
@@ -508,7 +537,10 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
             cpu_request=getenv("NS_REQUESTS_CPU", "2500m"),
             mem_request=getenv("NS_REQUESTS_MEMORY", "6Gi"),
         )
+        await _report_progress(spawner, "Creating user namespace...", 5)
         await _ensure_resource(core_api.create_namespace, body=namespace_manifest)
+
+        await _report_progress(spawner, "Waiting for namespace to be ready...", 15)
         if rancher_project_id:
             await _wait_for_ns_conditions(core_api, user_namespace, {"InitialRolesPopulated"})
         await core_api.patch_namespace(name=user_namespace, body=namespace_manifest)  # type: ignore[misc]
@@ -526,6 +558,7 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
 
         # Create Roles first, then RoleBindings.
         # Some clusters (or admission webhooks) reject RoleBindings that reference Roles that haven't been created yet.
+        await _report_progress(spawner, "Setting up access controls...", 35)
         await asyncio.gather(
             _ensure_resource(
                 rbac_api.create_namespaced_role,
@@ -567,8 +600,11 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
             _wait_for_resource(rbac_api.read_namespaced_role_binding, name=hub_binding, namespace=user_namespace),
         )
 
+        await _report_progress(spawner, "Waiting for resource quota...", 55)
         if rancher_project_id:
             await _wait_for_resource_quota_active(core_api, user_namespace)
+
+        await _report_progress(spawner, "Starting sidecar containers...", 70)
 
         # Configure spawner
         spawner.namespace = user_namespace
@@ -585,6 +621,9 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
             spawner.extra_containers = sidecar_containers
     finally:
         await api_client.close()
+
+    # Signal progress generator that hook is done
+    await _get_or_create_progress_queue(spawner).put(None)
 
 
 def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:  # noqa: ARG001
@@ -645,3 +684,4 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # n
 c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore # noqa: F821
 c.KubeSpawner.modify_pod_hook = modify_pod_hook  # type: ignore # noqa: F821
 c.KubeSpawner.post_stop_hook = post_stop_hook  # type: ignore # noqa: F821
+c.KubeSpawner.progress = _spawn_progress  # type: ignore # noqa: F821
