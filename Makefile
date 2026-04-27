@@ -32,6 +32,23 @@ format: ## Format all code (Python via ruff, frontend via prettier)
 	ruff format . --exclude .venv --exclude node_modules
 	cd dashboard/ui && npm run format
 
+# ==================== TYPE CHECK ====================
+
+.PHONY: type-check
+type-check: type-check-dashboard-api type-check-dashboard-auth type-check-mdrun-api ## Run type checks on all Python components
+
+.PHONY: type-check-dashboard-api
+type-check-dashboard-api: ## Type-check dashboard API
+	cd dashboard/api && uv run ty check .
+
+.PHONY: type-check-dashboard-auth
+type-check-dashboard-auth: ## Type-check dashboard auth
+	cd dashboard/auth && uv run ty check .
+
+.PHONY: type-check-mdrun-api
+type-check-mdrun-api: ## Type-check mdrun-api
+	cd mdrun-api && uv run ty check .
+
 # ==================== TEST ====================
 
 .PHONY: test
@@ -39,15 +56,15 @@ test: test-dashboard-api test-dashboard-auth test-mdrun-api ## Run all tests
 
 .PHONY: test-dashboard-api
 test-dashboard-api: ## Run dashboard API tests
-	cd dashboard/api && pip install -q -r requirements-dev.txt && pytest
+	cd dashboard/api && uv run pytest
 
 .PHONY: test-dashboard-auth
 test-dashboard-auth: ## Run dashboard auth tests
-	cd dashboard/auth && pip install -q -r requirements-dev.txt && pytest
+	cd dashboard/auth && uv run pytest
 
 .PHONY: test-mdrun-api
 test-mdrun-api: ## Run mdrun-api tests
-	cd mdrun-api && pip install -q -r requirements-dev.txt && pytest
+	cd mdrun-api && uv run pytest
 
 # ==================== BUILD ====================
 

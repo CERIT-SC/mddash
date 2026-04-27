@@ -48,11 +48,11 @@ test: test-api test-auth ## Run all dashboard tests
 
 .PHONY: test-api
 test-api: ## Run API tests
-	cd api && pip install -q -r requirements-dev.txt && pytest
+	cd api && uv run pytest
 
 .PHONY: test-auth
 test-auth: ## Run auth tests
-	cd auth && pip install -q -r requirements-dev.txt && pytest
+	cd auth && uv run pytest
 
 # ==================== BUILD ====================
 
