@@ -88,7 +88,9 @@ def start_notebook(experiment_id: str) -> Response:
     notebook = experiment.notebook
     notebook.start(tier=tier, gpu=gpu)
     db.session.commit()
-    return jsonify(schema.dump(notebook)), HTTPStatus.CREATED
+    response = jsonify(schema.dump(notebook))
+    response.status_code = HTTPStatus.CREATED
+    return response
 
 
 @notebook_bp.route("", methods=["DELETE"])
@@ -105,4 +107,4 @@ def stop_notebook(experiment_id: str) -> Response:
     )
     notebook = experiment.notebook
     notebook.stop()
-    return "", HTTPStatus.NO_CONTENT
+    return Response(status=HTTPStatus.NO_CONTENT)

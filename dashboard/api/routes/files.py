@@ -42,6 +42,9 @@ def get_file(experiment_id: str, path: str) -> Response:
 
     Returns:
         Response: The file contents as an inline response, or a JSON error if the file does not exist.
+
+    Raises:
+        NotFound: If the requested file does not exist.
     """
     check_experiment_id(experiment_id)
     check_path(path, DATA_DIR / experiment_id)

@@ -45,16 +45,16 @@ _MDPOSIT_NAME_MAP: dict[str, str] = {
 
 def install_k8s_mocks() -> None:
     """Install Kubernetes client mocks via module mutation."""
-    k8s.get_pod_status = _get_pod_status
-    k8s.create_notebook_pod = _create_notebook_pod
-    k8s.delete_pod = _delete_pod
-    k8s.create_service = _create_service
-    k8s.delete_service = _delete_service
-    k8s.get_pod_resource_requests = _get_pod_resource_requests
-    k8s.create_job = _create_job
-    k8s.get_job_status = _get_job_status
-    k8s.delete_job = _delete_job
-    k8s.get_job_logs = _get_job_logs
+    k8s.get_pod_status = _get_pod_status  # type: ignore
+    k8s.create_notebook_pod = _create_notebook_pod  # type: ignore
+    k8s.delete_pod = _delete_pod  # type: ignore
+    k8s.create_service = _create_service  # type: ignore
+    k8s.delete_service = _delete_service  # type: ignore
+    k8s.get_pod_resource_requests = _get_pod_resource_requests  # type: ignore
+    k8s.create_job = _create_job  # type: ignore
+    k8s.get_job_status = _get_job_status  # type: ignore
+    k8s.delete_job = _delete_job  # type: ignore
+    k8s.get_job_logs = _get_job_logs  # type: ignore
 
 
 def _get_pod_status(name: str) -> PodStatus:

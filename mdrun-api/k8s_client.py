@@ -166,7 +166,12 @@ def _gmx_resources(np: int, ntomp: int, nb: str, pme: str) -> dict[str, Any]:
 
 
 def _mdin_patch_command(mdin_name: str, ewald: str) -> str:
-    """Build an awk command that patches the &ewald namelist in the mdin file."""
+    """
+    Build an awk command that patches the &ewald namelist in the mdin file.
+
+    Returns:
+        Awk command string.
+    """
     match ewald:
         case "optimized":
             netfrc, skin_permit = "0", "0.75"

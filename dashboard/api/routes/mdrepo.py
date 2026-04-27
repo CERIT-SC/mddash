@@ -89,6 +89,9 @@ def initiate_auth() -> Response | WerkzeugResponse:
 
     Returns:
         Response: Redirect to the MDRepo authorization URL, or a JSON error if OAuth is not configured.
+
+    Raises:
+        ServiceUnavailable: If MDRepo OAuth is not configured.
     """
     if not all([MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET, MDREPO_REDIRECT_URI]):
         raise ServiceUnavailable("MDRepo OAuth is not configured. Contact administrator.")

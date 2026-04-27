@@ -123,7 +123,7 @@ class TestNotebookStartTierAndGpu:
         """start() with an unrecognized tier string raises BadRequest without creating a pod."""
         with patch("models.notebook.k8s.create_notebook_pod") as mock_create:
             with pytest.raises(BadRequest):
-                Notebook.start(self._make_notebook(), tier="99x")
+                Notebook.start(self._make_notebook(), tier="99x")  # type: ignore
             mock_create.assert_not_called()
 
 

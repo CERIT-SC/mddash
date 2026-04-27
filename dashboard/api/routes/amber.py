@@ -51,6 +51,9 @@ def submit_amber_job(experiment_id: str, prmtop_name: str) -> Response:
 
     Returns:
         Response: JSON response with the created AMBER job, or an error if files do not exist.
+
+    Raises:
+        NotFound: If the PRMTOP, INPCRD, or MDIN file does not exist.
     """
     check_path(prmtop_name, DATA_DIR / experiment_id)
     schema = AmberJobSchema()
@@ -96,7 +99,9 @@ def submit_amber_job(experiment_id: str, prmtop_name: str) -> Response:
             extra_args=extra_args,
         )
 
-    return jsonify(schema.dump(job)), HTTPStatus.CREATED
+    response = jsonify(schema.dump(job))
+    response.status_code = HTTPStatus.CREATED
+    return response
 
 
 @amber_bp.route("/<path:prmtop_name>", methods=["DELETE"])
@@ -114,7 +119,7 @@ def delete_amber_job(experiment_id: str, prmtop_name: str) -> Response:
     job.delete()
     db.session.delete(job)
     db.session.commit()
-    return "", HTTPStatus.NO_CONTENT
+    return Response(status=HTTPStatus.NO_CONTENT)
 
 
 @amber_bp.route("/<path:prmtop_name>/log", methods=["GET"])

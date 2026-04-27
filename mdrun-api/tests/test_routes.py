@@ -28,8 +28,7 @@ class TestHealthEndpoint:
         response = client.get("/api/health")
 
         assert response.status_code == HTTPStatus.OK
-        data = json.loads(response.data)
-        assert data["success"] is True
+        assert response.data.strip() == b'"MDRun API is healthy"'
 
 
 class TestGetGmxJob:
@@ -61,8 +60,8 @@ class TestGetGmxJob:
 
         assert response.status_code == HTTPStatus.OK
         data = json.loads(response.data)
-        assert data["data"]["id"] == "test-job-123"
-        assert data["data"]["status"] == "running"
+        assert data["id"] == "test-job-123"
+        assert data["status"] == "running"
 
 
 class TestCreateGmxJob:
@@ -86,9 +85,8 @@ class TestCreateGmxJob:
 
         assert response.status_code == HTTPStatus.CREATED
         data = json.loads(response.data)
-        assert data["success"] is True
-        assert "id" in data["data"]
-        assert data["data"]["status"] == "pending"
+        assert "id" in data
+        assert data["status"] == "pending"
 
         # Verify K8s job was created
         mock_k8s_client["create_gromacs_job"].assert_called_once()
@@ -126,7 +124,7 @@ class TestCreateGmxJob:
 
         assert response.status_code == HTTPStatus.BAD_REQUEST
         data = json.loads(response.data)
-        assert data["success"] is False
+        assert "detail" in data
 
 
 class TestDeleteGmxJob:
@@ -192,9 +190,8 @@ class TestCreateAmberJob:
 
         assert response.status_code == HTTPStatus.CREATED
         data = json.loads(response.data)
-        assert data["success"] is True
-        assert "id" in data["data"]
-        assert data["data"]["status"] == "pending"
+        assert "id" in data
+        assert data["status"] == "pending"
 
         # Verify K8s job was created
         mock_k8s_client["create_amber_job"].assert_called_once()

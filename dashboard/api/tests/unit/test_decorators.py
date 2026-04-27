@@ -7,6 +7,7 @@ from typing import NoReturn
 from decorators import handle_exceptions
 from extensions import db
 from flask import Flask, Response, jsonify
+from werkzeug.exceptions import BadRequest
 
 
 class TestHandleExceptionsDecorator:
@@ -41,7 +42,6 @@ class TestHandleExceptionsDecorator:
 
         @handle_exceptions()
         def bad_request_route() -> NoReturn:
-            from werkzeug.exceptions import BadRequest
             raise BadRequest("Invalid input")
 
         with app.app_context():
@@ -65,7 +65,7 @@ class TestHandleExceptionsDecorator:
             raise ValueError("DB error")
 
         with app.app_context():
-            db.session.rollback = tracking_rollback
+            db.session.rollback = tracking_rollback  # type: ignore
             try:
                 route_with_rollback()
                 assert rollback_called
@@ -87,9 +87,9 @@ class TestHandleExceptionsDecorator:
             raise ValueError("Some error")
 
         with app.app_context():
-            db.session.rollback = tracking_rollback
+            db.session.rollback = tracking_rollback  # type: ignore
             try:
                 route_without_rollback()
                 assert not rollback_called
             finally:
-                db.session.rollback = original_rollback
+                db.session.rollback = original_rollback  # type: ignore

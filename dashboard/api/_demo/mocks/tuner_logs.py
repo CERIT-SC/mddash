@@ -53,10 +53,10 @@ _AMBER_STDERR_TEMPLATE = ""
 
 def install_tuner_log_mocks() -> None:
     """Install tuner trial log mocks via module mutation."""
-    tuner.gmx_get_trial_stdout = _get_trial_stdout
-    tuner.gmx_get_trial_stderr = _get_trial_stderr
-    tuner.amber_get_trial_stdout = _get_amber_trial_stdout
-    tuner.amber_get_trial_stderr = _get_amber_trial_stderr
+    tuner.gmx_get_trial_stdout = _get_trial_stdout  # type: ignore
+    tuner.gmx_get_trial_stderr = _get_trial_stderr  # type: ignore
+    tuner.amber_get_trial_stdout = _get_amber_trial_stdout  # type: ignore
+    tuner.amber_get_trial_stderr = _get_amber_trial_stderr  # type: ignore
 
 
 def _get_amber_trial_stdout(job_id: str, trial_id: str) -> str:

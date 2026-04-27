@@ -36,6 +36,9 @@ def create_experiment() -> Response:
 
     Returns:
         Response: JSON response with the created experiment on success, or an error response for invalid input.
+
+    Raises:
+        BadRequest: If the experiment type or data is invalid.
     """
     schema = ExperimentSchema()
     form = request.form
@@ -68,7 +71,9 @@ def create_experiment() -> Response:
 
     db.session.add(experiment)
     db.session.commit()
-    return jsonify(schema.dump(experiment)), HTTPStatus.CREATED
+    response = jsonify(schema.dump(experiment))
+    response.status_code = HTTPStatus.CREATED
+    return response
 
 
 @experiments_bp.route("/<experiment_id>", methods=["GET"])
@@ -102,7 +107,7 @@ def delete_experiment(experiment_id: str) -> Response:
     experiment.delete()
     db.session.delete(experiment)
     db.session.commit()
-    return "", HTTPStatus.NO_CONTENT
+    return Response(status=HTTPStatus.NO_CONTENT)
 
 
 @experiments_bp.route("/<experiment_id>", methods=["PATCH"])
@@ -113,6 +118,9 @@ def edit_experiment(experiment_id: str) -> Response:
 
     Returns:
         Response: JSON response with the updated experiment data, or an error response for invalid input.
+
+    Raises:
+        BadRequest: If no valid fields are provided for update.
     """
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
@@ -143,6 +151,9 @@ def publish_experiment(experiment_id: str) -> Response:
 
     Returns:
         Response: JSON response with the published MDRepo experiment record, or an error if not authenticated.
+
+    Raises:
+        Unauthorized: If the user is not authenticated with MDRepo.
     """
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
@@ -158,7 +169,9 @@ def publish_experiment(experiment_id: str) -> Response:
     #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.
     mdrepo_experiment = experiment.publish(community="ceitec")
 
-    return jsonify(mdrepo_experiment), HTTPStatus.CREATED
+    response = jsonify(mdrepo_experiment)
+    response.status_code = HTTPStatus.CREATED
+    return response
 
 
 @experiments_bp.route("/<experiment_id>/step", methods=["GET"])

@@ -39,6 +39,10 @@ def submit_analysis_job(experiment_id: str) -> Response:
 
     Returns:
         JSON response with the created job on success, or an error response.
+
+    Raises:
+        BadRequest: If the request body is missing or invalid.
+        NotFound: If the trajectory file does not exist.
     """
     data = request.get_json()
     if not data:
@@ -102,7 +106,9 @@ def submit_analysis_job(experiment_id: str) -> Response:
         topology_file=topology_path,
         preprocessing_mode=preprocessing_mode,
     )
-    return jsonify(AnalysisJobSchema().dump(job)), HTTPStatus.CREATED
+    response = jsonify(AnalysisJobSchema().dump(job))
+    response.status_code = HTTPStatus.CREATED
+    return response
 
 
 @analysis_bp.route("/<job_id>", methods=["GET"])
@@ -136,7 +142,7 @@ def delete_analysis_job(experiment_id: str, job_id: str) -> Response:
     job.delete()
     db.session.delete(job)
     db.session.commit()
-    return "", HTTPStatus.NO_CONTENT
+    return Response(status=HTTPStatus.NO_CONTENT)
 
 
 @analysis_bp.route("/<job_id>/logs", methods=["GET"])
@@ -216,6 +222,10 @@ def get_analysis_result(experiment_id: str, name: str) -> Response:
 
     Returns:
         JSON response with the parsed analysis data, or an error response if not found.
+
+    Raises:
+        NotFound: If the analysis result file does not exist.
+        UnprocessableEntity: If the result file cannot be parsed as JSON.
     """
     result_file = find_result_file(experiment_id, name)
     if not result_file:

@@ -8,7 +8,7 @@ from clients.k8s import parse_cpu, parse_memory
 from config import GPU_TYPE, MAX_NOTEBOOKS, NAMESPACE, NOTEBOOK_RESOURCES, PREFIX
 from enums import NotebookTier, PodStatus
 from extensions import db
-from kubernetes.client.rest import ApiException  # type: ignore
+from kubernetes.client.rest import ApiException
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.exceptions import BadRequest, Conflict, Forbidden, InternalServerError
 

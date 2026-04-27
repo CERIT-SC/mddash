@@ -57,7 +57,7 @@ def _delete_job(job_id: str) -> Response:
     db.session.delete(job)
     db.session.commit()
 
-    return "", HTTPStatus.NO_CONTENT
+    return Response(status=HTTPStatus.NO_CONTENT)
 
 
 # Health endpoints
@@ -137,7 +137,9 @@ def create_gmx_job() -> Response:
     job = MdrunJob.create(job_id=job_id, job_name=job_name, experiment_id=experiment_id)
     logger.info(f"Started GROMACS job {job_name} with ID {job_id} in experiment {experiment_id}")
 
-    return jsonify({"id": job.id, "status": job.last_status.value}), HTTPStatus.CREATED
+    response = jsonify({"id": job.id, "status": job.last_status.value})
+    response.status_code = HTTPStatus.CREATED
+    return response
 
 
 @gmx_bp.route("/<job_id>", methods=["DELETE"])
@@ -219,7 +221,9 @@ def create_amber_job() -> Response:
     job = MdrunJob.create(job_id=job_id, job_name=job_name, experiment_id=experiment_id)
     logger.info(f"Started AMBER job {job_name} with ID {job_id} in experiment {experiment_id}")
 
-    return jsonify({"id": job.id, "status": job.last_status.value}), HTTPStatus.CREATED
+    response = jsonify({"id": job.id, "status": job.last_status.value})
+    response.status_code = HTTPStatus.CREATED
+    return response
 
 
 @amber_bp.route("/<job_id>", methods=["DELETE"])

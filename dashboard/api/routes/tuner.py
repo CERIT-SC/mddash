@@ -52,6 +52,9 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
 
     Returns:
         Response: JSON response with the created or existing tuner job, or an error if the TPR file does not exist.
+
+    Raises:
+        NotFound: If the TPR file does not exist.
     """
     check_path(tpr_name, DATA_DIR / experiment_id)
     schema = TunerJobSchema()
@@ -93,7 +96,9 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
         extra_args=extra_args,
     )
 
-    return jsonify(schema.dump(tuner_job)), HTTPStatus.CREATED
+    response = jsonify(schema.dump(tuner_job))
+    response.status_code = HTTPStatus.CREATED
+    return response
 
 
 @tuner_bp.route("/<path:tpr_name>/stop", methods=["POST"])
@@ -110,7 +115,7 @@ def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     )
     tuner_job.stop()
     db.session.commit()
-    return "", HTTPStatus.NO_CONTENT
+    return Response(status=HTTPStatus.NO_CONTENT)
 
 
 @tuner_bp.route("/<path:tpr_name>/trials/<trial_id>/stdout", methods=["GET"])
@@ -121,6 +126,9 @@ def get_trial_stdout(experiment_id: str, tpr_name: str, trial_id: str) -> Respon
 
     Returns:
         Response: JSON response with the stdout text.
+
+    Raises:
+        InternalServerError: If the engine is unknown.
     """
     tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
         description=f"Tuner job for {tpr_name} not found"
@@ -143,6 +151,9 @@ def get_trial_stderr(experiment_id: str, tpr_name: str, trial_id: str) -> Respon
 
     Returns:
         Response: JSON response with the stderr text.
+
+    Raises:
+        InternalServerError: If the engine is unknown.
     """
     tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
         description=f"Tuner job for {tpr_name} not found"
@@ -172,4 +183,4 @@ def delete_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     tuner_job.delete()
     db.session.delete(tuner_job)
     db.session.commit()
-    return "", HTTPStatus.NO_CONTENT
+    return Response(status=HTTPStatus.NO_CONTENT)

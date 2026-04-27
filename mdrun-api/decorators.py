@@ -11,7 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 def handle_exceptions(rollback: bool = False) -> Callable:
-    """Catch exceptions and return {detail: "..."} JSON responses."""
+    """
+    Catch exceptions and return {detail: "..."} JSON responses.
+
+    Returns:
+        Decorator that wraps the route handler and catches all exceptions.
+    """
 
     def decorator(f: Callable[..., Response]) -> Callable[..., Response]:
         @functools.wraps(f)

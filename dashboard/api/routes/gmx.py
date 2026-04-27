@@ -51,6 +51,9 @@ def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
 
     Returns:
         Response: JSON response with the created GROMACS job, or an error if the TPR file does not exist.
+
+    Raises:
+        NotFound: If the TPR file does not exist.
     """
     check_path(tpr_name, DATA_DIR / experiment_id)
     schema = GromacsJobSchema()
@@ -74,7 +77,9 @@ def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
             extra_args=request.form.get("extra_args", ""),
         )
 
-    return jsonify(schema.dump(job)), HTTPStatus.CREATED
+    response = jsonify(schema.dump(job))
+    response.status_code = HTTPStatus.CREATED
+    return response
 
 
 @gmx_bp.route("/<path:tpr_name>", methods=["DELETE"])
@@ -92,7 +97,7 @@ def delete_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     job.delete()
     db.session.delete(job)
     db.session.commit()
-    return "", HTTPStatus.NO_CONTENT
+    return Response(status=HTTPStatus.NO_CONTENT)
 
 
 @gmx_bp.route("/<path:tpr_name>/log", methods=["GET"])

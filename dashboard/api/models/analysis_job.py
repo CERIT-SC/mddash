@@ -170,6 +170,9 @@ def format_mwf_analysis_command(
 
     Returns:
         Shell command string used to execute the requested mwf analysis.
+
+    Raises:
+        ValueError: If both structure_file and topology_file are None.
     """
     if structure_file is None and topology_file is None:
         raise ValueError("At least one of structure_file or topology_file must be provided.")

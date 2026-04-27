@@ -28,8 +28,7 @@ class TestListExperiments:
 
         assert response.status_code == HTTPStatus.OK
         data = json.loads(response.data)
-        assert data["success"] is True
-        assert data["data"] == []
+        assert data == []
 
     def test_returns_experiments(self, client: FlaskClient, db_session: Session) -> None:
         """Should return list of all experiments."""
@@ -50,9 +49,9 @@ class TestListExperiments:
 
         assert response.status_code == HTTPStatus.OK
         data = json.loads(response.data)
-        assert len(data["data"]) == 1
-        assert data["data"][0]["id"] == "testx"
-        assert data["data"][0]["name"] == "Test Experiment"
+        assert len(data) == 1
+        assert data[0]["id"] == "testx"
+        assert data[0]["name"] == "Test Experiment"
 
 
 class TestGetExperiment:
@@ -76,8 +75,8 @@ class TestGetExperiment:
 
         assert response.status_code == HTTPStatus.OK
         data = json.loads(response.data)
-        assert data["data"]["id"] == "abcde"
-        assert data["data"]["name"] == "My Experiment"
+        assert data["id"] == "abcde"
+        assert data["name"] == "My Experiment"
 
     def test_returns_404_for_missing_experiment(self, client: FlaskClient) -> None:
         """Should return 404 for non-existent experiment ID."""
@@ -114,10 +113,9 @@ class TestCreateExperiment:
 
             assert response.status_code == HTTPStatus.CREATED
             data = json.loads(response.data)
-            assert data["success"] is True
-            assert data["data"]["name"] == "Test PDB Experiment"
-            assert data["data"]["notebooks_repo"] == "https://github.com/test/repo.git"
-            assert len(data["data"]["id"]) == EXPERIMENT_ID_LENGTH
+            assert data["name"] == "Test PDB Experiment"
+            assert data["notebooks_repo"] == "https://github.com/test/repo.git"
+            assert len(data["id"]) == EXPERIMENT_ID_LENGTH
             mock_clone.assert_called_once()
 
     def test_create_from_pdb_not_found(self, client: FlaskClient, tmp_path: Path) -> None:
@@ -170,7 +168,7 @@ class TestCreateExperiment:
 
             assert response.status_code == HTTPStatus.CREATED
             data = json.loads(response.data)
-            assert data["data"]["notebooks_repo"] == "https://github.com/default/repo.git"
+            assert data["notebooks_repo"] == "https://github.com/default/repo.git"
             mock_clone.assert_called_once()
 
     def test_create_fails_on_clone_error(self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path) -> None:
@@ -246,12 +244,11 @@ class TestCreateExperiment:
 
             assert response.status_code == HTTPStatus.CREATED
             data = json.loads(response.data)
-            assert data["success"] is True
-            assert data["data"]["name"] == "Test File Experiment"
+            assert data["name"] == "Test File Experiment"
             mock_clone.assert_called_once()
 
             # Verify files were saved
-            exp_id = data["data"]["id"]
+            exp_id = data["id"]
             exp_dir = tmp_path / exp_id
             assert (exp_dir / "test1.gro").exists()
             assert (exp_dir / "test2.itp").exists()
@@ -282,7 +279,7 @@ class TestCreateExperiment:
             data = json.loads(response.data)
 
             # Verify files were saved with sanitized names
-            exp_id = data["data"]["id"]
+            exp_id = data["id"]
             exp_dir = tmp_path / exp_id
 
             expected_name_1 = secure_filename(malicious_filename_1)
@@ -321,7 +318,7 @@ class TestEditExperiment:
 
         assert response.status_code == HTTPStatus.OK
         data = json.loads(response.data)
-        assert data["data"]["name"] == "Updated Name"
+        assert data["name"] == "Updated Name"
 
     def test_update_nonexistent_experiment(self, client: FlaskClient) -> None:
         """Should return 404 when updating non-existent experiment."""
