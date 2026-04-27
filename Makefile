@@ -40,7 +40,7 @@ lint: ## Check Python linting without auto-fix
 # ==================== TYPE CHECK ====================
 
 .PHONY: type-check
-type-check: type-check-dashboard-api type-check-dashboard-auth type-check-mdrun-api ## Run type checks on all Python components
+type-check: type-check-dashboard-api type-check-dashboard-auth type-check-mdrun-api type-check-ui ## Run type checks on all components
 
 .PHONY: type-check-dashboard-api
 type-check-dashboard-api: ## Type-check dashboard API
@@ -53,6 +53,10 @@ type-check-dashboard-auth: ## Type-check dashboard auth
 .PHONY: type-check-mdrun-api
 type-check-mdrun-api: ## Type-check mdrun-api
 	cd mdrun-api && uv run ty check .
+
+.PHONY: type-check-ui
+type-check-ui: ## Type-check dashboard UI (TypeScript)
+	cd dashboard/ui && npm run typecheck
 
 # ==================== TEST ====================
 
