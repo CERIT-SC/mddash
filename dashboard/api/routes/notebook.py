@@ -5,6 +5,7 @@ from decorators import handle_exceptions
 from enums import NotebookTier
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
+from flask.typing import ResponseReturnValue
 from models import Experiment
 from models.notebook import get_tier_resources
 from schemas import NotebookSchema
@@ -55,7 +56,7 @@ def get_notebook(experiment_id: str) -> Response:
 
 @notebook_bp.route("", methods=["POST"])
 @handle_exceptions(rollback=True)
-def start_notebook(experiment_id: str) -> Response:
+def start_notebook(experiment_id: str) -> ResponseReturnValue:
     """
     Start the notebook pod for an experiment.
 
@@ -88,14 +89,12 @@ def start_notebook(experiment_id: str) -> Response:
     notebook = experiment.notebook
     notebook.start(tier=tier, gpu=gpu)
     db.session.commit()
-    response = jsonify(schema.dump(notebook))
-    response.status_code = HTTPStatus.CREATED
-    return response
+    return jsonify(schema.dump(notebook)), HTTPStatus.CREATED
 
 
 @notebook_bp.route("", methods=["DELETE"])
 @handle_exceptions()
-def stop_notebook(experiment_id: str) -> Response:
+def stop_notebook(experiment_id: str) -> ResponseReturnValue:
     """
     Stop the notebook pod for an experiment.
 
@@ -107,4 +106,4 @@ def stop_notebook(experiment_id: str) -> Response:
     )
     notebook = experiment.notebook
     notebook.stop()
-    return Response(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT

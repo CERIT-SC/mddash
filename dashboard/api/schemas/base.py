@@ -16,7 +16,8 @@ class MDDashModelConverter(ModelConverter):
     """Serialize enum columns by their .value, not .name."""
 
     def _get_field_class_for_data_type(  # type: ignore
-        self, data_type: "TypeEngine",
+        self,
+        data_type: "TypeEngine",
     ) -> type[fields.Field] | functools.partial[type[fields.Field]]:
         result = super()._get_field_class_for_data_type(data_type)
         if isinstance(result, functools.partial) and result.func is fields.Enum:

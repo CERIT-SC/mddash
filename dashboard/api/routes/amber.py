@@ -5,6 +5,7 @@ from decorators import handle_exceptions
 from enums import AmberBinary, EwaldPreset
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
+from flask.typing import ResponseReturnValue
 from models import AmberJob, Experiment
 from schemas import AmberJobSchema
 from validators import check_path, check_positive_int
@@ -45,7 +46,7 @@ def get_amber_job(experiment_id: str, prmtop_name: str) -> Response:
 
 @amber_bp.route("/<path:prmtop_name>", methods=["POST"])
 @handle_exceptions(rollback=True)
-def submit_amber_job(experiment_id: str, prmtop_name: str) -> Response:
+def submit_amber_job(experiment_id: str, prmtop_name: str) -> ResponseReturnValue:
     """
     Submit a new AMBER simulation job.
 
@@ -99,14 +100,12 @@ def submit_amber_job(experiment_id: str, prmtop_name: str) -> Response:
             extra_args=extra_args,
         )
 
-    response = jsonify(schema.dump(job))
-    response.status_code = HTTPStatus.CREATED
-    return response
+    return jsonify(schema.dump(job)), HTTPStatus.CREATED
 
 
 @amber_bp.route("/<path:prmtop_name>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
-def delete_amber_job(experiment_id: str, prmtop_name: str) -> Response:
+def delete_amber_job(experiment_id: str, prmtop_name: str) -> ResponseReturnValue:
     """
     Delete an AMBER job and its associated Kubernetes resources.
 
@@ -119,7 +118,7 @@ def delete_amber_job(experiment_id: str, prmtop_name: str) -> Response:
     job.delete()
     db.session.delete(job)
     db.session.commit()
-    return Response(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
 
 
 @amber_bp.route("/<path:prmtop_name>/log", methods=["GET"])

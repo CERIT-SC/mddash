@@ -5,6 +5,7 @@ from decorators import handle_exceptions
 from enums import Engine
 from extensions import db
 from flask import Blueprint, Response, jsonify, request, session
+from flask.typing import ResponseReturnValue
 from models import Experiment
 from schemas import ExperimentSchema
 from token_manager import MDRepoTokenManager
@@ -30,7 +31,7 @@ def list_experiments() -> Response:
 
 @experiments_bp.route("", methods=["POST"])
 @handle_exceptions(rollback=True)
-def create_experiment() -> Response:
+def create_experiment() -> ResponseReturnValue:
     """
     Create a new experiment from PDB, repository URL, or uploaded files.
 
@@ -71,9 +72,7 @@ def create_experiment() -> Response:
 
     db.session.add(experiment)
     db.session.commit()
-    response = jsonify(schema.dump(experiment))
-    response.status_code = HTTPStatus.CREATED
-    return response
+    return jsonify(schema.dump(experiment)), HTTPStatus.CREATED
 
 
 @experiments_bp.route("/<experiment_id>", methods=["GET"])
@@ -94,7 +93,7 @@ def get_experiment(experiment_id: str) -> Response:
 
 @experiments_bp.route("/<experiment_id>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
-def delete_experiment(experiment_id: str) -> Response:
+def delete_experiment(experiment_id: str) -> ResponseReturnValue:
     """
     Delete an experiment and all associated resources.
 
@@ -107,7 +106,7 @@ def delete_experiment(experiment_id: str) -> Response:
     experiment.delete()
     db.session.delete(experiment)
     db.session.commit()
-    return Response(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
 
 
 @experiments_bp.route("/<experiment_id>", methods=["PATCH"])
@@ -145,7 +144,7 @@ def edit_experiment(experiment_id: str) -> Response:
 
 @experiments_bp.route("/<experiment_id>/publish", methods=["POST"])
 @handle_exceptions(rollback=True)
-def publish_experiment(experiment_id: str) -> Response:
+def publish_experiment(experiment_id: str) -> ResponseReturnValue:
     """
     Publish experiment to MDRepo. Requires MDRepo OAuth authentication.
 
@@ -169,9 +168,7 @@ def publish_experiment(experiment_id: str) -> Response:
     #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.
     mdrepo_experiment = experiment.publish(community="ceitec")
 
-    response = jsonify(mdrepo_experiment)
-    response.status_code = HTTPStatus.CREATED
-    return response
+    return jsonify(mdrepo_experiment), HTTPStatus.CREATED
 
 
 @experiments_bp.route("/<experiment_id>/step", methods=["GET"])

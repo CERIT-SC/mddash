@@ -11,6 +11,7 @@ RUN apt-get update \
     yq \
  && curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
  && apt-get install -y --no-install-recommends nodejs \
+ && ln -s $(which python3) /usr/local/bin/python \
  && rm -rf /var/lib/apt/lists/* \
  # Docker, kubectl, helm are installed by the features in devcontainer.json
  # Install gomplate

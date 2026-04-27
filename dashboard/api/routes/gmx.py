@@ -5,6 +5,7 @@ from decorators import handle_exceptions
 from enums import DeviceType
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
+from flask.typing import ResponseReturnValue
 from models import Experiment, GromacsJob
 from schemas import GromacsJobSchema
 from validators import check_log_type, check_path, check_positive_int
@@ -45,7 +46,7 @@ def get_gmx_job(experiment_id: str, tpr_name: str) -> Response:
 
 @gmx_bp.route("/<path:tpr_name>", methods=["POST"])
 @handle_exceptions(rollback=True)
-def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
+def submit_gmx_job(experiment_id: str, tpr_name: str) -> ResponseReturnValue:
     """
     Submit a new GROMACS simulation job.
 
@@ -77,14 +78,12 @@ def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
             extra_args=request.form.get("extra_args", ""),
         )
 
-    response = jsonify(schema.dump(job))
-    response.status_code = HTTPStatus.CREATED
-    return response
+    return jsonify(schema.dump(job)), HTTPStatus.CREATED
 
 
 @gmx_bp.route("/<path:tpr_name>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
-def delete_gmx_job(experiment_id: str, tpr_name: str) -> Response:
+def delete_gmx_job(experiment_id: str, tpr_name: str) -> ResponseReturnValue:
     """
     Delete a GROMACS job and its associated Kubernetes resources.
 
@@ -97,7 +96,7 @@ def delete_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     job.delete()
     db.session.delete(job)
     db.session.commit()
-    return Response(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
 
 
 @gmx_bp.route("/<path:tpr_name>/log", methods=["GET"])

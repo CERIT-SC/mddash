@@ -9,6 +9,7 @@ from decorators import handle_exceptions
 from enums import AmberBinary, DeviceType, EwaldPreset
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
+from flask.typing import ResponseReturnValue
 from marshmallow import ValidationError
 from models import MdrunJob
 from sanitization import (
@@ -44,7 +45,7 @@ def _get_job(job_id: str) -> Response:
     return jsonify(status_data)
 
 
-def _delete_job(job_id: str) -> Response:
+def _delete_job(job_id: str) -> ResponseReturnValue:
     """
     Delete a job and its associated Kubernetes resources.
 
@@ -57,7 +58,7 @@ def _delete_job(job_id: str) -> Response:
     db.session.delete(job)
     db.session.commit()
 
-    return Response(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
 
 
 # Health endpoints
@@ -88,7 +89,7 @@ def get_gmx_job(job_id: str) -> Response:
 
 @gmx_bp.route("", methods=["POST"])
 @handle_exceptions(rollback=True)
-def create_gmx_job() -> Response:
+def create_gmx_job() -> ResponseReturnValue:
     """
     Create and start a new GROMACS simulation job.
 
@@ -137,14 +138,12 @@ def create_gmx_job() -> Response:
     job = MdrunJob.create(job_id=job_id, job_name=job_name, experiment_id=experiment_id)
     logger.info(f"Started GROMACS job {job_name} with ID {job_id} in experiment {experiment_id}")
 
-    response = jsonify({"id": job.id, "status": job.last_status.value})
-    response.status_code = HTTPStatus.CREATED
-    return response
+    return jsonify({"id": job.id, "status": job.last_status.value}), HTTPStatus.CREATED
 
 
 @gmx_bp.route("/<job_id>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
-def delete_gmx_job(job_id: str) -> Response:
+def delete_gmx_job(job_id: str) -> ResponseReturnValue:
     """
     Delete a GROMACS job.
 
@@ -169,7 +168,7 @@ def get_amber_job(job_id: str) -> Response:
 
 @amber_bp.route("", methods=["POST"])
 @handle_exceptions(rollback=True)
-def create_amber_job() -> Response:
+def create_amber_job() -> ResponseReturnValue:
     """
     Create and start a new AMBER simulation job.
 
@@ -221,14 +220,12 @@ def create_amber_job() -> Response:
     job = MdrunJob.create(job_id=job_id, job_name=job_name, experiment_id=experiment_id)
     logger.info(f"Started AMBER job {job_name} with ID {job_id} in experiment {experiment_id}")
 
-    response = jsonify({"id": job.id, "status": job.last_status.value})
-    response.status_code = HTTPStatus.CREATED
-    return response
+    return jsonify({"id": job.id, "status": job.last_status.value}), HTTPStatus.CREATED
 
 
 @amber_bp.route("/<job_id>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
-def delete_amber_job(job_id: str) -> Response:
+def delete_amber_job(job_id: str) -> ResponseReturnValue:
     """
     Delete an AMBER job.
 

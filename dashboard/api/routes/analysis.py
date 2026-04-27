@@ -8,6 +8,7 @@ from decorators import handle_exceptions
 from enums import AnalysisType, PreprocessingMode
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
+from flask.typing import ResponseReturnValue
 from models import AnalysisJob, Experiment
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, find_result_file, list_result_files
 from schemas import AnalysisJobSchema
@@ -33,7 +34,7 @@ def get_analysis_jobs(experiment_id: str) -> Response:
 
 @analysis_bp.route("", methods=["POST"])
 @handle_exceptions(rollback=True)
-def submit_analysis_job(experiment_id: str) -> Response:
+def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
     """
     Submit a new analysis job. Rejects if a job is already running.
 
@@ -106,9 +107,7 @@ def submit_analysis_job(experiment_id: str) -> Response:
         topology_file=topology_path,
         preprocessing_mode=preprocessing_mode,
     )
-    response = jsonify(AnalysisJobSchema().dump(job))
-    response.status_code = HTTPStatus.CREATED
-    return response
+    return jsonify(AnalysisJobSchema().dump(job)), HTTPStatus.CREATED
 
 
 @analysis_bp.route("/<job_id>", methods=["GET"])
@@ -129,7 +128,7 @@ def get_analysis_job(experiment_id: str, job_id: str) -> Response:
 
 @analysis_bp.route("/<job_id>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
-def delete_analysis_job(experiment_id: str, job_id: str) -> Response:
+def delete_analysis_job(experiment_id: str, job_id: str) -> ResponseReturnValue:
     """
     Delete an analysis job and its results.
 
@@ -142,7 +141,7 @@ def delete_analysis_job(experiment_id: str, job_id: str) -> Response:
     job.delete()
     db.session.delete(job)
     db.session.commit()
-    return Response(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
 
 
 @analysis_bp.route("/<job_id>/logs", methods=["GET"])

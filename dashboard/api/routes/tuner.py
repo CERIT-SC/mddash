@@ -6,6 +6,7 @@ from decorators import handle_exceptions
 from enums import Engine
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
+from flask.typing import ResponseReturnValue
 from models import Experiment, TunerJob
 from schemas import TunerJobSchema
 from validators import check_path
@@ -46,7 +47,7 @@ def get_tuner_job(experiment_id: str, tpr_name: str) -> Response:
 
 @tuner_bp.route("/<path:tpr_name>", methods=["POST"])
 @handle_exceptions(rollback=True)
-def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
+def start_tuner_job(experiment_id: str, tpr_name: str) -> ResponseReturnValue:
     """
     Start a tuner job to optimize simulation parameters.
 
@@ -96,14 +97,12 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
         extra_args=extra_args,
     )
 
-    response = jsonify(schema.dump(tuner_job))
-    response.status_code = HTTPStatus.CREATED
-    return response
+    return jsonify(schema.dump(tuner_job)), HTTPStatus.CREATED
 
 
 @tuner_bp.route("/<path:tpr_name>/stop", methods=["POST"])
 @handle_exceptions(rollback=True)
-def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
+def stop_tuner_job(experiment_id: str, tpr_name: str) -> ResponseReturnValue:
     """
     Stop a running tuner job.
 
@@ -115,7 +114,7 @@ def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     )
     tuner_job.stop()
     db.session.commit()
-    return Response(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
 
 
 @tuner_bp.route("/<path:tpr_name>/trials/<trial_id>/stdout", methods=["GET"])
@@ -170,7 +169,7 @@ def get_trial_stderr(experiment_id: str, tpr_name: str, trial_id: str) -> Respon
 
 @tuner_bp.route("/<path:tpr_name>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
-def delete_tuner_job(experiment_id: str, tpr_name: str) -> Response:
+def delete_tuner_job(experiment_id: str, tpr_name: str) -> ResponseReturnValue:
     """
     Delete a tuner job and its associated resources.
 
@@ -183,4 +182,4 @@ def delete_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     tuner_job.delete()
     db.session.delete(tuner_job)
     db.session.commit()
-    return Response(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
