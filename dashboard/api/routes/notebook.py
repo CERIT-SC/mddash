@@ -26,7 +26,7 @@ def get_notebook_config() -> Response:
     """
     tiers = []
     for t in NotebookTier:
-        nb_res, _ = get_tier_resources(t)
+        nb_res = get_tier_resources(t)
         tiers.append({
             "value": t.value,
             "cpuLimit": nb_res["limits"]["cpu"],
