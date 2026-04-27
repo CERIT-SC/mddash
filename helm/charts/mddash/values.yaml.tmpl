@@ -91,14 +91,6 @@ jupyterhub:
         value: "{{ $cfg.resources.notebook.cpuLimit }}"
       NOTEBOOK_MEMORY_LIMIT:
         value: "{{ $cfg.resources.notebook.memoryLimit }}"
-      GMX_CPU_REQUEST:
-        value: "{{ $cfg.resources.notebook.gmxCpuRequest }}"
-      GMX_MEMORY_REQUEST:
-        value: "{{ $cfg.resources.notebook.gmxMemoryRequest }}"
-      GMX_CPU_LIMIT:
-        value: "{{ $cfg.resources.notebook.gmxCpuLimit }}"
-      GMX_MEMORY_LIMIT:
-        value: "{{ $cfg.resources.notebook.gmxMemoryLimit }}"
       NOTEBOOK_IDLE_TIMEOUT:
         value: "{{ $cfg.resources.notebook.idleTimeoutSeconds }}"
 
@@ -127,8 +119,6 @@ jupyterhub:
         value: "{{ $registry }}/{{ $cfg.notebook.image }}:{{ $imageTag }}"
       ANALYSIS_IMAGE:
         value: "{{ $registry }}/{{ $cfg.analysis.image }}"
-      GMX_IMAGE:
-        value: "{{ $cfg.gmxImage }}"
       GPU_TYPE:
         value: "{{ $cfg.gpuType }}"
       DEFAULT_NOTEBOOKS_REPO:

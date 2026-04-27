@@ -76,7 +76,6 @@ def _create_notebook_pod(
     _prefix: str,
     _token: str,
     notebook_resources: dict | None = None,  # noqa: ARG001
-    gmx_resources: dict | None = None,  # noqa: ARG001
     gpu: bool = False,  # noqa: ARG001
     tier: str | None = None,  # noqa: ARG001
 ) -> None:
