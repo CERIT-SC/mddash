@@ -122,4 +122,4 @@ dev-ui: ## Run UI dev server (hot reload)
 
 .PHONY: dev-api
 dev-api: ## Run API dev server (hot reload)
-	cd api && python app.py
+	cd api && uv run python app.py
