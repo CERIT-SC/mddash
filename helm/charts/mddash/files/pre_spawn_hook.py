@@ -16,9 +16,8 @@ from kubernetes_asyncio.client import (
     V1SeccompProfile,
     V1SecurityContext,
 )
-from kubespawner import KubeSpawner
 from kubernetes_asyncio.client.rest import ApiException
-
+from kubespawner import KubeSpawner
 
 logger = logging.getLogger(__name__)
 
@@ -485,7 +484,7 @@ async def _report_progress(spawner: "KubeSpawner", message: str, progress: int) 
     await _get_or_create_progress_queue(spawner).put({"message": message, "progress": progress})
 
 
-async def _spawn_progress(self: "KubeSpawner"):  # type: ignore[override]  # noqa: ANN201
+async def _spawn_progress(self: "KubeSpawner"):  # type: ignore[override]
     """Yield spawn progress messages sourced from the pre_spawn_hook via an asyncio.Queue."""
     queue = _get_or_create_progress_queue(self)
     while True:
