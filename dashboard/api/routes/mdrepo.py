@@ -12,7 +12,6 @@ from http import HTTPStatus
 from urllib.parse import urlencode
 
 import requests
-from api_response import ApiResponse
 from config import (
     API_PREFIX,
     MDREPO_AUTHORIZE_URL,
@@ -24,7 +23,7 @@ from config import (
     MDREPO_URL,
 )
 from decorators import handle_exceptions
-from flask import Blueprint, Response, redirect, request, session
+from flask import Blueprint, Response, jsonify, redirect, request, session
 from models.experiment import mdrepo_status_cache
 from token_manager import (
     MDREPO_REFRESH_TOKEN_KEY,
@@ -33,6 +32,7 @@ from token_manager import (
     MDREPO_TOKEN_KEY,
     MDRepoTokenManager,
 )
+from werkzeug.exceptions import ServiceUnavailable
 from werkzeug.wrappers import Response as WerkzeugResponse
 
 logger = logging.getLogger(__name__)
@@ -62,21 +62,21 @@ def get_status() -> Response:
     token = session.get(MDREPO_TOKEN_KEY)
 
     if not token:
-        return ApiResponse.success({"authenticated": False})
+        return jsonify({"authenticated": False})
 
     try:
         resp = requests.get(f"{MDREPO_URL}/api/me", headers={"Authorization": f"Bearer {token}"}, timeout=10)
 
         if resp.status_code == HTTPStatus.OK:
-            return ApiResponse.success({"authenticated": True, "mdrepo_url": MDREPO_URL})
+            return jsonify({"authenticated": True, "mdrepo_url": MDREPO_URL})
 
         # Token invalid or expired
         session.pop(MDREPO_TOKEN_KEY, None)
-        return ApiResponse.success({"authenticated": False})
+        return jsonify({"authenticated": False})
 
     except Exception as e:
         logger.error(f"MDRepo token validation failed: {e}")
-        return ApiResponse.success({"authenticated": False})
+        return jsonify({"authenticated": False})
 
 
 @mdrepo_bp.route("/auth", methods=["GET"])
@@ -91,9 +91,7 @@ def initiate_auth() -> Response | WerkzeugResponse:
         Response: Redirect to the MDRepo authorization URL, or a JSON error if OAuth is not configured.
     """
     if not all([MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET, MDREPO_REDIRECT_URI]):
-        return ApiResponse.error(
-            "MDRepo OAuth is not configured. Contact administrator.", HTTPStatus.SERVICE_UNAVAILABLE
-        )
+        raise ServiceUnavailable("MDRepo OAuth is not configured. Contact administrator.")
 
     # Store return URL and state in session
     return_url = request.args.get("return_url", "/")
@@ -202,4 +200,4 @@ def logout() -> Response:
     """
     token_manager = MDRepoTokenManager(session)
     token_manager.clear_tokens()
-    return ApiResponse.success({"message": "Logged out from MDRepo"})
+    return jsonify({"message": "Logged out from MDRepo"})

@@ -1,15 +1,15 @@
 from http import HTTPStatus
 
-from api_response import ApiResponse
 from config import API_PREFIX, DEFAULT_NOTEBOOKS_REPO
 from decorators import handle_exceptions
 from enums import Engine
 from extensions import db
-from flask import Blueprint, Response, request, session
+from flask import Blueprint, Response, jsonify, request, session
 from models import Experiment
 from schemas import ExperimentSchema
 from token_manager import MDRepoTokenManager
 from validators import validate_git_url
+from werkzeug.exceptions import BadRequest, Unauthorized
 
 experiments_bp = Blueprint("experiments", __name__, url_prefix=f"{API_PREFIX}/experiments")
 
@@ -25,7 +25,7 @@ def list_experiments() -> Response:
     """
     experiments: list[Experiment] = Experiment.query.all()
     schema = ExperimentSchema(many=True)
-    return ApiResponse.success(schema.dump(experiments))
+    return jsonify(schema.dump(experiments))
 
 
 @experiments_bp.route("", methods=["POST"])
@@ -52,7 +52,7 @@ def create_experiment() -> Response:
     try:
         engine = Engine.from_string(engine_str)
     except ValueError:
-        return ApiResponse.error(f"Invalid engine: {engine_str}", HTTPStatus.BAD_REQUEST)
+        raise BadRequest(f"Invalid engine: {engine_str}")
 
     validate_git_url(notebooks_repo)
 
@@ -64,11 +64,11 @@ def create_experiment() -> Response:
         case "file" if simulation_files:
             experiment = Experiment.from_files(name, simulation_files, notebooks_repo, access_token, engine=engine)
         case _:
-            return ApiResponse.error("Invalid experiment type or missing data.", HTTPStatus.BAD_REQUEST)
+            raise BadRequest("Invalid experiment type or missing data.")
 
     db.session.add(experiment)
     db.session.commit()
-    return ApiResponse.success(schema.dump(experiment), HTTPStatus.CREATED)
+    return jsonify(schema.dump(experiment)), HTTPStatus.CREATED
 
 
 @experiments_bp.route("/<experiment_id>", methods=["GET"])
@@ -84,7 +84,7 @@ def get_experiment(experiment_id: str) -> Response:
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
     schema = ExperimentSchema()
-    return ApiResponse.success(schema.dump(experiment))
+    return jsonify(schema.dump(experiment))
 
 
 @experiments_bp.route("/<experiment_id>", methods=["DELETE"])
@@ -102,7 +102,7 @@ def delete_experiment(experiment_id: str) -> Response:
     experiment.delete()
     db.session.delete(experiment)
     db.session.commit()
-    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
 
 
 @experiments_bp.route("/<experiment_id>", methods=["PATCH"])
@@ -119,7 +119,7 @@ def edit_experiment(experiment_id: str) -> Response:
     )
     data = request.get_json()
     if not data:
-        return ApiResponse.error("No data provided.", HTTPStatus.BAD_REQUEST)
+        raise BadRequest("No data provided.")
 
     updated = False
     # Currently only name can be edited
@@ -128,11 +128,11 @@ def edit_experiment(experiment_id: str) -> Response:
         updated = True
 
     if not updated:
-        return ApiResponse.error("No valid fields to update.", HTTPStatus.BAD_REQUEST)
+        raise BadRequest("No valid fields to update.")
 
     db.session.commit()
     schema = ExperimentSchema()
-    return ApiResponse.success(schema.dump(experiment))
+    return jsonify(schema.dump(experiment))
 
 
 @experiments_bp.route("/<experiment_id>/publish", methods=["POST"])
@@ -152,13 +152,13 @@ def publish_experiment(experiment_id: str) -> Response:
     token_manager = MDRepoTokenManager(session)
     token = token_manager.get_valid_token()
     if not token:
-        return ApiResponse.error("Not authenticated with MDRepo. Please authenticate first.", HTTPStatus.UNAUTHORIZED)
+        raise Unauthorized("Not authenticated with MDRepo. Please authenticate first.")
 
     # TODO: Add endpoint to fetch available communities from MDRepo and allow user to select from a dropdown in the publish UI.
     #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.
     mdrepo_experiment = experiment.publish(community="ceitec")
 
-    return ApiResponse.success(mdrepo_experiment, HTTPStatus.CREATED)
+    return jsonify(mdrepo_experiment), HTTPStatus.CREATED
 
 
 @experiments_bp.route("/<experiment_id>/step", methods=["GET"])
@@ -173,4 +173,4 @@ def get_experiment_step(experiment_id: str) -> Response:
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
-    return ApiResponse.success(experiment.step)
+    return jsonify(experiment.step)

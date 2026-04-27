@@ -1,9 +1,8 @@
-from api_response import ApiResponse
 from cache import metrics_cache
 from clients import k8s
 from config import API_PREFIX, CPU_REQUEST_QUOTA, DATA_DIR, MEMORY_REQUEST_QUOTA, PVC_SIZE
 from decorators import handle_exceptions
-from flask import Blueprint, Response
+from flask import Blueprint, Response, jsonify
 from utils import get_du_size
 
 misc_bp = Blueprint("misc", __name__, url_prefix=API_PREFIX)
@@ -19,7 +18,7 @@ def index() -> Response:
     Returns:
         Response: JSON response confirming the API is running.
     """
-    return ApiResponse.success("API is up!")
+    return jsonify("API is up!")
 
 
 @misc_bp.route("/metrics", methods=["GET"])
@@ -45,4 +44,4 @@ def get_metrics() -> Response:
         "storage": k8s.parse_memory(PVC_SIZE),
     }
 
-    return ApiResponse.success({"requests": requests, "limits": limits})
+    return jsonify({"requests": requests, "limits": limits})

@@ -1,15 +1,15 @@
 from http import HTTPStatus
 
-from api_response import ApiResponse
 from clients import tuner
 from config import API_PREFIX, DATA_DIR
 from decorators import handle_exceptions
 from enums import Engine
 from extensions import db
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response, jsonify, request
 from models import Experiment, TunerJob
 from schemas import TunerJobSchema
 from validators import check_path
+from werkzeug.exceptions import InternalServerError, NotFound
 
 tuner_bp = Blueprint("tuner", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/tuner")
 
@@ -25,7 +25,7 @@ def list_tuner_jobs(experiment_id: str) -> Response:
     """
     schema = TunerJobSchema(many=True)
     tuner_jobs = TunerJob.query.filter_by(experiment_id=experiment_id).all()
-    return ApiResponse.success(schema.dump(tuner_jobs))
+    return jsonify(schema.dump(tuner_jobs))
 
 
 @tuner_bp.route("/<path:tpr_name>", methods=["GET"])
@@ -41,7 +41,7 @@ def get_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     tuner_job: TunerJob = TunerJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
         description=f"Tuner job for {tpr_name} not found"
     )
-    return ApiResponse.success(schema.dump(tuner_job))
+    return jsonify(schema.dump(tuner_job))
 
 
 @tuner_bp.route("/<path:tpr_name>", methods=["POST"])
@@ -62,7 +62,7 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     tpr_path = DATA_DIR / experiment_id / tpr_name
 
     if not tpr_path.is_file():
-        return ApiResponse.error(f"TPR file {tpr_name} does not exist.", HTTPStatus.NOT_FOUND)
+        raise NotFound(f"TPR file {tpr_name} does not exist.")
 
     if tuner_job:
         if tuner_job.error_message:
@@ -70,7 +70,7 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
             db.session.delete(tuner_job)
             db.session.commit()
         else:
-            return ApiResponse.success(schema.dump(tuner_job), HTTPStatus.OK)
+            return jsonify(schema.dump(tuner_job))
 
     # Get parameters from request
     nsteps = request.args.get("nsteps", default=25000, type=int)
@@ -93,7 +93,7 @@ def start_tuner_job(experiment_id: str, tpr_name: str) -> Response:
         extra_args=extra_args,
     )
 
-    return ApiResponse.success(schema.dump(tuner_job), HTTPStatus.CREATED)
+    return jsonify(schema.dump(tuner_job)), HTTPStatus.CREATED
 
 
 @tuner_bp.route("/<path:tpr_name>/stop", methods=["POST"])
@@ -110,7 +110,7 @@ def stop_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     )
     tuner_job.stop()
     db.session.commit()
-    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
 
 
 @tuner_bp.route("/<path:tpr_name>/trials/<trial_id>/stdout", methods=["GET"])
@@ -131,8 +131,8 @@ def get_trial_stdout(experiment_id: str, tpr_name: str, trial_id: str) -> Respon
         case Engine.AMBER:
             stdout = tuner.amber_get_trial_stdout(tuner_job.id, trial_id)
         case _:
-            return ApiResponse.error(f"Unknown engine: {tuner_job.engine}", HTTPStatus.INTERNAL_SERVER_ERROR)
-    return ApiResponse.success(stdout)
+            raise InternalServerError(f"Unknown engine: {tuner_job.engine}")
+    return jsonify(stdout)
 
 
 @tuner_bp.route("/<path:tpr_name>/trials/<trial_id>/stderr", methods=["GET"])
@@ -153,8 +153,8 @@ def get_trial_stderr(experiment_id: str, tpr_name: str, trial_id: str) -> Respon
         case Engine.AMBER:
             stderr = tuner.amber_get_trial_stderr(tuner_job.id, trial_id)
         case _:
-            return ApiResponse.error(f"Unknown engine: {tuner_job.engine}", HTTPStatus.INTERNAL_SERVER_ERROR)
-    return ApiResponse.success(stderr)
+            raise InternalServerError(f"Unknown engine: {tuner_job.engine}")
+    return jsonify(stderr)
 
 
 @tuner_bp.route("/<path:tpr_name>", methods=["DELETE"])
@@ -172,4 +172,4 @@ def delete_tuner_job(experiment_id: str, tpr_name: str) -> Response:
     tuner_job.delete()
     db.session.delete(tuner_job)
     db.session.commit()
-    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT

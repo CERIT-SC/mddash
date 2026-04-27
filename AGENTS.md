@@ -130,7 +130,7 @@ sequenceDiagram
 - **Secrets Management**: All secrets created in namespace during deployment via GitHub Actions CI/CD.
 
 ### Error Handling
-- **Consistent API Responses**: Dashboard API uses `ApiResponse.success()` and `ApiResponse.error()` for all endpoints.
+- **RESTful API Responses**: Dashboard API routes return raw resources via `jsonify()` on success and raise `HTTPException` (`BadRequest`, `NotFound`, etc.) for errors. `@handle_exceptions` catches exceptions and returns `{detail: "..."}` with the correct HTTP status code.
 - **Decorator Pattern**: Use `@handle_exceptions()` decorator on route handlers in Dashboard API. Set `rollback=True` for routes that modify database.
 - **Graceful Degradation**: Missing environment variables log warnings but don't crash.
 

@@ -4,12 +4,11 @@ from typing import Any, cast
 from uuid import uuid4
 
 import k8s_client
-from api_response import ApiResponse
 from config import API_PREFIX, NAMESPACE
 from decorators import handle_exceptions
 from enums import AmberBinary, DeviceType, EwaldPreset
 from extensions import db
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response, jsonify, request
 from marshmallow import ValidationError
 from models import MdrunJob
 from sanitization import (
@@ -42,7 +41,7 @@ def _get_job(job_id: str) -> Response:
 
     status_data = {"id": job.id, "status": job.status.value}
 
-    return ApiResponse.success(status_data)
+    return jsonify(status_data)
 
 
 def _delete_job(job_id: str) -> Response:
@@ -58,7 +57,7 @@ def _delete_job(job_id: str) -> Response:
     db.session.delete(job)
     db.session.commit()
 
-    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
 
 
 # Health endpoints
@@ -71,7 +70,7 @@ def health_check() -> Response:
     Returns:
         Response: A JSON success response indicating the API is healthy.
     """
-    return ApiResponse.success("MDRun API is healthy", HTTPStatus.OK)
+    return jsonify("MDRun API is healthy")
 
 
 # GROMACS routes
@@ -138,7 +137,7 @@ def create_gmx_job() -> Response:
     job = MdrunJob.create(job_id=job_id, job_name=job_name, experiment_id=experiment_id)
     logger.info(f"Started GROMACS job {job_name} with ID {job_id} in experiment {experiment_id}")
 
-    return ApiResponse.success({"id": job.id, "status": job.last_status.value}, HTTPStatus.CREATED)
+    return jsonify({"id": job.id, "status": job.last_status.value}), HTTPStatus.CREATED
 
 
 @gmx_bp.route("/<job_id>", methods=["DELETE"])
@@ -220,7 +219,7 @@ def create_amber_job() -> Response:
     job = MdrunJob.create(job_id=job_id, job_name=job_name, experiment_id=experiment_id)
     logger.info(f"Started AMBER job {job_name} with ID {job_id} in experiment {experiment_id}")
 
-    return ApiResponse.success({"id": job.id, "status": job.last_status.value}, HTTPStatus.CREATED)
+    return jsonify({"id": job.id, "status": job.last_status.value}), HTTPStatus.CREATED
 
 
 @amber_bp.route("/<job_id>", methods=["DELETE"])

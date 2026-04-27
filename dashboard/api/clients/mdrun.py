@@ -8,6 +8,9 @@ def get_mdrun_response_data(response: requests.Response) -> dict:
     """
     Extract JSON data from an MDRun API response.
 
+    The API returns raw resources on success and {detail} on error.
+    HTTP status codes indicate success/failure.
+
     Args:
         response: The response object from the MDRun API.
 
@@ -17,12 +20,11 @@ def get_mdrun_response_data(response: requests.Response) -> dict:
     Raises:
         requests.HTTPError: If the request failed.
     """
-    data = response.json()
+    if not response.ok:
+        detail = response.json().get("detail", response.text)
+        raise requests.HTTPError(detail, request=None, response=response)
 
-    if not data["success"]:
-        raise requests.HTTPError(data["message"], request=None, response=response)
-
-    return data["data"]
+    return response.json()
 
 
 # Legacy aliases (kept for backward compatibility)
@@ -137,7 +139,7 @@ def delete_gmx_job(job_id: str) -> None:
         return
 
     if not response.ok:
-        raise requests.HTTPError(response.json()["message"], request=None, response=response)
+        raise requests.HTTPError(response.json().get("detail", response.text), request=None, response=response)
 
 
 # AMBER-specific functions
@@ -219,4 +221,4 @@ def delete_amber_job(job_id: str) -> None:
         return
 
     if not response.ok:
-        raise requests.HTTPError(response.json()["message"], request=None, response=response)
+        raise requests.HTTPError(response.json().get("detail", response.text), request=None, response=response)

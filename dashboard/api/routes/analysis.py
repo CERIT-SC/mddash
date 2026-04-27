@@ -2,18 +2,17 @@ import json
 from http import HTTPStatus
 from pathlib import Path
 
-from api_response import ApiResponse
 from clients import k8s
 from config import API_PREFIX, DATA_DIR
 from decorators import handle_exceptions
 from enums import AnalysisType, PreprocessingMode
 from extensions import db
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response, jsonify, request
 from models import AnalysisJob, Experiment
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, find_result_file, list_result_files
 from schemas import AnalysisJobSchema
 from validators import check_path, validate_analysis_structure_path, validate_analysis_topology_path
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, NotFound, UnprocessableEntity
 
 analysis_bp = Blueprint("analysis", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/analysis")
 
@@ -29,7 +28,7 @@ def get_analysis_jobs(experiment_id: str) -> Response:
     """
     schema = AnalysisJobSchema(many=True)
     jobs: list[AnalysisJob] = AnalysisJob.query.filter_by(experiment_id=experiment_id).all()
-    return ApiResponse.success(schema.dump(jobs))
+    return jsonify(schema.dump(jobs))
 
 
 @analysis_bp.route("", methods=["POST"])
@@ -43,29 +42,27 @@ def submit_analysis_job(experiment_id: str) -> Response:
     """
     data = request.get_json()
     if not data:
-        return ApiResponse.error("Request body is required.", HTTPStatus.BAD_REQUEST)
+        raise BadRequest("Request body is required.")
 
     analysis_name = data.get("analysis", "")
     structure_file = data.get("structure_file") or None
     trajectory_file = data.get("trajectory_file", "")
     if not analysis_name or not trajectory_file:
-        return ApiResponse.error("analysis and trajectory_file are required.", HTTPStatus.BAD_REQUEST)
+        raise BadRequest("analysis and trajectory_file are required.")
 
     try:
         analysis_type = AnalysisType(analysis_name)
     except ValueError:
-        return ApiResponse.error(
+        raise BadRequest(
             f"Unknown analysis '{analysis_name}'. Available: {', '.join(t.value for t in AnalysisType)}",
-            HTTPStatus.BAD_REQUEST,
         )
 
     preprocessing_mode_name = data.get("preprocessing_mode", PreprocessingMode.AS_IS.value)
     try:
         preprocessing_mode = PreprocessingMode(preprocessing_mode_name)
     except ValueError:
-        return ApiResponse.error(
+        raise BadRequest(
             f"Unknown preprocessing_mode '{preprocessing_mode_name}'. Available: {', '.join(mode.value for mode in PreprocessingMode)}",
-            HTTPStatus.BAD_REQUEST,
         )
 
     topology_file = data.get("topology_file") or None
@@ -79,12 +76,12 @@ def submit_analysis_job(experiment_id: str) -> Response:
             experiment_dir=experiment_dir,
         )
     except BadRequest as error:
-        return ApiResponse.error(error.description, HTTPStatus.BAD_REQUEST)
+        raise error
 
     check_path(trajectory_file, experiment_dir)
     trajectory_path = Path(trajectory_file)
     if not (experiment_dir / trajectory_path).is_file():
-        return ApiResponse.error(f"Trajectory file {trajectory_path.as_posix()} does not exist.", HTTPStatus.NOT_FOUND)
+        raise NotFound(f"Trajectory file {trajectory_path.as_posix()} does not exist.")
 
     try:
         topology_path = validate_analysis_topology_path(
@@ -95,7 +92,7 @@ def submit_analysis_job(experiment_id: str) -> Response:
             preprocessing_mode=preprocessing_mode,
         )
     except BadRequest as error:
-        return ApiResponse.error(error.description, HTTPStatus.BAD_REQUEST)
+        raise error
 
     job = AnalysisJob.start(
         experiment=Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found"),
@@ -105,7 +102,7 @@ def submit_analysis_job(experiment_id: str) -> Response:
         topology_file=topology_path,
         preprocessing_mode=preprocessing_mode,
     )
-    return ApiResponse.success(AnalysisJobSchema().dump(job), HTTPStatus.CREATED)
+    return jsonify(AnalysisJobSchema().dump(job)), HTTPStatus.CREATED
 
 
 @analysis_bp.route("/<job_id>", methods=["GET"])
@@ -121,7 +118,7 @@ def get_analysis_job(experiment_id: str, job_id: str) -> Response:
     job: AnalysisJob = AnalysisJob.query.filter_by(experiment_id=experiment_id, id=job_id).first_or_404(
         description=f"Analysis job {job_id} in experiment {experiment_id} not found"
     )
-    return ApiResponse.success(schema.dump(job))
+    return jsonify(schema.dump(job))
 
 
 @analysis_bp.route("/<job_id>", methods=["DELETE"])
@@ -139,7 +136,7 @@ def delete_analysis_job(experiment_id: str, job_id: str) -> Response:
     job.delete()
     db.session.delete(job)
     db.session.commit()
-    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
 
 
 @analysis_bp.route("/<job_id>/logs", methods=["GET"])
@@ -160,7 +157,7 @@ def get_analysis_job_logs(experiment_id: str, job_id: str) -> Response:
     # Strip initialization noise to avoid confusing users
     marker = "Running MDDB workflow"
     idx = logs.find(marker)
-    return ApiResponse.success(logs[idx:] if idx != -1 else logs)
+    return jsonify(logs[idx:] if idx != -1 else logs)
 
 
 @analysis_bp.route("/results", methods=["GET"])
@@ -178,7 +175,7 @@ def list_analysis_results(experiment_id: str) -> Response:
     """
     files = list_result_files(experiment_id)
     names = [f.name[len(ANALYSIS_RESULT_PREFIX) : -len(ANALYSIS_RESULT_SUFFIX)].replace("_", "-") for f in files]
-    return ApiResponse.success(names)
+    return jsonify(names)
 
 
 @analysis_bp.route("/results/<name>/variants", methods=["GET"])
@@ -195,20 +192,20 @@ def get_analysis_variants(experiment_id: str, name: str) -> Response:
     """
     result_file = find_result_file(experiment_id, name)
     if not result_file:
-        return ApiResponse.success([])
+        return jsonify([])
 
     try:
         data = json.loads(result_file.read_text())
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return ApiResponse.success([])
+        return jsonify([])
 
     # Summary format: [{ "name": "Overall", "analysis": "rmsd-pairwise-00" }, …]
     if isinstance(data, list) and all(
         isinstance(item, dict) and "analysis" in item and "name" in item for item in data
     ):
-        return ApiResponse.success(data)
+        return jsonify(data)
 
-    return ApiResponse.success([])
+    return jsonify([])
 
 
 @analysis_bp.route("/results/<name>", methods=["GET"])
@@ -222,11 +219,11 @@ def get_analysis_result(experiment_id: str, name: str) -> Response:
     """
     result_file = find_result_file(experiment_id, name)
     if not result_file:
-        return ApiResponse.error(f"Analysis result '{name}' not found.", HTTPStatus.NOT_FOUND)
+        raise NotFound(f"Analysis result '{name}' not found.")
 
     try:
         data = json.loads(result_file.read_text())
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
-        return ApiResponse.error(f"Failed to read analysis result: {e}", HTTPStatus.UNPROCESSABLE_ENTITY)
+        raise UnprocessableEntity(f"Failed to read analysis result: {e}")
 
-    return ApiResponse.success(data)
+    return jsonify(data)

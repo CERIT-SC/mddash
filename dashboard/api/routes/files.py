@@ -1,12 +1,11 @@
 from dataclasses import asdict
-from http import HTTPStatus
 
-from api_response import ApiResponse
 from config import API_PREFIX, DATA_DIR
 from decorators import handle_exceptions
-from flask import Blueprint, Response, request, send_file
+from flask import Blueprint, Response, jsonify, request, send_file
 from utils import get_files_with_extensions
 from validators import check_experiment_id, check_path
+from werkzeug.exceptions import NotFound
 
 files_bp = Blueprint("files", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/files")
 
@@ -32,7 +31,7 @@ def get_files(experiment_id: str) -> Response:
         file_dict["url"] = f"{API_PREFIX}/experiments/{experiment_id}/files/{f.path}"
         file_dicts.append(file_dict)
 
-    return ApiResponse.success(file_dicts)
+    return jsonify(file_dicts)
 
 
 @files_bp.route("/<path:path>", methods=["GET"])
@@ -49,6 +48,6 @@ def get_file(experiment_id: str, path: str) -> Response:
     file_path = DATA_DIR / experiment_id / path
 
     if not file_path.exists():
-        return ApiResponse.error(f"File {path} does not exist.", HTTPStatus.NOT_FOUND)
+        raise NotFound(f"File {path} does not exist.")
 
     return send_file(file_path, as_attachment=False)

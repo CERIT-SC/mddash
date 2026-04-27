@@ -60,7 +60,7 @@ graph TD
 1. User triggers action in component
 2. Component calls a TanStack Query hook from `src/hooks/`
 3. Hook's `queryFn` calls `api.get/post/patch/delete(path).then(r => r.data)` via `lib/http.ts`
-4. Axios interceptor unwraps `{ success, data, message }` backend envelope and throws on errors
+4. Backend returns raw resources on success; axios error interceptor extracts `detail` field from `{detail: "..."}` error responses
 5. TanStack Query updates its cache; components re-render automatically
 6. Errors surface as thrown `Error` objects caught by query error state or `toast.error()`
 
@@ -79,8 +79,8 @@ graph TD
 ### HTTP / API Client
 - **Always use `lib/http.ts`**: Use the configured `api` axios instance, never raw `axios`
 - **No wrapper functions**: Hooks call `api.get/post/patch/delete(path).then(r => r.data)` directly
-- **Envelope unwrapped**: Interceptor strips `{ success, data, message }` — `r.data` is the payload
-- **Errors thrown**: Failed requests throw `Error` with the backend `message`; handle in hook `onError` or toast
+- **Raw responses**: Backend returns resources directly — `r.data` is the payload (no envelope)
+- **Errors thrown**: Failed requests throw `Error` with the backend `detail` field; handle in hook `onError` or toast
 
 ### ShadCN / Tailwind v4
 - **CSS-first config**: Uses `@tailwindcss/vite` plugin; config lives in `src/index.css` via `@import "tailwindcss"` and `@theme` blocks

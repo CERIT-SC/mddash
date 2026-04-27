@@ -1,12 +1,12 @@
 """Unit tests for the handle_exceptions decorator."""
 
+import json
 from http import HTTPStatus
 from typing import NoReturn
 
-from api_response import ApiResponse
 from decorators import handle_exceptions
 from extensions import db
-from flask import Flask, Response
+from flask import Flask, Response, jsonify
 
 
 class TestHandleExceptionsDecorator:
@@ -17,14 +17,14 @@ class TestHandleExceptionsDecorator:
 
         @handle_exceptions()
         def successful_route() -> Response:
-            return ApiResponse.success({"result": "ok"})
+            return jsonify({"result": "ok"})
 
         with app.app_context():
             response = successful_route()
             assert response.status_code == HTTPStatus.OK
 
     def test_catches_exceptions(self, app: Flask) -> None:
-        """Decorator should catch and convert exceptions to error responses."""
+        """Decorator should catch and convert exceptions to {detail} error responses."""
 
         @handle_exceptions()
         def failing_route() -> NoReturn:
@@ -33,7 +33,22 @@ class TestHandleExceptionsDecorator:
         with app.app_context():
             response = failing_route()
             assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-            assert b"Test error" in response.data
+            data = json.loads(response.data)
+            assert data["detail"] == "Test error"
+
+    def test_catches_http_exceptions(self, app: Flask) -> None:
+        """Decorator should use HTTPException code and description."""
+
+        @handle_exceptions()
+        def bad_request_route() -> NoReturn:
+            from werkzeug.exceptions import BadRequest
+            raise BadRequest("Invalid input")
+
+        with app.app_context():
+            response = bad_request_route()
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            data = json.loads(response.data)
+            assert data["detail"] == "Invalid input"
 
     def test_rollback_on_exception(self, app: Flask) -> None:
         """Decorator with rollback=True should rollback DB on exception."""
