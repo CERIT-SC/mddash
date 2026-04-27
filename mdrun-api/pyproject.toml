@@ -1,0 +1,23 @@
+[project]
+name = "mdrun-api"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "flask",
+    "flask-sqlalchemy",
+    "flask-marshmallow",
+    "flask-cors",
+    "marshmallow-sqlalchemy",
+    "kubernetes",
+]
+
+[project.optional-dependencies]
+prod = ["uwsgi"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+    "pytest-flask>=1.3",
+    "ty",
+]

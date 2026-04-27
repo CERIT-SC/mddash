@@ -1,0 +1,12 @@
+[project]
+name = "mddash-notebook"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "setuptools<70",
+    "GromacsWrapper",
+    "mdtraj",
+    "nglview<4.0",
+    "pandas",
+    "matplotlib",
+]

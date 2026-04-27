@@ -1,15 +1,17 @@
 FROM python:3.11-slim AS builder
 
+COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /uvx /bin/
+
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir uwsgi
+COPY pyproject.toml uv.lock ./
+ENV UV_SYSTEM_PYTHON=1
+RUN uv sync --frozen --no-dev --extra prod --no-install-project
 
 
 FROM python:3.11-slim AS production

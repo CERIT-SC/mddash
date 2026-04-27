@@ -2,16 +2,20 @@
 
 FROM python:3.12-alpine
 
+COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /uvx /bin/
+
 WORKDIR /app
 
 RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
 COPY --chown=app:app auth.py .
 
 USER app
+
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 5001
 

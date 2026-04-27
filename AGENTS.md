@@ -182,6 +182,16 @@ sequenceDiagram
 4. **Deployment**: Run `make deploy ENV=dev` or `make deploy ENV=prod` to deploy via Helm
 5. **Rollback**: Run `make rollback ENV=prod REVISION=N` to rollback to specific revision
 
+## Feedback Loop
+
+Run from repo root before claiming any Python code is correct. Each command must pass before moving to the next.
+
+```bash
+make format
+make type-check
+make test
+```
+
 ## CI/CD Pipeline
 
 - **Push to `dev`**: Deploys to dev environment with `dev` tag

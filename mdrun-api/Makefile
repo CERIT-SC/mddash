@@ -32,7 +32,7 @@ help: ## Show this help
 
 .PHONY: test
 test: ## Run tests
-	pip install -q -r requirements-dev.txt && pytest
+	uv run pytest
 
 .PHONY: build
 build: ## Build Docker image (ENV=dev for dev, ENV=prod for prod)

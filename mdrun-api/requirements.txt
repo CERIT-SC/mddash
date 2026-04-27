@@ -1,6 +1,0 @@
-Flask
-Flask-SQLAlchemy
-Flask-Marshmallow
-Flask-CORS
-marshmallow-sqlalchemy
-kubernetes
