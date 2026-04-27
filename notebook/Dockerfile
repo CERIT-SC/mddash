@@ -34,8 +34,11 @@ ENV AMBERHOME=/opt/ambertools25
 ENV PATH="/opt/pmemd24/bin:/opt/ambertools25/bin:/opt/conda/envs/gromacs/bin:${PATH}"
 ENV LD_LIBRARY_PATH=/opt/ambertools25/lib:/opt/pmemd24/lib
 
-COPY requirements.txt /tmp
-RUN pip3 install -r /tmp/requirements.txt && rm /tmp/requirements.txt
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:0.5 /uv /bin/uv
+
+COPY pyproject.toml /tmp/
+RUN uv pip install --system --no-cache -r /tmp/pyproject.toml && rm /tmp/pyproject.toml
 
 COPY --chown=1000:1000 --chmod=755 setup-binder-env     /usr/local/bin/before-notebook.d/setup-binder-env
 COPY --chown=1000:1000 --chmod=755 start-with-binder.sh /usr/local/bin/start-with-binder.sh
