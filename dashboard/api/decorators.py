@@ -1,21 +1,16 @@
 import functools
+import logging
 from typing import Callable
 
-from api_response import ApiResponse
 from extensions import db
-from flask import Response
+from flask import Response, jsonify
+from werkzeug.exceptions import HTTPException
+
+logger = logging.getLogger(__name__)
 
 
 def handle_exceptions(rollback: bool = False) -> Callable:
-    """
-    Handle exceptions in Flask routes decorator.
-
-    Args:
-        rollback: Whether to rollback database session on exception (default: False)
-
-    Returns:
-        Callable: A decorator that wraps route functions with exception handling.
-    """
+    """Catch exceptions and return {detail: "..."} JSON responses."""
 
     def decorator(f: Callable[..., Response]) -> Callable[..., Response]:
         @functools.wraps(f)
@@ -25,7 +20,22 @@ def handle_exceptions(rollback: bool = False) -> Callable:
             except Exception as e:
                 if rollback:
                     db.session.rollback()
-                return ApiResponse.error(e)
+
+                exc_info = False
+
+                if isinstance(e, HTTPException):
+                    status = e.code or 500
+                    message = e.description or "Unknown error occurred."
+                else:
+                    status = 500
+                    message = str(e)
+                    exc_info = True
+
+                logger.error(message, exc_info=exc_info)
+
+                response = jsonify({"detail": message})
+                response.status_code = int(status)
+                return response
 
         return wrapper
 

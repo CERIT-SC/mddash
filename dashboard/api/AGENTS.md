@@ -45,7 +45,7 @@ graph TD
     D --> G[extensions.db]
     E --> H[Kubernetes API]
     F --> I[External Services]
-    G --> J[ApiResponse.success/error]
+    G --> J[jsonify / HTTPException]
     H --> J
     I --> J
     J --> K[HTTP Response]
@@ -59,8 +59,8 @@ graph TD
 1. Request hits Flask route in `routes/`
 2. Route handler calls model method or client function
 3. Model/Client performs business logic (DB, K8s, external API)
-4. Response wrapped in `ApiResponse.success()` or `ApiResponse.error()`
-5. JSON response returned with consistent structure `{success, data/message}`
+4. Route returns `jsonify(data)` for success or raises `HTTPException` for errors
+5. `@handle_exceptions` catches exceptions and returns `{detail: "..."}` with the correct HTTP status code
 
 ### Background Operations
 - MDRepo file uploads run in daemon threads via `mdrepo.start_upload_worker()`
@@ -103,8 +103,8 @@ graph TD
 ### Error Handling
 - **Always use `@handle_exceptions()` decorator** on route handlers
 - Set `rollback=True` for routes that modify database
-- `ApiResponse.error()` automatically logs exceptions
-- HTTP exceptions (`BadRequest`, `NotFound`, etc.) are caught and converted to JSON responses
+- Routes return `jsonify(data)` on success; raise `HTTPException` subclasses (`BadRequest`, `NotFound`, etc.) for errors
+- `@handle_exceptions` catches all exceptions, logs them, and returns `{detail: "..."}` with the correct HTTP status code
 
 ### Configuration
 - All config loaded from environment variables in `config.py`

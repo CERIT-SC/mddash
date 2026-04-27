@@ -1,14 +1,14 @@
 from http import HTTPStatus
 
-from api_response import ApiResponse
 from config import API_PREFIX, DATA_DIR
 from decorators import handle_exceptions
 from enums import DeviceType
 from extensions import db
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response, jsonify, request
 from models import Experiment, GromacsJob
 from schemas import GromacsJobSchema
 from validators import check_log_type, check_path, check_positive_int
+from werkzeug.exceptions import NotFound
 
 gmx_bp = Blueprint("gmx", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/gmx")
 
@@ -24,7 +24,7 @@ def get_gmx_jobs(experiment_id: str) -> Response:
     """
     schema = GromacsJobSchema(many=True)
     jobs: list[GromacsJob] = GromacsJob.query.filter_by(experiment_id=experiment_id).all()
-    return ApiResponse.success(schema.dump(jobs))
+    return jsonify(schema.dump(jobs))
 
 
 @gmx_bp.route("/<path:tpr_name>", methods=["GET"])
@@ -40,7 +40,7 @@ def get_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
         description=f"GROMACS job for {tpr_name} in experiment {experiment_id} not found"
     )
-    return ApiResponse.success(schema.dump(job))
+    return jsonify(schema.dump(job))
 
 
 @gmx_bp.route("/<path:tpr_name>", methods=["POST"])
@@ -61,7 +61,7 @@ def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     tpr_path = DATA_DIR / experiment_id / tpr_name
 
     if not tpr_path.is_file():
-        return ApiResponse.error(f"TPR file {tpr_name} does not exist.", HTTPStatus.NOT_FOUND)
+        raise NotFound(f"TPR file {tpr_name} does not exist.")
 
     if not job:
         job = GromacsJob.start(
@@ -74,7 +74,7 @@ def submit_gmx_job(experiment_id: str, tpr_name: str) -> Response:
             extra_args=request.form.get("extra_args", ""),
         )
 
-    return ApiResponse.success(schema.dump(job), HTTPStatus.CREATED)
+    return jsonify(schema.dump(job)), HTTPStatus.CREATED
 
 
 @gmx_bp.route("/<path:tpr_name>", methods=["DELETE"])
@@ -92,7 +92,7 @@ def delete_gmx_job(experiment_id: str, tpr_name: str) -> Response:
     job.delete()
     db.session.delete(job)
     db.session.commit()
-    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
 
 
 @gmx_bp.route("/<path:tpr_name>/log", methods=["GET"])
@@ -115,4 +115,4 @@ def get_gmx_job_log(experiment_id: str, tpr_name: str) -> Response:
     check_positive_int(tail_lines, "Tail lines", max_value=100000)
 
     log = job.get_log(log_type, int(tail_lines))
-    return ApiResponse.success(log)
+    return jsonify(log)

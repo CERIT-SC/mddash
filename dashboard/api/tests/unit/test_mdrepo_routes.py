@@ -54,8 +54,7 @@ class TestMDRepoRoutes:
         response = client.get("/dash/api/mdrepo/status")
         assert response.status_code == HTTPStatus.OK
         data = response.get_json()
-        assert data["success"] is True
-        assert data["data"]["authenticated"] is False
+        assert data["authenticated"] is False
 
     @patch("routes.mdrepo.requests.get")
     def test_get_status_valid_token(self, mock_get: Mock, client: FlaskClient) -> None:
@@ -71,8 +70,7 @@ class TestMDRepoRoutes:
         response = client.get("/dash/api/mdrepo/status")
         assert response.status_code == HTTPStatus.OK
         data = response.get_json()
-        assert data["success"] is True
-        assert data["data"]["authenticated"] is True
+        assert data["authenticated"] is True
 
     @patch("routes.mdrepo.requests.get")
     def test_get_status_expired_token(self, mock_get: Mock, client: FlaskClient) -> None:
@@ -88,8 +86,7 @@ class TestMDRepoRoutes:
         response = client.get("/dash/api/mdrepo/status")
         assert response.status_code == HTTPStatus.OK
         data = response.get_json()
-        assert data["success"] is True
-        assert data["data"]["authenticated"] is False
+        assert data["authenticated"] is False
         # Token should be cleared from session
         with client.session_transaction() as sess:
             assert MDREPO_TOKEN_KEY not in sess
@@ -220,8 +217,7 @@ class TestMDRepoRoutes:
         response = client.post("/dash/api/mdrepo/logout")
         assert response.status_code == HTTPStatus.OK
         data = response.get_json()
-        assert data["success"] is True
-        assert data["data"]["message"] == "Logged out from MDRepo"
+        assert data["message"] == "Logged out from MDRepo"
 
         # Check that all tokens are cleared
         with client.session_transaction() as sess:

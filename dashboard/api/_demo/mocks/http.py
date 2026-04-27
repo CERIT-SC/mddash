@@ -91,17 +91,14 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         }
 
         response_body = {
-            "success": True,
-            "data": {
-                "id": job_id,
-                "status": "RUNNING",
-                "bucket_name": body.get("bucket_name", "demo-bucket"),
-                "pme": pme,
-                "nb": nb,
-                "np": np_val,
-                "ntomp": ntomp,
-                "extra_args": body.get("extra_args", ""),
-            },
+            "id": job_id,
+            "status": "RUNNING",
+            "bucket_name": body.get("bucket_name", "demo-bucket"),
+            "pme": pme,
+            "nb": nb,
+            "np": np_val,
+            "ntomp": ntomp,
+            "extra_args": body.get("extra_args", ""),
         }
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
@@ -143,17 +140,14 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         }
 
         response_body = {
-            "success": True,
-            "data": {
-                "id": job_id,
-                "status": "RUNNING",
-                "bucket_name": body.get("bucket_name", "demo-bucket"),
-                "binary": binary,
-                "ewald": ewald,
-                "np": np_val,
-                "ntomp": ntomp,
-                "extra_args": body.get("extra_args", ""),
-            },
+            "id": job_id,
+            "status": "RUNNING",
+            "bucket_name": body.get("bucket_name", "demo-bucket"),
+            "binary": binary,
+            "ewald": ewald,
+            "np": np_val,
+            "ntomp": ntomp,
+            "extra_args": body.get("extra_args", ""),
         }
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
@@ -166,20 +160,17 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         """
         match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/(?P<job_id>[^/]+)", request.url)
         if not match:
-            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"success": False, "message": "Job not found"}))
+            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"detail": "Job not found"}))
 
         job_id = match.group("job_id")
         job_data = demo_state.mdrun_jobs.get(job_id)
 
         if job_data is None:
-            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"success": False, "message": f"Job {job_id} not found"}))
+            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"detail": f"Job {job_id} not found"}))
 
         _advance_mdrun_job(job_id, job_data)
 
-        response_body = {
-            "success": True,
-            "data": {"id": job_id, "status": job_data["status"]},
-        }
+        response_body = {"id": job_id, "status": job_data["status"]}
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
     def get_amber_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
@@ -191,20 +182,17 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         """
         match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/(?P<job_id>[^/]+)", request.url)
         if not match:
-            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"success": False, "message": "Job not found"}))
+            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"detail": "Job not found"}))
 
         job_id = match.group("job_id")
         job_data = demo_state.mdrun_jobs.get(job_id)
 
         if job_data is None:
-            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"success": False, "message": f"Job {job_id} not found"}))
+            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"detail": f"Job {job_id} not found"}))
 
         _advance_mdrun_job(job_id, job_data)
 
-        response_body = {
-            "success": True,
-            "data": {"id": job_id, "status": job_data["status"]},
-        }
+        response_body = {"id": job_id, "status": job_data["status"]}
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
     def delete_gmx_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:

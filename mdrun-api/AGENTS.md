@@ -9,7 +9,7 @@ Manage GROMACS and AMBER molecular dynamics simulation jobs on Kubernetes with a
 - **Flask Blueprint Pattern**: Routes organized into `health_bp`, `gmx_bp`, and `amber_bp` blueprints for modularity
 - **Active Record Pattern**: `MdrunJob` model encapsulates data persistence; Kubernetes orchestration lives in route handlers
 - **Background Polling**: Daemon thread periodically queries Kubernetes for job status updates (15-minute intervals)
-- **Decorator Pattern**: `@handle_exceptions` provides centralized error handling with optional database rollback
+- **Decorator Pattern**: `@handle_exceptions` catches exceptions and returns `{detail: "..."}` with the correct HTTP status code; includes optional database rollback
 - **Property-Based Status**: `MdrunJob.status` property dynamically fetches current status from Kubernetes and updates database
 - **Shared Route Handlers**: `_get_job` and `_delete_job` helpers are shared between GMX and AMBER routes
 

@@ -1,11 +1,10 @@
 from http import HTTPStatus
 
-from api_response import ApiResponse
 from config import API_PREFIX
 from decorators import handle_exceptions
 from enums import NotebookTier
 from extensions import db
-from flask import Blueprint, Response, request
+from flask import Blueprint, Response, jsonify, request
 from models import Experiment
 from models.notebook import get_tier_resources
 from schemas import NotebookSchema
@@ -32,7 +31,7 @@ def get_notebook_config() -> Response:
             "cpuLimit": nb_res["limits"]["cpu"],
             "memoryLimit": nb_res["limits"]["memory"],
         })
-    return ApiResponse.success({
+    return jsonify({
         "tiers": tiers,
         "defaultTier": NotebookTier.SMALL.value,
     })
@@ -51,7 +50,7 @@ def get_notebook(experiment_id: str) -> Response:
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
-    return ApiResponse.success(schema.dump(experiment.notebook))
+    return jsonify(schema.dump(experiment.notebook))
 
 
 @notebook_bp.route("", methods=["POST"])
@@ -89,7 +88,7 @@ def start_notebook(experiment_id: str) -> Response:
     notebook = experiment.notebook
     notebook.start(tier=tier, gpu=gpu)
     db.session.commit()
-    return ApiResponse.success(schema.dump(notebook), HTTPStatus.CREATED)
+    return jsonify(schema.dump(notebook)), HTTPStatus.CREATED
 
 
 @notebook_bp.route("", methods=["DELETE"])
@@ -106,4 +105,4 @@ def stop_notebook(experiment_id: str) -> Response:
     )
     notebook = experiment.notebook
     notebook.stop()
-    return ApiResponse.success(status=HTTPStatus.NO_CONTENT)
+    return "", HTTPStatus.NO_CONTENT
