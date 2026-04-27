@@ -188,11 +188,7 @@ Run from repo root before claiming any Python code is correct. Each command must
 
 ```bash
 make format
-```
-```bash
 make type-check
-```
-```bash
 make test
 ```
 
