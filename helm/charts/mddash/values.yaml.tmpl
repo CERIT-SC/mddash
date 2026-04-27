@@ -275,6 +275,8 @@ mdrun-api:
       value: "{{ $cfg.s3.endpoint }}"
     - name: GMX_IMAGE
       value: "{{ $cfg.gmxImage }}"
+    - name: AMBER_IMAGE
+      value: "{{ $cfg.amberImage }}"
     - name: GPU_TYPE
       value: "{{ $cfg.gpuType }}"
 
