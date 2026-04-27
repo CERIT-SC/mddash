@@ -25,7 +25,7 @@ S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")
 S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY")
 
 GMX_IMAGE = os.environ.get("GMX_IMAGE", "")
-AMBER_IMAGE = os.environ.get("AMBER_IMAGE", "cerit.io/xkrasa/amber:24")
+AMBER_IMAGE = os.environ.get("AMBER_IMAGE", "")
 
 logger = logging.getLogger(__name__)
 

@@ -36,7 +36,7 @@ jupyterhub:
       KubeSpawner:
         services_enabled: true
         events_enabled: false
-        http_timeout: 120
+        http_timeout: 600
 
     extraEnv:
       EGICHECKIN_HOST:
@@ -275,6 +275,8 @@ mdrun-api:
       value: "{{ $cfg.s3.endpoint }}"
     - name: GMX_IMAGE
       value: "{{ $cfg.gmxImage }}"
+    - name: AMBER_IMAGE
+      value: "{{ $cfg.amberImage }}"
     - name: GPU_TYPE
       value: "{{ $cfg.gpuType }}"
 
