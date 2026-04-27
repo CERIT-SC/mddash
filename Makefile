@@ -56,7 +56,7 @@ type-check-mdrun-api: ## Type-check mdrun-api
 
 .PHONY: type-check-ui
 type-check-ui: ## Type-check dashboard UI (TypeScript)
-	cd dashboard/ui && npm run typecheck
+	cd dashboard/ui && npm run type-check
 
 # ==================== TEST ====================
 
