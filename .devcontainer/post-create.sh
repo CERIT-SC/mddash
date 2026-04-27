@@ -1,6 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
+# Sync workspace venv for IDE type resolution
+uv sync --all-packages --group dev
+
 # Sync per-component Python environments
 (cd dashboard/api && uv sync --group dev)
 (cd dashboard/auth && uv sync --group dev)

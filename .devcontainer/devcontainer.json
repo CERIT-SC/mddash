@@ -53,8 +53,9 @@
 					"editor.formatOnSave": true,
 					"editor.defaultFormatter": "esbenp.prettier-vscode"
 				},
-				"python.defaultInterpreterPath": "${containerWorkspaceFolder}/dashboard/api/.venv/bin/python",
-				"ty.interpreter": ["${containerWorkspaceFolder}/dashboard/api/.venv/bin/python", "${containerWorkspaceFolder}/mdrun-api/.venv/bin/python"],
+				"python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python",
+				"ruff.interpreter": ["${containerWorkspaceFolder}/.venv/bin/python"],
+				"ty.interpreter": ["${containerWorkspaceFolder}/.venv/bin/python"],
 				"terminal.integrated.env.linux": {
 					"PATH": "/home/vscode/.local/bin:${env:PATH}"
 				}
