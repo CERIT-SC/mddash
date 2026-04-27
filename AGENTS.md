@@ -184,10 +184,16 @@ sequenceDiagram
 
 ## Feedback Loop
 
-Run from the component directory (`dashboard/api/`, `dashboard/auth/`, `mdrun-api/`) before claiming any Python code is correct:
+Run from repo root before claiming any Python code is correct. Each command must pass before moving to the next.
 
 ```bash
-uv run ty check . && ruff check . && ruff format --check . && uv run pytest
+make format
+```
+```bash
+make type-check
+```
+```bash
+make test
 ```
 
 ## CI/CD Pipeline

@@ -25,12 +25,17 @@ help: ## Show this help
 	@echo ""
 	@echo "Current: BRANCH=$(CURRENT_BRANCH), ENV=$(ENV), TAG=$(IMAGE_TAG), NS=$(namespace)"
 
-# ==================== FORMAT ====================
+# ==================== FORMAT / LINT ====================
 
 .PHONY: format
-format: ## Format all code (Python via ruff, frontend via prettier)
+format: ## Format and lint-fix all code (Python via ruff, frontend via prettier)
 	ruff format . --exclude .venv --exclude node_modules
+	ruff check . --fix --exclude .venv --exclude node_modules
 	cd dashboard/ui && npm run format
+
+.PHONY: lint
+lint: ## Check Python linting without auto-fix
+	ruff check . --exclude .venv --exclude node_modules
 
 # ==================== TYPE CHECK ====================
 
