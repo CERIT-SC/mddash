@@ -37,7 +37,8 @@
 				"ms-python.python",
 				"redhat.vscode-yaml",
 				"esbenp.prettier-vscode",
-				"charliermarsh.ruff"
+				"charliermarsh.ruff",
+				"astral-sh.ty"
 			],
 			"settings": {
 				"[python]": {
