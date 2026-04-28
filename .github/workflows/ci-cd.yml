@@ -422,24 +422,28 @@ jobs:
           make push-${{ matrix.component.name }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
           # Also tag as 'latest' for prod to enable re-tagging when builds are skipped
           if [[ "${{ needs.setup.outputs.env }}" == "prod" ]]; then
+            REGISTRY=${{ needs.setup.outputs.registry }}
             IMAGE_NAME=$(yq '.notebook.image' config.yaml)
             if [[ "${{ matrix.component.name }}" == "mdrun-api" ]]; then
               IMAGE_NAME=$(yq '.mdrunApi.image' config.yaml)
             fi
-            docker tag ${IMAGE_NAME}:${{ needs.setup.outputs.tag }} ${IMAGE_NAME}:latest
-            docker push ${IMAGE_NAME}:latest
+            FULL_IMAGE_NAME="${REGISTRY}/${IMAGE_NAME}"
+            docker tag ${FULL_IMAGE_NAME}:${{ needs.setup.outputs.tag }} ${FULL_IMAGE_NAME}:latest
+            docker push ${FULL_IMAGE_NAME}:latest
           fi
 
       - name: Re-tag existing image (when skipped)
         if: steps.changes.outputs.changed == 'false' && needs.setup.outputs.env == 'prod'
         run: |
+          REGISTRY=${{ needs.setup.outputs.registry }}
           IMAGE_NAME=$(yq '.notebook.image' config.yaml)
           if [[ "${{ matrix.component.name }}" == "mdrun-api" ]]; then
             IMAGE_NAME=$(yq '.mdrunApi.image' config.yaml)
           fi
-          docker pull ${IMAGE_NAME}:latest
-          docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:${{ needs.setup.outputs.tag }}
-          docker push ${IMAGE_NAME}:${{ needs.setup.outputs.tag }}
+          FULL_IMAGE_NAME="${REGISTRY}/${IMAGE_NAME}"
+          docker pull ${FULL_IMAGE_NAME}:latest
+          docker tag ${FULL_IMAGE_NAME}:latest ${FULL_IMAGE_NAME}:${{ needs.setup.outputs.tag }}
+          docker push ${FULL_IMAGE_NAME}:${{ needs.setup.outputs.tag }}
 
   push-mdrun-api-chart:
     needs: setup
