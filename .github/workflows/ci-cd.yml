@@ -136,7 +136,7 @@ jobs:
       - uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
-          cache-dependency-glob: "dashboard/api/uv.lock"
+          cache-dependency-glob: "uv.lock"
       - run: uv sync --group dev
       - run: uv run ty check .
 
