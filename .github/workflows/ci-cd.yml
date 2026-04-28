@@ -88,7 +88,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          cache-dependency-glob: "dashboard/api/uv.lock"
+          cache-dependency-glob: "uv.lock"
       - name: Install dependencies
         run: uv sync --group dev
       - name: Run tests
@@ -104,7 +104,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          cache-dependency-glob: "dashboard/auth/uv.lock"
+          cache-dependency-glob: "uv.lock"
       - name: Install dependencies
         run: uv sync --group dev
       - name: Run tests
@@ -120,7 +120,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          cache-dependency-glob: "mdrun-api/uv.lock"
+          cache-dependency-glob: "uv.lock"
       - name: Install dependencies
         run: uv sync --group dev --no-install-project
       - name: Run tests
@@ -150,7 +150,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          cache-dependency-glob: "dashboard/auth/uv.lock"
+          cache-dependency-glob: "uv.lock"
       - run: uv sync --group dev
       - run: uv run ty check .
 
@@ -164,7 +164,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-          cache-dependency-glob: "mdrun-api/uv.lock"
+          cache-dependency-glob: "uv.lock"
       - run: uv sync --group dev --no-install-project
       - run: uv run ty check .
 
@@ -302,10 +302,13 @@ jobs:
         sidecar:
           - name: auth
             path: dashboard/auth
+            context: .
           - name: api
             path: dashboard/api
+            context: .
           - name: s3sync
             path: dashboard/s3-sync
+            context: dashboard/s3-sync
     steps:
       - uses: actions/checkout@v4
         with:
@@ -353,7 +356,7 @@ jobs:
         if: steps.changes.outputs.changed == 'true'
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.sidecar.path }}
+          context: ${{ matrix.sidecar.context }}
           file: ${{ matrix.sidecar.path }}/${{ steps.dockerfile.outputs.file }}
           push: true
           tags: |

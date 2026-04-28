@@ -13,9 +13,14 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+COPY dashboard/api/pyproject.toml dashboard/api/
+COPY dashboard/auth/pyproject.toml dashboard/auth/
+COPY mdrun-api/pyproject.toml mdrun-api/
+COPY notebook/pyproject.toml notebook/
 
-COPY --chown=app:app . .
+RUN uv sync --frozen --no-dev --package dashboard-api --no-install-project
+
+COPY --chown=app:app dashboard/api/ .
 
 RUN mkdir -p /mddash && chown app:app /mddash
 RUN mkdir -p /home/app && chown app:app /home/app

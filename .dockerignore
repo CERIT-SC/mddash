@@ -1,0 +1,17 @@
+.git/
+.devcontainer/
+.github/
+.worktrees/
+docs/
+private/
+helm/
+config*.yaml
+**/node_modules/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/dist/
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/

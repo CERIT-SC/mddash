@@ -21,7 +21,10 @@ def get_mdrun_response_data(response: requests.Response) -> dict:
         requests.HTTPError: If the request failed.
     """
     if not response.ok:
-        detail = response.json().get("detail", response.text)
+        try:
+            detail = response.json().get("detail", response.text)
+        except requests.exceptions.JSONDecodeError:
+            detail = response.text or f"MDRun API error: HTTP {response.status_code}"
         raise requests.HTTPError(detail, request=None, response=response)
 
     return response.json()
