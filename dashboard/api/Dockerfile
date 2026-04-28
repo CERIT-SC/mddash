@@ -18,10 +18,12 @@ RUN uv sync --frozen --no-dev --no-install-project
 COPY --chown=app:app . .
 
 RUN mkdir -p /mddash && chown app:app /mddash
+RUN mkdir -p /home/app && chown app:app /home/app
 
 USER app
 
 ENV DATA_DIR=/mddash
+ENV HOME=/home/app
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 5000
