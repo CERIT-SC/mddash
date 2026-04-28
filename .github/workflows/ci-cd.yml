@@ -422,7 +422,7 @@ jobs:
           make push-${{ matrix.component.name }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
           # Also tag as 'latest' for prod to enable re-tagging when builds are skipped
           if [[ "${{ needs.setup.outputs.env }}" == "prod" ]]; then
-            REGISTRY=${{ needs.setup.outputs.registry }}
+            REGISTRY=$(yq '.registry' ${{ needs.setup.outputs.config }})
             IMAGE_NAME=$(yq '.notebook.image' config.yaml)
             if [[ "${{ matrix.component.name }}" == "mdrun-api" ]]; then
               IMAGE_NAME=$(yq '.mdrunApi.image' config.yaml)
@@ -435,7 +435,7 @@ jobs:
       - name: Re-tag existing image (when skipped)
         if: steps.changes.outputs.changed == 'false' && needs.setup.outputs.env == 'prod'
         run: |
-          REGISTRY=${{ needs.setup.outputs.registry }}
+          REGISTRY=$(yq '.registry' ${{ needs.setup.outputs.config }})
           IMAGE_NAME=$(yq '.notebook.image' config.yaml)
           if [[ "${{ matrix.component.name }}" == "mdrun-api" ]]; then
             IMAGE_NAME=$(yq '.mdrunApi.image' config.yaml)
