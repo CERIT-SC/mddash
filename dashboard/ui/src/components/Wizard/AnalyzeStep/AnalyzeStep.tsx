@@ -42,17 +42,16 @@ const AnalyzeStep = (props: WizardStepProps) => {
     [selectedAnalysis]
   )
   // Topology is required when preprocessing demands it, an analysis needs it,
-  // or a trajectory is selected for an engine that provides topology formats
-  // (e.g. AMBER .nc trajectories need .prmtop/.parm7 to render in MolStar).
+  // or the engine's trajectory format requires it (e.g. AMBER .nc needs .prmtop/.parm7).
+  const topologyForTrajectory = !!coordsFile && engineConfig.trajectoryRequiresTopology
   const topologyRequired =
     preprocessingMode !== AnalysisPreprocessingMode.AS_IS ||
     !!analysisConfig?.requiresTopology ||
-    (!!coordsFile && engineConfig.topologyExts.length > 0)
+    topologyForTrajectory
   const topologyFormats =
     preprocessingMode === AnalysisPreprocessingMode.AS_IS
       ? engineConfig.topologyExts
       : engineConfig.preprocessingTopologyExts
-  const topologyForTrajectory = !!coordsFile && engineConfig.topologyExts.length > 0
   const topologyTitle =
     preprocessingMode !== AnalysisPreprocessingMode.AS_IS
       ? "Select simulation topology file"
@@ -79,9 +78,8 @@ const AnalyzeStep = (props: WizardStepProps) => {
     }
   }, [preprocessingMode, topologyFile, topologyRequired, engineConfig])
 
-  // When coords are selected with a topology file, use the topology as MolStar's
-  // structure source (prmtop+nc = trajectory). Without coords, show the PDB only.
-  const viewerStructure = coordsFile && topologyFile ? topologyFile : structureFile
+  // Prefer structure file over topology. MolStar determines what files can be combined.
+  const viewerStructure = structureFile || topologyFile
 
   const molstarViewer = useMemo(() => {
     if (!viewerStructure) return null
