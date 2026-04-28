@@ -9,9 +9,14 @@ WORKDIR /app
 RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+COPY dashboard/api/pyproject.toml dashboard/api/
+COPY dashboard/auth/pyproject.toml dashboard/auth/
+COPY mdrun-api/pyproject.toml mdrun-api/
+COPY notebook/pyproject.toml notebook/
 
-COPY --chown=app:app auth.py .
+RUN uv sync --frozen --no-dev --package dashboard-auth --no-install-project
+
+COPY --chown=app:app dashboard/auth/auth.py .
 
 USER app
 

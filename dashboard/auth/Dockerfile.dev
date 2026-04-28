@@ -9,9 +9,14 @@ WORKDIR /app
 RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project
+COPY dashboard/api/pyproject.toml dashboard/api/
+COPY dashboard/auth/pyproject.toml dashboard/auth/
+COPY mdrun-api/pyproject.toml mdrun-api/
+COPY notebook/pyproject.toml notebook/
 
-COPY --chown=app:app auth.py .
+RUN uv sync --frozen --package dashboard-auth --no-install-project
+
+COPY --chown=app:app dashboard/auth/ .
 
 USER app
 
@@ -24,5 +29,4 @@ EXPOSE 5001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --spider --quiet http://localhost:5001/health || exit 1
 
-# Use Flask dev server with auto-reload instead of gunicorn
 CMD ["python", "-m", "flask", "--app=auth", "run", "--host=0.0.0.0", "--port=5001", "--reload"]

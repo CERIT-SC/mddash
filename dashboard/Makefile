@@ -72,11 +72,11 @@ build-proxy: build-ui ## Build proxy image (Caddy + UI static files)
 
 .PHONY: build-auth
 build-auth: ## Build auth image
-	docker build $(platform) -f auth/$(auth_dockerfile) -t $(auth_image):$(tag) auth/
+	docker build $(platform) -f auth/$(auth_dockerfile) -t $(auth_image):$(tag) ..
 
 .PHONY: build-api
 build-api: ## Build API image
-	docker build $(platform) -f api/$(api_dockerfile) -t $(api_image):$(tag) api/
+	docker build $(platform) -f api/$(api_dockerfile) -t $(api_image):$(tag) ..
 
 .PHONY: build-s3sync
 build-s3sync: ## Build s3-sync image

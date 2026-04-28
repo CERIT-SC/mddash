@@ -13,9 +13,14 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project
+COPY dashboard/api/pyproject.toml dashboard/api/
+COPY dashboard/auth/pyproject.toml dashboard/auth/
+COPY mdrun-api/pyproject.toml mdrun-api/
+COPY notebook/pyproject.toml notebook/
 
-COPY --chown=app:app . .
+RUN uv sync --frozen --package dashboard-api --no-install-project
+
+COPY --chown=app:app dashboard/api/ .
 
 RUN mkdir -p /mddash && chown app:app /mddash
 
@@ -32,5 +37,4 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD curl --fail http://localhost:5000/health || exit 1
 
-# Use Flask dev server with auto-reload instead of gunicorn
 CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5000", "--reload"]

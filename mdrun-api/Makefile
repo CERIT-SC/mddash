@@ -36,7 +36,7 @@ test: ## Run tests
 
 .PHONY: build
 build: ## Build Docker image (ENV=dev for dev, ENV=prod for prod)
-	docker build $(platform) -f $(dockerfile) -t $(image):$(tag) .
+	docker build $(platform) -f $(dockerfile) -t $(image):$(tag) ..
 
 .PHONY: push
 push: build ## Build and push Docker image
