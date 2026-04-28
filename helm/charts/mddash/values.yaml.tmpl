@@ -118,7 +118,7 @@ jupyterhub:
       NOTEBOOK_IMAGE:
         value: "{{ $registry }}/{{ $cfg.notebook.image }}:{{ $imageTag }}"
       ANALYSIS_IMAGE:
-        value: "{{ $registry }}/{{ $cfg.analysis.image }}"
+        value: "{{ $cfg.analysis.image }}"
       GPU_TYPE:
         value: "{{ $cfg.gpuType }}"
       DEFAULT_NOTEBOOKS_REPO:
