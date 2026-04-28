@@ -201,11 +201,11 @@ jobs:
 
       - name: Set up Docker Buildx
         if: steps.changes.outputs.changed == 'true'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to registry
         if: steps.changes.outputs.changed == 'true' || needs.setup.outputs.env == 'prod'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ needs.setup.outputs.registry }}
           username: ${{ secrets.REGISTRY_USERNAME }}
@@ -213,7 +213,7 @@ jobs:
 
       - name: Build and push UI
         if: steps.changes.outputs.changed == 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: dashboard/ui
           file: dashboard/ui/Dockerfile
@@ -260,11 +260,11 @@ jobs:
 
       - name: Set up Docker Buildx
         if: steps.changes.outputs.changed == 'true'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to registry
         if: steps.changes.outputs.changed == 'true' || needs.setup.outputs.env == 'prod'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ needs.setup.outputs.registry }}
           username: ${{ secrets.REGISTRY_USERNAME }}
@@ -272,7 +272,7 @@ jobs:
 
       - name: Build and push proxy
         if: steps.changes.outputs.changed == 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: dashboard/proxy
           file: dashboard/proxy/Dockerfile
@@ -342,11 +342,11 @@ jobs:
 
       - name: Set up Docker Buildx
         if: steps.changes.outputs.changed == 'true'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to registry
         if: steps.changes.outputs.changed == 'true' || needs.setup.outputs.env == 'prod'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ needs.setup.outputs.registry }}
           username: ${{ secrets.REGISTRY_USERNAME }}
@@ -354,7 +354,7 @@ jobs:
 
       - name: Build and push ${{ matrix.sidecar.name }}
         if: steps.changes.outputs.changed == 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.sidecar.context }}
           file: ${{ matrix.sidecar.path }}/${{ steps.dockerfile.outputs.file }}
@@ -408,11 +408,11 @@ jobs:
 
       - name: Set up Docker Buildx
         if: steps.changes.outputs.changed == 'true'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to registry
         if: steps.changes.outputs.changed == 'true' || needs.setup.outputs.env == 'prod'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ needs.setup.outputs.registry }}
           username: ${{ secrets.REGISTRY_USERNAME }}
@@ -477,7 +477,7 @@ jobs:
 
       - name: Install Helm
         if: steps.changes.outputs.changed == 'true'
-        uses: azure/setup-helm@v3
+        uses: azure/setup-helm@v5
 
       - name: Login to registry
         if: steps.changes.outputs.changed == 'true'
@@ -548,7 +548,7 @@ jobs:
           echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
 
       - name: Install Helm
-        uses: azure/setup-helm@v3
+        uses: azure/setup-helm@v5
 
       - name: Update Helm dependencies
         run: |
