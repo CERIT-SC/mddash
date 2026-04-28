@@ -85,7 +85,7 @@ jobs:
         working-directory: dashboard/api
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -101,7 +101,7 @@ jobs:
         working-directory: dashboard/auth
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -117,7 +117,7 @@ jobs:
         working-directory: mdrun-api
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -133,7 +133,7 @@ jobs:
         working-directory: dashboard/api
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
           cache-dependency-glob: "dashboard/api/uv.lock"
@@ -147,7 +147,7 @@ jobs:
         working-directory: dashboard/auth
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -161,7 +161,7 @@ jobs:
         working-directory: mdrun-api
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
