@@ -8,7 +8,7 @@ ENV ?= $(if $(filter master,$(CURRENT_BRANCH)),prod,dev)
 ifeq ($(ENV),dev)
   IMAGE_TAG ?= dev
 else
-  IMAGE_TAG ?= $(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD)
+  IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 endif
 export IMAGE_TAG
 

@@ -1,0 +1,317 @@
+name: CD
+
+on:
+  push:
+    branches: [dev, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      env: ${{ steps.set-env.outputs.env }}
+      tag: ${{ steps.set-env.outputs.tag }}
+      registry: ${{ steps.set-env.outputs.registry }}
+      config: ${{ steps.set-env.outputs.config }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate secrets
+        run: |
+          MISSING_SECRETS=()
+          check_secret() {
+            if [ -z "$1" ]; then
+              MISSING_SECRETS+=("$2")
+            fi
+          }
+          check_secret "${{ secrets.REGISTRY_USERNAME }}" "REGISTRY_USERNAME"
+          check_secret "${{ secrets.REGISTRY_PASSWORD }}" "REGISTRY_PASSWORD"
+          check_secret "${{ secrets.KUBECONFIG }}" "KUBECONFIG"
+          check_secret "${{ secrets.OAUTH_CLIENT_ID }}" "OAUTH_CLIENT_ID"
+          check_secret "${{ secrets.OAUTH_CLIENT_SECRET }}" "OAUTH_CLIENT_SECRET"
+          check_secret "${{ secrets.S3_ACCESS_KEY }}" "S3_ACCESS_KEY"
+          check_secret "${{ secrets.S3_SECRET_KEY }}" "S3_SECRET_KEY"
+          check_secret "${{ secrets.MDREPO_CLIENT_ID }}" "MDREPO_CLIENT_ID"
+          check_secret "${{ secrets.MDREPO_CLIENT_SECRET }}" "MDREPO_CLIENT_SECRET"
+          check_secret "${{ secrets.TUNER_USER }}" "TUNER_USER"
+          check_secret "${{ secrets.TUNER_PASSWORD }}" "TUNER_PASSWORD"
+          if [ ${#MISSING_SECRETS[@]} -ne 0 ]; then
+            for secret in "${MISSING_SECRETS[@]}"; do
+              echo "::error::Secret $secret is missing or empty"
+            done
+            exit 1
+          fi
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Set environment
+        id: set-env
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/master" ]]; then
+            CONFIG_FILE="config.yaml"
+            TAG="$(git rev-parse --short HEAD)"
+            echo "env=prod" >> $GITHUB_OUTPUT
+            echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          else
+            CONFIG_FILE="config.dev.yaml"
+            echo "env=dev" >> $GITHUB_OUTPUT
+            echo "tag=dev" >> $GITHUB_OUTPUT
+          fi
+          echo "config=${CONFIG_FILE}" >> $GITHUB_OUTPUT
+          REGISTRY=$(yq '.registry' ${CONFIG_FILE} | cut -d'/' -f1)
+          echo "registry=${REGISTRY}" >> $GITHUB_OUTPUT
+
+  changes:
+    needs: setup
+    runs-on: ubuntu-latest
+    outputs:
+      ui: ${{ steps.filter.outputs.ui }}
+      proxy: ${{ steps.filter.outputs.proxy }}
+      api: ${{ steps.filter.outputs.api }}
+      auth: ${{ steps.filter.outputs.auth }}
+      s3sync: ${{ steps.filter.outputs.s3sync }}
+      notebook: ${{ steps.filter.outputs.notebook }}
+      mdrun-api: ${{ steps.filter.outputs.mdrun-api }}
+      helm: ${{ steps.filter.outputs.helm }}
+      any: ${{ steps.check.outputs.any }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            ui:
+              - 'dashboard/ui/**'
+            proxy:
+              - 'dashboard/proxy/**'
+              - 'dashboard/ui/**'
+            api:
+              - 'dashboard/api/**'
+            auth:
+              - 'dashboard/auth/**'
+            s3sync:
+              - 'dashboard/s3-sync/**'
+            notebook:
+              - 'notebook/**'
+            mdrun-api:
+              - 'mdrun-api/**'
+            helm:
+              - 'helm/**'
+              - 'config.yaml'
+              - 'config.dev.yaml'
+      - name: Check if any component changed
+        id: check
+        run: |
+          if [[ "${{ steps.filter.outputs.ui }}" == "true" || \
+                "${{ steps.filter.outputs.proxy }}" == "true" || \
+                "${{ steps.filter.outputs.api }}" == "true" || \
+                "${{ steps.filter.outputs.auth }}" == "true" || \
+                "${{ steps.filter.outputs.s3sync }}" == "true" || \
+                "${{ steps.filter.outputs.notebook }}" == "true" || \
+                "${{ steps.filter.outputs.mdrun-api }}" == "true" || \
+                "${{ steps.filter.outputs.helm }}" == "true" ]]; then
+            echo "any=true" >> $GITHUB_OUTPUT
+          else
+            echo "any=false" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    needs: [setup, changes]
+    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.proxy == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.auth == 'true' || needs.changes.outputs.s3sync == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        sidecar:
+          - name: ui
+            path: dashboard/ui
+            context: dashboard/ui
+          - name: proxy
+            path: dashboard/proxy
+            context: dashboard/proxy
+          - name: api
+            path: dashboard/api
+            context: .
+          - name: auth
+            path: dashboard/auth
+            context: .
+          - name: s3sync
+            path: dashboard/s3-sync
+            context: dashboard/s3-sync
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ needs.setup.outputs.registry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Determine Dockerfile
+        id: dockerfile
+        run: |
+          if [[ "${{ needs.setup.outputs.env }}" == "dev" && "${{ matrix.sidecar.name }}" =~ ^(api|auth)$ ]]; then
+            echo "file=Dockerfile.dev" >> $GITHUB_OUTPUT
+          else
+            echo "file=Dockerfile" >> $GITHUB_OUTPUT
+          fi
+      - name: Build and push ${{ matrix.sidecar.name }}
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.sidecar.context }}
+          file: ${{ matrix.sidecar.path }}/${{ steps.dockerfile.outputs.file }}
+          push: true
+          tags: |
+            ${{ needs.setup.outputs.registry }}/xkrasa/mddash-${{ matrix.sidecar.name }}:${{ needs.setup.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.sidecar.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.sidecar.name }}
+          build-args: |
+            ${{ matrix.sidecar.name == 'proxy' && format('UI_IMAGE={0}/xkrasa/mddash-ui:{1}', needs.setup.outputs.registry, needs.setup.outputs.tag) || '' }}
+
+  build-components:
+    needs: [setup, changes]
+    if: needs.changes.outputs.notebook == 'true' || needs.changes.outputs.mdrun-api == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - name: notebook
+            path: notebook
+          - name: mdrun-api
+            path: mdrun-api
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ${{ needs.setup.outputs.registry }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Build and push ${{ matrix.component.name }}
+        run: |
+          make build-${{ matrix.component.name }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
+          make push-${{ matrix.component.name }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
+
+  deploy:
+    needs: [setup, changes, build, build-components]
+    if: |
+      always() &&
+      needs.changes.outputs.any == 'true' &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped') &&
+      (needs.build-components.result == 'success' || needs.build-components.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install tools
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          sudo wget -qO /usr/local/bin/gomplate https://github.com/hairyhenderson/gomplate/releases/latest/download/gomplate_linux-amd64
+          sudo chmod +x /usr/local/bin/gomplate
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+      - name: Install Helm
+        uses: azure/setup-helm@v5
+      - name: Update Helm dependencies
+        run: make -C helm update ENV=${{ needs.setup.outputs.env }}
+      - name: Setup namespace and secrets
+        run: |
+          NAMESPACE=$(yq '.namespace' ${{ needs.setup.outputs.config }})
+          PACKAGE=$(yq '.helm.package' ${{ needs.setup.outputs.config }})
+          kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic oidc-credentials \
+            --from-literal=client_id="${{ secrets.OAUTH_CLIENT_ID }}" \
+            --from-literal=client_secret="${{ secrets.OAUTH_CLIENT_SECRET }}" \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic ${PACKAGE}-s3-creds \
+            --from-literal=S3_ACCESS_KEY="${{ secrets.S3_ACCESS_KEY }}" \
+            --from-literal=S3_SECRET_KEY="${{ secrets.S3_SECRET_KEY }}" \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic ${PACKAGE}-mdrepo-credentials \
+            --from-literal=client_id="${{ secrets.MDREPO_CLIENT_ID }}" \
+            --from-literal=client_secret="${{ secrets.MDREPO_CLIENT_SECRET }}" \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic tuner-auth \
+            --from-literal=user="${{ secrets.TUNER_USER }}" \
+            --from-literal=password="${{ secrets.TUNER_PASSWORD }}" \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+      - name: Deploy
+        run: |
+          NAMESPACE=$(yq '.namespace' ${{ needs.setup.outputs.config }})
+          PACKAGE=$(yq '.helm.package' ${{ needs.setup.outputs.config }})
+          if helm status ${PACKAGE} -n ${NAMESPACE} >/dev/null 2>&1; then
+            make -C helm deploy ENV=${{ needs.setup.outputs.env }}
+          else
+            make -C helm install ENV=${{ needs.setup.outputs.env }}
+          fi
+
+  verify:
+    needs: [setup, deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+      - name: Install Helm
+        uses: azure/setup-helm@v5
+      - name: Verify deployment health
+        run: |
+          NAMESPACE=$(yq '.namespace' ${{ needs.setup.outputs.config }})
+          PACKAGE=$(yq '.helm.package' ${{ needs.setup.outputs.config }})
+          echo "=== Helm Status ==="
+          helm status ${PACKAGE} -n ${NAMESPACE} || true
+          echo ""
+          echo "=== Pod Status ==="
+          kubectl get pods -n ${NAMESPACE}
+      - name: Check Hub Health
+        run: |
+          if [[ "${{ needs.setup.outputs.env }}" == "prod" ]]; then
+            URL="https://mddash.dyn.cloud.e-infra.cz/hub/health"
+          else
+            URL="https://mddash-dev.dyn.cloud.e-infra.cz/hub/health"
+          fi
+          curl -sf "$URL" --max-time 60
+
+  push-mdrun-api-chart:
+    needs: [setup, changes]
+    if: needs.changes.outputs.helm == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - name: Install Helm
+        uses: azure/setup-helm@v5
+      - name: Login to registry
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | helm registry login ${{ needs.setup.outputs.registry }} \
+            --username ${{ secrets.REGISTRY_USERNAME }} \
+            --password-stdin
+      - name: Package and push mdrun-api chart
+        run: |
+          make push-mdrun-api-chart ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
