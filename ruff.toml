@@ -1,7 +1,7 @@
 target-version = "py312"
 line-length = 120
 preview = true  # required for DOC (pydoclint) rules
-extend-exclude = ["scripts"]
+extend-exclude = ["scripts", "docs", ".worktrees"]
 
 
 # Docs: https://docs.astral.sh/ruff/rules/
