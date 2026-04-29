@@ -28,9 +28,9 @@ jobs:
       - name: Install ruff
         run: uv tool install ruff
       - name: Check formatting
-        run: ruff format . --diff --exclude .venv --exclude node_modules --exclude .worktrees
+        run: ruff format . --diff
       - name: Check linting
-        run: ruff check . --exclude .venv --exclude node_modules --exclude .worktrees
+        run: ruff check .
 
   test-dashboard-api:
     runs-on: ubuntu-latest
