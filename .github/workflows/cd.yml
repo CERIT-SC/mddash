@@ -87,7 +87,9 @@ jobs:
       helm: ${{ steps.filter.outputs.helm }}
       any: ${{ steps.matrix.outputs.any }}
       sidecars: ${{ steps.matrix.outputs.sidecars }}
+      all_sidecars: '[{"name":"ui","path":"dashboard/ui","context":"dashboard/ui"},{"name":"proxy","path":"dashboard/proxy","context":"dashboard/proxy"},{"name":"api","path":"dashboard/api","context":"."},{"name":"auth","path":"dashboard/auth","context":"."},{"name":"s3sync","path":"dashboard/s3-sync","context":"dashboard/s3-sync"}]'
       components: ${{ steps.matrix.outputs.components }}
+      all_components: '[{"name":"notebook","path":"notebook"},{"name":"mdrun-api","path":"mdrun-api"}]'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -139,12 +141,15 @@ jobs:
 
   build:
     needs: [setup, changes]
-    if: needs.changes.outputs.sidecars != '[]'
+    if: |
+      needs.changes.outputs.sidecars != '[]' || (
+        needs.setup.outputs.env == 'prod' && needs.changes.outputs.any == 'true'
+      )
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        sidecar: ${{ fromJson(needs.changes.outputs.sidecars) }}
+        sidecar: ${{ fromJson(needs.setup.outputs.env == 'prod' && needs.changes.outputs.all_sidecars || needs.changes.outputs.sidecars) }}
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v4
@@ -176,12 +181,15 @@ jobs:
 
   build-components:
     needs: [setup, changes]
-    if: needs.changes.outputs.components != '[]'
+    if: |
+      needs.changes.outputs.components != '[]' || (
+        needs.setup.outputs.env == 'prod' && needs.changes.outputs.any == 'true'
+      )
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        component: ${{ fromJson(needs.changes.outputs.components) }}
+        component: ${{ fromJson(needs.setup.outputs.env == 'prod' && needs.changes.outputs.all_components || needs.changes.outputs.components) }}
     steps:
       - uses: actions/checkout@v6
       - name: Install yq
@@ -194,10 +202,24 @@ jobs:
           registry: ${{ needs.setup.outputs.registry }}
           username: ${{ secrets.REGISTRY_USERNAME }}
           password: ${{ secrets.REGISTRY_PASSWORD }}
-      - name: Build and push ${{ matrix.component.name }}
+      - name: Set image tag
+        id: tag
         run: |
-          make build-${{ matrix.component.name }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
-          make push-${{ matrix.component.name }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
+          if [ "${{ matrix.component.name }}" = "notebook" ]; then
+            IMAGE="${{ needs.setup.outputs.registry }}/xkrasa/mddash-notebook"
+          else
+            IMAGE="${{ needs.setup.outputs.registry }}/xkrasa/mdrun-api"
+          fi
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+      - name: Build and push ${{ matrix.component.name }}
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.component.path }}
+          push: true
+          tags: |
+            ${{ steps.tag.outputs.image }}:${{ needs.setup.outputs.tag }}
+          cache-from: type=gha,scope=${{ matrix.component.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component.name }}
 
   deploy:
     needs: [setup, changes, build, build-components, push-mdrun-api-chart]
