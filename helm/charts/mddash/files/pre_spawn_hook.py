@@ -476,16 +476,21 @@ def _get_sidecar_containers(
 
 def _get_or_create_progress_queue(spawner: "KubeSpawner") -> asyncio.Queue:
     if not hasattr(spawner, "_mddash_progress_queue"):
-        spawner._mddash_progress_queue = asyncio.Queue()  # type: ignore[attr-defined]
-    return spawner._mddash_progress_queue  # type: ignore[attr-defined]
+        spawner._mddash_progress_queue = asyncio.Queue()  # type: ignore[attr-defined]  # noqa: SLF001
+    return spawner._mddash_progress_queue  # type: ignore[attr-defined]  # noqa: SLF001
 
 
 async def _report_progress(spawner: "KubeSpawner", message: str, progress: int) -> None:
     await _get_or_create_progress_queue(spawner).put({"message": message, "progress": progress})
 
 
-async def _spawn_progress(self: "KubeSpawner"):  # type: ignore[override]
-    """Yield spawn progress messages sourced from the pre_spawn_hook via an asyncio.Queue."""
+async def _spawn_progress(self: "KubeSpawner") -> Any:  # type: ignore[override]  # noqa: ANN401
+    """
+    Yield spawn progress messages sourced from the pre_spawn_hook via an asyncio.Queue.
+
+    Yields:
+        dict[str, int | str]: Progress message with "message" and "progress" keys.
+    """
     queue = _get_or_create_progress_queue(self)
     while True:
         try:

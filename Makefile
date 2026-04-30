@@ -8,7 +8,7 @@ ENV ?= $(if $(filter master,$(CURRENT_BRANCH)),prod,dev)
 ifeq ($(ENV),dev)
   IMAGE_TAG ?= dev
 else
-  IMAGE_TAG ?= $(shell date +%Y%m%d)-$(shell git rev-parse --short HEAD)
+  IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
 endif
 export IMAGE_TAG
 
@@ -29,13 +29,13 @@ help: ## Show this help
 
 .PHONY: format
 format: ## Format and lint-fix all code (Python via ruff, frontend via prettier)
-	ruff format . --exclude .venv --exclude node_modules --exclude .worktrees
-	ruff check . --fix --exclude .venv --exclude node_modules --exclude .worktrees
+	ruff format .
+	ruff check . --fix
 	cd dashboard/ui && npm run format
 
 .PHONY: lint
 lint: ## Check Python linting without auto-fix
-	ruff check . --exclude .venv --exclude node_modules --exclude .worktrees
+	ruff check .
 
 # ==================== TYPE CHECK ====================
 
