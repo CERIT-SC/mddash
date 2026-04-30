@@ -279,7 +279,7 @@ jobs:
 
   verify:
     needs: [setup, deploy]
-    if: always()
+    if: always() && (needs.deploy.result == 'success' || needs.deploy.result == 'failure')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
