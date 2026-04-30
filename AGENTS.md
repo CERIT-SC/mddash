@@ -101,7 +101,7 @@ sequenceDiagram
 ## The "Gotchas" (Cross-Component)
 
 ### Configuration Management
-- **Environment Detection**: Branch determines environment (`dev` → dev, `master` → prod). Tagging: dev uses static `dev` tag, prod uses `YYYYMMDD-<sha>` format.
+- **Environment Detection**: Branch determines environment (`dev` → dev, `master` → prod). Tagging: dev uses static `dev` tag, prod uses `<short-sha>` format.
 - **Values Template Rendering**: `helm/charts/mddash/values.yaml.tmpl` must be rendered with `gomplate` before Helm operations. Use `make render`. Never edit `values.yaml` directly—it's generated.
 - **Runtime Config Injection**: UI receives runtime configuration via `window.MDDASH_CONFIG` object injected by Caddy proxy at `/dash/config.js`. Dev mode detected when this is undefined.
 
@@ -126,7 +126,7 @@ sequenceDiagram
 ### Deployment Pipeline
 - **Make-based Orchestration**: Root `Makefile` orchestrates build, test, push, and deploy across all components.
 - **Helm Dependency Management**: Use `make -C helm update` to update Helm dependencies before deployment.
-- **Image Tagging Strategy**: Dev uses static `dev` tag with `Always` pull policy; prod uses dated tags with `IfNotPresent` pull policy.
+- **Image Tagging Strategy**: Dev uses static `dev` tag with `Always` pull policy; prod uses immutable `<short-sha>` tags with `IfNotPresent` pull policy. No `latest` tag in prod.
 - **Secrets Management**: All secrets created in namespace during deployment via GitHub Actions CI/CD.
 
 ### Error Handling
@@ -194,7 +194,8 @@ make test
 
 ## CI/CD Pipeline
 
-- **Push to `dev`**: Deploys to dev environment with `dev` tag
-- **Push to `master`**: Deploys to production with `YYYYMMDD-<sha>` tag
+- **`ci.yml`**: Runs on every PR and push. Lint, test, type-check. No Docker builds or deployments.
+- **`cd.yml`**: Runs only on push to `dev` or `master`. Change detection via `dorny/paths-filter@v4`; image builds only when relevant files changed; deploys via Helm; verifies with lightweight health check.
+- **Image Tags**: Dev uses `dev`, prod uses `<short-sha>`.
 - **Secrets**: Automatically created in namespace during deployment
 - **Image Retention**: Harbor retention policy configured per environment

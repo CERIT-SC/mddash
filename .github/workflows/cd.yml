@@ -86,6 +86,8 @@ jobs:
       mdrun-api: ${{ steps.filter.outputs.mdrun-api }}
       helm: ${{ steps.filter.outputs.helm }}
       any: ${{ steps.check.outputs.any }}
+      sidecars: ${{ steps.dynamic-matrix.outputs.sidecars }}
+      components: ${{ steps.dynamic-matrix.outputs.components }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -130,29 +132,54 @@ jobs:
             echo "any=false" >> $GITHUB_OUTPUT
           fi
 
+      - name: Compute dynamic matrix
+        id: dynamic-matrix
+        run: |
+          SIDEARS=()
+          if [[ "${{ steps.filter.outputs.ui }}" == "true" ]]; then
+            SIDEARS+=("{\"name\":\"ui\",\"path\":\"dashboard/ui\",\"context\":\"dashboard/ui\"}")
+          fi
+          if [[ "${{ steps.filter.outputs.proxy }}" == "true" || "${{ steps.filter.outputs.ui }}" == "true" ]]; then
+            SIDEARS+=("{\"name\":\"proxy\",\"path\":\"dashboard/proxy\",\"context\":\"dashboard/proxy\"}")
+          fi
+          if [[ "${{ steps.filter.outputs.api }}" == "true" ]]; then
+            SIDEARS+=("{\"name\":\"api\",\"path\":\"dashboard/api\",\"context\":\".\"}")
+          fi
+          if [[ "${{ steps.filter.outputs.auth }}" == "true" ]]; then
+            SIDEARS+=("{\"name\":\"auth\",\"path\":\"dashboard/auth\",\"context\":\".\"}")
+          fi
+          if [[ "${{ steps.filter.outputs.s3sync }}" == "true" ]]; then
+            SIDEARS+=("{\"name\":\"s3sync\",\"path\":\"dashboard/s3-sync\",\"context\":\"dashboard/s3-sync\"}")
+          fi
+          if [ ${#SIDEARS[@]} -eq 0 ]; then
+            SIDECAR_JSON="[]"
+          else
+            SIDECAR_JSON="[$(IFS=,; echo "${SIDEARS[*]}")]"
+          fi
+          echo "sidecars=${SIDECAR_JSON}" >> $GITHUB_OUTPUT
+
+          COMPS=()
+          if [[ "${{ steps.filter.outputs.notebook }}" == "true" ]]; then
+            COMPS+=("{\"name\":\"notebook\",\"path\":\"notebook\"}")
+          fi
+          if [[ "${{ steps.filter.outputs.mdrun-api }}" == "true" ]]; then
+            COMPS+=("{\"name\":\"mdrun-api\",\"path\":\"mdrun-api\"}")
+          fi
+          if [ ${#COMPS[@]} -eq 0 ]; then
+            COMP_JSON="[]"
+          else
+            COMP_JSON="[$(IFS=,; echo "${COMPS[*]}")]"
+          fi
+          echo "components=${COMP_JSON}" >> $GITHUB_OUTPUT
+
   build:
     needs: [setup, changes]
-    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.proxy == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.auth == 'true' || needs.changes.outputs.s3sync == 'true'
+    if: needs.changes.outputs.sidecars != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        sidecar:
-          - name: ui
-            path: dashboard/ui
-            context: dashboard/ui
-          - name: proxy
-            path: dashboard/proxy
-            context: dashboard/proxy
-          - name: api
-            path: dashboard/api
-            context: .
-          - name: auth
-            path: dashboard/auth
-            context: .
-          - name: s3sync
-            path: dashboard/s3-sync
-            context: dashboard/s3-sync
+        sidecar: ${{ fromJson(needs.changes.outputs.sidecars) }}
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v4
@@ -184,16 +211,12 @@ jobs:
 
   build-components:
     needs: [setup, changes]
-    if: needs.changes.outputs.notebook == 'true' || needs.changes.outputs.mdrun-api == 'true'
+    if: needs.changes.outputs.components != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        component:
-          - name: notebook
-            path: notebook
-          - name: mdrun-api
-            path: mdrun-api
+        component: ${{ fromJson(needs.changes.outputs.components) }}
     steps:
       - uses: actions/checkout@v6
       - name: Install yq
