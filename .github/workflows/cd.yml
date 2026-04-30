@@ -85,9 +85,9 @@ jobs:
       notebook: ${{ steps.filter.outputs.notebook }}
       mdrun-api: ${{ steps.filter.outputs.mdrun-api }}
       helm: ${{ steps.filter.outputs.helm }}
-      any: ${{ steps.check.outputs.any }}
-      sidecars: ${{ steps.dynamic-matrix.outputs.sidecars }}
-      components: ${{ steps.dynamic-matrix.outputs.components }}
+      any: ${{ steps.matrix.outputs.any }}
+      sidecars: ${{ steps.matrix.outputs.sidecars }}
+      components: ${{ steps.matrix.outputs.components }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -116,61 +116,26 @@ jobs:
               - 'helm/**'
               - 'config.yaml'
               - 'config.dev.yaml'
-      - name: Check if any component changed
-        id: check
+      - name: Compute matrices
+        id: matrix
         run: |
-          if [[ "${{ steps.filter.outputs.ui }}" == "true" || \
-                "${{ steps.filter.outputs.proxy }}" == "true" || \
-                "${{ steps.filter.outputs.api }}" == "true" || \
-                "${{ steps.filter.outputs.auth }}" == "true" || \
-                "${{ steps.filter.outputs.s3sync }}" == "true" || \
-                "${{ steps.filter.outputs.notebook }}" == "true" || \
-                "${{ steps.filter.outputs.mdrun-api }}" == "true" || \
-                "${{ steps.filter.outputs.helm }}" == "true" ]]; then
-            echo "any=true" >> $GITHUB_OUTPUT
-          else
-            echo "any=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Compute dynamic matrix
-        id: dynamic-matrix
-        run: |
-          SIDEARS=()
-          if [[ "${{ steps.filter.outputs.ui }}" == "true" ]]; then
-            SIDEARS+=("{\"name\":\"ui\",\"path\":\"dashboard/ui\",\"context\":\"dashboard/ui\"}")
-          fi
-          if [[ "${{ steps.filter.outputs.proxy }}" == "true" || "${{ steps.filter.outputs.ui }}" == "true" ]]; then
-            SIDEARS+=("{\"name\":\"proxy\",\"path\":\"dashboard/proxy\",\"context\":\"dashboard/proxy\"}")
-          fi
-          if [[ "${{ steps.filter.outputs.api }}" == "true" ]]; then
-            SIDEARS+=("{\"name\":\"api\",\"path\":\"dashboard/api\",\"context\":\".\"}")
-          fi
-          if [[ "${{ steps.filter.outputs.auth }}" == "true" ]]; then
-            SIDEARS+=("{\"name\":\"auth\",\"path\":\"dashboard/auth\",\"context\":\".\"}")
-          fi
-          if [[ "${{ steps.filter.outputs.s3sync }}" == "true" ]]; then
-            SIDEARS+=("{\"name\":\"s3sync\",\"path\":\"dashboard/s3-sync\",\"context\":\"dashboard/s3-sync\"}")
-          fi
-          if [ ${#SIDEARS[@]} -eq 0 ]; then
-            SIDECAR_JSON="[]"
-          else
-            SIDECAR_JSON="[$(IFS=,; echo "${SIDEARS[*]}")]"
-          fi
-          echo "sidecars=${SIDECAR_JSON}" >> $GITHUB_OUTPUT
-
-          COMPS=()
-          if [[ "${{ steps.filter.outputs.notebook }}" == "true" ]]; then
-            COMPS+=("{\"name\":\"notebook\",\"path\":\"notebook\"}")
-          fi
-          if [[ "${{ steps.filter.outputs.mdrun-api }}" == "true" ]]; then
-            COMPS+=("{\"name\":\"mdrun-api\",\"path\":\"mdrun-api\"}")
-          fi
-          if [ ${#COMPS[@]} -eq 0 ]; then
-            COMP_JSON="[]"
-          else
-            COMP_JSON="[$(IFS=,; echo "${COMPS[*]}")]"
-          fi
-          echo "components=${COMP_JSON}" >> $GITHUB_OUTPUT
+          CHANGES='${{ steps.filter.outputs.changes }}'
+          jq -n --argjson changes "$CHANGES" '
+            {
+              "ui": {"name":"ui","path":"dashboard/ui","context":"dashboard/ui"},
+              "proxy": {"name":"proxy","path":"dashboard/proxy","context":"dashboard/proxy"},
+              "api": {"name":"api","path":"dashboard/api","context":"."},
+              "auth": {"name":"auth","path":"dashboard/auth","context":"."},
+              "s3sync": {"name":"s3sync","path":"dashboard/s3-sync","context":"dashboard/s3-sync"},
+              "notebook": {"name":"notebook","path":"notebook"},
+              "mdrun-api": {"name":"mdrun-api","path":"mdrun-api"}
+            } as $cfg |
+            {
+              sidecars: [($changes[] | select(in($cfg)) | select(. != "notebook" and . != "mdrun-api") | $cfg[.])],
+              components: [($changes[] | select(in($cfg)) | select(. == "notebook" or . == "mdrun-api") | $cfg[.])],
+              any: (if ($changes | length) > 0 then "true" else "false" end)
+            } | to_entries[] | "\(.key)=\(.value)"
+          ' -r >> "$GITHUB_OUTPUT"
 
   build:
     needs: [setup, changes]
