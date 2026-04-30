@@ -118,7 +118,7 @@ clean: ## Remove all Docker images
 # Development helpers
 .PHONY: dev-ui
 dev-ui: ## Run UI dev server (hot reload)
-	cd ui && npm run dev
+	cd ui && pnpm run dev
 
 .PHONY: dev-api
 dev-api: ## Run API dev server (hot reload)

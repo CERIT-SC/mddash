@@ -31,7 +31,7 @@ help: ## Show this help
 format: ## Format and lint-fix all code (Python via ruff, frontend via prettier)
 	ruff format .
 	ruff check . --fix
-	cd dashboard/ui && npm run format
+	cd dashboard/ui && pnpm run format
 
 .PHONY: lint
 lint: ## Check Python linting without auto-fix
@@ -56,7 +56,7 @@ type-check-mdrun-api: ## Type-check mdrun-api
 
 .PHONY: type-check-ui
 type-check-ui: ## Type-check dashboard UI (TypeScript)
-	cd dashboard/ui && npm run type-check
+	cd dashboard/ui && pnpm run type-check
 
 # ==================== TEST ====================
 
@@ -156,7 +156,7 @@ demo: ## Run local demo (real Flask API in demo profile + React dev server)
 	API_PID=$$!; \
 	echo "Flask API started (PID: $$API_PID)"; \
 	echo "Starting React dev server..."; \
-	cd dashboard/ui && npm run dev & \
+	cd dashboard/ui && pnpm run dev & \
 	VITE_PID=$$!; \
 	echo "React dev server started (PID: $$VITE_PID)"; \
 	echo "Demo running - Press Ctrl+C to stop"; \
