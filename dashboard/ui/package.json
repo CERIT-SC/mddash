@@ -2,12 +2,13 @@
   "name": "dash",
   "private": true,
   "version": "0.0.0",
+  "packageManager": "pnpm@10.33.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsgo -b && vite build",
     "lint": "eslint .",
-    "type-check": "tsc --noEmit",
+    "type-check": "tsgo --noEmit",
     "format": "prettier --write --log-level warn \"src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
     "preview": "vite preview"
@@ -37,6 +38,7 @@
     "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@typescript/native-preview": "^7.0.0-dev.20260421.2",
     "@vitejs/plugin-react": "^4.7.0",
     "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",

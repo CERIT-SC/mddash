@@ -120,12 +120,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: dashboard/ui/package-lock.json
-      - run: npm ci
+          cache: pnpm
+          cache-dependency-path: dashboard/ui/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
         working-directory: dashboard/ui
-      - run: npm run type-check
+      - run: pnpm run type-check
         working-directory: dashboard/ui

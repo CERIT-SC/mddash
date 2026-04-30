@@ -19,4 +19,4 @@ uv tool install ruff
 uv tool install ty
 
 # Install UI dependencies
-cd dashboard/ui && npm ci
+cd dashboard/ui && pnpm install --frozen-lockfile
