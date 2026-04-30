@@ -235,12 +235,13 @@ jobs:
           make push-${{ matrix.component.name }} ENV=${{ needs.setup.outputs.env }} IMAGE_TAG=${{ needs.setup.outputs.tag }}
 
   deploy:
-    needs: [setup, changes, build, build-components]
+    needs: [setup, changes, build, build-components, push-mdrun-api-chart]
     if: |
       always() &&
       needs.changes.outputs.any == 'true' &&
       (needs.build.result == 'success' || needs.build.result == 'skipped') &&
-      (needs.build-components.result == 'success' || needs.build-components.result == 'skipped')
+      (needs.build-components.result == 'success' || needs.build-components.result == 'skipped') &&
+      (needs.push-mdrun-api-chart.result == 'success' || needs.push-mdrun-api-chart.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
