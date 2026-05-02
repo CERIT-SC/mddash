@@ -114,11 +114,16 @@ class TestExtractMetadataBulk:
                 _submit_response("uuid-a"),
                 _submit_response("uuid-b"),
             ]
+
             # First poll: both complete in the same round
             def get_response(url: str, **kwargs: object) -> object:
                 if url.endswith("/results"):
                     uuid = url.split("/")[-2]
-                    data = {"uuid": "uuid-a", "metadata": metadata_a} if uuid == "uuid-a" else {"uuid": "uuid-b", "metadata": metadata_b}
+                    data = (
+                        {"uuid": "uuid-a", "metadata": metadata_a}
+                        if uuid == "uuid-a"
+                        else {"uuid": "uuid-b", "metadata": metadata_b}
+                    )
                     return _make_response(200, data)
                 else:
                     uuid = url.split("/")[-1]
@@ -177,7 +182,7 @@ class TestExtractMetadataBulk:
             with pytest.raises(InternalServerError) as exc_info:
                 extract_metadata_bulk([tpr])
 
-        assert "timed out" in exc_info.value.description.lower()
+        assert "timed out" in (exc_info.value.description or "").lower()
 
     def test_timeout_still_calls_delete(self, tmp_path: Path) -> None:
         """DELETE must be called for cleanup even when timeout is reached."""
@@ -210,7 +215,7 @@ class TestExtractMetadataBulk:
             with pytest.raises(InternalServerError) as exc_info:
                 extract_metadata_bulk([tpr])
 
-        assert "500" in exc_info.value.description
+        assert "500" in (exc_info.value.description or "")
 
     def test_error_status_raises_internal_server_error(self, tmp_path: Path) -> None:
         """When a job enters 'error' status, raise InternalServerError."""
@@ -227,7 +232,7 @@ class TestExtractMetadataBulk:
             with pytest.raises(InternalServerError) as exc_info:
                 extract_metadata_bulk([tpr])
 
-        assert "error status" in exc_info.value.description.lower()
+        assert "error status" in (exc_info.value.description or "").lower()
 
     def test_running_status_continues_polling(self, tmp_path: Path) -> None:
         """A 'running' status should not raise — polling should continue."""

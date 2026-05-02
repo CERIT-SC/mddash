@@ -62,16 +62,12 @@ def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:
         try:
             data = response.json()
         except ValueError:
-            raise InternalServerError(
-                description=f"MetaDump returned non-JSON response for '{path.name}'"
-            )
+            raise InternalServerError(description=f"MetaDump returned non-JSON response for '{path.name}'")
         uuid = data.get("uuid")
         pin = data.get("pin")
 
         if not uuid or not pin:
-            raise InternalServerError(
-                description=f"MetaDump returned unexpected response for '{path.name}': {data}"
-            )
+            raise InternalServerError(description=f"MetaDump returned unexpected response for '{path.name}': {data}")
 
         uuid_to_pin[uuid] = pin
         uuid_order.append(uuid)
@@ -98,9 +94,7 @@ def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:
                 try:
                     status = response.json().get("status")
                 except ValueError:
-                    raise InternalServerError(
-                        description=f"MetaDump returned non-JSON status response for uuid={uuid}"
-                    )
+                    raise InternalServerError(description=f"MetaDump returned non-JSON status response for uuid={uuid}")
 
                 match status:
                     case "completed":
@@ -108,9 +102,7 @@ def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:
                         completed.add(uuid)
                         logger.info("MetaDump job completed: uuid=%s", uuid)
                     case "error":
-                        raise InternalServerError(
-                            description=f"MetaDump job failed with error status: uuid={uuid}"
-                        )
+                        raise InternalServerError(description=f"MetaDump job failed with error status: uuid={uuid}")
                     case "pending" | "running":
                         pass
                     case _:
