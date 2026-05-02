@@ -4,11 +4,10 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-from werkzeug.exceptions import InternalServerError
-
 import clients.metadump as metadump_module
+import pytest
 from clients.metadump import extract_metadata, extract_metadata_bulk
+from werkzeug.exceptions import InternalServerError
 
 TEST_URL = "http://test-metadump"
 
@@ -23,7 +22,7 @@ _SAMPLE_METADATA = {
 def _make_response(status_code: int, body: dict) -> MagicMock:
     mock = MagicMock()
     mock.status_code = status_code
-    mock.ok = status_code < 400
+    mock.ok = status_code < 400  # noqa: PLR2004
     mock.json.return_value = body
     mock.text = json.dumps(body)
     return mock
@@ -116,7 +115,7 @@ class TestExtractMetadataBulk:
             ]
 
             # First poll: both complete in the same round
-            def get_response(url: str, **kwargs: object) -> object:
+            def get_response(url: str, **_kwargs: object) -> object:
                 if url.endswith("/results"):
                     uuid = url.split("/")[-2]
                     data = (
@@ -125,15 +124,14 @@ class TestExtractMetadataBulk:
                         else {"uuid": "uuid-b", "metadata": metadata_b}
                     )
                     return _make_response(200, data)
-                else:
-                    uuid = url.split("/")[-1]
-                    return _status_response(uuid, "completed")
+                uuid = url.rsplit("/", maxsplit=1)[-1]
+                return _status_response(uuid, "completed")
 
             mock_get.side_effect = get_response
 
             results = extract_metadata_bulk([tpr_a, tpr_b])
 
-        assert len(results) == 2
+        assert len(results) == 2  # noqa: PLR2004
         # Order must match [tpr_a, tpr_b]
         assert results[0]["metadata"] == metadata_a
         assert results[1]["metadata"] == metadata_b
@@ -178,9 +176,9 @@ class TestExtractMetadataBulk:
             patch("requests.post", return_value=_submit_response("uuid-1")),
             patch("requests.get", return_value=pending_response),
             patch("requests.delete", return_value=_delete_response()),
+            pytest.raises(InternalServerError) as exc_info,
         ):
-            with pytest.raises(InternalServerError) as exc_info:
-                extract_metadata_bulk([tpr])
+            extract_metadata_bulk([tpr])
 
         assert "timed out" in (exc_info.value.description or "").lower()
 
@@ -195,9 +193,9 @@ class TestExtractMetadataBulk:
             patch("requests.post", return_value=_submit_response("uuid-1")),
             patch("requests.get", return_value=_status_response("uuid-1", "pending")),
             patch("requests.delete", return_value=_delete_response()) as mock_delete,
+            pytest.raises(InternalServerError),
         ):
-            with pytest.raises(InternalServerError):
-                extract_metadata_bulk([tpr])
+            extract_metadata_bulk([tpr])
 
         mock_delete.assert_called_once()
 
@@ -211,9 +209,9 @@ class TestExtractMetadataBulk:
         with (
             patch("clients.metadump.METADUMP_API_URL", TEST_URL),
             patch("requests.post", return_value=error_response),
+            pytest.raises(InternalServerError) as exc_info,
         ):
-            with pytest.raises(InternalServerError) as exc_info:
-                extract_metadata_bulk([tpr])
+            extract_metadata_bulk([tpr])
 
         assert "500" in (exc_info.value.description or "")
 
@@ -228,9 +226,9 @@ class TestExtractMetadataBulk:
             patch("requests.post", return_value=_submit_response("uuid-1")),
             patch("requests.get", return_value=_status_response("uuid-1", "error")),
             patch("requests.delete", return_value=_delete_response()),
+            pytest.raises(InternalServerError) as exc_info,
         ):
-            with pytest.raises(InternalServerError) as exc_info:
-                extract_metadata_bulk([tpr])
+            extract_metadata_bulk([tpr])
 
         assert "error status" in (exc_info.value.description or "").lower()
 
@@ -284,4 +282,4 @@ class TestExtractMetadata:
     def test_max_polls_constant(self) -> None:
         """MAX_POLLS should equal TIMEOUT_SEC // POLL_INTERVAL_SEC."""
         assert metadump_module.MAX_POLLS == metadump_module.TIMEOUT_SEC // metadump_module.POLL_INTERVAL_SEC
-        assert metadump_module.MAX_POLLS == 30
+        assert metadump_module.MAX_POLLS == 30  # noqa: PLR2004

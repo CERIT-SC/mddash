@@ -1,6 +1,4 @@
-"""
-MetaDump API client for extracting metadata from GROMACS TPR files.
-"""
+"""MetaDump API client for extracting metadata from GROMACS TPR files."""
 
 import logging
 import time
@@ -17,7 +15,7 @@ TIMEOUT_SEC = 150
 MAX_POLLS = TIMEOUT_SEC // POLL_INTERVAL_SEC
 
 
-def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:
+def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:  # noqa: PLR0912
     """
     Extract metadata from multiple TPR files via the MetaDump API.
 
@@ -158,8 +156,6 @@ def extract_metadata(tpr_path: Path) -> dict:
     Returns:
         Metadata dict for the file.
 
-    Raises:
-        InternalServerError: If the extraction fails.
     """
     results = extract_metadata_bulk([tpr_path])
     return results[0]
