@@ -52,13 +52,9 @@ def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:  # noqa: PLR0912
                 timeout=60,
             )
 
-        if response.status_code == 413:  # noqa: PLR2004
-            raise InternalServerError(
-                description=f"MetaDump rejected '{path.name}': file too large (413). Contact MetaDump admins to increase upload limit."
-            )
         if not response.ok:
             raise InternalServerError(
-                description=f"MetaDump upload failed for '{path.name}': {response.status_code} - {response.text}"
+                description=f"MetaDump metadata extraction failed for '{path.name}' (HTTP {response.status_code})."
             )
 
         try:
@@ -90,7 +86,7 @@ def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:  # noqa: PLR0912
 
                 if not response.ok:
                     raise InternalServerError(
-                        description=f"MetaDump status check failed for uuid={uuid}: {response.status_code} - {response.text}"
+                        description=f"MetaDump metadata extraction failed for uuid={uuid} (HTTP {response.status_code})."
                     )
 
                 try:
@@ -128,7 +124,7 @@ def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:  # noqa: PLR0912
 
             if not response.ok:
                 raise InternalServerError(
-                    description=f"MetaDump results fetch failed for uuid={uuid}: {response.status_code} - {response.text}"
+                    description=f"MetaDump metadata extraction failed for uuid={uuid} (HTTP {response.status_code})."
                 )
 
             results[uuid] = response.json()
