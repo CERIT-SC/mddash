@@ -38,6 +38,10 @@ mdrepo:
   url: https://workflow-repo.test.du.cesnet.cz
   scopes: user:email
 
+# MetaDump API for extracting GROMACS TPR metadata before publishing
+metadump:
+  url: "https://gmd.ceitec.cz"
+
 # Default notebooks repository (setup and analysis notebooks)
 defaultNotebooksRepo: https://github.com/sb-ncbr/mddash-notebooks.git
 

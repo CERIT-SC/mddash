@@ -102,3 +102,8 @@ MDREPO_TOKEN_URL = f"{MDREPO_URL}/oauth/token"
 
 if not all([MDREPO_URL, MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET, MDREPO_SCOPES]):
     logger.warning("MDRepo configuration incomplete. Publishing to MDRepo will not work properly.")
+
+METADUMP_API_URL: str | None = os.environ.get("METADUMP_API_URL")
+
+if not METADUMP_API_URL:
+    logger.warning("METADUMP_API_URL environment variable is not set. MetaDump metadata extraction will be skipped.")

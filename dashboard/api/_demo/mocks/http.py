@@ -21,6 +21,7 @@ from config import (
     MDREPO_TOKEN_URL,
     MDREPO_URL,
     MDRUN_API_URL,
+    METADUMP_API_URL,
     TUNER_URL,
 )
 
@@ -49,6 +50,7 @@ def install_http_mocks(rsps: responses.RequestsMock) -> None:
     _install_mdrun_mocks(rsps)
     _install_tuner_mocks(rsps)
     _install_mdrepo_mocks(rsps)
+    _install_metadump_mocks(rsps)
     _install_caddy_mocks(rsps)
     _install_external_download_mocks(rsps)
     _install_mdposit_pass_through(rsps)
@@ -578,6 +580,69 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
     )
     if MDREPO_TOKEN_URL:
         rsps.add_callback(responses.POST, MDREPO_TOKEN_URL, callback=mdrepo_token_exchange)
+
+
+def _install_metadump_mocks(rsps: responses.RequestsMock) -> None:
+    """Install MetaDump API response mocks."""
+
+    def annotate_tpr(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        job_uuid = str(uuid4())
+        response_body = {
+            "uuid": job_uuid,
+            "pin": "123456",
+            "status_url": f"{METADUMP_API_URL}/api/annotate/{job_uuid}",
+            "results_url": f"{METADUMP_API_URL}/api/annotate/{job_uuid}/results",
+        }
+        return (HTTPStatus.CREATED, {}, json.dumps(response_body))
+
+    def get_annotate_status(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        match = re.search(r"/api/annotate/(?P<uuid>[^/]+)$", request.url)
+        job_uuid = match.group("uuid") if match else "unknown"
+        response_body = {
+            "uuid": job_uuid,
+            "status": "completed",
+            "created": "2026-05-02T12:00:00.000000",
+            "options": {"keep": False},
+        }
+        return (HTTPStatus.OK, {}, json.dumps(response_body))
+
+    def get_annotate_results(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        match = re.search(r"/api/annotate/(?P<uuid>[^/]+)/results", request.url)
+        job_uuid = match.group("uuid") if match else "unknown"
+        response_body = {
+            "uuid": job_uuid,
+            "metadata": {
+                "forcefield": "charmm36",
+                "water_model": "tip3p",
+                "nsteps": 100000,
+                "dt": 0.002,
+            },
+        }
+        return (HTTPStatus.OK, {}, json.dumps(response_body))
+
+    def delete_annotate_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        match = re.search(r"/api/annotate/(?P<uuid>[^/]+)", request.url)
+        job_uuid = match.group("uuid") if match else "unknown"
+        return (HTTPStatus.OK, {}, json.dumps({"message": f"Job {job_uuid} deleted"}))
+
+    if METADUMP_API_URL:
+        rsps.add_callback(responses.POST, f"{METADUMP_API_URL}/api/annotate", callback=annotate_tpr)
+        # /results must be registered before the status route — responses matches in registration order
+        rsps.add_callback(
+            responses.GET,
+            re.compile(rf"{re.escape(METADUMP_API_URL)}/api/annotate/[^/]+/results"),
+            callback=get_annotate_results,
+        )
+        rsps.add_callback(
+            responses.GET,
+            re.compile(rf"{re.escape(METADUMP_API_URL)}/api/annotate/[^/]+$"),
+            callback=get_annotate_status,
+        )
+        rsps.add_callback(
+            responses.DELETE,
+            re.compile(rf"{re.escape(METADUMP_API_URL)}/api/annotate/[^/]+"),
+            callback=delete_annotate_job,
+        )
 
 
 def _install_caddy_mocks(rsps: responses.RequestsMock) -> None:
