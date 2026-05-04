@@ -138,6 +138,9 @@ jupyterhub:
           secretKeyRef:
             name: {{ $helmPackage }}-mdrepo-credentials
             key: client_secret
+      # MetaDump API for extracting GROMACS TPR metadata
+      METADUMP_API_URL:
+        value: "{{ $cfg.metadump.url }}"
       TUNER_USER:
         valueFrom:
           secretKeyRef:
