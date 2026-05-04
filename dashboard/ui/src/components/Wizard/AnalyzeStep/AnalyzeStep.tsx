@@ -45,9 +45,7 @@ const AnalyzeStep = (props: WizardStepProps) => {
   // or the engine's trajectory format requires it (e.g. AMBER .nc needs .prmtop/.parm7).
   const topologyForTrajectory = !!coordsFile && engineConfig.trajectoryRequiresTopology
   const topologyRequired =
-    preprocessingMode !== AnalysisPreprocessingMode.AS_IS ||
-    !!analysisConfig?.requiresTopology ||
-    topologyForTrajectory
+    preprocessingMode !== AnalysisPreprocessingMode.AS_IS || !!analysisConfig?.requiresTopology || topologyForTrajectory
   const topologyFormats =
     preprocessingMode === AnalysisPreprocessingMode.AS_IS
       ? engineConfig.topologyExts
