@@ -167,7 +167,7 @@ make deploy ENV=${ENV}
 
 ## App Architecture
 
-![Architecture Diagram](doc/img/architecture.png)
+![Architecture Diagram](docs/img/architecture.png)
 
 ### Admin Namespace
 Shared infrastructure components that manage the platform and compute resources.

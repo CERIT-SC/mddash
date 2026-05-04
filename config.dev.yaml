@@ -105,7 +105,7 @@ resources:
     cpuLimit: "4000m"
     memoryLimit: "8Gi"
   namespaceQuota:
-    # requests = expected simultaneous usage; formula: see doc/resource-management.md
+    # requests = expected simultaneous usage; formula: see docs/resource-management.md
     requestsCpu: "2000m"
     requestsMemory: "5Gi"
     # limits = sum of all container limits at full load (1 notebook at 2x tier; 4x intentionally blocked)
