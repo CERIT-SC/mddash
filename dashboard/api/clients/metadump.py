@@ -15,7 +15,89 @@ TIMEOUT_SEC = 150
 MAX_POLLS = TIMEOUT_SEC // POLL_INTERVAL_SEC
 
 
-def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:  # noqa: PLR0912
+def _submit_job(tpr_path: Path) -> tuple[str, str]:
+    with tpr_path.open("rb") as f:
+        response = requests.post(
+            f"{METADUMP_API_URL}/api/annotate",
+            files={"file": (tpr_path.name, f, "application/octet-stream")},
+            timeout=60,
+        )
+
+    if not response.ok:
+        raise InternalServerError(
+            description=f"MetaDump upload failed for '{tpr_path.name}' (HTTP {response.status_code})."
+        )
+
+    try:
+        data = response.json()
+    except ValueError:
+        raise InternalServerError(description=f"MetaDump returned non-JSON response for '{tpr_path.name}'")
+
+    uuid = data.get("uuid")
+    pin = data.get("pin")
+    if not uuid or not pin:
+        raise InternalServerError(description=f"MetaDump returned unexpected response for '{tpr_path.name}': {data}")
+
+    return uuid, pin
+
+
+def _poll_status(uuid: str) -> str:
+    response = requests.get(
+        f"{METADUMP_API_URL}/api/annotate/{uuid}",
+        timeout=30,
+    )
+
+    if not response.ok:
+        raise InternalServerError(
+            description=f"MetaDump status check failed for uuid={uuid} (HTTP {response.status_code})."
+        )
+
+    try:
+        return response.json().get("status")
+    except ValueError:
+        raise InternalServerError(description=f"MetaDump returned non-JSON status response for uuid={uuid}")
+
+
+def _fetch_results(uuid: str) -> dict:
+    response = requests.get(
+        f"{METADUMP_API_URL}/api/annotate/{uuid}/results",
+        timeout=30,
+    )
+
+    if not response.ok:
+        raise InternalServerError(
+            description=f"MetaDump results fetch failed for uuid={uuid} (HTTP {response.status_code})."
+        )
+
+    return response.json()
+
+
+def _is_job_complete(uuid: str, status: str) -> bool:
+    match status:
+        case "completed":
+            return True
+        case "error":
+            raise InternalServerError(description=f"MetaDump job failed with error status: uuid={uuid}")
+        case "pending" | "running":
+            return False
+        case _:
+            raise InternalServerError(description=f"MetaDump job returned unknown status '{status}': uuid={uuid}")
+
+
+def _delete_job(uuid: str, pin: str) -> None:
+    try:
+        response = requests.delete(
+            f"{METADUMP_API_URL}/api/annotate/{uuid}",
+            params={"pin": pin},
+            timeout=30,
+        )
+        if not response.ok:
+            logger.warning("MetaDump cleanup failed for uuid=%s: %s", uuid, response.status_code)
+    except requests.RequestException:
+        logger.warning("MetaDump cleanup request error for uuid=%s", uuid, exc_info=True)
+
+
+def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:
     """
     Extract metadata from multiple TPR files via the MetaDump API.
 
@@ -39,34 +121,11 @@ def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:  # noqa: PLR0912
     if not tpr_paths:
         return []
 
-    # uuid -> pin, preserved for cleanup
     uuid_to_pin: dict[str, str] = {}
-    # Tracks submission order so results are returned in input order
     uuid_order: list[str] = []
 
     for path in tpr_paths:
-        with path.open("rb") as f:
-            response = requests.post(
-                f"{METADUMP_API_URL}/api/annotate",
-                files={"file": (path.name, f, "application/octet-stream")},
-                timeout=60,
-            )
-
-        if not response.ok:
-            raise InternalServerError(
-                description=f"MetaDump metadata extraction failed for '{path.name}' (HTTP {response.status_code})."
-            )
-
-        try:
-            data = response.json()
-        except ValueError:
-            raise InternalServerError(description=f"MetaDump returned non-JSON response for '{path.name}'")
-        uuid = data.get("uuid")
-        pin = data.get("pin")
-
-        if not uuid or not pin:
-            raise InternalServerError(description=f"MetaDump returned unexpected response for '{path.name}': {data}")
-
+        uuid, pin = _submit_job(path)
         uuid_to_pin[uuid] = pin
         uuid_order.append(uuid)
         logger.info("MetaDump job submitted for '%s': uuid=%s", path.name, uuid)
@@ -79,34 +138,10 @@ def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:  # noqa: PLR0912
             time.sleep(POLL_INTERVAL_SEC)
 
             for uuid in list(pending):
-                response = requests.get(
-                    f"{METADUMP_API_URL}/api/annotate/{uuid}",
-                    timeout=30,
-                )
-
-                if not response.ok:
-                    raise InternalServerError(
-                        description=f"MetaDump metadata extraction failed for uuid={uuid} (HTTP {response.status_code})."
-                    )
-
-                try:
-                    status = response.json().get("status")
-                except ValueError:
-                    raise InternalServerError(description=f"MetaDump returned non-JSON status response for uuid={uuid}")
-
-                match status:
-                    case "completed":
-                        pending.discard(uuid)
-                        completed.add(uuid)
-                        logger.info("MetaDump job completed: uuid=%s", uuid)
-                    case "error":
-                        raise InternalServerError(description=f"MetaDump job failed with error status: uuid={uuid}")
-                    case "pending" | "running":
-                        pass
-                    case _:
-                        raise InternalServerError(
-                            description=f"MetaDump job returned unknown status '{status}': uuid={uuid}"
-                        )
+                if _is_job_complete(uuid, _poll_status(uuid)):
+                    pending.discard(uuid)
+                    completed.add(uuid)
+                    logger.info("MetaDump job completed: uuid=%s", uuid)
 
             if not pending:
                 break
@@ -117,31 +152,12 @@ def extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]:  # noqa: PLR0912
 
         results: dict[str, dict] = {}
         for uuid in completed:
-            response = requests.get(
-                f"{METADUMP_API_URL}/api/annotate/{uuid}/results",
-                timeout=30,
-            )
-
-            if not response.ok:
-                raise InternalServerError(
-                    description=f"MetaDump metadata extraction failed for uuid={uuid} (HTTP {response.status_code})."
-                )
-
-            results[uuid] = response.json()
+            results[uuid] = _fetch_results(uuid)
             logger.info("MetaDump results fetched: uuid=%s", uuid)
 
     finally:
         for uuid, pin in uuid_to_pin.items():
-            try:
-                response = requests.delete(
-                    f"{METADUMP_API_URL}/api/annotate/{uuid}",
-                    params={"pin": pin},
-                    timeout=30,
-                )
-                if not response.ok:
-                    logger.warning("MetaDump cleanup failed for uuid=%s: %s", uuid, response.status_code)
-            except requests.RequestException:
-                logger.warning("MetaDump cleanup request error for uuid=%s", uuid, exc_info=True)
+            _delete_job(uuid, pin)
 
     return [results[uuid] for uuid in uuid_order]
 
