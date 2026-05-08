@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 import requests
 from cache import mdrepo_status_cache, step_status_cache
 from cachetools import cached
-from clients import mdrepo
+from clients import mdrepo, metadump
 from config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
 from enums import Engine, JobStatus, PodStatus
 from extensions import db
@@ -480,10 +480,6 @@ class Experiment(db.Model):  # type: ignore
         Raises:
             InternalServerError: If there is no valid access token or MDRepo creation fails.
         """
-        metadata: dict = {
-            "simulations": [],
-        }
-
         token_manager = MDRepoTokenManager(session)
         access_token = token_manager.get_valid_token()
 
@@ -491,6 +487,12 @@ class Experiment(db.Model):  # type: ignore
             raise InternalServerError(
                 description="No valid MDRepo access token available. Please authenticate with MDRepo."
             )
+
+        gmx_jobs = [j for j in self.simulation_jobs if j.engine == Engine.GMX]
+        tpr_paths = [DATA_DIR / self.id / j.tpr_name for j in gmx_jobs]
+        simulations = metadump.extract_metadata_bulk(tpr_paths) if tpr_paths else []
+
+        metadata: dict = {"simulations": simulations}
 
         # Create experiment in MDRepo
         mdrepo_experiment = mdrepo.create_experiment(access_token, community, metadata)
