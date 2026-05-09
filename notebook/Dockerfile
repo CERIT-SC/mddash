@@ -21,7 +21,9 @@ RUN curl -LOs "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/st
 # CUDA libs at pod startup.
 ENV CONDA_OVERRIDE_CUDA=12.0
 RUN mamba create -n gromacs -c conda-forge -y gromacs=2026 \
-    && mamba clean -afy
+    && mamba clean -afy \
+    && fix-permissions "${CONDA_DIR}" \
+    && fix-permissions "/home/${NB_USER}"
 
 COPY --from=amber /opt/ambertools25 /opt/ambertools25
 COPY --from=amber /opt/pmemd24      /opt/pmemd24
