@@ -1,0 +1,6 @@
+setuptools<70
+GromacsWrapper
+mdtraj
+nglview<4.0
+pandas
+matplotlib

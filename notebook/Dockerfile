@@ -21,9 +21,7 @@ RUN curl -LOs "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/st
 # CUDA libs at pod startup.
 ENV CONDA_OVERRIDE_CUDA=12.0
 RUN mamba create -n gromacs -c conda-forge -y gromacs=2026 \
-    && mamba clean -afy \
-    && fix-permissions "${CONDA_DIR}" \
-    && fix-permissions "/home/${NB_USER}"
+    && mamba clean -afy
 
 COPY --from=amber /opt/ambertools25 /opt/ambertools25
 COPY --from=amber /opt/pmemd24      /opt/pmemd24
@@ -36,11 +34,10 @@ ENV AMBERHOME=/opt/ambertools25
 ENV PATH="/opt/pmemd24/bin:/opt/ambertools25/bin:/opt/conda/envs/gromacs/bin:${PATH}"
 ENV LD_LIBRARY_PATH=/opt/ambertools25/lib:/opt/pmemd24/lib
 
-# Install uv
-COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /bin/uv
-
-COPY pyproject.toml /tmp/
-RUN uv pip install --system --no-cache -r /tmp/pyproject.toml && rm /tmp/pyproject.toml
+COPY requirements.txt /tmp/
+RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt \
+    && rm /tmp/requirements.txt \
+    && chown -R "${NB_USER}:users" "${CONDA_DIR}" "/home/${NB_USER}"
 
 COPY --chown=1000:1000 --chmod=755 setup-binder-env     /usr/local/bin/before-notebook.d/setup-binder-env
 COPY --chown=1000:1000 --chmod=755 start-with-binder.sh /usr/local/bin/start-with-binder.sh
