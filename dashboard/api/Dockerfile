@@ -16,7 +16,6 @@ COPY pyproject.toml uv.lock ./
 COPY dashboard/api/pyproject.toml dashboard/api/
 COPY dashboard/auth/pyproject.toml dashboard/auth/
 COPY mdrun-api/pyproject.toml mdrun-api/
-COPY notebook/pyproject.toml notebook/
 
 RUN uv sync --frozen --no-dev --package dashboard-api --no-install-project
 
