@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["dashboard/api", "dashboard/auth", "mdrun-api", "notebook"]
+members = ["dashboard/api", "dashboard/auth", "mdrun-api"]
 
 # This workspace venv is for IDE type resolution only.
 # Per-component venvs remain the source of truth for runtime behavior.
