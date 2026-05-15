@@ -1,4 +1,4 @@
-FROM cerit.io/xkrasa/amber:24 AS amber
+FROM cerit.io/xkrasa/amber:26 AS amber
 
 FROM quay.io/jupyter/base-notebook:latest
 
@@ -23,16 +23,16 @@ ENV CONDA_OVERRIDE_CUDA=12.0
 RUN mamba create -n gromacs -c conda-forge -y gromacs=2026 \
     && mamba clean -afy
 
-COPY --from=amber /opt/ambertools25 /opt/ambertools25
-COPY --from=amber /opt/pmemd24      /opt/pmemd24
+COPY --from=amber /opt/ambertools26 /opt/ambertools26
+COPY --from=amber /opt/pmemd26      /opt/pmemd26
 
 # tleap resolves force field parameters via AMBERHOME
-ENV AMBERHOME=/opt/ambertools25
+ENV AMBERHOME=/opt/ambertools26
 
 # PATH: pmemd > AmberTools > GROMACS.  Binder env prepended by setup-binder-env
 # takes priority -- correct fallback for repos that install their own tools.
-ENV PATH="/opt/pmemd24/bin:/opt/ambertools25/bin:/opt/conda/envs/gromacs/bin:${PATH}"
-ENV LD_LIBRARY_PATH=/opt/ambertools25/lib:/opt/pmemd24/lib
+ENV PATH="/opt/pmemd26/bin:/opt/ambertools26/bin:/opt/conda/envs/gromacs/bin:${PATH}"
+ENV LD_LIBRARY_PATH=/opt/ambertools26/lib:/opt/pmemd26/lib
 
 COPY requirements.txt /tmp/
 RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt \
