@@ -6,6 +6,8 @@ USER root
 
 RUN apt-get update && apt-get install -y \
     curl vim git build-essential python3-dev rsync libgfortran5 \
+    fontconfig fonts-dejavu-core \
+    && fc-cache -f \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,14 +27,17 @@ RUN mamba create -n gromacs -c conda-forge -y gromacs=2026 \
 
 COPY --from=amber /opt/ambertools26 /opt/ambertools26
 COPY --from=amber /opt/pmemd26      /opt/pmemd26
+COPY --from=amber /usr/local/cuda-12.8 /usr/local/cuda-12.8
+RUN ln -s /usr/local/cuda-12.8 /usr/local/cuda
 
 # tleap resolves force field parameters via AMBERHOME
 ENV AMBERHOME=/opt/ambertools26
 
-# PATH: pmemd > AmberTools > GROMACS.  Binder env prepended by setup-binder-env
-# takes priority -- correct fallback for repos that install their own tools.
-ENV PATH="/opt/pmemd26/bin:/opt/ambertools26/bin:/opt/conda/envs/gromacs/bin:${PATH}"
-ENV LD_LIBRARY_PATH=/opt/ambertools26/lib:/opt/pmemd26/lib
+# PATH: pmemd/AmberTools CLIs are available globally, but notebook/base conda
+# and Binder envs must keep priority over AmberTools' embedded miniconda.
+ENV PATH="/opt/pmemd26/bin:/opt/ambertools26/bin:/opt/conda/envs/gromacs/bin:${PATH}:/opt/ambertools26/miniconda/bin"
+ENV LD_LIBRARY_PATH=/opt/ambertools26/lib:/opt/pmemd26/lib:/opt/ambertools26/miniconda/lib:/usr/local/cuda/lib64
+ENV AMBER_PYTHONPATH=/opt/ambertools26/miniconda/lib/python3.12/site-packages:/opt/ambertools26/lib/python3.12/site-packages
 
 COPY requirements.txt /tmp/
 RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt \
