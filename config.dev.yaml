@@ -57,7 +57,7 @@ analysis:
 gpuType: "nvidia.com/mig-1g.10gb"
 
 # Container images used for mdrun-api simulation jobs
-gmxImage: "cerit.io/xkrasa/gromacs-tuner-worker:gmx-2026.1_amber-24_ray-2.54.0_py-3.13"
+gmxImage: "cerit.io/xkrasa/gromacs-tuner-worker:gmx-2026.1_amber-26_ray-2.54.0_py-3.13"
 amberImage: "cerit.io/xkrasa/amber:24"
 
 # Sidecar container images for user pod
@@ -155,7 +155,7 @@ gromacsTuner:
         cpu: "100m"
         memory: "256Mi"
   ray:
-    image: "cerit.io/xkrasa/gromacs-tuner-worker:gmx-2026.1_amber-24_ray-2.54.0_py-3.13"
+    image: "cerit.io/xkrasa/gromacs-tuner-worker:gmx-2026.1_amber-26_ray-2.54.0_py-3.13"
     head:
       resources:
         limits:

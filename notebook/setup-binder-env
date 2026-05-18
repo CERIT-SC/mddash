@@ -11,6 +11,21 @@ readonly WORKDIR="${WORKDIR:?Error: WORKDIR not set}"
 readonly ENV_PREFIX="${WORKDIR}/.binder-env"
 readonly MARKER="${WORKDIR}/.binder-env-installed"
 
+register_binder_kernel() {
+    local kernel_prefix="${CONDA_DIR:-/opt/conda}"
+
+    if [[ ! -x "${ENV_PREFIX}/bin/python" ]]; then
+        echo "WARNING: Cannot register Binder kernel; ${ENV_PREFIX}/bin/python is missing" >&2
+        return 1
+    fi
+
+    echo "Registering Binder environment as the default Python kernel..."
+    "${ENV_PREFIX}/bin/python" -m ipykernel install \
+        --prefix "$kernel_prefix" \
+        --name python3 \
+        --display-name "Python 3 (Binder)"
+}
+
 # Determine binder config directory (binder/ subdirectory takes precedence)
 binder_dir=""
 if [[ -d "${WORKDIR}/binder" ]]; then
@@ -29,6 +44,9 @@ fi
 # --- Fast path: env already built ---
 if [[ -f "$MARKER" ]] && [[ -x "${ENV_PREFIX}/bin/python" ]]; then
     echo "Binder environment already installed at ${ENV_PREFIX}"
+    if ! register_binder_kernel; then
+        echo "WARNING: Failed to register Binder Jupyter kernel" >&2
+    fi
     exit 0
 fi
 
@@ -86,6 +104,15 @@ if [[ -f "${binder_dir}/postBuild" ]]; then
     echo "Running postBuild script..."
     if ! env PATH="${ENV_PREFIX}/bin:${PATH}" bash -e "${binder_dir}/postBuild"; then
         echo "WARNING: postBuild script failed" >&2
+        failed=true
+    fi
+fi
+
+# 5. Make the Binder environment the default notebook kernel. Installing
+# ipykernel alone is not enough; otherwise notebooks keep using /opt/conda/bin/python.
+if [[ -x "${ENV_PREFIX}/bin/python" ]]; then
+    if ! register_binder_kernel; then
+        echo "WARNING: Failed to register Binder Jupyter kernel" >&2
         failed=true
     fi
 fi
