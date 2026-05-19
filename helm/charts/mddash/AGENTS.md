@@ -16,7 +16,7 @@ Deploys a multi-tenant JupyterHub environment with MD Dashboard for molecular dy
 - **api**: Flask backend for MD simulation management
 - **s3-sync**: Background synchronization with S3-compatible storage
 
-**Template-Based Configuration**: Values file is a Jinja2 template rendered with `gomplate` using external config YAML. This enables environment-specific deployments without maintaining duplicate values files.
+**Template-Based Configuration**: Values file is a gomplate/Go template rendered with `gomplate` using external config YAML. This enables environment-specific deployments without maintaining duplicate values files.
 
 ## Core Dependencies
 
@@ -54,15 +54,15 @@ graph TD
 
 ## The "Gotchas" (Critical)
 
-- **Values Template Rendering**: `values.yaml.tmpl` must be rendered with `gomplate` before Helm operations. Use `make render` or the `render` target in the Makefile. Never edit `values.yaml` directly—it's generated.
+- **Values Template Rendering**: `values.yaml.tmpl` must be rendered with `gomplate` before Helm operations. From the repo root, use `make -C helm render`; from `helm/`, use `make render`. Never edit `values.yaml` directly—it's generated.
 
 - **Pre-Spawn Hook Injection**: The hook file is injected via `--set-file jupyterhub.hub.extraConfig.pre-spawn-hook` during `helm install`/`upgrade`. The Makefile handles this automatically.
 
 - **Proxy Serves Static UI**: The proxy container is not just a reverse proxy—it also serves the complete static UI (compiled React/TypeScript dashboard from `dashboard/ui/`). The UI is embedded as static assets within the proxy container image.
 
-- **Rancher-Specific Annotations**: Namespaces require `field.cattle.io/projectId` and `field.cattle.io/resourceQuota` annotations for Rancher integration. The hook waits for Rancher conditions (`InitialRolesPopulated`, `ResourceQuotaInit`) before proceeding.
+- **Rancher-Specific Annotations**: Namespaces require `field.cattle.io/projectId` and `field.cattle.io/resourceQuota` annotations for Rancher integration. The hook waits for `InitialRolesPopulated`, patches the namespace, then waits for ResourceQuota status to become active.
 
-- **Custom Templates ConfigMap**: The `hub-templates` ConfigMap must be created separately via `make hub-templates` before Helm installation. This provides custom login/page templates.
+- **Custom Templates ConfigMap**: The `hub-templates` ConfigMap provides custom login/page templates. `make -C helm install` and `make -C helm deploy` create or update it through the `hub-templates` dependency.
 
 - **Async Kubernetes Client**: The hook uses `kubernetes_asyncio` (not the synchronous `kubernetes` client). All API calls are async and must be awaited.
 
@@ -79,5 +79,5 @@ graph TD
 ## Entry Points
 
 - **`Chart.yaml`**: Defines the chart metadata, version, and dependencies (jupyterhub, mdrun-api, gromacs-tuner)
-- **`values.yaml.tmpl`**: Jinja2 template for configuration values; rendered to `values.yaml` by `gomplate`
+- **`values.yaml.tmpl`**: gomplate/Go template for configuration values; rendered to `values.yaml` by `gomplate`
 - **`files/pre_spawn_hook.py`**: Main hook function `pre_spawn_hook()` that orchestrates user namespace creation, RBAC setup, and sidecar configuration
