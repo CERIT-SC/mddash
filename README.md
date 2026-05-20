@@ -133,16 +133,17 @@ Create the target namespace, apply the hub service account RBAC, and create the 
 kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || kubectl create namespace "${NAMESPACE}"
 ```
 
-Apply the cluster-wide RBAC once as a cluster admin:
+Apply the cluster-wide RBAC once:
+
+> [!CAUTION]
+> `helm/rbac/` grants cluster-wide permissions. Namespace admin rights are not enough; ask a cluster/Rancher admin to apply these for you.
 
 ```bash
-# Hub service account RBAC (applied once by cluster admin; see helm/rbac/ for details)
-# Replace <NAMESPACE> in helm/rbac/clusterrole.yaml first.
+# Hub service account RBAC. Replace <NAMESPACE> first.
 kubectl apply -f helm/rbac/clusterrole.yaml
 
-# Rancher clusters also need project namespace-management RBAC.
-# Replace <NAMESPACE> and <PROJECT_ID> first. <PROJECT_ID> is the short Rancher
-# project suffix without the leading "p-"; for c-m-qvndqhf6:p-hshk2 use hshk2.
+# Rancher namespace-management RBAC. Replace <NAMESPACE> and <PROJECT_ID> first.
+# <PROJECT_ID> is the short suffix without "p-"; for c-xxx:p-hshk2 use hshk2.
 kubectl apply -f helm/rbac/rancher-clusterrole.yaml
 ```
 
@@ -188,8 +189,7 @@ helm registry login <registry-host>
 make push ENV=${ENV}
 
 # 3. Package and push the mdrun-api Helm chart when the subchart changed.
-# The parent chart currently pulls this dependency from oci://cerit.io/xkrasa;
-# for non-xkrasa registries, update the dependency repository before relying on this push.
+# The parent chart currently pulls this dependency from oci://cerit.io/xkrasa; for non-xkrasa registries, update the dependency repository before relying on this push.
 make push-mdrun-api-chart ENV=${ENV}
 
 # 4. Update Helm dependencies when charts or config changed
