@@ -1,4 +1,3 @@
-import type { AnalysisPreprocessingMode as AnalysisPreprocessingModeValue } from "@/util/analysis-types"
 import type { FileOption } from "@/util/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import FileSelector from "@/components/FileSelector"
@@ -9,10 +8,11 @@ interface AnalyzeSidebarProps {
   structureExts: string[]
   trajectoryExts: string[]
   structureFile: FileOption | null
+  coordsFile: FileOption | null
+  topologyFile: FileOption | null
   topologyRequired: boolean
   topologyFormats: string[]
   topologyTitle: string
-  preprocessingMode: AnalysisPreprocessingModeValue
   onStructureSelected: (file: FileOption | null) => void
   onCoordsSelected: (file: FileOption | null) => void
   onTopologySelected: (file: FileOption | null) => void
@@ -23,10 +23,11 @@ const AnalyzeSidebar = ({
   structureExts,
   trajectoryExts,
   structureFile,
+  coordsFile,
+  topologyFile,
   topologyRequired,
   topologyFormats,
   topologyTitle,
-  preprocessingMode,
   onStructureSelected,
   onCoordsSelected,
   onTopologySelected,
@@ -42,23 +43,24 @@ const AnalyzeSidebar = ({
             experimentId={experimentId}
             ext={structureExts}
             title="Structure file"
+            selectedPath={structureFile?.path ?? null}
             onFileSelected={onStructureSelected}
             className="w-full"
           />
           <FileSelector
-            key={`coords-${structureFile?.path ?? "none"}`}
             experimentId={experimentId}
             ext={trajectoryExts}
             title="Trajectory file"
+            selectedPath={coordsFile?.path ?? null}
             onFileSelected={onCoordsSelected}
             className="w-full"
           />
           {topologyRequired && topologyFormats.length > 0 && (
             <FileSelector
-              key={`topology-${preprocessingMode}-${topologyRequired ? "required" : "optional"}`}
               experimentId={experimentId}
               ext={topologyFormats}
               title={topologyTitle}
+              selectedPath={topologyFile?.path ?? null}
               onFileSelected={onTopologySelected}
               className="w-full"
             />
