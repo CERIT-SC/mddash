@@ -67,7 +67,7 @@ sequenceDiagram
 ## The "Gotchas" (Critical)
 
 - **SQLite WAL Mode**: Database uses Write-Ahead Logging for concurrent reads/writes. Always use `db.session` within app context.
-- **uWSGI Worker 1 Only**: Background polling thread only starts in `UWSGI_WORKER_ID=1` to prevent duplicate polling across workers.
+- **uWSGI Post-Fork Polling**: Background polling is registered with uWSGI's post-fork hook and only starts in worker 1 to prevent unsafe pre-fork threads and duplicate polling across workers. Outside uWSGI, polling starts immediately for local/dev runs.
 - **On-Demand Status**: `MdrunJob.status` property queries Kubernetes on every access. Cache results if polling frequently.
 - **Auto-Cleanup**: Jobs in TERMINATED or ERROR state are automatically deleted from Kubernetes but preserved in database.
 - **Input Sanitization**: All user inputs MUST pass through `sanitization.py` functions to prevent shell injection in Kubernetes job manifests.

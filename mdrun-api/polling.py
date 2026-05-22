@@ -1,3 +1,4 @@
+import importlib
 import logging
 import os
 import threading
@@ -11,6 +12,16 @@ logger = logging.getLogger(__name__)
 
 # Poll every 15 minutes
 POLL_INTERVAL_SECONDS = 15 * 60
+
+
+def _get_uwsgi_worker_id() -> str:
+    try:
+        uwsgi = importlib.import_module("uwsgi")
+    except ImportError:
+        return os.environ.get("UWSGI_WORKER_ID", "1")
+
+    worker_id = getattr(uwsgi, "worker_id")
+    return str(worker_id())
 
 
 def _polling_worker(app: Flask) -> None:
@@ -47,7 +58,7 @@ def start_polling(app: Flask) -> None:
     Only runs in the first uWSGI worker to avoid duplicate polling.
     """
     # In uWSGI, only start polling in worker 1
-    worker_id = os.environ.get("UWSGI_WORKER_ID", "1")
+    worker_id = _get_uwsgi_worker_id()
 
     if worker_id != "1":
         logger.info(f"Skipping polling worker in uWSGI worker {worker_id}")

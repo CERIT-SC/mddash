@@ -4,7 +4,7 @@ SHELL := /bin/bash
 CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 ENV ?= $(if $(filter master,$(CURRENT_BRANCH)),prod,dev)
 
-# Tagging: dev uses static 'dev' tag, prod uses YYYYMMDD-<short-sha> for unique, traceable images
+# Tagging: dev uses static 'dev' tag, prod uses '<short-sha>' for unique, traceable images
 ifeq ($(ENV),dev)
   IMAGE_TAG ?= dev
 else
