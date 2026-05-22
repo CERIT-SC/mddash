@@ -24,13 +24,20 @@ class TestFormatMwfInputsYaml:
         """Hydrogen bond analysis should request automatic interaction processing."""
         content = format_mwf_inputs_yaml(AnalysisType.HBONDS)
 
-        assert content == "name: mddash\ntype: trajectory\ninteractions:\n  - auto\n"
+        assert content == "name: mddash\ntype: trajectory\npbc_selection:\ninteractions:\n  - auto\n"
 
     def test_omits_auto_interactions_for_clusters(self) -> None:
         """Clusters should not force automatic interactions for the overall run."""
         content = format_mwf_inputs_yaml(AnalysisType.CLUSTERS)
 
-        assert content == "name: mddash\ntype: trajectory\n"
+        assert content == "name: mddash\ntype: trajectory\npbc_selection:\n"
+
+    def test_sets_empty_pbc_selection_for_mwf_0_1_10(self) -> None:
+        """Missing pbc_selection must not trigger mwf's literal 'none' default."""
+        content = format_mwf_inputs_yaml(AnalysisType.PCA)
+
+        assert "pbc_selection:\n" in content
+        assert "pbc_selection: none" not in content
 
 
 class TestFormatMwfAnalysisCommand:
