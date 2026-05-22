@@ -52,7 +52,7 @@ notebook:
 
 # MD analysis image used for on-demand analysis K8s jobs
 analysis:
-  image: ghcr.io/mmb-irb/mddb_wf:0.0.8
+  image: ghcr.io/mmb-irb/mddb_wf:0.1.10
 
 # GPU resource type used by mdrun-api jobs and gromacs-tuner workers
 gpuType: "nvidia.com/mig-1g.10gb"
