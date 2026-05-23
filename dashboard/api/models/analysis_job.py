@@ -138,7 +138,7 @@ def format_mwf_inputs_yaml(analysis_name: AnalysisType) -> str:
     Returns:
         The YAML content passed to mwf as inputs.yaml.
     """
-    lines = ["name: mddash", "type: trajectory", "pbc_selection:"]
+    lines = ["name: mddash", "type: trajectory", "pbc_selection: auto"]
     if analysis_name in AUTO_INTERACTION_ANALYSES:
         lines.extend(["interactions:", "  - auto"])
     return "\n".join(lines) + "\n"

@@ -101,10 +101,11 @@ resources:
     memoryLimit: "8Gi"   # 8× request: burst headroom for in-memory analysis
 
   analysisJob:
+    # Dashboard mwf analysis jobs are mostly single-threaded; extra CPU limit rarely speeds them up.
     #  edc test: cpuRequest: "1000m"
     cpuRequest: "100m"
     memoryRequest: "2Gi"
-    cpuLimit: "4000m"
+    cpuLimit: "1000m"
     memoryLimit: "8Gi"
   namespaceQuota:
     # requests = expected simultaneous usage; formula: see docs/resource-management.md
