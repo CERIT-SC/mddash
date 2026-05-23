@@ -114,8 +114,14 @@ const AnalysisPanel = ({
     return analysisWithResults?.value ?? null
   }, [selectedAnalysis, activeJob, availableResults])
 
+  useEffect(() => {
+    if (!selectedAnalysis && resolvedAnalysis) setSelectedAnalysis(resolvedAnalysis)
+  }, [selectedAnalysis, resolvedAnalysis, setSelectedAnalysis])
+
   const analysisConfig = useMemo(() => AVAILABLE_ANALYSES.find((a) => a.value === resolvedAnalysis), [resolvedAnalysis])
   const selectedResultName = analysisConfig?.resultName ?? null
+  const submissionAnalysis = selectedAnalysis ?? resolvedAnalysis
+  const submitRequiresTopology = topologyRequired || !!analysisConfig?.requiresTopology
 
   const variantResults = useMemo(() => {
     if (!analysisConfig?.hasVariants || !selectedResultName) return []
@@ -155,17 +161,22 @@ const AnalysisPanel = ({
   const canSubmit =
     (!!structureFile || !!topologyFile) &&
     !!coordsFile &&
-    !!selectedAnalysis &&
-    (!topologyRequired || !!topologyFile) &&
+    !!submissionAnalysis &&
+    (!submitRequiresTopology || !!topologyFile) &&
     !activeJob &&
     !submitAnalysis.isPending
 
   const submitCurrentAnalysis = () => {
-    if ((!structureFile && !topologyFile) || !coordsFile || !selectedAnalysis || (topologyRequired && !topologyFile))
+    if (
+      (!structureFile && !topologyFile) ||
+      !coordsFile ||
+      !submissionAnalysis ||
+      (submitRequiresTopology && !topologyFile)
+    )
       return
 
     submitAnalysis.mutate({
-      analysis: selectedAnalysis,
+      analysis: submissionAnalysis,
       trajectory_file: coordsFile.path,
       preprocessing_mode: preprocessingMode,
       ...(structureFile && { structure_file: structureFile.path }),
@@ -355,9 +366,9 @@ const AnalysisPanel = ({
 
       {resolvedAnalysis &&
         !hasResult &&
-        ((!structureFile && !topologyFile) || !coordsFile || (topologyRequired && !topologyFile)) && (
+        ((!structureFile && !topologyFile) || !coordsFile || (submitRequiresTopology && !topologyFile)) && (
           <p className="text-muted-foreground text-xs">
-            {topologyRequired
+            {submitRequiresTopology
               ? preprocessingMode === AnalysisPreprocessingMode.AS_IS
                 ? "Select structure, trajectory, and topology files in the sidebar to run this analysis."
                 : "Select structure, trajectory, and simulation TPR files in the sidebar to run analyses with preprocessing."
@@ -413,7 +424,7 @@ const AnalysisPanel = ({
                 <BarChart3 className="text-muted-foreground/50 mx-auto h-12 w-12" />
                 <p className="text-muted-foreground text-sm">No results yet.</p>
                 <p className="text-muted-foreground/75 text-xs">
-                  {topologyRequired
+                  {submitRequiresTopology
                     ? preprocessingMode === AnalysisPreprocessingMode.AS_IS
                       ? 'Select the required files and click "Calculate" to run this analysis.'
                       : 'Select the simulation TPR and click "Calculate" to run this analysis.'
