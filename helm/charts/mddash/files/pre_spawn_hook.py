@@ -477,8 +477,8 @@ def _get_sidecar_containers(
 
 def _get_or_create_progress_queue(spawner: "KubeSpawner") -> asyncio.Queue:
     if not hasattr(spawner, "_mddash_progress_queue"):
-        spawner._mddash_progress_queue = asyncio.Queue()  # type: ignore[attr-defined]  # noqa: SLF001
-    return spawner._mddash_progress_queue  # type: ignore[attr-defined]  # noqa: SLF001
+        spawner._mddash_progress_queue = asyncio.Queue()  # type: ignore  # noqa: SLF001
+    return spawner._mddash_progress_queue  # type: ignore  # noqa: SLF001
 
 
 async def _report_progress(spawner: "KubeSpawner", message: str, progress: int) -> None:
@@ -642,8 +642,8 @@ def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:  # noqa: ARG00
         if container.name == "notebook":
             sc = container.security_context
             if isinstance(sc, dict):
-                allowed = {k: v for k, v in sc.items() if k in V1SecurityContext.openapi_types}  # type: ignore[attr-defined]
-                sc = V1SecurityContext(**allowed)
+                allowed = {k: v for k, v in sc.items() if k in V1SecurityContext.openapi_types}  # type: ignore
+                sc = V1SecurityContext(**allowed)  # type: ignore
             if sc is None:
                 sc = V1SecurityContext()
             sc.capabilities = V1Capabilities(drop=["ALL"])
@@ -690,4 +690,4 @@ c.KubeSpawner.post_stop_hook = post_stop_hook  # type: ignore # noqa: F821
 
 # progress is a plain method (not a traitlet), so c.KubeSpawner.progress is silently ignored.
 # Direct monkey-patch is required to override it.
-KubeSpawner.progress = _spawn_progress  # type: ignore[method-assign]
+KubeSpawner.progress = _spawn_progress  # type: ignore
