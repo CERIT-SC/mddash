@@ -288,6 +288,17 @@ def _get_security_context() -> dict:
 # =============================================================================
 
 
+def _proxy_start_command(service_prefix: str) -> str:
+    api_health_url = f"http://localhost:5000{service_prefix}/dash/api/health"
+    return (
+        "until "
+        "curl --fail --silent --show-error --connect-timeout 1 http://localhost:5001/health > /dev/null "
+        f"&& curl --fail --silent --show-error --connect-timeout 1 {api_health_url} > /dev/null; "
+        "do echo 'waiting for auth and dashboard API health'; sleep 0.1; done; "
+        "exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"
+    )
+
+
 def _proxy_container(service_prefix: str, username: str, security_context: dict) -> dict | None:
     image = getenv("PROXY_IMAGE")
     if not image:
@@ -297,11 +308,7 @@ def _proxy_container(service_prefix: str, username: str, security_context: dict)
         "name": "proxy",
         "image": image,
         "imagePullPolicy": getenv("IMAGE_PULL_POLICY", "Always"),
-        "command": [
-            "sh",
-            "-c",
-            "until curl -s --connect-timeout 1 http://localhost:5001 > /dev/null && curl -s --connect-timeout 1 http://localhost:5000 > /dev/null; do sleep 0.1; done; caddy run --config /etc/caddy/Caddyfile --adapter caddyfile",
-        ],
+        "command": ["sh", "-c", _proxy_start_command(service_prefix)],
         "ports": [{"containerPort": 8888, "name": "http"}],
         "env": [
             {"name": "CADDY_ROUTE_PREFIX", "value": service_prefix},
