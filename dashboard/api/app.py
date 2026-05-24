@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os
 import time
@@ -33,10 +34,8 @@ DU_MONITOR_START_DELAY_SECONDS = 10.0
 
 
 def _log_duration(phase: str, start: float) -> None:
-    try:
+    with contextlib.suppress(Exception):
         logger.info("startup phase %s completed in %.3fs", phase, time.perf_counter() - start)
-    except Exception:
-        pass
 
 
 def _run_migrations() -> None:
@@ -88,7 +87,12 @@ def _register_blueprints(app: Flask) -> None:
 
 
 def create_app() -> Flask:
-    """Create and configure the Flask application."""
+    """
+    Create and configure the Flask application.
+
+    Returns:
+        Flask: Configured Flask application instance.
+    """
     startup_start = time.perf_counter()
     app = Flask(__name__)
 

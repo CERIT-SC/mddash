@@ -289,6 +289,12 @@ def _get_security_context() -> dict:
 
 
 def _proxy_start_command(service_prefix: str) -> str:
+    """
+    Return the proxy startup command that waits for auth and API health.
+
+    Returns:
+        str: Shell command string for proxy container startup.
+    """
     api_health_url = f"http://localhost:5000{service_prefix}/dash/api/health"
     return (
         "until "

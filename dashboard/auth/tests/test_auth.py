@@ -206,11 +206,11 @@ class TestOAuthCallback:
         assert expected_user != returned_user
 
 
-def test_health_logs_first_health_once(client: FlaskClient, caplog) -> None:
+def test_health_logs_first_health_once(client: FlaskClient, caplog) -> None:  # noqa: ANN001
     """The first auth health response should be visible in startup diagnostics once."""
-    import auth
+    import auth  # noqa: PLC0415
 
-    auth._first_health_logged = False
+    auth._first_health_logged = False  # noqa: SLF001
     caplog.set_level("INFO", logger="auth")
 
     client.get("/health")

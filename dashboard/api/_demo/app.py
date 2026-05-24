@@ -96,9 +96,10 @@ def create_demo_app() -> "Flask":
 
         # Import the real app - this triggers kubernetes config loading
         # but it's already patched above
-        from app import app  # noqa: PLC0415
+        from app import create_app  # noqa: PLC0415
 
-        # Set up demo profile (seeding, MDRepo auth bypass)
+        app = create_app()
+
         setup_demo_profile(app)
 
         return app

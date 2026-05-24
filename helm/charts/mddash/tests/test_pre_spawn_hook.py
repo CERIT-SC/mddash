@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-def _load_pre_spawn_hook(monkeypatch):
+def _load_pre_spawn_hook(monkeypatch):  # noqa: ANN001, ANN202
     path = Path(__file__).parents[1] / "files" / "pre_spawn_hook.py"
     monkeypatch.setattr(
         builtins,
@@ -22,11 +22,11 @@ def _load_pre_spawn_hook(monkeypatch):
     return module
 
 
-def test_proxy_start_command_waits_for_real_health_endpoints(monkeypatch) -> None:
+def test_proxy_start_command_waits_for_real_health_endpoints(monkeypatch) -> None:  # noqa: ANN001
     """Proxy startup should wait for successful auth and API health checks."""
     module = _load_pre_spawn_hook(monkeypatch)
 
-    command = module._proxy_start_command("/user/alice")
+    command = module._proxy_start_command("/user/alice")  # noqa: SLF001
 
     assert "curl --fail" in command
     assert "http://localhost:5001/health" in command

@@ -1,8 +1,9 @@
 """Unit tests for utility functions."""
 
+import contextlib
 from pathlib import Path
-from unittest.mock import MagicMock
 
+from pytest_mock import MockerFixture
 from utils import (
     generate_id,
     get_files_with_extensions,
@@ -140,12 +141,12 @@ class TestIsExcludedPath:
 class TestDuMonitor:
     """Tests for storage-size monitor startup."""
 
-    def test_start_du_monitor_passes_initial_delay_to_thread(self, tmp_path: Path, mocker) -> None:
+    def test_start_du_monitor_passes_initial_delay_to_thread(self, tmp_path: Path, mocker: MockerFixture) -> None:
         """The first du scan should be delayable to avoid first-health IO contention."""
         thread_cls = mocker.patch("utils.threading.Thread")
         mocker.patch("utils.threading.enumerate", return_value=[])
 
-        from utils import start_du_monitor
+        from utils import start_du_monitor  # noqa: PLC0415
 
         start_du_monitor(tmp_path, initial_delay=7.5)
 
@@ -153,17 +154,17 @@ class TestDuMonitor:
         assert thread_cls.call_args.kwargs["args"] == (tmp_path, 7.5)
         thread_cls.return_value.start.assert_called_once_with()
 
-    def test_du_loop_sleeps_before_first_measurement_when_initial_delay_set(self, tmp_path: Path, mocker) -> None:
+    def test_du_loop_sleeps_before_first_measurement_when_initial_delay_set(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
         """A configured initial delay should happen before subprocess du runs."""
         sleep = mocker.patch("utils.time.sleep", side_effect=RuntimeError("stop"))
         run = mocker.patch("utils.subprocess.run")
 
-        from utils import _du_loop
+        from utils import _du_loop  # noqa: PLC2701, PLC0415
 
-        try:
+        with contextlib.suppress(RuntimeError):
             _du_loop(tmp_path, initial_delay=3.0)
-        except RuntimeError:
-            pass
 
         sleep.assert_called_once_with(3.0)
         run.assert_not_called()
