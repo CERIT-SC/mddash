@@ -15,6 +15,22 @@
 
 - Krása, F., Rošinec, A., Ondrejka, A., & Křenek, A. MDDash – one stop shop for MD simulations. MDDB Conference, Lausanne, 2026. https://doi.org/10.5281/zenodo.18740266
 
+### MDDash paper
+
+```bib
+@misc{mddash,
+  AUTHOR = {Krása, Filip},
+  TITLE = {Virtual Research Environment for Molecular Dynamics Simulation Experiments},
+  YEAR = {2026},
+  TYPE = {Bachelor's thesis},
+  INSTITUTION = {Masaryk University, Faculty of Informatics},
+  LOCATION = {Brno},
+  SUPERVISOR = {Adrián Rošinec},
+  URL = {https://is.muni.cz/th/wdhgd/},
+  URL_DATE = {2026-05-24},
+}
+```
+
 ## CI/CD Setup
 
 1. **Add GitHub secrets** (Settings → Secrets):
