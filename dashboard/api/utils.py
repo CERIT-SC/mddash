@@ -275,7 +275,7 @@ def start_du_monitor(data_dir: Path, initial_delay: float = 0.0) -> None:
         name="du-monitor",
     )
     thread.start()
-    logger.info("du monitor started (interval: %ds)", DU_INTERVAL)
+    logger.info("du monitor started (interval: %ds, initial delay: %.1fs)", DU_INTERVAL, initial_delay)
 
 
 # Timeout for git clone operations (seconds)
