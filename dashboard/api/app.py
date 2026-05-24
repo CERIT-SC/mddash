@@ -104,8 +104,9 @@ def create_app() -> Flask:
     ma.init_app(app)
     migrate.init_app(app, db, directory=str(MIGRATIONS_DIR))
 
+    reg_start = time.perf_counter()
     _register_blueprints(app)
-    _log_duration("route-registration", startup_start)
+    _log_duration("route-registration", reg_start)
 
     with app.app_context():
         try:

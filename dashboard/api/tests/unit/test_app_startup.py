@@ -106,3 +106,48 @@ def test_run_migrations_stamps_unversioned_database_with_tables(app: Flask, mock
 
     stamp.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR), revision="001", purge=True)
     upgrade.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR))
+
+
+def test_run_migrations_restamps_unknown_revision(app: Flask, mocker) -> None:
+    import app as app_module
+    from alembic.util.exc import CommandError
+
+    migration_context = MagicMock()
+    migration_context.get_current_revision.return_value = "old-rev"
+    script = MagicMock()
+    script.get_current_head.return_value = "006"
+    script.get_revision.side_effect = CommandError("unknown revision")
+
+    mocker.patch("app.MigrationContext.configure", return_value=migration_context)
+    mocker.patch("app.ScriptDirectory", return_value=script)
+    stamp = mocker.patch("app.stamp")
+    upgrade = mocker.patch("app.upgrade")
+
+    with app.app_context():
+        app_module._run_migrations()
+
+    stamp.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR), revision="001", purge=True)
+    upgrade.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR))
+
+
+def test_run_migrations_upgrades_fresh_empty_database(app: Flask, mocker) -> None:
+    import app as app_module
+
+    migration_context = MagicMock()
+    migration_context.get_current_revision.return_value = None
+    script = MagicMock()
+    script.get_current_head.return_value = "006"
+    inspector = MagicMock()
+    inspector.get_table_names.return_value = []
+
+    mocker.patch("app.MigrationContext.configure", return_value=migration_context)
+    mocker.patch("app.ScriptDirectory", return_value=script)
+    mocker.patch("app.sa_inspect", return_value=inspector)
+    stamp = mocker.patch("app.stamp")
+    upgrade = mocker.patch("app.upgrade")
+
+    with app.app_context():
+        app_module._run_migrations()
+
+    stamp.assert_not_called()
+    upgrade.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR))
