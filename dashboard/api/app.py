@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from pathlib import Path
 
 from alembic.runtime.migration import MigrationContext
@@ -28,34 +29,52 @@ from utils import start_du_monitor
 logger = logging.getLogger(__name__)
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+DU_MONITOR_START_DELAY_SECONDS = 10.0
 
 
-def create_app() -> Flask:
-    """
-    Create and configure the Flask application.
+def _log_duration(phase: str, start: float) -> None:
+    try:
+        logger.info("startup phase %s completed in %.3fs", phase, time.perf_counter() - start)
+    except Exception:
+        pass
 
-    Returns:
-        Flask: Configured Flask application instance with database, extensions, and blueprints registered.
-    """
-    app = Flask(__name__)
 
-    # Configuration
-    db_path = DATA_DIR / "experiments.db"
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+def _run_migrations() -> None:
+    start = time.perf_counter()
+    logger.info("Checking database migrations...")
 
-    # Secret key for Flask session (used by MDRepo OAuth)
-    app.config["SECRET_KEY"] = os.environ.get("MDREPO_CLIENT_SECRET", "")
-    # Secure session cookie settings (recommended for production)
-    app.config["SESSION_COOKIE_SECURE"] = True  # Only send over HTTPS
-    app.config["SESSION_COOKIE_HTTPONLY"] = True  # Prevent JavaScript access
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # CSRF protection
+    script = ScriptDirectory(str(MIGRATIONS_DIR))
+    head_rev = script.get_current_head()
 
-    # Initialize extensions
-    db.init_app(app)
-    ma.init_app(app)
-    migrate.init_app(app, db, directory=str(MIGRATIONS_DIR))
+    with db.engine.connect() as conn:
+        current_rev = MigrationContext.configure(conn).get_current_revision()
 
+    if current_rev is None:
+        if sa_inspect(db.engine).get_table_names():
+            logger.info("Unversioned DB with tables; stamping to migration baseline...")
+            stamp(directory=str(MIGRATIONS_DIR), revision="001", purge=True)
+            current_rev = "001"
+    else:
+        try:
+            script.get_revision(current_rev)
+        except CommandError:
+            logger.info("Unknown DB revision; restamping to migration baseline...")
+            stamp(directory=str(MIGRATIONS_DIR), revision="001", purge=True)
+            current_rev = "001"
+
+    _log_duration("db-revision-check", start)
+
+    if current_rev == head_rev:
+        logger.info("Database is at migration head %s; skipping upgrade", head_rev)
+        return
+
+    start = time.perf_counter()
+    logger.info("Running database migrations...")
+    upgrade(directory=str(MIGRATIONS_DIR))
+    _log_duration("migration-upgrade", start)
+
+
+def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(amber_bp)
     app.register_blueprint(analysis_bp)
     app.register_blueprint(experiments_bp)
@@ -67,42 +86,43 @@ def create_app() -> Flask:
     app.register_blueprint(misc_bp)
     app.register_blueprint(mdrepo_bp)
 
+
+def create_app() -> Flask:
+    """Create and configure the Flask application."""
+    startup_start = time.perf_counter()
+    app = Flask(__name__)
+
+    db_path = DATA_DIR / "experiments.db"
+    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SECRET_KEY"] = os.environ.get("MDREPO_CLIENT_SECRET", "")
+    app.config["SESSION_COOKIE_SECURE"] = True
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+
+    db.init_app(app)
+    ma.init_app(app)
+    migrate.init_app(app, db, directory=str(MIGRATIONS_DIR))
+
+    _register_blueprints(app)
+    _log_duration("route-registration", startup_start)
+
     with app.app_context():
         try:
-            logger.info("Running database migrations...")
-            with db.engine.connect() as conn:
-                current_rev = MigrationContext.configure(conn).get_current_revision()
-            if current_rev is None:
-                # Unversioned DB that already has tables: stamp baseline so upgrade() doesn't
-                # try to re-create them (which would fail on existing tables).
-                if sa_inspect(db.engine).get_table_names():
-                    logger.info("Unversioned DB with tables; stamping to migration baseline...")
-                    stamp(directory=str(MIGRATIONS_DIR), revision="001", purge=True)
-            else:
-                try:
-                    ScriptDirectory(str(MIGRATIONS_DIR)).get_revision(current_rev)
-                except CommandError:
-                    # Revision from old auto-generated migrations that no longer exist
-                    logger.info("Unknown DB revision; restamping to migration baseline...")
-                    stamp(directory=str(MIGRATIONS_DIR), revision="001", purge=True)
-            upgrade(directory=str(MIGRATIONS_DIR))
+            _run_migrations()
         except (Exception, SystemExit) as e:
-            logger.warning(f"Migration upgrade failed: {e}, falling back to create_all()")
+            logger.warning("Migration upgrade failed: %s, falling back to create_all()", e)
             db.create_all()
 
-    # Alembic may tweak logging handlers; restore our configuration afterwards
     configure_logging(LOG_FORMAT, LOG_LEVEL)
     enable_loggers()
 
-    start_du_monitor(DATA_DIR)
+    start_du_monitor(DATA_DIR, initial_delay=DU_MONITOR_START_DELAY_SECONDS)
+    _log_duration("app-factory", startup_start)
 
     return app
 
 
-app = create_app()
-
-
-# DEVELOPMENT ONLY - when running directly with python app.py
 if __name__ == "__main__":
     logger.info("Starting Flask development server...")
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    create_app().run(debug=True, host="0.0.0.0", port=5000)
