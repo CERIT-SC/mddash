@@ -3,3 +3,11 @@ members = ["dashboard/api", "dashboard/auth", "mdrun-api"]
 
 # This workspace venv is for IDE type resolution only.
 # Per-component venvs remain the source of truth for runtime behavior.
+
+[dependency-groups]
+dev = [
+    # pre_spawn_hook.py type support
+    "jupyterhub",
+    "jupyterhub-kubespawner",
+    "kubernetes-asyncio",
+]
