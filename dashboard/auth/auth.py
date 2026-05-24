@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import logging
 import os
 import secrets
 import time
@@ -9,6 +10,9 @@ import requests
 from flask import Flask, Response, make_response, redirect, request
 
 app = Flask(__name__)
+
+logger = logging.getLogger(__name__)
+_first_health_logged = False
 
 
 # Environment/config
@@ -22,6 +26,8 @@ SERVICE_PREFIX = os.environ.get("JUPYTERHUB_SERVICE_PREFIX", f"/user/{USER}").rs
 
 if not all([USER, CLIENT_ID, API_TOKEN, API_URL, CALLBACK_URL]):
     raise ValueError("Missing one of the required environment variables.")
+
+logger.info("auth app initialized for user %s", USER)
 
 # Session/cookie config
 COOKIE_NAME = "mddash-auth"
@@ -98,6 +104,10 @@ def health() -> tuple[str, int]:
     Returns:
         tuple[str, int]: A plain-text OK body and a 200 status code.
     """
+    global _first_health_logged  # noqa: PLW0603
+    if not _first_health_logged:
+        logger.info("auth first health response served")
+        _first_health_logged = True
     return "OK", HTTPStatus.OK
 
 
