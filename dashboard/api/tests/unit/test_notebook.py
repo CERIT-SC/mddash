@@ -132,9 +132,10 @@ class TestCreateNotebookPodLifecycleFlags:
 
     def test_lifecycle_flags_in_pod_spec(self) -> None:
         """create_notebook_pod() must include cull_idle_timeout, shutdown_no_activity_timeout, and MY_POD_NAME."""
+        mock_core = MagicMock()
         with (
             patch("clients.k8s.ping_resource", return_value=False),
-            patch("clients.k8s.core_v1") as mock_core,
+            patch("clients.k8s.get_core_v1", return_value=mock_core),
         ):
             create_notebook_pod(
                 name="notebook-test",

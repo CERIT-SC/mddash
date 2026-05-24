@@ -38,9 +38,47 @@ from kubernetes.client.rest import ApiException
 logger = logging.getLogger(__name__)
 
 
-config.load_incluster_config()
-core_v1 = CoreV1Api()
-batch_v1 = BatchV1Api()
+_k8s_lock = threading.Lock()
+_k8s_config_loaded = False
+_core_v1: CoreV1Api | None = None
+_batch_v1: BatchV1Api | None = None
+
+
+def _load_k8s_config_once() -> None:
+    global _k8s_config_loaded  # noqa: PLW0603
+    if _k8s_config_loaded:
+        return
+    with _k8s_lock:
+        if _k8s_config_loaded:
+            return
+        config.load_incluster_config()
+        _k8s_config_loaded = True
+
+
+def get_core_v1() -> CoreV1Api:
+    """Return a cached CoreV1Api client, loading in-cluster config on first use."""  # noqa: DOC201
+    global _core_v1  # noqa: PLW0603
+    if _core_v1 is None:
+        _load_k8s_config_once()
+        _core_v1 = CoreV1Api()
+    return _core_v1
+
+
+def get_batch_v1() -> BatchV1Api:
+    """Return a cached BatchV1Api client, loading in-cluster config on first use."""  # noqa: DOC201
+    global _batch_v1  # noqa: PLW0603
+    if _batch_v1 is None:
+        _load_k8s_config_once()
+        _batch_v1 = BatchV1Api()
+    return _batch_v1
+
+
+def reset_k8s_clients_for_tests() -> None:
+    """Reset cached Kubernetes clients for isolated unit tests."""
+    global _batch_v1, _core_v1, _k8s_config_loaded  # noqa: PLW0603
+    _core_v1 = None
+    _batch_v1 = None
+    _k8s_config_loaded = False
 
 
 def get_container(
@@ -183,6 +221,7 @@ def create_notebook_pod(
         },
     }
 
+    core_v1 = get_core_v1()
     core_v1.create_namespaced_pod(namespace=NAMESPACE, body=pod_manifest)
 
 
@@ -234,6 +273,7 @@ def create_job(
         },
     }
 
+    batch_v1 = get_batch_v1()
     batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job_manifest)
 
 
@@ -252,6 +292,8 @@ def ping_resource(resource_type: str, name: str) -> bool:
         ValueError: If resource_type is not a supported type.
     """
     try:
+        core_v1 = get_core_v1()
+        batch_v1 = get_batch_v1()
         match resource_type:
             case "svc":
                 core_v1.read_namespaced_service(name=name, namespace=NAMESPACE)
@@ -283,6 +325,7 @@ def delete_pod(name: str) -> None:
     if not ping_resource("pod", name):
         return
 
+    core_v1 = get_core_v1()
     core_v1.delete_namespaced_pod(name=name, namespace=NAMESPACE)
 
 
@@ -297,6 +340,7 @@ def delete_job(name: str) -> None:
     if not ping_resource("job", name):
         return
 
+    batch_v1 = get_batch_v1()
     batch_v1.delete_namespaced_job(
         name=name,
         namespace=NAMESPACE,
@@ -318,6 +362,7 @@ def delete_service(name: str) -> None:
     if not ping_resource("svc", name):
         return
 
+    core_v1 = get_core_v1()
     core_v1.delete_namespaced_service(name=name, namespace=NAMESPACE)
 
 
@@ -344,6 +389,7 @@ def create_service(name: str, target_name: str) -> None:
         ),
     )
 
+    core_v1 = get_core_v1()
     core_v1.create_namespaced_service(namespace=NAMESPACE, body=service)
 
 
@@ -446,6 +492,7 @@ def _get_active_pod_usage() -> dict[str, dict[str, int]]:
     Returns:
         dict: {"requests": {"cpu": millicores, "memory": bytes}, "limits": {...}}
     """
+    core_v1 = get_core_v1()
     pods = cast("V1PodList", core_v1.list_namespaced_pod(namespace=NAMESPACE))
     totals: dict[str, dict[str, int]] = {"requests": {"cpu": 0, "memory": 0}, "limits": {"cpu": 0, "memory": 0}}
 
@@ -485,6 +532,7 @@ def count_notebook_pods() -> int:
     Returns:
         int: Number of active (non-terminating) notebook pods.
     """
+    core_v1 = get_core_v1()
     pods = core_v1.list_namespaced_pod(namespace=NAMESPACE, label_selector="type=notebook")
     return sum(
         1
@@ -559,6 +607,7 @@ def get_pod_status(name: str) -> PodStatus:
         PodStatus: The current status (RUNNING, PENDING, TERMINATED, ERROR, DOWN, TERMINATING, or UNKNOWN).
     """
     try:
+        core_v1 = get_core_v1()
         pod = cast("V1Pod", core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE))
 
         if not pod.metadata or not pod.status:
@@ -599,6 +648,7 @@ def get_job_status(name: str) -> JobStatus:
         JobStatus: The current status (RUNNING, PENDING, TERMINATED, ERROR, or UNKNOWN).
     """
     try:
+        batch_v1 = get_batch_v1()
         job = cast("V1Job", batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE))
 
         if not job.status:
@@ -634,6 +684,7 @@ def get_job_logs(name: str, tail_lines: int = 200) -> str:
         Log text as a string, or empty string if the pod is not found or an error occurs.
     """
     try:
+        core_v1 = get_core_v1()
         pods = core_v1.list_namespaced_pod(namespace=NAMESPACE, label_selector=f"job={name}")
         if not pods.items:
             return ""

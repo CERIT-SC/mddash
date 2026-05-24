@@ -87,7 +87,8 @@ graph TD
 - Validate with `check_experiment_id()` before use
 
 ### Kubernetes Resources
-- **In-cluster config only**: `config.load_incluster_config()` called at module import
+- **In-cluster config lazy-loaded**: `config.load_incluster_config()` and client construction deferred until first use via `get_core_v1()` / `get_batch_v1()`; importing `clients.k8s` does NOT trigger Kubernetes initialization
+- **Test reset**: Call `reset_k8s_clients_for_tests()` in unit tests to clear cached clients between assertions
 - All containers run as non-root (UID 1000) with security context
 - Shared PVC mounted at `/mddash` for all pods/jobs
 - Jobs have `backoffLimit: 0` (no retries on failure)
