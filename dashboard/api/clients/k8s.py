@@ -44,13 +44,9 @@ _core_v1: CoreV1Api | None = None
 _batch_v1: BatchV1Api | None = None
 
 
-def _load_k8s_config_once() -> None:
+def _ensure_k8s_config() -> None:
     global _k8s_config_loaded  # noqa: PLW0603
-    if _k8s_config_loaded:
-        return
-    with _k8s_lock:
-        if _k8s_config_loaded:
-            return
+    if not _k8s_config_loaded:
         config.load_incluster_config()
         _k8s_config_loaded = True
 
@@ -59,8 +55,10 @@ def get_core_v1() -> CoreV1Api:
     """Return a cached CoreV1Api client, loading in-cluster config on first use."""  # noqa: DOC201
     global _core_v1  # noqa: PLW0603
     if _core_v1 is None:
-        _load_k8s_config_once()
-        _core_v1 = CoreV1Api()
+        with _k8s_lock:
+            if _core_v1 is None:
+                _ensure_k8s_config()
+                _core_v1 = CoreV1Api()
     return _core_v1
 
 
@@ -68,8 +66,10 @@ def get_batch_v1() -> BatchV1Api:
     """Return a cached BatchV1Api client, loading in-cluster config on first use."""  # noqa: DOC201
     global _batch_v1  # noqa: PLW0603
     if _batch_v1 is None:
-        _load_k8s_config_once()
-        _batch_v1 = BatchV1Api()
+        with _k8s_lock:
+            if _batch_v1 is None:
+                _ensure_k8s_config()
+                _batch_v1 = BatchV1Api()
     return _batch_v1
 
 
