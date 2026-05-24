@@ -76,6 +76,8 @@ graph TD
 
 - **Role Creation Order**: Roles must be created before RoleBindings. The hook uses `asyncio.gather` to create all Roles first, waits for them to exist, then creates RoleBindings.
 
+- **Proxy Health Wait**: The proxy sidecar waits for `auth` `/health` and the dashboard API prefixed `/dash/api/health` endpoint with `curl --fail` before starting Caddy. Do not replace this with bare port checks; non-2xx responses must not count as readiness.
+
 ## Entry Points
 
 - **`Chart.yaml`**: Defines the chart metadata, version, and dependencies (jupyterhub, mdrun-api, gromacs-tuner)

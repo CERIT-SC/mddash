@@ -69,7 +69,7 @@ graph TD
 ## The "Gotchas"
 
 ### Database Migrations
-- **Run on startup**: `create_app()` runs `flask_migrate.upgrade()` against `dashboard/api/migrations/versions/` on every startup
+- **Run on startup**: `create_app()` checks the current migration revision and skips `flask_migrate.upgrade()` when already at head; otherwise runs upgrade against `dashboard/api/migrations/versions/`
 - Fallback to `db.create_all()` if migration fails
 - Migrations are in source control under `dashboard/api/migrations/versions/` — add a new file when adding columns
 - Do NOT manually run `flask db upgrade` — the app handles it on startup

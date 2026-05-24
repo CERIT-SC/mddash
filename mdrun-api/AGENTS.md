@@ -77,6 +77,7 @@ sequenceDiagram
 - **K8s Config Loading**: Uses `config.load_incluster_config()` - assumes running inside Kubernetes cluster. For local dev, use `load_kube_config()`.
 - **Job Naming**: Kubernetes jobs are named `mdrun-{uuid}`. Never manually create jobs with this prefix.
 - **EmptyDir Size Limit**: Shared volume limited to 100Gi in `k8s_client.py`. Adjust for large simulations.
+- **Health access logs**: Successful `/api/health` probe access logs are suppressed at the uWSGI layer to avoid log congestion. Failed probes, 4xx/5xx responses, startup logs, and application errors must remain visible.
 - **Case-insensitive Enums**: `from_string` on all enums uses case-insensitive matching. Inputs like `PMEMD.CUDA` and `pmemd.cuda` are equivalent.
 
 ## Entry Points
