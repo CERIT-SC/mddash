@@ -611,6 +611,7 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
 
         # Configure spawner
         spawner.namespace = user_namespace
+        spawner.dns_name = spawner.dns_name_template.format(namespace=user_namespace, name=spawner.pod_name)
         spawner.service_account = "default"
         spawner.volumes = [{"name": volume_name, "persistentVolumeClaim": {"claimName": pvc_name}}]
 
