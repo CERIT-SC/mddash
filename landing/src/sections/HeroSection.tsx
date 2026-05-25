@@ -50,7 +50,7 @@ export function HeroSection() {
                   MDDash
                 </div>
               </div>
-              <img src={dashImg} alt="MDDash dashboard" className="block w-full" />
+              <img src={dashImg} alt="MDDash dashboard" className="block w-full" width={2435} height={2298} />
             </div>
           </div>
         </div>

@@ -17,6 +17,8 @@ type WizardStep = {
   description: string
   img: string
   alt: string
+  width: number
+  height: number
 }
 
 const WIZARD_STEPS: WizardStep[] = [
@@ -28,6 +30,8 @@ const WIZARD_STEPS: WizardStep[] = [
       "Jupyter notebooks replace ad hoc shell scripts. Notebooks are version-controlled, shareable, and self-documenting. Compatible with BioExcel Building Blocks (BioBB) via Binder. Experiments can be initialized from a PDB structure, a local upload, or any previously published MDRepo record.",
     img: setupImg,
     alt: "MDDash setup step",
+    width: 1612,
+    height: 1462,
   },
   {
     num: 2,
@@ -37,6 +41,8 @@ const WIZARD_STEPS: WizardStep[] = [
       "Integrated GROMACS Tuner runs short benchmarks across MPI, OpenMP, and GPU configurations in parallel. The best-performing configuration (measured in ns/day) is offered automatically — no manual guesswork, no wasted compute on long production runs.",
     img: tuneImg,
     alt: "MDDash tune step with benchmark results",
+    width: 2256,
+    height: 1940,
   },
   {
     num: 3,
@@ -46,6 +52,8 @@ const WIZARD_STEPS: WizardStep[] = [
       "Kubernetes Jobs manage execution with proper resource allocation. Watch live progress, stream logs, and inspect intermediate files — all without needing shell access to the cluster. Jobs survive browser disconnects and pod restarts.",
     img: runImg,
     alt: "MDDash run step with live progress",
+    width: 2256,
+    height: 2134,
   },
   {
     num: 4,
@@ -55,6 +63,8 @@ const WIZARD_STEPS: WizardStep[] = [
       "Mol* viewer embedded for 3D structures and trajectories. Full MDDB Workflow analyses with interactive charts. On-demand Jupyter notebooks for custom analysis with the complete Python scientific stack. Available during active runs for early issue detection.",
     img: analyzeImg,
     alt: "MDDash analysis step with charts",
+    width: 2300,
+    height: 1309,
   },
   {
     num: 5,
@@ -64,6 +74,8 @@ const WIZARD_STEPS: WizardStep[] = [
       "One-click publication to MDRepo. Metadata auto-extracted with GROMACS MetaDump. Files upload in the background. The experiment receives a persistent DOI. Built on InvenioRDM — the same framework as Zenodo — enforcing MD-specific metadata schemas and standardized trajectory formats.",
     img: publishImg,
     alt: "MDDash publish step",
+    width: 2256,
+    height: 1224,
   },
 ]
 
@@ -136,6 +148,8 @@ export function WizardSection() {
                 src={WIZARD_STEPS[active].img}
                 alt={WIZARD_STEPS[active].alt}
                 className="block w-full"
+                width={WIZARD_STEPS[active].width}
+                height={WIZARD_STEPS[active].height}
                 key={active}
               />
             </div>
