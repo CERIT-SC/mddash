@@ -42,6 +42,8 @@ spec:
             runAsNonRoot: true
             runAsUser: 1000
             allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
             capabilities:
               drop:
                 - ALL
@@ -58,15 +60,21 @@ spec:
     - port: 80
       targetPort: 8080
 ---
+# Combined ingress: replaces JupyterHub's built-in ingress (disabled via jupyterhub.ingress.enabled=false).
+# NGINX resolves Exact / before Prefix /, so the landing page owns only the root path.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ .Release.Name }}-landing
+  name: {{ .Release.Name }}-ingress
   namespace: {{ .Release.Namespace }}
   annotations:
-    kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "8g"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/custom-http-errors: "599"
 spec:
+  ingressClassName: nginx
   tls:
     - hosts:
         - {{ .Values.landing.hostname }}
@@ -80,5 +88,12 @@ spec:
             backend:
               service:
                 name: {{ .Release.Name }}-landing
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: proxy-public
                 port:
                   number: 80

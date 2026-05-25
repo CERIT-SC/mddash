@@ -237,20 +237,7 @@ jupyterhub:
       enabled: false
 
   ingress:
-    enabled: true
-    hosts:
-      - {{ $cfg.dashboard.hostname }}
-    tls:
-      - hosts:
-          - {{ $cfg.dashboard.hostname }}
-        secretName: {{ $cfg.dashboard.hostname | strings.ReplaceAll "." "-" }}-tls
-    annotations:
-      kubernetes.io/ingress.class: nginx
-      cert-manager.io/cluster-issuer: letsencrypt-prod
-      nginx.ingress.kubernetes.io/proxy-body-size: "8g"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-      nginx.ingress.kubernetes.io/custom-http-errors: "599"
+    enabled: false
 
 landing:
   hostname: "{{ $cfg.dashboard.hostname }}"
