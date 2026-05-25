@@ -12,7 +12,7 @@ export function SpeedStat() {
             <span className="font-display text-gradient text-8xl leading-none font-semibold">~75%*</span>
           </div>
           <div>
-            <P className="text-text mb-2 text-lg leading-snug font-semibold">
+            <P className="text-text mb-2 text-lg leading-snug font-medium">
               less active setup time compared to a manual command-line workflow
             </P>
             <P className="text-text-muted text-sm leading-relaxed">

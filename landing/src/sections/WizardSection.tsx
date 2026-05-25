@@ -1,6 +1,6 @@
 import { useState } from "react"
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, H2, Muted, P } from "@e-infra/design-system"
+import { Card, CardContent, CardHeader, CardTitle, H2, Muted, P } from "@e-infra/design-system"
 import { ChevronRight } from "lucide-react"
 
 import analyzeImg from "../assets/analysis-mwf.png"
@@ -140,14 +140,11 @@ export function WizardSection() {
               />
             </div>
 
-            <Card>
+            <Card className="gap-2">
               <CardHeader>
                 <CardTitle className="text-base">
                   Step {WIZARD_STEPS[active].num}: {WIZARD_STEPS[active].label}
                 </CardTitle>
-                <CardDescription className="text-primary-200 text-sm font-semibold">
-                  {WIZARD_STEPS[active].tagline}
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 <P className="text-text-muted text-sm leading-relaxed">{WIZARD_STEPS[active].description}</P>
