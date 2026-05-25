@@ -1,4 +1,5 @@
 import { Footer } from "@e-infra/design-system"
+
 import { GlowSeparator } from "./GlowSeparator"
 
 export function SiteFooter() {

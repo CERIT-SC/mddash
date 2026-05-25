@@ -1,24 +1,6 @@
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardIcon,
-  CardTitle,
-  H2,
-  Muted,
-} from "@e-infra/design-system"
-import {
-  BookOpen,
-  Cloud,
-  GitFork,
-  Globe,
-  Microscope,
-  RefreshCw,
-  Server,
-  Shield,
-  type LucideIcon,
-} from "lucide-react"
+import { Card, CardContent, CardDescription, CardHeader, CardIcon, CardTitle, H2, Muted } from "@e-infra/design-system"
+import { BookOpen, Cloud, GitFork, Globe, Microscope, RefreshCw, Server, Shield, type LucideIcon } from "lucide-react"
+
 import { useReveal } from "../hooks/useReveal"
 
 type Capability = {
@@ -86,7 +68,7 @@ function CapabilityCard({ icon: Icon, title, body, delay }: CapabilityCardProps)
           <CardIcon className="text-primary">
             <Icon size={18} />
           </CardIcon>
-          <CardTitle className="text-sm font-semibold mt-3">{title}</CardTitle>
+          <CardTitle className="mt-3 text-sm font-semibold">{title}</CardTitle>
         </CardHeader>
         <CardContent>
           <CardDescription className="text-xs leading-relaxed">{body}</CardDescription>
@@ -99,25 +81,15 @@ function CapabilityCard({ icon: Icon, title, body, delay }: CapabilityCardProps)
 export function CapabilitiesSection() {
   const ref = useReveal()
   return (
-    <section className="py-24 bg-background">
+    <section className="bg-background py-24">
       <div className="container mx-auto max-w-7xl px-6">
-        <div ref={ref} className="reveal text-center mb-16">
-          <Muted className="text-sm uppercase tracking-widest font-semibold mb-3">
-            Capabilities
-          </Muted>
-          <H2 className="font-display text-3xl lg:text-4xl text-text-heading mb-4">
-            Built for research, not demos
-          </H2>
+        <div ref={ref} className="reveal mb-16 text-center">
+          <Muted className="mb-3 text-sm font-semibold tracking-widest uppercase">Capabilities</Muted>
+          <H2 className="font-display text-text-heading mb-4 text-3xl lg:text-4xl">Built for research, not demos</H2>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {CAPABILITIES.map(({ icon, title, body }, i) => (
-            <CapabilityCard
-              key={title}
-              icon={icon}
-              title={title}
-              body={body}
-              delay={(i % 4) + 1}
-            />
+            <CapabilityCard key={title} icon={icon} title={title} body={body} delay={(i % 4) + 1} />
           ))}
         </div>
       </div>

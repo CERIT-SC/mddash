@@ -1,11 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,300;1,8..60,400&family=Figtree:wght@300;400;500;600;700;800&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,300;1,8..60,400&family=Figtree:wght@300;400;500;600;700;800&display=swap");
 @import "tailwindcss";
 @import "@e-infra/design-system/setup.css";
 @source "../node_modules/@e-infra/design-system/dist";
 
 :root {
-  --font-display: 'Source Serif 4', Georgia, serif;
-  --font-body: 'Figtree', system-ui, sans-serif;
+  --font-display: "Source Serif 4", Georgia, serif;
+  --font-body: "Figtree", system-ui, sans-serif;
 }
 
 html {
@@ -23,8 +23,16 @@ body {
 /* Multi-layer radial gradient — too verbose for arbitrary Tailwind values */
 .hero-mesh {
   background:
-    radial-gradient(ellipse 80% 60% at 70% 50%, color-mix(in srgb, var(--color-primary-700) 30%, transparent) 0%, transparent 65%),
-    radial-gradient(ellipse 60% 80% at 20% 80%, color-mix(in srgb, var(--color-primary-800) 20%, transparent) 0%, transparent 60%),
+    radial-gradient(
+      ellipse 80% 60% at 70% 50%,
+      color-mix(in srgb, var(--color-primary-700) 30%, transparent) 0%,
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse 60% 80% at 20% 80%,
+      color-mix(in srgb, var(--color-primary-800) 20%, transparent) 0%,
+      transparent 60%
+    ),
     var(--background);
 }
 
@@ -39,7 +47,12 @@ body {
 
 /* Gradient text — kept in CSS for -webkit-text-fill-color */
 .text-gradient {
-  background: linear-gradient(135deg, var(--color-secondary-500) 0%, var(--color-primary-200) 40%, var(--color-tertiary-500) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--color-secondary-500) 0%,
+    var(--color-primary-200) 40%,
+    var(--color-tertiary-500) 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -49,8 +62,9 @@ body {
 .reveal {
   opacity: 0;
   transform: translateY(20px);
-  transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
+  transition:
+    opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.65s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .reveal.visible {
@@ -58,16 +72,26 @@ body {
   transform: translateY(0);
 }
 
-.reveal-delay-1 { transition-delay: 0.1s; }
-.reveal-delay-2 { transition-delay: 0.2s; }
-.reveal-delay-3 { transition-delay: 0.3s; }
-.reveal-delay-4 { transition-delay: 0.4s; }
+.reveal-delay-1 {
+  transition-delay: 0.1s;
+}
+.reveal-delay-2 {
+  transition-delay: 0.2s;
+}
+.reveal-delay-3 {
+  transition-delay: 0.3s;
+}
+.reveal-delay-4 {
+  transition-delay: 0.4s;
+}
 
 /* Pseudo-class and JS-toggled states — cannot be expressed as Tailwind utilities */
 .step-tab {
   cursor: pointer;
   border-left: 3px solid transparent;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
 }
 
 .step-tab:hover {
@@ -82,7 +106,10 @@ body {
 
 /* JS-toggled by scroll listener */
 .site-header {
-  transition: background 0.3s ease, backdrop-filter 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    background 0.3s ease,
+    backdrop-filter 0.3s ease,
+    box-shadow 0.3s ease;
 }
 
 .site-header.scrolled {

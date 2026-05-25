@@ -32,6 +32,7 @@ format: ## Format and lint-fix all code (Python via ruff, frontend via prettier)
 	ruff format .
 	ruff check . --fix
 	cd dashboard/ui && pnpm run format
+	cd landing && pnpm run format
 
 .PHONY: lint
 lint: ## Check Python linting without auto-fix

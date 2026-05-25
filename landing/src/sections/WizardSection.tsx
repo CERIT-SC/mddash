@@ -1,15 +1,8 @@
 import { useState } from "react"
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  H2,
-  Muted,
-  P,
-} from "@e-infra/design-system"
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, H2, Muted, P } from "@e-infra/design-system"
 import { ChevronRight } from "lucide-react"
+
 import analyzeImg from "../assets/analysis-mwf.png"
 import publishImg from "../assets/publish.png"
 import runImg from "../assets/run.png"
@@ -79,47 +72,36 @@ export function WizardSection() {
   const titleRef = useReveal()
 
   return (
-    <section className="py-24 bg-background">
+    <section className="bg-background py-24">
       <div className="container mx-auto max-w-7xl px-6">
-        <div ref={titleRef} className="reveal text-center mb-16">
-          <Muted className="text-sm uppercase tracking-widest font-semibold mb-3">
-            The workflow
-          </Muted>
-          <H2 className="font-display text-3xl lg:text-4xl text-text-heading mb-4">
-            Five stages. One platform.
-          </H2>
-          <P className="text-text-muted max-w-2xl mx-auto">
-            A wizard-driven interface guides researchers through every step of
-            the simulation lifecycle, keeping metadata and provenance intact at
-            each transition.
+        <div ref={titleRef} className="reveal mb-16 text-center">
+          <Muted className="mb-3 text-sm font-semibold tracking-widest uppercase">The workflow</Muted>
+          <H2 className="font-display text-text-heading mb-4 text-3xl lg:text-4xl">Five stages. One platform.</H2>
+          <P className="text-text-muted mx-auto max-w-2xl">
+            A wizard-driven interface guides researchers through every step of the simulation lifecycle, keeping
+            metadata and provenance intact at each transition.
           </P>
         </div>
 
-        <div className="grid lg:grid-cols-[320px_1fr] gap-8 items-start">
+        <div className="grid items-start gap-8 lg:grid-cols-[320px_1fr]">
           <div className="flex flex-col gap-1">
             {WIZARD_STEPS.map((step, i) => (
               <button
                 key={step.num}
                 onClick={() => setActive(i)}
-                className={`step-tab text-left px-5 py-4 rounded-lg ${active === i ? "active" : ""}`}
+                className={`step-tab rounded-lg px-5 py-4 text-left ${active === i ? "active" : ""}`}
               >
                 <div className="flex items-center gap-3">
-                  <span
-                    className={`font-display text-2xl font-light ${active === i ? "text-primary" : "text-border"}`}
-                  >
+                  <span className={`font-display text-2xl font-light ${active === i ? "text-primary" : "text-border"}`}>
                     {step.num}
                   </span>
                   <div>
-                    <div className={`font-semibold text-sm ${active === i ? "text-text" : "text-text-muted"}`}>
+                    <div className={`text-sm font-semibold ${active === i ? "text-text" : "text-text-muted"}`}>
                       {step.label}
                     </div>
-                    <div className="text-xs text-text-muted mt-0.5">
-                      {step.tagline}
-                    </div>
+                    <div className="text-text-muted mt-0.5 text-xs">{step.tagline}</div>
                   </div>
-                  {active === i && (
-                    <ChevronRight size={14} className="ml-auto text-primary shrink-0" />
-                  )}
+                  {active === i && <ChevronRight size={14} className="text-primary ml-auto shrink-0" />}
                 </div>
               </button>
             ))}
@@ -127,20 +109,20 @@ export function WizardSection() {
 
           <div className="flex flex-col gap-5">
             <div className="screen-frame overflow-hidden">
-              <div className="bg-surface border-b border-border/50 px-4 py-2.5 flex items-center gap-2">
+              <div className="bg-surface border-border/50 flex items-center gap-2 border-b px-4 py-2.5">
                 <div className="flex gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-error opacity-70" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-warning opacity-70" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-success opacity-70" />
+                  <span className="bg-error h-2.5 w-2.5 rounded-full opacity-70" />
+                  <span className="bg-warning h-2.5 w-2.5 rounded-full opacity-70" />
+                  <span className="bg-success h-2.5 w-2.5 rounded-full opacity-70" />
                 </div>
-                <div className="flex gap-1 ml-3">
+                <div className="ml-3 flex gap-1">
                   {WIZARD_STEPS.map((step, i) => (
                     <span
                       key={step.num}
-                      className={`text-xs px-3 py-0.5 rounded-t-sm border-t border-x ${
+                      className={`rounded-t-sm border-x border-t px-3 py-0.5 text-xs ${
                         i === active
                           ? "bg-surface border-border text-text"
-                          : "bg-transparent border-transparent text-text-muted"
+                          : "text-text-muted border-transparent bg-transparent"
                       }`}
                     >
                       {step.label}
@@ -151,7 +133,7 @@ export function WizardSection() {
               <img
                 src={WIZARD_STEPS[active].img}
                 alt={WIZARD_STEPS[active].alt}
-                className="w-full block"
+                className="block w-full"
                 key={active}
               />
             </div>
@@ -161,14 +143,12 @@ export function WizardSection() {
                 <CardTitle className="text-base">
                   Step {WIZARD_STEPS[active].num} — {WIZARD_STEPS[active].label}
                 </CardTitle>
-                <CardDescription className="font-semibold text-sm text-primary-200">
+                <CardDescription className="text-primary-200 text-sm font-semibold">
                   {WIZARD_STEPS[active].tagline}
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <P className="text-sm text-text-muted leading-relaxed">
-                  {WIZARD_STEPS[active].description}
-                </P>
+                <P className="text-text-muted text-sm leading-relaxed">{WIZARD_STEPS[active].description}</P>
               </CardContent>
             </Card>
           </div>

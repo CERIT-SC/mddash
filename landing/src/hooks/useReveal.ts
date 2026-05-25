@@ -12,7 +12,7 @@ export function useReveal() {
           observer.disconnect()
         }
       },
-      { threshold: 0.1 },
+      { threshold: 0.1 }
     )
     observer.observe(el)
     return () => observer.disconnect()

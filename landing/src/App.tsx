@@ -9,7 +9,7 @@ import { WizardSection } from "./sections/WizardSection"
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-background text-text">
+    <div className="bg-background text-text min-h-screen">
       <SiteHeader />
       <main>
         <HeroSection />
