@@ -1,26 +1,11 @@
-import importlib
 import os
-from collections.abc import Callable
-from typing import cast
 
 from config import DB_URL
 from extensions import db, ma
 from flask import Flask
 from flask_cors import CORS
-from polling import start_polling
 from routes import amber_bp, gmx_bp, health_bp
 from sqlalchemy import text
-
-PostForkHook = Callable[[Callable[[], None]], Callable[[], None]]
-
-
-def _load_uwsgi_postfork() -> PostForkHook | None:
-    try:
-        uwsgidecorators = importlib.import_module("uwsgidecorators")
-    except ImportError:
-        return None
-
-    return cast("PostForkHook", uwsgidecorators.postfork)
 
 
 def create_app() -> Flask:
@@ -62,27 +47,7 @@ def create_app() -> Flask:
     return app
 
 
-def register_polling_startup(app: Flask, postfork: PostForkHook | None = None) -> None:
-    """
-    Register job polling after uWSGI forks worker processes.
-
-    Starting threads before uWSGI forks can leave workers unable to serve HTTP
-    requests. Outside uWSGI, start polling immediately for local/dev runs.
-    """
-    hook = postfork or _load_uwsgi_postfork()
-
-    if hook is None:
-        start_polling(app)
-        return
-
-    @hook
-    def _start_polling_after_fork() -> None:
-        start_polling(app)
-
-
 app = create_app()
-
-register_polling_startup(app)
 
 
 if __name__ == "__main__":

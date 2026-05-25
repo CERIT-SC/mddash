@@ -138,6 +138,21 @@ mdrunApi:
   platform: linux/amd64
   storage:  # Persistent storage for mdrun-api database
     size: 20Gi
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+    requests:
+      cpu: "100m"
+      memory: "256Mi"
+  polling:
+    resources:
+      limits:
+        cpu: "250m"
+        memory: "256Mi"
+      requests:
+        cpu: "50m"
+        memory: "128Mi"
   jobHeadroom:
     # Maximum number of HPC jobs running simultaneously in the hub namespace.
     # Set cpuPerJob/memoryPerJob to the largest single job you want to allow.

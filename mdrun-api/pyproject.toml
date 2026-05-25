@@ -7,12 +7,10 @@ dependencies = [
     "flask-sqlalchemy",
     "flask-marshmallow",
     "flask-cors",
+    "gunicorn",
     "marshmallow-sqlalchemy",
     "kubernetes",
 ]
-
-[project.optional-dependencies]
-prod = ["uwsgi"]
 
 [dependency-groups]
 dev = [

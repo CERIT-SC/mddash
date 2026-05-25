@@ -14,7 +14,7 @@ COPY dashboard/api/pyproject.toml dashboard/api/
 COPY dashboard/auth/pyproject.toml dashboard/auth/
 COPY mdrun-api/pyproject.toml mdrun-api/
 
-RUN uv sync --frozen --no-dev --extra prod --package mdrun-api --no-install-project
+RUN uv sync --frozen --no-dev --package mdrun-api --no-install-project
 
 COPY mdrun-api/ .
 
@@ -28,12 +28,11 @@ USER appuser
 EXPOSE 5000
 
 ENV APP_ENV=prod
-ENV UWSGI_PROCESSES=4
-ENV UWSGI_THREADS=2
-ENV UWSGI_ENABLE_THREADS=1
+ENV GUNICORN_WORKERS=2
+ENV GUNICORN_THREADS=4
 ENV PATH="/app/.venv/bin:$PATH"
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:5000/api/health').read()" || exit 1
 
-CMD ["sh", "-c", "uwsgi --http 0.0.0.0:5000 --module app:app --processes $UWSGI_PROCESSES --threads $UWSGI_THREADS --enable-threads --master --die-on-term --route-uri '^/api/health$ donotlog:' --log-4xx --log-5xx 2>&1 | tee /data/api.log"]
+CMD ["sh", "-c", "exec gunicorn --bind 0.0.0.0:5000 --workers ${GUNICORN_WORKERS:-2} --threads ${GUNICORN_THREADS:-4} --access-logfile - --error-logfile - --logger-class gunicorn_logging.HealthCheckFilter app:app"]

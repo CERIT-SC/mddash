@@ -261,9 +261,20 @@ mdrun-api:
     pullPolicy: Always
   storage:
     size: {{ $cfg.mdrunApi.storage.size }}
-  uwsgi:
-    processes: 2
+  gunicorn:
+    workers: 2
     threads: 4
+  polling:
+    enabled: true
+    schedule: "*/15 * * * *"
+    sameNodeAsApi: true
+    backoffLimit: 1
+    successfulJobsHistoryLimit: 3
+    failedJobsHistoryLimit: 3
+    resources:
+{{ $cfg.mdrunApi.polling.resources | toYAML | indent 6 }}
+  resources:
+{{ $cfg.mdrunApi.resources | toYAML | indent 4 }}
   replicaCount: 1
   env:
     - name: S3_ACCESS_KEY

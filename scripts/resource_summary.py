@@ -7,11 +7,11 @@ recommended namespace quota values for both the hub namespace and
 per-user namespaces.
 
 Usage:
-    python3 scripts/resource_summary.py <config.yaml> <mdrun-api-values.yaml>
+    python3 scripts/resource_summary.py <config.yaml>
 
 Example:
-    python3 scripts/resource_summary.py config.dev.yaml helm/charts/mdrun-api/values.dev.yaml
-    python3 scripts/resource_summary.py config.yaml     helm/charts/mdrun-api/values.yaml
+    make resources ENV=dev
+    python3 scripts/resource_summary.py config.dev.yaml
 """
 
 import subprocess
@@ -147,7 +147,7 @@ def compare_quota(label: str, recommended: int, configured_str: str, is_cpu: boo
     return ok
 
 
-def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
+def main(config: str) -> None:  # noqa: PLR0914
     """Print a full resource budget summary for both user and hub namespaces."""
     print(f"\nResource Budget — {config}")
     print("=" * 72)
@@ -239,20 +239,32 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
     print()
     print("  User namespace quota comparison (worst-case: all notebooks at highest tier):")
     ok_u = all([
-        compare_quota("NS_REQUESTS_CPU", total_u_cr, yq(".resources.namespaceQuota.requestsCpu", config), True),
-        compare_quota("NS_REQUESTS_MEMORY", total_u_mr, yq(".resources.namespaceQuota.requestsMemory", config), False),
-        compare_quota("NS_LIMITS_CPU", total_u_cl, yq(".resources.namespaceQuota.limitsCpu", config), True),
-        compare_quota("NS_LIMITS_MEMORY", total_u_ml, yq(".resources.namespaceQuota.limitsMemory", config), False),
+        compare_quota(
+            "NS_REQUESTS_CPU", total_u_cr, yq(".resources.namespaceQuota.requestsCpu", config), True
+        ),
+        compare_quota(
+            "NS_REQUESTS_MEMORY", total_u_mr, yq(".resources.namespaceQuota.requestsMemory", config), False
+        ),
+        compare_quota(
+            "NS_LIMITS_CPU", total_u_cl, yq(".resources.namespaceQuota.limitsCpu", config), True
+        ),
+        compare_quota(
+            "NS_LIMITS_MEMORY", total_u_ml, yq(".resources.namespaceQuota.limitsMemory", config), False
+        ),
     ])
     if not ok_u:
         print("\n  WARNING: Increase the under-provisioned values in resources.namespaceQuota and redeploy.")
 
     # ── Hub namespace ──────────────────────────────────────────────────────────
 
-    mdrun_cr = parse_cpu(yq(".resources.requests.cpu", mdrun_values))
-    mdrun_mr = parse_memory(yq(".resources.requests.memory", mdrun_values))
-    mdrun_cl = parse_cpu(yq(".resources.limits.cpu", mdrun_values))
-    mdrun_ml = parse_memory(yq(".resources.limits.memory", mdrun_values))
+    mdrun_cr = parse_cpu(yq(".mdrunApi.resources.requests.cpu", config))
+    mdrun_mr = parse_memory(yq(".mdrunApi.resources.requests.memory", config))
+    mdrun_cl = parse_cpu(yq(".mdrunApi.resources.limits.cpu", config))
+    mdrun_ml = parse_memory(yq(".mdrunApi.resources.limits.memory", config))
+    mdrun_polling_cr = parse_cpu(yq(".mdrunApi.polling.resources.requests.cpu", config))
+    mdrun_polling_mr = parse_memory(yq(".mdrunApi.polling.resources.requests.memory", config))
+    mdrun_polling_cl = parse_cpu(yq(".mdrunApi.polling.resources.limits.cpu", config))
+    mdrun_polling_ml = parse_memory(yq(".mdrunApi.polling.resources.limits.memory", config))
 
     ta_cr = parse_cpu(yq(".gromacsTuner.api.resources.requests.cpu", config))
     ta_mr = parse_memory(yq(".gromacsTuner.api.resources.requests.memory", config))
@@ -294,6 +306,7 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
     section("Always-on services")
     row("jupyterhub-hub", hub_cr, hub_mr, hub_cl, hub_ml, indent=1)
     row("mdrun-api", mdrun_cr, mdrun_mr, mdrun_cl, mdrun_ml, indent=1)
+    row("mdrun-api poller", mdrun_polling_cr, mdrun_polling_mr, mdrun_polling_cl, mdrun_polling_ml, indent=1)
     row("gromacs-tuner-api", ta_cr, ta_mr, ta_cl, ta_ml, indent=1)
     row("ray-head", rh_cr, rh_mr, rh_cl, rh_ml, indent=1)
     row(
@@ -309,6 +322,10 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
     svc_mr = hub_mr + mdrun_mr + ta_mr + rh_mr + rw_replicas * rw_mr
     svc_cl = hub_cl + mdrun_cl + ta_cl + rh_cl + rw_replicas * rw_cl
     svc_ml = hub_ml + mdrun_ml + ta_ml + rh_ml + rw_replicas * rw_ml
+    svc_cr += mdrun_polling_cr
+    svc_mr += mdrun_polling_mr
+    svc_cl += mdrun_polling_cl
+    svc_ml += mdrun_polling_ml
     subtotal("Services total", svc_cr, svc_mr, svc_cl, svc_ml)
 
     section(f"HPC jobs  (on-demand, up to {max_jobs} concurrent)")
@@ -329,7 +346,7 @@ def main(config: str, mdrun_values: str) -> None:  # noqa: PLR0914
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:  # noqa: PLR2004
-        print(f"Usage: {sys.argv[0]} <config.yaml> <mdrun-api-values.yaml>", file=sys.stderr)
+    if len(sys.argv) != 2:  # noqa: PLR2004
+        print(f"Usage: {sys.argv[0]} <config.yaml>", file=sys.stderr)
         sys.exit(1)
-    main(sys.argv[1], sys.argv[2])
+    main(sys.argv[1])

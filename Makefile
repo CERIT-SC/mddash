@@ -35,8 +35,18 @@ format: ## Format and lint-fix all code (Python via ruff, frontend via prettier)
 	cd landing && pnpm run format
 
 .PHONY: lint
-lint: ## Check Python linting without auto-fix
+lint: lint-python lint-helm ## Check linting and renderable Helm charts
+
+.PHONY: lint-python
+lint-python: ## Check Python linting without auto-fix
 	ruff check .
+
+.PHONY: lint-helm
+lint-helm: ## Validate Helm charts
+	helm lint helm/charts/mdrun-api
+	helm template mdrun-api helm/charts/mdrun-api >/dev/null
+	helm lint helm/charts/mddash
+	helm template mddash helm/charts/mddash >/dev/null
 
 # ==================== TYPE CHECK ====================
 
@@ -142,11 +152,9 @@ status: ## Show deployment status
 logs: ## Show deployment logs
 	@$(MAKE) -C helm logs ENV=$(ENV)
 
-mdrun_api_values := $(if $(filter dev,$(ENV)),helm/charts/mdrun-api/values.dev.yaml,helm/charts/mdrun-api/values.yaml)
-
 .PHONY: resources
 resources: ## Show resource budget and recommended namespace quota values (offline)
-	@python3 scripts/resource_summary.py $(config) $(mdrun_api_values)
+	@python3 scripts/resource_summary.py $(config)
 
 # ==================== ROLLBACK ====================
 
