@@ -78,7 +78,7 @@ test-mdrun-api: ## Run mdrun-api tests
 # ==================== BUILD ====================
 
 .PHONY: build
-build: build-dashboard build-notebook build-mdrun-api ## Build all images
+build: build-dashboard build-notebook build-mdrun-api build-landing ## Build all images
 
 .PHONY: build-dashboard
 build-dashboard: ## Build dashboard sidecar images (ui, proxy, auth, api, s3sync)
@@ -92,8 +92,12 @@ build-notebook: ## Build notebook image
 build-mdrun-api: ## Build mdrun-api image
 	@$(MAKE) -C mdrun-api build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
+.PHONY: build-landing
+build-landing: ## Build landing page image
+	@$(MAKE) -C landing build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
+
 .PHONY: push
-push: push-dashboard push-notebook push-mdrun-api ## Build and push all images
+push: push-dashboard push-notebook push-mdrun-api push-landing ## Build and push all images
 
 .PHONY: push-dashboard
 push-dashboard: ## Build and push dashboard sidecar images
@@ -106,6 +110,10 @@ push-notebook: ## Build and push notebook image
 .PHONY: push-mdrun-api
 push-mdrun-api: ## Build and push mdrun-api image
 	@$(MAKE) -C mdrun-api push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
+
+.PHONY: push-landing
+push-landing: ## Build and push landing page image
+	@$(MAKE) -C landing push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push-mdrun-api-chart
 push-mdrun-api-chart: ## Package and push mdrun-api Helm chart to OCI registry

@@ -252,6 +252,21 @@ jupyterhub:
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
       nginx.ingress.kubernetes.io/custom-http-errors: "599"
 
+landing:
+  hostname: "{{ $cfg.dashboard.hostname }}"
+  tlsSecretName: "{{ $cfg.dashboard.hostname | strings.ReplaceAll "." "-" }}-tls"
+  image:
+    repository: "{{ $registry }}/{{ $cfg.landing.image }}"
+    tag: "{{ $imageTag }}"
+    pullPolicy: Always
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "32Mi"
+    limits:
+      cpu: "100m"
+      memory: "64Mi"
+
 mdrun-api:
   image:
     repository: "{{ $cfg.registry }}/{{ $cfg.mdrunApi.image }}"

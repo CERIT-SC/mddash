@@ -84,12 +84,13 @@ jobs:
       s3sync: ${{ steps.filter.outputs.s3sync }}
       notebook: ${{ steps.filter.outputs.notebook }}
       mdrun-api: ${{ steps.filter.outputs.mdrun-api }}
+      landing: ${{ steps.filter.outputs.landing }}
       helm: ${{ steps.filter.outputs.helm }}
       any: ${{ steps.matrix.outputs.any }}
       sidecars: ${{ steps.matrix.outputs.sidecars }}
       all_sidecars: '[{"name":"ui","path":"dashboard/ui","context":"dashboard/ui"},{"name":"api","path":"dashboard/api","context":"."},{"name":"auth","path":"dashboard/auth","context":"."},{"name":"s3sync","path":"dashboard/s3-sync","context":"dashboard/s3-sync"}]'
       components: ${{ steps.matrix.outputs.components }}
-      all_components: '[{"name":"notebook","path":"notebook","context":"notebook"},{"name":"mdrun-api","path":"mdrun-api","context":"."}]'
+      all_components: '[{"name":"notebook","path":"notebook","context":"notebook"},{"name":"mdrun-api","path":"mdrun-api","context":"."},{"name":"landing","path":"landing","context":"landing"}]'
     steps:
       - uses: actions/checkout@v6
         with:
@@ -114,6 +115,8 @@ jobs:
               - 'notebook/**'
             mdrun-api:
               - 'mdrun-api/**'
+            landing:
+              - 'landing/**'
             helm:
               - 'helm/**'
               - 'config.yaml'
@@ -130,11 +133,12 @@ jobs:
               "auth": {"name":"auth","path":"dashboard/auth","context":"."},
               "s3sync": {"name":"s3sync","path":"dashboard/s3-sync","context":"dashboard/s3-sync"},
               "notebook": {"name":"notebook","path":"notebook","context":"notebook"},
-              "mdrun-api": {"name":"mdrun-api","path":"mdrun-api","context":"."}
+              "mdrun-api": {"name":"mdrun-api","path":"mdrun-api","context":"."},
+              "landing": {"name":"landing","path":"landing","context":"landing"}
             } as $cfg |
             {
-              sidecars: [($changes[] | select(in($cfg)) | select(. != "notebook" and . != "mdrun-api" and . != "proxy") | $cfg[.])],
-              components: [($changes[] | select(in($cfg)) | select(. == "notebook" or . == "mdrun-api") | $cfg[.])],
+              sidecars: [($changes[] | select(in($cfg)) | select(. != "notebook" and . != "mdrun-api" and . != "landing" and . != "proxy") | $cfg[.])],
+              components: [($changes[] | select(in($cfg)) | select(. == "notebook" or . == "mdrun-api" or . == "landing") | $cfg[.])],
               any: (if ($changes | length) > 0 then "true" else "false" end)
             } | to_entries[] | "\(.key)=\(.value)"
           ' -r >> "$GITHUB_OUTPUT"
@@ -207,6 +211,8 @@ jobs:
         run: |
           if [ "${{ matrix.component.name }}" = "notebook" ]; then
             IMAGE="${{ needs.setup.outputs.registry }}/xkrasa/mddash-notebook"
+          elif [ "${{ matrix.component.name }}" = "landing" ]; then
+            IMAGE="${{ needs.setup.outputs.registry }}/xkrasa/mddash-landing"
           else
             IMAGE="${{ needs.setup.outputs.registry }}/xkrasa/mdrun-api"
           fi
