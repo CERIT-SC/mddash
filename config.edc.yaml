@@ -61,6 +61,10 @@ gpuType: "nvidia.com/mig-1g.10gb"
 gmxImage: "cerit.io/xkrasa/gromacs-tuner-worker:gmx-2026.1_amber-26_ray-2.54.0_py-3.13"
 amberImage: "cerit.io/xkrasa/amber:24"
 
+# Landing page image (served at / on the dashboard hostname)
+landing:
+  image: mddash-landing
+
 # Sidecar container images for user pod
 sidecars:
   platform: linux/amd64
