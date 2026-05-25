@@ -1,5 +1,5 @@
-import { Badge, Button, Strong } from "@e-infra/design-system"
-import { ArrowRight, CheckCircle, GitBranch, Globe, Rocket } from "lucide-react"
+import { Badge, Button } from "@e-infra/design-system"
+import { ArrowRight, Globe, Rocket } from "lucide-react"
 
 import dashImg from "../assets/dash.png"
 import { useReveal } from "../hooks/useReveal"
@@ -13,11 +13,7 @@ export function HeroSection() {
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary" className="text-xs font-medium">
               <Rocket size={11} className="mr-1" />
-              Now in beta
-            </Badge>
-            <Badge variant="outline" className="text-xs font-medium">
-              <Globe size={11} className="mr-1" />
-              e-INFRA CZ platform
+              Beta
             </Badge>
           </div>
 
@@ -32,41 +28,11 @@ export function HeroSection() {
 
           <div className="flex flex-wrap gap-3">
             <Button size="lg" asChild>
-              <a href="/hub/home" className="no-underline">
+              <a href="/hub/oauth_login?next=%2Fhub%2Fhome" className="no-underline">
                 Try MDDash
                 <ArrowRight size={16} />
               </a>
             </Button>
-            <Button size="lg" variant="outline" asChild>
-              <a
-                href="https://github.com/CERIT-SC/mddash"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="no-underline"
-              >
-                <GitBranch size={16} />
-                Source code
-              </a>
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-4 pt-2">
-            <div className="bg-border h-px flex-1" />
-            <div className="flex items-center gap-6 text-sm">
-              <span className="text-text-muted flex items-center gap-1.5">
-                <CheckCircle size={14} className="text-success shrink-0" />
-                <span>
-                  <Strong className="text-text">~75%</Strong> less setup time
-                </span>
-              </span>
-              <span className="text-text-muted flex items-center gap-1.5">
-                <CheckCircle size={14} className="text-success shrink-0" />
-                <span>
-                  <Strong className="text-text">No</Strong> terminal required
-                </span>
-              </span>
-            </div>
-            <div className="bg-border h-px flex-1" />
           </div>
         </div>
 

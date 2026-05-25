@@ -104,6 +104,11 @@ body {
   background: color-mix(in srgb, var(--color-primary-800) 30%, transparent);
 }
 
+/* Uses multiple design-system color tokens — cannot be expressed as Tailwind utilities */
+.glow-separator {
+  background: linear-gradient(90deg, transparent, var(--primary), var(--tertiary), transparent);
+}
+
 /* JS-toggled by scroll listener */
 .site-header {
   transition:

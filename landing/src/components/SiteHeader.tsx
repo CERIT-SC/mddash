@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react"
 
 import { Button, Header, HeaderContent, HeaderLeft, HeaderRight } from "@e-infra/design-system"
-import { ArrowRight, FlaskConical, GitBranch } from "lucide-react"
+import { ArrowRight } from "lucide-react"
+
+import einfraLogo from "../assets/einfra.svg"
 
 export function SiteHeader() {
   const [scrolled, setScrolled] = useState(false)
@@ -17,31 +19,20 @@ export function SiteHeader() {
     >
       <HeaderContent className="py-3">
         <HeaderLeft>
-          <a href="#" className="flex items-center gap-2 no-underline">
-            <div className="bg-primary text-primary-foreground flex h-8 w-8 items-center justify-center rounded-lg">
-              <FlaskConical size={16} strokeWidth={2.5} />
-            </div>
-            <span className="font-display text-text-heading text-lg font-semibold">MDDash</span>
+          <a href="#" className="flex items-center gap-3 no-underline">
+            <img src={einfraLogo} alt="e-INFRA CZ" className="h-7 w-auto" />
+            <span className="text-text-muted text-sm">for Molecular dynamics simulations</span>
           </a>
         </HeaderLeft>
         <HeaderRight className="gap-2">
-          <Button variant="ghost" size="sm" asChild>
-            <a
-              href="https://github.com/CERIT-SC/mddash"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="no-underline"
-            >
-              <GitBranch size={16} />
-              <span className="hidden sm:inline">GitHub</span>
-            </a>
-          </Button>
-          <Button size="sm" asChild>
-            <a href="/hub/home" className="no-underline">
-              Try MDDash
-              <ArrowRight size={14} />
-            </a>
-          </Button>
+          <nav aria-label="Site navigation">
+            <Button size="sm" asChild>
+              <a href="/hub/oauth_login?next=%2Fhub%2Fhome" className="no-underline">
+                Try MDDash
+                <ArrowRight size={14} />
+              </a>
+            </Button>
+          </nav>
         </HeaderRight>
       </HeaderContent>
     </Header>

@@ -22,7 +22,7 @@ export function CtaSection() {
 
           <div className="mt-2 flex flex-wrap justify-center gap-4">
             <Button size="lg" asChild>
-              <a href="/hub/home" className="no-underline">
+              <a href="/hub/oauth_login?next=%2Fhub%2Fhome" className="no-underline">
                 Launch MDDash
                 <ExternalLink size={15} />
               </a>

@@ -62,8 +62,8 @@ type CapabilityCardProps = {
 function CapabilityCard({ icon: Icon, title, body, delay }: CapabilityCardProps) {
   const ref = useReveal()
   return (
-    <div ref={ref} className={`reveal reveal-delay-${delay} transition-transform duration-200 hover:-translate-y-0.5`}>
-      <Card className="h-full">
+    <div ref={ref} className={`reveal reveal-delay-${delay}`}>
+      <Card className="h-full" animation="translate">
         <CardHeader>
           <CardIcon className="text-primary">
             <Icon size={18} />
@@ -85,7 +85,9 @@ export function CapabilitiesSection() {
       <div className="container mx-auto max-w-7xl px-6">
         <div ref={ref} className="reveal mb-16 text-center">
           <Muted className="mb-3 text-sm font-semibold tracking-widest uppercase">Capabilities</Muted>
-          <H2 className="font-display text-text-heading mb-4 text-3xl lg:text-4xl">Built for research, not demos</H2>
+          <H2 className="font-display text-text-heading mb-4 text-3xl lg:text-4xl">
+            Built for molecular dynamics community
+          </H2>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {CAPABILITIES.map(({ icon, title, body }, i) => (

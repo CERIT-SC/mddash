@@ -84,15 +84,17 @@ export function WizardSection() {
         </div>
 
         <div className="grid items-start gap-8 lg:grid-cols-[320px_1fr]">
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1" role="tablist" aria-label="Workflow steps">
             {WIZARD_STEPS.map((step, i) => (
               <button
                 key={step.num}
+                role="tab"
+                aria-selected={active === i}
                 onClick={() => setActive(i)}
                 className={`step-tab rounded-lg px-5 py-4 text-left ${active === i ? "active" : ""}`}
               >
                 <div className="flex items-center gap-3">
-                  <span className={`font-display text-2xl font-light ${active === i ? "text-primary" : "text-border"}`}>
+                  <span className={`font-display text-2xl font-light ${active === i ? "text-primary" : "text-text-muted"}`}>
                     {step.num}
                   </span>
                   <div>
@@ -141,7 +143,7 @@ export function WizardSection() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                  Step {WIZARD_STEPS[active].num} — {WIZARD_STEPS[active].label}
+                  Step {WIZARD_STEPS[active].num}: {WIZARD_STEPS[active].label}
                 </CardTitle>
                 <CardDescription className="text-primary-200 text-sm font-semibold">
                   {WIZARD_STEPS[active].tagline}
