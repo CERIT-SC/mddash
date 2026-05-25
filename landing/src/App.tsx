@@ -12,7 +12,7 @@ export default function App() {
       </button>
       <br />
       <br />
-      <a href="/hub/">Go to Hub →</a>
+      <a href="/hub/home">Go to Hub →</a>
     </div>
   )
 }
