@@ -9,7 +9,7 @@ React-based web interface that provides a wizard-driven workflow for creating, c
 ### Design Patterns
 - **TanStack Query Pattern**: Server state managed via custom hooks with automatic polling; no manual `setInterval`/`useEffect` fetching
 - **TanStack Router**: Manual route tree (`src/router.tsx`) with `basepath: BASE_PATH`; no file-based routing
-- **Custom Hooks Pattern**: 8 domain hooks in `src/hooks/` encapsulate all data fetching and mutations
+- **Custom Hooks Pattern**: Domain hooks in `src/hooks/` encapsulate all data fetching and mutations
 - **Stepper Pattern**: Linear wizard workflow with step validation and state progression
 - **Provider Pattern**: Nested providers in `Main.tsx` — `ThemeProvider → QueryClientProvider → RouterProvider`
 - **Component Composition**: Wizard steps as composable child components receiving shared props
@@ -48,7 +48,7 @@ graph TD
     D --> G[lib/http.ts api instance]
     G --> H[Axios Request]
     H --> I[Backend API]
-    I --> J[Envelope unwrapped by interceptor]
+    I --> J[Raw response returned by axios]
     J --> K[TanStack Query cache]
     K --> L[UI Re-render]
     M[Runtime Config] --> N[window.MDDASH_CONFIG]
@@ -151,12 +151,14 @@ graph TD
 - `use-notebook.ts` - Notebook status and control
 - `use-tuner.ts` - Gromacs Tuner integration
 - `use-gromacs.ts` - GROMACS job state
+- `use-amber.ts` - AMBER job state
+- `use-analysis.ts` - Analysis job state
 - `use-files.ts` - File listing query
 - `use-mdrepo.ts` - MDRepo integration + `getMDRepoAuthUrl()`
 
 ### Wizard Step Entry Points
 - `src/components/Wizard/SetupStep/SetupStep.tsx` - Initial setup and notebook spawning
-- `src/components/Wizard/TuneStep/TuneStep.tsx` - Parameter tuning workflow
-- `src/components/Wizard/RunStep/RunStep.tsx` - GROMACS job execution
+- `src/components/Wizard/TuneStep/TuneStep.tsx` - Engine-specific parameter tuning workflow for GROMACS or AMBER
+- `src/components/Wizard/RunStep/RunStep.tsx` - Engine-specific simulation execution for GROMACS or AMBER
 - `src/components/Wizard/AnalyzeStep/AnalyzeStep.tsx` - Results analysis
 - `src/components/Wizard/PublishStep/PublishStep.tsx` - MDRepo publication

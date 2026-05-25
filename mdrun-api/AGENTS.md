@@ -67,22 +67,23 @@ sequenceDiagram
 ## The "Gotchas" (Critical)
 
 - **SQLite WAL Mode**: Database uses Write-Ahead Logging for concurrent reads/writes. Always use `db.session` within app context.
-- **uWSGI Worker 1 Only**: Background polling thread only starts in `UWSGI_WORKER_ID=1` to prevent duplicate polling across workers.
+- **uWSGI Post-Fork Polling**: Background polling is registered with uWSGI's post-fork hook and only starts in worker 1 to prevent unsafe pre-fork threads and duplicate polling across workers. Outside uWSGI, polling starts immediately for local/dev runs.
 - **On-Demand Status**: `MdrunJob.status` property queries Kubernetes on every access. Cache results if polling frequently.
 - **Auto-Cleanup**: Jobs in TERMINATED or ERROR state are automatically deleted from Kubernetes but preserved in database.
 - **Input Sanitization**: All user inputs MUST pass through `sanitization.py` functions to prevent shell injection in Kubernetes job manifests.
 - **Delete Ordering**: Always delete Kubernetes resources before committing DB deletion. If K8s cleanup fails, the DB record remains so the job can be retried or cleaned up later.
-- **S3 Credentials Required**: `S3_ENDPOINT` must be set or API logs errors on startup.
+- **S3 Credentials Required**: `S3_ENDPOINT`, `S3_ACCESS_KEY`, and `S3_SECRET_KEY` must be set or the API logs errors on startup.
 - **GPU Type**: GPU resource type is read from the `GPU_TYPE` environment variable (set via `gpuType` in config.yaml). Defaults to empty string if unset.
 - **K8s Config Loading**: Uses `config.load_incluster_config()` - assumes running inside Kubernetes cluster. For local dev, use `load_kube_config()`.
 - **Job Naming**: Kubernetes jobs are named `mdrun-{uuid}`. Never manually create jobs with this prefix.
 - **EmptyDir Size Limit**: Shared volume limited to 100Gi in `k8s_client.py`. Adjust for large simulations.
+- **Health access logs**: Successful `/api/health` probe access logs are suppressed at the uWSGI layer to avoid log congestion. Failed probes, 4xx/5xx responses, startup logs, and application errors must remain visible.
 - **Case-insensitive Enums**: `from_string` on all enums uses case-insensitive matching. Inputs like `PMEMD.CUDA` and `pmemd.cuda` are equivalent.
 
 ## Entry Points
 
 - **`app.py`**: Flask application factory, database initialization, and polling thread startup
-- **`routes.py`**: API endpoints — `GET/POST/DELETE /api/jobs/gmx/{id}`, `GET/POST/DELETE /api/jobs/amber/{id}`
+- **`routes.py`**: API endpoints — `POST /api/jobs/gmx`, `GET/DELETE /api/jobs/gmx/{id}`, `POST /api/jobs/amber`, `GET/DELETE /api/jobs/amber/{id}`
 - **`models.py`**: `MdrunJob` model with `create()` classmethod for persistence; `status` property polls K8s; `delete()` cleans up K8s resources
 - **`enums.py`**: `DeviceType`, `AmberBinary`, `EwaldPreset`, `JobStatus` enumerations with case-insensitive `from_string`
 - **`schemas.py`**: Marshmallow schemas for GROMACS (`GmxJobCreateRequestSchema`) and AMBER (`AmberJobCreateRequestSchema`) request validation

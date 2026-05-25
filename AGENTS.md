@@ -2,7 +2,7 @@
 
 ## Mission Statement
 
-Multi-tenant JupyterHub-based platform for molecular dynamics simulations that orchestrates GROMACS jobs, provides wizard-driven experiment workflows, and integrates with external services (MDRepo, S3, Gromacs Tuner) through isolated user namespaces with sidecar containers.
+Multi-tenant JupyterHub-based platform for molecular dynamics simulations that orchestrates GROMACS and AMBER jobs, provides wizard-driven experiment workflows, and integrates with external services (MDRepo, S3, Gromacs Tuner) through isolated user namespaces with sidecar containers.
 
 ## Architecture & Patterns
 
@@ -59,7 +59,7 @@ graph TB
 | **Background Polling Pattern** | MDRun API | Daemon threads query Kubernetes for job status updates |
 | **TanStack Query Pattern** | Dashboard UI | Server state management via custom hooks with automatic polling |
 | **Repository Pattern** | Dashboard UI, Dashboard API | Centralized API clients with consistent error handling |
-| **Template-Based Configuration** | Helm Charts | Jinja2 templates rendered with gomplate for environment-specific deployments |
+| **Template-Based Configuration** | Helm Charts | gomplate/Go templates rendered for environment-specific deployments |
 
 ## Core Dependencies
 
@@ -102,8 +102,8 @@ sequenceDiagram
 
 ### Configuration Management
 - **Environment Detection**: Branch determines environment (`dev` → dev, `master` → prod). Tagging: dev uses static `dev` tag, prod uses `<short-sha>` format.
-- **Values Template Rendering**: `helm/charts/mddash/values.yaml.tmpl` must be rendered with `gomplate` before Helm operations. Use `make render`. Never edit `values.yaml` directly—it's generated.
-- **Runtime Config Injection**: UI receives runtime configuration via `window.MDDASH_CONFIG` object injected by Caddy proxy at `/dash/config.js`. Dev mode detected when this is undefined.
+- **Values Template Rendering**: `helm/charts/mddash/values.yaml.tmpl` must be rendered with `gomplate` before Helm operations. Use `make -C helm render`. Never edit `values.yaml` directly—it's generated.
+- **Runtime Config Injection**: UI receives runtime configuration via `window.MDDASH_CONFIG` object injected by Caddy proxy at `{$CADDY_ROUTE_PREFIX}/dash/config.js`. Dev mode detected when this is undefined.
 
 ### Authentication Flow
 - **JupyterHub OAuth**: All authentication flows through JupyterHub's OAuth2 system.
@@ -115,7 +115,7 @@ sequenceDiagram
 - **In-cluster Config Only**: Dashboard API, MDRun API, and the pre_spawn_hook all use `config.load_incluster_config()`. The hub pod's service account requires the ClusterRole defined in `helm/rbac/` to be applied by the cluster admin.
 - **Shared PVC**: All containers in user pod mount `/mddash` directory to a persistent volume for user data.
 - **Non-root Containers**: All containers run as UID 1000 with security context for e-INFRA compliance.
-- **Rancher-Specific Annotations**: User namespaces require `field.cattle.io/projectId` and `field.cattle.io/resourceQuota` annotations. Pre-spawn hook waits for Rancher conditions.
+- **Rancher-Specific Annotations**: User namespaces require `field.cattle.io/projectId` and `field.cattle.io/resourceQuota` annotations. Pre-spawn hook waits for `InitialRolesPopulated`, patches the namespace, then waits for the ResourceQuota status to become active.
 - **Binder Repository Support**: Notebook image automatically detects and installs Binder-compatible repositories (`environment.yml`, `requirements.txt`, `postBuild`). Conda environments are created at `/mddash/{experiment_id}/.binder-env` on the PVC for persistence across pod restarts.
 
 ### Database & Migrations
@@ -126,12 +126,12 @@ sequenceDiagram
 ### Deployment Pipeline
 - **Make-based Orchestration**: Root `Makefile` orchestrates build, test, push, and deploy across all components.
 - **Helm Dependency Management**: Use `make -C helm update` to update Helm dependencies before deployment.
-- **Image Tagging Strategy**: Dev uses static `dev` tag with `Always` pull policy; prod uses immutable `<short-sha>` tags with `IfNotPresent` pull policy. No `latest` tag in prod.
+- **Image Tagging Strategy**: Dev uses static `dev` tags and prod uses immutable `<short-sha>` tags. Pull policy is per component/config: sidecars use `Always` in dev and `IfNotPresent` in prod, while some services such as Gromacs Tuner and the rendered `mdrun-api` subchart use `Always`.
 - **Secrets Management**: All secrets created in namespace during deployment via GitHub Actions CI/CD.
 
 ### Error Handling
 - **RESTful API Responses**: Dashboard API routes return raw resources via `jsonify()` on success and raise `HTTPException` (`BadRequest`, `NotFound`, etc.) for errors. `@handle_exceptions` catches exceptions and returns `{detail: "..."}` with the correct HTTP status code.
-- **Decorator Pattern**: Use `@handle_exceptions()` decorator on route handlers in Dashboard API. Set `rollback=True` for routes that modify database.
+- **Decorator Pattern**: Use `@handle_exceptions()` decorator on Dashboard API JSON route handlers. Set `rollback=True` for routes that modify database.
 - **Graceful Degradation**: Missing environment variables log warnings but don't crash.
 
 ## Entry Points
@@ -142,6 +142,7 @@ sequenceDiagram
 | `Makefile` | Build, test, deploy orchestration | `make build`, `make push`, `make deploy`, `make test` |
 | `config.yaml` | Production environment configuration | All environment-specific settings |
 | `config.dev.yaml` | Development environment configuration | Dev-specific settings |
+| `config.edc.yaml` | EDC/EGI CheckIn environment configuration | EDC-specific settings |
 | `README.md` | Project documentation | CI/CD setup, manual deployment, architecture overview |
 
 ### Component Entry Points (See Component AGENTS.md for Details)
@@ -153,7 +154,7 @@ sequenceDiagram
 | **Dashboard Auth** | `dashboard/auth/` | See `dashboard/auth/auth.py` | OAuth flow and session management |
 | **Dashboard Proxy** | `dashboard/proxy/` | See `dashboard/proxy/Caddyfile` | Caddy reverse proxy, static UI serving, routes to JupyterHub Singleuser |
 | **Dashboard S3-Sync** | `dashboard/s3-sync/` | See `dashboard/s3-sync/sync.sh` | Bidirectional S3 synchronization |
-| **MDRun API** | `mdrun-api/` | `mdrun-api/AGENTS.md` | GROMACS job management API |
+| **MDRun API** | `mdrun-api/` | `mdrun-api/AGENTS.md` | GROMACS and AMBER job management API |
 | **Helm Charts** | `helm/charts/mddash/` | `helm/charts/mddash/AGENTS.md` | Multi-tenant JupyterHub deployment |
 
 ### Key Application Entry Points
@@ -164,7 +165,7 @@ sequenceDiagram
 
 **Dashboard UI:**
 - `dashboard/ui/src/Main.tsx` - Application root with routing
-- `dashboard/ui/src/util/api.ts` - Centralized API client
+- `dashboard/ui/src/lib/http.ts` - Centralized API client
 
 **MDRun API:**
 - `mdrun-api/app.py` - Flask application factory
@@ -195,7 +196,8 @@ make test
 ## CI/CD Pipeline
 
 - **`ci.yml`**: Runs on every PR and push. Lint, test, type-check. No Docker builds or deployments.
-- **`cd.yml`**: Runs only on push to `dev` or `master`. Change detection via `dorny/paths-filter@v4`; image builds only when relevant files changed; deploys via Helm; verifies with lightweight health check.
+- **`cd.yml`**: Runs only on push to `dev` or `master`. Change detection via `dorny/paths-filter@v4`; dev builds only changed components, prod builds all components when any tracked deploy path changed; deploys via Helm only when tracked deploy paths changed; verifies with lightweight health check.
+- **`codeql.yml`**: Runs CodeQL for GitHub Actions, JavaScript/TypeScript, and Python on `master` pushes, `master` PRs, and a weekly schedule.
 - **Image Tags**: Dev uses `dev`, prod uses `<short-sha>`.
 - **Secrets**: Automatically created in namespace during deployment
 - **Image Retention**: Harbor retention policy configured per environment

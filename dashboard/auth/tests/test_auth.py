@@ -200,8 +200,21 @@ class TestOAuthCallback:
 
     def test_user_mismatch_detection(self) -> None:
         """OAuth should detect user mismatch."""
-        # Verify user mismatch detection logic
-        expected_user = USER  # "testuser" from conftest
+        expected_user = USER
         returned_user = "wronguser"
 
         assert expected_user != returned_user
+
+
+def test_health_logs_first_health_once(client: FlaskClient, caplog) -> None:  # noqa: ANN001
+    """The first auth health response should be visible in startup diagnostics once."""
+    import auth  # noqa: PLC0415
+
+    auth._first_health_logged = False  # noqa: SLF001
+    caplog.set_level("INFO", logger="auth")
+
+    client.get("/health")
+    client.get("/health")
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert messages.count("auth first health response served") == 1

@@ -234,8 +234,10 @@ def get_du_size(data_dir: Path) -> int | None:
         return None
 
 
-def _du_loop(data_dir: Path) -> None:
+def _du_loop(data_dir: Path, initial_delay: float = 0.0) -> None:
     """Background thread body: measure data_dir size every DU_INTERVAL seconds."""
+    if initial_delay > 0:
+        time.sleep(initial_delay)
     size_file = data_dir / DU_SIZE_FILENAME
     while True:
         try:
@@ -254,12 +256,13 @@ def _du_loop(data_dir: Path) -> None:
         time.sleep(DU_INTERVAL)
 
 
-def start_du_monitor(data_dir: Path) -> None:
+def start_du_monitor(data_dir: Path, initial_delay: float = 0.0) -> None:
     """
     Start a daemon thread that measures data_dir size every DU_INTERVAL seconds.
 
     Args:
         data_dir: Directory to measure (DATA_DIR).
+        initial_delay: Seconds to wait before first measurement.
     """
     if any(t.name == "du-monitor" for t in threading.enumerate()):
         logger.debug("du monitor thread already running, skipping")
@@ -267,12 +270,12 @@ def start_du_monitor(data_dir: Path) -> None:
 
     thread = threading.Thread(
         target=_du_loop,
-        args=(data_dir,),
+        args=(data_dir, initial_delay),
         daemon=True,
         name="du-monitor",
     )
     thread.start()
-    logger.info("du monitor started (interval: %ds)", DU_INTERVAL)
+    logger.info("du monitor started (interval: %ds, initial delay: %.1fs)", DU_INTERVAL, initial_delay)
 
 
 # Timeout for git clone operations (seconds)

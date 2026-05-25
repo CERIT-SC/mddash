@@ -33,6 +33,7 @@ const TprSelector = (props: TprSelectorProps) => {
           experimentId={experimentId}
           ext="tpr"
           title="Select TPR file"
+          selectedPath={fileSelectorTpr || null}
           onFileSelected={(file) => setFileSelectorTpr(file?.path ?? "")}
           ignoreFiles={tprFiles}
         />

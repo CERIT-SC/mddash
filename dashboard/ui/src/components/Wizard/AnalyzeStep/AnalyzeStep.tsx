@@ -33,9 +33,21 @@ const AnalyzeStep = (props: WizardStepProps) => {
   const [reloadKey, setReloadKey] = useState(0)
   const [activeTab, setActiveTab] = useState("viewer")
 
-  useEffect(() => {
-    if (!structureFile && !topologyFile) setCoordsFile(null)
-  }, [structureFile, topologyFile])
+  // Prefer structure file over topology. MolStar determines what files can be combined.
+  const viewerStructure = structureFile || topologyFile
+  const viewerStructurePath = viewerStructure?.path ?? null
+
+  const handleStructureSelected = (file: FileOption | null) => {
+    const nextViewerStructurePath = (file || topologyFile)?.path ?? null
+    if (nextViewerStructurePath !== viewerStructurePath) setCoordsFile(null)
+    setStructureFile(file)
+  }
+
+  const handleTopologySelected = (file: FileOption | null) => {
+    const nextViewerStructurePath = (structureFile || file)?.path ?? null
+    if (nextViewerStructurePath !== viewerStructurePath) setCoordsFile(null)
+    setTopologyFile(file)
+  }
 
   const analysisConfig = useMemo(
     () => AVAILABLE_ANALYSES.find((analysis) => analysis.value === selectedAnalysis),
@@ -59,7 +71,10 @@ const AnalyzeStep = (props: WizardStepProps) => {
 
   useEffect(() => {
     if (!topologyRequired) {
-      if (topologyFile) setTopologyFile(null)
+      if (topologyFile) {
+        if (!structureFile) setCoordsFile(null)
+        setTopologyFile(null)
+      }
       return
     }
 
@@ -72,12 +87,10 @@ const AnalyzeStep = (props: WizardStepProps) => {
         : engineConfig.preprocessingTopologyExts
 
     if (!allowedSuffixes.includes(suffix)) {
+      if (!structureFile) setCoordsFile(null)
       setTopologyFile(null)
     }
-  }, [preprocessingMode, topologyFile, topologyRequired, engineConfig])
-
-  // Prefer structure file over topology. MolStar determines what files can be combined.
-  const viewerStructure = structureFile || topologyFile
+  }, [preprocessingMode, structureFile, topologyFile, topologyRequired, engineConfig])
 
   const molstarViewer = useMemo(() => {
     if (!viewerStructure) return null
@@ -102,13 +115,14 @@ const AnalyzeStep = (props: WizardStepProps) => {
           structureExts={engineConfig.structureExts}
           trajectoryExts={engineConfig.trajectoryExts}
           structureFile={structureFile}
+          coordsFile={coordsFile}
+          topologyFile={topologyFile}
           topologyRequired={topologyRequired}
           topologyFormats={topologyFormats}
           topologyTitle={topologyTitle}
-          preprocessingMode={preprocessingMode}
-          onStructureSelected={setStructureFile}
+          onStructureSelected={handleStructureSelected}
           onCoordsSelected={setCoordsFile}
-          onTopologySelected={setTopologyFile}
+          onTopologySelected={handleTopologySelected}
         />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 flex-1">

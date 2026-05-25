@@ -1,5 +1,4 @@
 from cache import metrics_cache
-from clients import k8s
 from config import API_PREFIX, CPU_REQUEST_QUOTA, DATA_DIR, MEMORY_REQUEST_QUOTA, PVC_SIZE
 from decorators import handle_exceptions
 from flask import Blueprint, Response, jsonify
@@ -30,6 +29,8 @@ def get_metrics() -> Response:
     Returns:
         Response: JSON response with current resource requests and configured limits for CPU, memory, and storage.
     """
+    from clients import k8s  # noqa: PLC0415
+
     if "pod_resources" in metrics_cache:
         pod_requests = metrics_cache["pod_resources"]
     else:

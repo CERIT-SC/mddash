@@ -52,7 +52,7 @@ notebook:
 
 # MD analysis image used for on-demand analysis K8s jobs
 analysis:
-  image: ghcr.io/mmb-irb/mddb_wf:0.0.8
+  image: ghcr.io/mmb-irb/mddb_wf:0.1.10
 
 # GPU resource type used by mdrun-api jobs and gromacs-tuner workers
 gpuType: "nvidia.com/mig-1g.10gb"
@@ -60,6 +60,10 @@ gpuType: "nvidia.com/mig-1g.10gb"
 # Container images used for mdrun-api simulation jobs
 gmxImage: "cerit.io/xkrasa/gromacs-tuner-worker:gmx-2026.1_amber-26_ray-2.54.0_py-3.13"
 amberImage: "cerit.io/xkrasa/amber:24"
+
+# Landing page image (served at / on the dashboard hostname)
+landing:
+  image: mddash-landing
 
 # Sidecar container images for user pod
 sidecars:
@@ -101,10 +105,11 @@ resources:
     memoryLimit: "8Gi"   # 8× request: burst headroom for in-memory analysis
 
   analysisJob:
+    # Dashboard mwf analysis jobs are mostly single-threaded; extra CPU limit rarely speeds them up.
     #  edc test: cpuRequest: "1000m"
     cpuRequest: "100m"
     memoryRequest: "2Gi"
-    cpuLimit: "4000m"
+    cpuLimit: "1000m"
     memoryLimit: "8Gi"
   namespaceQuota:
     # requests = expected simultaneous usage; formula: see docs/resource-management.md

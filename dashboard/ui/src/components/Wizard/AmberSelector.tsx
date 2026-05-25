@@ -28,7 +28,6 @@ interface AmberSelectorProps {
 const AmberSelector = (props: AmberSelectorProps) => {
   const { experimentId, jobs, selectedPrmtop, loading, onAddJob, onDeleteJob, onSelectJob } = props
 
-  const [selectorKey, setSelectorKey] = useState(0)
   const [prmtopFile, setPrmtopFile] = useState<FileOption | null>(null)
   const [inpcrdFile, setInpcrdFile] = useState<FileOption | null>(null)
   const [mdinFile, setMdinFile] = useState<FileOption | null>(null)
@@ -41,7 +40,6 @@ const AmberSelector = (props: AmberSelectorProps) => {
     setPrmtopFile(null)
     setInpcrdFile(null)
     setMdinFile(null)
-    setSelectorKey((k) => k + 1)
   }
 
   return (
@@ -51,25 +49,25 @@ const AmberSelector = (props: AmberSelectorProps) => {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <FileSelector
-          key={`prmtop-${selectorKey}`}
           experimentId={experimentId}
           ext={["prmtop", "parm7"]}
           title="Topology"
+          selectedPath={prmtopFile?.path ?? null}
           onFileSelected={setPrmtopFile}
           ignoreFiles={jobs}
         />
         <FileSelector
-          key={`inpcrd-${selectorKey}`}
           experimentId={experimentId}
           ext={["inpcrd", "rst7", "nc"]}
           title="Coordinates"
+          selectedPath={inpcrdFile?.path ?? null}
           onFileSelected={setInpcrdFile}
         />
         <FileSelector
-          key={`mdin-${selectorKey}`}
           experimentId={experimentId}
           ext={["mdin", "in"]}
           title="Run Control"
+          selectedPath={mdinFile?.path ?? null}
           onFileSelected={setMdinFile}
         />
         <Button variant="default" disabled={!canAdd} onClick={handleAdd}>

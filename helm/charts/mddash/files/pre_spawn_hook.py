@@ -288,6 +288,23 @@ def _get_security_context() -> dict:
 # =============================================================================
 
 
+def _proxy_start_command(service_prefix: str) -> str:
+    """
+    Return the proxy startup command that waits for auth and API health.
+
+    Returns:
+        str: Shell command string for proxy container startup.
+    """
+    api_health_url = f"http://localhost:5000{service_prefix}/dash/api/health"
+    return (
+        "until "
+        "curl --fail --silent --show-error --connect-timeout 1 http://localhost:5001/health > /dev/null "
+        f"&& curl --fail --silent --show-error --connect-timeout 1 {api_health_url} > /dev/null; "
+        "do echo 'waiting for auth and dashboard API health'; sleep 0.1; done; "
+        "exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"
+    )
+
+
 def _proxy_container(service_prefix: str, username: str, security_context: dict) -> dict | None:
     image = getenv("PROXY_IMAGE")
     if not image:
@@ -297,11 +314,7 @@ def _proxy_container(service_prefix: str, username: str, security_context: dict)
         "name": "proxy",
         "image": image,
         "imagePullPolicy": getenv("IMAGE_PULL_POLICY", "Always"),
-        "command": [
-            "sh",
-            "-c",
-            "until curl -s --connect-timeout 1 http://localhost:5001 > /dev/null && curl -s --connect-timeout 1 http://localhost:5000 > /dev/null; do sleep 0.1; done; caddy run --config /etc/caddy/Caddyfile --adapter caddyfile",
-        ],
+        "command": ["sh", "-c", _proxy_start_command(service_prefix)],
         "ports": [{"containerPort": 8888, "name": "http"}],
         "env": [
             {"name": "CADDY_ROUTE_PREFIX", "value": service_prefix},
@@ -477,8 +490,8 @@ def _get_sidecar_containers(
 
 def _get_or_create_progress_queue(spawner: "KubeSpawner") -> asyncio.Queue:
     if not hasattr(spawner, "_mddash_progress_queue"):
-        spawner._mddash_progress_queue = asyncio.Queue()  # type: ignore[attr-defined]  # noqa: SLF001
-    return spawner._mddash_progress_queue  # type: ignore[attr-defined]  # noqa: SLF001
+        spawner._mddash_progress_queue = asyncio.Queue()  # type: ignore  # noqa: SLF001
+    return spawner._mddash_progress_queue  # type: ignore  # noqa: SLF001
 
 
 async def _report_progress(spawner: "KubeSpawner", message: str, progress: int) -> None:
@@ -611,6 +624,7 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
 
         # Configure spawner
         spawner.namespace = user_namespace
+        spawner.dns_name = spawner.dns_name_template.format(namespace=user_namespace, name=spawner.pod_name)
         spawner.service_account = "default"
         spawner.volumes = [{"name": volume_name, "persistentVolumeClaim": {"claimName": pvc_name}}]
 
@@ -642,8 +656,8 @@ def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:  # noqa: ARG00
         if container.name == "notebook":
             sc = container.security_context
             if isinstance(sc, dict):
-                allowed = {k: v for k, v in sc.items() if k in V1SecurityContext.openapi_types}  # type: ignore[attr-defined]
-                sc = V1SecurityContext(**allowed)
+                allowed = {k: v for k, v in sc.items() if k in V1SecurityContext.openapi_types}  # type: ignore
+                sc = V1SecurityContext(**allowed)  # type: ignore
             if sc is None:
                 sc = V1SecurityContext()
             sc.capabilities = V1Capabilities(drop=["ALL"])
@@ -690,4 +704,4 @@ c.KubeSpawner.post_stop_hook = post_stop_hook  # type: ignore # noqa: F821
 
 # progress is a plain method (not a traitlet), so c.KubeSpawner.progress is silently ignored.
 # Direct monkey-patch is required to override it.
-KubeSpawner.progress = _spawn_progress  # type: ignore[method-assign]
+KubeSpawner.progress = _spawn_progress  # type: ignore
