@@ -269,7 +269,7 @@ mdrun-api:
     schedule: "*/15 * * * *"
     sameNodeAsApi: true
     backoffLimit: 1
-    successfulJobsHistoryLimit: 3
+    successfulJobsHistoryLimit: 1
     failedJobsHistoryLimit: 3
     resources:
 {{ $cfg.mdrunApi.polling.resources | toYAML | indent 6 }}
