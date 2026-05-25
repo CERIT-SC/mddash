@@ -79,10 +79,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: azure/setup-helm@v4
-      - run: helm lint helm/charts/mdrun-api
-      - run: helm template mdrun-api helm/charts/mdrun-api >/dev/null
-      - run: helm lint helm/charts/mddash
-      - run: helm template mddash helm/charts/mddash >/dev/null
+      - run: make lint-helm-dependencies
 
   type-check-dashboard-api:
     runs-on: ubuntu-latest

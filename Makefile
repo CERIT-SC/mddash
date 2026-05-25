@@ -45,6 +45,12 @@ lint-python: ## Check Python linting without auto-fix
 lint-helm: ## Validate Helm charts
 	helm lint helm/charts/mdrun-api
 	helm template mdrun-api helm/charts/mdrun-api >/dev/null
+
+.PHONY: lint-helm-dependencies
+lint-helm-dependencies: lint-helm ## Validate Helm charts that require dependency downloads
+	helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ >/dev/null
+	helm repo update jupyterhub >/dev/null
+	helm dependency build helm/charts/mddash
 	helm lint helm/charts/mddash
 	helm template mddash helm/charts/mddash >/dev/null
 
