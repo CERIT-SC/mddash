@@ -16,6 +16,7 @@ graph TB
         JH[JupyterHub Hub]
         MA[MDRun API]
         GT[Gromacs Tuner]
+        LP[Landing Page - Caddy]
     end
 
     subgraph "User Namespace (per user)"
@@ -32,7 +33,9 @@ graph TB
         S3S[S3 Storage]
     end
 
+    User[User] -->|Browse| LP
     User[User] -->|OAuth| JH
+    LP -->|Link to Hub| JH
     JH -->|Spawn Pod| P
     P --> A
     P --> API
@@ -155,6 +158,7 @@ sequenceDiagram
 | **Dashboard Proxy** | `dashboard/proxy/` | See `dashboard/proxy/Caddyfile` | Caddy reverse proxy, static UI serving, routes to JupyterHub Singleuser |
 | **Dashboard S3-Sync** | `dashboard/s3-sync/` | See `dashboard/s3-sync/sync.sh` | Bidirectional S3 synchronization |
 | **MDRun API** | `mdrun-api/` | `mdrun-api/AGENTS.md` | GROMACS and AMBER job management API |
+| **Landing Page** | `landing/` | `landing/AGENTS.md` | Public landing page served at root path |
 | **Helm Charts** | `helm/charts/mddash/` | `helm/charts/mddash/AGENTS.md` | Multi-tenant JupyterHub deployment |
 
 ### Key Application Entry Points
@@ -170,6 +174,10 @@ sequenceDiagram
 **MDRun API:**
 - `mdrun-api/app.py` - Flask application factory
 - `mdrun-api/routes.py` - API endpoints
+
+**Landing Page:**
+- `landing/src/main.tsx` - React entry point
+- `landing/vite.config.ts` - Build configuration with single-file plugin
 
 **Helm Charts:**
 - `helm/charts/mddash/values.yaml.tmpl` - Configuration template (includes JupyterHub Singleuser configuration)

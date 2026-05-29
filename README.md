@@ -236,6 +236,9 @@ Shared infrastructure components that manage the platform and compute resources.
 - **Gromacs Tuner**
   - *Location*: [source code](https://github.com/CERIT-SC/gromacs-tuner) (Configured in `helm/charts/mddash/values.yaml.tmpl`)
   - *Purpose*: Automatically benchmarks and selects the most efficient simulation parameters to optimize performance and resource usage.
+- **Landing Page**
+  - *Location*: `landing/`
+  - *Purpose*: Public landing page served at the root path, introducing the platform and linking users to the JupyterHub login at `/hub/`.
 
 ### User Namespace
 Isolated environments created for each logged-in user.
