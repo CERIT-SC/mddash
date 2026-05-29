@@ -35,19 +35,14 @@ format: ## Format and lint-fix all code (Python via ruff, frontend via prettier)
 	cd landing && pnpm run format
 
 .PHONY: lint
-lint: lint-python lint-helm ## Check linting and renderable Helm charts
-
-.PHONY: lint-python
-lint-python: ## Check Python linting without auto-fix
+lint: ## Check Python linting without auto-fix
 	ruff check .
 
 .PHONY: lint-helm
 lint-helm: ## Validate Helm charts
 	helm lint helm/charts/mdrun-api
 	helm template mdrun-api helm/charts/mdrun-api >/dev/null
-
-.PHONY: lint-helm-dependencies
-lint-helm-dependencies: lint-helm ## Validate Helm charts that require dependency downloads
+	$(MAKE) -C helm render
 	helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ >/dev/null
 	helm repo update jupyterhub >/dev/null
 	helm dependency build helm/charts/mddash

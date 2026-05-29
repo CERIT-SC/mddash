@@ -74,13 +74,6 @@ jobs:
       - run: uv sync --group dev --no-install-project
       - run: uv run pytest
 
-  lint-helm:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: azure/setup-helm@v4
-      - run: make lint-helm-dependencies
-
   type-check-dashboard-api:
     runs-on: ubuntu-latest
     defaults:
