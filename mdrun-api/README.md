@@ -8,7 +8,6 @@ Flask-based API for managing molecular dynamics simulation jobs.
 - Debug mode enabled
 - SQL query logging enabled
 - Detailed logging (DEBUG level)
-- No uWSGI overhead
 
 **Build & Run:**
 ```bash
@@ -18,8 +17,7 @@ docker run -p 5000:5000 -v $(pwd):/app <image>:dev
 
 ## Production Mode
 
-- Multi-stage build for minimal image size
-- uWSGI with 4 processes and 2 threads
+- Gunicorn with 2 workers and 4 threads by default
 - Health check endpoint configured
 - INFO level logging
 - Optimized for performance and security
@@ -33,8 +31,8 @@ docker push <image>:latest
 ## Environment Variables
 
 - `APP_ENV`: Set to `dev` or `prod` (default: `prod`)
-- `UWSGI_PROCESSES`: Number of uWSGI worker processes (default: 4)
-- `UWSGI_THREADS`: Number of threads per process (default: 2)
+- `GUNICORN_WORKERS`: Number of Gunicorn worker processes (default: 2)
+- `GUNICORN_THREADS`: Number of threads per worker (default: 4)
 - `POD_NAMESPACE`: Kubernetes namespace (default: `default`)
 - `PVC_NAME`: Persistent volume claim name (default: `mdrun-api-pvc`)
 - `S3_CREDENTIALS`: S3 access credentials

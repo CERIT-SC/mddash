@@ -12,14 +12,28 @@ service:
 storage:
   size: 5Gi
 
-uwsgi:
-  processes: 4
-  threads: 2
+gunicorn:
+  workers: 2
+  threads: 4
+
+polling:
+  schedule: "*/15 * * * *"
+  sameNodeAsApi: true
+  backoffLimit: 1
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
 
 resources:
   limits:
     cpu: 500m
-    memory: 1024Mi
+    memory: 512Mi
   requests:
     cpu: 100m
     memory: 256Mi

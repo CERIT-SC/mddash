@@ -19,10 +19,8 @@ platform := --platform $(shell yq .mdrunApi.platform $(config))
 
 ifeq ($(ENV),dev)
 	tag := dev
-	dockerfile := Dockerfile.dev
 else
 	tag := $(IMAGE_TAG)
-	dockerfile := Dockerfile
 endif
 
 .PHONY: help
@@ -36,7 +34,7 @@ test: ## Run tests
 
 .PHONY: build
 build: ## Build Docker image (ENV=dev for dev, ENV=prod for prod)
-	docker build $(platform) -f $(dockerfile) -t $(image):$(tag) ..
+	docker build $(platform) -f Dockerfile -t $(image):$(tag) ..
 
 .PHONY: push
 push: build ## Build and push Docker image
