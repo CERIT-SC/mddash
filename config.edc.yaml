@@ -138,6 +138,9 @@ mdrunApi:
   platform: linux/amd64
   storage:  # Persistent storage for mdrun-api database
     size: 20Gi
+  gunicorn:
+    workers: 2
+    threads: 4
   resources:
     limits:
       cpu: "500m"

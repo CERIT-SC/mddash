@@ -262,8 +262,8 @@ mdrun-api:
   storage:
     size: {{ $cfg.mdrunApi.storage.size }}
   gunicorn:
-    workers: 2
-    threads: 4
+    workers: {{ $cfg.mdrunApi.gunicorn.workers }}
+    threads: {{ $cfg.mdrunApi.gunicorn.threads }}
   polling:
     enabled: true
     schedule: "*/15 * * * *"
