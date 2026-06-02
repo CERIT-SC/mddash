@@ -41,7 +41,12 @@ ENV AMBER_PYTHONPATH=/opt/ambertools26/miniconda/lib/python3.12/site-packages:/o
 
 COPY requirements.txt /tmp/
 RUN python -m pip install --no-cache-dir -r /tmp/requirements.txt \
-    && rm /tmp/requirements.txt \
+    && rm /tmp/requirements.txt
+
+COPY jupyterlab-pipeline-tracker /tmp/jupyterlab-pipeline-tracker
+RUN python -m pip install --no-cache-dir --no-build-isolation /tmp/jupyterlab-pipeline-tracker \
+    && rm -rf /tmp/jupyterlab-pipeline-tracker \
+    && jupyter labextension list \
     && chown -R "${NB_USER}:users" "${CONDA_DIR}" "/home/${NB_USER}"
 
 COPY --chown=1000:1000 --chmod=755 setup-binder-env     /usr/local/bin/before-notebook.d/setup-binder-env

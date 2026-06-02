@@ -1,0 +1,45 @@
+{
+  "name": "jupyterlab-pipeline-tracker",
+  "version": "0.1.0",
+  "description": "JupyterLab extension prototype for MD notebook pipeline progress tracking.",
+  "private": true,
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "style": "style/index.css",
+  "files": [
+    "lib/**/*",
+    "style/**/*",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && jupyter labextension build .",
+    "build:lib": "tsc -p tsconfig.json",
+    "watch": "tsc -w -p tsconfig.json",
+    "clean": "rimraf lib tsconfig.tsbuildinfo jupyterlab_pipeline_tracker/labextension"
+  },
+  "dependencies": {
+    "@jupyterlab/application": "^4.2.5",
+    "@jupyterlab/docregistry": "^4.2.5",
+    "@jupyterlab/notebook": "^4.2.5",
+    "@lumino/disposable": "^2.1.4",
+    "@lumino/widgets": "^2.4.0"
+  },
+  "devDependencies": {
+    "@jupyterlab/builder": "^4.2.5",
+    "@types/json-schema": "^7.0.15",
+    "rimraf": "^5.0.5",
+    "typescript": "~5.8.3"
+  },
+  "jupyterlab": {
+    "extension": true,
+    "outputDir": "jupyterlab_pipeline_tracker/labextension",
+    "_build": {
+      "load": "static\\remoteEntry.e8908aae088b912a1686.js",
+      "extension": "./extension",
+      "style": "./style"
+    }
+  },
+  "sideEffects": [
+    "style/index.css"
+  ]
+}
