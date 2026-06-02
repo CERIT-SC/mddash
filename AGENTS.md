@@ -196,7 +196,7 @@ sequenceDiagram
 Run from repo root before claiming any Python code is correct. Each command must pass before moving to the next.
 
 ```bash
-make format
+make fix
 make type-check
 make test
 ```

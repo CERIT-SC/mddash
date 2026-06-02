@@ -27,8 +27,8 @@ help: ## Show this help
 
 # ==================== FORMAT / LINT ====================
 
-.PHONY: format
-format: ## Format and lint-fix all code (Python via ruff, frontend via prettier)
+.PHONY: fix
+fix: ## Auto-fix formatting and lint issues (Python via ruff, frontend via prettier)
 	ruff format .
 	ruff check . --fix
 	cd dashboard/ui && pnpm run format
@@ -37,6 +37,10 @@ format: ## Format and lint-fix all code (Python via ruff, frontend via prettier)
 .PHONY: lint
 lint: ## Check Python linting without auto-fix
 	ruff check .
+
+.PHONY: format-check
+format-check: ## Check Python formatting without modifying files
+	ruff format . --diff
 
 .PHONY: lint-helm
 lint-helm: ## Validate Helm charts

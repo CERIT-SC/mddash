@@ -28,9 +28,9 @@ jobs:
       - name: Install ruff
         run: uv tool install ruff
       - name: Check formatting
-        run: ruff format . --diff
+        run: make format-check
       - name: Check linting
-        run: ruff check .
+        run: make lint
 
   test-dashboard-api:
     runs-on: ubuntu-latest
