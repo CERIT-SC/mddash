@@ -25,8 +25,19 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable Corepack
+        run: corepack enable
       - name: Install ruff
         run: uv tool install ruff
+      - name: Install dashboard UI dependencies
+        run: corepack pnpm install --frozen-lockfile
+        working-directory: dashboard/ui
+      - name: Install landing dependencies
+        run: corepack pnpm install --frozen-lockfile
+        working-directory: landing
       - name: Check formatting
         run: make format-check
       - name: Check linting
@@ -120,15 +131,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: pnpm/action-setup@v4
-        with:
-          version: latest
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: dashboard/ui/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
+      - name: Enable Corepack
+        run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile
         working-directory: dashboard/ui
-      - run: pnpm run type-check
+      - run: corepack pnpm run type-check
         working-directory: dashboard/ui
+
+  type-check-landing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enable Corepack
+        run: corepack enable
+      - run: corepack pnpm install --frozen-lockfile
+        working-directory: landing
+      - run: corepack pnpm run type-check
+        working-directory: landing

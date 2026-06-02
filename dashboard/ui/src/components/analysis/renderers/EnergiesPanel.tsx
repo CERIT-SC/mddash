@@ -170,7 +170,7 @@ const EnergiesPanel: FC<{ data: EnergiesAnalysis }> = ({ data }) => {
   const selectedInteraction = interactions.find((entry) => entry.id === interactionId) ?? interactions[0]
   const selectedAgent = selectedInteraction?.[agentKey]
 
-  const labels = selectedAgent?.labels ?? []
+  const labels = useMemo(() => selectedAgent?.labels ?? [], [selectedAgent])
   const xPositions = useMemo(() => labels.map((_, index) => index + 1), [labels])
 
   const stageConfig = STAGE_OPTIONS.find((option) => option.key === stage)

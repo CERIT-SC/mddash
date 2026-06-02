@@ -1,4 +1,4 @@
-import { useMemo, type FC } from "react"
+import { useCallback, useMemo, type FC } from "react"
 
 import type { ClustersAnalysis } from "@/util/analysis-types"
 import { Badge } from "@/components/ui/badge"
@@ -14,9 +14,9 @@ const formatClusterLabel = (index: number, frame?: number) => {
 }
 
 const ClustersPanel: FC<{ data: ClustersAnalysis }> = ({ data }) => {
-  const clusters = Array.isArray(data?.clusters) ? data.clusters : []
+  const clusters = useMemo(() => (Array.isArray(data?.clusters) ? data.clusters : []), [data?.clusters])
   const hasClusters = clusters.length > 0
-  const transitions = Array.isArray(data.transitions) ? data.transitions : []
+  const transitions = useMemo(() => (Array.isArray(data.transitions) ? data.transitions : []), [data.transitions])
 
   const clusterSizes = useMemo(() => {
     if (!hasClusters) {
@@ -56,11 +56,14 @@ const ClustersPanel: FC<{ data: ClustersAnalysis }> = ({ data }) => {
     return map
   }, [clusters])
 
-  const resolveClusterIndex = (value: number | undefined) => {
-    if (typeof value !== "number" || !Number.isFinite(value)) return undefined
-    if (value >= 0 && value < clusters.length) return value
-    return clusterIndexById.get(value)
-  }
+  const resolveClusterIndex = useCallback(
+    (value: number | undefined) => {
+      if (typeof value !== "number" || !Number.isFinite(value)) return undefined
+      if (value >= 0 && value < clusters.length) return value
+      return clusterIndexById.get(value)
+    },
+    [clusterIndexById, clusters.length]
+  )
 
   const transitionHeatmap = useMemo(() => {
     if (!hasClusters) {
@@ -88,7 +91,7 @@ const ClustersPanel: FC<{ data: ClustersAnalysis }> = ({ data }) => {
     const labels = clusters.map((cluster, index) => formatClusterLabel(index, cluster?.main))
 
     return { triples, labels }
-  }, [clusters, transitions, clusterIndexById, hasClusters])
+  }, [clusters, transitions, resolveClusterIndex, hasClusters])
 
   const topTransitions = useMemo(() => {
     if (!hasClusters) {
@@ -111,7 +114,7 @@ const ClustersPanel: FC<{ data: ClustersAnalysis }> = ({ data }) => {
       .filter((entry) => entry.from != null && entry.to != null)
       .sort((a, b) => b.count - a.count)
       .slice(0, 6)
-  }, [transitions, clusterIndexById, hasClusters])
+  }, [transitions, resolveClusterIndex, hasClusters])
 
   const labels = clusters.map((cluster, index) => formatClusterLabel(index, cluster?.main))
 

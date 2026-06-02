@@ -50,7 +50,7 @@ const formatStat = (value?: number, precision = 2) =>
 
 const ThicknessAnalysisPanel: FC<{ data: ThicknessAnalysis }> = ({ data }) => {
   const dataset = data?.data
-  const rawFrames = Array.isArray(dataset?.frame) ? dataset?.frame : []
+  const rawFrames = useMemo(() => (Array.isArray(dataset?.frame) ? dataset.frame : []), [dataset?.frame])
   const thicknessValues = useMemo(() => sanitizeNumericArray(dataset?.thickness), [dataset?.thickness])
 
   const fallbackLength = thicknessValues.length
