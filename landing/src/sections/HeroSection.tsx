@@ -1,5 +1,5 @@
 import { Badge, Button } from "@e-infra/design-system"
-import { ArrowRight, Globe, Rocket } from "lucide-react"
+import { ArrowRight, Rocket } from "lucide-react"
 
 import dashImg from "../assets/dash.png"
 import { useReveal } from "../hooks/useReveal"
@@ -17,12 +17,12 @@ export function HeroSection() {
             </Badge>
           </div>
 
-          <h1 className="font-display text-text-heading text-5xl leading-[1.08] font-semibold lg:text-6xl">
-            A Virtual Research Environment for Molecular Dynamics
+          <h1 className="font-display text-text-heading text-5xl leading-[1.08] font-bold tracking-tight lg:text-6xl">
+            A Virtual Research Environment for <span className="text-secondary block">Molecular Dynamics</span>
           </h1>
 
           <p className="text-text-muted max-w-lg text-lg leading-relaxed">
-            Prepare, tune, run, analyze, and publish MD simulations — without leaving the browser. One platform for the
+            Prepare, tune, run, analyze, and publish MD simulations without leaving the browser. One platform for the
             full lifecycle.
           </p>
 
@@ -44,10 +44,6 @@ export function HeroSection() {
                   <span className="bg-error h-3 w-3 rounded-full opacity-70" />
                   <span className="bg-warning h-3 w-3 rounded-full opacity-70" />
                   <span className="bg-success h-3 w-3 rounded-full opacity-70" />
-                </div>
-                <div className="text-text-muted bg-surface mx-auto flex items-center gap-2 rounded-md px-3 py-1 text-xs">
-                  <Globe size={10} />
-                  MDDash
                 </div>
               </div>
               <img src={dashImg} alt="MDDash dashboard" className="block w-full" width={2435} height={2298} />
