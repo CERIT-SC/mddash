@@ -56,6 +56,7 @@ Setup import remains one DOI/repository URL field. DOI and InvenioRDM URLs use t
 - `clients/mdposit.py` URL helpers: detect trusted MDPosit hosts and extract accession/project IDs.
 - Publish route/model functions: short target-specific functions such as `publish_invenio(...)` and `publish_mdposit(...)` or equivalent module-level functions.
 - Repo import helpers: keep `Experiment.from_repo(...)` as the single setup entry point for all repository/DOI URLs. It routes to `import_invenio_repo(...)` or `import_mdposit_repo(...)` depending on URL detection.
+- `import_invenio_repo(...)`: helper that downloads the InvenioRDM `files-archive` and returns the files needed for `Experiment.from_repo(...)`.
 - `import_mdposit_repo(...)`: helper that fetches MDPosit metadata and downloads files for `Experiment.from_repo(...)`.
 - Handoff helper: generates the VRE Lite metadata file and serves the required MD files as individual downloads with a short instruction file.
 
@@ -125,7 +126,7 @@ This flow must remain behaviorally unchanged for users.
 1. User enters a DOI/repository URL in the existing setup field.
 2. Resolver follows DOI redirects when needed.
 3. `Experiment.from_repo(...)` detects whether the URL is an InvenioRDM record or a trusted MDPosit host.
-4. If InvenioRDM, the existing Invenio `files-archive` download logic inside `Experiment.from_repo(...)` runs.
+4. If InvenioRDM, `import_invenio_repo(...)` downloads the `files-archive` and returns the files needed for experiment creation.
 5. If MDPosit, `import_mdposit_repo(...)` extracts the accession/project ID, fetches metadata from configured MDDB REST, downloads files from official MDDB endpoints when available, and returns the files/metadata needed for experiment creation.
 6. `Experiment.from_repo(...)` creates the experiment from the downloaded files.
 7. The new experiment stores the original source URL for display, the same way other experiment sources are tracked.
