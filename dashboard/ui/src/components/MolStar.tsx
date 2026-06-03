@@ -11,47 +11,7 @@ import { PluginUIContext } from "molstar/lib/mol-plugin-ui/context"
 import { Plugin } from "molstar/lib/mol-plugin-ui/plugin"
 import { DefaultPluginUISpec, type PluginUISpec } from "molstar/lib/mol-plugin-ui/spec"
 
-type StructureFormat = string
-type CoordsFormat = string
-
-/** Map file extensions to MolStar structure/topology format IDs. */
-const STRUCTURE_FORMAT_MAP: Record<string, StructureFormat> = {
-  pdb: "pdb",
-  gro: "gro",
-  mmcif: "mmcif",
-  cifcore: "cifCore",
-  pdbqt: "pdbqt",
-  xyz: "xyz",
-  mol: "mol",
-  sdf: "sdf",
-  mol2: "mol2",
-  psf: "psf",
-  prmtop: "prmtop",
-  parm7: "prmtop",
-  top: "top",
-}
-
-/** Map file extensions to MolStar coordinates format IDs. */
-const COORDS_FORMAT_MAP: Record<string, CoordsFormat> = {
-  xtc: "xtc",
-  trr: "trr",
-  dcd: "dcd",
-  nc: "nctraj",
-  nctraj: "nctraj",
-  lammpstrj: "lammpstrj",
-}
-
-/** Resolve a file extension to a MolStar structure/topology format. */
-export function resolveStructureFormat(filename: string): StructureFormat {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? ""
-  return STRUCTURE_FORMAT_MAP[ext] ?? "pdb"
-}
-
-/** Resolve a file extension to a MolStar coordinates format. */
-export function resolveCoordsFormat(filename: string): CoordsFormat {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? ""
-  return COORDS_FORMAT_MAP[ext] ?? "xtc"
-}
+import type { CoordsFormat, StructureFormat } from "@/util/molstar-formats"
 
 interface MolStarProps {
   width?: React.CSSProperties["width"]

@@ -8,10 +8,11 @@ import {
   type AnalysisPreprocessingMode as AnalysisPreprocessingModeValue,
   type AnalysisType,
 } from "@/util/analysis-types"
+import { resolveCoordsFormat, resolveStructureFormat } from "@/util/molstar-formats"
 import type { FileOption } from "@/util/types"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import MolStar, { resolveCoordsFormat, resolveStructureFormat } from "@/components/MolStar"
+import MolStar from "@/components/MolStar"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import AnalysisPanel from "./AnalysisPanel"

@@ -106,7 +106,9 @@ export function WizardSection() {
                 className={`step-tab rounded-lg px-5 py-4 text-left ${active === i ? "active" : ""}`}
               >
                 <div className="flex items-center gap-3">
-                  <span className={`font-display text-2xl font-light ${active === i ? "text-primary" : "text-text-muted"}`}>
+                  <span
+                    className={`font-display text-2xl font-light ${active === i ? "text-primary" : "text-text-muted"}`}
+                  >
                     {step.num}
                   </span>
                   <div>

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61", "wheel", "jupyterlab>=4.2.5,<5"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jupyterlab-pipeline-tracker"
+version = "0.1.0"
+description = "JupyterLab 4 extension for notebook pipeline tracking"
+readme = {text = "JupyterLab 4 extension for notebook pipeline tracking.", content-type = "text/markdown"}
+requires-python = ">=3.8"
+authors = [{name = "Simon Hudec", email = "524860@mail.muni.cz"}]
+license = {text = "MIT"}
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/example/jupyterlab-pipeline-tracker"
+
+[tool.jupyter.labextension]
+src = "."
+dest = "jupyterlab_pipeline_tracker/labextension"
+
+[tool.setuptools.packages.find]
+exclude = ["node_modules", "node_modules.*", ".venv", ".venv.*"]
+
+[tool.setuptools.package-data]
+jupyterlab_pipeline_tracker = ["labextension/**"]
+
+[tool.setuptools.data-files]
+"share/jupyter/labextensions/jupyterlab-pipeline-tracker" = [
+	"jupyterlab_pipeline_tracker/labextension/package.json",
+]
+"share/jupyter/labextensions/jupyterlab-pipeline-tracker/static" = [
+	"jupyterlab_pipeline_tracker/labextension/static/*.js",
+	"jupyterlab_pipeline_tracker/labextension/static/*.json",
+]

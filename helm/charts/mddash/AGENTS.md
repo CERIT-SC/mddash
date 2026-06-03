@@ -16,6 +16,8 @@ Deploys a multi-tenant JupyterHub environment with MD Dashboard for molecular dy
 - **api**: Flask backend for MD simulation management
 - **s3-sync**: Background synchronization with S3-compatible storage
 
+**Landing Page Deployment Pattern**: A separate Deployment, Service, and Ingress serves the public landing page at the root path (`pathType: Exact /`). It uses `vite-plugin-singlefile` to inline all assets, so no additional ingress rules are required for static assets.
+
 **Template-Based Configuration**: Values file is a gomplate/Go template rendered with `gomplate` using external config YAML. This enables environment-specific deployments without maintaining duplicate values files.
 
 ## Core Dependencies
@@ -78,8 +80,12 @@ graph TD
 
 - **Proxy Health Wait**: The proxy sidecar waits for `auth` `/health` and the dashboard API prefixed `/dash/api/health` endpoint with `curl --fail` before starting Caddy. Do not replace this with bare port checks; non-2xx responses must not count as readiness.
 
+- **Landing Page Ingress Priority**: The landing page Ingress uses `pathType: Exact /` on the same host as JupyterHub. NGINX resolves Exact rules before Prefix rules, so the landing page owns only the root path while all other traffic continues to JupyterHub.
+
 ## Entry Points
 
 - **`Chart.yaml`**: Defines the chart metadata, version, and dependencies (jupyterhub, mdrun-api, gromacs-tuner)
 - **`values.yaml.tmpl`**: gomplate/Go template for configuration values; rendered to `values.yaml` by `gomplate`
 - **`files/pre_spawn_hook.py`**: Main hook function `pre_spawn_hook()` that orchestrates user namespace creation, RBAC setup, and sidecar configuration
+- **`templates/landing-page.yaml`**: Deployment, Service, and Ingress for the public landing page
+- **`values.yaml.tmpl`** includes a `landing` section for image repository, tag, pull policy, and resource limits

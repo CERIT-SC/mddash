@@ -1,4 +1,5 @@
 setuptools<70
+wheel
 GromacsWrapper
 mdtraj
 nglview<4.0

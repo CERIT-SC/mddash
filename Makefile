@@ -27,21 +27,51 @@ help: ## Show this help
 
 # ==================== FORMAT / LINT ====================
 
-.PHONY: format
-format: ## Format and lint-fix all code (Python via ruff, frontend via prettier)
+.PHONY: fix
+fix: ## Auto-fix formatting and lint issues (Python via ruff, frontend via prettier/eslint)
 	ruff format .
 	ruff check . --fix
-	cd dashboard/ui && pnpm run format
-	cd landing && pnpm run format
+	cd dashboard/ui && corepack pnpm run format && corepack pnpm exec eslint . --fix
+	cd landing && corepack pnpm run format
 
 .PHONY: lint
-lint: ## Check Python linting without auto-fix
+lint: lint-py lint-ui ## Check linting without auto-fix
+
+.PHONY: lint-py
+lint-py: ## Check Python linting
 	ruff check .
+
+.PHONY: lint-ui
+lint-ui: ## Check frontend linting (dashboard/ui via eslint)
+	cd dashboard/ui && corepack pnpm exec eslint . --max-warnings=0
+
+.PHONY: format-check
+format-check: format-check-py format-check-ui ## Check formatting without modifying files
+
+.PHONY: format-check-py
+format-check-py: ## Check Python formatting
+	ruff format . --diff
+
+.PHONY: format-check-ui
+format-check-ui: ## Check frontend formatting (dashboard/ui and landing via prettier)
+	cd dashboard/ui && corepack pnpm run format:check
+	cd landing && corepack pnpm run format:check
+
+.PHONY: lint-helm
+lint-helm: ## Validate Helm charts
+	helm lint helm/charts/mdrun-api
+	helm template mdrun-api helm/charts/mdrun-api >/dev/null
+	$(MAKE) -C helm render
+	helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ >/dev/null
+	helm repo update jupyterhub >/dev/null
+	helm dependency build helm/charts/mddash
+	helm lint helm/charts/mddash
+	helm template mddash helm/charts/mddash >/dev/null
 
 # ==================== TYPE CHECK ====================
 
 .PHONY: type-check
-type-check: type-check-dashboard-api type-check-dashboard-auth type-check-mdrun-api type-check-ui ## Run type checks on all components
+type-check: type-check-dashboard-api type-check-dashboard-auth type-check-mdrun-api type-check-ui type-check-landing ## Run type checks on all components
 
 .PHONY: type-check-dashboard-api
 type-check-dashboard-api: ## Type-check dashboard API
@@ -57,7 +87,11 @@ type-check-mdrun-api: ## Type-check mdrun-api
 
 .PHONY: type-check-ui
 type-check-ui: ## Type-check dashboard UI (TypeScript)
-	cd dashboard/ui && pnpm run type-check
+	cd dashboard/ui && corepack pnpm run type-check
+
+.PHONY: type-check-landing
+type-check-landing: ## Type-check landing page (TypeScript)
+	cd landing && corepack pnpm run type-check
 
 # ==================== TEST ====================
 
@@ -142,11 +176,9 @@ status: ## Show deployment status
 logs: ## Show deployment logs
 	@$(MAKE) -C helm logs ENV=$(ENV)
 
-mdrun_api_values := $(if $(filter dev,$(ENV)),helm/charts/mdrun-api/values.dev.yaml,helm/charts/mdrun-api/values.yaml)
-
 .PHONY: resources
 resources: ## Show resource budget and recommended namespace quota values (offline)
-	@python3 scripts/resource_summary.py $(config) $(mdrun_api_values)
+	@python3 scripts/resource_summary.py $(config)
 
 # ==================== ROLLBACK ====================
 
@@ -165,7 +197,7 @@ demo: ## Run local demo (real Flask API in demo profile + React dev server)
 	API_PID=$$!; \
 	echo "Flask API started (PID: $$API_PID)"; \
 	echo "Starting React dev server..."; \
-	cd dashboard/ui && pnpm run dev & \
+	cd dashboard/ui && corepack pnpm run dev & \
 	VITE_PID=$$!; \
 	echo "React dev server started (PID: $$VITE_PID)"; \
 	echo "Demo running - Press Ctrl+C to stop"; \

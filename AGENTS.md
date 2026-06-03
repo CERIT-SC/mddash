@@ -16,6 +16,7 @@ graph TB
         JH[JupyterHub Hub]
         MA[MDRun API]
         GT[Gromacs Tuner]
+        LP[Landing Page - Caddy]
     end
 
     subgraph "User Namespace (per user)"
@@ -32,7 +33,9 @@ graph TB
         S3S[S3 Storage]
     end
 
+    User[User] -->|Browse| LP
     User[User] -->|OAuth| JH
+    LP -->|Link to Hub| JH
     JH -->|Spawn Pod| P
     P --> A
     P --> API
@@ -56,7 +59,7 @@ graph TB
 | **Sidecar Container Pattern** | All user pods | Proxy, Auth, API, S3-Sync run alongside JupyterHub Singleuser |
 | **Pre-Spawn Hook Pattern** | JupyterHub | Dynamically provisions user infrastructure before notebook startup |
 | **Active Record Pattern** | Dashboard API, MDRun API | Models encapsulate data persistence and orchestration logic |
-| **Background Polling Pattern** | MDRun API | Daemon threads query Kubernetes for job status updates |
+| **CronJob Polling Pattern** | MDRun API | Scheduled one-shot Kubernetes CronJob queries job status and updates SQLite |
 | **TanStack Query Pattern** | Dashboard UI | Server state management via custom hooks with automatic polling |
 | **Repository Pattern** | Dashboard UI, Dashboard API | Centralized API clients with consistent error handling |
 | **Template-Based Configuration** | Helm Charts | gomplate/Go templates rendered for environment-specific deployments |
@@ -155,6 +158,7 @@ sequenceDiagram
 | **Dashboard Proxy** | `dashboard/proxy/` | See `dashboard/proxy/Caddyfile` | Caddy reverse proxy, static UI serving, routes to JupyterHub Singleuser |
 | **Dashboard S3-Sync** | `dashboard/s3-sync/` | See `dashboard/s3-sync/sync.sh` | Bidirectional S3 synchronization |
 | **MDRun API** | `mdrun-api/` | `mdrun-api/AGENTS.md` | GROMACS and AMBER job management API |
+| **Landing Page** | `landing/` | `landing/AGENTS.md` | Public landing page served at root path |
 | **Helm Charts** | `helm/charts/mddash/` | `helm/charts/mddash/AGENTS.md` | Multi-tenant JupyterHub deployment |
 
 ### Key Application Entry Points
@@ -170,6 +174,10 @@ sequenceDiagram
 **MDRun API:**
 - `mdrun-api/app.py` - Flask application factory
 - `mdrun-api/routes.py` - API endpoints
+
+**Landing Page:**
+- `landing/src/main.tsx` - React entry point
+- `landing/vite.config.ts` - Build configuration with single-file plugin
 
 **Helm Charts:**
 - `helm/charts/mddash/values.yaml.tmpl` - Configuration template (includes JupyterHub Singleuser configuration)
@@ -188,7 +196,7 @@ sequenceDiagram
 Run from repo root before claiming any Python code is correct. Each command must pass before moving to the next.
 
 ```bash
-make format
+make fix
 make type-check
 make test
 ```

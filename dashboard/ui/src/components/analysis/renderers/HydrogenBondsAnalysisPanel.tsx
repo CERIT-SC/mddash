@@ -130,7 +130,7 @@ const HydrogenBondsAnalysisPanel: FC<{ data: HydrogenBondsAnalysis }> = ({ data 
 
   const selectedInteraction = interactions.find((entry) => entry.id === selectedInteractionId)
 
-  const activeMatrix = selectedInteraction?.hbonds ?? []
+  const activeMatrix = useMemo(() => selectedInteraction?.hbonds ?? [], [selectedInteraction])
   const frameCount = useMemo(() => activeMatrix.reduce((max, row) => Math.max(max, row.length), 0), [activeMatrix])
 
   const countsPerFrame = useMemo(() => countSeries(activeMatrix), [activeMatrix])

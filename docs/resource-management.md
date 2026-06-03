@@ -9,7 +9,7 @@ Each user gets an isolated Kubernetes namespace (`{helm-package}-user-{username}
 | Always-on | While the user is logged in | JupyterHub singleuser pod + sidecars (proxy, auth, api, s3sync) |
 | On-demand | User-initiated, short to long-lived | Notebook pods, analysis jobs |
 
-The hub namespace (`md-dashboard-ns`) hosts JupyterHub itself, mdrun-api, and the GROMACS tuner — those are not covered by per-user quotas.
+The hub namespace (`md-dashboard-ns`) hosts JupyterHub itself, mdrun-api, the GROMACS tuner, and the landing page — those are not covered by per-user quotas.
 
 ---
 

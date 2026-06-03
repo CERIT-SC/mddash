@@ -42,10 +42,10 @@ spec:
               fieldPath: metadata.namespace
         - name: PVC_NAME
           value: "mdrun-api-data"
-        - name: UWSGI_PROCESSES
-          value: "{{ .Values.uwsgi.processes }}"
-        - name: UWSGI_THREADS
-          value: "{{ .Values.uwsgi.threads }}"
+        - name: GUNICORN_WORKERS
+          value: "{{ .Values.gunicorn.workers }}"
+        - name: GUNICORN_THREADS
+          value: "{{ .Values.gunicorn.threads }}"
         - name: TZ
           value: "UTC"
         {{- if .Values.env }}
