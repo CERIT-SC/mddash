@@ -137,9 +137,7 @@ If the public MDDB API can return metadata but cannot return downloadable files 
 
 Add or clarify configuration values in `config.yaml` and environment rendering:
 
-- `mdpositUrl`: base MDPosit client URL, for example `https://mdrepo.eu/`.
-- `mdpositRestUrl`: REST API URL, default derived from `mdpositUrl` as `<mdpositUrl>/api/` when not explicitly set.
-- `mdpositVreLiteUrl`: VRE Lite URL, default derived from `mdpositUrl` as `<mdpositUrl>/vre_lite/` when not explicitly set.
+- `mdpositUrl`: base MDPosit client URL, for example `https://mdrepo.eu/`. The REST API URL and VRE Lite URL are derived from this as `<mdpositUrl>/api/` and `<mdpositUrl>/vre_lite/` respectively.
 - Trusted parent host: hardcode `mdposit.mddbr.eu` as a trusted MDPosit parent repository host.
 - Configured MDPosit host: derive the deploy-specific trusted host, such as `mdrepo.eu`, from `mdpositUrl`.
 
