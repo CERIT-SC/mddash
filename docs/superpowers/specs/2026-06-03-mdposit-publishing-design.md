@@ -67,7 +67,7 @@ The current `mdrepo_id` and `mdrepo_published` fields are too narrow for two tar
 Proposed publication fields:
 
 - `publish_target`: nullable string, values `invenio` or `mdposit`.
-- `publish_status`: nullable string, values such as `draft`, `exported`, `published`.
+- `publish_status`: nullable enum backed by a new backend `PublishStatus` enum with values `draft`, `exported`, and `published`.
 - `publish_id`: nullable string, Invenio record/draft ID or final MDPosit accession.
 - `publish_url`: nullable string, final external project/draft URL when known.
 
@@ -80,8 +80,8 @@ Proposed source provenance fields:
 Migration behavior:
 
 - Existing `mdrepo_id` values migrate to `publish_id` with `publish_target='invenio'`.
-- Existing `mdrepo_published=True` migrates to `publish_status='published'`.
-- Existing `mdrepo_published=False` migrates to `publish_status='draft'`.
+- Existing `mdrepo_published=True` migrates to `PublishStatus.PUBLISHED`.
+- Existing `mdrepo_published=False` migrates to `PublishStatus.DRAFT`.
 - Legacy fields may remain temporarily if that is the least disruptive path, but new code should use the target-aware fields.
 
 ## Frontend Components
@@ -165,9 +165,9 @@ MDPosit errors are local and explicit:
 
 State semantics:
 
-- `exported`: MDDash generated the MDPosit handoff package.
-- `draft`: Invenio draft exists.
-- `published`: final external record/accession is verified.
+- `PublishStatus.EXPORTED`: MDDash generated the MDPosit handoff package.
+- `PublishStatus.DRAFT`: Invenio draft exists.
+- `PublishStatus.PUBLISHED`: final external record/accession is verified.
 
 ## Demo Support
 
