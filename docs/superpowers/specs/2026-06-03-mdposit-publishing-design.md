@@ -83,7 +83,8 @@ Migration behavior:
 - Publish step target selector, defaulting to the existing Invenio target.
 - Invenio UI state remains functionally unchanged: OAuth connect, publish, and view/edit draft.
 - MDPosit UI state explains the handoff clearly.
-- MDPosit handoff action provides individual download links for the metadata file and required MD files.
+- MDPosit file selection UI lets the user pick structure, topology, and trajectory files from the experiment directory using the existing `FileSelector` with extension filters.
+- MDPosit handoff action provides individual download links for the selected metadata file and selected MD files.
 - MDPosit instructions tell the user to open VRE Lite, upload the metadata file first, review the metadata form, then upload structure/topology/trajectory files.
 - MDPosit accession-linking UI lets the user enter the final accession after MDPosit processing completes.
 - Setup page keeps the existing DOI/repository field and expands help text to mention MDPosit/MDDB URLs.
@@ -93,18 +94,19 @@ Migration behavior:
 1. User opens the publish step.
 2. Target selector defaults to the existing Invenio target.
 3. User selects MDPosit/MDDB.
-4. Backend validates that MDDash can create a VRE Lite-compatible metadata file and identify the MD files required for handoff.
-5. Backend generates the VRE Lite metadata file.
-6. UI provides individual download links for:
+4. Backend validates that MDDash can create a VRE Lite-compatible metadata file.
+5. UI presents a `FileSelector` filtered to relevant extensions so the user can choose the structure, topology, and trajectory files for handoff.
+6. Backend generates the VRE Lite metadata file.
+7. UI provides individual download links for:
    - VRE Lite metadata file.
-   - Structure file when available or required by the VRE Lite metadata flow.
-   - Topology file.
-   - Trajectory file or files.
-7. UI also provides a link to `https://mdrepo.eu/vre_lite/` and short instructions.
-8. MDDash marks local state as `publish_target='mdposit'` and `publish_status='exported'` after the user confirms the handoff.
-9. User completes upload and metadata review in VRE Lite manually.
-10. After MDPosit processing creates a project, user links the final accession in MDDash.
-11. MDDash verifies the accession via MDDB REST and stores `publish_id`, `publish_url`, and `publish_status='published'`.
+   - User-selected structure file.
+   - User-selected topology file.
+   - User-selected trajectory file or files.
+8. UI also provides a link to `https://mdrepo.eu/vre_lite/` and short instructions.
+9. MDDash marks local state as `publish_target='mdposit'` and `publish_status='exported'` after the user confirms the handoff.
+10. User completes upload and metadata review in VRE Lite manually.
+11. After MDPosit processing creates a project, user links the final accession in MDDash.
+12. MDDash verifies the accession via MDDB REST and stores `publish_id`, `publish_url`, and `publish_status='published'`.
 
 ## Invenio Publish Flow
 
@@ -150,7 +152,7 @@ Invenio errors keep the current semantics: missing OAuth returns unauthorized, d
 
 MDPosit errors are local and explicit:
 
-- Missing metadata mapping or required MD files returns a validation error describing what is missing. Structure is included when available or required by the VRE Lite metadata flow; topology and trajectory files are the primary MD upload files.
+- Missing metadata mapping or user-selected files returns a validation error describing what is missing.
 - File preparation or handoff failure does not update publication state.
 - Missing VRE Lite URL still allows metadata generation and file download, but the UI does not show an "Open VRE Lite" action.
 - Accession linking verifies the MDPosit project before storing it.
