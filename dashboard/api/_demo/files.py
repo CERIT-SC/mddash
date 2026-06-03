@@ -16,6 +16,13 @@ DEFAULT_INPCRD_FILE = DEMO_DATA_DIR / "md.inpcrd"
 DEFAULT_MDIN_FILE = DEMO_DATA_DIR / "md.mdin"
 DEFAULT_NC_FILE = DEMO_DATA_DIR / "trajectory.nc"
 DEFAULT_AMBER_PDB_FILE = DEMO_DATA_DIR / "amber_structure.pdb"
+MDPOSIT_DEMO_ACCESSION = "MD-DEMO01.1"
+MDPOSIT_DEMO_PROJECT_URL = f"https://mdposit.mddbr.eu/projects/{MDPOSIT_DEMO_ACCESSION}"
+MDPOSIT_DEMO_FILES = {
+    "mdposit/structure.pdb": DEFAULT_PDB_FILE,
+    "mdposit/topology.tpr": DEFAULT_TPR_FILE,
+    "mdposit/trajectory.xtc": DEFAULT_XTC_FILE,
+}
 
 FIXTURE_BY_SUFFIX = {
     ".tpr": DEFAULT_TPR_FILE,
@@ -93,6 +100,20 @@ def ensure_amber_demo_files(
     _copy_if_missing(experiment_dir / "structure.pdb", DEFAULT_AMBER_PDB_FILE)
     _copy_if_missing(experiment_dir / "trajectory.nc", DEFAULT_NC_FILE)
     _copy_if_missing(experiment_dir / f"{Path(prmtop_name).stem}.parm7", DEFAULT_PARM7_FILE)
+
+
+def ensure_mdposit_demo_files(experiment_id: str) -> None:
+    experiment_dir = DATA_DIR / experiment_id
+    experiment_dir.mkdir(parents=True, exist_ok=True)
+    for filename, fixture_path in MDPOSIT_DEMO_FILES.items():
+        _copy_if_missing(experiment_dir / filename, fixture_path)
+
+
+def get_mdposit_fixture_bytes(filename: str) -> bytes | None:
+    fixture_path = MDPOSIT_DEMO_FILES.get(filename)
+    if fixture_path is None:
+        return None
+    return _read_fixture(fixture_path)
 
 
 def _copy_if_missing(dest: Path, src: Path) -> None:
