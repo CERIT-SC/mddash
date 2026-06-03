@@ -25,7 +25,6 @@ Terminology used in this design:
 - Make MDPosit publishing an honest guided handoff to VRE Lite, not a fake automated publish.
 - Let users import/create a MDDash experiment from an existing MDPosit record URL/accession through the existing DOI/repository setup field.
 - Add simple target-aware publication state and source provenance.
-- Avoid MDPosit host, storage, database, or remote execution credentials in MDDash.
 - Update the demo harness so the new flows can be exercised locally.
 
 ## Non-Goals
@@ -35,6 +34,7 @@ Terminology used in this design:
 - Do not upload to VRE Lite programmatically from MDDash. The user uploads the prepared export through the VRE Lite browser UI.
 - Do not claim an MDPosit project is published until a final accession/project ID is verified.
 - Do not integrate directly with MDPosit storage for publish or import in this design.
+- Do not store or require MDPosit host, storage, database, or remote execution credentials in MDDash.
 
 ## Architecture
 
