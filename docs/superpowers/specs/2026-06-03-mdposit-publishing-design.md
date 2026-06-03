@@ -55,7 +55,8 @@ Setup import remains one DOI/repository URL field. DOI and InvenioRDM URLs use t
 - `clients/mdposit.py:download_project(...)`: download files for an MDPosit record when an official REST/client endpoint is available.
 - `clients/mdposit.py` URL helpers: detect trusted MDPosit hosts and extract accession/project IDs.
 - Publish route/model functions: short target-specific functions such as `publish_invenio(...)` and `publish_mdposit(...)` or equivalent module-level functions.
-- `Experiment.from_mdposit(...)`: create a new experiment from an MDPosit record after metadata and files are downloaded.
+- Repo import helpers: keep `Experiment.from_repo(...)` as the single setup entry point for all repository/DOI URLs. It routes to `import_invenio_repo(...)` or `import_mdposit_repo(...)` depending on URL detection.
+- `import_mdposit_repo(...)`: helper that fetches MDPosit metadata and downloads files for `Experiment.from_repo(...)`.
 - Handoff helper: generates the VRE Lite metadata file and serves the required MD files as individual downloads with a short instruction file.
 
 Avoid a new class-heavy abstraction. The existing API uses function modules and model methods; the implementation should stay consistent with that style.
@@ -123,12 +124,11 @@ This flow must remain behaviorally unchanged for users.
 
 1. User enters a DOI/repository URL in the existing setup field.
 2. Resolver follows DOI redirects when needed.
-3. If the URL is an InvenioRDM record, existing `Experiment.from_repo(...)` runs.
-4. If the URL host is `mdposit.mddbr.eu` or the configured MDPosit host, MDDash extracts the accession/project ID.
-5. `clients/mdposit.py` fetches project metadata from configured MDDB REST.
-6. `clients/mdposit.py` downloads the project files from official MDDB endpoints when available.
-7. `Experiment.from_mdposit(...)` creates the experiment from the downloaded files.
-8. The new experiment stores the original source URL for display, the same way other experiment sources are tracked.
+3. `Experiment.from_repo(...)` detects whether the URL is an InvenioRDM record or a trusted MDPosit host.
+4. If InvenioRDM, existing repo download helper runs.
+5. If MDPosit, `import_mdposit_repo(...)` extracts the accession/project ID, fetches metadata from configured MDDB REST, downloads files from official MDDB endpoints when available, and returns the files/metadata needed for experiment creation.
+6. `Experiment.from_repo(...)` creates the experiment from the downloaded files.
+7. The new experiment stores the original source URL for display, the same way other experiment sources are tracked.
 
 If the public MDDB API can return metadata but cannot return downloadable files for a record, MDDash returns a clear error and does not create a partial experiment.
 
@@ -185,6 +185,7 @@ Backend unit tests should cover:
 - Migration maps existing legacy `mdrepo_*` fields to target-aware fields.
 - MDPosit URL detection and accession extraction.
 - MDPosit metadata lookup and file-download-unavailable failure.
+- `import_mdposit_repo(...)` creates an experiment when MDPosit files are available.
 - Config derivation for MDPosit URLs.
 
 Frontend behavior should be verified through the demo instead of assuming a frontend test framework:
