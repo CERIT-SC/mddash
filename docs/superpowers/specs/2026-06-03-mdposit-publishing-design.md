@@ -4,14 +4,13 @@
 
 MDDash currently supports publication through an InvenioRDM-compatible MDRepo integration. The current flow creates an Invenio draft deposition, uploads files directly to that draft, stores the draft/record identifier locally, and opens the Invenio draft UI so the user can complete metadata and explicitly publish.
 
-MDPosit, backed by MDDB, is not an Invenio draft-deposition backend. The verified MDDB/VRE Lite flow is an upload and staging helper: users provide metadata, structure/topology/trajectory files are uploaded through VRE Lite or MinIO-compatible storage, and MDDB workflow/loader processes create the final MDPosit project later. The public MDDB REST API is read/query oriented and does not expose a publish/deposition endpoint.
+MDPosit, backed by MDDB, is not an Invenio draft-deposition backend. The verified MDDB/VRE Lite flow is an upload and staging helper: users provide metadata, upload structure/topology/trajectory files through VRE Lite, and MDDB workflow/loader processes create the final MDPosit project later. The public MDDB REST API is read/query oriented and does not expose a publish/deposition endpoint.
 
 The target deployment is:
 
 - Client: `https://mdrepo.eu/`
 - REST API: `https://mdrepo.eu/api/`
 - VRE Lite: `https://mdrepo.eu/vre_lite/`
-- S3/MinIO API: `https://s3.mdrepo.eu/`
 
 Terminology used in this design:
 
@@ -25,16 +24,16 @@ Terminology used in this design:
 - Make MDPosit publishing an honest guided handoff to VRE Lite, not a fake automated publish.
 - Let users import/create a MDDash experiment from an existing MDPosit record URL/accession through the existing DOI/repository setup field.
 - Add simple target-aware publication state and source provenance.
-- Keep credentials server-side and avoid exposing permanent MDPosit, MinIO, MongoDB, or host credentials to the browser.
+- Avoid MDPosit host, storage, database, or remote execution credentials in MDDash.
 - Update the demo harness so the new flows can be exercised locally.
 
 ## Non-Goals
 
 - Do not run MDDB workflow or loader commands from MDDash.
 - Do not add SSH, VPN, or remote-command automation to the MDPosit host.
-- Do not call VRE Lite `/api/upload` from MDDash for the initial publish flow. The endpoint exists, but it is fire-and-forget staging and cannot be linked to a redirected browser session.
+- Do not upload to VRE Lite programmatically from MDDash. The user uploads the prepared export through the VRE Lite browser UI.
 - Do not claim an MDPosit project is published until a final accession/project ID is verified.
-- Do not expose MinIO internals to end users for import.
+- Do not integrate directly with MDPosit storage for publish or import in this design.
 
 ## Architecture
 
@@ -44,15 +43,15 @@ The existing Invenio/MDRepo path remains the default behavior. It keeps using MD
 
 MDPosit/MDDB uses a guided manual handoff. MDDash prepares a VRE Lite-compatible export: the metadata file is the main artifact, and the export also includes the structure/topology/trajectory files needed by the VRE Lite upload steps. The user downloads the export, opens `https://mdrepo.eu/vre_lite/`, uploads the metadata file first, reviews or fills the VRE Lite form, and uploads the prepared MD files through VRE Lite.
 
-MDDash records this as an export/handoff state. It does not store VRE Lite bucket state because MDDash is not creating the VRE Lite upload. It stores a final MDPosit accession only after the user links an accession and MDDash verifies it through the configured MDDB REST API.
+MDDash records this as an export/handoff state. It does not store VRE Lite upload state because MDDash is not creating the VRE Lite upload. It stores a final MDPosit accession only after the user links an accession and MDDash verifies it through the configured MDDB REST API.
 
-Setup import remains one DOI/repository URL field. DOI and InvenioRDM URLs use the existing archive download path. Trusted MDPosit URLs, including `mdposit.mddbr.eu` and the configured MDPosit host such as `mdrepo.eu`, route through the MDPosit client to fetch metadata and download record files from official MDDB endpoints when available.
+Setup import remains one DOI/repository URL field. DOI and InvenioRDM URLs use the existing archive download path. Trusted MDPosit URLs, including `mdposit.mddbr.eu` and the configured MDPosit host such as `mdrepo.eu`, route through the MDPosit client to fetch metadata and download record files from official MDDB REST/client endpoints when available.
 
 ## Backend Components
 
 - `clients/mdposit.py`: function-based MDPosit client module, parallel to `clients/mdrepo.py`.
 - `clients/mdposit.py:get_project(...)`: fetch MDDB project metadata by accession/project ID.
-- `clients/mdposit.py:download_project(...)`: download files for an MDPosit record when an official endpoint is available.
+- `clients/mdposit.py:download_project(...)`: download files for an MDPosit record when an official REST/client endpoint is available.
 - `clients/mdposit.py` URL helpers: detect trusted MDPosit hosts and extract accession/project IDs.
 - Publish route/model functions: short target-specific functions such as `publish_invenio(...)` and `publish_mdposit(...)` or equivalent module-level functions.
 - `Experiment.from_mdposit(...)`: create a new experiment from an MDPosit record after metadata and files are downloaded.
@@ -147,7 +146,7 @@ Add or clarify configuration values in `config.yaml` and environment rendering:
 - Trusted parent host: hardcode `mdposit.mddbr.eu` as a trusted MDPosit parent repository host.
 - Configured MDPosit host: derive the deploy-specific trusted host, such as `mdrepo.eu`, from `mdpositUrl`.
 
-Do not configure permanent browser-visible MinIO credentials for this flow.
+Do not configure MDPosit storage credentials for this flow. MDDash uses VRE Lite as a user-facing handoff UI and MDDB REST/client endpoints for record lookup/import only.
 
 ## Error Handling
 
@@ -208,5 +207,5 @@ make test
 ## Open Constraints
 
 - Full automated MDPosit publication is not part of this design because the verified VRE Lite upload API does not link server-side uploads to a browser handoff and MDDB REST does not expose a publish endpoint.
-- MDPosit import depends on official MDDB download support. If record files are not available through public/official endpoints, import must fail clearly rather than exposing MinIO internals.
+- MDPosit import depends on official MDDB download support. If record files are not available through public/official REST/client endpoints, import must fail clearly rather than adding direct storage access.
 - The metadata mapping from MDDash experiment data to VRE Lite metadata should be conservative. Fields that cannot be mapped confidently should be left for the user to review or fill in VRE Lite.
