@@ -62,6 +62,7 @@ def _configure_demo_env() -> None:
     os.environ.setdefault("MDREPO_CLIENT_ID", "demo-client")
     os.environ.setdefault("MDREPO_CLIENT_SECRET", "demo-secret")
     os.environ.setdefault("DEFAULT_NOTEBOOKS_REPO", "https://github.com/sb-ncbr/mddash-notebooks.git")
+    os.environ.setdefault("MDPOSIT_URL", "https://mdposit.mddbr.eu")
 
 
 def create_demo_app() -> "Flask":

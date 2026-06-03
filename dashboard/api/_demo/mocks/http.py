@@ -15,7 +15,6 @@ from urllib.parse import unquote
 from uuid import uuid4
 
 import responses
-from clients import mdposit as mdposit_client
 from clients.caddy import CADDY_ADMIN_API_URL
 from config import (
     MDPOSIT_REST_URL,
@@ -50,7 +49,6 @@ def install_http_mocks(rsps: responses.RequestsMock) -> None:
     Args:
         rsps: The RequestsMock instance to register mocks on.
     """
-    _ensure_mdposit_demo_client_config()
     _install_mdrun_mocks(rsps)
     _install_tuner_mocks(rsps)
     _install_mdrepo_mocks(rsps)
@@ -880,14 +878,16 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
     )
     rsps.add_callback(
         responses.GET,
-        re.compile(r"https://mdposit\.mddbr\.eu/api/rest/v1/projects/[^/]+/analyses/[^/?#]+"),
+        re.compile(_mdposit_analysis_pattern()),
         callback=get_analysis,
     )
 
 
-def _ensure_mdposit_demo_client_config() -> None:
-    if not mdposit_client.MDPOSIT_REST_URL:
-        mdposit_client.MDPOSIT_REST_URL = "https://mdposit.mddbr.eu/api/"
+def _mdposit_analysis_pattern() -> str:
+    if MDPOSIT_REST_URL:
+        base = re.escape(MDPOSIT_REST_URL.rstrip("/").removesuffix("/api"))
+        return rf"{base}/api/rest/v1/projects/[^/]+/analyses/[^/?#]+"
+    return r"https://mdposit\.mddbr\.eu/api/rest/v1/projects/[^/]+/analyses/[^/?#]+"
 
 
 def _mdposit_project_base_pattern() -> str:
