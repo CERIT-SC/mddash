@@ -125,7 +125,7 @@ This flow must remain behaviorally unchanged for users.
 1. User enters a DOI/repository URL in the existing setup field.
 2. Resolver follows DOI redirects when needed.
 3. `Experiment.from_repo(...)` detects whether the URL is an InvenioRDM record or a trusted MDPosit host.
-4. If InvenioRDM, existing repo download helper runs.
+4. If InvenioRDM, the existing Invenio `files-archive` download logic inside `Experiment.from_repo(...)` runs.
 5. If MDPosit, `import_mdposit_repo(...)` extracts the accession/project ID, fetches metadata from configured MDDB REST, downloads files from official MDDB endpoints when available, and returns the files/metadata needed for experiment creation.
 6. `Experiment.from_repo(...)` creates the experiment from the downloaded files.
 7. The new experiment stores the original source URL for display, the same way other experiment sources are tracked.
