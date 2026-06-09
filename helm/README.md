@@ -1,4 +1,4 @@
-# MD Dashboard JupyterHub Helm Chart
+# MDDash JupyterHub Helm Chart
 
 This Helm chart deploys JupyterHub with minimal configuration suitable for development and testing.
 
@@ -207,4 +207,4 @@ kubectl describe svc proxy-public -n fida-ns
 - Replace the dummy authenticator with a proper authentication method
 - Configure persistent storage for user data
 - Set up proper ingress with TLS
-- Replace the default single-user image with your custom image containing your MD Dashboard tools
+- Replace the default single-user image with your custom image containing your MDDash tools
