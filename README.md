@@ -149,6 +149,9 @@ Create the target namespace, apply the hub service account RBAC, and create the 
 kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || kubectl create namespace "${NAMESPACE}"
 ```
 
+> [!CAUTION]
+> If you are using Rancher, manually restrict the Resource Quota of the hub namespace in the Rancher UI so user namespaces have room. See `docs/resource-management.md` for sizing guidance.
+
 Apply the cluster-wide RBAC once:
 
 > [!CAUTION]
