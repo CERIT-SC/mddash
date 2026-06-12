@@ -396,7 +396,6 @@ class TestMdpositHandoffSelectedFiles:
             assert "program: GROMACS" in yaml_content
             assert "type: trajectory" in yaml_content
             assert "method: Classical MD" in yaml_content
-            assert "mds:" in yaml_content
 
 
 # ---------------------------------------------------------------------------

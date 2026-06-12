@@ -673,12 +673,4 @@ class Experiment(db.Model):  # type: ignore
             "input_structure_filepath": structure_name,
             "input_topology_filepath": topology_name,
             "input_trajectory_filepaths": [trajectory_name],
-            "mds": [
-                {
-                    "name": "simulation",
-                    "input_structure_filepath": structure_name,
-                    "input_topology_filepath": topology_name,
-                    "input_trajectory_filepaths": [trajectory_name],
-                }
-            ],
         }
