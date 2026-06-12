@@ -433,6 +433,7 @@ dependencies = [
     { name = "gunicorn" },
     { name = "kubernetes" },
     { name = "marshmallow-sqlalchemy" },
+    { name = "pyyaml" },
     { name = "requests" },
     { name = "werkzeug" },
 ]
@@ -458,6 +459,7 @@ requires-dist = [
     { name = "gunicorn" },
     { name = "kubernetes" },
     { name = "marshmallow-sqlalchemy" },
+    { name = "pyyaml" },
     { name = "requests" },
     { name = "werkzeug" },
 ]

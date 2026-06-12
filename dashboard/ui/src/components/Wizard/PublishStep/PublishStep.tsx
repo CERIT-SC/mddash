@@ -230,7 +230,8 @@ const mdpositSelectedDefaults: MdPositSelectedFiles = {
   trajectory: "",
 }
 
-const mdpositFileLabels: Record<MdPositHandoffFile["role"], string> = {
+const mdpositFileLabels: Record<MdPositHandoffFile["role"] | "metadata", string> = {
+  metadata: "Metadata file (inputs.yaml)",
   structure: "Structure file",
   topology: "Topology file",
   trajectory: "Trajectory file",
@@ -300,7 +301,7 @@ const MdPositPublishContent = ({ experiment }: { experiment: Experiment }) => {
         <p className="font-medium">MDPosit publishing workflow</p>
         <ol className="text-muted-foreground mt-2 list-decimal space-y-1 pl-5">
           <li>Open VRE Lite from the link below when available.</li>
-          <li>Upload the metadata file first.</li>
+          <li>Upload the metadata file (inputs.yaml) first.</li>
           <li>Review the imported form and fill any missing fields.</li>
           <li>Upload the selected structure, topology, and trajectory files.</li>
         </ol>
@@ -328,8 +329,8 @@ const MdPositPublishContent = ({ experiment }: { experiment: Experiment }) => {
       )}
 
       {currentHandoffData && (
-        <div className="space-y-3 rounded-md border p-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-3 rounded-md border p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-medium">Handoff downloads</p>
             {currentHandoffData.vre_lite_url && (
               <Button variant="outline" size="sm" asChild>
@@ -340,14 +341,10 @@ const MdPositPublishContent = ({ experiment }: { experiment: Experiment }) => {
               </Button>
             )}
           </div>
-          <div className="flex flex-col gap-2 text-sm">
-            <DownloadLink
-              label="Metadata file"
-              path={currentHandoffData.metadata_file.path}
-              url={currentHandoffData.metadata_file.url}
-            />
+          <div className="grid gap-2 sm:grid-cols-2">
+            <HandoffDownloadButton label={mdpositFileLabels.metadata} url={currentHandoffData.metadata_file.url} />
             {currentHandoffData.files.map((file) => (
-              <DownloadLink key={file.role} label={mdpositFileLabels[file.role]} path={file.path} url={file.url} />
+              <HandoffDownloadButton key={file.role} label={mdpositFileLabels[file.role]} url={file.url} />
             ))}
           </div>
         </div>
@@ -356,12 +353,13 @@ const MdPositPublishContent = ({ experiment }: { experiment: Experiment }) => {
   )
 }
 
-const DownloadLink = ({ label, path, url }: { label: string; path: string; url: string }) => (
-  <a className="text-primary inline-flex items-center gap-2 underline-offset-4 hover:underline" href={url} download>
-    <Download className="h-4 w-4" />
-    <span className="font-medium">{label}:</span>
-    <span className="truncate">{path}</span>
-  </a>
+const HandoffDownloadButton = ({ label, url }: { label: string; url: string }) => (
+  <Button variant="secondary" size="sm" className="w-full justify-start" asChild>
+    <a href={url} download>
+      <Download className="mr-2 h-4 w-4 shrink-0" />
+      <span className="truncate">{label}</span>
+    </a>
+  </Button>
 )
 
 export default PublishStep

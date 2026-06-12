@@ -173,6 +173,7 @@ class TestMdpositPublishNoOAuth:
             data = resp.get_json()
             assert "metadata_file" in data
             assert "files" in data
+            assert len(data["files"]) == len({"structure", "topology", "trajectory"})
             assert "vre_lite_url" in data
 
 
@@ -215,6 +216,7 @@ class TestMdpositPublishNoDbMutation:
             assert exp.mdrepo_id is None
             assert exp.mdrepo_published is None
             assert "metadata_file" in result
+            assert result["metadata_file"]["path"] == "inputs.yaml"
 
     def test_mdposit_publish_does_not_overwrite_existing_mdrepo_fields(self, app: Flask, tmp_path: Path) -> None:
         """If experiment was already published to MDRepo, mdposit publish must not clear those fields."""
@@ -324,10 +326,10 @@ class TestInvenioPublishUnchanged:
 
 
 class TestMdpositHandoffSelectedFiles:
-    """Only user-selected structure/topology/trajectory files appear in handoff."""
+    """Handoff contains individual file links and valid metadata YAML."""
 
-    def test_handoff_includes_only_selected_files(self, app: Flask, tmp_path: Path) -> None:
-        """Result files list should contain exactly the three selected roles."""
+    def test_handoff_includes_metadata_and_files(self, app: Flask, tmp_path: Path) -> None:
+        """Result should contain metadata file and three selected file descriptors."""
         _seed_experiment(app)
         exp_dir = tmp_path / "pubsh"
         exp_dir.mkdir(parents=True, exist_ok=True)
@@ -350,6 +352,8 @@ class TestMdpositHandoffSelectedFiles:
                 },
             )
 
+            assert result["metadata_file"]["path"] == "inputs.yaml"
+            assert result["metadata_file"]["url"].startswith("/dash/api/experiments/pubsh/files/")
             roles = {f["role"] for f in result["files"]}
             assert roles == {"structure", "topology", "trajectory"}
             paths = {f["path"] for f in result["files"]}
@@ -357,35 +361,8 @@ class TestMdpositHandoffSelectedFiles:
             assert "my_top.top" in paths
             assert "my_traj.xtc" in paths
 
-    def test_handoff_file_urls_include_api_prefix(self, app: Flask, tmp_path: Path) -> None:
-        """Each file URL should point to the API files endpoint."""
-        _seed_experiment(app)
-        exp_dir = tmp_path / "pubsh"
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        (exp_dir / "s.gro").write_text("g")
-        (exp_dir / "t.top").write_text("t")
-        (exp_dir / "r.xtc").write_bytes(b"\x00" * 16)
-
-        with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.MDPOSIT_VRE_LITE_URL", ""),
-            app.app_context(),
-        ):
-            exp = Experiment.query.get("pubsh")
-            result = exp.publish(
-                target="mdposit",
-                selected_files={
-                    "structure": "s.gro",
-                    "topology": "t.top",
-                    "trajectory": "r.xtc",
-                },
-            )
-
-            for f in result["files"]:
-                assert f["url"].startswith("/dash/api/experiments/pubsh/files/")
-
-    def test_metadata_file_written(self, app: Flask, tmp_path: Path) -> None:
-        """inputs.yaml metadata file should be written to experiment directory."""
+    def test_metadata_yaml_contains_expected_fields(self, app: Flask, tmp_path: Path) -> None:
+        """inputs.yaml should contain top-level MDDB workflow fields."""
         _seed_experiment(app)
         exp_dir = tmp_path / "pubsh"
         exp_dir.mkdir(parents=True, exist_ok=True)
@@ -410,6 +387,16 @@ class TestMdpositHandoffSelectedFiles:
 
             assert (exp_dir / "inputs.yaml").exists()
             assert result["metadata_file"]["path"] == "inputs.yaml"
+            yaml_content = (exp_dir / "inputs.yaml").read_text()
+            assert yaml_content.startswith("name:")
+            assert "input_structure_filepath: s.pdb" in yaml_content
+            assert "input_topology_filepath: t.top" in yaml_content
+            assert "input_trajectory_filepaths:" in yaml_content
+            assert "- r.xtc" in yaml_content
+            assert "program: GROMACS" in yaml_content
+            assert "type: trajectory" in yaml_content
+            assert "method: Classical MD" in yaml_content
+            assert "mds:" in yaml_content
 
 
 # ---------------------------------------------------------------------------

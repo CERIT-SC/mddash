@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import requests
+import yaml
 from cache import mdrepo_status_cache, step_status_cache
 from cachetools import cached
 from clients import mdposit, mdrepo, metadump
@@ -578,20 +579,6 @@ class Experiment(db.Model):  # type: ignore
         logger.info(f"Queued file upload job '{self.id}' to MDRepo.")
         return mdrepo_experiment
 
-    @staticmethod
-    def _format_mdposit_inputs_yaml(metadata: dict[str, dict[str, str]]) -> str:
-        def quote(value: str) -> str:
-            return '"' + value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
-
-        return "\n".join([
-            "project:",
-            f"  title: {quote(metadata['project']['title'])}",
-            f"  description: {quote(metadata['project']['description'])}",
-            "files:",
-            *(f"  {role}: {quote(filename)}" for role, filename in metadata["files"].items()),
-            "",
-        ])
-
     def _publish_mdposit(self, selected_files: dict[str, str]) -> dict:
         """
         Prepare stateless MDPosit publication metadata for selected experiment files.
@@ -644,18 +631,12 @@ class Experiment(db.Model):  # type: ignore
                 "url": f"{API_PREFIX}/experiments/{self.id}/files/{relative_path}",
             })
 
+        metadata = self._build_mdposit_metadata(selected_paths)
         metadata_file = exp_dir / "inputs.yaml"
         metadata_relative_path = str(metadata_file.relative_to(exp_dir))
-        metadata = {
-            "project": {
-                "title": self.name,
-                "description": self.source_message or "",
-            },
-            "files": {role: path.name for role, path in selected_paths.items()},
-        }
 
         try:
-            metadata_file.write_text(self._format_mdposit_inputs_yaml(metadata), encoding="utf-8")
+            metadata_file.write_text(yaml.safe_dump(metadata, sort_keys=False), encoding="utf-8")
         except OSError as exc:
             raise InternalServerError(description=f"Failed to generate metadata file: {exc}") from exc
 
@@ -666,4 +647,38 @@ class Experiment(db.Model):  # type: ignore
             },
             "files": files,
             "vre_lite_url": MDPOSIT_VRE_LITE_URL or None,
+        }
+
+    def _build_mdposit_metadata(self, selected_paths: dict[str, Path]) -> dict:
+        """
+        Build MDDB-compatible inputs.yaml metadata dict.
+
+        Only fields we can determine without external assumptions are included.
+        The user fills remaining fields in VRE Lite.
+
+        Returns:
+            Dictionary of metadata fields for the inputs.yaml file.
+        """
+        structure_name = selected_paths["structure"].name
+        topology_name = selected_paths["topology"].name
+        trajectory_name = selected_paths["trajectory"].name
+        program = "GROMACS" if self.engine == Engine.GMX else "AMBER" if self.engine == Engine.AMBER else ""
+
+        return {
+            "name": self.name,
+            "description": self.source_message or "",
+            **({"program": program} if program else {}),
+            "type": "trajectory",
+            "method": "Classical MD",
+            "input_structure_filepath": structure_name,
+            "input_topology_filepath": topology_name,
+            "input_trajectory_filepaths": [trajectory_name],
+            "mds": [
+                {
+                    "name": "simulation",
+                    "input_structure_filepath": structure_name,
+                    "input_topology_filepath": topology_name,
+                    "input_trajectory_filepaths": [trajectory_name],
+                }
+            ],
         }

@@ -14,6 +14,7 @@ dependencies = [
     "requests",
     "kubernetes",
     "gunicorn",
+    "pyyaml",
 ]
 
 [dependency-groups]
