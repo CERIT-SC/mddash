@@ -13,5 +13,5 @@ class NotebookTier(str, Enum):
 
     @property
     def multiplier(self) -> int:
-        """Return the integer multiplier for this tier (1, 2, or 4)."""
+        """The integer multiplier for this tier (1, 2, or 4)."""
         return int(self.value.rstrip("x"))

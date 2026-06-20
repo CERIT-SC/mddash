@@ -1,6 +1,8 @@
 import asyncio
+import hashlib
 import json
 import logging
+import re
 import time
 from http import HTTPStatus
 from os import getenv
@@ -284,6 +286,40 @@ def _get_security_context() -> dict:
 
 
 # =============================================================================
+# User Resource Naming
+# =============================================================================
+
+
+_VALID_DNS1123 = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
+_INVALID_DNS1123_CHARS = re.compile(r"[^a-z0-9-]+")
+_REPEATED_HYPHENS = re.compile(r"-+")
+
+
+def _dns1123_label(value: str) -> str:
+    """
+    Map a username to a valid Kubernetes DNS-1123 label.
+
+    Already-valid names pass through unchanged so existing deployments keep their
+    namespaces. Names needing sanitization get a hash suffix of the original value
+    so two usernames that collapse to the same label (e.g. ``john.doe`` and
+    ``john-doe``) cannot land in the same namespace.
+
+    Returns:
+        str: The sanitized label.
+
+    Raises:
+        ValueError: If the value contains no valid label characters.
+    """
+    if _VALID_DNS1123.match(value):
+        return value
+
+    safe = _REPEATED_HYPHENS.sub("-", _INVALID_DNS1123_CHARS.sub("-", value.lower())).strip("-")
+    if not safe:
+        raise ValueError(f"username {value!r} has no valid DNS-1123 characters")
+    return f"{safe}-{hashlib.sha256(value.encode()).hexdigest()[:8]}"
+
+
+# =============================================================================
 # Sidecar Container Builders
 # =============================================================================
 
@@ -539,8 +575,9 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
         hub_namespace = getenv("POD_NAMESPACE", "default")
         rancher_project_id = getenv("RANCHER_PROJECT_ID", "")
 
-        user_namespace = f"{helm_package}-user-{username}-ns"
-        bucket_name = f"{helm_package}-user-{username}"
+        user_slug = _dns1123_label(username)
+        user_namespace = f"{helm_package}-user-{user_slug}-ns"
+        bucket_name = f"{helm_package}-user-{user_slug}"
         pvc_name = f"{helm_package}-user-pvc"
         volume_name = "mddash-volume"
 
@@ -680,7 +717,7 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # n
     try:
         username: str = spawner.user.name  # type: ignore[union-attr]
         helm_package = getenv("HELM_PACKAGE", "mddash")
-        user_namespace = f"{helm_package}-user-{username}-ns"
+        user_namespace = f"{helm_package}-user-{_dns1123_label(username)}-ns"
         rancher_project_id = getenv("RANCHER_PROJECT_ID", "")
 
         zero_quota_manifest = _get_namespace_manifest(user_namespace, rancher_project_id, "0", "0", "0", "0")

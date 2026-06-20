@@ -32,12 +32,6 @@ from auth import _sessions  # noqa: PLC2701
 from auth import app as auth_app
 
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_env() -> None:
-    """Ensure environment is set for all tests."""
-    return
-
-
 @pytest.fixture
 def app() -> Flask:
     """

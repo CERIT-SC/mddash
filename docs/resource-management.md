@@ -4,6 +4,8 @@
 
 Each user gets an isolated Kubernetes namespace (`{helm-package}-user-{username}-ns`) managed by JupyterHub's pre-spawn hook. Two categories of workload run there:
 
+> `{username}` is normalized to a Kubernetes DNS-1123-safe slug, so OIDC usernames containing dots or other invalid characters (e.g. `john.doe` → `john-doe`) do not break namespace creation. The raw username is still used for JupyterHub routing.
+
 | Category | Lifetime | Examples |
 |---|---|---|
 | Always-on | While the user is logged in | JupyterHub singleuser pod + sidecars (proxy, auth, api, s3sync) |
