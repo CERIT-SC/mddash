@@ -1,4 +1,4 @@
-# MD Dash API
+# MDDash API
 
 ## Mission Statement
 

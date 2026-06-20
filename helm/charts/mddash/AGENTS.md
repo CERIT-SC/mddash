@@ -2,7 +2,7 @@
 
 ## Mission Statement
 
-Deploys a multi-tenant JupyterHub environment with MD Dashboard for molecular dynamics simulations, providing isolated user namespaces with sidecar services for authentication, API access, and S3 synchronization.
+Deploys a multi-tenant JupyterHub environment with MDDash for molecular dynamics simulations, providing isolated user namespaces with sidecar services for authentication, API access, and S3 synchronization.
 
 ## Architecture & Patterns
 

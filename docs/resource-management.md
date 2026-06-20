@@ -4,6 +4,8 @@
 
 Each user gets an isolated Kubernetes namespace (`{helm-package}-user-{username}-ns`) managed by JupyterHub's pre-spawn hook. Two categories of workload run there:
 
+> `{username}` is normalized to a Kubernetes DNS-1123-safe slug, so OIDC usernames containing dots or other invalid characters (e.g. `john.doe` → `john-doe`) do not break namespace creation. The raw username is still used for JupyterHub routing.
+
 | Category | Lifetime | Examples |
 |---|---|---|
 | Always-on | While the user is logged in | JupyterHub singleuser pod + sidecars (proxy, auth, api, s3sync) |
@@ -94,6 +96,12 @@ Set `resources.namespaceQuota.*` in `config.yaml` (or `config.dev.yaml`) to valu
 
 ## Setting quotas in Rancher
 
+### Hub namespace quota
+
+Rancher project limits are shared between the hub namespace and every user namespace. The user namespace quotas are set automatically by MDDash from `resources.namespaceQuota.*` in `config.yaml`, but the hub namespace quota is not. You must manually cap it in the Rancher UI.
+
+In Rancher, open **Cluster → Projects/Namespaces**, select your project, find the hub namespace, click **⋮ → Edit Config**, and set its Resource Quota so the project limit minus the hub quota leaves enough room for at least one user namespace at full load. Use `make resources` to see the exact CPU and memory totals MDDash will request for each user namespace.
+
 1. Edit `resources.namespaceQuota.*` in `config.yaml`.
 2. Run `make deploy` — renders values into the hub's `extraEnv`; the pre-spawn hook applies them when creating user namespaces.
 3. **Existing namespaces** are only updated on next login. To force an immediate update, patch the namespace annotation manually or delete the namespace.
@@ -101,8 +109,8 @@ Set `resources.namespaceQuota.*` in `config.yaml` (or `config.dev.yaml`) to valu
 ### Using `make resources`
 
 ```
-make resources  # uses ENV=dev
-make resources ENV=prod
+make resources  # uses config.yaml
+make resources ENV=dev  # uses config.dev.yaml
 ```
 
 Prints per-component breakdown, formula minimums, and a comparison against the configured quota values. Run this before setting Rancher quotas.

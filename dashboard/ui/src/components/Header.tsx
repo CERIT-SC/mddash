@@ -46,7 +46,7 @@ const Header = () => {
         {/* Title */}
         <div className="flex-1 text-center">
           <Link to="/" className="text-primary-foreground hover:text-primary-foreground no-underline">
-            <h1 className="text-2xl font-bold tracking-tight">MD Dash</h1>
+            <h1 className="text-2xl font-bold tracking-tight">MDDash</h1>
           </Link>
         </div>
 

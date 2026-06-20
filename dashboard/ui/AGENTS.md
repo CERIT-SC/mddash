@@ -1,4 +1,4 @@
-# MD Dash UI
+# MDDash UI
 
 ## Mission Statement
 
