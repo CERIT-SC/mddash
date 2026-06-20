@@ -87,7 +87,7 @@ class Notebook(db.Model):  # type: ignore
 
     @property
     def status(self) -> PodStatus:
-        """Get the status of the notebook pod."""
+        """The status of the notebook pod."""
         pod_name = f"notebook-{self.experiment_id}"
         return k8s.get_pod_status(pod_name)
 

@@ -43,7 +43,7 @@ class MdrunJob(db.Model):  # type: ignore
 
     @property
     def status(self) -> JobStatus:
-        """Get the current job status from Kubernetes and update the database."""
+        """The current job status from Kubernetes; the database row is updated as a side effect."""
         job_status = k8s_client.get_job_status(ns=NAMESPACE, name=self.job_name)
 
         if job_status == JobStatus.UNKNOWN:

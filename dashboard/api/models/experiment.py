@@ -112,7 +112,7 @@ class Experiment(db.Model):  # type: ignore
 
     @property
     def mdrepo_record_url(self) -> str | None:
-        """Get the MDRepo record URL if published."""
+        """The MDRepo record URL if published."""
         if self.mdrepo_id:
             return f"{MDREPO_URL}/{MDREPO_RECORD_NAME}/uploads/{self.mdrepo_id}"
         return None
