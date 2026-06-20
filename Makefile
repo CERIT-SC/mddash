@@ -96,7 +96,7 @@ type-check-landing: ## Type-check landing page (TypeScript)
 # ==================== TEST ====================
 
 .PHONY: test
-test: test-dashboard-api test-dashboard-auth test-mdrun-api test-helm-hook ## Run all tests
+test: test-dashboard-api test-dashboard-auth test-mdrun-api test-pre-spawn-hook ## Run all tests
 
 .PHONY: test-dashboard-api
 test-dashboard-api: ## Run dashboard API tests
@@ -110,8 +110,8 @@ test-dashboard-auth: ## Run dashboard auth tests
 test-mdrun-api: ## Run mdrun-api tests
 	cd mdrun-api && uv run pytest
 
-.PHONY: test-helm-hook
-test-helm-hook: ## Run pre-spawn hook unit tests
+.PHONY: test-pre-spawn-hook
+test-pre-spawn-hook: ## Run pre-spawn hook unit tests
 	uv run --group dev pytest helm/charts/mddash/tests/
 
 # ==================== BUILD ====================

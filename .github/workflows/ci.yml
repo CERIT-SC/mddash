@@ -85,7 +85,7 @@ jobs:
       - run: uv sync --group dev --no-install-project
       - run: uv run pytest
 
-  test-helm-hook:
+  test-pre-spawn-hook:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6

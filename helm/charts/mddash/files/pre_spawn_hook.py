@@ -293,30 +293,44 @@ def _get_security_context() -> dict:
 _VALID_DNS1123 = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 _INVALID_DNS1123_CHARS = re.compile(r"[^a-z0-9-]+")
 _REPEATED_HYPHENS = re.compile(r"-+")
+DNS1123_LABEL_MAX = 63
+_HASH_SUFFIX_LEN = 9  # "-" + 8 hex chars from sha256
 
 
-def _dns1123_label(value: str) -> str:
+def _dns1123_label(value: str, max_length: int = DNS1123_LABEL_MAX) -> str:
     """
-    Map a username to a valid Kubernetes DNS-1123 label.
+    Map a username to a valid Kubernetes DNS-1123 label no longer than ``max_length``.
 
-    Already-valid names pass through unchanged so existing deployments keep their
-    namespaces. Names needing sanitization get a hash suffix of the original value
-    so two usernames that collapse to the same label (e.g. ``john.doe`` and
-    ``john-doe``) cannot land in the same namespace.
+    Already-valid names short enough to fit pass through unchanged so existing
+    deployments keep their namespaces. Any name that needs sanitization or would
+    exceed ``max_length`` gets an 8-char SHA-256 suffix of the original value, so
+    two usernames that collapse to the same label (e.g. ``john.doe`` and
+    ``john-doe``) or are both truncated cannot land in the same namespace.
 
     Returns:
         str: The sanitized label.
 
     Raises:
-        ValueError: If the value contains no valid label characters.
+        ValueError: If the value contains no valid label characters, or
+            ``max_length`` is too small to hold a label plus the hash suffix.
     """
-    if _VALID_DNS1123.match(value):
+    if _VALID_DNS1123.match(value) and len(value) <= max_length:
         return value
+
+    digest = hashlib.sha256(value.encode()).hexdigest()[:8]
+    budget = max_length - _HASH_SUFFIX_LEN
+    if budget < 1:
+        raise ValueError(f"max_length {max_length} leaves no room for a label")
 
     safe = _REPEATED_HYPHENS.sub("-", _INVALID_DNS1123_CHARS.sub("-", value.lower())).strip("-")
     if not safe:
         raise ValueError(f"username {value!r} has no valid DNS-1123 characters")
-    return f"{safe}-{hashlib.sha256(value.encode()).hexdigest()[:8]}"
+
+    if len(safe) > budget:
+        safe = safe[:budget].rstrip("-")
+        if not safe:
+            raise ValueError(f"username {value!r} has no valid DNS-1123 characters")
+    return f"{safe}-{digest}"
 
 
 # =============================================================================
@@ -575,7 +589,7 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
         hub_namespace = getenv("POD_NAMESPACE", "default")
         rancher_project_id = getenv("RANCHER_PROJECT_ID", "")
 
-        user_slug = _dns1123_label(username)
+        user_slug = _dns1123_label(username, max_length=DNS1123_LABEL_MAX - len(f"{helm_package}-user-") - len("-ns"))
         user_namespace = f"{helm_package}-user-{user_slug}-ns"
         bucket_name = f"{helm_package}-user-{user_slug}"
         pvc_name = f"{helm_package}-user-pvc"
@@ -717,7 +731,7 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # n
     try:
         username: str = spawner.user.name  # type: ignore[union-attr]
         helm_package = getenv("HELM_PACKAGE", "mddash")
-        user_namespace = f"{helm_package}-user-{_dns1123_label(username)}-ns"
+        user_namespace = f"{helm_package}-user-{_dns1123_label(username, max_length=DNS1123_LABEL_MAX - len(f'{helm_package}-user-') - len('-ns'))}-ns"
         rancher_project_id = getenv("RANCHER_PROJECT_ID", "")
 
         zero_quota_manifest = _get_namespace_manifest(user_namespace, rancher_project_id, "0", "0", "0", "0")
