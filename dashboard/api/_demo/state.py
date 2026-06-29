@@ -10,7 +10,21 @@ from typing import Any, TypeVar
 
 from enums import PodStatus
 
+from .files import MDPOSIT_DEMO_ACCESSION, MDPOSIT_DEMO_FILES
+
 ModelType = TypeVar("ModelType")
+
+
+def _default_mdposit_projects() -> dict[str, dict[str, Any]]:
+    return {
+        MDPOSIT_DEMO_ACCESSION: {
+            "id": MDPOSIT_DEMO_ACCESSION,
+            "accession": MDPOSIT_DEMO_ACCESSION,
+            "title": "Demo MDPosit lysozyme trajectory",
+            "description": "Offline demo project for MDPosit import flows.",
+            "files": list(MDPOSIT_DEMO_FILES),
+        }
+    }
 
 
 @dataclass
@@ -84,6 +98,7 @@ class DemoState:
     analysis_jobs: dict[str, dict[str, Any]] = field(default_factory=dict)
     mdrepo_records: dict[str, bool] = field(default_factory=dict)
     mdrepo_counter: int = 1
+    mdposit_projects: dict[str, dict[str, Any]] = field(default_factory=_default_mdposit_projects)
 
     def reset(self) -> None:
         """Clear all runtime state."""
@@ -93,6 +108,7 @@ class DemoState:
         self.analysis_jobs.clear()
         self.mdrepo_records.clear()
         self.mdrepo_counter = 1
+        self.mdposit_projects = _default_mdposit_projects()
         self.initialized = False
 
     def get_notebook_status(self, experiment_id: str) -> PodStatus:

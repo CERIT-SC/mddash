@@ -44,6 +44,7 @@ EXCLUDED_FILES: list[str] = [
     "*.tmp",
     ".nfs*",
     ".binder-env-installed",
+    "inputs.yaml",
 ]
 
 

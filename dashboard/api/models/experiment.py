@@ -5,21 +5,23 @@ import zipfile
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
-from shutil import rmtree
+from shutil import move, rmtree
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import requests
+import yaml
 from cache import mdrepo_status_cache, step_status_cache
 from cachetools import cached
-from clients import mdrepo, metadump
-from config import DATA_DIR, MDREPO_RECORD_NAME, MDREPO_URL
+from clients import mdposit, mdrepo, metadump
+from config import API_PREFIX, DATA_DIR, MDPOSIT_URL, MDPOSIT_VRE_LITE_URL, MDREPO_RECORD_NAME, MDREPO_URL
 from enums import Engine, JobStatus, PodStatus
 from extensions import db
 from flask import session
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from token_manager import MDRepoTokenManager
 from utils import download_git_repo, get_files_with_extensions, get_unique_id
+from validators import check_path
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 from werkzeug.utils import secure_filename
@@ -33,6 +35,83 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_repo_link(repo_link: str) -> str:
+    resolved = repo_link.strip().rstrip("/")
+    if urlparse(resolved).netloc == "doi.org":
+        response = requests.head(resolved, allow_redirects=True, timeout=30)
+        resolved = response.url.rstrip("/")
+
+    return resolved
+
+
+def _safe_extract_zip(zf: zipfile.ZipFile, output_dir: Path) -> None:
+    resolved_output_dir = output_dir.resolve()
+    for member in zf.infolist():
+        output_path = (output_dir / member.filename).resolve()
+        try:
+            output_path.relative_to(resolved_output_dir)
+        except ValueError as exc:
+            raise BadRequest(description=f"Unsafe path in repository archive: {member.filename}") from exc
+
+        zf.extract(member, output_dir)
+
+
+def _import_invenio_repo(repo_link: str, experiment_id: str) -> None:
+    # Parse InvenioRDM-compatible URL (Zenodo, MDRepo, etc.)
+    # UI URL format:  {scheme}://{host}/[collection/]records/{id}
+    # API URL format: {scheme}://{host}/api/{collection_or_records}/{id}/files-archive
+    parsed = urlparse(repo_link)
+    path_parts = [p for p in parsed.path.split("/") if p]
+    record_id: str = path_parts[-1]
+    records_idx: int = path_parts.index("records")  # raises ValueError if missing
+    prefix_parts: list[str] = path_parts[:records_idx]
+    api_segment: str = "/".join(prefix_parts) if prefix_parts else "records"
+    url: str = f"{parsed.scheme}://{parsed.netloc}/api/{api_segment}/{record_id}/files-archive"
+
+    with tempfile.NamedTemporaryFile(suffix=".zip") as tmp_file:
+        tmp_path = Path(tmp_file.name)
+        with requests.get(url, stream=True, timeout=300) as response:
+            if response.status_code == HTTPStatus.NOT_FOUND:
+                raise NotFound(description=f"Repository '{repo_link}' not found.")
+            if response.status_code != HTTPStatus.OK:
+                raise InternalServerError(description=f"Failed to download repository: {response.status_code}")
+
+            # 128KB chunk size for better performance with large files
+            for chunk in response.iter_content(chunk_size=128 * 1024):
+                tmp_file.write(chunk)
+
+        tmp_file.flush()
+        with zipfile.ZipFile(tmp_path) as zf:
+            _safe_extract_zip(zf, DATA_DIR / experiment_id)
+
+
+def _import_mdposit_repo(repo_link: str, experiment_id: str) -> None:
+    accession = mdposit.extract_accession(repo_link)
+    if not accession:
+        raise BadRequest(description="Missing MDPosit project accession.")
+
+    output_dir = DATA_DIR / experiment_id
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        mdposit.get_project(accession)
+        with tempfile.TemporaryDirectory(dir=output_dir) as tmp_dir_name:
+            tmp_dir = Path(tmp_dir_name)
+            downloaded_paths = mdposit.download_project(accession, tmp_dir)
+            resolved_tmp_dir = tmp_dir.resolve()
+
+            for downloaded_path in downloaded_paths:
+                source_path = Path(downloaded_path)
+                relative_path = source_path.resolve().relative_to(resolved_tmp_dir)
+                destination_path = output_dir / relative_path
+                destination_path.parent.mkdir(parents=True, exist_ok=True)
+                move(source_path, destination_path)
+    except ValueError as exc:
+        raise BadRequest(description=str(exc)) from exc
+    except requests.HTTPError as exc:
+        raise InternalServerError(description=f"Failed to download MDPosit project: {exc}") from exc
 
 
 class Experiment(db.Model):  # type: ignore
@@ -227,61 +306,27 @@ class Experiment(db.Model):  # type: ignore
         engine: Engine = Engine.GMX,
     ) -> "Experiment":
         """
-        Create experiment from an InvenioRDM-compatible repository (Zenodo, MDRepo, etc.).
+        Create experiment from a supported repository URL.
 
         Args:
             name: Name of the experiment.
-            repo_link: Repository record URL (e.g., https://zenodo.org/records/1234567
-                       or https://workflow-repo.test.du.cesnet.cz/datasets/records/8gahj-dh519).
+            repo_link: Repository record URL.
             notebooks_repo: Git repository URL containing setup notebooks.
             access_token: Optional GitHub access token for private repositories.
             engine: Molecular dynamics engine (default: GMX).
 
         Returns:
             The created Experiment instance.
-
-        Raises:
-            NotFound: If the repository URL cannot be found.
-            InternalServerError: If the repository download fails.
         """
         experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
 
         try:
-            repo_link = repo_link.strip().rstrip("/")
+            resolved_repo_link = _resolve_repo_link(repo_link)
+            if mdposit.is_mdposit_url(resolved_repo_link):
+                _import_mdposit_repo(resolved_repo_link, experiment_id)
+            else:
+                _import_invenio_repo(resolved_repo_link, experiment_id)
 
-            # Resolve DOI links by following the redirect to the actual record URL
-            if urlparse(repo_link).netloc == "doi.org":
-                doi_response = requests.head(repo_link, allow_redirects=True, timeout=30)
-                repo_link = doi_response.url.rstrip("/")
-
-            # Parse InvenioRDM-compatible URL (Zenodo, MDRepo, etc.)
-            # UI URL format:  {scheme}://{host}/[collection/]records/{id}
-            # API URL format: {scheme}://{host}/api/{collection_or_records}/{id}/files-archive
-            parsed = urlparse(repo_link)
-            path_parts = [p for p in parsed.path.split("/") if p]
-            record_id: str = path_parts[-1]
-            records_idx: int = path_parts.index("records")  # raises ValueError if missing
-            prefix_parts: list[str] = path_parts[:records_idx]
-            api_segment: str = "/".join(prefix_parts) if prefix_parts else "records"
-            url: str = f"{parsed.scheme}://{parsed.netloc}/api/{api_segment}/{record_id}/files-archive"
-            # Download repository to a temporary file
-            with tempfile.NamedTemporaryFile(suffix=".zip") as tmp_file:
-                tmp_path = Path(tmp_file.name)
-                with requests.get(url, stream=True, timeout=300) as response:
-                    if response.status_code == HTTPStatus.NOT_FOUND:
-                        raise NotFound(description=f"Repository '{repo_link}' not found.")
-                    if response.status_code != HTTPStatus.OK:
-                        raise InternalServerError(description=f"Failed to download repository: {response.status_code}")
-
-                    # 128KB chunk size for better performance with large files
-                    for chunk in response.iter_content(chunk_size=128 * 1024):
-                        tmp_file.write(chunk)
-
-                tmp_file.flush()
-                with zipfile.ZipFile(tmp_path) as zf:
-                    zf.extractall(DATA_DIR / experiment_id)
-
-            # Create experiment instance
             message: str = f"Created by downloading repository from '{repo_link}'."
             experiment = cls(
                 id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo, engine=engine
@@ -467,7 +512,28 @@ class Experiment(db.Model):  # type: ignore
         thread = threading.Thread(target=del_dir, args=(DATA_DIR / self.id,), daemon=True)
         thread.start()
 
-    def publish(self, community: str) -> dict:
+    def publish(
+        self,
+        community: str = "ceitec",
+        target: str = "invenio",
+        selected_files: dict[str, str] | None = None,
+    ) -> dict:
+        """
+        Publish the experiment to the selected target.
+
+        Returns:
+            Publication metadata for the selected target.
+
+        Raises:
+            BadRequest: If the publish target is unknown.
+        """
+        if target == "invenio":
+            return self._publish_invenio(community)
+        if target == "mdposit":
+            return self._publish_mdposit(selected_files or {})
+        raise BadRequest(description=f"Unknown publish target: {target}")
+
+    def _publish_invenio(self, community: str) -> dict:
         """
         Publish the experiment to MDRepo into a draft state.
 
@@ -512,3 +578,113 @@ class Experiment(db.Model):  # type: ignore
 
         logger.info(f"Queued file upload job '{self.id}' to MDRepo.")
         return mdrepo_experiment
+
+    def _publish_mdposit(self, selected_files: dict[str, str]) -> dict:
+        """
+        Prepare stateless MDPosit publication metadata for selected experiment files.
+
+        Returns:
+            Metadata file and selected file descriptors for MDPosit publishing.
+
+        Raises:
+            BadRequest: If required selected files are missing or invalid.
+            InternalServerError: If metadata generation fails.
+        """
+        if not MDPOSIT_URL:
+            raise BadRequest(description="MDPosit is not configured. Set MDPOSIT_URL to enable MDPosit publishing.")
+
+        exp_dir = DATA_DIR / self.id
+        if not exp_dir.exists():
+            raise BadRequest(description="Experiment directory not found.")
+        exp_dir_resolved = exp_dir.resolve()
+
+        allowed_extensions = {
+            "structure": {"pdb", "gro"},
+            "topology": {"top", "prmtop", "parm7", "psf"},
+            "trajectory": {"xtc", "trr", "nc", "dcd"},
+        }
+
+        files: list[dict[str, str]] = []
+        selected_paths: dict[str, Path] = {}
+
+        for role, extensions in allowed_extensions.items():
+            relative_path = selected_files.get(role)
+            if not relative_path:
+                raise BadRequest(description=f"Missing required file for role: {role}")
+
+            check_path(relative_path, exp_dir)
+            try:
+                file_path = (exp_dir / relative_path).resolve()
+                file_path.relative_to(exp_dir_resolved)
+            except (OSError, ValueError):
+                raise BadRequest(description=f"Selected file for role '{role}' is invalid.")
+
+            if not file_path.is_file():
+                raise BadRequest(description=f"Selected file for role '{role}' does not exist.")
+
+            extension = file_path.suffix.lstrip(".").lower()
+            if extension not in extensions:
+                allowed = ", ".join(sorted(extensions))
+                raise BadRequest(description=f"Invalid file extension for role '{role}'. Allowed: {allowed}")
+
+            selected_paths[role] = file_path
+            files.append({
+                "role": role,
+                "path": relative_path,
+                "url": self._file_download_url(relative_path),
+            })
+
+        metadata = self._build_mdposit_metadata(selected_paths)
+        metadata_file = exp_dir / "inputs.yaml"
+        metadata_relative_path = str(metadata_file.relative_to(exp_dir))
+
+        try:
+            metadata_file.write_text(yaml.safe_dump(metadata, sort_keys=False), encoding="utf-8")
+        except OSError as exc:
+            raise InternalServerError(description=f"Failed to generate metadata file: {exc}") from exc
+
+        return {
+            "metadata_file": {
+                "path": metadata_relative_path,
+                "url": self._file_download_url(metadata_relative_path),
+            },
+            "files": files,
+            "vre_lite_url": MDPOSIT_VRE_LITE_URL or None,
+        }
+
+    def _file_download_url(self, relative_path: str) -> str:
+        """
+        Build a URL-encoded download link for a file relative to the experiment directory.
+
+        Returns:
+            Absolute API URL with each path segment percent-encoded.
+        """
+        quoted = "/".join(quote(part) for part in Path(relative_path).parts if part)
+        return f"{API_PREFIX}/experiments/{self.id}/files/{quoted}"
+
+    def _build_mdposit_metadata(self, selected_paths: dict[str, Path]) -> dict:
+        """
+        Build MDDB-compatible inputs.yaml metadata dict.
+
+        Only fields we can determine without external assumptions are included.
+        The user fills remaining fields in VRE Lite.
+
+        Returns:
+            Dictionary of metadata fields for the inputs.yaml file.
+        """
+        structure_name = selected_paths["structure"].name
+        topology_name = selected_paths["topology"].name
+        trajectory_name = selected_paths["trajectory"].name
+        program = "GROMACS" if self.engine == Engine.GMX else "AMBER" if self.engine == Engine.AMBER else ""
+
+        metadata: dict[str, object] = {
+            "name": self.name,
+            **({"description": self.source_message} if self.source_message else {}),
+            **({"program": program} if program else {}),
+            "type": "trajectory",
+            "method": "Classical MD",
+            "input_structure_filepath": structure_name,
+            "input_topology_filepath": topology_name,
+            "input_trajectory_filepaths": [trajectory_name],
+        }
+        return metadata

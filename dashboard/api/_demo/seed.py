@@ -10,19 +10,21 @@ from extensions import db
 from models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook, TunerJob
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, MWF_DIR
 
-from .files import ensure_amber_demo_files, ensure_demo_files, write_finished_gmx_log, write_running_gmx_log
+from .files import (
+    MDPOSIT_DEMO_PROJECT_URL,
+    ensure_amber_demo_files,
+    ensure_demo_files,
+    ensure_mdposit_demo_files,
+    write_finished_gmx_log,
+    write_running_gmx_log,
+)
 from .state import build_model, demo_state
 
 logger = logging.getLogger(__name__)
 
 
 def seed_data() -> None:  # noqa: PLR0914
-    demo_state.notebook_status.clear()
-    demo_state.mdrun_jobs.clear()
-    demo_state.tuner_jobs.clear()
-    demo_state.analysis_jobs.clear()
-    demo_state.mdrepo_records.clear()
-    demo_state.mdrepo_counter = 1
+    demo_state.reset()
 
     if Experiment.query.count() > 0:
         _rehydrate_runtime_state()
@@ -356,6 +358,19 @@ def seed_data() -> None:  # noqa: PLR0914
     amber_dna_notebook = build_model(Notebook, experiment_id=amber_dna.id, token="demo-token-dna")
     demo_state.notebook_status[amber_dna.id] = PodStatus.DOWN
 
+    # Experiment 6: MDPosit-imported trajectory bundle
+    mdposit_demo = build_model(
+        Experiment,
+        id="fffff",
+        name="MDPosit imported lysozyme trajectory",
+        source_message=f"Created by downloading repository from '{MDPOSIT_DEMO_PROJECT_URL}'.",
+        notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
+        created_at=now - timedelta(days=1, hours=6),
+        updated_at=now - timedelta(days=1),
+    )
+    mdposit_demo_notebook = build_model(Notebook, experiment_id=mdposit_demo.id, token="demo-token-mdposit")
+    demo_state.notebook_status[mdposit_demo.id] = PodStatus.DOWN
+
     # Finished AMBER DNA job
     finished_amber_dna = build_model(
         AmberJob,
@@ -408,6 +423,8 @@ def seed_data() -> None:  # noqa: PLR0914
         amber_dna,
         amber_dna_notebook,
         finished_amber_dna,
+        mdposit_demo,
+        mdposit_demo_notebook,
     ])
     db.session.commit()
 
@@ -449,6 +466,9 @@ def seed_data() -> None:  # noqa: PLR0914
         inpcrd_name="dna.inpcrd",
         mdin_names=["simulation.mdin"],
     )
+
+    # MDPosit import study: mirrors the project file layout exposed by HTTP mocks.
+    ensure_mdposit_demo_files(mdposit_demo.id)
 
     # Write analysis result files (fetched from MDposit)
     _fetch_and_write_analysis_results(published.id, ["rmsds", "sasa"])
@@ -632,6 +652,7 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
     published = Experiment.query.filter_by(id="ccccc").first()
     amber_folding = Experiment.query.filter_by(id="ddddd").first()
     amber_dna = Experiment.query.filter_by(id="eeeee").first()
+    mdposit_demo = Experiment.query.filter_by(id="fffff").first()
 
     if membrane is not None:
         demo_state.notebook_status[membrane.id] = PodStatus.DOWN
@@ -677,3 +698,7 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
             inpcrd_name="dna.inpcrd",
             mdin_names=["simulation.mdin"],
         )
+
+    if mdposit_demo is not None:
+        demo_state.notebook_status[mdposit_demo.id] = PodStatus.DOWN
+        ensure_mdposit_demo_files(mdposit_demo.id)

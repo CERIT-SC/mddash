@@ -1,6 +1,7 @@
 import logging
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 from logging_utils import configure_logging
 
@@ -102,6 +103,15 @@ MDREPO_TOKEN_URL = f"{MDREPO_URL}/oauth/token"
 
 if not all([MDREPO_URL, MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET, MDREPO_SCOPES]):
     logger.warning("MDRepo configuration incomplete. Publishing to MDRepo will not work properly.")
+
+MDPOSIT_URL = os.environ.get("MDPOSIT_URL", "").rstrip("/")
+MDPOSIT_HOST = urlparse(MDPOSIT_URL).netloc if MDPOSIT_URL else ""
+MDPOSIT_REST_URL = f"{MDPOSIT_URL}/api/" if MDPOSIT_URL else ""
+MDPOSIT_VRE_LITE_URL = f"{MDPOSIT_URL}/vre_lite/" if MDPOSIT_URL else ""
+MDPOSIT_TRUSTED_PARENT_HOST = "mdposit.mddbr.eu"
+
+if not MDPOSIT_URL:
+    logger.warning("MDPOSIT_URL is not set. MDPosit integration will not be available.")
 
 METADUMP_API_URL: str | None = os.environ.get("METADUMP_API_URL")
 
