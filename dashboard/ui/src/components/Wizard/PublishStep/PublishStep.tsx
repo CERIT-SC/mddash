@@ -300,7 +300,8 @@ const MdPositPublishContent = ({ experiment }: { experiment: Experiment }) => {
       <div className="rounded-md border p-3 text-sm">
         <p className="font-medium">MDPosit publishing workflow</p>
         <ol className="text-muted-foreground mt-2 list-decimal space-y-1 pl-5">
-          <li>Open VRE Lite from the link below when available.</li>
+          <li>Prepare the handoff package using the button below.</li>
+          <li>Download all files and open VRE Lite.</li>
           <li>Upload the metadata file (inputs.yaml) first.</li>
           <li>Review the imported form and fill any missing fields.</li>
           <li>Upload the selected structure, topology, and trajectory files.</li>

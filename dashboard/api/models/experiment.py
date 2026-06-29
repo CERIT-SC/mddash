@@ -7,7 +7,7 @@ from http import HTTPStatus
 from pathlib import Path
 from shutil import move, rmtree
 from typing import TYPE_CHECKING
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import requests
 import yaml
@@ -628,7 +628,7 @@ class Experiment(db.Model):  # type: ignore
             files.append({
                 "role": role,
                 "path": relative_path,
-                "url": f"{API_PREFIX}/experiments/{self.id}/files/{relative_path}",
+                "url": self._file_download_url(relative_path),
             })
 
         metadata = self._build_mdposit_metadata(selected_paths)
@@ -643,11 +643,21 @@ class Experiment(db.Model):  # type: ignore
         return {
             "metadata_file": {
                 "path": metadata_relative_path,
-                "url": f"{API_PREFIX}/experiments/{self.id}/files/{metadata_relative_path}",
+                "url": self._file_download_url(metadata_relative_path),
             },
             "files": files,
             "vre_lite_url": MDPOSIT_VRE_LITE_URL or None,
         }
+
+    def _file_download_url(self, relative_path: str) -> str:
+        """
+        Build a URL-encoded download link for a file relative to the experiment directory.
+
+        Returns:
+            Absolute API URL with each path segment percent-encoded.
+        """
+        quoted = "/".join(quote(part) for part in Path(relative_path).parts if part)
+        return f"{API_PREFIX}/experiments/{self.id}/files/{quoted}"
 
     def _build_mdposit_metadata(self, selected_paths: dict[str, Path]) -> dict:
         """
@@ -664,9 +674,9 @@ class Experiment(db.Model):  # type: ignore
         trajectory_name = selected_paths["trajectory"].name
         program = "GROMACS" if self.engine == Engine.GMX else "AMBER" if self.engine == Engine.AMBER else ""
 
-        return {
+        metadata: dict[str, object] = {
             "name": self.name,
-            "description": self.source_message or "",
+            **({"description": self.source_message} if self.source_message else {}),
             **({"program": program} if program else {}),
             "type": "trajectory",
             "method": "Classical MD",
@@ -674,3 +684,4 @@ class Experiment(db.Model):  # type: ignore
             "input_topology_filepath": topology_name,
             "input_trajectory_filepaths": [trajectory_name],
         }
+        return metadata
