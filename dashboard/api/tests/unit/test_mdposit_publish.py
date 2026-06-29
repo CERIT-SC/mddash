@@ -48,6 +48,16 @@ def app(tmp_path: Path) -> Generator[Flask, None, None]:
 
 
 @pytest.fixture
+def _mdposit_configured() -> Generator[None, None, None]:
+    """Ensure MDPOSIT_URL is set for all tests in this module unless overridden."""
+    with patch("models.experiment.MDPOSIT_URL", "https://mdposit.example.com"):
+        yield
+
+
+pytestmark = pytest.mark.usefixtures("_mdposit_configured")
+
+
+@pytest.fixture
 def client(app: Flask) -> FlaskClient:
     """
     Flask test client.
@@ -175,6 +185,34 @@ class TestMdpositPublishNoOAuth:
             assert "files" in data
             assert len(data["files"]) == len({"structure", "topology", "trajectory"})
             assert "vre_lite_url" in data
+
+    def test_mdposit_publish_rejected_when_not_configured(self, app: Flask, tmp_path: Path) -> None:
+        """target=mdposit must return 400 when MDPOSIT_URL is empty."""
+        _seed_experiment(app)
+        exp_dir = tmp_path / "pubsh"
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        (exp_dir / "struct.pdb").write_text("ATOM data")
+        (exp_dir / "topol.top").write_text(" topology ")
+        (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
+
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.MDPOSIT_URL", ""),
+            app.test_client() as c,
+        ):
+            resp = c.post(
+                "/dash/api/experiments/pubsh/publish",
+                json={
+                    "target": "mdposit",
+                    "files": {
+                        "structure": "struct.pdb",
+                        "topology": "topol.top",
+                        "trajectory": "traj.xtc",
+                    },
+                },
+                content_type="application/json",
+            )
+            assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
 # ---------------------------------------------------------------------------

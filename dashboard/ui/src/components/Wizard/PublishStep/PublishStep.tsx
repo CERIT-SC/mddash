@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { DEBUG, MDPOSIT_URL } from "@/util/const"
 import { formatFileSize } from "@/util/helpers"
 import { type Experiment } from "@/util/types"
 import { useFiles } from "@/hooks/use-files"
@@ -29,6 +30,8 @@ import FileSelector from "@/components/FileSelector"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 type PublishTarget = "invenio" | "mdposit"
+
+const mdpositEnabled = DEBUG || MDPOSIT_URL !== ""
 
 const PublishStep = (props: WizardStepProps) => {
   const { experiment } = props
@@ -47,20 +50,22 @@ const PublishStep = (props: WizardStepProps) => {
             <h2 className="text-lg font-semibold">Publish Experiment</h2>
           </div>
 
-          <div className="w-full space-y-2">
-            <Label htmlFor="publish-target">Publication target</Label>
-            <Select value={target} onValueChange={handleTargetChange}>
-              <SelectTrigger id="publish-target" className="w-full">
-                <SelectValue placeholder="Select publication target" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="invenio">Invenio / MDRepo</SelectItem>
-                <SelectItem value="mdposit">MDPosit</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {mdpositEnabled ? (
+            <div className="w-full space-y-2">
+              <Label htmlFor="publish-target">Publication target</Label>
+              <Select value={target} onValueChange={handleTargetChange}>
+                <SelectTrigger id="publish-target" className="w-full">
+                  <SelectValue placeholder="Select publication target" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="invenio">Invenio / MDRepo</SelectItem>
+                  <SelectItem value="mdposit">MDPosit</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
-          {target === "invenio" ? (
+          {target === "invenio" || !mdpositEnabled ? (
             <InvenioPublishContent experiment={experiment} />
           ) : (
             <MdPositPublishContent experiment={experiment} />

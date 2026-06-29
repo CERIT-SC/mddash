@@ -14,7 +14,7 @@ import yaml
 from cache import mdrepo_status_cache, step_status_cache
 from cachetools import cached
 from clients import mdposit, mdrepo, metadump
-from config import API_PREFIX, DATA_DIR, MDPOSIT_VRE_LITE_URL, MDREPO_RECORD_NAME, MDREPO_URL
+from config import API_PREFIX, DATA_DIR, MDPOSIT_URL, MDPOSIT_VRE_LITE_URL, MDREPO_RECORD_NAME, MDREPO_URL
 from enums import Engine, JobStatus, PodStatus
 from extensions import db
 from flask import session
@@ -590,6 +590,9 @@ class Experiment(db.Model):  # type: ignore
             BadRequest: If required selected files are missing or invalid.
             InternalServerError: If metadata generation fails.
         """
+        if not MDPOSIT_URL:
+            raise BadRequest(description="MDPosit is not configured. Set MDPOSIT_URL to enable MDPosit publishing.")
+
         exp_dir = DATA_DIR / self.id
         if not exp_dir.exists():
             raise BadRequest(description="Experiment directory not found.")

@@ -537,9 +537,9 @@ def test_proxy_start_command_gates_on_health_before_caddy(monkeypatch: pytest.Mo
 
 
 def test_proxy_container_built_from_image_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The proxy container is built from PROXY_IMAGE and carries route/user env."""
+    """The proxy container is built from PROXY_IMAGE and carries route/user/env."""
     module = _load_module(monkeypatch)
-    _set_images(monkeypatch, PROXY_IMAGE="proxy:1")
+    _set_images(monkeypatch, PROXY_IMAGE="proxy:1", MDPOSIT_URL="https://mdposit.example.com")
     sc = module._get_security_context()  # noqa: SLF001
 
     container = module._proxy_container("/user/alice", "alice", sc)  # noqa: SLF001
@@ -552,6 +552,7 @@ def test_proxy_container_built_from_image_env(monkeypatch: pytest.MonkeyPatch) -
     env = {e["name"]: e["value"] for e in container["env"]}
     assert env["CADDY_ROUTE_PREFIX"] == "/user/alice"
     assert env["JUPYTERHUB_USER"] == "alice"
+    assert env["MDPOSIT_URL"] == "https://mdposit.example.com"
     assert container["securityContext"]["runAsUser"] == NON_ROOT_UID
 
 

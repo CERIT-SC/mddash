@@ -376,6 +376,7 @@ def _proxy_container(service_prefix: str, username: str, security_context: dict)
                 "name": "DEFAULT_NOTEBOOKS_REPO",
                 "value": getenv("DEFAULT_NOTEBOOKS_REPO", "https://github.com/sb-ncbr/mddash-notebooks.git"),
             },
+            {"name": "MDPOSIT_URL", "value": getenv("MDPOSIT_URL", "")},
         ],
         "resources": {"requests": {"cpu": "10m", "memory": "32Mi"}, "limits": {"cpu": "100m", "memory": "64Mi"}},
         "securityContext": security_context,
