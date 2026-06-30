@@ -142,6 +142,8 @@ mdrunApi:
   platform: linux/amd64
   storage:  # Persistent storage for mdrun-api database
     size: 20Gi
+    # SQLite (WAL) needs a local POSIX filesystem; NFS causes disk I/O errors.
+    storageClassName: zfs-csi
   gunicorn:
     workers: 2
     threads: 4

@@ -10,3 +10,6 @@ spec:
   resources:
     requests:
       storage: {{ .Values.storage.size }}
+  {{- with .Values.storage.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}

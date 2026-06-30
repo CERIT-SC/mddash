@@ -264,16 +264,12 @@ mdrun-api:
     pullPolicy: Always
   storage:
     size: {{ $cfg.mdrunApi.storage.size }}
+    storageClassName: "{{ $cfg.mdrunApi.storage.storageClassName }}"
   gunicorn:
     workers: {{ $cfg.mdrunApi.gunicorn.workers }}
     threads: {{ $cfg.mdrunApi.gunicorn.threads }}
   polling:
-    enabled: true
-    schedule: "*/15 * * * *"
-    sameNodeAsApi: true
-    backoffLimit: 1
-    successfulJobsHistoryLimit: 1
-    failedJobsHistoryLimit: 3
+    intervalSeconds: 900
     resources:
 {{ $cfg.mdrunApi.polling.resources | toYAML | indent 6 }}
   resources:

@@ -59,7 +59,7 @@ graph TB
 | **Sidecar Container Pattern** | All user pods | Proxy, Auth, API, S3-Sync run alongside JupyterHub Singleuser |
 | **Pre-Spawn Hook Pattern** | JupyterHub | Dynamically provisions user infrastructure before notebook startup |
 | **Active Record Pattern** | Dashboard API, MDRun API | Models encapsulate data persistence and orchestration logic |
-| **CronJob Polling Pattern** | MDRun API | Scheduled one-shot Kubernetes CronJob queries job status and updates SQLite |
+| **Sidecar Polling Pattern** | MDRun API | Poller sidecar in the API pod queries job status on an interval and updates SQLite |
 | **TanStack Query Pattern** | Dashboard UI | Server state management via custom hooks with automatic polling |
 | **Repository Pattern** | Dashboard UI, Dashboard API | Centralized API clients with consistent error handling |
 | **Template-Based Configuration** | Helm Charts | gomplate/Go templates rendered for environment-specific deployments |
