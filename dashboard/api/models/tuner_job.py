@@ -1,5 +1,6 @@
 import logging
 from datetime import UTC, datetime
+from http import HTTPStatus
 from pathlib import Path
 
 from cache import tuner_last_known_status, tuner_status_cache
@@ -107,6 +108,14 @@ class TunerJob(db.Model):  # type: ignore
 
         except TimeoutError:
             logger.warning(f"Timeout fetching tuner status for job {self.id}")
+        except HTTPError as exc:
+            # 404 means the tuner no longer has this job (reaped or restarted); stop re-polling.
+            if exc.response is not None and exc.response.status_code == HTTPStatus.NOT_FOUND:
+                logger.warning(f"Tuner job {self.id} not found on tuner; stopping")
+                self.stop()
+                db.session.commit()
+            else:
+                logger.exception(f"Error fetching tuner status for job {self.id}")
         except Exception:
             logger.exception(f"Error fetching tuner status for job {self.id}")
 
@@ -170,20 +179,12 @@ class TunerJob(db.Model):  # type: ignore
         return job
 
     def stop(self) -> None:
-        """
-        Stop the tuner job and preserve its trials.
-
-        The job gets deleted from the tuner but trials data is preserved in the database.
-        """
+        """Stop the tuner job and preserve observed trials."""
         if self.is_stopped:
             return
 
-        current_status = self._status()
-
-        # Only preserve trials with performance data
-        trials = [trial for trial in current_status.get("trials", []) if trial.get("performance") is not None]
-
-        self._preserved_trials = trials
+        last = tuner_last_known_status.get(self.id, {})
+        self._preserved_trials = [trial for trial in last.get("trials", []) if trial.get("performance") is not None]
         self.is_stopped = True
 
         try:
@@ -193,7 +194,7 @@ class TunerJob(db.Model):  # type: ignore
                 case Engine.AMBER:
                     tuner.amber_delete_job(self.id)
                 case _:
-                    pass  # Unknown engine, nothing to delete
+                    pass
         except HTTPError:
             logger.exception(f"Failed to delete tuner job {self.id}")
 
