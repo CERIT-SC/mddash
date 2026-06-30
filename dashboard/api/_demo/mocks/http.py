@@ -885,19 +885,19 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
 
 def _mdposit_analysis_pattern() -> str:
     if MDPOSIT_REST_URL:
-        base = re.escape(MDPOSIT_REST_URL.rstrip("/").removesuffix("/api"))
-        return rf"{base}/api/rest/v1/projects/[^/]+/analyses/[^/?#]+"
+        base = re.escape(MDPOSIT_REST_URL.rstrip("/"))
+        return rf"{base}/projects/[^/]+/analyses/[^/?#]+"
     return r"https://mdposit\.mddbr\.eu/api/rest/v1/projects/[^/]+/analyses/[^/?#]+"
 
 
 def _mdposit_project_base_pattern() -> str:
     if MDPOSIT_REST_URL:
         return rf"{re.escape(MDPOSIT_REST_URL.rstrip('/'))}/projects"
-    return r"https://mdposit\.mddbr\.eu/api/projects"
+    return r"https://mdposit\.mddbr\.eu/api/rest/v1/projects"
 
 
 def _extract_mdposit_accession(url: str) -> str:
-    match = re.search(r"/api/projects/(?P<accession>[^/]+)", url)
+    match = re.search(r"/projects/(?P<accession>[^/]+)", url)
     return unquote(match.group("accession")) if match else ""
 
 

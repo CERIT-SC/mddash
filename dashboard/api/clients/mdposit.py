@@ -175,13 +175,20 @@ def is_mdposit_url(url: str, hosts: list[str] | None = None) -> bool:
 
 def extract_accession(url: str) -> str:
     """
-    Extract an accession from the last non-trailing URL path segment.
+    Extract the MDPosit project accession from a UI or API URL.
 
     Args:
         url: MDPosit project URL.
 
     Returns:
-        Extracted accession, or an empty string if no path segment exists.
+        The accession, or an empty string if none is found.
     """
-    path = urlparse(url).path.rstrip("/")
-    return path.rsplit("/", 1)[-1] if path else ""
+    parsed = urlparse(url)
+    path_segments = [s for s in parsed.path.split("/") if s]
+    # MDPosit UI uses hash routing, so the accession lives in the fragment (#/id/{accession}/...).
+    source = parsed.fragment if not path_segments else parsed.path
+    segments = [s for s in source.split("/") if s]
+    if "id" in segments:
+        index = segments.index("id")
+        return segments[index + 1] if index + 1 < len(segments) else ""
+    return segments[-1] if segments else ""

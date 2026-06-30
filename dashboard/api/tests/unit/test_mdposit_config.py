@@ -13,12 +13,12 @@ class TestMdpositConfigDerivation:
         with (
             patch.object(config, "MDPOSIT_URL", "https://mdposit.example.com"),
             patch.object(config, "MDPOSIT_HOST", "mdposit.example.com"),
-            patch.object(config, "MDPOSIT_REST_URL", "https://mdposit.example.com/api/"),
+            patch.object(config, "MDPOSIT_REST_URL", "https://mdposit.example.com/api/rest/v1"),
             patch.object(config, "MDPOSIT_VRE_LITE_URL", "https://mdposit.example.com/vre_lite/"),
         ):
             assert config.MDPOSIT_URL == "https://mdposit.example.com"
             assert config.MDPOSIT_HOST == "mdposit.example.com"
-            assert config.MDPOSIT_REST_URL == "https://mdposit.example.com/api/"
+            assert config.MDPOSIT_REST_URL == "https://mdposit.example.com/api/rest/v1"
             assert config.MDPOSIT_VRE_LITE_URL == "https://mdposit.example.com/vre_lite/"
 
     def test_empty_url_yields_empty_derivations(self) -> None:
@@ -40,7 +40,7 @@ class TestMdpositConfigDerivation:
         with (
             patch.object(config, "MDPOSIT_URL", url),
             patch.object(config, "MDPOSIT_HOST", "mdposit.example.com"),
-            patch.object(config, "MDPOSIT_REST_URL", f"{url}/api/"),
+            patch.object(config, "MDPOSIT_REST_URL", f"{url}/api/rest/v1"),
             patch.object(config, "MDPOSIT_VRE_LITE_URL", f"{url}/vre_lite/"),
         ):
             assert config.MDPOSIT_URL == "https://mdposit.example.com"
@@ -54,10 +54,10 @@ class TestMdpositConfigDerivation:
             assert config.MDPOSIT_HOST == "mdposit.example.com"
 
     def test_rest_url_format(self) -> None:
-        """MDPOSIT_REST_URL follows {MDPOSIT_URL}/api/ format."""
+        """MDPOSIT_REST_URL follows {MDPOSIT_URL}/api/rest/v1 format."""
         url = "https://mdposit.example.com"
-        with patch.object(config, "MDPOSIT_URL", url), patch.object(config, "MDPOSIT_REST_URL", f"{url}/api/"):
-            assert config.MDPOSIT_REST_URL == "https://mdposit.example.com/api/"
+        with patch.object(config, "MDPOSIT_URL", url), patch.object(config, "MDPOSIT_REST_URL", f"{url}/api/rest/v1"):
+            assert config.MDPOSIT_REST_URL == "https://mdposit.example.com/api/rest/v1"
 
     def test_vre_lite_url_format(self) -> None:
         """MDPOSIT_VRE_LITE_URL follows {MDPOSIT_URL}/vre_lite/ format."""

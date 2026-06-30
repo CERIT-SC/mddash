@@ -15,6 +15,8 @@ from clients.mdposit import (
     list_files,
 )
 
+REST_URL = "https://mdrepo.eu/api/rest/v1"
+
 # ---------------------------------------------------------------------------
 # is_mdposit_url
 # ---------------------------------------------------------------------------
@@ -72,6 +74,18 @@ class TestExtractAccession:
     def test_nested_path(self) -> None:
         """Only the last segment matters regardless of nesting depth."""
         assert extract_accession("https://host/a/b/c/MY_ACCESSION") == "MY_ACCESSION"
+
+    def test_hash_routed_detail_url(self) -> None:
+        """SPA hash route #/id/{accession}/overview must yield the accession."""
+        assert extract_accession("https://mdrepo.eu/#/id/A0001/overview") == "A0001"
+
+    def test_hash_routed_detail_url_without_tab(self) -> None:
+        """Hash route ending at the accession (#/id/{accession}) must still work."""
+        assert extract_accession("https://mdrepo.eu/#/id/A0001") == "A0001"
+
+    def test_hash_route_fragment_ignored_when_path_present(self) -> None:
+        """A fragment anchor must not override a path-style accession."""
+        assert extract_accession("https://mdposit.example.com/projects/ABC#section") == "ABC"
 
     def test_root_url_returns_empty(self) -> None:
         """Root URL with no path segments should return empty string."""
@@ -248,3 +262,51 @@ class TestDownloadFile:
 
         with pytest.raises(requests.HTTPError):
             download_file("ABC", "sim.gro", tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# URL construction
+# ---------------------------------------------------------------------------
+
+
+class TestUrlConstruction:
+    """Guards the MDPosit REST endpoint paths against regression."""
+
+    @patch("clients.mdposit.MDPOSIT_REST_URL", REST_URL)
+    @patch("clients.mdposit.requests.get")
+    def test_get_project_uses_rest_v1_path(self, mock_get: Mock) -> None:
+        """Project metadata must be fetched from /api/rest/v1/projects/{accession}."""
+        mock_resp = Mock(status_code=HTTPStatus.OK)
+        mock_resp.json.return_value = {"accession": "A0001"}
+        mock_get.return_value = mock_resp
+
+        get_project("A0001")
+
+        assert mock_get.call_args.args[0] == f"{REST_URL}/projects/A0001"
+
+    @patch("clients.mdposit.MDPOSIT_REST_URL", REST_URL)
+    @patch("clients.mdposit.requests.get")
+    def test_list_files_uses_rest_v1_path(self, mock_get: Mock) -> None:
+        """File listing must be fetched from /api/rest/v1/projects/{accession}/files."""
+        mock_resp = Mock(status_code=HTTPStatus.OK)
+        mock_resp.json.return_value = ["structure.pdb"]
+        mock_get.return_value = mock_resp
+
+        list_files("A0001")
+
+        assert mock_get.call_args.args[0] == f"{REST_URL}/projects/A0001/files"
+
+    @patch("clients.mdposit.MDPOSIT_REST_URL", REST_URL)
+    @patch("clients.mdposit.requests.get")
+    def test_download_file_uses_rest_v1_path(self, mock_get: Mock, tmp_path: Path) -> None:
+        """File download must target /api/rest/v1/projects/{accession}/files/{name}."""
+        mock_resp = Mock(status_code=HTTPStatus.OK)
+        mock_resp.raise_for_status.return_value = None
+        mock_resp.raw = BytesIO(b"data")
+        mock_resp.__enter__ = Mock(return_value=mock_resp)
+        mock_resp.__exit__ = Mock(return_value=False)
+        mock_get.return_value = mock_resp
+
+        download_file("A0001", "structure.pdb", tmp_path)
+
+        assert mock_get.call_args.args[0] == f"{REST_URL}/projects/A0001/files/structure.pdb"

@@ -106,7 +106,7 @@ if not all([MDREPO_URL, MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET, MDREPO_SCOPES]):
 
 MDPOSIT_URL = os.environ.get("MDPOSIT_URL", "").rstrip("/")
 MDPOSIT_HOST = urlparse(MDPOSIT_URL).netloc if MDPOSIT_URL else ""
-MDPOSIT_REST_URL = f"{MDPOSIT_URL}/api/" if MDPOSIT_URL else ""
+MDPOSIT_REST_URL = f"{MDPOSIT_URL}/api/rest/v1" if MDPOSIT_URL else ""
 MDPOSIT_VRE_LITE_URL = f"{MDPOSIT_URL}/vre_lite/" if MDPOSIT_URL else ""
 MDPOSIT_TRUSTED_PARENT_HOST = "mdposit.mddbr.eu"
 
