@@ -11,11 +11,13 @@ import re
 import time
 from http import HTTPStatus
 from typing import TYPE_CHECKING
+from urllib.parse import unquote
 from uuid import uuid4
 
 import responses
 from clients.caddy import CADDY_ADMIN_API_URL
 from config import (
+    MDPOSIT_REST_URL,
     MDREPO_API_URL,
     MDREPO_RECORD_NAME,
     MDREPO_TOKEN_URL,
@@ -25,7 +27,7 @@ from config import (
     TUNER_URL,
 )
 
-from ..files import DEFAULT_PDB_FILE, build_demo_archive_bytes
+from ..files import DEFAULT_PDB_FILE, build_demo_archive_bytes, get_mdposit_fixture_bytes
 from ..state import demo_state
 
 if TYPE_CHECKING:
@@ -50,10 +52,10 @@ def install_http_mocks(rsps: responses.RequestsMock) -> None:
     _install_mdrun_mocks(rsps)
     _install_tuner_mocks(rsps)
     _install_mdrepo_mocks(rsps)
+    _install_mdposit_mocks(rsps)
     _install_metadump_mocks(rsps)
     _install_caddy_mocks(rsps)
     _install_external_download_mocks(rsps)
-    _install_mdposit_pass_through(rsps)
 
 
 def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
@@ -742,11 +744,161 @@ def _install_external_download_mocks(rsps: responses.RequestsMock) -> None:
     rsps.add_callback(responses.HEAD, re.compile(r"https://.*"), callback=head_request)
 
 
-def _install_mdposit_pass_through(rsps: responses.RequestsMock) -> None:
-    """Allow MDposit API requests to pass through (real network calls for analysis data)."""
-    # Use passthrough for MDposit and its redirect targets so real requests are made
-    rsps.add_passthru(re.compile(r"https://mdposit\.mddbr\.eu/.*"))
-    rsps.add_passthru(re.compile(r"https://irb-dev\.mddbr\.eu/.*"))
+ANALYSIS_FIXTURES: dict[str, object] = {
+    "rmsds": {
+        "start": 0,
+        "step": 100,
+        "data": [
+            {
+                "reference": "backbone",
+                "group": "C-alpha",
+                "values": [0.0, 0.12, 0.23, 0.31, 0.38, 0.42, 0.45, 0.47, 0.49, 0.50],
+            },
+            {
+                "reference": "backbone",
+                "group": "Mainchain",
+                "values": [0.0, 0.11, 0.21, 0.29, 0.35, 0.39, 0.42, 0.44, 0.46, 0.47],
+            },
+        ],
+    },
+    "sasa": {
+        "saspf": [
+            [120.5, 118.2, 115.8, 113.4, 111.0, 108.6, 106.2, 103.8, 101.4, 99.0],
+            [85.3, 84.1, 82.9, 81.7, 80.5, 79.3, 78.1, 76.9, 75.7, 74.5],
+            [210.4, 207.8, 205.2, 202.6, 200.0, 197.4, 194.8, 192.2, 189.6, 187.0],
+            [65.1, 64.3, 63.5, 62.7, 61.9, 61.1, 60.3, 59.5, 58.7, 57.9],
+            [150.2, 148.5, 146.8, 145.1, 143.4, 141.7, 140.0, 138.3, 136.6, 134.9],
+        ],
+        "means": [116.8, 79.9, 198.7, 61.1, 142.6],
+        "stdvs": [7.5, 4.1, 8.9, 2.7, 5.9],
+    },
+    "hbonds": [
+        {"name": "Protein-Water", "analysis": "hbonds-00"},
+        {"name": "Intra-Protein", "analysis": "hbonds-01"},
+    ],
+    "hbonds-00": {
+        "data": [
+            {
+                "name": "Protein-Water",
+                "acceptors": [15, 27, 42, 58],
+                "donors": [3, 19, 35, 51],
+                "hydrogens": [8, 22, 38, 54],
+                "hbonds": [
+                    [True, False, True, True],
+                    [False, True, False, True],
+                    [True, True, True, False],
+                    [False, False, True, True],
+                    [True, True, False, False],
+                ],
+            }
+        ]
+    },
+    "hbonds-01": {
+        "data": [
+            {
+                "name": "Intra-Protein",
+                "acceptors": [5, 12, 30],
+                "donors": [8, 25, 45],
+                "hydrogens": [7, 20, 40],
+                "hbonds": [
+                    [True, True, False],
+                    [False, True, True],
+                    [True, False, True],
+                    [True, True, True],
+                    [False, True, False],
+                ],
+            }
+        ]
+    },
+}
+
+
+def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
+    """Install deterministic MDPosit mocks for offline demo imports and analyses."""
+
+    def get_project(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        accession = _extract_mdposit_accession(request.url)
+        project = demo_state.mdposit_projects.get(accession)
+        if project is None:
+            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"detail": "Project not found"}))
+        response_body = {key: value for key, value in project.items() if key != "files"}
+        return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(response_body))
+
+    def list_project_files(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        accession = _extract_mdposit_accession(request.url)
+        project = demo_state.mdposit_projects.get(accession)
+        if project is None:
+            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"detail": "Project not found"}))
+        response_body = [{"name": filename} for filename in project.get("files", [])]
+        return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(response_body))
+
+    def download_project_file(request: "ResponsesProxy") -> tuple[int, dict[str, str], bytes]:
+        match = re.search(r"/api/projects/[^/]+/files/(?P<filename>.+)$", request.url)
+        if not match:
+            return (HTTPStatus.NOT_FOUND, {}, b"")
+
+        accession = _extract_mdposit_accession(request.url)
+        project = demo_state.mdposit_projects.get(accession)
+        filename = unquote(match.group("filename"))
+        if project is None or filename not in project.get("files", []):
+            return (HTTPStatus.NOT_FOUND, {}, b"")
+
+        content = get_mdposit_fixture_bytes(filename)
+        if content is None:
+            return (HTTPStatus.NOT_FOUND, {}, b"")
+        return (HTTPStatus.OK, {"Content-Type": "application/octet-stream"}, content)
+
+    def get_analysis(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+        match = re.search(r"/analyses/(?P<analysis>[^/?#]+)", request.url)
+        analysis_name = unquote(match.group("analysis")) if match else ""
+        fixture = ANALYSIS_FIXTURES.get(analysis_name)
+        if fixture is None:
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"detail": f"Analysis '{analysis_name}' not found"}),
+            )
+        return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(fixture))
+
+    project_base_pattern = _mdposit_project_base_pattern()
+    rsps.add_callback(
+        responses.GET,
+        re.compile(rf"{project_base_pattern}/(?P<accession>[^/]+)/files/(?P<filename>.+)$"),
+        callback=download_project_file,
+    )
+    rsps.add_callback(
+        responses.GET,
+        re.compile(rf"{project_base_pattern}/(?P<accession>[^/]+)/files$"),
+        callback=list_project_files,
+    )
+    rsps.add_callback(
+        responses.GET,
+        re.compile(rf"{project_base_pattern}/(?P<accession>[^/]+)$"),
+        callback=get_project,
+    )
+    rsps.add_callback(
+        responses.GET,
+        re.compile(_mdposit_analysis_pattern()),
+        callback=get_analysis,
+    )
+
+
+def _mdposit_analysis_pattern() -> str:
+    if MDPOSIT_REST_URL:
+        base = re.escape(MDPOSIT_REST_URL.rstrip("/"))
+        return rf"{base}/projects/[^/]+/analyses/[^/?#]+"
+    return r"https://mdposit\.mddbr\.eu/api/rest/v1/projects/[^/]+/analyses/[^/?#]+"
+
+
+def _mdposit_project_base_pattern() -> str:
+    if MDPOSIT_REST_URL:
+        return rf"{re.escape(MDPOSIT_REST_URL.rstrip('/'))}/projects"
+    return r"https://mdposit\.mddbr\.eu/api/rest/v1/projects"
+
+
+def _extract_mdposit_accession(url: str) -> str:
+    match = re.search(r"/projects/(?P<accession>[^/]+)", url)
+    return unquote(match.group("accession")) if match else ""
 
 
 def _advance_mdrun_job(job_id: str, job_data: dict) -> None:

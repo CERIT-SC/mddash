@@ -11,17 +11,16 @@ service:
 
 storage:
   size: 5Gi
+  # SQLite WAL requires a local POSIX filesystem; NFS causes disk I/O errors.
+  storageClassName: ""
 
 gunicorn:
   workers: 2
   threads: 4
 
 polling:
-  schedule: "*/15 * * * *"
-  sameNodeAsApi: true
-  backoffLimit: 1
-  successfulJobsHistoryLimit: 3
-  failedJobsHistoryLimit: 3
+  # Poller runs as a sidecar in this pod, sharing the /data PVC.
+  intervalSeconds: 900
   resources:
     limits:
       cpu: 250m

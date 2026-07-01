@@ -63,7 +63,7 @@ http://:8888 {
 			uri /auth
 		}
 		header Content-Type "application/javascript"
-		respond `window.MDDASH_CONFIG = {basePath: "{$CADDY_ROUTE_PREFIX}/dash", apiPath: "{$CADDY_ROUTE_PREFIX}/dash/api", user: "{$JUPYTERHUB_USER}", defaultNotebooksRepo: "{$DEFAULT_NOTEBOOKS_REPO}"};`
+		respond `window.MDDASH_CONFIG = {basePath: "{$CADDY_ROUTE_PREFIX}/dash", apiPath: "{$CADDY_ROUTE_PREFIX}/dash/api", user: "{$JUPYTERHUB_USER}", defaultNotebooksRepo: "{$DEFAULT_NOTEBOOKS_REPO}", mdpositUrl: "{$MDPOSIT_URL}"};`
 	}
 
 	# Dashboard routes - static files with authentication

@@ -1,4 +1,6 @@
 import logging
+import os
+import time
 
 from enums import JobStatus
 from flask import Flask
@@ -22,7 +24,15 @@ def poll_once(app: Flask) -> None:
                 logger.exception("Error polling job %s: %s", job.job_name, e)
 
 
+def run(app: Flask, interval: int) -> None:
+    """Poll job statuses in a loop, sleeping ``interval`` seconds between runs."""
+    logger.info("Starting poller loop every %d seconds", interval)
+    while True:
+        poll_once(app)
+        time.sleep(interval)
+
+
 if __name__ == "__main__":
     from app import app as flask_app
 
-    poll_once(flask_app)
+    run(flask_app, int(os.getenv("POLL_INTERVAL_SECONDS", "900")))

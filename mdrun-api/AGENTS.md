@@ -8,12 +8,12 @@ Manage GROMACS and AMBER molecular dynamics simulation jobs on Kubernetes with a
 
 - **Flask Blueprint Pattern**: Routes organized into `health_bp`, `gmx_bp`, and `amber_bp` blueprints for modularity
 - **Active Record Pattern**: `MdrunJob` model encapsulates data persistence; Kubernetes orchestration lives in route handlers
-- **CronJob Polling**: Kubernetes CronJob runs `python -m polling` every 15 minutes and updates job status in the shared SQLite database
+- **Sidecar Polling**: The poller runs as a sidecar container (`python -m polling` with `POLL_INTERVAL_SECONDS`) in the `mdrun-api` pod, sharing the `/data` PVC and node with the API.
 - **Decorator Pattern**: `@handle_exceptions` catches exceptions and returns `{detail: "..."}` with the correct HTTP status code; includes optional database rollback
 - **Property-Based Status**: `MdrunJob.status` property dynamically fetches current status from Kubernetes and updates database
 - **Shared Route Handlers**: `_get_job` and `_delete_job` helpers are shared between GMX and AMBER routes
 
-**Why these patterns**: The Active Record pattern simplifies job lifecycle management by coupling database records with Kubernetes resources. CronJob polling avoids webhook complexity without tying background scheduling to the web server process.
+**Why these patterns**: The Active Record pattern simplifies job lifecycle management by coupling database records with Kubernetes resources. The in-pod sidecar co-locates the poller with the API on a single PVC, so the SQLite database can live on a local POSIX volume (`zfs-csi`) instead of NFS — SQLite WAL is unsupported on network filesystems and causes `disk I/O error`. Polling avoids webhook complexity without tying background scheduling to the web server process.
 
 ## Core Dependencies
 
@@ -52,7 +52,7 @@ sequenceDiagram
     API->>DB: Store job metadata
     API-->>Client: Return job ID
 
-    Note over DB,K8s: Every 15 min (CronJob)
+    Note over DB,K8s: Every 15 min (poller sidecar)
     DB->>K8s: Query active job status
     K8s-->>DB: Return status
     DB->>DB: Update last_status
@@ -67,8 +67,8 @@ sequenceDiagram
 
 ## The "Gotchas" (Critical)
 
-- **SQLite WAL Mode**: Database uses Write-Ahead Logging for concurrent reads/writes. Always use `db.session` within app context.
-- **Polling CronJob**: Status polling is a one-shot CronJob (`python -m polling`) with `concurrencyPolicy: Forbid`. It mounts the same `/data` PVC as the API and writes to the same SQLite database.
+- **SQLite WAL Mode**: Database uses Write-Ahead Logging for concurrent reads/writes. Always use `db.session` within app context. WAL requires a local POSIX filesystem — the `/data` PVC MUST use a local storage class (`zfs-csi`), never NFS, or commits fail with `sqlite3.OperationalError: disk I/O error`. `storageClassName` is immutable on an existing PVC, so switching classes requires deleting and recreating the PVC.
+- **Polling Sidecar**: Status polling runs as a sidecar container (`python -m polling` with `POLL_INTERVAL_SECONDS` env) in the `mdrun-api` pod, sharing the `/data` PVC. Co-locating writer and volume on one node is required because the SQLite DB lives on a local RWO PVC.
 - **On-Demand Status**: `MdrunJob.status` property queries Kubernetes on every access. Cache results if polling frequently.
 - **Auto-Cleanup**: Jobs in TERMINATED or ERROR state are automatically deleted from Kubernetes but preserved in database.
 - **Input Sanitization**: All user inputs MUST pass through `sanitization.py` functions to prevent shell injection in Kubernetes job manifests.
@@ -84,7 +84,7 @@ sequenceDiagram
 ## Entry Points
 
 - **`app.py`**: Flask application factory and database initialization
-- **`polling.py`**: Polling helpers and the one-shot module entrypoint used by the Kubernetes CronJob
+- **`polling.py`**: Polling helpers; `poll_once()` refreshes statuses once, `run()` loops on an interval (used by the sidecar via `POLL_INTERVAL_SECONDS`)
 - **`routes.py`**: API endpoints — `POST /api/jobs/gmx`, `GET/DELETE /api/jobs/gmx/{id}`, `POST /api/jobs/amber`, `GET/DELETE /api/jobs/amber/{id}`
 - **`models.py`**: `MdrunJob` model with `create()` classmethod for persistence; `status` property polls K8s; `delete()` cleans up K8s resources
 - **`enums.py`**: `DeviceType`, `AmberBinary`, `EwaldPreset`, `JobStatus` enumerations with case-insensitive `from_string`

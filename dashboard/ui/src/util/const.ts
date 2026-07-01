@@ -10,6 +10,7 @@ declare global {
       apiPath: string
       user: string
       defaultNotebooksRepo: string
+      mdpositUrl: string
     }
   }
 }
@@ -24,6 +25,7 @@ export const HUB_API_BASE = "/hub/api"
 export const USER = window.MDDASH_CONFIG?.user ?? "dev-user"
 export const DEFAULT_NOTEBOOKS_REPO =
   window.MDDASH_CONFIG?.defaultNotebooksRepo ?? "https://github.com/sb-ncbr/mddash-notebooks.git"
+export const MDPOSIT_URL = window.MDDASH_CONFIG?.mdpositUrl ?? ""
 
 // Sentinel value for ShadCN Select components that require non-empty string values
 export const SELECT_NONE = "__none__"

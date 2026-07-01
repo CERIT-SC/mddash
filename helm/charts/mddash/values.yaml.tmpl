@@ -138,6 +138,9 @@ jupyterhub:
           secretKeyRef:
             name: {{ $helmPackage }}-mdrepo-credentials
             key: client_secret
+      # MDPosit integration for publishing experiments
+      MDPOSIT_URL:
+        value: "{{ $cfg.mdposit.url }}"
       # MetaDump API for extracting GROMACS TPR metadata
       METADUMP_API_URL:
         value: "{{ $cfg.metadump.url }}"
@@ -261,16 +264,12 @@ mdrun-api:
     pullPolicy: Always
   storage:
     size: {{ $cfg.mdrunApi.storage.size }}
+    storageClassName: "{{ $cfg.mdrunApi.storage.storageClassName }}"
   gunicorn:
     workers: {{ $cfg.mdrunApi.gunicorn.workers }}
     threads: {{ $cfg.mdrunApi.gunicorn.threads }}
   polling:
-    enabled: true
-    schedule: "*/15 * * * *"
-    sameNodeAsApi: true
-    backoffLimit: 1
-    successfulJobsHistoryLimit: 1
-    failedJobsHistoryLimit: 3
+    intervalSeconds: 900
     resources:
 {{ $cfg.mdrunApi.polling.resources | toYAML | indent 6 }}
   resources:

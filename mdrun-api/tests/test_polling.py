@@ -2,12 +2,15 @@
 
 from unittest.mock import PropertyMock
 
+import pytest
 from enums import JobStatus
 from models import MdrunJob
-from polling import poll_once
+from polling import poll_once, run
 from sqlalchemy.orm import Session
 
 EXPECTED_POLLED_JOBS = 2
+LOOP_INTERVAL = 5
+EXPECTED_LOOP_POLLS = 2
 
 
 def test_poll_once_updates_active_jobs_only(app, db_session: Session, mocker) -> None:  # noqa: ANN001
@@ -39,3 +42,16 @@ def test_poll_once_continues_when_job_status_refresh_fails(app, db_session: Sess
     poll_once(app)
 
     assert status.call_count == EXPECTED_POLLED_JOBS
+
+
+def test_run_loops_and_sleeps_between_polls(app, mocker) -> None:  # noqa: ANN001
+    """The poller should poll, sleep, then poll again."""
+    poll = mocker.patch("polling.poll_once", side_effect=[None, StopIteration])
+    sleep = mocker.patch("polling.time.sleep")
+
+    # The second poll_once raises, breaking the loop after one full iteration.
+    with pytest.raises(StopIteration):
+        run(app, LOOP_INTERVAL)
+
+    assert poll.call_count == EXPECTED_LOOP_POLLS
+    sleep.assert_called_once_with(LOOP_INTERVAL)

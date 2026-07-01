@@ -146,29 +146,52 @@ def edit_experiment(experiment_id: str) -> Response:
 @handle_exceptions(rollback=True)
 def publish_experiment(experiment_id: str) -> ResponseReturnValue:
     """
-    Publish experiment to MDRepo. Requires MDRepo OAuth authentication.
+    Publish experiment to the requested target.
 
     Returns:
-        Response: JSON response with the published MDRepo experiment record, or an error if not authenticated.
+        Response: JSON response with the publication metadata.
 
     Raises:
-        Unauthorized: If the user is not authenticated with MDRepo.
+        BadRequest: If the publish target or selected files are invalid.
+        Unauthorized: If the user is not authenticated with MDRepo for Invenio publishing.
     """
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
+    if request.get_data(cache=True):
+        if not request.is_json:
+            raise BadRequest("Publish request body must be JSON.")
+        data = request.get_json()
+        if not isinstance(data, dict):
+            raise BadRequest("Publish request body must be a JSON object.")
+    else:
+        data = {}
 
-    # Check if user is authenticated with MDRepo and has a valid token
-    token_manager = MDRepoTokenManager(session)
-    token = token_manager.get_valid_token()
-    if not token:
-        raise Unauthorized("Not authenticated with MDRepo. Please authenticate first.")
+    target = data.get("target", "invenio")
+    if not isinstance(target, str):
+        raise BadRequest("Publish target must be a string.")
 
-    # TODO: Add endpoint to fetch available communities from MDRepo and allow user to select from a dropdown in the publish UI.
-    #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.
-    mdrepo_experiment = experiment.publish(community="ceitec")
+    if target == "invenio":
+        token_manager = MDRepoTokenManager(session)
+        token = token_manager.get_valid_token()
+        if not token:
+            raise Unauthorized("Not authenticated with MDRepo. Please authenticate first.")
 
-    return jsonify(mdrepo_experiment), HTTPStatus.CREATED
+        # TODO: Add endpoint to fetch available communities from MDRepo and allow user to select from a dropdown in the publish UI.
+        #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.
+        result = experiment.publish(target="invenio", community="ceitec")
+    elif target == "mdposit":
+        selected_files = data.get("files")
+        if not isinstance(selected_files, dict) or not all(
+            isinstance(role, str) and isinstance(path, str) for role, path in selected_files.items()
+        ):
+            raise BadRequest("MDPosit publish requires selected files.")
+
+        result = experiment.publish(target="mdposit", selected_files=selected_files)
+    else:
+        raise BadRequest(f"Unknown publish target: {target}")
+
+    return jsonify(result), HTTPStatus.CREATED
 
 
 @experiments_bp.route("/<experiment_id>/step", methods=["GET"])
