@@ -104,7 +104,7 @@ sequenceDiagram
 ## The "Gotchas" (Cross-Component)
 
 ### Configuration Management
-- **Environment Detection**: Branch determines environment (`dev` → dev, `master` → prod). Tagging: dev uses static `dev` tag, prod uses `<short-sha>` format.
+- **Environment Detection**: Branch determines environment (`dev` → dev, `master` → prod). Tagging: dev uses static `dev` tag, prod uses `sha-<short-sha>` format (prefix enables Harbor retention policy pattern matching).
 - **Values Template Rendering**: `helm/charts/mddash/values.yaml.tmpl` must be rendered with `gomplate` before Helm operations. Use `make -C helm render`. Never edit `values.yaml` directly—it's generated.
 - **Runtime Config Injection**: UI receives runtime configuration via `window.MDDASH_CONFIG` object injected by Caddy proxy at `{$CADDY_ROUTE_PREFIX}/dash/config.js`. Dev mode detected when this is undefined.
 
@@ -129,7 +129,7 @@ sequenceDiagram
 ### Deployment Pipeline
 - **Make-based Orchestration**: Root `Makefile` orchestrates build, test, push, and deploy across all components.
 - **Helm Dependency Management**: Use `make -C helm update` to update Helm dependencies before deployment.
-- **Image Tagging Strategy**: Dev uses static `dev` tags and prod uses immutable `<short-sha>` tags. Pull policy is per component/config: sidecars use `Always` in dev and `IfNotPresent` in prod, while some services such as Gromacs Tuner and the rendered `mdrun-api` subchart use `Always`.
+- **Image Tagging Strategy**: Dev uses static `dev` tags and prod uses immutable `sha-<short-sha>` tags (prefix enables Harbor retention policy pattern matching). Pull policy is per component/config: sidecars use `Always` in dev and `IfNotPresent` in prod, while some services such as Gromacs Tuner and the rendered `mdrun-api` subchart use `Always`.
 - **Secrets Management**: All secrets created in namespace during deployment via GitHub Actions CI/CD.
 
 ### Error Handling
@@ -206,6 +206,6 @@ make test
 - **`ci.yml`**: Runs on every PR and push. Lint, test, type-check. No Docker builds or deployments.
 - **`cd.yml`**: Runs only on push to `dev` or `master`. Change detection via `dorny/paths-filter@v4`; dev builds only changed components, prod builds all components when any tracked deploy path changed; deploys via Helm only when tracked deploy paths changed; verifies with lightweight health check.
 - **`codeql.yml`**: Runs CodeQL for GitHub Actions, JavaScript/TypeScript, and Python on `master` pushes, `master` PRs, and a weekly schedule.
-- **Image Tags**: Dev uses `dev`, prod uses `<short-sha>`.
+- **Image Tags**: Dev uses `dev`, prod uses `sha-<short-sha>`.
 - **Secrets**: Automatically created in namespace during deployment
-- **Image Retention**: Harbor retention policy configured per environment
+- **Image Retention**: Harbor retention policy configured per environment using `sha-*` tag pattern for prod

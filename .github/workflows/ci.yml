@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: 26
           cache: pnpm
-          cache-dependency-glob: "**/pnpm-lock.yaml"
+          cache-dependency-path: "**/pnpm-lock.yaml"
       - name: Enable Corepack
         run: corepack enable
       - name: Install ruff
@@ -151,7 +151,7 @@ jobs:
         with:
           node-version: 26
           cache: pnpm
-          cache-dependency-glob: "**/pnpm-lock.yaml"
+          cache-dependency-path: "**/pnpm-lock.yaml"
       - name: Enable Corepack
         run: corepack enable
       - run: corepack pnpm install --frozen-lockfile
@@ -170,7 +170,7 @@ jobs:
         with:
           node-version: 26
           cache: pnpm
-          cache-dependency-glob: "**/pnpm-lock.yaml"
+          cache-dependency-path: "**/pnpm-lock.yaml"
       - name: Enable Corepack
         run: corepack enable
       - run: corepack pnpm install --frozen-lockfile

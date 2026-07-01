@@ -48,7 +48,7 @@
 
 2. **Push to deploy**:
    - Push to `dev` → deploys to dev environment when application, Helm, or config paths changed (tag: `dev`)
-   - Push to `master` → deploys to production when application, Helm, or config paths changed (tag: `<short-sha>`)
+   - Push to `master` → deploys to production when application, Helm, or config paths changed (tag: `sha-<short-sha>`)
 
 All secrets are automatically created in the namespace during deployment.
 CodeQL security scanning runs separately for `master` pushes, `master` pull requests, and the weekly scheduled scan.
@@ -59,7 +59,7 @@ CodeQL security scanning runs separately for `master` pushes, `master` pull requ
 | Environment | Branch   | Tag Format        | Sidecar Pull Policy |
 | ----------- | -------- | ----------------- | ------------------- |
 | **Dev**     | `dev`    | Static `dev`      | `Always`            |
-| **Prod**    | `master` | `<short-sha>`     | `IfNotPresent`      |
+| **Prod**    | `master` | `sha-<short-sha>` | `IfNotPresent`      |
 
 Other services can override this policy in configuration; for example, Gromacs Tuner uses `Always`, and the rendered `mdrun-api` subchart currently uses `Always`.
 
@@ -67,7 +67,7 @@ Other services can override this policy in configuration; for example, Gromacs T
 
 Configure in Harbor UI (Project → Policy → Tag Retention):
 1. **Dev tags**: Repository `**`, tag `dev` → Retain always
-2. **Prod tags**: Repository `**`, tag matching commit SHA pattern → Keep last 10 pushed
+2. **Prod tags**: Repository `**`, tag `sha-*` → Keep last 10 pushed
 
 
 ## Configuration
