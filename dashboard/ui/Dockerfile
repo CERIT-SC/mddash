@@ -1,7 +1,7 @@
 # UI build image - outputs static files to /dist
 # This image is used as a build stage for the proxy container
 
-FROM node:24-slim AS build
+FROM node:26-slim AS build
 
 WORKDIR /app
 
