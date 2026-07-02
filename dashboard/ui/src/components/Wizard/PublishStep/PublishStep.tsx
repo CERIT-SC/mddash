@@ -15,26 +15,27 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-import { DEBUG, MDPOSIT_URL } from "@/util/const"
+import { DEBUG, Engine, MDPOSIT_URL } from "@/util/const"
 import { formatFileSize } from "@/util/helpers"
-import { type Experiment } from "@/util/types"
+import { type Experiment, type Simulation } from "@/util/types"
 import { useFiles } from "@/hooks/use-files"
-import { useMdPositPublishData, type MdPositHandoffFile, type MdPositSelectedFiles } from "@/hooks/use-mdposit"
+import { useMdPositPublishData, type MdPositHandoffFile } from "@/hooks/use-mdposit"
 import { getMDRepoAuthUrl, useMDRepoStatus, usePublishExperiment } from "@/hooks/use-mdrepo"
+import { useSimulations } from "@/hooks/use-simulations"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import FileSelector from "@/components/FileSelector"
+import SimulationPreview from "@/components/Wizard/SimulationPreview"
+import SimulationSelector from "@/components/Wizard/SimulationSelector"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 type PublishTarget = "invenio" | "mdposit"
 
-const mdpositEnabled = DEBUG || MDPOSIT_URL !== ""
-
 const PublishStep = (props: WizardStepProps) => {
   const { experiment } = props
+  const mdpositEnabled = (DEBUG || MDPOSIT_URL !== "") && experiment.engine === Engine.GMX
   const [target, setTarget] = useState<PublishTarget>("invenio")
 
   const handleTargetChange = (value: string) => {
@@ -229,12 +230,6 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
   )
 }
 
-const mdpositSelectedDefaults: MdPositSelectedFiles = {
-  structure: "",
-  topology: "",
-  trajectory: "",
-}
-
 const mdpositFileLabels: Record<MdPositHandoffFile["role"] | "metadata", string> = {
   metadata: "Metadata file (inputs.yaml)",
   structure: "Structure file",
@@ -243,30 +238,16 @@ const mdpositFileLabels: Record<MdPositHandoffFile["role"] | "metadata", string>
 }
 
 const MdPositPublishContent = ({ experiment }: { experiment: Experiment }) => {
-  const [selectedFiles, setSelectedFiles] = useState<MdPositSelectedFiles>({ ...mdpositSelectedDefaults })
-  const [handoffFiles, setHandoffFiles] = useState<MdPositSelectedFiles | null>(null)
+  const [selected, setSelected] = useState<Simulation | null>(null)
   const mdpositPublishData = useMdPositPublishData(experiment.id)
+  const { data: simulations = [], isLoading } = useSimulations(experiment.id)
 
-  const selectedCount = Object.values(selectedFiles).filter(Boolean).length
-  const canPrepareHandoff = selectedCount === 3
-  const isHandoffCurrent =
-    handoffFiles &&
-    handoffFiles.structure === selectedFiles.structure &&
-    handoffFiles.topology === selectedFiles.topology &&
-    handoffFiles.trajectory === selectedFiles.trajectory
-  const currentHandoffData = isHandoffCurrent ? mdpositPublishData.data : null
-
-  const updateSelectedFile = (role: keyof MdPositSelectedFiles, path: string) => {
-    if (selectedFiles[role] === path) return
-    setHandoffFiles(null)
-    mdpositPublishData.reset()
-    setSelectedFiles((current) => ({ ...current, [role]: path }))
-  }
+  const canPrepare = !!selected && selected.valid
+  const currentHandoffData = mdpositPublishData.data
 
   const handlePrepareHandoff = () => {
-    const files = { ...selectedFiles }
-    setHandoffFiles(files)
-    mdpositPublishData.mutate(files, {
+    if (!selected) return
+    mdpositPublishData.mutate(selected.simulation_path, {
       onSuccess: () => toast.success("MDPosit handoff files are ready."),
     })
   }
@@ -278,28 +259,16 @@ const MdPositPublishContent = ({ experiment }: { experiment: Experiment }) => {
         progress.
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <FileSelector
-          experimentId={experiment.id}
-          ext={["pdb", "gro"]}
-          title="Structure"
-          selectedPath={selectedFiles.structure}
-          onFileSelected={(file) => updateSelectedFile("structure", file?.path ?? "")}
+      <div className="flex flex-row gap-4">
+        <SimulationSelector
+          simulations={simulations}
+          selectedPath={selected?.simulation_path ?? null}
+          loading={isLoading}
+          onSelect={setSelected}
         />
-        <FileSelector
-          experimentId={experiment.id}
-          ext={["top", "prmtop", "parm7", "psf"]}
-          title="Topology"
-          selectedPath={selectedFiles.topology}
-          onFileSelected={(file) => updateSelectedFile("topology", file?.path ?? "")}
-        />
-        <FileSelector
-          experimentId={experiment.id}
-          ext={["xtc", "trr", "nc", "dcd"]}
-          title="Trajectory"
-          selectedPath={selectedFiles.trajectory}
-          onFileSelected={(file) => updateSelectedFile("trajectory", file?.path ?? "")}
-        />
+        <div className="flex-1">
+          <SimulationPreview simulation={selected ?? null} loading={isLoading} />
+        </div>
       </div>
 
       <div className="rounded-md border p-3 text-sm">
@@ -317,7 +286,7 @@ const MdPositPublishContent = ({ experiment }: { experiment: Experiment }) => {
         variant="default"
         size="lg"
         onClick={handlePrepareHandoff}
-        disabled={!canPrepareHandoff || mdpositPublishData.isPending}
+        disabled={!canPrepare || mdpositPublishData.isPending}
         className="self-center"
       >
         {mdpositPublishData.isPending ? (
@@ -328,9 +297,9 @@ const MdPositPublishContent = ({ experiment }: { experiment: Experiment }) => {
         Prepare MDPosit handoff
       </Button>
 
-      {!canPrepareHandoff && (
+      {!canPrepare && (
         <p className="text-muted-foreground text-center text-xs">
-          Select one structure, topology, and trajectory file before preparing the MDPosit handoff.
+          Select a valid simulation before preparing the MDPosit handoff.
         </p>
       )}
 

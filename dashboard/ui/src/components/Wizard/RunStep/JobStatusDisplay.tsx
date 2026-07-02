@@ -80,12 +80,6 @@ const JobStatusDisplay = ({ jobStatus }: JobStatusDisplayProps) => {
             {jobStatus.pme} / {jobStatus.nb}
           </p>
         </div>
-        {jobStatus.extra_args && (
-          <div className="col-span-2 rounded-md border p-3">
-            <p className="text-muted-foreground text-xs">Extra Arguments</p>
-            <p className="text-sm">{jobStatus.extra_args}</p>
-          </div>
-        )}
       </div>
     </div>
   )

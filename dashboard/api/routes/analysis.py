@@ -1,19 +1,22 @@
 import json
 from http import HTTPStatus
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from clients import k8s
-from config import API_PREFIX, DATA_DIR
+from config import API_PREFIX
 from decorators import handle_exceptions
-from enums import AnalysisType, PreprocessingMode
+from enums import AnalysisType, Engine, PreprocessingMode
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import AnalysisJob, Experiment
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, find_result_file, list_result_files
+from models.simulation import get_simulation, resolve_simulation_role
 from schemas import AnalysisJobSchema
-from validators import check_path, validate_analysis_structure_path, validate_analysis_topology_path
 from werkzeug.exceptions import BadRequest, NotFound, UnprocessableEntity
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 analysis_bp = Blueprint("analysis", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/analysis")
 
@@ -36,24 +39,24 @@ def get_analysis_jobs(experiment_id: str) -> Response:
 @handle_exceptions(rollback=True)
 def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
     """
-    Submit a new analysis job. Rejects if a job is already running.
+    Submit a new analysis job from a simulation manifest.
+
+    Body: ``{"simulation_path": "...", "analysis": "...", "preprocessing_mode": "as-is"}``.
 
     Returns:
         JSON response with the created job on success, or an error response.
 
     Raises:
-        BadRequest: If the request body is missing or invalid.
-        NotFound: If the trajectory file does not exist.
+        BadRequest: If the request body is missing, invalid, or files are missing.
     """
     data = request.get_json()
     if not data:
         raise BadRequest("Request body is required.")
 
+    simulation_path = data.get("simulation_path", "")
     analysis_name = data.get("analysis", "")
-    structure_file = data.get("structure_file") or None
-    trajectory_file = data.get("trajectory_file", "")
-    if not analysis_name or not trajectory_file:
-        raise BadRequest("analysis and trajectory_file are required.")
+    if not simulation_path or not analysis_name:
+        raise BadRequest("simulation_path and analysis are required.")
 
     try:
         analysis_type = AnalysisType(analysis_name)
@@ -61,6 +64,22 @@ def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
         raise BadRequest(
             f"Unknown analysis '{analysis_name}'. Available: {', '.join(t.value for t in AnalysisType)}",
         )
+
+    experiment = Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found")
+    simulation = get_simulation(experiment_id, simulation_path)
+    if not simulation.get("valid"):
+        errors = simulation.get("errors") or ["Simulation is invalid."]
+        raise BadRequest(f"Cannot analyze invalid simulation: {'; '.join(errors)}")
+
+    trajectory_path = resolve_simulation_role(experiment_id, simulation, "trajectory")
+
+    topology_path: Path | None = None
+    if "topology" in simulation.get("files", {}):
+        topology_path = resolve_simulation_role(experiment_id, simulation, "topology")
+
+    structure_path: Path | None = None
+    if experiment.engine == Engine.GMX and "structure" in simulation.get("files", {}):
+        structure_path = resolve_simulation_role(experiment_id, simulation, "structure")
 
     preprocessing_mode_name = data.get("preprocessing_mode", PreprocessingMode.AS_IS.value)
     try:
@@ -70,37 +89,16 @@ def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
             f"Unknown preprocessing_mode '{preprocessing_mode_name}'. Available: {', '.join(mode.value for mode in PreprocessingMode)}",
         )
 
-    topology_file = data.get("topology_file") or None
+    if not trajectory_path.is_file():
+        raise BadRequest(f"Trajectory file {trajectory_path} does not exist.")
 
-    experiment_dir = DATA_DIR / experiment_id
-
-    try:
-        structure_path = validate_analysis_structure_path(
-            structure_file=structure_file,
-            topology_file=topology_file,
-            experiment_dir=experiment_dir,
-        )
-    except BadRequest as error:
-        raise error
-
-    check_path(trajectory_file, experiment_dir)
-    trajectory_path = Path(trajectory_file)
-    if not (experiment_dir / trajectory_path).is_file():
-        raise NotFound(f"Trajectory file {trajectory_path.as_posix()} does not exist.")
-
-    try:
-        topology_path = validate_analysis_topology_path(
-            topology_file=topology_file,
-            experiment_dir=experiment_dir,
-            analysis_name=analysis_name,
-            analysis_type=analysis_type,
-            preprocessing_mode=preprocessing_mode,
-        )
-    except BadRequest as error:
-        raise error
+    if preprocessing_mode in {PreprocessingMode.IMAGE, PreprocessingMode.IMAGE_FIT} and (
+        not topology_path or topology_path.suffix.lower() != ".tpr"
+    ):
+        raise BadRequest("Trajectory preprocessing requires a simulation TPR file (.tpr).")
 
     job = AnalysisJob.start(
-        experiment=Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found"),
+        experiment=experiment,
         analysis_name=analysis_type,
         structure_file=structure_path,
         trajectory_file=trajectory_path,

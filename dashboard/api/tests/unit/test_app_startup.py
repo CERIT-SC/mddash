@@ -6,6 +6,7 @@ from pathlib import Path
 from types import ModuleType
 from unittest.mock import MagicMock
 
+import pytest
 from flask import Flask
 from pytest_mock import MockerFixture
 
@@ -109,7 +110,7 @@ def test_run_migrations_stamps_unversioned_database_with_tables(app: Flask, mock
 
 
 def test_run_migrations_restamps_unknown_revision(app: Flask, mocker: MockerFixture) -> None:
-    """Unknown DB revisions from old auto-generated migrations must be restamped."""
+    """Unknown DB revisions ahead of the script directory must fail fast."""
     import app as app_module  # noqa: PLC0415
     from alembic.util.exc import CommandError  # noqa: PLC0415
 
@@ -124,11 +125,14 @@ def test_run_migrations_restamps_unknown_revision(app: Flask, mocker: MockerFixt
     stamp = mocker.patch("app.stamp")
     upgrade = mocker.patch("app.upgrade")
 
-    with app.app_context():
+    with (
+        app.app_context(),
+        pytest.raises(RuntimeError, match="ahead of migration scripts"),
+    ):
         app_module._run_migrations()  # noqa: SLF001
 
-    stamp.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR), revision="001", purge=True)
-    upgrade.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR))
+    stamp.assert_not_called()
+    upgrade.assert_not_called()
 
 
 def test_run_migrations_upgrades_fresh_empty_database(app: Flask, mocker: MockerFixture) -> None:

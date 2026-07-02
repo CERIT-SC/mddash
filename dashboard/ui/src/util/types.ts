@@ -17,6 +17,19 @@ export interface Experiment {
   simulation_jobs: SimulationJob[]
 }
 
+export interface Simulation {
+  simulation_path: string
+  name: string
+  engine: "GMX" | "AMBER"
+  files: Record<string, string>
+  resolved_files: Record<string, string>
+  extra_args: string
+  locked: boolean
+  valid: boolean
+  errors: string[]
+  missing_files: string[]
+}
+
 export type NotebookTier = "1x" | "2x" | "4x"
 
 export interface Notebook {
@@ -44,9 +57,7 @@ export interface TunerJob {
   id: string
   experiment_id: string
   engine: Engine
-  tpr_name: string
-  inpcrd_name: string | null
-  mdin_name: string | null
+  simulation_path: string
   tuner_status: JobStatus | null
   error_message: string | null
   created_at: string
@@ -86,12 +97,11 @@ export interface GromacsJob {
   experiment_id: string
   created_at: string
   engine: "GMX"
-  tpr_name: string
+  simulation_path: string
   pme: DeviceType
   nb: DeviceType
   np: number
   ntomp: number
-  extra_args: string
   status: JobStatus
   start_timestamp: number | null
   finish_timestamp: number | null
@@ -106,14 +116,11 @@ export interface AmberJob {
   experiment_id: string
   created_at: string
   engine: "AMBER"
-  prmtop_name: string
-  inpcrd_name: string
-  mdin_name: string
+  simulation_path: string
   binary: AmberBinary
   ewald: EwaldPreset
   np: number
   ntomp: number
-  extra_args: string
   status: JobStatus
   start_timestamp: number | null
   finish_timestamp: number | null

@@ -2,10 +2,12 @@ import { useState } from "react"
 
 import { SkipForward } from "lucide-react"
 
+import type { Simulation } from "@/util/types"
+import { useSimulations } from "@/hooks/use-simulations"
 import { useDeleteTuner, useStopTuner, useTunerStatuses } from "@/hooks/use-tuner"
 import { Button } from "@/components/ui/button"
 import ConfirmDialog from "@/components/ConfirmDialog"
-import AmberSelector, { type AmberJobEntry } from "@/components/Wizard/AmberSelector"
+import SimulationSelector from "@/components/Wizard/SimulationSelector"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import AmberTunerView from "./AmberTunerView"
@@ -14,78 +16,53 @@ const AmberTunePanel = (props: WizardStepProps) => {
   const { experiment } = props
 
   const { data: tunerJobs = [], refetch: refetchJobs } = useTunerStatuses(experiment.id)
+  const { data: simulations = [], isLoading } = useSimulations(experiment.id)
   const stopTuner = useStopTuner(experiment.id)
   const deleteTuner = useDeleteTuner(experiment.id)
 
-  const existingPrmtops = tunerJobs.map((job) => job.tpr_name)
-
-  const [selectedPrmtop, setSelectedPrmtop] = useState<string | null>(null)
-  const [localJobs, setLocalJobs] = useState<AmberJobEntry[]>([])
+  const [selected, setSelected] = useState<Simulation | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false)
   const [skipDialog, setSkipDialog] = useState(false)
 
-  const allPrmtops = Array.from(new Set([...existingPrmtops, ...localJobs.map((j) => j.prmtopName)]))
-
-  const handleAddJob = (entry: AmberJobEntry) => {
-    setLocalJobs((prev) => (prev.some((j) => j.prmtopName === entry.prmtopName) ? prev : [...prev, entry]))
-    setSelectedPrmtop(entry.prmtopName)
-  }
-
-  const handleDeleteJob = (prmtopName: string) => {
-    if (existingPrmtops.includes(prmtopName)) {
-      setDeleteTarget(prmtopName)
+  const handleDelete = (sim: Simulation) => {
+    if (tunerJobs.some((j) => j.simulation_path === sim.simulation_path)) {
+      setDeleteTarget(sim.simulation_path)
       setConfirmDeleteDialog(true)
     } else {
-      if (selectedPrmtop === prmtopName) setSelectedPrmtop(null)
-      setLocalJobs((prev) => prev.filter((j) => j.prmtopName !== prmtopName))
+      setSelected(null)
     }
   }
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return
     await deleteTuner.mutateAsync(deleteTarget)
-    if (selectedPrmtop === deleteTarget) setSelectedPrmtop(null)
-    setLocalJobs((prev) => prev.filter((j) => j.prmtopName !== deleteTarget))
+    setSelected(null)
     refetchJobs()
   }
 
-  const handleStop = async (prmtopName: string) => {
-    await stopTuner.mutateAsync(prmtopName)
+  const handleStop = async (simulationPath: string) => {
+    await stopTuner.mutateAsync(simulationPath)
     refetchJobs()
   }
-
-  const selectedJob =
-    tunerJobs.find((j) => j.tpr_name === selectedPrmtop) ?? localJobs.find((j) => j.prmtopName === selectedPrmtop)
-
-  const selectedInpcrd =
-    selectedJob && "inpcrd_name" in selectedJob
-      ? (selectedJob.inpcrd_name ?? "")
-      : ((selectedJob as AmberJobEntry | undefined)?.inpcrdName ?? "")
-
-  const selectedMdin =
-    selectedJob && "mdin_name" in selectedJob
-      ? (selectedJob.mdin_name ?? "")
-      : ((selectedJob as AmberJobEntry | undefined)?.mdinName ?? "")
 
   return (
     <div className="flex w-full flex-col items-center gap-4">
       <div className="flex w-[90%] flex-row gap-4">
-        <AmberSelector
-          experimentId={experiment.id}
-          jobs={allPrmtops}
-          selectedPrmtop={selectedPrmtop}
-          onAddJob={handleAddJob}
-          onDeleteJob={handleDeleteJob}
-          onSelectJob={setSelectedPrmtop}
+        <SimulationSelector
+          simulations={simulations}
+          selectedPath={selected?.simulation_path ?? null}
+          loading={isLoading}
+          onSelect={(sim) => {
+            if (sim) handleDelete(sim)
+            setSelected(sim)
+          }}
         />
 
-        {selectedPrmtop && selectedJob ? (
+        {selected ? (
           <div className="flex-1">
             <AmberTunerView
-              prmtopName={selectedPrmtop}
-              inpcrdName={selectedInpcrd}
-              mdinName={selectedMdin}
+              simulationPath={selected.simulation_path}
               stopJob={handleStop}
               onStartTuner={refetchJobs}
               {...props}

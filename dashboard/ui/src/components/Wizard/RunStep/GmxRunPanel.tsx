@@ -1,67 +1,58 @@
 import { useState } from "react"
 
+import type { Simulation } from "@/util/types"
 import { useDeleteGmx, useGromacsStatuses } from "@/hooks/use-gromacs"
+import { useSimulations } from "@/hooks/use-simulations"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import SimulationSelector from "@/components/Wizard/SimulationSelector"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
-import TprSelector from "../TprSelector"
 import RunView from "./RunView"
 
 const GmxRunPanel = (props: WizardStepProps) => {
   const { experiment } = props
 
   const { data: gromacsJobs = [], refetch: refetchJobs } = useGromacsStatuses(experiment.id)
+  const { data: simulations = [], isLoading } = useSimulations(experiment.id)
   const deleteGmx = useDeleteGmx(experiment.id)
 
-  const existingJobs = gromacsJobs.map((job) => job.tpr_name)
-
-  const [selectedTpr, setSelectedTpr] = useState<string | null>(null)
-  const [localTprFiles, setLocalTprFiles] = useState<string[]>([])
-  const [deleteTpr, setDeleteTpr] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Simulation | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false)
 
-  const allTprFiles = Array.from(new Set([...existingJobs, ...localTprFiles]))
-
-  const handleAddTpr = (tpr: string) => {
-    setLocalTprFiles((prev) => (prev.includes(tpr) ? prev : [...prev, tpr]))
-    setSelectedTpr(tpr)
-  }
-
-  const handleDeleteTpr = (tpr: string) => {
-    if (existingJobs.includes(tpr)) {
-      setDeleteTpr(tpr)
-      setConfirmDeleteDialog(true)
-    } else {
-      setSelectedTpr(null)
-      setLocalTprFiles((prev) => prev.filter((t) => t !== tpr))
+  const handleSelect = (sim: Simulation | null) => {
+    if (!sim) {
+      setSelected(null)
+      return
     }
+    if (gromacsJobs.some((j) => j.simulation_path === sim.simulation_path)) {
+      setDeleteTarget(sim.simulation_path)
+      setConfirmDeleteDialog(true)
+      return
+    }
+    setSelected(sim)
   }
 
   const handleConfirmDelete = async () => {
-    if (!deleteTpr) return
-    await deleteGmx.mutateAsync(deleteTpr)
-    setSelectedTpr(null)
-    setLocalTprFiles((prev) => prev.filter((t) => t !== deleteTpr))
+    if (!deleteTarget) return
+    await deleteGmx.mutateAsync(deleteTarget)
+    setSelected(null)
     refetchJobs()
   }
 
   return (
     <div className="flex w-full flex-col items-center gap-4">
       <div className="flex w-[90%] flex-row gap-4">
-        <TprSelector
-          experimentId={experiment.id}
-          title="Gromacs Jobs"
-          addTitle="Add Gromacs Job"
-          tprFiles={allTprFiles}
-          selectedTpr={selectedTpr}
-          onAddTpr={handleAddTpr}
-          onDeleteTpr={handleDeleteTpr}
-          onSelectTpr={setSelectedTpr}
+        <SimulationSelector
+          simulations={simulations}
+          selectedPath={selected?.simulation_path ?? null}
+          loading={isLoading}
+          onSelect={handleSelect}
         />
 
-        {selectedTpr && (
+        {selected && (
           <div className="flex-1">
-            <RunView tprName={selectedTpr} onStartJob={refetchJobs} {...props} />
+            <RunView simulationPath={selected.simulation_path} onStartJob={refetchJobs} {...props} />
           </div>
         )}
       </div>

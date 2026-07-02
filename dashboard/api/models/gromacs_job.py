@@ -1,6 +1,7 @@
 import logging
 import re
 from datetime import UTC, datetime
+from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -25,6 +26,13 @@ from werkzeug.exceptions import (
     UnprocessableEntity,
 )
 
+from models.simulation import (
+    get_simulation,
+    mark_simulation_readonly,
+    simulation_files,
+    validate_simulation_for_action,
+)
+
 from .simulation_job import SimulationJob
 
 if TYPE_CHECKING:
@@ -45,8 +53,6 @@ class GromacsJob(SimulationJob):
 
     id: Mapped[str] = mapped_column(ForeignKey("simulation_jobs.id"), primary_key=True)
 
-    # Name of the TPR file
-    tpr_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # Device type for PME calculations
     pme: Mapped["DeviceType"] = mapped_column(db.Enum(DeviceType), nullable=False)
     # Device type for non-bonded interactions
@@ -54,10 +60,18 @@ class GromacsJob(SimulationJob):
     # Step at which the simulation started (non-zero when resuming from checkpoint)
     _init_step: Mapped[int | None] = mapped_column("init_step", db.Integer, nullable=True)
 
+    @cached_property
+    def _files(self) -> dict[str, str]:
+        return simulation_files(self.experiment_id, self.simulation_path)
+
+    @property
+    def _topology_rel(self) -> str:
+        return self._files["topology"]
+
     @property
     def _deffnm(self) -> str:
-        """Default filename without extension."""
-        return self.tpr_name.removesuffix(".tpr")
+        """Default filename without extension, derived from the simulation topology."""
+        return self._topology_rel.removesuffix(".tpr")
 
     @property
     def _gmx_log(self) -> Path:
@@ -177,29 +191,33 @@ class GromacsJob(SimulationJob):
     def start(
         cls,
         experiment: "Experiment",
-        tpr_path: Path,
+        simulation_path: str,
         pme: DeviceType,
         nb: DeviceType,
         np: int,
         ntomp: int,
-        extra_args: str = "",
     ) -> "GromacsJob":
         """
-        Start a GROMACS job for the given experiment and TPR file.
+        Start a GROMACS job for the given experiment and simulation manifest.
+
+        The TPR path and ``extra_args`` are derived from the simulation JSON and
+        passed to MDRun; only ``simulation_path`` and compute settings are persisted.
 
         Args:
             experiment: The experiment to associate with the job.
-            tpr_path: Path to the TPR file.
+            simulation_path: Experiment-relative path to the ``.simulation.json``.
             pme: Device type for PME calculations.
             nb: Device type for non-bonded interactions.
             np: Number of MPI processes.
             ntomp: Number of OpenMP threads per MPI rank.
-            extra_args: Additional arguments for the job.
 
         Returns:
             The created GromacsJob instance.
         """
-        tpr_rel_path = str(tpr_path.relative_to(DATA_DIR / experiment.id))
+        simulation = get_simulation(experiment.id, simulation_path)
+        validate_simulation_for_action(simulation, "run")
+        tpr_rel_path = simulation["resolved_files"]["topology"]
+        extra_args = simulation.get("extra_args", "")
 
         mdrun_job = mdrun.create_job(
             experiment_id=experiment.id,
@@ -214,12 +232,11 @@ class GromacsJob(SimulationJob):
 
         job = GromacsJob(
             id=mdrun_job["id"],  # type: ignore[call-arg]
-            tpr_name=tpr_rel_path,  # type: ignore[call-arg]
+            simulation_path=simulation_path,  # type: ignore[call-arg]
             pme=pme,  # type: ignore[call-arg]
             nb=nb,  # type: ignore[call-arg]
             np=np,  # type: ignore[call-arg]
             ntomp=ntomp,  # type: ignore[call-arg]
-            extra_args=extra_args,  # type: ignore[call-arg]
             experiment_id=experiment.id,  # type: ignore[call-arg]
             engine=Engine.GMX,  # type: ignore[call-arg]
         )
@@ -228,7 +245,8 @@ class GromacsJob(SimulationJob):
         job._cleanup_files()
 
         db.session.commit()
-        logger.info(f"Started GROMACS job {job.id} for experiment {experiment.id} with TPR {tpr_rel_path}")
+        mark_simulation_readonly(experiment.id, simulation_path)
+        logger.info(f"Started GROMACS job {job.id} for experiment {experiment.id} (simulation {simulation_path})")
 
         return job
 

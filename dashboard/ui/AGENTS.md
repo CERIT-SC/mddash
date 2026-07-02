@@ -149,16 +149,20 @@ graph TD
 - `use-experiment.ts` - Single experiment query + mutations
 - `use-metrics.ts` - Simulation metrics (refetchInterval: 30s)
 - `use-notebook.ts` - Notebook status and control
-- `use-tuner.ts` - Gromacs Tuner integration
-- `use-gromacs.ts` - GROMACS job state
-- `use-amber.ts` - AMBER job state
-- `use-analysis.ts` - Analysis job state
+- `use-simulations.ts` - Simulation manifest CRUD (list, get, create, update)
+- `use-tuner.ts` - Tuner job integration (keyed by `simulation_path`)
+- `use-gromacs.ts` - GROMACS job state (keyed by `simulation_path`)
+- `use-amber.ts` - AMBER job state (keyed by `simulation_path`)
+- `use-analysis.ts` - Analysis job state (submits `simulation_path`)
 - `use-files.ts` - File listing query
 - `use-mdrepo.ts` - MDRepo integration + `getMDRepoAuthUrl()`
 
 ### Wizard Step Entry Points
-- `src/components/Wizard/SetupStep/SetupStep.tsx` - Initial setup and notebook spawning
+- `src/components/Wizard/SetupStep/SetupStep.tsx` - Setup, notebook spawning, and simulation manifest editing
+- `src/components/Wizard/SimulationSelector.tsx` - Shared simulation list selector (used by all wizard steps)
+- `src/components/Wizard/SimulationPreview.tsx` - Read-only simulation manifest preview with validation status
+- `src/components/Wizard/SimulationEditor.tsx` - Create/edit simulation manifests in the setup step
 - `src/components/Wizard/TuneStep/TuneStep.tsx` - Engine-specific parameter tuning workflow for GROMACS or AMBER
 - `src/components/Wizard/RunStep/RunStep.tsx` - Engine-specific simulation execution for GROMACS or AMBER
 - `src/components/Wizard/AnalyzeStep/AnalyzeStep.tsx` - Results analysis
-- `src/components/Wizard/PublishStep/PublishStep.tsx` - MDRepo publication
+- `src/components/Wizard/PublishStep/PublishStep.tsx` - MDRepo/MDPosit publication

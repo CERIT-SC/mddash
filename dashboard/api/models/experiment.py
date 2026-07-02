@@ -20,8 +20,7 @@ from extensions import db
 from flask import session
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from token_manager import MDRepoTokenManager
-from utils import download_git_repo, get_files_with_extensions, get_unique_id
-from validators import check_path
+from utils import download_git_repo, get_unique_id
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 from werkzeug.utils import secure_filename
@@ -35,6 +34,32 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+
+def _list_simulations(experiment_id: str) -> list[dict]:
+    """
+    List simulations for an experiment, deferring the import to avoid a circular dependency.
+
+    Returns:
+        List of simulation response dicts.
+    """
+    from .simulation import list_simulations  # noqa: PLC0415
+
+    return list_simulations(experiment_id)
+
+
+_SCHEMA_FILES = ("gromacs.schema.json", "amber.schema.json")
+
+
+def _chmod_schema_files_readonly(experiment_dir: Path) -> None:
+    """Best-effort chmod notebook schema files read-only (0444)."""
+    for name in _SCHEMA_FILES:
+        schema_path = experiment_dir / name
+        if schema_path.is_file():
+            try:
+                Path(schema_path).chmod(0o444)
+            except OSError:
+                logger.warning("Failed to chmod schema file '%s' read-only", name, exc_info=True)
 
 
 def _resolve_repo_link(repo_link: str) -> str:
@@ -218,6 +243,8 @@ class Experiment(db.Model):  # type: ignore
         except Exception:
             rmtree(experiment_dir, ignore_errors=True)
             raise
+
+        _chmod_schema_files_readonly(experiment_dir)
         return experiment_id
 
     @classmethod
@@ -394,24 +421,20 @@ class Experiment(db.Model):  # type: ignore
 
     def _has_setup_files(self) -> bool:
         """
-        Check if the experiment directory contains required setup files for the configured engine.
+        Return whether at least one valid simulation manifest exists for the engine.
 
         Returns:
-            True if all required files for the engine are present, False otherwise.
+            True if a valid simulation exists, False otherwise.
         """
-        exp_dir = DATA_DIR / self.id
-        if not exp_dir.exists():
-            return False
+        from .simulation import (  # noqa: PLC0415
+            get_simulation,
+            list_simulation_files,
+        )
 
-        if self.engine == Engine.GMX:
-            return bool(get_files_with_extensions(exp_dir, "tpr"))
-
-        if self.engine == Engine.AMBER:
-            has_mdin = get_files_with_extensions(exp_dir, "mdin")
-            has_prmtop = get_files_with_extensions(exp_dir, ["prmtop", "parm7"])
-            has_inpcrd = get_files_with_extensions(exp_dir, ["inpcrd", "rst7", "nc"])
-            return bool(has_mdin and has_prmtop and has_inpcrd)
-
+        for f in list_simulation_files(self.id):
+            sim = get_simulation(self.id, f.path)
+            if sim["valid"] and sim.get("engine") == self.engine.value:
+                return True
         return False
 
     @cached(cache=step_status_cache)
@@ -516,7 +539,7 @@ class Experiment(db.Model):  # type: ignore
         self,
         community: str = "ceitec",
         target: str = "invenio",
-        selected_files: dict[str, str] | None = None,
+        simulation_path: str | None = None,
     ) -> dict:
         """
         Publish the experiment to the selected target.
@@ -530,7 +553,7 @@ class Experiment(db.Model):  # type: ignore
         if target == "invenio":
             return self._publish_invenio(community)
         if target == "mdposit":
-            return self._publish_mdposit(selected_files or {})
+            return self._publish_mdposit(simulation_path or "")
         raise BadRequest(description=f"Unknown publish target: {target}")
 
     def _publish_invenio(self, community: str) -> dict:
@@ -554,8 +577,13 @@ class Experiment(db.Model):  # type: ignore
                 description="No valid MDRepo access token available. Please authenticate with MDRepo."
             )
 
-        gmx_jobs = [j for j in self.simulation_jobs if j.engine == Engine.GMX]
-        tpr_paths = [DATA_DIR / self.id / j.tpr_name for j in gmx_jobs]
+        gmx_simulations = [s for s in _list_simulations(self.id) if s.get("engine") == Engine.GMX.value and s["valid"]]
+        tpr_paths = []
+        for sim in gmx_simulations:
+            resolved = sim.get("resolved_files", {})
+            topology = resolved.get("topology")
+            if topology:
+                tpr_paths.append(DATA_DIR / self.id / topology)
         simulations = metadump.extract_metadata_bulk(tpr_paths) if tpr_paths else []
 
         metadata: dict = {"simulations": simulations}
@@ -579,19 +607,26 @@ class Experiment(db.Model):  # type: ignore
         logger.info(f"Queued file upload job '{self.id}' to MDRepo.")
         return mdrepo_experiment
 
-    def _publish_mdposit(self, selected_files: dict[str, str]) -> dict:
+    def _publish_mdposit(self, simulation_path: str) -> dict:
         """
-        Prepare stateless MDPosit publication metadata for selected experiment files.
+        Prepare stateless MDPosit publication metadata from a simulation manifest.
 
         Returns:
             Metadata file and selected file descriptors for MDPosit publishing.
 
         Raises:
-            BadRequest: If required selected files are missing or invalid.
+            BadRequest: If MDPosit is unconfigured or required files are missing/invalid.
             InternalServerError: If metadata generation fails.
         """
         if not MDPOSIT_URL:
             raise BadRequest(description="MDPosit is not configured. Set MDPOSIT_URL to enable MDPosit publishing.")
+
+        from .simulation import get_simulation, resolve_simulation_role  # noqa: PLC0415
+
+        simulation = get_simulation(self.id, simulation_path)
+        if not simulation.get("valid"):
+            errors = simulation.get("errors") or ["Simulation is invalid."]
+            raise BadRequest(description=f"Cannot publish invalid simulation: {'; '.join(errors)}")
 
         exp_dir = DATA_DIR / self.id
         if not exp_dir.exists():
@@ -600,33 +635,27 @@ class Experiment(db.Model):  # type: ignore
 
         allowed_extensions = {
             "structure": {"pdb", "gro"},
-            "topology": {"top", "prmtop", "parm7", "psf"},
+            "topology": {"top", "prmtop", "parm7", "psf", "tpr"},
             "trajectory": {"xtc", "trr", "nc", "dcd"},
         }
 
         files: list[dict[str, str]] = []
         selected_paths: dict[str, Path] = {}
 
-        for role, extensions in allowed_extensions.items():
-            relative_path = selected_files.get(role)
-            if not relative_path:
-                raise BadRequest(description=f"Missing required file for role: {role}")
+        for role, exts in allowed_extensions.items():
+            if role not in simulation.get("files", {}):
+                raise BadRequest(description=f"Simulation is missing file role '{role}' for MDPosit.")
 
-            check_path(relative_path, exp_dir)
-            try:
-                file_path = (exp_dir / relative_path).resolve()
-                file_path.relative_to(exp_dir_resolved)
-            except (OSError, ValueError):
-                raise BadRequest(description=f"Selected file for role '{role}' is invalid.")
-
+            file_path = resolve_simulation_role(self.id, simulation, role)
             if not file_path.is_file():
                 raise BadRequest(description=f"Selected file for role '{role}' does not exist.")
 
             extension = file_path.suffix.lstrip(".").lower()
-            if extension not in extensions:
-                allowed = ", ".join(sorted(extensions))
+            if extension not in exts:
+                allowed = ", ".join(sorted(exts))
                 raise BadRequest(description=f"Invalid file extension for role '{role}'. Allowed: {allowed}")
 
+            relative_path = str(file_path.relative_to(exp_dir_resolved))
             selected_paths[role] = file_path
             files.append({
                 "role": role,

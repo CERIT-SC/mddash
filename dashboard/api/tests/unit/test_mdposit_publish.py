@@ -2,6 +2,8 @@
 
 # ruff: noqa: ARG002 — @patch decorators inject unused mock params by design
 
+import json
+import os
 from collections.abc import Generator
 from http import HTTPStatus
 from pathlib import Path
@@ -13,11 +15,31 @@ from flask import Flask
 from flask.testing import FlaskClient
 from models import Experiment, Notebook
 from routes import experiments_bp, mdrepo_bp
-from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError
+from werkzeug.exceptions import BadRequest, InternalServerError
 
-# ---------------------------------------------------------------------------
-# Fixtures — lightweight Flask app with DB for model-level tests
-# ---------------------------------------------------------------------------
+GMX_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "MDDash GROMACS simulation manifest",
+    "type": "object",
+    "required": ["name", "engine", "files", "extra_args"],
+    "additionalProperties": False,
+    "properties": {
+        "$schema": {"type": "string"},
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "engine": {"const": "GMX"},
+        "files": {
+            "type": "object",
+            "required": ["topology", "structure", "trajectory"],
+            "additionalProperties": False,
+            "properties": {
+                "topology": {"type": "string"},
+                "structure": {"type": "string"},
+                "trajectory": {"type": "string"},
+            },
+        },
+        "extra_args": {"type": "string"},
+    },
+}
 
 
 @pytest.fixture
@@ -37,7 +59,7 @@ def app(tmp_path: Path) -> Generator[Flask, None, None]:
     db.init_app(test_app)
     ma.init_app(test_app)
 
-    with patch.dict("config.__dict__", {"DATA_DIR": tmp_path}):
+    with patch.dict("config.__dict__", {"DATA_DIR": tmp_path}), patch("models.simulation.DATA_DIR", tmp_path):
         test_app.register_blueprint(experiments_bp)
         test_app.register_blueprint(mdrepo_bp)
 
@@ -85,16 +107,38 @@ def _seed_experiment(app: Flask, exp_id: str = "pubsh", name: str = "Publish Tes
         return exp_id
 
 
-# ---------------------------------------------------------------------------
-# Requirement 1: Default publish target is Invenio, still requires MDRepo OAuth
-# ---------------------------------------------------------------------------
+def _write_gmx_simulation(
+    exp_dir: Path,
+    simulation_path: str = "sim.simulation.json",
+    name: str = "sim",
+    files: dict[str, str] | None = None,
+) -> str:
+    """
+    Write schema files and a GMX simulation manifest.
+
+    Returns:
+        The simulation_path.
+    """
+    (exp_dir / "gromacs.schema.json").write_text(json.dumps(GMX_SCHEMA))
+    sim_file = exp_dir / simulation_path
+    sim_file.parent.mkdir(parents=True, exist_ok=True)
+    sim_dir = sim_file.parent
+    content = {
+        "$schema": os.path.relpath(exp_dir / "gromacs.schema.json", sim_dir),
+        "name": name,
+        "engine": "GMX",
+        "files": files or {"topology": "topol.tpr", "structure": "struct.pdb", "trajectory": "traj.xtc"},
+        "extra_args": "",
+    }
+    sim_file.write_text(json.dumps(content))
+    return simulation_path
 
 
 class TestDefaultPublishTargetInvenio:
     """Default target=invenio requires MDRepo authentication."""
 
     def test_publish_default_target_requires_mdrepo_token(self, app: Flask, tmp_path: Path) -> None:
-        """Publishing without MDRepo token raises Unauthorized."""
+        """Test test_publish_default_target_requires_mdrepo_token."""
         _seed_experiment(app)
         (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
 
@@ -104,7 +148,7 @@ class TestDefaultPublishTargetInvenio:
             assert "MDRepo" in resp.get_json()["detail"]
 
     def test_publish_explicit_invenio_also_requires_token(self, app: Flask, tmp_path: Path) -> None:
-        """Explicit target=invenio also requires MDRepo auth."""
+        """Test test_publish_explicit_invenio_also_requires_token."""
         _seed_experiment(app)
         (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
 
@@ -127,12 +171,13 @@ class TestDefaultPublishTargetInvenio:
         app: Flask,
         tmp_path: Path,
     ) -> None:
-        """When a valid MDRepo token exists, invenio publish should succeed at model level."""
+        """Test test_publish_invenio_with_token_succeeds."""
         _seed_experiment(app)
         (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
 
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
         ):
             exp = Experiment.query.get("pubsh")
@@ -145,38 +190,31 @@ class TestDefaultPublishTargetInvenio:
             mock_create.assert_called_once()
 
 
-# ---------------------------------------------------------------------------
-# Requirement 2: Explicit target=mdposit returns handoff without MDRepo OAuth
-# ---------------------------------------------------------------------------
-
-
 class TestMdpositPublishNoOAuth:
     """MDPosit publish does not require MDRepo OAuth token."""
 
     def test_mdposit_publish_does_not_require_mdrepo_token(self, app: Flask, tmp_path: Path) -> None:
-        """target=mdposit should succeed without any MDRepo token in session."""
+        """Test test_mdposit_publish_does_not_require_mdrepo_token."""
         _seed_experiment(app)
         exp_dir = tmp_path / "pubsh"
         exp_dir.mkdir(parents=True, exist_ok=True)
         (exp_dir / "struct.pdb").write_text("ATOM data")
-        (exp_dir / "topol.top").write_text(" topology ")
+        (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
+        sim_path = _write_gmx_simulation(
+            exp_dir,
+            files={"topology": "topol.tpr", "structure": "struct.pdb", "trajectory": "traj.xtc"},
+        )
 
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             patch("models.experiment.MDPOSIT_VRE_LITE_URL", "https://mdposit.example.com/vre_lite/"),
             app.test_client() as c,
         ):
             resp = c.post(
                 "/dash/api/experiments/pubsh/publish",
-                json={
-                    "target": "mdposit",
-                    "files": {
-                        "structure": "struct.pdb",
-                        "topology": "topol.top",
-                        "trajectory": "traj.xtc",
-                    },
-                },
+                json={"target": "mdposit", "simulation_path": sim_path},
                 content_type="application/json",
             )
             assert resp.status_code == HTTPStatus.CREATED
@@ -187,53 +225,47 @@ class TestMdpositPublishNoOAuth:
             assert "vre_lite_url" in data
 
     def test_mdposit_publish_rejected_when_not_configured(self, app: Flask, tmp_path: Path) -> None:
-        """target=mdposit must return 400 when MDPOSIT_URL is empty."""
+        """Test test_mdposit_publish_rejected_when_not_configured."""
         _seed_experiment(app)
         exp_dir = tmp_path / "pubsh"
         exp_dir.mkdir(parents=True, exist_ok=True)
         (exp_dir / "struct.pdb").write_text("ATOM data")
-        (exp_dir / "topol.top").write_text(" topology ")
+        (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
+        sim_path = _write_gmx_simulation(exp_dir)
 
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             patch("models.experiment.MDPOSIT_URL", ""),
             app.test_client() as c,
         ):
             resp = c.post(
                 "/dash/api/experiments/pubsh/publish",
-                json={
-                    "target": "mdposit",
-                    "files": {
-                        "structure": "struct.pdb",
-                        "topology": "topol.top",
-                        "trajectory": "traj.xtc",
-                    },
-                },
+                json={"target": "mdposit", "simulation_path": sim_path},
                 content_type="application/json",
             )
             assert resp.status_code == HTTPStatus.BAD_REQUEST
-
-
-# ---------------------------------------------------------------------------
-# Requirement 3: MDPosit publish does NOT modify mdrepo_id or mdrepo_published
-# ---------------------------------------------------------------------------
 
 
 class TestMdpositPublishNoDbMutation:
     """MDPosit handoff is stateless — must not change MDRepo columns."""
 
     def test_mdposit_publish_leaves_mdrepo_fields_null(self, app: Flask, tmp_path: Path) -> None:
-        """After mdposit publish, mdrepo_id and mdrepo_published remain None."""
+        """Test test_mdposit_publish_leaves_mdrepo_fields_null."""
         _seed_experiment(app)
         exp_dir = tmp_path / "pubsh"
         exp_dir.mkdir(parents=True, exist_ok=True)
         (exp_dir / "struct.gro").write_text("gro data")
-        (exp_dir / "topol.top").write_text("top data")
+        (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
+        sim_path = _write_gmx_simulation(
+            exp_dir, files={"topology": "topol.tpr", "structure": "struct.gro", "trajectory": "traj.xtc"}
+        )
 
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             patch("models.experiment.MDPOSIT_VRE_LITE_URL", "https://mdposit.example.com/vre_lite/"),
             app.app_context(),
         ):
@@ -241,14 +273,7 @@ class TestMdpositPublishNoDbMutation:
             assert exp.mdrepo_id is None
             assert exp.mdrepo_published is None
 
-            result = exp.publish(
-                target="mdposit",
-                selected_files={
-                    "structure": "struct.gro",
-                    "topology": "topol.top",
-                    "trajectory": "traj.xtc",
-                },
-            )
+            result = exp.publish(target="mdposit", simulation_path=sim_path)
 
             db.session.refresh(exp)
             assert exp.mdrepo_id is None
@@ -257,16 +282,18 @@ class TestMdpositPublishNoDbMutation:
             assert result["metadata_file"]["path"] == "inputs.yaml"
 
     def test_mdposit_publish_does_not_overwrite_existing_mdrepo_fields(self, app: Flask, tmp_path: Path) -> None:
-        """If experiment was already published to MDRepo, mdposit publish must not clear those fields."""
+        """Test test_mdposit_publish_does_not_overwrite_existing_mdrepo_fields."""
         _seed_experiment(app)
         exp_dir = tmp_path / "pubsh"
         exp_dir.mkdir(parents=True, exist_ok=True)
         (exp_dir / "struct.pdb").write_text("ATOM")
-        (exp_dir / "topol.top").write_text("top")
+        (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
+        sim_path = _write_gmx_simulation(exp_dir)
 
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             patch("models.experiment.MDPOSIT_VRE_LITE_URL", ""),
             app.app_context(),
         ):
@@ -275,23 +302,11 @@ class TestMdpositPublishNoDbMutation:
             exp.mdrepo_published = True
             db.session.commit()
 
-            exp.publish(
-                target="mdposit",
-                selected_files={
-                    "structure": "struct.pdb",
-                    "topology": "topol.top",
-                    "trajectory": "traj.xtc",
-                },
-            )
+            exp.publish(target="mdposit", simulation_path=sim_path)
 
             db.session.refresh(exp)
             assert exp.mdrepo_id == "existing-mdrepo-id"
             assert exp.mdrepo_published is True
-
-
-# ---------------------------------------------------------------------------
-# Requirement 4: Existing Invenio publish behavior unchanged
-# ---------------------------------------------------------------------------
 
 
 class TestInvenioPublishUnchanged:
@@ -308,12 +323,13 @@ class TestInvenioPublishUnchanged:
         app: Flask,
         tmp_path: Path,
     ) -> None:
-        """Invenio publish must set mdrepo_id and mdrepo_published=False."""
+        """Test test_invenio_publish_sets_mdrepo_fields."""
         _seed_experiment(app)
         (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
 
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
         ):
             exp = Experiment.query.get("pubsh")
@@ -339,12 +355,13 @@ class TestInvenioPublishUnchanged:
         app: Flask,
         tmp_path: Path,
     ) -> None:
-        """Invenio publish must raise InternalServerError when no valid token."""
+        """Test test_invenio_publish_raises_without_token."""
         _seed_experiment(app)
         (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
 
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
         ):
             exp = Experiment.query.get("pubsh")
@@ -358,37 +375,29 @@ class TestInvenioPublishUnchanged:
                 exp.publish(target="invenio")
 
 
-# ---------------------------------------------------------------------------
-# Requirement 5: MDPosit handoff uses user-selected files only
-# ---------------------------------------------------------------------------
-
-
 class TestMdpositHandoffSelectedFiles:
     """Handoff contains individual file links and valid metadata YAML."""
 
     def test_handoff_includes_metadata_and_files(self, app: Flask, tmp_path: Path) -> None:
-        """Result should contain metadata file and three selected file descriptors."""
+        """Test test_handoff_includes_metadata_and_files."""
         _seed_experiment(app)
         exp_dir = tmp_path / "pubsh"
         exp_dir.mkdir(parents=True, exist_ok=True)
         (exp_dir / "my_struct.pdb").write_text("ATOM")
-        (exp_dir / "my_top.top").write_text("top")
+        (exp_dir / "my_top.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "my_traj.xtc").write_bytes(b"\x00" * 16)
+        sim_path = _write_gmx_simulation(
+            exp_dir, files={"topology": "my_top.tpr", "structure": "my_struct.pdb", "trajectory": "my_traj.xtc"}
+        )
 
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             patch("models.experiment.MDPOSIT_VRE_LITE_URL", ""),
             app.app_context(),
         ):
             exp = Experiment.query.get("pubsh")
-            result = exp.publish(
-                target="mdposit",
-                selected_files={
-                    "structure": "my_struct.pdb",
-                    "topology": "my_top.top",
-                    "trajectory": "my_traj.xtc",
-                },
-            )
+            result = exp.publish(target="mdposit", simulation_path=sim_path)
 
             assert result["metadata_file"]["path"] == "inputs.yaml"
             assert result["metadata_file"]["url"].startswith("/dash/api/experiments/pubsh/files/")
@@ -396,39 +405,36 @@ class TestMdpositHandoffSelectedFiles:
             assert roles == {"structure", "topology", "trajectory"}
             paths = {f["path"] for f in result["files"]}
             assert "my_struct.pdb" in paths
-            assert "my_top.top" in paths
+            assert "my_top.tpr" in paths
             assert "my_traj.xtc" in paths
 
     def test_metadata_yaml_contains_expected_fields(self, app: Flask, tmp_path: Path) -> None:
-        """inputs.yaml should contain top-level MDDB workflow fields."""
+        """Test test_metadata_yaml_contains_expected_fields."""
         _seed_experiment(app)
         exp_dir = tmp_path / "pubsh"
         exp_dir.mkdir(parents=True, exist_ok=True)
         (exp_dir / "s.pdb").write_text("ATOM")
-        (exp_dir / "t.top").write_text("top")
+        (exp_dir / "t.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "r.xtc").write_bytes(b"\x00" * 16)
+        sim_path = _write_gmx_simulation(
+            exp_dir, files={"topology": "t.tpr", "structure": "s.pdb", "trajectory": "r.xtc"}
+        )
 
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             patch("models.experiment.MDPOSIT_VRE_LITE_URL", ""),
             app.app_context(),
         ):
             exp = Experiment.query.get("pubsh")
-            result = exp.publish(
-                target="mdposit",
-                selected_files={
-                    "structure": "s.pdb",
-                    "topology": "t.top",
-                    "trajectory": "r.xtc",
-                },
-            )
+            result = exp.publish(target="mdposit", simulation_path=sim_path)
 
             assert (exp_dir / "inputs.yaml").exists()
             assert result["metadata_file"]["path"] == "inputs.yaml"
             yaml_content = (exp_dir / "inputs.yaml").read_text()
             assert yaml_content.startswith("name:")
             assert "input_structure_filepath: s.pdb" in yaml_content
-            assert "input_topology_filepath: t.top" in yaml_content
+            assert "input_topology_filepath: t.tpr" in yaml_content
             assert "input_trajectory_filepaths:" in yaml_content
             assert "- r.xtc" in yaml_content
             assert "program: GROMACS" in yaml_content
@@ -436,58 +442,54 @@ class TestMdpositHandoffSelectedFiles:
             assert "method: Classical MD" in yaml_content
 
 
-# ---------------------------------------------------------------------------
-# Requirement 6: Missing/invalid selected files return useful errors
-# ---------------------------------------------------------------------------
-
-
 class TestMdpositPublishFileValidation:
-    """Validate error messages for missing, nonexistent, unsupported, and traversal paths."""
+    """Validate error messages for missing, nonexistent, unsupported files."""
 
     def test_missing_role_key(self, app: Flask, tmp_path: Path) -> None:
-        """Omitting a required role should raise BadRequest with role name."""
+        """Simulation missing a file role should raise BadRequest."""
         _seed_experiment(app)
         exp_dir = tmp_path / "pubsh"
         exp_dir.mkdir(parents=True, exist_ok=True)
         (exp_dir / "struct.pdb").write_text("ATOM")
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
+        sim_path = _write_gmx_simulation(
+            exp_dir, files={"topology": "topol.tpr", "structure": "struct.pdb", "trajectory": "traj.xtc"}
+        )
+        # Rewrite without topology role
+        sim_file = exp_dir / sim_path
+        content = json.loads(sim_file.read_text())
+        del content["files"]["topology"]
+        sim_file.write_text(json.dumps(content))
 
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
         ):
             exp = Experiment.query.get("pubsh")
-            with pytest.raises(BadRequest, match="Missing required file for role"):
-                exp.publish(
-                    target="mdposit",
-                    selected_files={
-                        "structure": "struct.pdb",
-                        "trajectory": "traj.xtc",
-                    },
-                )
+            with pytest.raises(BadRequest, match="invalid simulation"):
+                exp.publish(target="mdposit", simulation_path=sim_path)
 
     def test_nonexistent_selected_file(self, app: Flask, tmp_path: Path) -> None:
-        """Selecting a file that does not exist on disk should raise BadRequest."""
+        """Simulation pointing to a nonexistent file should raise BadRequest."""
         _seed_experiment(app)
         exp_dir = tmp_path / "pubsh"
         exp_dir.mkdir(parents=True, exist_ok=True)
-        (exp_dir / "topol.top").write_text("top")
+        (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
+        sim_path = _write_gmx_simulation(
+            exp_dir,
+            files={"topology": "topol.tpr", "structure": "ghost.pdb", "trajectory": "traj.xtc"},
+        )
 
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
         ):
             exp = Experiment.query.get("pubsh")
             with pytest.raises(BadRequest, match="does not exist"):
-                exp.publish(
-                    target="mdposit",
-                    selected_files={
-                        "structure": "ghost.pdb",
-                        "topology": "topol.top",
-                        "trajectory": "traj.xtc",
-                    },
-                )
+                exp.publish(target="mdposit", simulation_path=sim_path)
 
     def test_unsupported_extension(self, app: Flask, tmp_path: Path) -> None:
         """File with wrong extension for its role should raise BadRequest."""
@@ -495,49 +497,24 @@ class TestMdpositPublishFileValidation:
         exp_dir = tmp_path / "pubsh"
         exp_dir.mkdir(parents=True, exist_ok=True)
         (exp_dir / "struct.txt").write_text("not a structure")
-        (exp_dir / "topol.top").write_text("top")
+        (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
+        sim_path = _write_gmx_simulation(
+            exp_dir,
+            files={"topology": "topol.tpr", "structure": "struct.txt", "trajectory": "traj.xtc"},
+        )
 
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
         ):
             exp = Experiment.query.get("pubsh")
             with pytest.raises(BadRequest, match="Invalid file extension for role 'structure'"):
-                exp.publish(
-                    target="mdposit",
-                    selected_files={
-                        "structure": "struct.txt",
-                        "topology": "topol.top",
-                        "trajectory": "traj.xtc",
-                    },
-                )
+                exp.publish(target="mdposit", simulation_path=sim_path)
 
-    def test_traversal_path_rejected(self, app: Flask, tmp_path: Path) -> None:
-        """Path traversal in selected file should raise an error."""
-        _seed_experiment(app)
-        exp_dir = tmp_path / "pubsh"
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        (exp_dir / "topol.top").write_text("top")
-        (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
-
-        with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            app.app_context(),
-        ):
-            exp = Experiment.query.get("pubsh")
-            with pytest.raises(Forbidden, match="Path traversal not allowed"):
-                exp.publish(
-                    target="mdposit",
-                    selected_files={
-                        "structure": "../../../etc/passwd",
-                        "topology": "topol.top",
-                        "trajectory": "traj.xtc",
-                    },
-                )
-
-    def test_route_returns_400_for_missing_files_key(self, app: Flask, tmp_path: Path) -> None:
-        """Route handler should return 400 when files dict is missing for mdposit target."""
+    def test_route_returns_400_for_missing_simulation_path(self, app: Flask, tmp_path: Path) -> None:
+        """Route handler should return 400 when simulation_path is missing for mdposit target."""
         _seed_experiment(app)
         (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
 
@@ -563,11 +540,6 @@ class TestMdpositPublishFileValidation:
             assert resp.status_code == HTTPStatus.BAD_REQUEST
 
 
-# ---------------------------------------------------------------------------
-# Requirement 9: _import_mdposit_repo creates experiment when files available
-# ---------------------------------------------------------------------------
-
-
 class TestImportMdpositRepo:
     """Tests for _import_mdposit_repo called via Experiment.from_repo."""
 
@@ -584,12 +556,9 @@ class TestImportMdpositRepo:
         app: Flask,
         tmp_path: Path,
     ) -> None:
-        """from_repo with MDPosit URL should create an experiment via _import_mdposit_repo."""
+        """Test test_from_repo_mdposit_creates_experiment."""
         exp_dir = tmp_path / "mpcr1"
         exp_dir.mkdir(parents=True, exist_ok=True)
-
-        downloaded_file = exp_dir / "sim.gro"
-        downloaded_file.write_text("gro data")
 
         def fake_download(_accession: str, output_dir: Path) -> list[Path]:
             f = output_dir / "sim.gro"
@@ -603,6 +572,7 @@ class TestImportMdpositRepo:
             patch("models.experiment._resolve_repo_link", return_value="https://mdposit.mddbr.eu/projects/PRJ1"),
             patch("models.experiment.mdposit.extract_accession", return_value="PRJ1"),
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
             patch("models.experiment.Experiment.prepare_env", return_value="mpcr1"),
         ):
@@ -626,12 +596,13 @@ class TestImportMdpositRepo:
         app: Flask,
         tmp_path: Path,
     ) -> None:
-        """from_repo with MDPosit URL but empty accession should raise BadRequest."""
+        """Test test_from_repo_mdposit_missing_accession_raises."""
         (tmp_path / "mpacc1").mkdir(parents=True, exist_ok=True)
 
         with (
             patch("models.experiment._resolve_repo_link", return_value="https://mdposit.mddbr.eu/"),
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
             patch("models.experiment.Experiment.prepare_env", return_value="mpacc1"),
             pytest.raises(BadRequest, match="Missing MDPosit project accession"),
@@ -655,13 +626,14 @@ class TestImportMdpositRepo:
         app: Flask,
         tmp_path: Path,
     ) -> None:
-        """from_repo when MDPosit has no files should raise BadRequest."""
+        """Test test_from_repo_mdposit_no_files_raises."""
         (tmp_path / "mpnf1").mkdir(parents=True, exist_ok=True)
 
         with (
             patch("models.experiment._resolve_repo_link", return_value="https://mdposit.mddbr.eu/projects/EMPTY"),
             patch("models.experiment.mdposit.extract_accession", return_value="EMPTY"),
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
             patch("models.experiment.Experiment.prepare_env", return_value="mpnf1"),
             pytest.raises(BadRequest, match="No files found"),
@@ -671,11 +643,6 @@ class TestImportMdpositRepo:
                 repo_link="https://mdposit.mddbr.eu/projects/EMPTY",
                 notebooks_repo="https://github.com/t/r.git",
             )
-
-
-# ---------------------------------------------------------------------------
-# Requirement 7 (route-level): is_mdposit_url drives from_repo routing
-# ---------------------------------------------------------------------------
 
 
 class TestFromRepoRouting:
@@ -692,12 +659,13 @@ class TestFromRepoRouting:
         app: Flask,
         tmp_path: Path,
     ) -> None:
-        """Non-MDPosit URLs should route through _import_invenio_repo."""
+        """Test test_from_repo_invenio_url."""
         (tmp_path / "inv01").mkdir(parents=True, exist_ok=True)
 
         with (
             patch("models.experiment._resolve_repo_link", return_value="https://zenodo.org/records/12345"),
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
             patch("models.experiment.Experiment.prepare_env", return_value="inv01"),
         ):
@@ -719,12 +687,13 @@ class TestFromRepoRouting:
         app: Flask,
         tmp_path: Path,
     ) -> None:
-        """MDPosit URLs should route through _import_mdposit_repo."""
+        """Test test_from_repo_mdposit_url."""
         (tmp_path / "mp01").mkdir(parents=True, exist_ok=True)
 
         with (
             patch("models.experiment._resolve_repo_link", return_value="https://mdposit.mddbr.eu/projects/P1"),
             patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
             patch("models.experiment.Experiment.prepare_env", return_value="mp01"),
         ):

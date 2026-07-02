@@ -12,11 +12,11 @@ export function useAmberStatuses(experimentId: string) {
   })
 }
 
-export function useAmberStatus(experimentId: string, prmtopName: string) {
+export function useAmberStatus(experimentId: string, simulationPath: string) {
   return useQuery<AmberJob>({
-    queryKey: ["experiment", experimentId, "amber", prmtopName],
-    queryFn: () => api.get(`/experiments/${experimentId}/amber/${prmtopName}`).then((r) => r.data),
-    enabled: !!experimentId && !!prmtopName,
+    queryKey: ["experiment", experimentId, "amber", simulationPath],
+    queryFn: () => api.get(`/experiments/${experimentId}/amber/${simulationPath}`).then((r) => r.data),
+    enabled: !!experimentId && !!simulationPath,
     meta: { suppressError: true },
     refetchInterval: (query) => {
       const data = query.state.data
@@ -27,18 +27,21 @@ export function useAmberStatus(experimentId: string, prmtopName: string) {
 }
 
 interface SubmitAmberVariables {
-  prmtopName: string
-  formData: FormData
+  simulationPath: string
+  binary: string
+  ewald: string
+  np: number
+  ntomp: number
 }
 
 export function useSubmitAmber(experimentId: string) {
   const queryClient = useQueryClient()
 
   return useMutation<AmberJob, Error, SubmitAmberVariables>({
-    mutationFn: ({ prmtopName, formData }) =>
-      api.post(`/experiments/${experimentId}/amber/${prmtopName}`, formData).then((r) => r.data),
+    mutationFn: ({ simulationPath, ...params }) =>
+      api.post(`/experiments/${experimentId}/amber/${simulationPath}`, params).then((r) => r.data),
     onSuccess: (job) => {
-      queryClient.setQueryData(["experiment", experimentId, "amber", job.prmtop_name], job)
+      queryClient.setQueryData(["experiment", experimentId, "amber", job.simulation_path], job)
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "amber"], exact: true })
     },
     onError: (error: Error) => toast.error(error.message),
@@ -49,12 +52,13 @@ export function useDeleteAmber(experimentId: string) {
   const queryClient = useQueryClient()
 
   return useMutation<void, Error, string>({
-    mutationFn: async (prmtopName) => {
-      await api.delete(`/experiments/${experimentId}/amber/${prmtopName}`)
+    mutationFn: async (simulationPath) => {
+      await api.delete(`/experiments/${experimentId}/amber/${simulationPath}`)
     },
-    onSuccess: (_data, prmtopName) => {
-      queryClient.removeQueries({ queryKey: ["experiment", experimentId, "amber", prmtopName] })
+    onSuccess: (_data, simulationPath) => {
+      queryClient.removeQueries({ queryKey: ["experiment", experimentId, "amber", simulationPath] })
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "amber"], exact: true })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "simulations"] })
     },
     onError: (error: Error) => toast.error(error.message),
   })
@@ -62,18 +66,18 @@ export function useDeleteAmber(experimentId: string) {
 
 export function useAmberLogs(
   experimentId: string,
-  prmtopName: string,
+  simulationPath: string,
   logType: "mdout" | "mdinfo" | "stdout" | "stderr" | "",
   shouldPoll: boolean,
   tail = 100
 ) {
   return useQuery<string>({
-    queryKey: ["experiment", experimentId, "amber", prmtopName, "logs", logType],
+    queryKey: ["experiment", experimentId, "amber", simulationPath, "logs", logType],
     queryFn: () =>
       api
-        .get(`/experiments/${experimentId}/amber/${prmtopName}/log`, { params: { type: logType, tail } })
+        .get(`/experiments/${experimentId}/amber/${simulationPath}/log`, { params: { type: logType, tail } })
         .then((r) => r.data),
-    enabled: !!experimentId && !!prmtopName && !!logType,
+    enabled: !!experimentId && !!simulationPath && !!logType,
     refetchInterval: shouldPoll ? 5000 : false,
   })
 }

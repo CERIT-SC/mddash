@@ -31,6 +31,8 @@ class SimulationJob(db.Model):  # type: ignore
     id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
     # ID of the experiment this job belongs to
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
+    # Experiment-relative path to the .simulation.json manifest (job identity)
+    simulation_path: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # Creation time
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
     # Engine discriminator for JTI
@@ -40,8 +42,6 @@ class SimulationJob(db.Model):  # type: ignore
     np: Mapped[int] = mapped_column(db.Integer, nullable=False)
     # Number of OpenMP threads per MPI rank
     ntomp: Mapped[int] = mapped_column(db.Integer, nullable=False)
-    # Extra arguments for the job
-    extra_args: Mapped[str] = mapped_column(db.Text, default="")
 
     # Unix timestamp when the job started
     _start_timestamp: Mapped[int | None] = mapped_column("start_timestamp", db.Integer, nullable=True)

@@ -14,7 +14,7 @@ import {
 } from "@/util/analysis-types"
 import { getAnalysisLabel } from "@/util/analysis-utils"
 import { Engine } from "@/util/const"
-import type { FileOption } from "@/util/types"
+import type { Simulation } from "@/util/types"
 import { getJobStatusVariant } from "@/util/types"
 import {
   useAnalysisData,
@@ -35,10 +35,7 @@ import LogsView from "@/components/LogsView"
 interface AnalysisPanelProps {
   experimentId: string
   engine: Engine
-  structureFile: FileOption | null
-  coordsFile: FileOption | null
-  topologyFile: FileOption | null
-  topologyRequired: boolean
+  simulation: Simulation | null
   preprocessingMode: AnalysisPreprocessingModeValue
   setPreprocessingMode: (mode: AnalysisPreprocessingModeValue) => void
   selectedAnalysis: AnalysisType | null
@@ -54,10 +51,7 @@ const PREPROCESSING_OPTIONS: Array<{ value: AnalysisPreprocessingModeValue; labe
 const AnalysisPanel = ({
   experimentId,
   engine,
-  structureFile,
-  coordsFile,
-  topologyFile,
-  topologyRequired,
+  simulation,
   preprocessingMode,
   setPreprocessingMode,
   selectedAnalysis,
@@ -121,7 +115,6 @@ const AnalysisPanel = ({
   const analysisConfig = useMemo(() => AVAILABLE_ANALYSES.find((a) => a.value === resolvedAnalysis), [resolvedAnalysis])
   const selectedResultName = analysisConfig?.resultName ?? null
   const submissionAnalysis = selectedAnalysis ?? resolvedAnalysis
-  const submitRequiresTopology = topologyRequired || !!analysisConfig?.requiresTopology
 
   const variantResults = useMemo(() => {
     if (!analysisConfig?.hasVariants || !selectedResultName) return []
@@ -159,28 +152,21 @@ const AnalysisPanel = ({
   )
 
   const canSubmit =
-    (!!structureFile || !!topologyFile) &&
-    !!coordsFile &&
+    !!simulation &&
+    simulation.valid &&
+    !simulation.missing_files.includes("trajectory") &&
     !!submissionAnalysis &&
-    (!submitRequiresTopology || !!topologyFile) &&
     !activeJob &&
     !submitAnalysis.isPending
 
   const submitCurrentAnalysis = () => {
-    if (
-      (!structureFile && !topologyFile) ||
-      !coordsFile ||
-      !submissionAnalysis ||
-      (submitRequiresTopology && !topologyFile)
-    )
-      return
+    if (!simulation || !simulation.valid || !submissionAnalysis) return
+    if (simulation.missing_files.includes("trajectory")) return
 
     submitAnalysis.mutate({
       analysis: submissionAnalysis,
-      trajectory_file: coordsFile.path,
+      simulation_path: simulation.simulation_path,
       preprocessing_mode: preprocessingMode,
-      ...(structureFile && { structure_file: structureFile.path }),
-      ...(topologyFile && { topology_file: topologyFile.path }),
     })
   }
 
@@ -364,21 +350,15 @@ const AnalysisPanel = ({
         )}
       </div>
 
-      {resolvedAnalysis &&
-        !hasResult &&
-        ((!structureFile && !topologyFile) || !coordsFile || (submitRequiresTopology && !topologyFile)) && (
-          <p className="text-muted-foreground text-xs">
-            {submitRequiresTopology
-              ? preprocessingMode === AnalysisPreprocessingMode.AS_IS
-                ? "Select structure, trajectory, and topology files in the sidebar to run this analysis."
-                : "Select structure, trajectory, and simulation TPR files in the sidebar to run analyses with preprocessing."
-              : !structureFile && !topologyFile
-                ? "Select a structure file or a topology file and a trajectory file in the sidebar to run this analysis."
-                : !coordsFile
-                  ? "Select trajectory file in the sidebar to run this analysis."
-                  : "Select structure and trajectory files in the sidebar to run this analysis."}
-          </p>
-        )}
+      {resolvedAnalysis && !hasResult && (!simulation || !simulation.valid || simulation.missing_files.length > 0) && (
+        <p className="text-muted-foreground text-xs">
+          {!simulation
+            ? "Select a simulation in the sidebar to run this analysis."
+            : !simulation.valid
+              ? "The selected simulation is invalid. Repair it in the setup step."
+              : "The selected simulation is missing required files."}
+        </p>
+      )}
 
       {showLogs && <LogsView logs={jobLogs ?? ""} isLoading={jobLogsLoading} />}
 
@@ -424,11 +404,7 @@ const AnalysisPanel = ({
                 <BarChart3 className="text-muted-foreground/50 mx-auto h-12 w-12" />
                 <p className="text-muted-foreground text-sm">No results yet.</p>
                 <p className="text-muted-foreground/75 text-xs">
-                  {submitRequiresTopology
-                    ? preprocessingMode === AnalysisPreprocessingMode.AS_IS
-                      ? 'Select the required files and click "Calculate" to run this analysis.'
-                      : 'Select the simulation TPR and click "Calculate" to run this analysis.'
-                    : 'Select the required files and click "Calculate" to run this analysis.'}
+                  {'Select a simulation and click "Calculate" to run this analysis.'}
                 </p>
               </div>
             )}

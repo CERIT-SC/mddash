@@ -15,7 +15,10 @@ from .files import (
     ensure_amber_demo_files,
     ensure_demo_files,
     ensure_mdposit_demo_files,
+    ensure_schema_files,
+    write_amber_simulation,
     write_finished_gmx_log,
+    write_gmx_simulation,
     write_running_gmx_log,
 )
 from .state import build_model, demo_state
@@ -62,7 +65,7 @@ def seed_data() -> None:  # noqa: PLR0914
     running_tuner = build_model(
         TunerJob,
         experiment=enzyme,
-        tpr_name="production/md.tpr",
+        simulation_path="production/md.simulation.json",
         id="demo-tuner-prod",
         created_at=now - timedelta(hours=8),
         is_stopped=False,
@@ -110,7 +113,7 @@ def seed_data() -> None:  # noqa: PLR0914
     stopped_tuner = build_model(
         TunerJob,
         experiment=enzyme,
-        tpr_name="npt_equilibration.tpr",
+        simulation_path="npt_equilibration.simulation.json",
         id="demo-tuner-npt",
         created_at=now - timedelta(hours=9),
         is_stopped=True,
@@ -141,7 +144,7 @@ def seed_data() -> None:  # noqa: PLR0914
     error_tuner = build_model(
         TunerJob,
         experiment=enzyme,
-        tpr_name="hiv_protease_apo_enzyme_wild_type_production_run_2024.tpr",
+        simulation_path="hiv_protease_apo_enzyme_wild_type_production_run_2024.simulation.json",
         id="demo-tuner-failed",
         created_at=now - timedelta(hours=10),
         is_stopped=False,
@@ -153,12 +156,11 @@ def seed_data() -> None:  # noqa: PLR0914
         GromacsJob,
         id="demo-gmx-running",
         experiment=enzyme,
-        tpr_name="production/md.tpr",
+        simulation_path="production/md.simulation.json",
         pme=DeviceType.CPU,
         nb=DeviceType.GPU,
         np=4,
         ntomp=2,
-        extra_args="",
         _nsteps=500000,
         _start_timestamp=int((now - timedelta(hours=3)).timestamp()),
         _finish_timestamp=None,
@@ -179,12 +181,11 @@ def seed_data() -> None:  # noqa: PLR0914
         GromacsJob,
         id="demo-gmx-finished",
         experiment=enzyme,
-        tpr_name="npt_equilibration.tpr",
+        simulation_path="npt_equilibration.simulation.json",
         pme=DeviceType.CPU,
         nb=DeviceType.GPU,
         np=8,
         ntomp=1,
-        extra_args="",
         _nsteps=100000,
         _start_timestamp=int((now - timedelta(days=1)).timestamp()),
         _finish_timestamp=int((now - timedelta(hours=20)).timestamp()),
@@ -219,12 +220,11 @@ def seed_data() -> None:  # noqa: PLR0914
         GromacsJob,
         id="demo-gmx-published",
         experiment=published,
-        tpr_name="lysozyme_hewl.tpr",
+        simulation_path="lysozyme_hewl.simulation.json",
         pme=DeviceType.CPU,
         nb=DeviceType.CPU,
         np=4,
         ntomp=4,
-        extra_args="",
         _nsteps=1000000,
         _start_timestamp=int((now - timedelta(days=9)).timestamp()),
         _finish_timestamp=int((now - timedelta(days=8, hours=4)).timestamp()),
@@ -289,14 +289,11 @@ def seed_data() -> None:  # noqa: PLR0914
         AmberJob,
         id="demo-amber-running",
         experiment=amber_folding,
-        prmtop_name="villin.prmtop",
-        inpcrd_name="villin.inpcrd",
-        mdin_name="production.mdin",
+        simulation_path="production/villin.simulation.json",
         binary=AmberBinary.PMEMD_CUDA,
         ewald=EwaldPreset.OPTIMIZED,
         np=1,
         ntomp=8,
-        extra_args="",
         _nsteps=500000,
         _start_timestamp=int((now - timedelta(hours=2)).timestamp()),
         _finish_timestamp=None,
@@ -320,14 +317,11 @@ def seed_data() -> None:  # noqa: PLR0914
         AmberJob,
         id="demo-amber-finished",
         experiment=amber_folding,
-        prmtop_name="villin.prmtop",
-        inpcrd_name="villin.inpcrd",
-        mdin_name="equilibration.mdin",
+        simulation_path="equilibration.simulation.json",
         binary=AmberBinary.PMEMD_MPI,
         ewald=EwaldPreset.DEFAULT,
         np=4,
         ntomp=2,
-        extra_args="",
         _nsteps=100000,
         _start_timestamp=int((now - timedelta(hours=5)).timestamp()),
         _finish_timestamp=int((now - timedelta(hours=3)).timestamp()),
@@ -376,14 +370,11 @@ def seed_data() -> None:  # noqa: PLR0914
         AmberJob,
         id="demo-amber-dna",
         experiment=amber_dna,
-        prmtop_name="dna.prmtop",
-        inpcrd_name="dna.inpcrd",
-        mdin_name="simulation.mdin",
+        simulation_path="production/dna.simulation.json",
         binary=AmberBinary.PMEMD_CUDA,
         ewald=EwaldPreset.OPTIMIZED,
         np=1,
         ntomp=4,
-        extra_args="",
         _nsteps=2000000,
         _start_timestamp=int((now - timedelta(days=6)).timestamp()),
         _finish_timestamp=int((now - timedelta(days=5)).timestamp()),
@@ -470,6 +461,51 @@ def seed_data() -> None:  # noqa: PLR0914
     # MDPosit import study: mirrors the project file layout exposed by HTTP mocks.
     ensure_mdposit_demo_files(mdposit_demo.id)
 
+    # Seed schema files and simulation manifests for each experiment
+    ensure_schema_files(membrane.id)
+    write_gmx_simulation(membrane.id, "gpcr_membrane", topology="gpcr_membrane.tpr")
+
+    ensure_schema_files(enzyme.id)
+    write_gmx_simulation(enzyme.id, "md", simulation_path="production/md.simulation.json", topology="production/md.tpr")
+    write_gmx_simulation(enzyme.id, "npt_equilibration", simulation_path="npt_equilibration.simulation.json")
+    write_gmx_simulation(
+        enzyme.id,
+        "hiv_protease",
+        simulation_path="hiv_protease_apo_enzyme_wild_type_production_run_2024.simulation.json",
+        topology="hiv_protease_apo_enzyme_wild_type_production_run_2024.tpr",
+    )
+
+    ensure_schema_files(published.id)
+    write_gmx_simulation(published.id, "lysozyme_hewl", topology="lysozyme_hewl.tpr")
+
+    ensure_schema_files(amber_folding.id)
+    write_amber_simulation(
+        amber_folding.id,
+        "villin",
+        simulation_path="production/villin.simulation.json",
+        topology="villin.prmtop",
+        coordinates="villin.inpcrd",
+        control="production.mdin",
+    )
+    write_amber_simulation(
+        amber_folding.id,
+        "villin",
+        simulation_path="equilibration.simulation.json",
+        topology="villin.prmtop",
+        coordinates="villin.inpcrd",
+        control="equilibration.mdin",
+    )
+
+    ensure_schema_files(amber_dna.id)
+    write_amber_simulation(
+        amber_dna.id,
+        "dna",
+        simulation_path="production/dna.simulation.json",
+        topology="dna.prmtop",
+        coordinates="dna.inpcrd",
+        control="simulation.mdin",
+    )
+
     # Write analysis result files (fetched from MDposit)
     _fetch_and_write_analysis_results(published.id, ["rmsds", "sasa"])
     _fetch_and_write_analysis_results(enzyme.id, ["hbonds"])
@@ -552,10 +588,13 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
     # Rehydrate GROMACS jobs from database
     for gmx_job in GromacsJob.query.all():
         status = JobStatus.TERMINATED.value if gmx_job._finish_timestamp else JobStatus.RUNNING.value  # noqa: SLF001
+        from models.simulation import simulation_files  # noqa: PLC0415
+
+        files = simulation_files(gmx_job.experiment_id, gmx_job.simulation_path)
         demo_state.mdrun_jobs[gmx_job.id] = {
             "status": status,
             "experiment_id": gmx_job.experiment_id,
-            "tpr_name": gmx_job.tpr_name,
+            "tpr_name": files.get("topology", "md.tpr"),
             "nsteps": gmx_job._nsteps or 100000,  # noqa: SLF001
             "created_at": float(gmx_job._start_timestamp or time.time()),  # noqa: SLF001
             "duration_sec": 30.0,
@@ -566,12 +605,15 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
     # Rehydrate AMBER jobs from database
     for amber_job in AmberJob.query.all():
         status = JobStatus.TERMINATED.value if amber_job._finish_timestamp else JobStatus.RUNNING.value  # noqa: SLF001
+        from models.simulation import simulation_files  # noqa: PLC0415
+
+        files = simulation_files(amber_job.experiment_id, amber_job.simulation_path)
         demo_state.mdrun_jobs[amber_job.id] = {
             "status": status,
             "experiment_id": amber_job.experiment_id,
-            "prmtop_name": amber_job.prmtop_name,
-            "inpcrd_name": amber_job.inpcrd_name,
-            "mdin_name": amber_job.mdin_name,
+            "prmtop_name": files.get("topology", "md.prmtop"),
+            "inpcrd_name": files.get("coordinates", "md.inpcrd"),
+            "mdin_name": files.get("control", "md.mdin"),
             "nsteps": amber_job._nsteps or 100000,  # noqa: SLF001
             "created_at": float(amber_job._start_timestamp or time.time()),  # noqa: SLF001
             "duration_sec": 30.0,
@@ -702,3 +744,55 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
     if mdposit_demo is not None:
         demo_state.notebook_status[mdposit_demo.id] = PodStatus.DOWN
         ensure_mdposit_demo_files(mdposit_demo.id)
+
+    # Re-seed schema files and simulation manifests for rehydrated experiments
+    if membrane is not None:
+        ensure_schema_files(membrane.id)
+        write_gmx_simulation(membrane.id, "gpcr_membrane", topology="gpcr_membrane.tpr")
+
+    if enzyme is not None:
+        ensure_schema_files(enzyme.id)
+        write_gmx_simulation(
+            enzyme.id, "md", simulation_path="production/md.simulation.json", topology="production/md.tpr"
+        )
+        write_gmx_simulation(enzyme.id, "npt_equilibration", simulation_path="npt_equilibration.simulation.json")
+        write_gmx_simulation(
+            enzyme.id,
+            "hiv_protease",
+            simulation_path="hiv_protease_apo_enzyme_wild_type_production_run_2024.simulation.json",
+            topology="hiv_protease_apo_enzyme_wild_type_production_run_2024.tpr",
+        )
+
+    if published is not None:
+        ensure_schema_files(published.id)
+        write_gmx_simulation(published.id, "lysozyme_hewl", topology="lysozyme_hewl.tpr")
+
+    if amber_folding is not None:
+        ensure_schema_files(amber_folding.id)
+        write_amber_simulation(
+            amber_folding.id,
+            "villin",
+            simulation_path="production/villin.simulation.json",
+            topology="villin.prmtop",
+            coordinates="villin.inpcrd",
+            control="production.mdin",
+        )
+        write_amber_simulation(
+            amber_folding.id,
+            "villin",
+            simulation_path="equilibration.simulation.json",
+            topology="villin.prmtop",
+            coordinates="villin.inpcrd",
+            control="equilibration.mdin",
+        )
+
+    if amber_dna is not None:
+        ensure_schema_files(amber_dna.id)
+        write_amber_simulation(
+            amber_dna.id,
+            "dna",
+            simulation_path="production/dna.simulation.json",
+            topology="dna.prmtop",
+            coordinates="dna.inpcrd",
+            control="simulation.mdin",
+        )

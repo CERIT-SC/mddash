@@ -181,13 +181,11 @@ def publish_experiment(experiment_id: str) -> ResponseReturnValue:
         #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.
         result = experiment.publish(target="invenio", community="ceitec")
     elif target == "mdposit":
-        selected_files = data.get("files")
-        if not isinstance(selected_files, dict) or not all(
-            isinstance(role, str) and isinstance(path, str) for role, path in selected_files.items()
-        ):
-            raise BadRequest("MDPosit publish requires selected files.")
+        simulation_path = data.get("simulation_path")
+        if not isinstance(simulation_path, str) or not simulation_path:
+            raise BadRequest("MDPosit publish requires simulation_path.")
 
-        result = experiment.publish(target="mdposit", selected_files=selected_files)
+        result = experiment.publish(target="mdposit", simulation_path=simulation_path)
     else:
         raise BadRequest(f"Unknown publish target: {target}")
 

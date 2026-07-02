@@ -1,84 +1,58 @@
 import { useState } from "react"
 
+import type { Simulation } from "@/util/types"
 import { useAmberStatuses, useDeleteAmber } from "@/hooks/use-amber"
+import { useSimulations } from "@/hooks/use-simulations"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import SimulationSelector from "@/components/Wizard/SimulationSelector"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
-import AmberSelector, { type AmberJobEntry } from "../AmberSelector"
 import AmberRunView from "./AmberRunView"
 
 const AmberRunPanel = (props: WizardStepProps) => {
   const { experiment } = props
 
   const { data: amberJobs = [], refetch: refetchJobs } = useAmberStatuses(experiment.id)
+  const { data: simulations = [], isLoading } = useSimulations(experiment.id)
   const deleteAmber = useDeleteAmber(experiment.id)
 
-  const existingPrmtops = amberJobs.map((job) => job.prmtop_name)
-
-  const [selectedPrmtop, setSelectedPrmtop] = useState<string | null>(null)
-  const [localJobs, setLocalJobs] = useState<AmberJobEntry[]>([])
+  const [selected, setSelected] = useState<Simulation | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
   const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false)
 
-  const allPrmtops = Array.from(new Set([...existingPrmtops, ...localJobs.map((j) => j.prmtopName)]))
-
-  const handleAddJob = (entry: AmberJobEntry) => {
-    setLocalJobs((prev) => (prev.some((j) => j.prmtopName === entry.prmtopName) ? prev : [...prev, entry]))
-    setSelectedPrmtop(entry.prmtopName)
-  }
-
-  const handleDeleteJob = (prmtopName: string) => {
-    if (existingPrmtops.includes(prmtopName)) {
-      setDeleteTarget(prmtopName)
-      setConfirmDeleteDialog(true)
-    } else {
-      if (selectedPrmtop === prmtopName) setSelectedPrmtop(null)
-      setLocalJobs((prev) => prev.filter((j) => j.prmtopName !== prmtopName))
+  const handleSelect = (sim: Simulation | null) => {
+    if (!sim) {
+      setSelected(null)
+      return
     }
+    if (amberJobs.some((j) => j.simulation_path === sim.simulation_path)) {
+      setDeleteTarget(sim.simulation_path)
+      setConfirmDeleteDialog(true)
+      return
+    }
+    setSelected(sim)
   }
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return
     await deleteAmber.mutateAsync(deleteTarget)
-    if (selectedPrmtop === deleteTarget) setSelectedPrmtop(null)
-    setLocalJobs((prev) => prev.filter((j) => j.prmtopName !== deleteTarget))
+    setSelected(null)
     refetchJobs()
   }
-
-  const selectedJob =
-    amberJobs.find((j) => j.prmtop_name === selectedPrmtop) ?? localJobs.find((j) => j.prmtopName === selectedPrmtop)
-
-  const selectedInpcrd =
-    "inpcrd_name" in (selectedJob ?? {})
-      ? (selectedJob as (typeof amberJobs)[0]).inpcrd_name
-      : ((selectedJob as AmberJobEntry | undefined)?.inpcrdName ?? "")
-
-  const selectedMdin =
-    "mdin_name" in (selectedJob ?? {})
-      ? (selectedJob as (typeof amberJobs)[0]).mdin_name
-      : ((selectedJob as AmberJobEntry | undefined)?.mdinName ?? "")
 
   return (
     <div className="flex w-full flex-col items-center gap-4">
       <div className="flex w-[90%] flex-row gap-4">
-        <AmberSelector
-          experimentId={experiment.id}
-          jobs={allPrmtops}
-          selectedPrmtop={selectedPrmtop}
-          onAddJob={handleAddJob}
-          onDeleteJob={handleDeleteJob}
-          onSelectJob={setSelectedPrmtop}
+        <SimulationSelector
+          simulations={simulations}
+          selectedPath={selected?.simulation_path ?? null}
+          loading={isLoading}
+          onSelect={handleSelect}
         />
 
-        {selectedPrmtop && selectedJob && (
+        {selected && (
           <div className="flex-1">
-            <AmberRunView
-              prmtopName={selectedPrmtop}
-              inpcrdName={selectedInpcrd}
-              mdinName={selectedMdin}
-              onStartJob={refetchJobs}
-              {...props}
-            />
+            <AmberRunView simulationPath={selected.simulation_path} onStartJob={refetchJobs} {...props} />
           </div>
         )}
       </div>

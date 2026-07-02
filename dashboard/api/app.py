@@ -22,6 +22,7 @@ from routes import (
     misc_bp,
     notebook_bp,
     notebook_config_bp,
+    simulations_bp,
     tuner_bp,
 )
 from sqlalchemy import inspect as sa_inspect
@@ -57,9 +58,12 @@ def _run_migrations() -> None:
         try:
             script.get_revision(current_rev)
         except CommandError:
-            logger.info("Unknown DB revision; restamping to migration baseline...")
-            stamp(directory=str(MIGRATIONS_DIR), revision="001", purge=True)
-            current_rev = "001"
+            logger.error(
+                "DB revision '%s' not in migration scripts (head: '%s'). Downgrade the DB first.",
+                current_rev,
+                head_rev,
+            )
+            raise RuntimeError(f"DB revision '{current_rev}' is ahead of migration scripts.")
 
     _log_duration("db-revision-check", start)
 
@@ -81,6 +85,7 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(notebook_config_bp)
     app.register_blueprint(tuner_bp)
     app.register_blueprint(gmx_bp)
+    app.register_blueprint(simulations_bp)
     app.register_blueprint(files_bp)
     app.register_blueprint(misc_bp)
     app.register_blueprint(mdrepo_bp)

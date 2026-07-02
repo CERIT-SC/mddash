@@ -3,6 +3,7 @@ import { useState } from "react"
 import { Loader2, Pause, Play } from "lucide-react"
 
 import { type GmxTunerTrial } from "@/util/types"
+import { useSimulation } from "@/hooks/use-simulations"
 import { useRunTuner, useTunerStatus } from "@/hooks/use-tuner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -10,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import { StartForm } from "@/components/Wizard/RunStep/GmxStartForm"
+import SimulationPreview from "@/components/Wizard/SimulationPreview"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import TunerTable from "./TunerTable"
@@ -17,28 +19,29 @@ import TunerTable from "./TunerTable"
 const DEFAULT_NSTEPS = 25000
 
 interface TunerViewProps extends WizardStepProps {
-  tprName: string
-  stopJob: (tprName: string) => void
+  simulationPath: string
+  stopJob: (simulationPath: string) => void
   onStartTuner?: () => void
 }
 
 const TunerView = (props: TunerViewProps) => {
-  const { experiment, tprName, stopJob, nextStep, changeStep, onStartTuner } = props
+  const { experiment, simulationPath, stopJob, nextStep, changeStep, onStartTuner } = props
 
   const [selectedTrial, setSelectedTrial] = useState<GmxTunerTrial | null>(null)
   const [nsteps, setNsteps] = useState<number | "">(DEFAULT_NSTEPS)
   const [confirmStopDialog, setConfirmStopDialog] = useState(false)
 
   const runTuner = useRunTuner(experiment.id)
+  const { data: simulation } = useSimulation(experiment.id, simulationPath)
 
   const tunerStarted_condition = (tuner: ReturnType<typeof useTunerStatus>["data"]) =>
     !!tuner && !tuner.error_message && tuner.tuner_status !== "ERROR"
 
-  const { data: tuner, isLoading } = useTunerStatus(experiment.id, tprName)
+  const { data: tuner, isLoading } = useTunerStatus(experiment.id, simulationPath)
 
   const handleRunTuner = () => {
     const actualNsteps = nsteps === "" ? DEFAULT_NSTEPS : nsteps
-    runTuner.mutate({ tprName, nsteps: actualNsteps }, { onSuccess: () => onStartTuner?.() })
+    runTuner.mutate({ simulationPath, nsteps: actualNsteps }, { onSuccess: () => onStartTuner?.() })
   }
 
   const goToRunStep = () => {
@@ -56,21 +59,21 @@ const TunerView = (props: TunerViewProps) => {
 
   const displayStarted = tunerStarted_condition(tuner)
   const displayStopped = tuner?.is_stopped || false
-
-  // Cast trials to GmxTunerTrial[] since we know this is GMX engine
   const trials = (tuner?.trials || []) as GmxTunerTrial[]
 
   return (
     <>
+      <SimulationPreview simulation={simulation ?? null} />
+
       {displayStarted ? (
-        <div className="flex flex-col gap-4">
+        <div className="mt-4 flex flex-col gap-4">
           <TunerTable
             rows={trials}
             selectedTrial={selectedTrial}
             setSelectedTrial={setSelectedTrial}
             tunerStopped={displayStopped}
             experimentId={experiment.id}
-            tprName={tprName}
+            simulationPath={simulationPath}
           />
 
           {!displayStopped && (
@@ -98,14 +101,16 @@ const TunerView = (props: TunerViewProps) => {
           )}
         </div>
       ) : (
-        <div className="flex h-full flex-col items-center justify-center gap-4">
+        <div className="mt-4 flex flex-col items-center justify-center gap-4">
           {tuner?.error_message && (
             <div className="border-destructive bg-destructive/10 text-destructive w-full rounded-md border p-3 text-sm">
               <strong>Error:</strong> {tuner.error_message}
             </div>
           )}
 
-          {!tuner?.error_message && <h3 className="text-lg font-semibold">Configure tuning job for {tprName}</h3>}
+          {!tuner?.error_message && (
+            <h3 className="text-lg font-semibold">Configure tuning job for {simulationPath}</h3>
+          )}
 
           {(!tuner || tuner.error_message) && (
             <Card className="w-fit">
@@ -141,7 +146,7 @@ const TunerView = (props: TunerViewProps) => {
         setOpen={setConfirmStopDialog}
         confirmColor="warning"
         onConfirm={async () => {
-          await stopJob(tprName)
+          await stopJob(simulationPath)
         }}
         message="Are you sure you want to stop the tuning job? Results collected so far will be saved, but any trials still in progress will be lost. This cannot be undone."
       />

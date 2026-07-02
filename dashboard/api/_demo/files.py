@@ -1,4 +1,5 @@
 import io
+import json
 import shutil
 import zipfile
 from functools import lru_cache
@@ -23,6 +24,129 @@ MDPOSIT_DEMO_FILES = {
     "mdposit/topology.tpr": DEFAULT_TPR_FILE,
     "mdposit/trajectory.xtc": DEFAULT_XTC_FILE,
 }
+
+GMX_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "MDDash GROMACS simulation manifest",
+    "type": "object",
+    "required": ["name", "engine", "files", "extra_args"],
+    "additionalProperties": False,
+    "properties": {
+        "$schema": {"type": "string"},
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "engine": {"const": "GMX"},
+        "files": {
+            "type": "object",
+            "required": ["topology", "structure", "trajectory"],
+            "additionalProperties": False,
+            "properties": {
+                "topology": {"type": "string"},
+                "structure": {"type": "string"},
+                "trajectory": {"type": "string"},
+            },
+        },
+        "extra_args": {"type": "string"},
+    },
+}
+
+AMBER_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "MDDash AMBER simulation manifest",
+    "type": "object",
+    "required": ["name", "engine", "files", "extra_args"],
+    "additionalProperties": False,
+    "properties": {
+        "$schema": {"type": "string"},
+        "name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
+        "engine": {"const": "AMBER"},
+        "files": {
+            "type": "object",
+            "required": ["topology", "coordinates", "control", "trajectory"],
+            "additionalProperties": False,
+            "properties": {
+                "topology": {"type": "string"},
+                "coordinates": {"type": "string"},
+                "control": {"type": "string"},
+                "trajectory": {"type": "string"},
+            },
+        },
+        "extra_args": {"type": "string"},
+    },
+}
+
+
+def ensure_schema_files(experiment_id: str) -> None:
+    experiment_dir = DATA_DIR / experiment_id
+    experiment_dir.mkdir(parents=True, exist_ok=True)
+    _write_json_if_missing(experiment_dir / "gromacs.schema.json", GMX_SCHEMA)
+    _write_json_if_missing(experiment_dir / "amber.schema.json", AMBER_SCHEMA)
+
+
+def _write_json_if_missing(path: Path, data: dict) -> None:
+    if not path.exists():
+        path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def write_gmx_simulation(
+    experiment_id: str,
+    name: str,
+    simulation_path: str = "",
+    topology: str | None = None,
+    structure: str | None = None,
+    trajectory: str | None = None,
+    extra_args: str = "",
+) -> str:
+    experiment_dir = DATA_DIR / experiment_id
+    sim_path = simulation_path or f"production/{name}.simulation.json"
+    sim_file = experiment_dir / sim_path
+    sim_file.parent.mkdir(parents=True, exist_ok=True)
+    sim_dir = sim_file.parent
+    content = {
+        "$schema": str(Path("../gromacs.schema.json")),
+        "name": name,
+        "engine": "GMX",
+        "files": {
+            "topology": topology or f"{name}.tpr",
+            "structure": structure or f"{name}.gro",
+            "trajectory": trajectory or f"{name}.xtc",
+        },
+        "extra_args": extra_args,
+    }
+    content["$schema"] = str((experiment_dir / "gromacs.schema.json").relative_to(sim_dir))
+    sim_file.write_text(json.dumps(content, indent=2, sort_keys=True), encoding="utf-8")
+    return sim_path
+
+
+def write_amber_simulation(
+    experiment_id: str,
+    name: str,
+    simulation_path: str = "",
+    topology: str | None = None,
+    coordinates: str | None = None,
+    control: str | None = None,
+    trajectory: str | None = None,
+    extra_args: str = "",
+) -> str:
+    experiment_dir = DATA_DIR / experiment_id
+    sim_path = simulation_path or f"production/{name}.simulation.json"
+    sim_file = experiment_dir / sim_path
+    sim_file.parent.mkdir(parents=True, exist_ok=True)
+    sim_dir = sim_file.parent
+    content = {
+        "$schema": str((experiment_dir / "amber.schema.json").relative_to(sim_dir)),
+        "name": name,
+        "engine": "AMBER",
+        "files": {
+            "topology": topology or f"{name}.prmtop",
+            "coordinates": coordinates or f"{name}.rst7",
+            "control": control or f"{name}.mdin",
+            "trajectory": trajectory or f"{name}.nc",
+        },
+        "extra_args": extra_args,
+    }
+    sim_file.write_text(json.dumps(content, indent=2, sort_keys=True), encoding="utf-8")
+    return sim_path
+
 
 FIXTURE_BY_SUFFIX = {
     ".tpr": DEFAULT_TPR_FILE,
