@@ -25,6 +25,63 @@ READONLY_MODE = 0o444
 WRITABLE_MODE = 0o644
 
 
+@lru_cache(maxsize=16)
+def _load_schema(schema_path: Path) -> dict | None:
+    try:
+        if not schema_path.is_file():
+            return None
+        return json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _safe_default_path(name: str) -> str:
+    safe_name = Path(name).name if name else "simulation"
+    return f"production/{safe_name}{SIMULATION_SUFFIX}"
+
+
+def _build_content(experiment_id: str, simulation_path: str, engine: Engine, payload: dict) -> dict:
+    schema_filename = ENGINE_SCHEMA_FILE[engine]
+    exp_dir = DATA_DIR / experiment_id
+    sim_dir = (exp_dir / simulation_path).parent
+    schema_ref = os.path.relpath(exp_dir / schema_filename, start=sim_dir)
+
+    files = payload.get("files")
+    if not isinstance(files, dict):
+        raise BadRequest(description="'files' must be an object.")
+
+    return {
+        "$schema": schema_ref,
+        "name": payload.get("name", ""),
+        "engine": engine.value,
+        "files": files,
+        "extra_args": payload.get("extra_args", ""),
+    }
+
+
+def _validate_content_or_raise(experiment_id: str, simulation_path: str, content: dict, engine: Engine) -> None:
+    exp_dir = DATA_DIR / experiment_id
+    simulation_file = exp_dir / simulation_path
+    schema_ref = content.get("$schema")
+    if not isinstance(schema_ref, str) or not schema_ref:
+        raise BadRequest(description="Missing or invalid '$schema' reference.")
+    schema_path = (simulation_file.parent / schema_ref).resolve()
+    try:
+        schema_path.relative_to(exp_dir.resolve())
+    except ValueError:
+        raise BadRequest(description=f"Schema file escapes experiment directory: {schema_ref}")
+    schema = _load_schema(schema_path)
+    if schema is None:
+        raise BadRequest(description=f"Schema file is missing or unreadable: {schema_ref}")
+    try:
+        jsonschema.validate(content, schema)
+    except jsonschema.ValidationError as exc:
+        raise BadRequest(description=f"Simulation content is invalid: {exc.message}") from exc
+
+    if content.get("engine") != engine.value:
+        raise BadRequest(description="Simulation engine does not match the experiment engine.")
+
+
 class Simulation:
     """File-backed simulation manifest (`.simulation.json`)."""
 
@@ -96,7 +153,7 @@ class Simulation:
         """Whether the simulation is locked (read-only file or active job)."""
         if self._file.exists() and not os.access(self._file, os.W_OK):
             return True
-        return self.is_job_locked(self.experiment_id, self.simulation_path)
+        return self.is_locked(self.experiment_id, self.simulation_path)
 
     def to_dict(self) -> dict:
         """
@@ -241,7 +298,7 @@ class Simulation:
         return resolved
 
     @staticmethod
-    def is_job_locked(experiment_id: str, simulation_path: str) -> bool:
+    def is_locked(experiment_id: str, simulation_path: str) -> bool:
         """
         Return whether any tuner or production job references this simulation.
 
@@ -329,7 +386,7 @@ class Simulation:
             raise BadRequest(description=f"Path must end with '{SIMULATION_SUFFIX}'.")
 
         simulation_file = DATA_DIR / experiment_id / simulation_path
-        if simulation_file.exists() and cls.is_job_locked(experiment_id, simulation_path):
+        if simulation_file.exists() and cls.is_locked(experiment_id, simulation_path):
             raise BadRequest(description=f"Simulation '{simulation_path}' is locked.")
 
         content = _build_content(experiment_id, simulation_path, experiment.engine, payload)
@@ -357,7 +414,7 @@ class Simulation:
         if not simulation_file.is_file():
             raise NotFound(description=f"Simulation '{simulation_path}' not found.")
 
-        if cls.is_job_locked(experiment_id, simulation_path):
+        if cls.is_locked(experiment_id, simulation_path):
             raise BadRequest(description=f"Simulation '{simulation_path}' is locked.")
 
         content = _build_content(experiment_id, simulation_path, experiment.engine, payload)
@@ -377,60 +434,3 @@ class Simulation:
             logger.warning("Failed to restore writable mode for '%s'", simulation_path, exc_info=True)
 
         return cls(experiment_id, simulation_path, raw=content)
-
-
-@lru_cache(maxsize=16)
-def _load_schema(schema_path: Path) -> dict | None:
-    try:
-        if not schema_path.is_file():
-            return None
-        return json.loads(schema_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-
-
-def _safe_default_path(name: str) -> str:
-    safe_name = Path(name).name if name else "simulation"
-    return f"production/{safe_name}{SIMULATION_SUFFIX}"
-
-
-def _build_content(experiment_id: str, simulation_path: str, engine: Engine, payload: dict) -> dict:
-    schema_filename = ENGINE_SCHEMA_FILE[engine]
-    exp_dir = DATA_DIR / experiment_id
-    sim_dir = (exp_dir / simulation_path).parent
-    schema_ref = os.path.relpath(exp_dir / schema_filename, start=sim_dir)
-
-    files = payload.get("files")
-    if not isinstance(files, dict):
-        raise BadRequest(description="'files' must be an object.")
-
-    return {
-        "$schema": schema_ref,
-        "name": payload.get("name", ""),
-        "engine": engine.value,
-        "files": files,
-        "extra_args": payload.get("extra_args", ""),
-    }
-
-
-def _validate_content_or_raise(experiment_id: str, simulation_path: str, content: dict, engine: Engine) -> None:
-    exp_dir = DATA_DIR / experiment_id
-    simulation_file = exp_dir / simulation_path
-    schema_ref = content.get("$schema")
-    if not isinstance(schema_ref, str) or not schema_ref:
-        raise BadRequest(description="Missing or invalid '$schema' reference.")
-    schema_path = (simulation_file.parent / schema_ref).resolve()
-    try:
-        schema_path.relative_to(exp_dir.resolve())
-    except ValueError:
-        raise BadRequest(description=f"Schema file escapes experiment directory: {schema_ref}")
-    schema = _load_schema(schema_path)
-    if schema is None:
-        raise BadRequest(description=f"Schema file is missing or unreadable: {schema_ref}")
-    try:
-        jsonschema.validate(content, schema)
-    except jsonschema.ValidationError as exc:
-        raise BadRequest(description=f"Simulation content is invalid: {exc.message}") from exc
-
-    if content.get("engine") != engine.value:
-        raise BadRequest(description="Simulation engine does not match the experiment engine.")
