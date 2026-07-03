@@ -1,4 +1,4 @@
-"""Unit tests for the central simulation manifest helpers."""
+"""Unit tests for the Simulation class."""
 
 import json
 import os
@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from extensions import db
 from flask import Flask
-from models import Experiment, Notebook, is_simulation_locked, list_simulations, write_simulation
-from models.simulation import get_simulation, mark_simulation_readonly
+from models import Experiment, Notebook
+from models.simulation import Simulation
 from werkzeug.exceptions import BadRequest
 
 GMX_SCHEMA = {
@@ -37,6 +37,12 @@ GMX_SCHEMA = {
 
 
 def _seed_experiment(app: Flask, exp_id: str = "simts") -> str:
+    """
+    Seed a minimal experiment into the DB.
+
+    Returns:
+        The experiment ID.
+    """
     with app.app_context():
         exp = Experiment(id=exp_id, name="Sim Test", source_message="test", notebooks_repo="https://github.com/t/r.git")
         db.session.add(exp)
@@ -52,6 +58,12 @@ def _write_schema(exp_dir: Path) -> None:
 
 
 def _write_sim_file(exp_dir: Path, simulation_path: str, files: dict, name: str = "protein") -> str:
+    """
+    Write a GMX simulation manifest.
+
+    Returns:
+        The simulation_path.
+    """
     sim_file = exp_dir / simulation_path
     sim_file.parent.mkdir(parents=True, exist_ok=True)
     sim_dir = sim_file.parent
@@ -87,8 +99,8 @@ class TestDiscovery:
         )
 
         with app.app_context():
-            sims = list_simulations(exp_id)
-            paths = [s["simulation_path"] for s in sims]
+            sims = Simulation.list(exp_id)
+            paths = [s.simulation_path for s in sims]
             assert "production/protein.simulation.json" in paths
             assert "equilibration/nvt.simulation.json" in paths
 
@@ -106,9 +118,9 @@ class TestDiscovery:
         )
 
         with app.app_context():
-            sims = list_simulations(exp_id)
-            assert sims[0]["simulation_path"] == "a.simulation.json"
-            assert sims[1]["simulation_path"] == "z.simulation.json"
+            sims = Simulation.list(exp_id)
+            assert sims[0].simulation_path == "a.simulation.json"
+            assert sims[1].simulation_path == "z.simulation.json"
 
 
 class TestValidation:
@@ -132,9 +144,9 @@ class TestValidation:
         sim_file.write_text(json.dumps(content))
 
         with app.app_context():
-            sim = get_simulation(exp_id, sim_path)
-            assert not sim["valid"]
-            assert any("schema" in e.lower() or "missing" in e.lower() for e in sim["errors"])
+            sim = Simulation.get(exp_id, sim_path)
+            assert not sim.valid
+            assert any("schema" in e.lower() or "missing" in e.lower() for e in sim.errors)
 
     def test_valid_simulation(self, app: Flask, tmp_path: Path) -> None:
         """A complete simulation with existing files is valid."""
@@ -152,9 +164,9 @@ class TestValidation:
         (exp_dir / "production" / "protein.xtc").write_bytes(b"\x00")
 
         with app.app_context():
-            sim = get_simulation(exp_id, "production/protein.simulation.json")
-            assert sim["valid"]
-            assert sim["missing_files"] == []
+            sim = Simulation.get(exp_id, "production/protein.simulation.json")
+            assert sim.valid
+            assert sim.missing_files == []
 
 
 class TestLocking:
@@ -171,9 +183,10 @@ class TestLocking:
         )
 
         with app.app_context():
-            assert not is_simulation_locked(exp_id, sim_path)
-            mark_simulation_readonly(exp_id, sim_path)
-            assert is_simulation_locked(exp_id, sim_path)
+            sim = Simulation.get(exp_id, sim_path)
+            assert not sim.locked
+            sim.mark_readonly()
+            assert sim.locked
 
     def test_writable_unlocked_file_not_locked(self, app: Flask, tmp_path: Path) -> None:
         """A writable file with no jobs is not locked."""
@@ -186,21 +199,22 @@ class TestLocking:
         )
 
         with app.app_context():
-            assert not is_simulation_locked(exp_id, sim_path)
+            sim = Simulation.get(exp_id, sim_path)
+            assert not sim.locked
 
 
 class TestWriteSimulation:
-    """Create simulation JSON via write_simulation."""
+    """Create simulation JSON via Simulation.write."""
 
     def test_create_simulation(self, app: Flask, tmp_path: Path) -> None:
-        """write_simulation creates a valid manifest at the default path."""
+        """Simulation.write creates a valid manifest at the default path."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
         _write_schema(exp_dir)
 
         with app.app_context():
-            sim = write_simulation(
+            sim = Simulation.write(
                 exp_id,
                 {
                     "name": "protein",
@@ -208,9 +222,9 @@ class TestWriteSimulation:
                     "extra_args": "-v",
                 },
             )
-            assert sim["simulation_path"] == "production/protein.simulation.json"
-            assert sim["name"] == "protein"
-            assert sim["valid"]
+            assert sim.simulation_path == "production/protein.simulation.json"
+            assert sim.name == "protein"
+            assert sim.valid
 
     def test_create_rejects_invalid_content(self, app: Flask, tmp_path: Path) -> None:
         """Invalid content is rejected before writing."""
@@ -220,7 +234,7 @@ class TestWriteSimulation:
         _write_schema(exp_dir)
 
         with app.app_context(), pytest.raises(BadRequest):
-            write_simulation(
+            Simulation.write(
                 exp_id,
                 {
                     "name": "protein",

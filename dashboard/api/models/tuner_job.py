@@ -10,12 +10,7 @@ from requests import HTTPError
 from sqlalchemy import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from models.simulation import (
-    get_simulation,
-    mark_simulation_readonly,
-    resolve_simulation_role,
-    validate_simulation_for_action,
-)
+from models.simulation import Simulation
 
 from .experiment import Experiment
 
@@ -142,18 +137,18 @@ class TunerJob(db.Model):  # type: ignore
         Raises:
             ValueError: If the engine is unknown.
         """
-        simulation = get_simulation(experiment.id, simulation_path)
-        validate_simulation_for_action(simulation, "tune")
-        extra_args = simulation.get("extra_args", "")
+        simulation = Simulation.get(experiment.id, simulation_path)
+        simulation.validate_for_action("tune")
+        extra_args = simulation.extra_args
 
         match experiment.engine:
             case Engine.GMX:
-                tpr_path = resolve_simulation_role(experiment.id, simulation, "topology")
+                tpr_path = simulation.resolve_role("topology")
                 response = tuner.gmx_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
             case Engine.AMBER:
-                prmtop_path = resolve_simulation_role(experiment.id, simulation, "topology")
-                inpcrd_path = resolve_simulation_role(experiment.id, simulation, "coordinates")
-                mdin_path = resolve_simulation_role(experiment.id, simulation, "control")
+                prmtop_path = simulation.resolve_role("topology")
+                inpcrd_path = simulation.resolve_role("coordinates")
+                mdin_path = simulation.resolve_role("control")
                 response = tuner.amber_submit(prmtop_path, inpcrd_path, mdin_path, nsteps=nsteps, extra_args=extra_args)
             case _:
                 raise ValueError(f"Unknown engine: {experiment.engine}")
@@ -166,7 +161,7 @@ class TunerJob(db.Model):  # type: ignore
         db.session.add(job)
         db.session.commit()
 
-        mark_simulation_readonly(experiment.id, simulation_path)
+        simulation.mark_readonly()
 
         logger.info(
             f"Tuner job {response['id']} started for experiment {experiment.id} "

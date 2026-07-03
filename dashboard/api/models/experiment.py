@@ -29,6 +29,7 @@ from .notebook import Notebook
 
 if TYPE_CHECKING:
     from .analysis_job import AnalysisJob
+    from .simulation import Simulation
     from .simulation_job import SimulationJob
     from .tuner_job import TunerJob
 
@@ -36,16 +37,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _list_simulations(experiment_id: str) -> list[dict]:
+def _list_simulations(experiment_id: str) -> list["Simulation"]:
     """
     List simulations for an experiment, deferring the import to avoid a circular dependency.
 
     Returns:
-        List of simulation response dicts.
+        List of Simulation instances.
     """
-    from .simulation import list_simulations  # noqa: PLC0415
+    from .simulation import Simulation  # noqa: PLC0415
 
-    return list_simulations(experiment_id)
+    return Simulation.list(experiment_id)
 
 
 _SCHEMA_FILES = ("gromacs.schema.json", "amber.schema.json")
@@ -426,14 +427,11 @@ class Experiment(db.Model):  # type: ignore
         Returns:
             True if a valid simulation exists, False otherwise.
         """
-        from .simulation import (  # noqa: PLC0415
-            get_simulation,
-            list_simulation_files,
-        )
+        from .simulation import Simulation  # noqa: PLC0415
 
-        for f in list_simulation_files(self.id):
-            sim = get_simulation(self.id, f.path)
-            if sim["valid"] and sim.get("engine") == self.engine.value:
+        for f in Simulation.list_files(self.id):
+            sim = Simulation.get(self.id, f.path)
+            if sim.valid and sim.engine == self.engine.value:
                 return True
         return False
 
@@ -577,11 +575,10 @@ class Experiment(db.Model):  # type: ignore
                 description="No valid MDRepo access token available. Please authenticate with MDRepo."
             )
 
-        gmx_simulations = [s for s in _list_simulations(self.id) if s.get("engine") == Engine.GMX.value and s["valid"]]
+        gmx_simulations = [s for s in _list_simulations(self.id) if s.engine == Engine.GMX.value and s.valid]
         tpr_paths = []
         for sim in gmx_simulations:
-            resolved = sim.get("resolved_files", {})
-            topology = resolved.get("topology")
+            topology = sim.resolved_files.get("topology")
             if topology:
                 tpr_paths.append(DATA_DIR / self.id / topology)
         simulations = metadump.extract_metadata_bulk(tpr_paths) if tpr_paths else []
@@ -621,11 +618,11 @@ class Experiment(db.Model):  # type: ignore
         if not MDPOSIT_URL:
             raise BadRequest(description="MDPosit is not configured. Set MDPOSIT_URL to enable MDPosit publishing.")
 
-        from .simulation import get_simulation, resolve_simulation_role  # noqa: PLC0415
+        from .simulation import Simulation  # noqa: PLC0415
 
-        simulation = get_simulation(self.id, simulation_path)
-        if not simulation.get("valid"):
-            errors = simulation.get("errors") or ["Simulation is invalid."]
+        simulation = Simulation.get(self.id, simulation_path)
+        if not simulation.valid:
+            errors = simulation.errors or ["Simulation is invalid."]
             raise BadRequest(description=f"Cannot publish invalid simulation: {'; '.join(errors)}")
 
         exp_dir = DATA_DIR / self.id
@@ -643,10 +640,10 @@ class Experiment(db.Model):  # type: ignore
         selected_paths: dict[str, Path] = {}
 
         for role, exts in allowed_extensions.items():
-            if role not in simulation.get("files", {}):
+            if role not in simulation.files:
                 raise BadRequest(description=f"Simulation is missing file role '{role}' for MDPosit.")
 
-            file_path = resolve_simulation_role(self.id, simulation, role)
+            file_path = simulation.resolve_role(role)
             if not file_path.is_file():
                 raise BadRequest(description=f"Selected file for role '{role}' does not exist.")
 

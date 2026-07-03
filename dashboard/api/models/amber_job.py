@@ -19,12 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from utils import tail
 from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError, NotFound, UnprocessableEntity
 
-from models.simulation import (
-    get_simulation,
-    mark_simulation_readonly,
-    simulation_files,
-    validate_simulation_for_action,
-)
+from models.simulation import Simulation
 
 from .simulation_job import SimulationJob
 
@@ -52,7 +47,7 @@ class AmberJob(SimulationJob):
 
     @cached_property
     def _files(self) -> dict[str, str]:
-        return simulation_files(self.experiment_id, self.simulation_path)
+        return Simulation.get(self.experiment_id, self.simulation_path).resolved_files
 
     @property
     def _mdin_path(self) -> Path:
@@ -175,13 +170,13 @@ class AmberJob(SimulationJob):
         Returns:
             The created AmberJob instance.
         """
-        simulation = get_simulation(experiment.id, simulation_path)
-        validate_simulation_for_action(simulation, "run")
-        resolved = simulation["resolved_files"]
+        simulation = Simulation.get(experiment.id, simulation_path)
+        simulation.validate_for_action("run")
+        resolved = simulation.resolved_files
         prmtop_rel_path = resolved["topology"]
         inpcrd_rel_path = resolved["coordinates"]
         mdin_rel_path = resolved["control"]
-        extra_args = simulation.get("extra_args", "")
+        extra_args = simulation.extra_args
 
         mdrun_job = mdrun.create_amber_job(
             experiment_id=experiment.id,
@@ -211,7 +206,7 @@ class AmberJob(SimulationJob):
         job._cleanup_files()
 
         db.session.commit()
-        mark_simulation_readonly(experiment.id, simulation_path)
+        simulation.mark_readonly()
         logger.info(f"Started AMBER job {job.id} for experiment {experiment.id} (simulation {simulation_path})")
 
         return job

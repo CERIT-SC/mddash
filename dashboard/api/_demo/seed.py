@@ -588,9 +588,9 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
     # Rehydrate GROMACS jobs from database
     for gmx_job in GromacsJob.query.all():
         status = JobStatus.TERMINATED.value if gmx_job._finish_timestamp else JobStatus.RUNNING.value  # noqa: SLF001
-        from models.simulation import simulation_files  # noqa: PLC0415
+        from models.simulation import Simulation  # noqa: PLC0415
 
-        files = simulation_files(gmx_job.experiment_id, gmx_job.simulation_path)
+        files = Simulation.get(gmx_job.experiment_id, gmx_job.simulation_path).resolved_files
         demo_state.mdrun_jobs[gmx_job.id] = {
             "status": status,
             "experiment_id": gmx_job.experiment_id,
@@ -605,9 +605,9 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
     # Rehydrate AMBER jobs from database
     for amber_job in AmberJob.query.all():
         status = JobStatus.TERMINATED.value if amber_job._finish_timestamp else JobStatus.RUNNING.value  # noqa: SLF001
-        from models.simulation import simulation_files  # noqa: PLC0415
+        from models.simulation import Simulation  # noqa: PLC0415
 
-        files = simulation_files(amber_job.experiment_id, amber_job.simulation_path)
+        files = Simulation.get(amber_job.experiment_id, amber_job.simulation_path).resolved_files
         demo_state.mdrun_jobs[amber_job.id] = {
             "status": status,
             "experiment_id": amber_job.experiment_id,

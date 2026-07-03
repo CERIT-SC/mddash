@@ -25,35 +25,358 @@ READONLY_MODE = 0o444
 WRITABLE_MODE = 0o644
 
 
-def _simulation_path(experiment_id: str, simulation_path: str) -> Path:
-    check_path(simulation_path, DATA_DIR / experiment_id)
-    return DATA_DIR / experiment_id / simulation_path
+class Simulation:
+    """File-backed simulation manifest (`.simulation.json`)."""
 
+    def __init__(
+        self,
+        experiment_id: str,
+        simulation_path: str,
+        raw: dict | None = None,
+        read_error: str | None = None,
+    ) -> None:
+        """Initialize a Simulation instance from raw manifest data or a read error."""
+        self.experiment_id = experiment_id
+        self.simulation_path = simulation_path
+        self._raw = raw if isinstance(raw, dict) else {}
+        self._read_error = read_error
+        self._resolved: dict[str, str] | None = None
+        self._validation: tuple[bool, list[str], list[str]] | None = None
 
-def list_simulation_files(experiment_id: str) -> list[FileInfo]:
-    """
-    Discover ``.simulation.json`` files under the experiment directory.
+    @property
+    def _file(self) -> Path:
+        """Absolute path to the manifest file."""
+        return DATA_DIR / self.experiment_id / self.simulation_path
 
-    Returns:
-        Sorted list of FileInfo objects.
-    """
-    exp_dir = DATA_DIR / experiment_id
-    if not exp_dir.is_dir():
-        return []
-    files = [f for f in get_files_with_extensions(exp_dir, "json") if f.name.endswith(SIMULATION_SUFFIX)]
-    return sorted(files, key=lambda f: f.path)
+    @property
+    def name(self) -> str:
+        """Simulation name from the manifest."""
+        return self._raw.get("name", "")
 
+    @property
+    def engine(self) -> str:
+        """Engine value from the manifest."""
+        return self._raw.get("engine", "")
 
-def _resolve_schema_path(simulation_file: Path, raw: dict, exp_dir: Path) -> Path | None:
-    schema_ref = raw.get("$schema")
-    if not isinstance(schema_ref, str) or not schema_ref:
-        return None
-    resolved = (simulation_file.parent / schema_ref).resolve()
-    try:
-        resolved.relative_to(exp_dir.resolve())
-    except ValueError:
-        return None
-    return resolved
+    @property
+    def extra_args(self) -> str:
+        """Extra CLI arguments from the manifest."""
+        return self._raw.get("extra_args", "")
+
+    @property
+    def files(self) -> dict[str, str]:
+        """Raw file role paths from the manifest."""
+        f = self._raw.get("files")
+        return f if isinstance(f, dict) else {}
+
+    @property
+    def resolved_files(self) -> dict[str, str]:
+        """Experiment-relative paths for each file role."""
+        if self._resolved is None:
+            self._resolved = self._resolve_files(self.files)
+        return self._resolved
+
+    @property
+    def valid(self) -> bool:
+        """Whether the manifest passes validation."""
+        return self._run_validation()[0]
+
+    @property
+    def errors(self) -> list[str]:
+        """Validation errors, if any."""
+        return self._run_validation()[1]
+
+    @property
+    def missing_files(self) -> list[str]:
+        """File roles whose resolved path does not exist."""
+        return self._run_validation()[2]
+
+    @property
+    def locked(self) -> bool:
+        """Whether the simulation is locked (read-only file or active job)."""
+        if self._file.exists() and not os.access(self._file, os.W_OK):
+            return True
+        return self.is_job_locked(self.experiment_id, self.simulation_path)
+
+    def to_dict(self) -> dict:
+        """
+        Serialize to the API response dict.
+
+        Returns:
+            Dict with simulation_path, name, engine, files, resolved_files,
+            extra_args, locked, valid, errors, missing_files.
+        """
+        valid, errors, missing = self._run_validation()
+        return {
+            "simulation_path": self.simulation_path,
+            "name": self.name,
+            "engine": self.engine,
+            "files": self.files,
+            "resolved_files": self.resolved_files,
+            "extra_args": self.extra_args,
+            "locked": self.locked,
+            "valid": valid,
+            "errors": errors,
+            "missing_files": missing,
+        }
+
+    def resolve_role(self, role: str) -> Path:
+        """
+        Resolve a file role to an absolute Path.
+
+        Returns:
+            Absolute Path to the role file.
+
+        Raises:
+            BadRequest: If the role is absent or escapes the experiment directory.
+        """
+        rel = self.files.get(role)
+        if not isinstance(rel, str) or not rel:
+            raise BadRequest(description=f"Simulation is missing file role '{role}'.")
+        resolved = (self._file.parent / rel).resolve()
+        try:
+            resolved.relative_to((DATA_DIR / self.experiment_id).resolve())
+        except ValueError as exc:
+            raise BadRequest(description=f"File role '{role}' escapes the experiment directory.") from exc
+        return resolved
+
+    def validate_for_action(self, action: str) -> None:
+        """
+        Validate this simulation may be used for a workflow action.
+
+        Raises:
+            BadRequest: If invalid or missing files.
+        """
+        if not self.valid:
+            errors = self.errors or ["Simulation is invalid."]
+            raise BadRequest(description=f"Cannot {action} invalid simulation: {'; '.join(errors)}")
+        if self.missing_files:
+            raise BadRequest(
+                description=f"Cannot {action} simulation: missing files for roles: {', '.join(self.missing_files)}"
+            )
+
+    def mark_readonly(self) -> None:
+        """Best-effort chmod the manifest read-only (0444)."""
+        try:
+            self._file.chmod(READONLY_MODE)
+        except OSError:
+            logger.warning("Failed to mark simulation '%s' read-only", self.simulation_path, exc_info=True)
+
+    def _resolve_files(self, files: dict) -> dict[str, str]:
+        """
+        Resolve file roles to experiment-relative paths.
+
+        Returns:
+            Dict mapping role to experiment-relative path.
+        """
+        exp_dir = (DATA_DIR / self.experiment_id).resolve()
+        sim_dir = self._file.parent
+        resolved: dict[str, str] = {}
+        for role, rel in files.items():
+            if not isinstance(rel, str) or not rel:
+                continue
+            try:
+                absolute = (sim_dir / rel).resolve()
+                absolute.relative_to(exp_dir)
+                resolved[role] = str(absolute.relative_to(exp_dir))
+            except (OSError, ValueError):
+                resolved[role] = rel
+        return resolved
+
+    def _run_validation(self) -> tuple[bool, list[str], list[str]]:
+        """
+        Run validation if not cached.
+
+        Returns:
+            Tuple of (valid, errors, missing_files).
+        """
+        if self._validation is not None:
+            return self._validation
+
+        if self._read_error:
+            self._validation = False, [f"Failed to read simulation manifest: {self._read_error}"], []
+            return self._validation
+
+        errors: list[str] = []
+        resolved = self.resolved_files
+        exp_dir = DATA_DIR / self.experiment_id
+
+        schema_path = self._resolve_schema_path(exp_dir)
+        schema = _load_schema(schema_path) if schema_path is not None else None
+        if schema_path is None:
+            errors.append("Missing or invalid '$schema' reference.")
+        elif schema is None:
+            errors.append(f"Schema file missing or unreadable: {self._raw.get('$schema')}")
+
+        if schema is not None:
+            try:
+                jsonschema.validate(self._raw, schema)
+            except jsonschema.ValidationError as exc:
+                errors.append(f"Schema validation failed: {exc.message}")
+
+        experiment = db.session.get(Experiment, self.experiment_id)
+        if experiment is not None:
+            sim_engine = self._raw.get("engine")
+            if sim_engine != experiment.engine.value:
+                errors.append(f"Engine '{sim_engine}' does not match experiment engine '{experiment.engine.value}'.")
+
+        for role, rel in resolved.items():
+            if rel and rel.startswith("/"):
+                errors.append(f"File role '{role}' must be a relative path.")
+
+        missing = [role for role, rel in resolved.items() if not (exp_dir / rel).is_file()]
+
+        self._validation = not errors, errors, missing
+        return self._validation
+
+    def _resolve_schema_path(self, exp_dir: Path) -> Path | None:
+        schema_ref = self._raw.get("$schema")
+        if not isinstance(schema_ref, str) or not schema_ref:
+            return None
+        resolved = (self._file.parent / schema_ref).resolve()
+        try:
+            resolved.relative_to(exp_dir.resolve())
+        except ValueError:
+            return None
+        return resolved
+
+    @staticmethod
+    def is_job_locked(experiment_id: str, simulation_path: str) -> bool:
+        """
+        Return whether any tuner or production job references this simulation.
+
+        Returns:
+            True if a job references the simulation.
+        """
+        from .simulation_job import SimulationJob  # noqa: PLC0415
+        from .tuner_job import TunerJob  # noqa: PLC0415
+
+        return bool(
+            TunerJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first()
+            or SimulationJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first()
+        )
+
+    @staticmethod
+    def list_files(experiment_id: str) -> list[FileInfo]:
+        """
+        Discover `.simulation.json` files under the experiment directory.
+
+        Returns:
+            Sorted list of FileInfo objects.
+        """
+        exp_dir = DATA_DIR / experiment_id
+        if not exp_dir.is_dir():
+            return []
+        files = [f for f in get_files_with_extensions(exp_dir, "json") if f.name.endswith(SIMULATION_SUFFIX)]
+        return sorted(files, key=lambda f: f.path)
+
+    @classmethod
+    def list(cls, experiment_id: str) -> list["Simulation"]:
+        """
+        List all simulations with validation status, sorted by path.
+
+        Returns:
+            List of Simulation instances (includes invalid/unreadable ones).
+        """
+        simulations: list[Simulation] = []
+        for file_info in cls.list_files(experiment_id):
+            sim = cls._from_file(experiment_id, file_info.path)
+            simulations.append(sim)
+        return simulations
+
+    @classmethod
+    def get(cls, experiment_id: str, simulation_path: str) -> "Simulation":
+        """
+        Get a single simulation by path.
+
+        Returns:
+            Simulation instance (includes invalid/unreadable ones).
+
+        Raises:
+            NotFound: If the file does not exist.
+        """
+        sim_path = Path(simulation_path).as_posix()
+        check_path(sim_path, DATA_DIR / experiment_id)
+        simulation_file = DATA_DIR / experiment_id / sim_path
+        if not simulation_file.is_file():
+            raise NotFound(description=f"Simulation '{sim_path}' not found.")
+        return cls._from_file(experiment_id, sim_path)
+
+    @classmethod
+    def _from_file(cls, experiment_id: str, simulation_path: str) -> "Simulation":
+        try:
+            raw = json.loads((DATA_DIR / experiment_id / simulation_path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            return cls(experiment_id, simulation_path, read_error=str(exc))
+        return cls(experiment_id, simulation_path, raw=raw)
+
+    @classmethod
+    def write(cls, experiment_id: str, payload: dict) -> "Simulation":
+        """
+        Create a simulation manifest at `production/{name}.simulation.json`.
+
+        Returns:
+            The created Simulation instance.
+
+        Raises:
+            BadRequest: If the path is unsafe, locked, or content is invalid.
+        """
+        experiment = Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found")
+        simulation_path = payload.get("simulation_path") or _safe_default_path(payload.get("name", ""))
+        simulation_path = Path(simulation_path).as_posix()
+        check_path(simulation_path, DATA_DIR / experiment_id)
+        if not simulation_path.endswith(SIMULATION_SUFFIX):
+            raise BadRequest(description=f"Path must end with '{SIMULATION_SUFFIX}'.")
+
+        simulation_file = DATA_DIR / experiment_id / simulation_path
+        if simulation_file.exists() and cls.is_job_locked(experiment_id, simulation_path):
+            raise BadRequest(description=f"Simulation '{simulation_path}' is locked.")
+
+        content = _build_content(experiment_id, simulation_path, experiment.engine, payload)
+        _validate_content_or_raise(experiment_id, simulation_path, content, experiment.engine)
+
+        simulation_file.parent.mkdir(parents=True, exist_ok=True)
+        simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return cls(experiment_id, simulation_path, raw=content)
+
+    @classmethod
+    def update(cls, experiment_id: str, simulation_path: str, payload: dict) -> "Simulation":
+        """
+        Edit an unlocked simulation manifest.
+
+        Returns:
+            The updated Simulation instance.
+
+        Raises:
+            NotFound: If the file does not exist.
+            BadRequest: If job-locked or content is invalid.
+        """
+        experiment = Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found")
+        simulation_path = Path(simulation_path).as_posix()
+        simulation_file = DATA_DIR / experiment_id / simulation_path
+        if not simulation_file.is_file():
+            raise NotFound(description=f"Simulation '{simulation_path}' not found.")
+
+        if cls.is_job_locked(experiment_id, simulation_path):
+            raise BadRequest(description=f"Simulation '{simulation_path}' is locked.")
+
+        content = _build_content(experiment_id, simulation_path, experiment.engine, payload)
+        _validate_content_or_raise(experiment_id, simulation_path, content, experiment.engine)
+
+        if simulation_file.exists() and not os.access(simulation_file, os.W_OK):
+            try:
+                simulation_file.chmod(WRITABLE_MODE)
+            except OSError:
+                logger.warning("Failed to make simulation '%s' writable", simulation_path, exc_info=True)
+
+        simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+        try:
+            simulation_file.chmod(WRITABLE_MODE)
+        except OSError:
+            logger.warning("Failed to restore writable mode for '%s'", simulation_path, exc_info=True)
+
+        return cls(experiment_id, simulation_path, raw=content)
 
 
 @lru_cache(maxsize=16)
@@ -66,266 +389,13 @@ def _load_schema(schema_path: Path) -> dict | None:
         return None
 
 
-def _resolved_files(experiment_id: str, simulation_path: str, files: dict) -> dict[str, str]:
-    exp_dir = DATA_DIR / experiment_id
-    sim_dir = (exp_dir / simulation_path).parent
-    resolved: dict[str, str] = {}
-    for role, rel in files.items():
-        if not isinstance(rel, str) or not rel:
-            continue
-        try:
-            absolute = (sim_dir / rel).resolve()
-            absolute.relative_to(exp_dir.resolve())
-            resolved[role] = str(absolute.relative_to(exp_dir.resolve()))
-        except (OSError, ValueError):
-            resolved[role] = rel
-    return resolved
-
-
-def _missing_files(experiment_id: str, resolved_files: dict[str, str]) -> list[str]:
-    exp_dir = DATA_DIR / experiment_id
-    return [role for role, rel in resolved_files.items() if not (exp_dir / rel).is_file()]
-
-
-def _validate(
-    experiment_id: str,
-    simulation_path: str,
-    raw: dict,
-) -> tuple[bool, list[str], list[str], dict[str, str]]:
-    """
-    Validate a parsed manifest.
-
-    Returns:
-        Tuple of (valid, errors, missing_files, resolved_files).
-    """
-    errors: list[str] = []
-    exp_dir = DATA_DIR / experiment_id
-    simulation_file = exp_dir / simulation_path
-
-    if not isinstance(raw, dict):
-        return False, ["Manifest is not a JSON object."], [], {}
-
-    files = raw.get("files")
-    if not isinstance(files, dict):
-        errors.append("Manifest is missing a 'files' object.")
-        files = {}
-
-    resolved_files = _resolved_files(experiment_id, simulation_path, files)
-
-    schema_path = _resolve_schema_path(simulation_file, raw, exp_dir)
-    schema = _load_schema(schema_path) if schema_path is not None else None
-    if schema_path is None:
-        errors.append("Missing or invalid '$schema' reference.")
-    elif schema is None:
-        errors.append(f"Schema file missing or unreadable: {raw.get('$schema')}")
-
-    if schema is not None:
-        try:
-            jsonschema.validate(raw, schema)
-        except jsonschema.ValidationError as exc:
-            errors.append(f"Schema validation failed: {exc.message}")
-
-    experiment = db.session.get(Experiment, experiment_id)
-    if experiment is not None:
-        sim_engine = raw.get("engine")
-        if sim_engine != experiment.engine.value:
-            errors.append(f"Engine '{sim_engine}' does not match experiment engine '{experiment.engine.value}'.")
-
-    for role, rel in resolved_files.items():
-        if rel and rel.startswith("/"):
-            errors.append(f"File role '{role}' must be a relative path.")
-
-    missing_files = _missing_files(experiment_id, resolved_files)
-
-    valid = not errors
-    return valid, errors, missing_files, resolved_files
-
-
-def _to_response(
-    experiment_id: str,
-    simulation_path: str,
-    raw: dict,
-) -> dict:
-    valid, errors, missing_files, resolved_files = _validate(experiment_id, simulation_path, raw)
-    return {
-        "simulation_path": simulation_path,
-        "name": raw.get("name", ""),
-        "engine": raw.get("engine", ""),
-        "files": raw.get("files", {}) if isinstance(raw.get("files"), dict) else {},
-        "resolved_files": resolved_files,
-        "extra_args": raw.get("extra_args", ""),
-        "locked": is_simulation_locked(experiment_id, simulation_path),
-        "valid": valid,
-        "errors": errors,
-        "missing_files": missing_files,
-    }
-
-
-def list_simulations(experiment_id: str) -> list[dict]:
-    """
-    List all simulations with validation status, sorted by path.
-
-    Returns:
-        List of simulation response dicts.
-    """
-    simulations: list[dict] = []
-    for file_info in list_simulation_files(experiment_id):
-        simulation_file = DATA_DIR / experiment_id / file_info.path
-        try:
-            raw = json.loads(simulation_file.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            simulations.append({
-                "simulation_path": file_info.path,
-                "name": "",
-                "engine": "",
-                "files": {},
-                "resolved_files": {},
-                "extra_args": "",
-                "locked": is_simulation_locked(experiment_id, file_info.path),
-                "valid": False,
-                "errors": [f"Failed to read simulation manifest: {exc}"],
-                "missing_files": [],
-            })
-            continue
-        simulations.append(_to_response(experiment_id, file_info.path, raw))
-    return simulations
-
-
-def get_simulation(experiment_id: str, simulation_path: str) -> dict:
-    """
-    Get a single simulation by path.
-
-    Returns:
-        Simulation response dict (includes invalid simulations).
-
-    Raises:
-        NotFound: If the file does not exist.
-    """
-    simulation_file = _simulation_path(experiment_id, simulation_path)
-    if not simulation_file.is_file():
-        raise NotFound(description=f"Simulation '{simulation_path}' not found.")
-    try:
-        raw = json.loads(simulation_file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        return {
-            "simulation_path": simulation_path,
-            "name": "",
-            "engine": "",
-            "files": {},
-            "resolved_files": {},
-            "extra_args": "",
-            "locked": is_simulation_locked(experiment_id, simulation_path),
-            "valid": False,
-            "errors": [f"Failed to read simulation manifest: {exc}"],
-            "missing_files": [],
-        }
-    return _to_response(experiment_id, simulation_path, raw)
-
-
-def resolve_simulation_role(experiment_id: str, simulation: dict, role: str) -> Path:
-    """
-    Resolve a file role to an absolute Path.
-
-    Returns:
-        Absolute Path to the role file.
-
-    Raises:
-        BadRequest: If the role is absent or escapes the experiment directory.
-    """
-    files = simulation.get("files", {})
-    rel = files.get(role)
-    if not isinstance(rel, str) or not rel:
-        raise BadRequest(description=f"Simulation is missing file role '{role}'.")
-    simulation_file = _simulation_path(experiment_id, simulation["simulation_path"])
-    resolved = (simulation_file.parent / rel).resolve()
-    try:
-        resolved.relative_to((DATA_DIR / experiment_id).resolve())
-    except ValueError as exc:
-        raise BadRequest(description=f"File role '{role}' escapes the experiment directory.") from exc
-    return resolved
-
-
-def simulation_files(experiment_id: str, simulation_path: str) -> dict[str, str]:
-    """
-    Return resolved file role paths for a simulation (no validation).
-
-    Returns:
-        Dict mapping file role to experiment-relative path.
-
-    Raises:
-        NotFound: If the manifest cannot be read.
-    """
-    simulation_file = _simulation_path(experiment_id, simulation_path)
-    try:
-        raw = json.loads(simulation_file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise NotFound(description=f"Failed to read simulation '{simulation_path}': {exc}") from exc
-    files = raw.get("files", {}) if isinstance(raw, dict) else {}
-    return _resolved_files(experiment_id, simulation_path, files)
-
-
-def validate_simulation_for_action(simulation: dict, action: str) -> None:
-    """
-    Validate a simulation may be used for an action.
-
-    Raises:
-        BadRequest: If the simulation is invalid or missing files.
-    """
-    if not simulation.get("valid"):
-        errors = simulation.get("errors") or ["Simulation is invalid."]
-        raise BadRequest(description=f"Cannot {action} invalid simulation: {'; '.join(errors)}")
-    missing = simulation.get("missing_files") or []
-    if missing:
-        raise BadRequest(description=f"Cannot {action} simulation: missing files for roles: {', '.join(missing)}")
-
-
-def is_simulation_job_locked(experiment_id: str, simulation_path: str) -> bool:
-    """
-    Return whether any tuner or production job references this simulation.
-
-    Returns:
-        True if a job references the simulation.
-    """
-    from .simulation_job import SimulationJob  # noqa: PLC0415
-    from .tuner_job import TunerJob  # noqa: PLC0415
-
-    return bool(
-        TunerJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first()
-        or SimulationJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first()
-    )
-
-
-def is_simulation_locked(experiment_id: str, simulation_path: str) -> bool:
-    """
-    Return whether a simulation is locked (read-only file or active job).
-
-    Returns:
-        True if locked.
-    """
-    simulation_file = _simulation_path(experiment_id, simulation_path)
-    if simulation_file.exists() and not os.access(simulation_file, os.W_OK):
-        return True
-    return is_simulation_job_locked(experiment_id, simulation_path)
-
-
-def mark_simulation_readonly(experiment_id: str, simulation_path: str) -> None:
-    """Best-effort chmod a simulation manifest read-only (0444)."""
-    simulation_file = _simulation_path(experiment_id, simulation_path)
-    try:
-        Path(simulation_file).chmod(READONLY_MODE)
-    except OSError:
-        logger.warning("Failed to mark simulation '%s' read-only", simulation_path, exc_info=True)
-
-
-def _schema_for_engine(engine: Engine) -> str:
-    try:
-        return ENGINE_SCHEMA_FILE[engine]
-    except KeyError as exc:
-        raise BadRequest(description=f"Unsupported engine: {engine}") from exc
+def _safe_default_path(name: str) -> str:
+    safe_name = Path(name).name if name else "simulation"
+    return f"production/{safe_name}{SIMULATION_SUFFIX}"
 
 
 def _build_content(experiment_id: str, simulation_path: str, engine: Engine, payload: dict) -> dict:
-    schema_filename = _schema_for_engine(engine)
+    schema_filename = ENGINE_SCHEMA_FILE[engine]
     exp_dir = DATA_DIR / experiment_id
     sim_dir = (exp_dir / simulation_path).parent
     schema_ref = os.path.relpath(exp_dir / schema_filename, start=sim_dir)
@@ -346,10 +416,17 @@ def _build_content(experiment_id: str, simulation_path: str, engine: Engine, pay
 def _validate_content_or_raise(experiment_id: str, simulation_path: str, content: dict, engine: Engine) -> None:
     exp_dir = DATA_DIR / experiment_id
     simulation_file = exp_dir / simulation_path
-    schema_path = _resolve_schema_path(simulation_file, content, exp_dir)
-    schema = _load_schema(schema_path) if schema_path is not None else None
+    schema_ref = content.get("$schema")
+    if not isinstance(schema_ref, str) or not schema_ref:
+        raise BadRequest(description="Missing or invalid '$schema' reference.")
+    schema_path = (simulation_file.parent / schema_ref).resolve()
+    try:
+        schema_path.relative_to(exp_dir.resolve())
+    except ValueError:
+        raise BadRequest(description=f"Schema file escapes experiment directory: {schema_ref}")
+    schema = _load_schema(schema_path)
     if schema is None:
-        raise BadRequest(description=f"Schema file is missing or unreadable: {content.get('$schema')}")
+        raise BadRequest(description=f"Schema file is missing or unreadable: {schema_ref}")
     try:
         jsonschema.validate(content, schema)
     except jsonschema.ValidationError as exc:
@@ -357,76 +434,3 @@ def _validate_content_or_raise(experiment_id: str, simulation_path: str, content
 
     if content.get("engine") != engine.value:
         raise BadRequest(description="Simulation engine does not match the experiment engine.")
-
-
-def _safe_default_path(name: str) -> str:
-    safe_name = Path(name).name if name else "simulation"
-    return f"production/{safe_name}{SIMULATION_SUFFIX}"
-
-
-def write_simulation(experiment_id: str, payload: dict) -> dict:
-    """
-    Create a simulation manifest at ``production/{name}.simulation.json``.
-
-    Returns:
-        The created simulation response dict.
-
-    Raises:
-        BadRequest: If the path is unsafe, locked, or content is invalid.
-    """
-    experiment = Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found")
-    simulation_path = payload.get("simulation_path") or _safe_default_path(payload.get("name", ""))
-    simulation_path = Path(simulation_path).as_posix()
-    check_path(simulation_path, DATA_DIR / experiment_id)
-    if not simulation_path.endswith(SIMULATION_SUFFIX):
-        raise BadRequest(description=f"Path must end with '{SIMULATION_SUFFIX}'.")
-
-    simulation_file = _simulation_path(experiment_id, simulation_path)
-    if simulation_file.exists() and is_simulation_job_locked(experiment_id, simulation_path):
-        raise BadRequest(description=f"Simulation '{simulation_path}' is locked.")
-
-    content = _build_content(experiment_id, simulation_path, experiment.engine, payload)
-    _validate_content_or_raise(experiment_id, simulation_path, content, experiment.engine)
-
-    simulation_file.parent.mkdir(parents=True, exist_ok=True)
-    simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return _to_response(experiment_id, simulation_path, content)
-
-
-def update_simulation(experiment_id: str, simulation_path: str, payload: dict) -> dict:
-    """
-    Edit an unlocked simulation manifest.
-
-    Returns:
-        The updated simulation response dict.
-
-    Raises:
-        NotFound: If the file does not exist.
-        BadRequest: If job-locked or content is invalid.
-    """
-    experiment = Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found")
-    simulation_path = Path(simulation_path).as_posix()
-    simulation_file = _simulation_path(experiment_id, simulation_path)
-    if not simulation_file.is_file():
-        raise NotFound(description=f"Simulation '{simulation_path}' not found.")
-
-    if is_simulation_job_locked(experiment_id, simulation_path):
-        raise BadRequest(description=f"Simulation '{simulation_path}' is locked.")
-
-    content = _build_content(experiment_id, simulation_path, experiment.engine, payload)
-    _validate_content_or_raise(experiment_id, simulation_path, content, experiment.engine)
-
-    if simulation_file.exists() and not os.access(simulation_file, os.W_OK):
-        try:
-            Path(simulation_file).chmod(WRITABLE_MODE)
-        except OSError:
-            logger.warning("Failed to make simulation '%s' writable", simulation_path, exc_info=True)
-
-    simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-    try:
-        Path(simulation_file).chmod(WRITABLE_MODE)
-    except OSError:
-        logger.warning("Failed to restore writable mode for '%s'", simulation_path, exc_info=True)
-
-    return _to_response(experiment_id, simulation_path, content)

@@ -4,12 +4,7 @@ from config import API_PREFIX
 from decorators import handle_exceptions
 from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
-from models import (
-    get_simulation,
-    list_simulations,
-    update_simulation,
-    write_simulation,
-)
+from models import Simulation
 from werkzeug.exceptions import BadRequest
 
 simulations_bp = Blueprint("simulations", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/simulations")
@@ -24,7 +19,7 @@ def list_simulations_route(experiment_id: str) -> Response:
     Returns:
         Response: JSON response with the list of simulations.
     """
-    return jsonify(list_simulations(experiment_id))
+    return jsonify([s.to_dict() for s in Simulation.list(experiment_id)])
 
 
 @simulations_bp.route("/<path:simulation_path>", methods=["GET"])
@@ -36,7 +31,7 @@ def get_simulation_route(experiment_id: str, simulation_path: str) -> Response:
     Returns:
         Response: JSON response with the simulation data.
     """
-    return jsonify(get_simulation(experiment_id, simulation_path))
+    return jsonify(Simulation.get(experiment_id, simulation_path).to_dict())
 
 
 @simulations_bp.route("", methods=["POST"])
@@ -54,8 +49,8 @@ def create_simulation_route(experiment_id: str) -> ResponseReturnValue:
     data = request.get_json()
     if not isinstance(data, dict):
         raise BadRequest("Request body must be a JSON object.")
-    simulation = write_simulation(experiment_id, data)
-    return jsonify(simulation), HTTPStatus.CREATED
+    simulation = Simulation.write(experiment_id, data)
+    return jsonify(simulation.to_dict()), HTTPStatus.CREATED
 
 
 @simulations_bp.route("/<path:simulation_path>", methods=["PATCH"])
@@ -73,5 +68,5 @@ def update_simulation_route(experiment_id: str, simulation_path: str) -> Respons
     data = request.get_json()
     if not isinstance(data, dict):
         raise BadRequest("Request body must be a JSON object.")
-    simulation = update_simulation(experiment_id, simulation_path, data)
-    return jsonify(simulation)
+    simulation = Simulation.update(experiment_id, simulation_path, data)
+    return jsonify(simulation.to_dict())

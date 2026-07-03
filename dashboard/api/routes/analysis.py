@@ -11,7 +11,7 @@ from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import AnalysisJob, Experiment
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, find_result_file, list_result_files
-from models.simulation import get_simulation, resolve_simulation_role
+from models.simulation import Simulation
 from schemas import AnalysisJobSchema
 from werkzeug.exceptions import BadRequest, NotFound, UnprocessableEntity
 
@@ -66,20 +66,20 @@ def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
         )
 
     experiment = Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found")
-    simulation = get_simulation(experiment_id, simulation_path)
-    if not simulation.get("valid"):
-        errors = simulation.get("errors") or ["Simulation is invalid."]
+    simulation = Simulation.get(experiment_id, simulation_path)
+    if not simulation.valid:
+        errors = simulation.errors or ["Simulation is invalid."]
         raise BadRequest(f"Cannot analyze invalid simulation: {'; '.join(errors)}")
 
-    trajectory_path = resolve_simulation_role(experiment_id, simulation, "trajectory")
+    trajectory_path = simulation.resolve_role("trajectory")
 
     topology_path: Path | None = None
-    if "topology" in simulation.get("files", {}):
-        topology_path = resolve_simulation_role(experiment_id, simulation, "topology")
+    if "topology" in simulation.files:
+        topology_path = simulation.resolve_role("topology")
 
     structure_path: Path | None = None
-    if experiment.engine == Engine.GMX and "structure" in simulation.get("files", {}):
-        structure_path = resolve_simulation_role(experiment_id, simulation, "structure")
+    if experiment.engine == Engine.GMX and "structure" in simulation.files:
+        structure_path = simulation.resolve_role("structure")
 
     preprocessing_mode_name = data.get("preprocessing_mode", PreprocessingMode.AS_IS.value)
     try:

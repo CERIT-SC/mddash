@@ -26,12 +26,7 @@ from werkzeug.exceptions import (
     UnprocessableEntity,
 )
 
-from models.simulation import (
-    get_simulation,
-    mark_simulation_readonly,
-    simulation_files,
-    validate_simulation_for_action,
-)
+from models.simulation import Simulation
 
 from .simulation_job import SimulationJob
 
@@ -62,7 +57,7 @@ class GromacsJob(SimulationJob):
 
     @cached_property
     def _files(self) -> dict[str, str]:
-        return simulation_files(self.experiment_id, self.simulation_path)
+        return Simulation.get(self.experiment_id, self.simulation_path).resolved_files
 
     @property
     def _topology_rel(self) -> str:
@@ -214,10 +209,10 @@ class GromacsJob(SimulationJob):
         Returns:
             The created GromacsJob instance.
         """
-        simulation = get_simulation(experiment.id, simulation_path)
-        validate_simulation_for_action(simulation, "run")
-        tpr_rel_path = simulation["resolved_files"]["topology"]
-        extra_args = simulation.get("extra_args", "")
+        simulation = Simulation.get(experiment.id, simulation_path)
+        simulation.validate_for_action("run")
+        tpr_rel_path = simulation.resolved_files["topology"]
+        extra_args = simulation.extra_args
 
         mdrun_job = mdrun.create_job(
             experiment_id=experiment.id,
@@ -245,7 +240,7 @@ class GromacsJob(SimulationJob):
         job._cleanup_files()
 
         db.session.commit()
-        mark_simulation_readonly(experiment.id, simulation_path)
+        simulation.mark_readonly()
         logger.info(f"Started GROMACS job {job.id} for experiment {experiment.id} (simulation {simulation_path})")
 
         return job
