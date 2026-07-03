@@ -81,22 +81,17 @@ def create_demo_app() -> "Flask":
     """
     _configure_demo_env()
 
-    # Patch Kubernetes BEFORE importing anything that uses it
-    # The k8s module calls config.load_incluster_config() at import time
+    # k8s loads kubernetes lazily; patches must precede demo seeding.
     with (
         patch("kubernetes.config.load_incluster_config"),
         patch("kubernetes.client.CoreV1Api"),
         patch("kubernetes.client.BatchV1Api"),
     ):
-        # Import mock installation and setup
         from _demo.mocks import install_all_mocks  # noqa: PLC0415
         from _demo.profile import setup_demo_profile  # noqa: PLC0415
 
-        # Install all mocks - this activates responses globally
         install_all_mocks()
 
-        # Import the real app - this triggers kubernetes config loading
-        # but it's already patched above
         from app import create_app  # noqa: PLC0415
 
         app = create_app()

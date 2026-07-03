@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import threading
 import time
@@ -6,6 +8,22 @@ from typing import TYPE_CHECKING, Callable, cast
 
 if TYPE_CHECKING:
     from enums import NotebookTier
+
+    # Available at runtime via _load_k8s() populating module globals.
+    from kubernetes import config  # noqa: TC004
+    from kubernetes.client import (  # noqa: TC004
+        BatchV1Api,
+        CoreV1Api,
+        V1DeleteOptions,
+        V1Job,
+        V1ObjectMeta,
+        V1Pod,
+        V1PodList,
+        V1Service,
+        V1ServicePort,
+        V1ServiceSpec,
+    )
+    from kubernetes.client.rest import ApiException  # noqa: TC004
 
 from config import (
     CPU_LIMIT_QUOTA,
@@ -20,33 +38,52 @@ from config import (
     PVC_NAME,
 )
 from enums import JobStatus, PodStatus
-from kubernetes import config
-from kubernetes.client import (
-    BatchV1Api,
-    CoreV1Api,
-    V1DeleteOptions,
-    V1Job,
-    V1ObjectMeta,
-    V1Pod,
-    V1PodList,
-    V1Service,
-    V1ServicePort,
-    V1ServiceSpec,
-)
-from kubernetes.client.rest import ApiException
 
 logger = logging.getLogger(__name__)
 
-
 _k8s_lock = threading.Lock()
+_k8s_loaded = False
 _k8s_config_loaded = False
 _core_v1: CoreV1Api | None = None
 _batch_v1: BatchV1Api | None = None
 
 
+def _load_k8s() -> None:
+    """Import kubernetes symbols into module globals on first k8s use."""
+    global _k8s_loaded  # noqa: PLW0603
+    if _k8s_loaded:
+        return
+    import kubernetes.config  # noqa: PLC0415
+    from kubernetes.client import (  # noqa: PLC0415
+        BatchV1Api,
+        CoreV1Api,
+        V1DeleteOptions,
+        V1ObjectMeta,
+        V1Service,
+        V1ServicePort,
+        V1ServiceSpec,
+    )
+    from kubernetes.client.rest import ApiException  # noqa: PLC0415
+
+    g = globals()
+    g["config"] = kubernetes.config
+    g.update(
+        BatchV1Api=BatchV1Api,
+        CoreV1Api=CoreV1Api,
+        V1DeleteOptions=V1DeleteOptions,
+        V1ObjectMeta=V1ObjectMeta,
+        V1Service=V1Service,
+        V1ServicePort=V1ServicePort,
+        V1ServiceSpec=V1ServiceSpec,
+        ApiException=ApiException,
+    )
+    _k8s_loaded = True
+
+
 def _ensure_k8s_config() -> None:
     global _k8s_config_loaded  # noqa: PLW0603
     if not _k8s_config_loaded:
+        _load_k8s()
         config.load_incluster_config()
         _k8s_config_loaded = True
 
@@ -75,10 +112,11 @@ def get_batch_v1() -> BatchV1Api:
 
 def reset_k8s_clients_for_tests() -> None:
     """Reset cached Kubernetes clients for isolated unit tests."""
-    global _batch_v1, _core_v1, _k8s_config_loaded  # noqa: PLW0603
+    global _batch_v1, _core_v1, _k8s_config_loaded, _k8s_loaded  # noqa: PLW0603
     _core_v1 = None
     _batch_v1 = None
     _k8s_config_loaded = False
+    _k8s_loaded = False
 
 
 def get_container(

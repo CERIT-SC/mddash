@@ -94,6 +94,8 @@ def create_app() -> Flask:
         Flask: Configured Flask application instance.
     """
     startup_start = time.perf_counter()
+    configure_logging(LOG_FORMAT, LOG_LEVEL)
+    enable_loggers()
     app = Flask(__name__)
 
     db_path = DATA_DIR / "experiments.db"
@@ -118,9 +120,6 @@ def create_app() -> Flask:
         except (Exception, SystemExit) as e:
             logger.warning("Migration upgrade failed: %s, falling back to create_all()", e)
             db.create_all()
-
-    configure_logging(LOG_FORMAT, LOG_LEVEL)
-    enable_loggers()
 
     start_du_monitor(DATA_DIR, initial_delay=DU_MONITOR_START_DELAY_SECONDS)
     _log_duration("app-factory", startup_start)
