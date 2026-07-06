@@ -1,11 +1,11 @@
 import { useState } from "react"
 
-import { Loader2, Pause, Play } from "lucide-react"
+import { Loader2, Pause, Play, Trash2 } from "lucide-react"
 
 import { simulationLaunchUnavailableReason } from "@/util/simulation"
 import { type AmberTunerTrial } from "@/util/types"
 import { useSimulation } from "@/hooks/use-simulations"
-import { useRunTuner, useTunerStatus } from "@/hooks/use-tuner"
+import { useDeleteTuner, useRunTuner, useTunerStatus } from "@/hooks/use-tuner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -31,6 +31,9 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
   const [selectedTrial, setSelectedTrial] = useState<AmberTunerTrial | null>(null)
   const [nsteps, setNsteps] = useState<number | "">(DEFAULT_NSTEPS)
   const [confirmStopDialog, setConfirmStopDialog] = useState(false)
+  const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false)
+
+  const deleteTuner = useDeleteTuner(experiment.id)
 
   const runTuner = useRunTuner(experiment.id)
   const { data: simulation } = useSimulation(experiment.id, simulationPath)
@@ -85,6 +88,19 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
               >
                 <Pause className="mr-1 h-4 w-4" />
                 Stop
+              </Button>
+            </div>
+          )}
+
+          {displayStopped && (
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => setConfirmDeleteDialog(true)}
+              >
+                <Trash2 className="mr-1 h-4 w-4" />
+                Delete job
               </Button>
             </div>
           )}
@@ -158,6 +174,16 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
           await stopJob(simulationPath)
         }}
         message="Are you sure you want to stop the tuning job? Results collected so far will be saved, but any trials still in progress will be lost. This cannot be undone."
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteDialog}
+        setOpen={setConfirmDeleteDialog}
+        confirmColor="destructive"
+        onConfirm={async () => {
+          await deleteTuner.mutateAsync(simulationPath)
+        }}
+        message="Delete this tuning job? This cannot be undone."
       />
     </>
   )

@@ -210,7 +210,7 @@ class GromacsJob(SimulationJob):
             The created GromacsJob instance.
         """
         simulation = Simulation.get(experiment.id, simulation_path)
-        simulation.validate_for_action("run")
+        simulation.require_files(["topology"])
         tpr_rel_path = simulation.resolved_files["topology"]
         extra_args = simulation.extra_args
 

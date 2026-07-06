@@ -46,40 +46,47 @@ const SimulationPreview = ({ simulation, loading, title = "Simulation", classNam
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Name</span>
-          <span className="text-sm font-medium">{simulation.name}</span>
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="bg-muted/40 rounded-md border p-3">
+            <span className="text-muted-foreground text-xs">Name</span>
+            <p className="mt-1 text-sm font-medium">{simulation.name}</p>
+          </div>
+          <div className="bg-muted/40 rounded-md border p-3">
+            <span className="text-muted-foreground text-xs">Path</span>
+            <p className="text-muted-foreground mt-1 truncate text-sm" title={simulation.simulation_path}>
+              {simulation.simulation_path}
+            </p>
+          </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Path</span>
-          <span className="text-muted-foreground text-sm">{simulation.simulation_path}</span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs">Files</span>
-          <div className="flex flex-col gap-1">
+
+        <div className="rounded-md border">
+          <div className="border-border bg-muted/40 border-b px-3 py-2">
+            <span className="text-sm font-medium">Files</span>
+          </div>
+          <div className="divide-border divide-y">
             {Object.entries(simulation.files).map(([role, path]) => {
               const missing = simulation.missing_files.includes(role)
               return (
-                <div key={role} className="flex items-center gap-2 text-sm">
-                  <Badge variant="outline" className="text-xs">
-                    {role}
+                <div key={role} className="grid gap-2 px-3 py-2 text-sm sm:grid-cols-[8rem_1fr_auto] sm:items-center">
+                  <span className="font-medium">{role}</span>
+                  <span className="text-muted-foreground min-w-0 truncate" title={path}>
+                    {path}
+                  </span>
+                  <Badge variant={missing ? "destructive" : "outline"} className="w-fit text-xs">
+                    {missing ? "missing" : "present"}
                   </Badge>
-                  <span className="text-muted-foreground">{path}</span>
-                  {missing && (
-                    <Badge variant="destructive" className="text-xs">
-                      missing
-                    </Badge>
-                  )}
                 </div>
               )
             })}
           </div>
         </div>
         {simulation.extra_args && (
-          <div className="flex flex-col gap-1">
-            <span className="text-muted-foreground text-xs">Extra args</span>
-            <code className="bg-muted rounded px-2 py-1 text-xs">{simulation.extra_args}</code>
+          <div className="rounded-md border">
+            <div className="border-border bg-muted/40 border-b px-3 py-2">
+              <span className="text-sm font-medium">Extra args</span>
+            </div>
+            <code className="bg-muted/30 block rounded-b-md px-3 py-2 text-xs break-all">{simulation.extra_args}</code>
           </div>
         )}
         {!simulation.valid && simulation.errors.length > 0 && (

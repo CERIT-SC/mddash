@@ -4,6 +4,7 @@ import { Loader2, Save } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Engine } from "@/util/const"
+import { experimentPathToManifestRelative, safeDefaultSimulationPath } from "@/util/simulation"
 import type { Simulation } from "@/util/types"
 import { useCreateSimulation, useUpdateSimulation, type SimulationPayload } from "@/hooks/use-simulations"
 import { Button } from "@/components/ui/button"
@@ -42,9 +43,9 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
   useEffect(() => {
     if (selected) {
       setName(selected.name)
-      setTopology(selected.files.topology ?? "")
-      setCoordinates(selected.files.coordinates ?? "")
-      setControl(selected.files.control ?? "")
+      setTopology(selected.resolved_files.topology ?? selected.files.topology ?? "")
+      setCoordinates(selected.resolved_files.coordinates ?? selected.files.coordinates ?? "")
+      setControl(selected.resolved_files.control ?? selected.files.control ?? "")
       const out: Record<string, string> = {}
       for (const role of GMX_OUTPUT_ROLES) {
         if (selected.files[role]) out[role] = selected.files[role]
@@ -66,17 +67,21 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
 
   const outputRoles = engine === Engine.GMX ? GMX_OUTPUT_ROLES : AMBER_OUTPUT_ROLES
 
+  const simulationPath = selected?.simulation_path ?? safeDefaultSimulationPath(name)
+
   const buildFiles = useMemo(() => {
-    const files: Record<string, string> = { topology }
+    const files: Record<string, string> = {
+      topology: experimentPathToManifestRelative(topology, simulationPath),
+    }
     if (engine === Engine.AMBER) {
-      files.coordinates = coordinates
-      files.control = control
+      files.coordinates = experimentPathToManifestRelative(coordinates, simulationPath)
+      files.control = experimentPathToManifestRelative(control, simulationPath)
     }
     for (const role of outputRoles) {
       if (outputs[role]) files[role] = outputs[role]
     }
     return files
-  }, [topology, coordinates, control, outputs, engine, outputRoles])
+  }, [topology, coordinates, control, outputs, engine, outputRoles, simulationPath])
 
   useEffect(() => {
     if (!isEditing) {
@@ -107,7 +112,7 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
   const isPending = createMutation.isPending || updateMutation.isPending
 
   if (isLocked && selected) {
-    return <SimulationPreview simulation={selected} title="Simulation (locked)" className={className} />
+    return <SimulationPreview simulation={selected} title="Simulation" className={className} />
   }
 
   return (

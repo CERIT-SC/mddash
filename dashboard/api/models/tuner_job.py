@@ -138,7 +138,9 @@ class TunerJob(db.Model):  # type: ignore
             ValueError: If the engine is unknown.
         """
         simulation = Simulation.get(experiment.id, simulation_path)
-        simulation.validate_for_action("tune")
+        simulation.require_files(
+            ["topology"] if experiment.engine == Engine.GMX else ["topology", "coordinates", "control"]
+        )
         extra_args = simulation.extra_args
 
         match experiment.engine:

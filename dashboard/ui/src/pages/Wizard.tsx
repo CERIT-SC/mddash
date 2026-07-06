@@ -87,8 +87,8 @@ const Wizard = () => {
           <Loader2 className="text-muted-foreground h-10 w-10 animate-spin" />
         </div>
       ) : experiment ? (
-        <div className="mt-2 px-4 sm:px-6 lg:px-8">
-          <Card className="mx-auto max-w-6xl p-0">
+        <div className="mt-2 px-2 sm:px-4">
+          <Card className="mx-auto max-w-7xl p-0">
             <WizardStepper experiment={experiment} />
           </Card>
         </div>

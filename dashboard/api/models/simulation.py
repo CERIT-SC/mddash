@@ -197,20 +197,21 @@ class Simulation:
             raise BadRequest(description=f"File role '{role}' escapes the experiment directory.") from exc
         return resolved
 
-    def validate_for_action(self, action: str) -> None:
+    def require_files(self, roles: list[str] | None = None) -> None:
         """
-        Validate this simulation may be used for a workflow action.
+        Require simulation file roles to exist.
 
         Raises:
             BadRequest: If invalid or missing files.
         """
         if not self.valid:
             errors = self.errors or ["Simulation is invalid."]
-            raise BadRequest(description=f"Cannot {action} invalid simulation: {'; '.join(errors)}")
-        if self.missing_files:
-            raise BadRequest(
-                description=f"Cannot {action} simulation: missing files for roles: {', '.join(self.missing_files)}"
-            )
+            raise BadRequest(description=f"Invalid simulation: {'; '.join(errors)}")
+        missing_files = self.missing_files
+        if roles is not None:
+            missing_files = [role for role in roles if role in self.missing_files or not self.files.get(role)]
+        if missing_files:
+            raise BadRequest(description=f"Missing files for roles: {', '.join(missing_files)}")
 
     def mark_readonly(self) -> None:
         """Best-effort chmod the manifest read-only (0444)."""

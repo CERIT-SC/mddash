@@ -1,13 +1,15 @@
 import { useState } from "react"
 
-import { Loader2 } from "lucide-react"
+import { Loader2, Trash2 } from "lucide-react"
 
 import { SELECT_NONE } from "@/util/const"
 import { simulationLaunchUnavailableReason } from "@/util/simulation"
-import { useGromacsLogs, useGromacsStatus } from "@/hooks/use-gromacs"
+import { useDeleteGmx, useGromacsLogs, useGromacsStatus } from "@/hooks/use-gromacs"
 import { useSimulation } from "@/hooks/use-simulations"
+import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import ConfirmDialog from "@/components/ConfirmDialog"
 import LogsView from "@/components/LogsView"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
@@ -26,9 +28,11 @@ const RunView = (props: RunViewProps) => {
   const { experiment, simulationPath, hasSimulationJob, onStartJob } = props
 
   const [logType, setLogType] = useState<LogType | "">("")
+  const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false)
 
   const { data: simulation } = useSimulation(experiment.id, simulationPath)
   const jobQuery = useGromacsStatus(experiment.id, simulationPath, hasSimulationJob)
+  const deleteGmx = useDeleteGmx(experiment.id)
 
   const jobStatus = jobQuery.data ?? null
   const isRunning = jobStatus?.status === "RUNNING"
@@ -58,7 +62,20 @@ const RunView = (props: RunViewProps) => {
 
   return (
     <div className="flex flex-col gap-4">
-      <JobStatusDisplay jobStatus={jobStatus} />
+      <JobStatusDisplay
+        jobStatus={jobStatus}
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+            onClick={() => setConfirmDeleteDialog(true)}
+          >
+            <Trash2 className="mr-1 h-4 w-4" />
+            Delete job
+          </Button>
+        }
+      />
 
       {logsAvailable && (
         <div className="flex flex-col gap-3">
@@ -88,6 +105,16 @@ const RunView = (props: RunViewProps) => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteDialog}
+        setOpen={setConfirmDeleteDialog}
+        confirmColor="destructive"
+        onConfirm={async () => {
+          await deleteGmx.mutateAsync(simulationPath)
+        }}
+        message="Delete this simulation job? This cannot be undone."
+      />
     </div>
   )
 }

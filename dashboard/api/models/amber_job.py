@@ -171,7 +171,7 @@ class AmberJob(SimulationJob):
             The created AmberJob instance.
         """
         simulation = Simulation.get(experiment.id, simulation_path)
-        simulation.validate_for_action("run")
+        simulation.require_files(["topology", "coordinates", "control"])
         resolved = simulation.resolved_files
         prmtop_rel_path = resolved["topology"]
         inpcrd_rel_path = resolved["coordinates"]

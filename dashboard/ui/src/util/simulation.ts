@@ -1,6 +1,8 @@
 import { Engine } from "./const"
 import type { Simulation } from "./types"
 
+const SIMULATION_SUFFIX = ".simulation.json"
+
 const REQUIRED_LAUNCH_ROLES: Record<Engine, string[]> = {
   [Engine.GMX]: ["topology"],
   [Engine.AMBER]: ["topology", "coordinates", "control"],
@@ -38,4 +40,32 @@ export function simulationAnalysisUnavailableReason(simulation: Simulation | nul
 
 export function simulationMdpositUnavailableReason(simulation: Simulation | null): string | null {
   return simulationUnavailableReason(simulation, REQUIRED_MDPOSIT_ROLES)
+}
+
+function normalizePath(path: string): string[] {
+  return path.split("/").filter(Boolean)
+}
+
+function dirname(path: string): string {
+  const index = path.lastIndexOf("/")
+  return index === -1 ? "" : path.slice(0, index)
+}
+
+export function safeDefaultSimulationPath(name: string): string {
+  const safeName = name.split(/[\\/]/).filter(Boolean).pop() || "simulation"
+  return `production/${safeName}${SIMULATION_SUFFIX}`
+}
+
+export function experimentPathToManifestRelative(filePath: string, simulationPath: string): string {
+  if (!filePath) return ""
+
+  const from = normalizePath(dirname(simulationPath))
+  const to = normalizePath(filePath)
+  let common = 0
+
+  while (common < from.length && common < to.length && from[common] === to[common]) {
+    common += 1
+  }
+
+  return [...from.slice(common).map(() => ".."), ...to.slice(common)].join("/") || "."
 }

@@ -168,6 +168,28 @@ class TestValidation:
             assert sim.valid
             assert sim.missing_files == []
 
+    def test_require_files_can_limit_required_roles(self, app: Flask, tmp_path: Path) -> None:
+        """Action validation only requires the roles needed by that action."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_schema(exp_dir)
+        _write_sim_file(
+            exp_dir,
+            "production/protein.simulation.json",
+            {"topology": "protein.tpr", "structure": "protein.gro", "trajectory": "protein.xtc"},
+        )
+        (exp_dir / "production" / "protein.tpr").write_bytes(b"\x00")
+
+        with app.app_context():
+            sim = Simulation.get(exp_id, "production/protein.simulation.json")
+            assert sim.missing_files == ["structure", "trajectory"]
+
+            sim.require_files(["topology"])
+
+            with pytest.raises(BadRequest, match="structure, trajectory"):
+                sim.require_files()
+
 
 class TestLocking:
     """Lock inference from file permissions and job references."""
