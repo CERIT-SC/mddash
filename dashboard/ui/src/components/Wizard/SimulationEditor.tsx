@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 
 import { Loader2, Save } from "lucide-react"
 
+import { cn } from "@/lib/utils"
 import { Engine } from "@/util/const"
 import type { Simulation } from "@/util/types"
 import { useCreateSimulation, useUpdateSimulation, type SimulationPayload } from "@/hooks/use-simulations"
@@ -21,9 +22,10 @@ interface SimulationEditorProps {
   engine: Engine
   selected: Simulation | null
   onSelect: (sim: Simulation | null) => void
+  className?: string
 }
 
-const SimulationEditor = ({ experimentId, engine, selected, onSelect }: SimulationEditorProps) => {
+const SimulationEditor = ({ experimentId, engine, selected, onSelect, className }: SimulationEditorProps) => {
   const isEditing = !!selected
   const isLocked = selected?.locked ?? false
 
@@ -105,11 +107,11 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect }: Simulati
   const isPending = createMutation.isPending || updateMutation.isPending
 
   if (isLocked && selected) {
-    return <SimulationPreview simulation={selected} title="Simulation (locked)" />
+    return <SimulationPreview simulation={selected} title="Simulation (locked)" className={className} />
   }
 
   return (
-    <Card>
+    <Card className={cn(className)}>
       <CardHeader className="pb-2">
         <CardTitle className="text-base">{isEditing ? "Edit Simulation" : "Create Simulation"}</CardTitle>
       </CardHeader>

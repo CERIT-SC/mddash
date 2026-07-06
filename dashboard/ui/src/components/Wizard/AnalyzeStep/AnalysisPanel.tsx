@@ -13,7 +13,8 @@ import {
   type AnalysisType,
 } from "@/util/analysis-types"
 import { getAnalysisLabel } from "@/util/analysis-utils"
-import { Engine } from "@/util/const"
+import { Engine, SELECT_NONE } from "@/util/const"
+import { simulationAnalysisUnavailableReason } from "@/util/simulation"
 import type { Simulation } from "@/util/types"
 import { getJobStatusVariant } from "@/util/types"
 import {
@@ -151,17 +152,12 @@ const AnalysisPanel = ({
     hasResult ? effectiveResultName : null
   )
 
+  const unavailableReason = simulationAnalysisUnavailableReason(simulation, engine)
   const canSubmit =
-    !!simulation &&
-    simulation.valid &&
-    !simulation.missing_files.includes("trajectory") &&
-    !!submissionAnalysis &&
-    !activeJob &&
-    !submitAnalysis.isPending
+    !!simulation && !unavailableReason && !!submissionAnalysis && !activeJob && !submitAnalysis.isPending
 
   const submitCurrentAnalysis = () => {
-    if (!simulation || !simulation.valid || !submissionAnalysis) return
-    if (simulation.missing_files.includes("trajectory")) return
+    if (!simulation || unavailableReason || !submissionAnalysis) return
 
     submitAnalysis.mutate({
       analysis: submissionAnalysis,
@@ -204,13 +200,18 @@ const AnalysisPanel = ({
             Analysis
           </Label>
           <Select
-            value={resolvedAnalysis ?? undefined}
-            onValueChange={(value) => setSelectedAnalysis(value as AnalysisType)}
+            value={resolvedAnalysis ?? SELECT_NONE}
+            onValueChange={(value) => {
+              if (value !== SELECT_NONE) setSelectedAnalysis(value as AnalysisType)
+            }}
           >
             <SelectTrigger id="analysis-select" className="w-full">
               <SelectValue placeholder="Select analysis..." />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value={SELECT_NONE} disabled>
+                <em>Select analysis...</em>
+              </SelectItem>
               {AVAILABLE_ANALYSES.map((a) => (
                 <SelectItem key={a.value} value={a.value}>
                   <span className="flex items-center gap-2">
@@ -269,6 +270,8 @@ const AnalysisPanel = ({
             )}
           </>
         )}
+
+        {unavailableReason && simulation && <p className="text-muted-foreground w-full text-xs">{unavailableReason}</p>}
 
         {hasResult && variantResults.length > 0 && (
           <Select value={selectedVariant ?? undefined} onValueChange={setSelectedVariant}>

@@ -476,7 +476,9 @@ def seed_data() -> None:  # noqa: PLR0914
     )
 
     ensure_schema_files(published.id)
-    write_gmx_simulation(published.id, "lysozyme_hewl", topology="lysozyme_hewl.tpr")
+    write_gmx_simulation(
+        published.id, "lysozyme_hewl", simulation_path="lysozyme_hewl.simulation.json", topology="lysozyme_hewl.tpr"
+    )
 
     ensure_schema_files(amber_folding.id)
     write_amber_simulation(
@@ -576,6 +578,116 @@ def _fetch_and_write_analysis_results(experiment_id: str, analysis_names: list[s
 
 def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
     """Rehydrate runtime state from existing database records."""
+    membrane = Experiment.query.filter_by(id="aaaaa").first()
+    enzyme = Experiment.query.filter_by(id="bbbbb").first()
+    published = Experiment.query.filter_by(id="ccccc").first()
+    amber_folding = Experiment.query.filter_by(id="ddddd").first()
+    amber_dna = Experiment.query.filter_by(id="eeeee").first()
+    mdposit_demo = Experiment.query.filter_by(id="fffff").first()
+
+    if membrane is not None:
+        demo_state.notebook_status[membrane.id] = PodStatus.DOWN
+        ensure_demo_files(membrane.id, ["gpcr_membrane.tpr", "structure.pdb", "trajectory.xtc"])
+
+    if enzyme is not None:
+        demo_state.notebook_status[enzyme.id] = PodStatus.RUNNING
+        ensure_demo_files(
+            enzyme.id,
+            [
+                "production/md.tpr",
+                "npt_equilibration.tpr",
+                "hiv_protease_apo_enzyme_wild_type_production_run_2024.tpr",
+                "structure.pdb",
+                "trajectory.xtc",
+                "equilibration/nvt.tpr",
+            ],
+        )
+        write_running_gmx_log(enzyme.id, "production/md")
+        write_finished_gmx_log(enzyme.id, "npt_equilibration", nsteps=100000, performance=68.5)
+
+    if published is not None:
+        demo_state.notebook_status[published.id] = PodStatus.DOWN
+        ensure_demo_files(published.id, ["lysozyme_hewl.tpr", "structure.pdb", "trajectory.xtc"])
+        write_finished_gmx_log(published.id, "lysozyme_hewl", nsteps=1000000, performance=45.3)
+        if published.mdrepo_id:
+            demo_state.mdrepo_records[published.mdrepo_id] = True
+
+    if amber_folding is not None:
+        demo_state.notebook_status[amber_folding.id] = PodStatus.RUNNING
+        ensure_amber_demo_files(
+            amber_folding.id,
+            prmtop_name="villin.prmtop",
+            inpcrd_name="villin.inpcrd",
+            mdin_names=["production.mdin", "equilibration.mdin"],
+        )
+
+    if amber_dna is not None:
+        demo_state.notebook_status[amber_dna.id] = PodStatus.DOWN
+        ensure_amber_demo_files(
+            amber_dna.id,
+            prmtop_name="dna.prmtop",
+            inpcrd_name="dna.inpcrd",
+            mdin_names=["simulation.mdin"],
+        )
+
+    if mdposit_demo is not None:
+        demo_state.notebook_status[mdposit_demo.id] = PodStatus.DOWN
+        ensure_mdposit_demo_files(mdposit_demo.id)
+
+    # Re-seed schema files and simulation manifests for rehydrated experiments
+    if membrane is not None:
+        ensure_schema_files(membrane.id)
+        write_gmx_simulation(membrane.id, "gpcr_membrane", topology="gpcr_membrane.tpr")
+
+    if enzyme is not None:
+        ensure_schema_files(enzyme.id)
+        write_gmx_simulation(
+            enzyme.id, "md", simulation_path="production/md.simulation.json", topology="production/md.tpr"
+        )
+        write_gmx_simulation(enzyme.id, "npt_equilibration", simulation_path="npt_equilibration.simulation.json")
+        write_gmx_simulation(
+            enzyme.id,
+            "hiv_protease",
+            simulation_path="hiv_protease_apo_enzyme_wild_type_production_run_2024.simulation.json",
+            topology="hiv_protease_apo_enzyme_wild_type_production_run_2024.tpr",
+        )
+
+    if published is not None:
+        ensure_schema_files(published.id)
+        write_gmx_simulation(
+            published.id, "lysozyme_hewl", simulation_path="lysozyme_hewl.simulation.json", topology="lysozyme_hewl.tpr"
+        )
+
+    if amber_folding is not None:
+        ensure_schema_files(amber_folding.id)
+        write_amber_simulation(
+            amber_folding.id,
+            "villin",
+            simulation_path="production/villin.simulation.json",
+            topology="villin.prmtop",
+            coordinates="villin.inpcrd",
+            control="production.mdin",
+        )
+        write_amber_simulation(
+            amber_folding.id,
+            "villin",
+            simulation_path="equilibration.simulation.json",
+            topology="villin.prmtop",
+            coordinates="villin.inpcrd",
+            control="equilibration.mdin",
+        )
+
+    if amber_dna is not None:
+        ensure_schema_files(amber_dna.id)
+        write_amber_simulation(
+            amber_dna.id,
+            "dna",
+            simulation_path="production/dna.simulation.json",
+            topology="dna.prmtop",
+            coordinates="dna.inpcrd",
+            control="simulation.mdin",
+        )
+
     # Rehydrate analysis jobs: any job with result files is treated as terminated.
     for job in AnalysisJob.query.all():
         job_name = f"analysis-{job.id}"
@@ -688,111 +800,3 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
                     },
                 ],
             }
-
-    membrane = Experiment.query.filter_by(id="aaaaa").first()
-    enzyme = Experiment.query.filter_by(id="bbbbb").first()
-    published = Experiment.query.filter_by(id="ccccc").first()
-    amber_folding = Experiment.query.filter_by(id="ddddd").first()
-    amber_dna = Experiment.query.filter_by(id="eeeee").first()
-    mdposit_demo = Experiment.query.filter_by(id="fffff").first()
-
-    if membrane is not None:
-        demo_state.notebook_status[membrane.id] = PodStatus.DOWN
-        ensure_demo_files(membrane.id, ["gpcr_membrane.tpr", "structure.pdb", "trajectory.xtc"])
-
-    if enzyme is not None:
-        demo_state.notebook_status[enzyme.id] = PodStatus.RUNNING
-        ensure_demo_files(
-            enzyme.id,
-            [
-                "production/md.tpr",
-                "npt_equilibration.tpr",
-                "hiv_protease_apo_enzyme_wild_type_production_run_2024.tpr",
-                "structure.pdb",
-                "trajectory.xtc",
-                "equilibration/nvt.tpr",
-            ],
-        )
-        write_running_gmx_log(enzyme.id, "production/md")
-        write_finished_gmx_log(enzyme.id, "npt_equilibration", nsteps=100000, performance=68.5)
-
-    if published is not None:
-        demo_state.notebook_status[published.id] = PodStatus.DOWN
-        ensure_demo_files(published.id, ["lysozyme_hewl.tpr", "structure.pdb", "trajectory.xtc"])
-        write_finished_gmx_log(published.id, "lysozyme_hewl", nsteps=1000000, performance=45.3)
-        if published.mdrepo_id:
-            demo_state.mdrepo_records[published.mdrepo_id] = True
-
-    if amber_folding is not None:
-        demo_state.notebook_status[amber_folding.id] = PodStatus.RUNNING
-        ensure_amber_demo_files(
-            amber_folding.id,
-            prmtop_name="villin.prmtop",
-            inpcrd_name="villin.inpcrd",
-            mdin_names=["production.mdin", "equilibration.mdin"],
-        )
-
-    if amber_dna is not None:
-        demo_state.notebook_status[amber_dna.id] = PodStatus.DOWN
-        ensure_amber_demo_files(
-            amber_dna.id,
-            prmtop_name="dna.prmtop",
-            inpcrd_name="dna.inpcrd",
-            mdin_names=["simulation.mdin"],
-        )
-
-    if mdposit_demo is not None:
-        demo_state.notebook_status[mdposit_demo.id] = PodStatus.DOWN
-        ensure_mdposit_demo_files(mdposit_demo.id)
-
-    # Re-seed schema files and simulation manifests for rehydrated experiments
-    if membrane is not None:
-        ensure_schema_files(membrane.id)
-        write_gmx_simulation(membrane.id, "gpcr_membrane", topology="gpcr_membrane.tpr")
-
-    if enzyme is not None:
-        ensure_schema_files(enzyme.id)
-        write_gmx_simulation(
-            enzyme.id, "md", simulation_path="production/md.simulation.json", topology="production/md.tpr"
-        )
-        write_gmx_simulation(enzyme.id, "npt_equilibration", simulation_path="npt_equilibration.simulation.json")
-        write_gmx_simulation(
-            enzyme.id,
-            "hiv_protease",
-            simulation_path="hiv_protease_apo_enzyme_wild_type_production_run_2024.simulation.json",
-            topology="hiv_protease_apo_enzyme_wild_type_production_run_2024.tpr",
-        )
-
-    if published is not None:
-        ensure_schema_files(published.id)
-        write_gmx_simulation(published.id, "lysozyme_hewl", topology="lysozyme_hewl.tpr")
-
-    if amber_folding is not None:
-        ensure_schema_files(amber_folding.id)
-        write_amber_simulation(
-            amber_folding.id,
-            "villin",
-            simulation_path="production/villin.simulation.json",
-            topology="villin.prmtop",
-            coordinates="villin.inpcrd",
-            control="production.mdin",
-        )
-        write_amber_simulation(
-            amber_folding.id,
-            "villin",
-            simulation_path="equilibration.simulation.json",
-            topology="villin.prmtop",
-            coordinates="villin.inpcrd",
-            control="equilibration.mdin",
-        )
-
-    if amber_dna is not None:
-        ensure_schema_files(amber_dna.id)
-        write_amber_simulation(
-            amber_dna.id,
-            "dna",
-            simulation_path="production/dna.simulation.json",
-            topology="dna.prmtop",
-            coordinates="dna.inpcrd",
-            control="simulation.mdin",
-        )

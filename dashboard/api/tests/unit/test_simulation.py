@@ -226,6 +226,33 @@ class TestWriteSimulation:
             assert sim.name == "protein"
             assert sim.valid
 
+    def test_create_rejects_existing_simulation_path(self, app: Flask, tmp_path: Path) -> None:
+        """Creating a simulation must not silently overwrite an existing manifest."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_schema(exp_dir)
+
+        with app.app_context():
+            Simulation.write(
+                exp_id,
+                {
+                    "name": "protein",
+                    "files": {"topology": "protein.tpr", "structure": "protein.gro", "trajectory": "protein.xtc"},
+                    "extra_args": "",
+                },
+            )
+
+            with pytest.raises(BadRequest, match="already exists"):
+                Simulation.write(
+                    exp_id,
+                    {
+                        "name": "protein",
+                        "files": {"topology": "other.tpr", "structure": "other.gro", "trajectory": "other.xtc"},
+                        "extra_args": "",
+                    },
+                )
+
     def test_create_rejects_invalid_content(self, app: Flask, tmp_path: Path) -> None:
         """Invalid content is rejected before writing."""
         exp_id = _seed_experiment(app)

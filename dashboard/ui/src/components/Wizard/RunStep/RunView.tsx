@@ -3,12 +3,12 @@ import { useState } from "react"
 import { Loader2 } from "lucide-react"
 
 import { SELECT_NONE } from "@/util/const"
+import { simulationLaunchUnavailableReason } from "@/util/simulation"
 import { useGromacsLogs, useGromacsStatus } from "@/hooks/use-gromacs"
 import { useSimulation } from "@/hooks/use-simulations"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import LogsView from "@/components/LogsView"
-import SimulationPreview from "@/components/Wizard/SimulationPreview"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import GmxStartForm from "./GmxStartForm"
@@ -18,16 +18,17 @@ type LogType = "gmx" | "stdout" | "stderr"
 
 interface RunViewProps extends WizardStepProps {
   simulationPath: string
+  hasSimulationJob: boolean
   onStartJob: () => void
 }
 
 const RunView = (props: RunViewProps) => {
-  const { experiment, simulationPath, onStartJob } = props
+  const { experiment, simulationPath, hasSimulationJob, onStartJob } = props
 
   const [logType, setLogType] = useState<LogType | "">("")
 
   const { data: simulation } = useSimulation(experiment.id, simulationPath)
-  const jobQuery = useGromacsStatus(experiment.id, simulationPath)
+  const jobQuery = useGromacsStatus(experiment.id, simulationPath, hasSimulationJob)
 
   const jobStatus = jobQuery.data ?? null
   const isRunning = jobStatus?.status === "RUNNING"
@@ -36,6 +37,7 @@ const RunView = (props: RunViewProps) => {
   const shouldRefreshLogs = isRunning
 
   const logsQuery = useGromacsLogs(experiment.id, simulationPath, logType, shouldRefreshLogs)
+  const unavailableReason = simulationLaunchUnavailableReason(simulation ?? null, experiment.engine)
 
   const handleJobStarted = () => {
     jobQuery.refetch()
@@ -51,19 +53,11 @@ const RunView = (props: RunViewProps) => {
   }
 
   if (!jobStatus) {
-    return (
-      <>
-        <SimulationPreview simulation={simulation ?? null} />
-        <div className="mt-4">
-          <GmxStartForm {...props} onStartJob={handleJobStarted} />
-        </div>
-      </>
-    )
+    return <GmxStartForm {...props} onStartJob={handleJobStarted} disabledReason={unavailableReason} />
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <SimulationPreview simulation={simulation ?? null} />
       <JobStatusDisplay jobStatus={jobStatus} />
 
       {logsAvailable && (

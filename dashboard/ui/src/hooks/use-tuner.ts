@@ -12,11 +12,11 @@ export function useTunerStatuses(experimentId: string) {
   })
 }
 
-export function useTunerStatus(experimentId: string, simulationPath: string) {
+export function useTunerStatus(experimentId: string, simulationPath: string, enabled = true) {
   return useQuery<TunerJob>({
     queryKey: ["experiment", experimentId, "tuner", simulationPath],
     queryFn: () => api.get(`/experiments/${experimentId}/tuner/${simulationPath}`).then((r) => r.data),
-    enabled: !!experimentId && !!simulationPath,
+    enabled: enabled && !!experimentId && !!simulationPath,
     meta: { suppressError: true },
     refetchInterval: (query) => {
       const data = query.state.data

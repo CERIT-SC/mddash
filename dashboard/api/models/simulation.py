@@ -386,8 +386,8 @@ class Simulation:
             raise BadRequest(description=f"Path must end with '{SIMULATION_SUFFIX}'.")
 
         simulation_file = DATA_DIR / experiment_id / simulation_path
-        if simulation_file.exists() and cls.is_locked(experiment_id, simulation_path):
-            raise BadRequest(description=f"Simulation '{simulation_path}' is locked.")
+        if simulation_file.exists():
+            raise BadRequest(description=f"Simulation '{simulation_path}' already exists.")
 
         content = _build_content(experiment_id, simulation_path, experiment.engine, payload)
         _validate_content_or_raise(experiment_id, simulation_path, content, experiment.engine)

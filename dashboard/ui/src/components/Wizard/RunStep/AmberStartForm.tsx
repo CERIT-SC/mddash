@@ -21,10 +21,11 @@ interface AmberStartFormProps {
   ewald?: EwaldPreset
   np?: number
   ntomp?: number
+  disabledReason?: string | null
 }
 
 const AmberStartForm = (props: AmberStartFormProps) => {
-  const { experiment, simulationPath, onStartJob, binary, ewald, np, ntomp } = props
+  const { experiment, simulationPath, onStartJob, binary, ewald, np, ntomp, disabledReason } = props
 
   const submitAmber = useSubmitAmber(experiment.id)
 
@@ -98,11 +99,12 @@ const AmberStartForm = (props: AmberStartFormProps) => {
           </div>
 
           <div className="mt-2 flex justify-end">
-            <Button type="submit" disabled={submitAmber.isPending}>
+            <Button type="submit" disabled={submitAmber.isPending || !!disabledReason}>
               <Rocket className="mr-1 h-4 w-4" />
               Run
             </Button>
           </div>
+          {disabledReason && <p className="text-muted-foreground text-right text-xs">{disabledReason}</p>}
         </form>
       </CardContent>
     </Card>

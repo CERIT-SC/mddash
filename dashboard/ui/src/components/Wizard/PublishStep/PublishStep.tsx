@@ -17,18 +17,17 @@ import { toast } from "sonner"
 
 import { DEBUG, Engine, MDPOSIT_URL } from "@/util/const"
 import { formatFileSize } from "@/util/helpers"
+import { simulationMdpositUnavailableReason } from "@/util/simulation"
 import { type Experiment, type Simulation } from "@/util/types"
 import { useFiles } from "@/hooks/use-files"
 import { useMdPositPublishData, type MdPositHandoffFile } from "@/hooks/use-mdposit"
 import { getMDRepoAuthUrl, useMDRepoStatus, usePublishExperiment } from "@/hooks/use-mdrepo"
-import { useSimulations } from "@/hooks/use-simulations"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import SimulationPreview from "@/components/Wizard/SimulationPreview"
-import SimulationSelector from "@/components/Wizard/SimulationSelector"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 type PublishTarget = "invenio" | "mdposit"
@@ -43,7 +42,7 @@ const PublishStep = (props: WizardStepProps) => {
   }
 
   return (
-    <div className="flex justify-center p-6">
+    <div className="flex justify-center">
       <Card className={target === "invenio" ? "w-full max-w-lg" : "w-full max-w-2xl"}>
         <CardContent className="flex flex-col items-center gap-4 pt-4">
           <div className="flex items-center gap-2">
@@ -69,7 +68,7 @@ const PublishStep = (props: WizardStepProps) => {
           {target === "invenio" || !mdpositEnabled ? (
             <InvenioPublishContent experiment={experiment} />
           ) : (
-            <MdPositPublishContent experiment={experiment} />
+            <MdPositPublishContent experiment={experiment} selected={props.selectedSimulation} />
           )}
         </CardContent>
       </Card>
@@ -237,12 +236,11 @@ const mdpositFileLabels: Record<MdPositHandoffFile["role"] | "metadata", string>
   trajectory: "Trajectory file",
 }
 
-const MdPositPublishContent = ({ experiment }: { experiment: Experiment }) => {
-  const [selected, setSelected] = useState<Simulation | null>(null)
+const MdPositPublishContent = ({ experiment, selected }: { experiment: Experiment; selected: Simulation | null }) => {
   const mdpositPublishData = useMdPositPublishData(experiment.id)
-  const { data: simulations = [], isLoading } = useSimulations(experiment.id)
 
-  const canPrepare = !!selected && selected.valid
+  const unavailableReason = simulationMdpositUnavailableReason(selected)
+  const canPrepare = !!selected && !unavailableReason
   const currentHandoffData = mdpositPublishData.data
 
   const handlePrepareHandoff = () => {
@@ -259,16 +257,8 @@ const MdPositPublishContent = ({ experiment }: { experiment: Experiment }) => {
         progress.
       </div>
 
-      <div className="flex flex-row gap-4">
-        <SimulationSelector
-          simulations={simulations}
-          selectedPath={selected?.simulation_path ?? null}
-          loading={isLoading}
-          onSelect={setSelected}
-        />
-        <div className="flex-1">
-          <SimulationPreview simulation={selected ?? null} loading={isLoading} />
-        </div>
+      <div>
+        <SimulationPreview simulation={selected ?? null} />
       </div>
 
       <div className="rounded-md border p-3 text-sm">
@@ -299,7 +289,7 @@ const MdPositPublishContent = ({ experiment }: { experiment: Experiment }) => {
 
       {!canPrepare && (
         <p className="text-muted-foreground text-center text-xs">
-          Select a valid simulation before preparing the MDPosit handoff.
+          {unavailableReason ?? "Select a valid simulation before preparing the MDPosit handoff."}
         </p>
       )}
 

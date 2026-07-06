@@ -9,12 +9,10 @@ import {
 } from "@/util/analysis-types"
 import { API_BASE } from "@/util/const"
 import { resolveCoordsFormat, resolveStructureFormat } from "@/util/molstar-formats"
-import type { Simulation } from "@/util/types"
-import { useSimulations } from "@/hooks/use-simulations"
+import { simulationAnalysisUnavailableReason } from "@/util/simulation"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import MolStar from "@/components/MolStar"
-import SimulationSelector from "@/components/Wizard/SimulationSelector"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import AnalysisPanel from "./AnalysisPanel"
@@ -25,9 +23,6 @@ const fileName = (path: string) => path.split("/").pop() ?? path
 const AnalyzeStep = (props: WizardStepProps) => {
   const { experiment } = props
 
-  const { data: simulations = [], isLoading } = useSimulations(experiment.id)
-
-  const [selected, setSelected] = useState<Simulation | null>(null)
   const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisType | null>(null)
   const [preprocessingMode, setPreprocessingMode] = useState<AnalysisPreprocessingModeValue>(
     AnalysisPreprocessingMode.AS_IS
@@ -35,13 +30,15 @@ const AnalyzeStep = (props: WizardStepProps) => {
   const [reloadKey, setReloadKey] = useState(0)
   const [activeTab, setActiveTab] = useState("viewer")
 
-  const sim = selected
+  const sim = props.selectedSimulation
   const resolved = sim?.resolved_files ?? {}
+  const viewerUnavailableReason = simulationAnalysisUnavailableReason(sim, experiment.engine)
 
   const structurePath = resolved.structure ?? resolved.topology ?? null
   const trajectoryPath = resolved.trajectory ?? null
 
   const molstarViewer = useMemo(() => {
+    if (viewerUnavailableReason) return null
     if (!structurePath) return null
     return (
       <MolStar
@@ -54,7 +51,7 @@ const AnalyzeStep = (props: WizardStepProps) => {
         coordsFormat={trajectoryPath ? resolveCoordsFormat(fileName(trajectoryPath)) : undefined}
       />
     )
-  }, [structurePath, trajectoryPath, reloadKey, experiment.id])
+  }, [structurePath, trajectoryPath, reloadKey, experiment.id, viewerUnavailableReason])
 
   useEffect(() => {
     if (sim && !sim.valid) setSelectedAnalysis(null)
@@ -62,21 +59,14 @@ const AnalyzeStep = (props: WizardStepProps) => {
 
   return (
     <div className="flex w-full flex-col items-center gap-4">
-      <div className="flex w-[90%] flex-col gap-4 xl:flex-row">
-        <SimulationSelector
-          simulations={simulations}
-          selectedPath={sim?.simulation_path ?? null}
-          loading={isLoading}
-          onSelect={setSelected}
-        />
-
+      <div className="flex w-full flex-col gap-4">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 flex-1">
           <div className="flex items-center justify-between">
             <TabsList>
               <TabsTrigger value="viewer">Structure Viewer</TabsTrigger>
               <TabsTrigger value="analysis">Analysis</TabsTrigger>
             </TabsList>
-            {trajectoryPath && activeTab === "viewer" && (
+            {trajectoryPath && !viewerUnavailableReason && activeTab === "viewer" && (
               <Button size="sm" variant="outline" onClick={() => setReloadKey((k) => k + 1)}>
                 <RefreshCw className="mr-1 h-3.5 w-3.5" />
                 Reload
@@ -88,7 +78,7 @@ const AnalyzeStep = (props: WizardStepProps) => {
             <div className="flex items-center justify-center">
               {molstarViewer ?? (
                 <div className="border-muted-foreground/25 bg-muted text-muted-foreground flex h-150 w-full items-center justify-center rounded-lg border-2 border-dashed text-sm">
-                  Select a simulation in the sidebar to view its structure.
+                  {viewerUnavailableReason ?? "Select a simulation above to view its structure."}
                 </div>
               )}
             </div>

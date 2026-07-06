@@ -3,12 +3,12 @@ import { useState } from "react"
 import { Loader2 } from "lucide-react"
 
 import { SELECT_NONE } from "@/util/const"
+import { simulationLaunchUnavailableReason } from "@/util/simulation"
 import { useAmberLogs, useAmberStatus } from "@/hooks/use-amber"
 import { useSimulation } from "@/hooks/use-simulations"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import LogsView from "@/components/LogsView"
-import SimulationPreview from "@/components/Wizard/SimulationPreview"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import AmberJobStatusDisplay from "./AmberJobStatusDisplay"
@@ -18,16 +18,17 @@ type LogType = "mdout" | "mdinfo" | "stdout" | "stderr"
 
 interface AmberRunViewProps extends WizardStepProps {
   simulationPath: string
+  hasSimulationJob: boolean
   onStartJob: () => void
 }
 
 const AmberRunView = (props: AmberRunViewProps) => {
-  const { experiment, simulationPath, onStartJob } = props
+  const { experiment, simulationPath, hasSimulationJob, onStartJob } = props
 
   const [logType, setLogType] = useState<LogType | "">("")
 
   const { data: simulation } = useSimulation(experiment.id, simulationPath)
-  const jobQuery = useAmberStatus(experiment.id, simulationPath)
+  const jobQuery = useAmberStatus(experiment.id, simulationPath, hasSimulationJob)
 
   const jobStatus = jobQuery.data ?? null
   const isRunning = jobStatus?.status === "RUNNING"
@@ -36,6 +37,7 @@ const AmberRunView = (props: AmberRunViewProps) => {
   const shouldRefreshLogs = isRunning
 
   const logsQuery = useAmberLogs(experiment.id, simulationPath, logType, shouldRefreshLogs)
+  const unavailableReason = simulationLaunchUnavailableReason(simulation ?? null, experiment.engine)
 
   const handleJobStarted = () => {
     jobQuery.refetch()
@@ -51,19 +53,11 @@ const AmberRunView = (props: AmberRunViewProps) => {
   }
 
   if (!jobStatus) {
-    return (
-      <>
-        <SimulationPreview simulation={simulation ?? null} />
-        <div className="mt-4">
-          <AmberStartForm {...props} onStartJob={handleJobStarted} />
-        </div>
-      </>
-    )
+    return <AmberStartForm {...props} onStartJob={handleJobStarted} disabledReason={unavailableReason} />
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <SimulationPreview simulation={simulation ?? null} />
       <AmberJobStatusDisplay jobStatus={jobStatus} />
 
       {logsAvailable && (

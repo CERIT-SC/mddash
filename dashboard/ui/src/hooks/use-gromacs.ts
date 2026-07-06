@@ -12,11 +12,11 @@ export function useGromacsStatuses(experimentId: string) {
   })
 }
 
-export function useGromacsStatus(experimentId: string, simulationPath: string) {
+export function useGromacsStatus(experimentId: string, simulationPath: string, enabled = true) {
   return useQuery<GromacsJob>({
     queryKey: ["experiment", experimentId, "gmx", simulationPath],
     queryFn: () => api.get(`/experiments/${experimentId}/gmx/${simulationPath}`).then((r) => r.data),
-    enabled: !!experimentId && !!simulationPath,
+    enabled: enabled && !!experimentId && !!simulationPath,
     meta: { suppressError: true },
     refetchInterval: (query) => {
       const data = query.state.data

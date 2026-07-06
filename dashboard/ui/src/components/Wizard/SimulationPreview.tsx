@@ -1,5 +1,6 @@
 import { AlertCircle, Lock } from "lucide-react"
 
+import { cn } from "@/lib/utils"
 import type { Simulation } from "@/util/types"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -8,12 +9,13 @@ interface SimulationPreviewProps {
   simulation: Simulation | null
   loading?: boolean
   title?: string
+  className?: string
 }
 
-const SimulationPreview = ({ simulation, loading, title = "Simulation" }: SimulationPreviewProps) => {
+const SimulationPreview = ({ simulation, loading, title = "Simulation", className }: SimulationPreviewProps) => {
   if (loading) {
     return (
-      <Card>
+      <Card className={cn(className)}>
         <CardContent className="text-muted-foreground py-4 text-sm">Loading simulation...</CardContent>
       </Card>
     )
@@ -21,14 +23,14 @@ const SimulationPreview = ({ simulation, loading, title = "Simulation" }: Simula
 
   if (!simulation) {
     return (
-      <Card>
+      <Card className={cn(className)}>
         <CardContent className="text-muted-foreground py-4 text-sm">No simulation selected.</CardContent>
       </Card>
     )
   }
 
   return (
-    <Card>
+    <Card className={cn(className)}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">{title}</CardTitle>

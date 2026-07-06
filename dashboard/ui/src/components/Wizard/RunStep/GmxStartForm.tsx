@@ -18,10 +18,11 @@ interface ManualStartFormProps extends WizardStepProps {
   ntomp?: number
   nb?: "cpu" | "gpu" | "auto"
   pme?: "cpu" | "gpu" | "auto"
+  disabledReason?: string | null
 }
 
 export const StartForm = (props: ManualStartFormProps) => {
-  const { experiment, simulationPath, onStartJob, np, ntomp, nb, pme } = props
+  const { experiment, simulationPath, onStartJob, np, ntomp, nb, pme, disabledReason } = props
 
   const submitGmx = useSubmitGmx(experiment.id)
 
@@ -98,11 +99,12 @@ export const StartForm = (props: ManualStartFormProps) => {
           </div>
 
           <div className="mt-2 flex justify-end">
-            <Button type="submit" disabled={submitGmx.isPending}>
+            <Button type="submit" disabled={submitGmx.isPending || !!disabledReason}>
               <Rocket className="mr-1 h-4 w-4" />
               Run
             </Button>
           </div>
+          {disabledReason && <p className="text-muted-foreground text-right text-xs">{disabledReason}</p>}
         </form>
       </CardContent>
     </Card>

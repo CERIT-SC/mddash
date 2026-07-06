@@ -12,11 +12,11 @@ export function useAmberStatuses(experimentId: string) {
   })
 }
 
-export function useAmberStatus(experimentId: string, simulationPath: string) {
+export function useAmberStatus(experimentId: string, simulationPath: string, enabled = true) {
   return useQuery<AmberJob>({
     queryKey: ["experiment", experimentId, "amber", simulationPath],
     queryFn: () => api.get(`/experiments/${experimentId}/amber/${simulationPath}`).then((r) => r.data),
-    enabled: !!experimentId && !!simulationPath,
+    enabled: enabled && !!experimentId && !!simulationPath,
     meta: { suppressError: true },
     refetchInterval: (query) => {
       const data = query.state.data

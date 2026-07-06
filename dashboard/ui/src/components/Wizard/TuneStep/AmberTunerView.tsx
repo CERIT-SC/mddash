@@ -2,6 +2,7 @@ import { useState } from "react"
 
 import { Loader2, Pause, Play } from "lucide-react"
 
+import { simulationLaunchUnavailableReason } from "@/util/simulation"
 import { type AmberTunerTrial } from "@/util/types"
 import { useSimulation } from "@/hooks/use-simulations"
 import { useRunTuner, useTunerStatus } from "@/hooks/use-tuner"
@@ -11,7 +12,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import AmberStartForm from "@/components/Wizard/RunStep/AmberStartForm"
-import SimulationPreview from "@/components/Wizard/SimulationPreview"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import AmberTunerTable from "./AmberTunerTable"
@@ -20,12 +20,13 @@ const DEFAULT_NSTEPS = 25000
 
 interface AmberTunerViewProps extends WizardStepProps {
   simulationPath: string
+  hasTunerJob: boolean
   stopJob: (simulationPath: string) => void
   onStartTuner?: () => void
 }
 
 const AmberTunerView = (props: AmberTunerViewProps) => {
-  const { experiment, simulationPath, stopJob, nextStep, changeStep, onStartTuner } = props
+  const { experiment, simulationPath, hasTunerJob, stopJob, nextStep, changeStep, onStartTuner } = props
 
   const [selectedTrial, setSelectedTrial] = useState<AmberTunerTrial | null>(null)
   const [nsteps, setNsteps] = useState<number | "">(DEFAULT_NSTEPS)
@@ -37,7 +38,7 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
   const tunerStarted_condition = (tuner: ReturnType<typeof useTunerStatus>["data"]) =>
     !!tuner && !tuner.error_message && tuner.tuner_status !== "ERROR"
 
-  const { data: tuner, isLoading } = useTunerStatus(experiment.id, simulationPath)
+  const { data: tuner, isLoading } = useTunerStatus(experiment.id, simulationPath, hasTunerJob)
 
   const handleRunTuner = () => {
     const actualNsteps = nsteps === "" ? DEFAULT_NSTEPS : nsteps
@@ -60,13 +61,12 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
   const displayStarted = tunerStarted_condition(tuner)
   const displayStopped = tuner?.is_stopped || false
   const trials = (tuner?.trials || []) as AmberTunerTrial[]
+  const unavailableReason = simulationLaunchUnavailableReason(simulation ?? null, experiment.engine)
 
   return (
     <>
-      <SimulationPreview simulation={simulation ?? null} />
-
       {displayStarted ? (
-        <div className="mt-4 flex flex-col gap-4">
+        <div className="flex flex-col gap-4">
           <AmberTunerTable
             rows={trials}
             selectedTrial={selectedTrial}
@@ -104,16 +104,14 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
           )}
         </div>
       ) : (
-        <div className="mt-4 flex flex-col items-center justify-center gap-4">
+        <div className="flex flex-col items-center justify-center gap-4">
           {tuner?.error_message && (
             <div className="border-destructive bg-destructive/10 text-destructive w-full rounded-md border p-3 text-sm">
               <strong>Error:</strong> {tuner.error_message}
             </div>
           )}
 
-          {!tuner?.error_message && (
-            <h3 className="text-lg font-semibold">Configure tuning job for {simulationPath}</h3>
-          )}
+          {!tuner?.error_message && <h3 className="text-lg font-semibold">Configure tuning job</h3>}
 
           {(!tuner || tuner.error_message) && (
             <Card className="w-fit">
@@ -130,7 +128,12 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
                     }}
                   />
                 </div>
-                <Button variant="default" onClick={handleRunTuner} disabled={runTuner.isPending} className="w-48">
+                <Button
+                  variant="default"
+                  onClick={handleRunTuner}
+                  disabled={runTuner.isPending || !!unavailableReason}
+                  className="w-48"
+                >
                   {runTuner.isPending ? (
                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                   ) : (
@@ -138,6 +141,9 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
                   )}
                   Start tune job
                 </Button>
+                {unavailableReason && (
+                  <p className="text-muted-foreground max-w-72 text-center text-xs">{unavailableReason}</p>
+                )}
               </CardContent>
             </Card>
           )}

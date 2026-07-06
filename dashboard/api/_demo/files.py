@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import shutil
 import zipfile
 from functools import lru_cache
@@ -87,6 +88,10 @@ def _write_json_if_missing(path: Path, data: dict) -> None:
         path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
 
 
+def _schema_ref(schema_path: Path, sim_dir: Path) -> str:
+    return os.path.relpath(schema_path, start=sim_dir)
+
+
 def write_gmx_simulation(
     experiment_id: str,
     name: str,
@@ -102,7 +107,7 @@ def write_gmx_simulation(
     sim_file.parent.mkdir(parents=True, exist_ok=True)
     sim_dir = sim_file.parent
     content = {
-        "$schema": str(Path("../gromacs.schema.json")),
+        "$schema": _schema_ref(experiment_dir / "gromacs.schema.json", sim_dir),
         "name": name,
         "engine": "GMX",
         "files": {
@@ -112,7 +117,6 @@ def write_gmx_simulation(
         },
         "extra_args": extra_args,
     }
-    content["$schema"] = str((experiment_dir / "gromacs.schema.json").relative_to(sim_dir))
     sim_file.write_text(json.dumps(content, indent=2, sort_keys=True), encoding="utf-8")
     return sim_path
 
@@ -133,7 +137,7 @@ def write_amber_simulation(
     sim_file.parent.mkdir(parents=True, exist_ok=True)
     sim_dir = sim_file.parent
     content = {
-        "$schema": str((experiment_dir / "amber.schema.json").relative_to(sim_dir)),
+        "$schema": _schema_ref(experiment_dir / "amber.schema.json", sim_dir),
         "name": name,
         "engine": "AMBER",
         "files": {
