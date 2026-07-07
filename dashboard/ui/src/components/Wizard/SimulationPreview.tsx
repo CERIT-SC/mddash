@@ -5,6 +5,16 @@ import type { Simulation } from "@/util/types"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
+const ROLE_LABELS: Record<string, string> = {
+  run_input: "Run input",
+  run_structure: "Final run structure",
+  reference_structure: "Reference structure",
+  topology: "Topology",
+  coordinates: "Coordinates",
+  control: "Run control",
+  trajectory: "Trajectory",
+}
+
 interface SimulationPreviewProps {
   simulation: Simulation | null
   loading?: boolean
@@ -69,7 +79,7 @@ const SimulationPreview = ({ simulation, loading, title = "Simulation", classNam
               const missing = simulation.missing_files.includes(role)
               return (
                 <div key={role} className="grid gap-2 px-3 py-2 text-sm sm:grid-cols-[8rem_1fr_auto] sm:items-center">
-                  <span className="font-medium">{role}</span>
+                  <span className="font-medium">{ROLE_LABELS[role] ?? role}</span>
                   <span className="text-muted-foreground min-w-0 truncate" title={path}>
                     {path}
                   </span>

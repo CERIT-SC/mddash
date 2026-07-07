@@ -276,18 +276,7 @@ def create_gromacs_job(
             + extra_part
             + f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2)"
         ),
-        "echo 'Processing trajectory for visualization...'",
-        f"gmx select -s {_q(f'{deffnm}.gro')} -on {_q(f'{deffnm}.p.ndx')} -select Protein",
-        (
-            f"gmx trjconv -s {_q(f'{deffnm}.gro')} -f {_q(f'{deffnm}.xtc')} -o {_q(f'{deffnm}.pbc.xtc')} "
-            f"-pbc nojump -n {_q(f'{deffnm}.p.ndx')}"
-        ),
-        (
-            f"gmx trjconv -s {_q(f'{deffnm}.gro')} -f {_q(f'{deffnm}.pbc.xtc')} -o {_q(f'{deffnm}.fit.xtc')} "
-            f"-fit rot+trans -n {_q(f'{deffnm}.p.ndx')}"
-        ),
-        f"rm -f {_q(f'{deffnm}.p.ndx')} {_q(f'{deffnm}.pbc.xtc')}",
-        "echo 'Trajectory processing completed.'",
+        "echo 'Simulation completed.'",
     ])
 
     manifest = _build_job_manifest(

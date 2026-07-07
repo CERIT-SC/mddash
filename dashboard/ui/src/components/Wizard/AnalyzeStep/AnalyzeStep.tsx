@@ -13,6 +13,7 @@ import { simulationAnalysisUnavailableReason } from "@/util/simulation"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import MolStar from "@/components/MolStar"
+import NotebookController from "@/components/NotebookController"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import AnalysisPanel from "./AnalysisPanel"
@@ -34,8 +35,8 @@ const AnalyzeStep = (props: WizardStepProps) => {
   const resolved = sim?.resolved_files ?? {}
   const viewerUnavailableReason = simulationAnalysisUnavailableReason(sim, experiment.engine)
 
-  const structurePath = resolved.structure ?? resolved.topology ?? null
   const trajectoryPath = resolved.trajectory ?? null
+  const structurePath = resolved.reference_structure ?? null
 
   const molstarViewer = useMemo(() => {
     if (viewerUnavailableReason) return null
@@ -60,10 +61,12 @@ const AnalyzeStep = (props: WizardStepProps) => {
   return (
     <div className="flex w-full flex-col items-center gap-4">
       <div className="flex w-full flex-col gap-4">
+        <NotebookController experimentId={experiment.id} compact inline className="w-full" />
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 flex-1">
           <div className="flex items-center justify-between">
             <TabsList>
-              <TabsTrigger value="viewer">Structure Viewer</TabsTrigger>
+              <TabsTrigger value="viewer">Trajectory Viewer</TabsTrigger>
               <TabsTrigger value="analysis">Analysis</TabsTrigger>
             </TabsList>
             {trajectoryPath && !viewerUnavailableReason && activeTab === "viewer" && (

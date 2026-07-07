@@ -59,3 +59,18 @@ export function useUpdateSimulation(experimentId: string) {
     onError: (error: Error) => toast.error(error.message),
   })
 }
+
+export function useDeleteSimulation(experimentId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation<void, Error, string>({
+    mutationFn: (simulationPath) =>
+      api.delete(`/experiments/${experimentId}/simulations/${simulationPath}`).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "simulations"] })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId] })
+      toast.success("Simulation deleted")
+    },
+    onError: (error: Error) => toast.error(error.message),
+  })
+}

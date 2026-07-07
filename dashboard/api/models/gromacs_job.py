@@ -44,7 +44,7 @@ class GromacsJob(SimulationJob):
     __mapper_args__: ClassVar[dict[str, Any]] = {"polymorphic_identity": Engine.GMX}
 
     # TODO: verify if files with these extensions should really be deleted
-    RESULT_EXTENSIONS: ClassVar[list[str]] = ["edr", "gro", "log", "trr", "xtc", "cpt", "fit.xtc"]
+    RESULT_EXTENSIONS: ClassVar[list[str]] = ["edr", "gro", "log", "trr", "xtc", "cpt"]
 
     id: Mapped[str] = mapped_column(ForeignKey("simulation_jobs.id"), primary_key=True)
 
@@ -61,7 +61,7 @@ class GromacsJob(SimulationJob):
 
     @property
     def _topology_rel(self) -> str:
-        return self._files["topology"]
+        return self._files["run_input"]
 
     @property
     def _deffnm(self) -> str:
@@ -210,8 +210,8 @@ class GromacsJob(SimulationJob):
             The created GromacsJob instance.
         """
         simulation = Simulation.get(experiment.id, simulation_path)
-        simulation.require_files(["topology"])
-        tpr_rel_path = simulation.resolved_files["topology"]
+        simulation.require_files(["run_input"])
+        tpr_rel_path = simulation.resolved_files["run_input"]
         extra_args = simulation.extra_args
 
         mdrun_job = mdrun.create_job(

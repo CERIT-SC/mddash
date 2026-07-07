@@ -74,21 +74,23 @@ const AnalysisPanel = ({
   const queryClient = useQueryClient()
   const [confirmCancelDialog, setConfirmCancelDialog] = useState(false)
 
-  const { data: jobs } = useAnalysisJobs(experimentId)
+  const simulationPath = simulation?.simulation_path ?? null
+
+  const { data: jobs } = useAnalysisJobs(experimentId, simulationPath)
   const activeJob = useMemo(() => jobs?.find((j) => j.status === "RUNNING" || j.status === "PENDING"), [jobs])
 
-  const { data: availableResultsList } = useAvailableAnalysisResults(experimentId)
+  const { data: availableResultsList } = useAvailableAnalysisResults(experimentId, simulationPath)
 
   // Invalidate the results list and cached chart data when a job finishes.
   const hadActiveJobRef = useRef(false)
   useEffect(() => {
     const isActive = !!activeJob
     if (hadActiveJobRef.current && !isActive) {
-      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-results"] })
-      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-variants"] })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-results", simulationPath] })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-variants", simulationPath] })
     }
     hadActiveJobRef.current = isActive
-  }, [activeJob, queryClient, experimentId])
+  }, [activeJob, queryClient, experimentId, simulationPath])
   const submitAnalysis = useSubmitAnalysis(experimentId)
   const deleteAnalysis = useDeleteAnalysis(experimentId)
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null)
@@ -135,6 +137,7 @@ const AnalysisPanel = ({
 
   const { data: analysisVariants } = useAnalysisVariants(
     experimentId,
+    simulationPath,
     hasResult && analysisConfig?.hasVariants ? selectedResultName : null
   )
   const variantLabelMap = useMemo(() => {
@@ -149,6 +152,7 @@ const AnalysisPanel = ({
 
   const { data: analysisData, isLoading: isLoadingData } = useAnalysisData(
     experimentId,
+    simulationPath!,
     hasResult ? effectiveResultName : null
   )
 

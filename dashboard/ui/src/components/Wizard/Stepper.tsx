@@ -80,7 +80,6 @@ const WizardStepper = ({ experiment }: WizardStepperProps) => {
   }
 
   const ActiveComponent = STEP_COMPONENTS[activeStep]
-  const showSimulationTabs = activeStep !== 4
 
   return (
     <div className="flex w-full flex-col">
@@ -139,17 +138,15 @@ const WizardStepper = ({ experiment }: WizardStepperProps) => {
         </div>
       </div>
 
-      {showSimulationTabs && (
-        <div className="border-border border-y py-2">
-          <SimulationTabs
-            simulations={simulations}
-            selectedPath={selectedSimulationPath ?? null}
-            loading={simulationsLoading}
-            onSelect={selectSimulation}
-            onCreate={createSimulation}
-          />
-        </div>
-      )}
+      <div className="border-border border-y py-2">
+        <SimulationTabs
+          simulations={simulations}
+          selectedPath={selectedSimulationPath ?? null}
+          loading={simulationsLoading}
+          onSelect={selectSimulation}
+          onCreate={createSimulation}
+        />
+      </div>
 
       <div className="px-6 pt-5 pb-6">
         <ActiveComponent

@@ -630,32 +630,32 @@ class Experiment(db.Model):  # type: ignore
             raise BadRequest(description="Experiment directory not found.")
         exp_dir_resolved = exp_dir.resolve()
 
-        allowed_extensions = {
-            "structure": {"pdb", "gro"},
-            "topology": {"top", "prmtop", "parm7", "psf", "tpr"},
-            "trajectory": {"xtc", "trr", "nc", "dcd"},
+        publish_roles = {
+            "reference_structure": ("structure", {"pdb", "gro"}),
+            "run_input": ("topology", {"top", "prmtop", "parm7", "psf", "tpr"}),
+            "trajectory": ("trajectory", {"xtc", "trr", "nc", "dcd"}),
         }
 
         files: list[dict[str, str]] = []
         selected_paths: dict[str, Path] = {}
 
-        for role, exts in allowed_extensions.items():
-            if role not in simulation.files:
-                raise BadRequest(description=f"Simulation is missing file role '{role}' for MDPosit.")
+        for manifest_role, (publish_role, exts) in publish_roles.items():
+            if manifest_role not in simulation.files:
+                raise BadRequest(description=f"Simulation is missing file role '{manifest_role}' for MDPosit.")
 
-            file_path = simulation.resolve_role(role)
+            file_path = simulation.resolve_role(manifest_role)
             if not file_path.is_file():
-                raise BadRequest(description=f"Selected file for role '{role}' does not exist.")
+                raise BadRequest(description=f"Selected file for role '{manifest_role}' does not exist.")
 
             extension = file_path.suffix.lstrip(".").lower()
             if extension not in exts:
                 allowed = ", ".join(sorted(exts))
-                raise BadRequest(description=f"Invalid file extension for role '{role}'. Allowed: {allowed}")
+                raise BadRequest(description=f"Invalid file extension for role '{manifest_role}'. Allowed: {allowed}")
 
             relative_path = str(file_path.relative_to(exp_dir_resolved))
-            selected_paths[role] = file_path
+            selected_paths[publish_role] = file_path
             files.append({
-                "role": role,
+                "role": publish_role,
                 "path": relative_path,
                 "url": self._file_download_url(relative_path),
             })

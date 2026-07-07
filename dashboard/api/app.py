@@ -120,11 +120,7 @@ def create_app() -> Flask:
     _log_duration("route-registration", reg_start)
 
     with app.app_context():
-        try:
-            _run_migrations()
-        except (Exception, SystemExit) as e:
-            logger.warning("Migration upgrade failed: %s, falling back to create_all()", e)
-            db.create_all()
+        _run_migrations()
 
     start_du_monitor(DATA_DIR, initial_delay=DU_MONITOR_START_DELAY_SECONDS)
     _log_duration("app-factory", startup_start)

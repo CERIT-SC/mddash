@@ -65,7 +65,7 @@ def seed_data() -> None:  # noqa: PLR0914
     running_tuner = build_model(
         TunerJob,
         experiment=enzyme,
-        simulation_path="production/md.simulation.json",
+        simulation_path="md.simulation.json",
         id="demo-tuner-prod",
         created_at=now - timedelta(hours=8),
         is_stopped=False,
@@ -156,7 +156,7 @@ def seed_data() -> None:  # noqa: PLR0914
         GromacsJob,
         id="demo-gmx-running",
         experiment=enzyme,
-        simulation_path="production/md.simulation.json",
+        simulation_path="md.simulation.json",
         pme=DeviceType.CPU,
         nb=DeviceType.GPU,
         np=4,
@@ -289,7 +289,7 @@ def seed_data() -> None:  # noqa: PLR0914
         AmberJob,
         id="demo-amber-running",
         experiment=amber_folding,
-        simulation_path="production/villin.simulation.json",
+        simulation_path="villin.simulation.json",
         binary=AmberBinary.PMEMD_CUDA,
         ewald=EwaldPreset.OPTIMIZED,
         np=1,
@@ -370,7 +370,7 @@ def seed_data() -> None:  # noqa: PLR0914
         AmberJob,
         id="demo-amber-dna",
         experiment=amber_dna,
-        simulation_path="production/dna.simulation.json",
+        simulation_path="dna.simulation.json",
         binary=AmberBinary.PMEMD_CUDA,
         ewald=EwaldPreset.OPTIMIZED,
         np=1,
@@ -466,7 +466,7 @@ def seed_data() -> None:  # noqa: PLR0914
     write_gmx_simulation(membrane.id, "gpcr_membrane", topology="gpcr_membrane.tpr")
 
     ensure_schema_files(enzyme.id)
-    write_gmx_simulation(enzyme.id, "md", simulation_path="production/md.simulation.json", topology="production/md.tpr")
+    write_gmx_simulation(enzyme.id, "md", simulation_path="md.simulation.json", topology="production/md.tpr")
     write_gmx_simulation(enzyme.id, "npt_equilibration", simulation_path="npt_equilibration.simulation.json")
     write_gmx_simulation(
         enzyme.id,
@@ -477,14 +477,17 @@ def seed_data() -> None:  # noqa: PLR0914
 
     ensure_schema_files(published.id)
     write_gmx_simulation(
-        published.id, "lysozyme_hewl", simulation_path="lysozyme_hewl.simulation.json", topology="lysozyme_hewl.tpr"
+        published.id,
+        "lysozyme_hewl",
+        simulation_path="lysozyme_hewl.simulation.json",
+        topology="lysozyme_hewl.tpr",
     )
 
     ensure_schema_files(amber_folding.id)
     write_amber_simulation(
         amber_folding.id,
         "villin",
-        simulation_path="production/villin.simulation.json",
+        simulation_path="villin.simulation.json",
         topology="villin.prmtop",
         coordinates="villin.inpcrd",
         control="production.mdin",
@@ -502,7 +505,7 @@ def seed_data() -> None:  # noqa: PLR0914
     write_amber_simulation(
         amber_dna.id,
         "dna",
-        simulation_path="production/dna.simulation.json",
+        simulation_path="dna.simulation.json",
         topology="dna.prmtop",
         coordinates="dna.inpcrd",
         control="simulation.mdin",
@@ -641,9 +644,7 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
 
     if enzyme is not None:
         ensure_schema_files(enzyme.id)
-        write_gmx_simulation(
-            enzyme.id, "md", simulation_path="production/md.simulation.json", topology="production/md.tpr"
-        )
+        write_gmx_simulation(enzyme.id, "md", simulation_path="md.simulation.json", topology="production/md.tpr")
         write_gmx_simulation(enzyme.id, "npt_equilibration", simulation_path="npt_equilibration.simulation.json")
         write_gmx_simulation(
             enzyme.id,
@@ -655,7 +656,10 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
     if published is not None:
         ensure_schema_files(published.id)
         write_gmx_simulation(
-            published.id, "lysozyme_hewl", simulation_path="lysozyme_hewl.simulation.json", topology="lysozyme_hewl.tpr"
+            published.id,
+            "lysozyme_hewl",
+            simulation_path="lysozyme_hewl.simulation.json",
+            topology="lysozyme_hewl.tpr",
         )
 
     if amber_folding is not None:
@@ -663,7 +667,7 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
         write_amber_simulation(
             amber_folding.id,
             "villin",
-            simulation_path="production/villin.simulation.json",
+            simulation_path="villin.simulation.json",
             topology="villin.prmtop",
             coordinates="villin.inpcrd",
             control="production.mdin",
@@ -682,7 +686,7 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
         write_amber_simulation(
             amber_dna.id,
             "dna",
-            simulation_path="production/dna.simulation.json",
+            simulation_path="dna.simulation.json",
             topology="dna.prmtop",
             coordinates="dna.inpcrd",
             control="simulation.mdin",

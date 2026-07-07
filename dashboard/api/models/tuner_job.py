@@ -139,13 +139,13 @@ class TunerJob(db.Model):  # type: ignore
         """
         simulation = Simulation.get(experiment.id, simulation_path)
         simulation.require_files(
-            ["topology"] if experiment.engine == Engine.GMX else ["topology", "coordinates", "control"]
+            ["run_input"] if experiment.engine == Engine.GMX else ["topology", "coordinates", "control"]
         )
         extra_args = simulation.extra_args
 
         match experiment.engine:
             case Engine.GMX:
-                tpr_path = simulation.resolve_role("topology")
+                tpr_path = simulation.resolve_role("run_input")
                 response = tuner.gmx_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
             case Engine.AMBER:
                 prmtop_path = simulation.resolve_role("topology")

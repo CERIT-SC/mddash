@@ -29,11 +29,12 @@ GMX_SCHEMA = {
         "engine": {"const": "GMX"},
         "files": {
             "type": "object",
-            "required": ["topology", "structure", "trajectory"],
+            "required": ["run_input", "reference_structure", "trajectory"],
             "additionalProperties": False,
             "properties": {
-                "topology": {"type": "string"},
-                "structure": {"type": "string"},
+                "run_input": {"type": "string"},
+                "run_structure": {"type": "string"},
+                "reference_structure": {"type": "string"},
                 "trajectory": {"type": "string"},
             },
         },
@@ -127,7 +128,7 @@ def _write_gmx_simulation(
         "$schema": os.path.relpath(exp_dir / "gromacs.schema.json", sim_dir),
         "name": name,
         "engine": "GMX",
-        "files": files or {"topology": "topol.tpr", "structure": "struct.pdb", "trajectory": "traj.xtc"},
+        "files": files or {"run_input": "topol.tpr", "reference_structure": "struct.pdb", "trajectory": "traj.xtc"},
         "extra_args": "",
     }
     sim_file.write_text(json.dumps(content))
@@ -203,7 +204,7 @@ class TestMdpositPublishNoOAuth:
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
         sim_path = _write_gmx_simulation(
             exp_dir,
-            files={"topology": "topol.tpr", "structure": "struct.pdb", "trajectory": "traj.xtc"},
+            files={"run_input": "topol.tpr", "reference_structure": "struct.pdb", "trajectory": "traj.xtc"},
         )
 
         with (
@@ -260,7 +261,7 @@ class TestMdpositPublishNoDbMutation:
         (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
         sim_path = _write_gmx_simulation(
-            exp_dir, files={"topology": "topol.tpr", "structure": "struct.gro", "trajectory": "traj.xtc"}
+            exp_dir, files={"run_input": "topol.tpr", "reference_structure": "struct.gro", "trajectory": "traj.xtc"}
         )
 
         with (
@@ -387,7 +388,8 @@ class TestMdpositHandoffSelectedFiles:
         (exp_dir / "my_top.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "my_traj.xtc").write_bytes(b"\x00" * 16)
         sim_path = _write_gmx_simulation(
-            exp_dir, files={"topology": "my_top.tpr", "structure": "my_struct.pdb", "trajectory": "my_traj.xtc"}
+            exp_dir,
+            files={"run_input": "my_top.tpr", "reference_structure": "my_struct.pdb", "trajectory": "my_traj.xtc"},
         )
 
         with (
@@ -417,7 +419,7 @@ class TestMdpositHandoffSelectedFiles:
         (exp_dir / "t.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "r.xtc").write_bytes(b"\x00" * 16)
         sim_path = _write_gmx_simulation(
-            exp_dir, files={"topology": "t.tpr", "structure": "s.pdb", "trajectory": "r.xtc"}
+            exp_dir, files={"run_input": "t.tpr", "reference_structure": "s.pdb", "trajectory": "r.xtc"}
         )
 
         with (
@@ -453,12 +455,12 @@ class TestMdpositPublishFileValidation:
         (exp_dir / "struct.pdb").write_text("ATOM")
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
         sim_path = _write_gmx_simulation(
-            exp_dir, files={"topology": "topol.tpr", "structure": "struct.pdb", "trajectory": "traj.xtc"}
+            exp_dir, files={"run_input": "topol.tpr", "reference_structure": "struct.pdb", "trajectory": "traj.xtc"}
         )
         # Rewrite without topology role
         sim_file = exp_dir / sim_path
         content = json.loads(sim_file.read_text())
-        del content["files"]["topology"]
+        del content["files"]["run_input"]
         sim_file.write_text(json.dumps(content))
 
         with (
@@ -479,7 +481,7 @@ class TestMdpositPublishFileValidation:
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
         sim_path = _write_gmx_simulation(
             exp_dir,
-            files={"topology": "topol.tpr", "structure": "ghost.pdb", "trajectory": "traj.xtc"},
+            files={"run_input": "topol.tpr", "reference_structure": "ghost.pdb", "trajectory": "traj.xtc"},
         )
 
         with (
@@ -501,7 +503,7 @@ class TestMdpositPublishFileValidation:
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
         sim_path = _write_gmx_simulation(
             exp_dir,
-            files={"topology": "topol.tpr", "structure": "struct.txt", "trajectory": "traj.xtc"},
+            files={"run_input": "topol.tpr", "reference_structure": "struct.txt", "trajectory": "traj.xtc"},
         )
 
         with (
@@ -510,7 +512,7 @@ class TestMdpositPublishFileValidation:
             app.app_context(),
         ):
             exp = Experiment.query.get("pubsh")
-            with pytest.raises(BadRequest, match="Invalid file extension for role 'structure'"):
+            with pytest.raises(BadRequest, match="Invalid file extension for role 'reference_structure'"):
                 exp.publish(target="mdposit", simulation_path=sim_path)
 
     def test_route_returns_400_for_missing_simulation_path(self, app: Flask, tmp_path: Path) -> None:

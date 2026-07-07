@@ -29,19 +29,18 @@ EXCLUDED_DIRS: list[str] = [
     ".binder-env",
     "*.edr",
     "*.xtc",
-    "*.fit.xtc",
     "*.tpr",
     "*.cpt",
     "*.gro",
     "*.log",
-    "mwf_analyses",
-    "mwf_inputs",
+    "analysis/mwf",
 ]
 
 EXCLUDED_FILES: list[str] = [
     "#*#",
     "*.swp",
     "*.tmp",
+    ".gitkeep",
     ".nfs*",
     ".binder-env-installed",
     "inputs.yaml",

@@ -43,12 +43,9 @@ class TestFormatMwfInputsYaml:
 class TestFormatMwfAnalysisCommand:
     """Tests for mwf shell command construction."""
 
-    def test_incomplete_task_dirs_cover_project_and_md_roots(self) -> None:
-        """Incomplete task directories should cover both project-relative and MD-relative roots."""
-        assert get_incomplete_task_dirs("inter") == [
-            Path("incomplete_inter"),
-            Path("mwf_analyses") / "incomplete_inter",
-        ]
+    def test_incomplete_task_dirs_cover_project_relative_root(self) -> None:
+        """Incomplete task directories are project-relative (MD dir is per-simulation)."""
+        assert get_incomplete_task_dirs("inter") == [Path("incomplete_inter")]
 
     def test_runtime_prelude_sets_writable_home_and_git_safe_directory(self) -> None:
         """Third-party mwf jobs should get a writable HOME and a safe Git directory override."""
@@ -66,23 +63,24 @@ class TestFormatMwfAnalysisCommand:
             trajectory_file=Path("traj.xtc"),
             topology_file=None,
             preprocessing_mode=PreprocessingMode.AS_IS,
+            simulation_path="protein.simulation.json",
         )
 
         assert "interactions:" not in command
-        assert "mkdir -p incomplete_clusters mwf_analyses/incomplete_clusters" in command
+        assert "mkdir -p incomplete_clusters" in command
         assert "-i clusters" in command
 
     def test_clusters_runtime_prep_covers_project_and_md_relative_temp_dirs(self) -> None:
         """Clusters prep should create temp screenshot directories for both path-resolution variants."""
         commands = get_analysis_runtime_prep_commands(AnalysisType.CLUSTERS)
 
-        assert commands == ["mkdir -p incomplete_clusters mwf_analyses/incomplete_clusters"]
+        assert commands == ["mkdir -p incomplete_clusters"]
 
     def test_hbonds_runtime_prep_covers_project_and_md_relative_inter_dirs(self) -> None:
         """Interaction-driven analyses should create temp interaction directories for both path anchors."""
         commands = get_analysis_runtime_prep_commands(AnalysisType.HBONDS)
 
-        assert commands == ["mkdir -p incomplete_inter mwf_analyses/incomplete_inter"]
+        assert commands == ["mkdir -p incomplete_inter"]
 
     def test_hbonds_command_injects_auto_interactions(self) -> None:
         """Hydrogen bond command should request automatic interactions."""
@@ -92,12 +90,27 @@ class TestFormatMwfAnalysisCommand:
             trajectory_file=Path("traj.xtc"),
             topology_file=None,
             preprocessing_mode=PreprocessingMode.AS_IS,
+            simulation_path="protein.simulation.json",
         )
 
         assert "interactions:" in command
         assert "  - auto" in command
-        assert "mkdir -p incomplete_inter mwf_analyses/incomplete_inter" in command
+        assert "mkdir -p incomplete_inter" in command
         assert "-i hbonds" in command
+
+    def test_topology_only_command_omits_structure_flag(self) -> None:
+        """GMX analysis can derive structure from topology to avoid mismatched GRO/XTC atom sets."""
+        command = format_mwf_analysis_command(
+            analysis_name=AnalysisType.RMSDS,
+            structure_file=None,
+            trajectory_file=Path("traj.xtc"),
+            topology_file=Path("topol.tpr"),
+            preprocessing_mode=PreprocessingMode.AS_IS,
+            simulation_path="protein.simulation.json",
+        )
+
+        assert "-stru" not in command
+        assert "-top analysis/mwf/inputs/input_topology.tpr" in command
 
 
 class TestAnalysisJobStartQuotaCheck:
@@ -126,6 +139,7 @@ class TestAnalysisJobStartQuotaCheck:
             with pytest.raises(Forbidden):
                 AnalysisJob.start(
                     experiment=self._mock_experiment(),
+                    simulation_path="test.simulation.json",
                     analysis_name=AnalysisType.RMSDS,
                     structure_file=structure_file,
                     trajectory_file=trajectory_file,
@@ -152,6 +166,7 @@ class TestAnalysisJobStartQuotaCheck:
 
             AnalysisJob.start(
                 experiment=self._mock_experiment(),
+                simulation_path="test.simulation.json",
                 analysis_name=AnalysisType.RMSDS,
                 structure_file=structure_file,
                 trajectory_file=trajectory_file,

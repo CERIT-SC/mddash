@@ -71,6 +71,7 @@ interface NotebookControllerProps {
   experimentId: string
   className?: string
   compact?: boolean
+  inline?: boolean
 }
 
 function formatCpu(cpu: string): string {
@@ -87,7 +88,7 @@ function formatMemory(mem: string): string {
   return mem
 }
 
-const NotebookController = ({ experimentId, className, compact = false }: NotebookControllerProps) => {
+const NotebookController = ({ experimentId, className, compact = false, inline = false }: NotebookControllerProps) => {
   const isTransitioning_status = (s: Notebook["status"]) =>
     s === "PENDING" || s === "INITIALIZING" || s === "TERMINATING"
 
@@ -153,15 +154,21 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
     <div
       className={cn(
         "flex w-96 max-w-full items-center justify-center rounded-md border",
-        compact ? "min-h-0 p-4" : "min-h-48 p-6",
+        inline ? "w-full p-3" : compact ? "min-h-0 p-4" : "min-h-48 p-6",
         className
       )}
     >
       {isLoading ? (
         <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
       ) : (
-        <div className={cn("flex w-full flex-col gap-4", compact && "items-center text-center")}>
-          <div className={cn("flex items-center gap-2", compact && "justify-center")}>
+        <div
+          className={cn(
+            "flex w-full flex-col gap-4",
+            compact && "items-center text-center",
+            inline && "items-stretch gap-3 text-left sm:flex-row sm:items-center sm:justify-between"
+          )}
+        >
+          <div className={cn("flex items-center gap-2", compact && "justify-center", inline && "justify-start")}>
             {isTransitioning ? (
               <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
             ) : StatusIcon ? (
@@ -173,10 +180,18 @@ const NotebookController = ({ experimentId, className, compact = false }: Notebo
             </Badge>
           </div>
 
-          <p className={cn("text-muted-foreground text-sm", compact && "max-w-xs text-center")}>{message}</p>
+          <p
+            className={cn(
+              "text-muted-foreground text-sm",
+              compact && "max-w-xs text-center",
+              inline && "max-w-none text-left"
+            )}
+          >
+            {message}
+          </p>
 
           {(displayStatus === "DOWN" || displayStatus === "TERMINATED") && config && (
-            <div className="flex w-full flex-col items-center gap-3">
+            <div className={cn("flex w-full flex-col items-center gap-3", inline && "sm:w-auto sm:flex-row")}>
               <div className="flex flex-wrap items-center justify-center gap-3">
                 <span className="text-muted-foreground text-sm">Size:</span>
                 <Select value={selectedTier} onValueChange={(v) => setSelectedTier(v as NotebookTier)}>

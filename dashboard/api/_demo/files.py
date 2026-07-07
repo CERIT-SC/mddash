@@ -38,11 +38,12 @@ GMX_SCHEMA = {
         "engine": {"const": "GMX"},
         "files": {
             "type": "object",
-            "required": ["topology", "structure", "trajectory"],
+            "required": ["run_input", "reference_structure", "trajectory"],
             "additionalProperties": False,
             "properties": {
-                "topology": {"type": "string"},
-                "structure": {"type": "string"},
+                "run_input": {"type": "string"},
+                "run_structure": {"type": "string"},
+                "reference_structure": {"type": "string"},
                 "trajectory": {"type": "string"},
             },
         },
@@ -62,12 +63,13 @@ AMBER_SCHEMA = {
         "engine": {"const": "AMBER"},
         "files": {
             "type": "object",
-            "required": ["topology", "coordinates", "control", "trajectory"],
+            "required": ["topology", "coordinates", "control", "reference_structure", "trajectory"],
             "additionalProperties": False,
             "properties": {
                 "topology": {"type": "string"},
                 "coordinates": {"type": "string"},
                 "control": {"type": "string"},
+                "reference_structure": {"type": "string"},
                 "trajectory": {"type": "string"},
             },
         },
@@ -102,7 +104,7 @@ def write_gmx_simulation(
     extra_args: str = "",
 ) -> str:
     experiment_dir = DATA_DIR / experiment_id
-    sim_path = simulation_path or f"production/{name}.simulation.json"
+    sim_path = simulation_path or f"{name}.simulation.json"
     sim_file = experiment_dir / sim_path
     sim_file.parent.mkdir(parents=True, exist_ok=True)
     sim_dir = sim_file.parent
@@ -111,9 +113,9 @@ def write_gmx_simulation(
         "name": name,
         "engine": "GMX",
         "files": {
-            "topology": topology or f"{name}.tpr",
-            "structure": structure or f"{name}.gro",
-            "trajectory": trajectory or f"{name}.xtc",
+            "run_input": topology or f"production/{name}.tpr",
+            "reference_structure": structure or f"analysis/{name}-reference.gro",
+            "trajectory": trajectory or f"production/{name}.xtc",
         },
         "extra_args": extra_args,
     }
@@ -132,7 +134,7 @@ def write_amber_simulation(
     extra_args: str = "",
 ) -> str:
     experiment_dir = DATA_DIR / experiment_id
-    sim_path = simulation_path or f"production/{name}.simulation.json"
+    sim_path = simulation_path or f"{name}.simulation.json"
     sim_file = experiment_dir / sim_path
     sim_file.parent.mkdir(parents=True, exist_ok=True)
     sim_dir = sim_file.parent
@@ -144,6 +146,7 @@ def write_amber_simulation(
             "topology": topology or f"{name}.prmtop",
             "coordinates": coordinates or f"{name}.rst7",
             "control": control or f"{name}.mdin",
+            "reference_structure": f"analysis/{name}-reference.pdb",
             "trajectory": trajectory or f"{name}.nc",
         },
         "extra_args": extra_args,

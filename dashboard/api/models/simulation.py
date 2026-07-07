@@ -37,7 +37,7 @@ def _load_schema(schema_path: Path) -> dict | None:
 
 def _safe_default_path(name: str) -> str:
     safe_name = Path(name).name if name else "simulation"
-    return f"production/{safe_name}{SIMULATION_SUFFIX}"
+    return f"{safe_name}{SIMULATION_SUFFIX}"
 
 
 def _build_content(experiment_id: str, simulation_path: str, engine: Engine, payload: dict) -> dict:
@@ -82,7 +82,7 @@ def _validate_content_or_raise(experiment_id: str, simulation_path: str, content
         raise BadRequest(description="Simulation engine does not match the experiment engine.")
 
 
-class Simulation:
+class Simulation:  # noqa: PLR0904
     """File-backed simulation manifest (`.simulation.json`)."""
 
     def __init__(
@@ -150,9 +150,7 @@ class Simulation:
 
     @property
     def locked(self) -> bool:
-        """Whether the simulation is locked (read-only file or active job)."""
-        if self._file.exists() and not os.access(self._file, os.W_OK):
-            return True
+        """Whether the simulation is locked (active tuner/simulation job references it)."""
         return self.is_locked(self.experiment_id, self.simulation_path)
 
     def to_dict(self) -> dict:
@@ -228,13 +226,12 @@ class Simulation:
             Dict mapping role to experiment-relative path.
         """
         exp_dir = (DATA_DIR / self.experiment_id).resolve()
-        sim_dir = self._file.parent
         resolved: dict[str, str] = {}
         for role, rel in files.items():
             if not isinstance(rel, str) or not rel:
                 continue
             try:
-                absolute = (sim_dir / rel).resolve()
+                absolute = (exp_dir / rel).resolve()
                 absolute.relative_to(exp_dir)
                 resolved[role] = str(absolute.relative_to(exp_dir))
             except (OSError, ValueError):
@@ -306,6 +303,7 @@ class Simulation:
         Returns:
             True if a job references the simulation.
         """
+        # avoid circular dependency
         from .simulation_job import SimulationJob  # noqa: PLC0415
         from .tuner_job import TunerJob  # noqa: PLC0415
 
@@ -371,7 +369,7 @@ class Simulation:
     @classmethod
     def write(cls, experiment_id: str, payload: dict) -> "Simulation":
         """
-        Create a simulation manifest at `production/{name}.simulation.json`.
+        Create a simulation manifest at `{name}.simulation.json` unless a path is provided.
 
         Returns:
             The created Simulation instance.
@@ -396,6 +394,39 @@ class Simulation:
         simulation_file.parent.mkdir(parents=True, exist_ok=True)
         simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return cls(experiment_id, simulation_path, raw=content)
+
+    @classmethod
+    def delete(cls, experiment_id: str, simulation_path: str) -> None:
+        """
+        Delete a simulation manifest and cascade-delete all related jobs.
+
+        Removes TunerJob, SimulationJob, and AnalysisJob records (and their K8s resources), then removes the manifest file. Data files are left untouched.
+
+        Raises:
+            NotFound: If the manifest file does not exist.
+        """
+        # avoid circular dependency
+        from .analysis_job import AnalysisJob  # noqa: PLC0415
+        from .simulation_job import SimulationJob  # noqa: PLC0415
+        from .tuner_job import TunerJob  # noqa: PLC0415
+
+        simulation_path = Path(simulation_path).as_posix()
+        simulation_file = DATA_DIR / experiment_id / simulation_path
+        if not simulation_file.is_file():
+            raise NotFound(description=f"Simulation '{simulation_path}' not found.")
+
+        for model in (TunerJob, SimulationJob, AnalysisJob):
+            jobs = model.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).all()
+            for job in jobs:
+                job.delete()
+                db.session.delete(job)
+
+        try:
+            if not os.access(simulation_file, os.W_OK):
+                simulation_file.chmod(WRITABLE_MODE)
+            simulation_file.unlink()
+        except OSError:
+            logger.warning("Failed to delete simulation '%s'", simulation_path, exc_info=True)
 
     @classmethod
     def update(cls, experiment_id: str, simulation_path: str, payload: dict) -> "Simulation":

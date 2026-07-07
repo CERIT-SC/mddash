@@ -41,7 +41,7 @@ def create_simulation_route(experiment_id: str) -> ResponseReturnValue:
     Create a new simulation manifest.
 
     Returns:
-        Response: JSON response with the created simulation.
+        JSON response with the created simulation.
 
     Raises:
         BadRequest: If the body is invalid or the simulation is locked.
@@ -60,7 +60,7 @@ def update_simulation_route(experiment_id: str, simulation_path: str) -> Respons
     Edit an unlocked simulation manifest.
 
     Returns:
-        Response: JSON response with the updated simulation.
+        JSON response with the updated simulation.
 
     Raises:
         BadRequest: If the body is not a JSON object.
@@ -70,3 +70,16 @@ def update_simulation_route(experiment_id: str, simulation_path: str) -> Respons
         raise BadRequest("Request body must be a JSON object.")
     simulation = Simulation.update(experiment_id, simulation_path, data)
     return jsonify(simulation.to_dict())
+
+
+@simulations_bp.route("/<path:simulation_path>", methods=["DELETE"])
+@handle_exceptions(rollback=True)
+def delete_simulation_route(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
+    """
+    Delete a simulation manifest and cascade-delete all related jobs.
+
+    Returns:
+        Empty 204 response.
+    """
+    Simulation.delete(experiment_id, simulation_path)
+    return "", HTTPStatus.NO_CONTENT

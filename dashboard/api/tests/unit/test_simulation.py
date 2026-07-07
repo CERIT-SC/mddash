@@ -23,11 +23,12 @@ GMX_SCHEMA = {
         "engine": {"const": "GMX"},
         "files": {
             "type": "object",
-            "required": ["topology", "structure", "trajectory"],
+            "required": ["run_input", "reference_structure", "trajectory"],
             "additionalProperties": False,
             "properties": {
-                "topology": {"type": "string"},
-                "structure": {"type": "string"},
+                "run_input": {"type": "string"},
+                "run_structure": {"type": "string"},
+                "reference_structure": {"type": "string"},
                 "trajectory": {"type": "string"},
             },
         },
@@ -89,19 +90,27 @@ class TestDiscovery:
         _write_schema(exp_dir)
         _write_sim_file(
             exp_dir,
-            "production/protein.simulation.json",
-            {"topology": "protein.tpr", "structure": "protein.gro", "trajectory": "protein.xtc"},
+            "protein.simulation.json",
+            {
+                "run_input": "production/protein.tpr",
+                "reference_structure": "analysis/protein-reference.gro",
+                "trajectory": "production/protein.xtc",
+            },
         )
         _write_sim_file(
             exp_dir,
             "equilibration/nvt.simulation.json",
-            {"topology": "nvt.tpr", "structure": "nvt.gro", "trajectory": "nvt.xtc"},
+            {
+                "run_input": "equilibration/nvt.tpr",
+                "reference_structure": "analysis/nvt-reference.gro",
+                "trajectory": "equilibration/nvt.xtc",
+            },
         )
 
         with app.app_context():
             sims = Simulation.list(exp_id)
             paths = [s.simulation_path for s in sims]
-            assert "production/protein.simulation.json" in paths
+            assert "protein.simulation.json" in paths
             assert "equilibration/nvt.simulation.json" in paths
 
     def test_sorted_by_path(self, app: Flask, tmp_path: Path) -> None:
@@ -111,10 +120,14 @@ class TestDiscovery:
         exp_dir.mkdir(parents=True, exist_ok=True)
         _write_schema(exp_dir)
         _write_sim_file(
-            exp_dir, "z.simulation.json", {"topology": "z.tpr", "structure": "z.gro", "trajectory": "z.xtc"}
+            exp_dir,
+            "z.simulation.json",
+            {"run_input": "z.tpr", "reference_structure": "z-reference.gro", "trajectory": "z.xtc"},
         )
         _write_sim_file(
-            exp_dir, "a.simulation.json", {"topology": "a.tpr", "structure": "a.gro", "trajectory": "a.xtc"}
+            exp_dir,
+            "a.simulation.json",
+            {"run_input": "a.tpr", "reference_structure": "a-reference.gro", "trajectory": "a.xtc"},
         )
 
         with app.app_context():
@@ -131,14 +144,18 @@ class TestValidation:
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
-        sim_path = "production/protein.simulation.json"
+        sim_path = "protein.simulation.json"
         sim_file = exp_dir / sim_path
         sim_file.parent.mkdir(parents=True, exist_ok=True)
         content = {
             "$schema": "../gromacs.schema.json",
             "name": "protein",
             "engine": "GMX",
-            "files": {"topology": "protein.tpr", "structure": "protein.gro", "trajectory": "protein.xtc"},
+            "files": {
+                "run_input": "production/protein.tpr",
+                "reference_structure": "analysis/protein-reference.gro",
+                "trajectory": "production/protein.xtc",
+            },
             "extra_args": "",
         }
         sim_file.write_text(json.dumps(content))
@@ -156,15 +173,21 @@ class TestValidation:
         _write_schema(exp_dir)
         _write_sim_file(
             exp_dir,
-            "production/protein.simulation.json",
-            {"topology": "protein.tpr", "structure": "protein.gro", "trajectory": "protein.xtc"},
+            "protein.simulation.json",
+            {
+                "run_input": "production/protein.tpr",
+                "reference_structure": "analysis/protein-reference.gro",
+                "trajectory": "production/protein.xtc",
+            },
         )
+        (exp_dir / "production").mkdir(parents=True, exist_ok=True)
         (exp_dir / "production" / "protein.tpr").write_bytes(b"\x00")
-        (exp_dir / "production" / "protein.gro").write_text("gro")
+        (exp_dir / "analysis" / "protein-reference.gro").parent.mkdir(parents=True, exist_ok=True)
+        (exp_dir / "analysis" / "protein-reference.gro").write_text("gro")
         (exp_dir / "production" / "protein.xtc").write_bytes(b"\x00")
 
         with app.app_context():
-            sim = Simulation.get(exp_id, "production/protein.simulation.json")
+            sim = Simulation.get(exp_id, "protein.simulation.json")
             assert sim.valid
             assert sim.missing_files == []
 
@@ -176,39 +199,46 @@ class TestValidation:
         _write_schema(exp_dir)
         _write_sim_file(
             exp_dir,
-            "production/protein.simulation.json",
-            {"topology": "protein.tpr", "structure": "protein.gro", "trajectory": "protein.xtc"},
+            "protein.simulation.json",
+            {
+                "run_input": "production/protein.tpr",
+                "reference_structure": "analysis/protein-reference.gro",
+                "trajectory": "production/protein.xtc",
+            },
         )
+        (exp_dir / "production").mkdir(parents=True, exist_ok=True)
         (exp_dir / "production" / "protein.tpr").write_bytes(b"\x00")
 
         with app.app_context():
-            sim = Simulation.get(exp_id, "production/protein.simulation.json")
-            assert sim.missing_files == ["structure", "trajectory"]
+            sim = Simulation.get(exp_id, "protein.simulation.json")
+            assert sim.missing_files == ["reference_structure", "trajectory"]
 
-            sim.require_files(["topology"])
+            sim.require_files(["run_input"])
 
-            with pytest.raises(BadRequest, match="structure, trajectory"):
+            with pytest.raises(BadRequest, match="reference_structure, trajectory"):
                 sim.require_files()
 
 
 class TestLocking:
     """Lock inference from file permissions and job references."""
 
-    def test_readonly_file_is_locked(self, app: Flask, tmp_path: Path) -> None:
-        """A read-only file is treated as locked."""
+    def test_readonly_file_without_jobs_not_locked(self, app: Flask, tmp_path: Path) -> None:
+        """A read-only file with no jobs is not locked — file permissions alone don't lock."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
         _write_schema(exp_dir)
         sim_path = _write_sim_file(
-            exp_dir, "protein.simulation.json", {"topology": "p.tpr", "structure": "p.gro", "trajectory": "p.xtc"}
+            exp_dir,
+            "protein.simulation.json",
+            {"run_input": "p.tpr", "reference_structure": "p-reference.gro", "trajectory": "p.xtc"},
         )
 
         with app.app_context():
             sim = Simulation.get(exp_id, sim_path)
             assert not sim.locked
             sim.mark_readonly()
-            assert sim.locked
+            assert not sim.locked
 
     def test_writable_unlocked_file_not_locked(self, app: Flask, tmp_path: Path) -> None:
         """A writable file with no jobs is not locked."""
@@ -217,7 +247,9 @@ class TestLocking:
         exp_dir.mkdir(parents=True, exist_ok=True)
         _write_schema(exp_dir)
         sim_path = _write_sim_file(
-            exp_dir, "protein.simulation.json", {"topology": "p.tpr", "structure": "p.gro", "trajectory": "p.xtc"}
+            exp_dir,
+            "protein.simulation.json",
+            {"run_input": "p.tpr", "reference_structure": "p-reference.gro", "trajectory": "p.xtc"},
         )
 
         with app.app_context():
@@ -240,11 +272,15 @@ class TestWriteSimulation:
                 exp_id,
                 {
                     "name": "protein",
-                    "files": {"topology": "protein.tpr", "structure": "protein.gro", "trajectory": "protein.xtc"},
+                    "files": {
+                        "run_input": "production/protein.tpr",
+                        "reference_structure": "analysis/protein-reference.gro",
+                        "trajectory": "production/protein.xtc",
+                    },
                     "extra_args": "-v",
                 },
             )
-            assert sim.simulation_path == "production/protein.simulation.json"
+            assert sim.simulation_path == "protein.simulation.json"
             assert sim.name == "protein"
             assert sim.valid
 
@@ -260,7 +296,11 @@ class TestWriteSimulation:
                 exp_id,
                 {
                     "name": "protein",
-                    "files": {"topology": "protein.tpr", "structure": "protein.gro", "trajectory": "protein.xtc"},
+                    "files": {
+                        "run_input": "production/protein.tpr",
+                        "reference_structure": "analysis/protein-reference.gro",
+                        "trajectory": "production/protein.xtc",
+                    },
                     "extra_args": "",
                 },
             )
@@ -270,7 +310,11 @@ class TestWriteSimulation:
                     exp_id,
                     {
                         "name": "protein",
-                        "files": {"topology": "other.tpr", "structure": "other.gro", "trajectory": "other.xtc"},
+                        "files": {
+                            "run_input": "production/other.tpr",
+                            "reference_structure": "analysis/other-reference.gro",
+                            "trajectory": "production/other.xtc",
+                        },
                         "extra_args": "",
                     },
                 )
@@ -287,7 +331,7 @@ class TestWriteSimulation:
                 exp_id,
                 {
                     "name": "protein",
-                    "files": {"topology": "protein.tpr"},
+                    "files": {"run_input": "production/protein.tpr"},
                     "extra_args": "",
                 },
             )
