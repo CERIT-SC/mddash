@@ -47,6 +47,7 @@ export function useRunTuner(experimentId: string) {
     onSuccess: (job) => {
       queryClient.setQueryData(["experiment", experimentId, "tuner", job.simulation_path], job)
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner"], exact: true })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "simulations"] })
     },
     onError: (error: Error) => toast.error(error.message),
   })
@@ -62,6 +63,7 @@ export function useStopTuner(experimentId: string) {
     onSuccess: (_data, simulationPath) => {
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner", simulationPath] })
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner"], exact: true })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "simulations"] })
     },
     onError: (error: Error) => toast.error(error.message),
   })

@@ -43,6 +43,7 @@ export function useSubmitGmx(experimentId: string) {
     onSuccess: (job) => {
       queryClient.setQueryData(["experiment", experimentId, "gmx", job.simulation_path], job)
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "gmx"], exact: true })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "simulations"] })
     },
     onError: (error: Error) => toast.error(error.message),
   })

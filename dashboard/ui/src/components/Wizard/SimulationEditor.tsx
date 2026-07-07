@@ -206,9 +206,9 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
             <p className="text-muted-foreground text-xs">{ROLE_HELP.name}</p>
           </div>
 
-          {/* Input files */}
-          <div className="flex flex-col gap-3">
-            <span className="text-sm font-medium">Input files</span>
+          {/* Existing files — files that already exist and are selected from disk */}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <p className="text-muted-foreground/80 col-span-full text-[11px] tracking-wide uppercase">Existing files</p>
 
             <FileSelector
               experimentId={experimentId}
@@ -216,6 +216,16 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
               title={engine === Engine.GMX ? "Run input (.tpr)" : "Topology"}
               selectedPath={runInput || null}
               onFileSelected={(file) => setRunInput(file?.path ?? "")}
+              helperText={engine === Engine.GMX ? ROLE_HELP.run_input : ROLE_HELP.topology}
+            />
+
+            <FileSelector
+              experimentId={experimentId}
+              ext={["gro", "pdb"]}
+              title="Reference structure"
+              selectedPath={referenceStructure || null}
+              onFileSelected={(file) => setReferenceStructure(file?.path ?? "")}
+              helperText={ROLE_HELP.reference_structure}
             />
 
             {engine === Engine.AMBER && (
@@ -226,6 +236,7 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
                   title="Coordinates"
                   selectedPath={coordinates || null}
                   onFileSelected={(file) => setCoordinates(file?.path ?? "")}
+                  helperText={ROLE_HELP.coordinates}
                 />
                 <FileSelector
                   experimentId={experimentId}
@@ -233,25 +244,16 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
                   title="Run control"
                   selectedPath={control || null}
                   onFileSelected={(file) => setControl(file?.path ?? "")}
+                  helperText={ROLE_HELP.control}
                 />
               </>
             )}
           </div>
 
-          {/* Analysis and output files */}
-          <div className="flex flex-col gap-3">
-            <span className="text-sm font-medium">Analysis and output files</span>
+          {/* Output paths — paths the simulation will create */}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <p className="text-muted-foreground/80 col-span-full text-[11px] tracking-wide uppercase">Output paths</p>
 
-            {/* Reference structure — exists from setup notebook */}
-            <FileSelector
-              experimentId={experimentId}
-              ext={["gro", "pdb"]}
-              title="Reference structure"
-              selectedPath={referenceStructure || null}
-              onFileSelected={(file) => setReferenceStructure(file?.path ?? "")}
-            />
-
-            {/* Trajectory — does not exist yet, text input */}
             <div className="flex flex-col gap-1">
               <Label htmlFor="trajectory">Trajectory</Label>
               <Input
@@ -279,7 +281,10 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
 
           {/* Extra arguments */}
           <div className="flex flex-col gap-1">
-            <Label htmlFor="extra-args">Extra arguments</Label>
+            <p className="text-muted-foreground/80 mb-1 text-[11px] tracking-wide uppercase">Runtime options</p>
+            <Label htmlFor="extra-args" className="sr-only">
+              Extra arguments
+            </Label>
             <Input
               id="extra-args"
               value={extraArgs}

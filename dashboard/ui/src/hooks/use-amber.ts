@@ -43,6 +43,7 @@ export function useSubmitAmber(experimentId: string) {
     onSuccess: (job) => {
       queryClient.setQueryData(["experiment", experimentId, "amber", job.simulation_path], job)
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "amber"], exact: true })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "simulations"] })
     },
     onError: (error: Error) => toast.error(error.message),
   })

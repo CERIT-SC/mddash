@@ -1,5 +1,6 @@
 """Verify all migrations produce a schema matching the SQLAlchemy models."""
 
+from collections.abc import Mapping
 from pathlib import Path
 
 import app as app_module
@@ -26,7 +27,7 @@ def _column_names(engine: Engine, table: str) -> set[str]:
     return {col["name"] for col in sa_inspect(engine).get_columns(table)}
 
 
-def _columns(engine: Engine, table: str) -> dict[str, dict]:
+def _columns(engine: Engine, table: str) -> dict[str, Mapping]:
     return {col["name"]: col for col in sa_inspect(engine).get_columns(table)}
 
 

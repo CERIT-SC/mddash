@@ -8,7 +8,7 @@ from config import DATA_DIR
 from enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus, PodStatus
 from extensions import db
 from models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook, TunerJob
-from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, MWF_DIR
+from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
 
 from .files import (
     MDPOSIT_DEMO_PROJECT_URL,
@@ -243,6 +243,7 @@ def seed_data() -> None:  # noqa: PLR0914
         AnalysisJob,
         id="analysis-rmsd",
         experiment=published,
+        simulation_path="lysozyme_hewl.simulation.json",
         analysis_name=AnalysisType.RMSDS,
         structure_file="structure.pdb",
         trajectory_file="trajectory.xtc",
@@ -253,6 +254,7 @@ def seed_data() -> None:  # noqa: PLR0914
         AnalysisJob,
         id="analysis-sasa",
         experiment=published,
+        simulation_path="lysozyme_hewl.simulation.json",
         analysis_name=AnalysisType.SAS,
         structure_file="structure.pdb",
         trajectory_file="trajectory.xtc",
@@ -264,6 +266,7 @@ def seed_data() -> None:  # noqa: PLR0914
         AnalysisJob,
         id="analysis-hbonds",
         experiment=enzyme,
+        simulation_path="md.simulation.json",
         analysis_name=AnalysisType.HBONDS,
         structure_file="structure.pdb",
         trajectory_file="trajectory.xtc",
@@ -512,11 +515,11 @@ def seed_data() -> None:  # noqa: PLR0914
     )
 
     # Write analysis result files (fetched from MDposit)
-    _fetch_and_write_analysis_results(published.id, ["rmsds", "sasa"])
-    _fetch_and_write_analysis_results(enzyme.id, ["hbonds"])
+    _fetch_and_write_analysis_results(published.id, "lysozyme_hewl.simulation.json", ["rmsds", "sasa"])
+    _fetch_and_write_analysis_results(enzyme.id, "md.simulation.json", ["hbonds"])
 
 
-def _fetch_and_write_analysis_results(experiment_id: str, analysis_names: list[str]) -> None:
+def _fetch_and_write_analysis_results(experiment_id: str, simulation_path: str, analysis_names: list[str]) -> None:
     """Fetch analysis data from MDposit and write result files for seeding."""
     mdposit_analyses_url = "https://mdposit.mddbr.eu/api/rest/v1/projects/MD-A003ZT.2/analyses"
 
@@ -533,7 +536,8 @@ def _fetch_and_write_analysis_results(experiment_id: str, analysis_names: list[s
         "tmscore": "tmscores",
     }
 
-    mwf_dir = DATA_DIR / experiment_id / MWF_DIR
+
+    mwf_dir = DATA_DIR / experiment_id / mwf_output_dir(simulation_path)
     mwf_dir.mkdir(parents=True, exist_ok=True)
 
     headers = {"Accept": "application/json"}
