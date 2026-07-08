@@ -11,25 +11,29 @@ _TPR_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,246}$")
 _BUCKET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")
 
 _EXTRA_ARGS_FORBIDDEN_RE = re.compile(r"[;&|><`]|\$\(|\$\{|\n|\r|\x00")
-# Flags that the harness controls (inputs) or that redirect outputs away from
-# the simulation directory. Forbidding these keeps all results co-located with
-# the primary input so the scoped S3 sync (sim dir only) never misses a file.
-#
-# Engine-specific because flags overlap across tools with different meanings:
-#   - AMBER `-O` (capital) is the boolean "overwrite" flag (allowed), while
-#     `-o` (lowercase) is the mdout output file (forbidden).
-#   - GMX `-c` is the output structure file, while AMBER `-c` is the input
-#     coordinates file — both harness-controlled, forbidden for both engines
-#     but for different reasons.
-# Matching is case-sensitive to honor this distinction.
 _EXTRA_ARGS_FORBIDDEN_FLAGS: dict[str, set[str]] = {
     "gmx": {
-        "-deffnm", "-s",  # input TPR (harness controls via -deffnm)
-        "-o", "-x", "-c", "-e", "-g", "-cpo", "-dhdl", "-px", "-pf", "-mtx",  # outputs
+        "-deffnm",
+        "-s",
+        "-o",
+        "-x",
+        "-c",
+        "-e",
+        "-g",
+        "-cpo",
+        "-dhdl",
+        "-px",
+        "-pf",
+        "-mtx",
     },
     "amber": {
-        "-i", "-p", "-c",  # inputs (harness controls)
-        "-o", "-r", "-x", "-inf",  # outputs
+        "-i",
+        "-p",
+        "-c",
+        "-o",
+        "-r",
+        "-x",
+        "-inf",
     },
 }
 MAX_EXTRA_ARGS_TOKENS = 80
@@ -98,25 +102,19 @@ def sanitize_bucket_name(bucket_name: str) -> str:
 
 def sanitize_extra_args(extra_args: str, engine: str) -> str:
     """
-    Validate and normalize extra simulation args (GROMACS mdrun or AMBER pmemd).
+    Validate and normalize extra simulation args (GROMACS or AMBER).
 
-    This is used inside a shell script in the K8s job container, so we block
-    shell metacharacters and also forbid overriding harness-controlled input or
-    output flags so results stay co-located with the primary input (and within
-    the scoped S3 sync). Flag matching is case-sensitive because AMBER uses
-    capital flags for boolean options (e.g. ``-O`` overwrite) and lowercase for
-    output paths (e.g. ``-o`` mdout).
+    Blocks shell metacharacters and harness-controlled input/output flags so results stay co-located with the primary input. Flag matching is case-sensitive.
 
     Args:
         extra_args: Raw extra arguments string.
-        engine: Target engine — ``"gmx"`` or ``"amber"``.
+        engine: ``"gmx"`` or ``"amber"``.
 
     Returns:
-        str: Canonicalized extra args string, or an empty string if none were provided.
+        Canonicalized extra args string, or empty string if none provided.
 
     Raises:
-        ValidationError: If the args contain forbidden characters, forbidden flags,
-            exceed the token limit, or cannot be parsed by shlex.
+        ValidationError: If args contain forbidden characters/flags, are too long, or cannot be parsed by shlex.
     """
     extra_args = (extra_args or "").strip()
     if not extra_args:
@@ -139,9 +137,7 @@ def sanitize_extra_args(extra_args: str, engine: str) -> str:
 
     overridden = {t for t in tokens if t in forbidden}
     if overridden:
-        raise ValidationError(
-            f"extra_args must not override harness-controlled flags: {', '.join(sorted(overridden))}"
-        )
+        raise ValidationError(f"extra_args must not override harness-controlled flags: {', '.join(sorted(overridden))}")
 
     # Canonicalize spacing/quoting.
     return shlex.join(tokens)

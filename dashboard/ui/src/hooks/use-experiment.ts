@@ -25,11 +25,12 @@ export function useExperimentStep(id: string, currentStep: number) {
     refetchInterval: 5000,
   })
 
-  // When the step changes, update the experiment cache
+  // When the step changes, update the experiment cache and refetch simulations
   useEffect(() => {
     if (query.data !== undefined && query.data !== prevStepRef.current) {
       prevStepRef.current = query.data
       queryClient.setQueryData<Experiment>(["experiment", id], (old) => (old ? { ...old, step: query.data! } : old))
+      queryClient.invalidateQueries({ queryKey: ["experiment", id, "simulations"] })
     }
   }, [query.data, id, queryClient])
 

@@ -157,18 +157,12 @@ def test_sanitize_extra_args_rejects_amber_forbidden_flags(extra_args: str) -> N
 
 
 def test_sanitize_extra_args_allows_amber_overwrite_flag() -> None:
-    """
-    AMBER `-O` (capital) is the boolean overwrite flag and must be allowed.
-
-    Only the lowercase `-o` (mdout output path) is forbidden. This is the key
-    reason flag matching is case-sensitive and engine-specific.
-    """
+    """AMBER `-O` (overwrite) allowed; only lowercase `-o` (mdout) is forbidden."""
     assert sanitize_extra_args("-O -nsteps 1000", "amber") == "-O -nsteps 1000"
 
 
 def test_sanitize_extra_args_allows_amber_minus_o_for_gmx() -> None:
-    """AMBER-only forbidden flags like `-r`/`-inf` are allowed for GMX (not GMX flags)."""
-    # GMX doesn't have -r/-inf, so they pass through harmlessly.
+    """AMBER-only flags like `-r`/`-inf` pass through for GMX."""
     assert sanitize_extra_args("-r 1.0 -inf 100", "gmx") == "-r 1.0 -inf 100"
 
 
