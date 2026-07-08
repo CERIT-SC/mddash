@@ -54,24 +54,29 @@ class AmberJob(SimulationJob):
         return DATA_DIR / self.experiment_id / self._files["control"]
 
     @property
+    def _sim_dir(self) -> Path:
+        """Experiment-relative directory containing the mdin (where the simulation runs)."""
+        return Path(self._files["control"]).parent
+
+    @property
     def _mdout_log(self) -> Path:
         base_name = Path(self._files["control"]).stem
-        return DATA_DIR / self.experiment_id / f"{base_name}.out"
+        return DATA_DIR / self.experiment_id / self._sim_dir / f"{base_name}.out"
 
     @property
     def _mdinfo_log(self) -> Path:
         base_name = Path(self._files["control"]).stem
-        return DATA_DIR / self.experiment_id / f"{base_name}.mdinfo"
+        return DATA_DIR / self.experiment_id / self._sim_dir / f"{base_name}.mdinfo"
 
     @property
     def _stdout_log(self) -> Path:
         """Path to the stdout log file."""
-        return DATA_DIR / self.experiment_id / f"mdrun-{self.id}.out"
+        return DATA_DIR / self.experiment_id / self._sim_dir / f"mdrun-{self.id}.out"
 
     @property
     def _stderr_log(self) -> Path:
         """Path to the stderr log file."""
-        return DATA_DIR / self.experiment_id / f"mdrun-{self.id}.err"
+        return DATA_DIR / self.experiment_id / self._sim_dir / f"mdrun-{self.id}.err"
 
     @property
     def nsteps(self) -> int | None:
@@ -259,7 +264,7 @@ class AmberJob(SimulationJob):
         base_name = Path(self._files["control"]).stem
 
         for ext in self.RESULT_EXTENSIONS:
-            file = DATA_DIR / self.experiment_id / f"{base_name}.{ext}"
+            file = DATA_DIR / self.experiment_id / self._sim_dir / f"{base_name}.{ext}"
             if file.exists():
                 file.unlink()
                 logger.info(f"Deleted previous result file: {file}")

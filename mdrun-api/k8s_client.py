@@ -1,4 +1,5 @@
 import logging
+import os
 import shlex
 from http import HTTPStatus
 from pathlib import Path
@@ -53,17 +54,17 @@ def _s3_init_command(exp_dir: str, remote: str) -> str:
     )
 
 
-def _s3_sync_command(exp_dir: str, remote: str) -> str:
+def _s3_sync_command(local_dir: str, remote: str) -> str:
     return (
         f'echo "Starting continuous rclone copy process..." && '
         "while true; do\n"
         "    if [ -f /data/job_completed ]; then\n"
         '        echo "Job completed, performing final copy to S3..." &&\n'
-        f"        rclone copy {_q(exp_dir + '/')} {_q(remote)} --checksum --progress &&\n"
+        f"        rclone copy {_q(local_dir + '/')} {_q(remote)} --checksum --progress &&\n"
         '        echo "Final copy completed, exiting..." &&\n'
         "        break\n"
         "    fi\n"
-        f"    rclone copy {_q(exp_dir + '/')} {_q(remote)} --ignore-checksum --retries 1 --quiet || "
+        f"    rclone copy {_q(local_dir + '/')} {_q(remote)} --ignore-checksum --retries 1 --quiet || "
         'echo "Copy attempt failed, retrying..."\n'
         "    sleep 10\n"
         "done\n"
@@ -74,19 +75,27 @@ def _volume_mount(path: str = "/data") -> dict[str, str]:
     return {"name": _SHARED_VOLUME_NAME, "mountPath": path}
 
 
+def _sim_sync_remote(bucket_name: str, experiment_id: str, primary_file: str) -> str:
+    sim_rel = Path(primary_file).parent.as_posix()
+    base = f"s3remote:{bucket_name}/{experiment_id}/"
+    return f"{base}{sim_rel}/" if sim_rel != "." else base
+
+
 def _build_job_manifest(
     *,
     name: str,
     ns: str,
     exp_dir: str,
     remote: str,
+    working_dir: str,
+    sync_remote: str,
     sim_image: str,
     sim_command: str,
     sim_resources: dict[str, Any],
     sim_env: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     s3_init = _s3_init_command(exp_dir, remote)
-    s3_sync = _s3_sync_command(exp_dir, remote)
+    s3_sync = _s3_sync_command(working_dir, sync_remote)
     vol_mount = _volume_mount()
     rclone_env = _rclone_env()
 
@@ -117,7 +126,7 @@ def _build_job_manifest(
                             "name": name,
                             "image": sim_image,
                             "imagePullPolicy": "Always",
-                            "workingDir": exp_dir,
+                            "workingDir": working_dir,
                             "command": ["bash", "-c", sim_command],
                             "securityContext": _SECURITY_CONTEXT,
                             "env": sim_env or [],
@@ -254,6 +263,10 @@ def create_gromacs_job(
     remote = f"s3remote:{bucket_name}/{experiment_id}/"
     extra_part = f" {extra_args}" if extra_args else ""
 
+    working_dir = str(Path(exp_dir) / Path(deffnm).parent)
+    sync_remote = _sim_sync_remote(bucket_name, experiment_id, deffnm)
+    deffnm_arg = Path(deffnm).name
+
     gromacs_command = "\n".join([
         "set -euo pipefail",
         "trap 'touch /data/job_completed' EXIT TERM INT",
@@ -271,7 +284,7 @@ def create_gromacs_job(
                 "-pme",
                 _q(pme),
                 "-deffnm",
-                _q(deffnm),
+                _q(deffnm_arg),
             ])
             + extra_part
             + f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2)"
@@ -284,6 +297,8 @@ def create_gromacs_job(
         ns=ns,
         exp_dir=exp_dir,
         remote=remote,
+        working_dir=working_dir,
+        sync_remote=sync_remote,
         sim_image=GMX_IMAGE,
         sim_command=gromacs_command,
         sim_resources=_gmx_resources(np, ntomp, nb, pme),
@@ -323,22 +338,29 @@ def create_amber_job(
 
     exp_dir = f"/data/{experiment_id}"
     remote = f"s3remote:{bucket_name}/{experiment_id}/"
+
+    sim_rel = Path(mdin_name).parent.as_posix()
+    mdin_rel = Path(mdin_name).name
+    prmtop_rel = os.path.relpath(prmtop_name, start=sim_rel)
+    inpcrd_rel = os.path.relpath(inpcrd_name, start=sim_rel)
     output_prefix = Path(mdin_name).stem
 
     base_flags = (
-        f"-O -i {_q(mdin_name)} -o {_q(f'{output_prefix}.out')} "
-        f"-p {_q(prmtop_name)} -c {_q(inpcrd_name)} "
+        f"-O -i {_q(mdin_rel)} -o {_q(f'{output_prefix}.out')} "
+        f"-p {_q(prmtop_rel)} -c {_q(inpcrd_rel)} "
         f"-r {_q(f'{output_prefix}.rst7')} -x {_q(f'{output_prefix}.nc')} "
         f"-inf {_q(f'{output_prefix}.mdinfo')}"
     )
 
-    amber_command, use_gpu = _amber_command(binary, np, ewald, extra_args, base_flags, mdin_name, name)
+    amber_command, use_gpu = _amber_command(binary, np, ewald, extra_args, base_flags, mdin_rel, name)
 
     manifest = _build_job_manifest(
         name=name,
         ns=ns,
         exp_dir=exp_dir,
         remote=remote,
+        working_dir=str(Path(exp_dir) / Path(mdin_name).parent),
+        sync_remote=_sim_sync_remote(bucket_name, experiment_id, mdin_name),
         sim_image=AMBER_IMAGE,
         sim_command=amber_command,
         sim_resources=_amber_resources(binary, np, ntomp, use_gpu),

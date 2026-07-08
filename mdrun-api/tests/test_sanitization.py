@@ -105,22 +105,91 @@ def test_sanitize_bucket_name_accepts_normal_value() -> None:
         "-nsteps 1000 > /tmp/x",
         "-nsteps 1000 < /etc/passwd",
         "-nsteps 1000 `id`",
-        "-deffnm hacked",
     ],
 )
 def test_sanitize_extra_args_rejects_injection(extra_args: str) -> None:
-    """Reject extra_args that include shell metacharacters or forbidden flags."""
+    """Reject extra_args that include shell metacharacters (any engine)."""
     with pytest.raises(ValidationError):
-        sanitize_extra_args(extra_args)
+        sanitize_extra_args(extra_args, "gmx")
+    with pytest.raises(ValidationError):
+        sanitize_extra_args(extra_args, "amber")
+
+
+@pytest.mark.parametrize(
+    "extra_args",
+    [
+        "-deffnm hacked",
+        "-s other.tpr",
+        "-o /tmp/out.trr",
+        "-x /tmp/traj.xtc",
+        "-c /tmp/final.gro",
+        "-e /tmp/ener.edr",
+        "-g /tmp/run.log",
+        "-cpo /tmp/state.cpt",
+        "-dhdl /tmp/dhdl.xvg",
+        "-px /tmp/pullx.xvg",
+        "-pf /tmp/pullf.xvg",
+        "-mtx /tmp/matrix.mtx",
+    ],
+)
+def test_sanitize_extra_args_rejects_gmx_forbidden_flags(extra_args: str) -> None:
+    """Reject GMX flags that redirect outputs or override harness inputs."""
+    with pytest.raises(ValidationError):
+        sanitize_extra_args(extra_args, "gmx")
+
+
+@pytest.mark.parametrize(
+    "extra_args",
+    [
+        "-i custom.mdin",
+        "-p custom.prmtop",
+        "-c custom.rst7",
+        "-o /tmp/mdout",
+        "-r /tmp/restrt.rst7",
+        "-x /tmp/traj.nc",
+        "-inf /tmp/mdinfo",
+    ],
+)
+def test_sanitize_extra_args_rejects_amber_forbidden_flags(extra_args: str) -> None:
+    """Reject AMBER flags that redirect outputs or override harness inputs."""
+    with pytest.raises(ValidationError):
+        sanitize_extra_args(extra_args, "amber")
+
+
+def test_sanitize_extra_args_allows_amber_overwrite_flag() -> None:
+    """
+    AMBER `-O` (capital) is the boolean overwrite flag and must be allowed.
+
+    Only the lowercase `-o` (mdout output path) is forbidden. This is the key
+    reason flag matching is case-sensitive and engine-specific.
+    """
+    assert sanitize_extra_args("-O -nsteps 1000", "amber") == "-O -nsteps 1000"
+
+
+def test_sanitize_extra_args_allows_amber_minus_o_for_gmx() -> None:
+    """AMBER-only forbidden flags like `-r`/`-inf` are allowed for GMX (not GMX flags)."""
+    # GMX doesn't have -r/-inf, so they pass through harmlessly.
+    assert sanitize_extra_args("-r 1.0 -inf 100", "gmx") == "-r 1.0 -inf 100"
+
+
+def test_sanitize_extra_args_allows_legitimate_gmx_args() -> None:
+    """Allow genuine GROMACS mdrun tuning flags that don't redirect outputs."""
+    assert sanitize_extra_args("-nsteps 1000 -maxh 1.0 -v -resethway", "gmx") == "-nsteps 1000 -maxh 1.0 -v -resethway"
+
+
+def test_sanitize_extra_args_rejects_unknown_engine() -> None:
+    """An unrecognized engine value must raise ValidationError."""
+    with pytest.raises(ValidationError):
+        sanitize_extra_args("-nsteps 1000", "lammps")
 
 
 def test_sanitize_extra_args_normalizes_whitespace_and_quotes() -> None:
     """Normalize spacing and remove redundant quotes from extra_args."""
-    assert sanitize_extra_args("  -nsteps   1000  ") == "-nsteps 1000"
-    assert sanitize_extra_args("-nsteps '1000'") == "-nsteps 1000"
+    assert sanitize_extra_args("  -nsteps   1000  ", "gmx") == "-nsteps 1000"
+    assert sanitize_extra_args("-nsteps '1000'", "gmx") == "-nsteps 1000"
 
 
 def test_sanitize_extra_args_allows_empty() -> None:
     """Empty or whitespace-only extra_args should be accepted as empty string."""
-    assert not sanitize_extra_args("")
-    assert not sanitize_extra_args("   ")
+    assert not sanitize_extra_args("", "gmx")
+    assert not sanitize_extra_args("   ", "amber")

@@ -60,13 +60,18 @@ class GromacsJob(SimulationJob):
         return Simulation.get(self.experiment_id, self.simulation_path).resolved_files
 
     @property
-    def _topology_rel(self) -> str:
+    def _run_input(self) -> str:
         return self._files["run_input"]
 
     @property
     def _deffnm(self) -> str:
-        """Default filename without extension, derived from the simulation topology."""
-        return self._topology_rel.removesuffix(".tpr")
+        """Default filename without extension, derived from the TPR."""
+        return self._run_input.removesuffix(".tpr")
+
+    @property
+    def _sim_dir(self) -> Path:
+        """Experiment-relative directory containing the TPR (where the simulation runs)."""
+        return Path(self._run_input).parent
 
     @property
     def _gmx_log(self) -> Path:
@@ -76,12 +81,12 @@ class GromacsJob(SimulationJob):
     @property
     def _stdout_log(self) -> Path:
         """Path to the stdout log file."""
-        return DATA_DIR / self.experiment_id / f"mdrun-{self.id}.out"
+        return DATA_DIR / self.experiment_id / self._sim_dir / f"mdrun-{self.id}.out"
 
     @property
     def _stderr_log(self) -> Path:
         """Path to the stderr log file."""
-        return DATA_DIR / self.experiment_id / f"mdrun-{self.id}.err"
+        return DATA_DIR / self.experiment_id / self._sim_dir / f"mdrun-{self.id}.err"
 
     @property
     def nsteps(self) -> int | None:
