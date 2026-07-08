@@ -203,7 +203,7 @@ make test
 
 ## CI/CD Pipeline
 
-- **`ci.yml`**: Runs on every PR and push. Lint, test, type-check. No Docker builds or deployments.
+- **`ci.yml`**: Lint, test, type-check. Runs on every PR (`pull_request`) and on `push` to `dev`/`master` only.
 - **`cd.yml`**: Runs only on push to `dev` or `master`. Change detection via `dorny/paths-filter@v4`; dev builds only changed components, prod builds all components when any tracked deploy path changed; deploys via Helm only when tracked deploy paths changed; verifies with lightweight health check.
 - **`codeql.yml`**: Runs CodeQL for GitHub Actions, JavaScript/TypeScript, and Python on `master` pushes, `master` PRs, and a weekly schedule.
 - **Image Tags**: Dev uses `dev`, prod uses `sha-<short-sha>`.
