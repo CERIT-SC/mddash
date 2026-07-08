@@ -536,7 +536,6 @@ def _fetch_and_write_analysis_results(experiment_id: str, simulation_path: str, 
         "tmscore": "tmscores",
     }
 
-
     mwf_dir = DATA_DIR / experiment_id / mwf_output_dir(simulation_path)
     mwf_dir.mkdir(parents=True, exist_ok=True)
 

@@ -1,18 +1,11 @@
-import { useState } from "react"
-
-import { SkipForward } from "lucide-react"
-
 import { formatDateTime } from "@/util/helpers"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import ConfirmDialog from "@/components/ConfirmDialog"
 import NotebookController from "@/components/NotebookController"
 import SimulationEditor from "@/components/Wizard/SimulationEditor"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 const SetupStep = (props: WizardStepProps) => {
-  const { experiment, nextStep } = props
-  const [nextStepDialog, setNextStepDialog] = useState(false)
+  const { experiment } = props
 
   const hasValidSimulation = props.simulations.some((s) => s.valid)
 
@@ -22,17 +15,6 @@ const SetupStep = (props: WizardStepProps) => {
         <Card className="gap-4 py-5">
           <CardHeader className="flex flex-row items-center justify-between gap-4 px-5">
             <CardTitle className="text-lg">Experiment Details</CardTitle>
-            {experiment.step === 0 && (
-              <Button
-                variant="outline"
-                className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                onClick={() => setNextStepDialog(true)}
-                disabled={!hasValidSimulation}
-              >
-                <SkipForward className="mr-1 h-4 w-4" />
-                Skip Setup
-              </Button>
-            )}
           </CardHeader>
           <CardContent className="grid gap-3 px-5 text-sm md:grid-cols-3">
             <div className="flex flex-col gap-1">
@@ -69,14 +51,6 @@ const SetupStep = (props: WizardStepProps) => {
           is required to continue.
         </p>
       )}
-
-      <ConfirmDialog
-        open={nextStepDialog}
-        setOpen={setNextStepDialog}
-        title="Complete Setup?"
-        message="Are you sure you want to proceed to the next step? Setup doesn't appear to be complete in the notebook. Stuff may break later."
-        onConfirm={nextStep}
-      />
     </div>
   )
 }
