@@ -1,11 +1,15 @@
 import { useState } from "react"
 
-import { Loader2 } from "lucide-react"
+import { Loader2, Trash2 } from "lucide-react"
 
 import { SELECT_NONE } from "@/util/const"
-import { useGromacsLogs, useGromacsStatus } from "@/hooks/use-gromacs"
+import { simulationLaunchUnavailableReason } from "@/util/simulation"
+import { useDeleteGmx, useGromacsLogs, useGromacsStatus } from "@/hooks/use-gromacs"
+import { useSimulation } from "@/hooks/use-simulations"
+import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import ConfirmDialog from "@/components/ConfirmDialog"
 import LogsView from "@/components/LogsView"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
@@ -15,16 +19,20 @@ import JobStatusDisplay from "./JobStatusDisplay"
 type LogType = "gmx" | "stdout" | "stderr"
 
 interface RunViewProps extends WizardStepProps {
-  tprName: string
+  simulationPath: string
+  hasSimulationJob: boolean
   onStartJob: () => void
 }
 
 const RunView = (props: RunViewProps) => {
-  const { experiment, tprName, onStartJob } = props
+  const { experiment, simulationPath, hasSimulationJob, onStartJob } = props
 
   const [logType, setLogType] = useState<LogType | "">("")
+  const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false)
 
-  const jobQuery = useGromacsStatus(experiment.id, tprName)
+  const { data: simulation } = useSimulation(experiment.id, simulationPath)
+  const jobQuery = useGromacsStatus(experiment.id, simulationPath, hasSimulationJob)
+  const deleteGmx = useDeleteGmx(experiment.id)
 
   const jobStatus = jobQuery.data ?? null
   const isRunning = jobStatus?.status === "RUNNING"
@@ -32,7 +40,8 @@ const RunView = (props: RunViewProps) => {
   const logsAvailable = !!jobStatus && jobStatus.status !== "PENDING"
   const shouldRefreshLogs = isRunning
 
-  const logsQuery = useGromacsLogs(experiment.id, tprName, logType, shouldRefreshLogs)
+  const logsQuery = useGromacsLogs(experiment.id, simulationPath, logType, shouldRefreshLogs)
+  const unavailableReason = simulationLaunchUnavailableReason(simulation ?? null, experiment.engine)
 
   const handleJobStarted = () => {
     jobQuery.refetch()
@@ -48,12 +57,25 @@ const RunView = (props: RunViewProps) => {
   }
 
   if (!jobStatus) {
-    return <GmxStartForm {...props} onStartJob={handleJobStarted} />
+    return <GmxStartForm {...props} onStartJob={handleJobStarted} disabledReason={unavailableReason} />
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <JobStatusDisplay jobStatus={jobStatus} />
+      <JobStatusDisplay
+        jobStatus={jobStatus}
+        actions={
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+            onClick={() => setConfirmDeleteDialog(true)}
+          >
+            <Trash2 className="mr-1 h-4 w-4" />
+            Delete job
+          </Button>
+        }
+      />
 
       {logsAvailable && (
         <div className="flex flex-col gap-3">
@@ -83,6 +105,16 @@ const RunView = (props: RunViewProps) => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteDialog}
+        setOpen={setConfirmDeleteDialog}
+        confirmColor="destructive"
+        onConfirm={async () => {
+          await deleteGmx.mutateAsync(simulationPath)
+        }}
+        message="Delete this simulation job? This cannot be undone."
+      />
     </div>
   )
 }

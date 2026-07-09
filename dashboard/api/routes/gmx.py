@@ -1,6 +1,6 @@
 from http import HTTPStatus
 
-from config import API_PREFIX, DATA_DIR
+from config import API_PREFIX
 from decorators import handle_exceptions
 from enums import DeviceType
 from extensions import db
@@ -8,8 +8,8 @@ from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import Experiment, GromacsJob
 from schemas import GromacsJobSchema
-from validators import check_log_type, check_path, check_positive_int
-from werkzeug.exceptions import NotFound
+from validators import check_log_type, check_positive_int
+from werkzeug.exceptions import BadRequest
 
 gmx_bp = Blueprint("gmx", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/gmx")
 
@@ -28,89 +28,96 @@ def get_gmx_jobs(experiment_id: str) -> Response:
     return jsonify(schema.dump(jobs))
 
 
-@gmx_bp.route("/<path:tpr_name>", methods=["GET"])
+@gmx_bp.route("/<path:simulation_path>", methods=["GET"])
 @handle_exceptions()
-def get_gmx_job(experiment_id: str, tpr_name: str) -> Response:
+def get_gmx_job(experiment_id: str, simulation_path: str) -> Response:
     """
-    Get a specific GROMACS job by TPR name.
+    Get a specific GROMACS job by simulation path.
 
     Returns:
         Response: JSON response with the GROMACS job data.
     """
     schema = GromacsJobSchema()
-    job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
-        description=f"GROMACS job for {tpr_name} in experiment {experiment_id} not found"
-    )
+    job: GromacsJob = GromacsJob.query.filter_by(
+        experiment_id=experiment_id, simulation_path=simulation_path
+    ).first_or_404(description=f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
     return jsonify(schema.dump(job))
 
 
-@gmx_bp.route("/<path:tpr_name>", methods=["POST"])
+@gmx_bp.route("/<path:simulation_path>", methods=["POST"])
 @handle_exceptions(rollback=True)
-def submit_gmx_job(experiment_id: str, tpr_name: str) -> ResponseReturnValue:
+def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
-    Submit a new GROMACS simulation job.
+    Submit a GROMACS simulation job from a simulation manifest.
+
+    Body: ``{"np": 4, "ntomp": 2, "pme": "cpu", "nb": "gpu"}``.
 
     Returns:
-        Response: JSON response with the created GROMACS job, or an error if the TPR file does not exist.
+        Response: JSON response with the created GROMACS job.
 
     Raises:
-        NotFound: If the TPR file does not exist.
+        BadRequest: If compute parameters are invalid.
     """
-    check_path(tpr_name, DATA_DIR / experiment_id)
     schema = GromacsJobSchema()
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
-    job: GromacsJob | None = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first()
-    tpr_path = DATA_DIR / experiment_id / tpr_name
-
-    if not tpr_path.is_file():
-        raise NotFound(f"TPR file {tpr_name} does not exist.")
+    job: GromacsJob | None = GromacsJob.query.filter_by(
+        experiment_id=experiment_id, simulation_path=simulation_path
+    ).first()
 
     if not job:
+        data = request.get_json(silent=True) or {}
+        try:
+            np = int(data.get("np", request.form.get("np", "")))
+            ntomp = int(data.get("ntomp", request.form.get("ntomp", "")))
+            pme = DeviceType.from_string(data.get("pme", request.form.get("pme", "")))
+            nb = DeviceType.from_string(data.get("nb", request.form.get("nb", "")))
+        except (ValueError, TypeError) as exc:
+            raise BadRequest(f"Invalid compute parameters: {exc}") from exc
+
         job = GromacsJob.start(
             experiment=experiment,
-            tpr_path=tpr_path,
-            pme=DeviceType.from_string(request.form["pme"]),
-            nb=DeviceType.from_string(request.form["nb"]),
-            np=int(request.form["np"]),
-            ntomp=int(request.form["ntomp"]),
-            extra_args=request.form.get("extra_args", ""),
+            simulation_path=simulation_path,
+            pme=pme,
+            nb=nb,
+            np=np,
+            ntomp=ntomp,
         )
 
     return jsonify(schema.dump(job)), HTTPStatus.CREATED
 
 
-@gmx_bp.route("/<path:tpr_name>", methods=["DELETE"])
+@gmx_bp.route("/<path:simulation_path>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
-def delete_gmx_job(experiment_id: str, tpr_name: str) -> ResponseReturnValue:
+def delete_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
     Delete a GROMACS job and its associated Kubernetes resources.
 
     Returns:
         Response: Empty JSON response with 204 No Content on success.
     """
-    job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
-        description=f"GROMACS job for {tpr_name} in experiment {experiment_id} not found"
-    )
+    job: GromacsJob = GromacsJob.query.filter_by(
+        experiment_id=experiment_id, simulation_path=simulation_path
+    ).first_or_404(description=f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
     job.delete()
     db.session.delete(job)
     db.session.commit()
     return "", HTTPStatus.NO_CONTENT
 
 
-@gmx_bp.route("/<path:tpr_name>/log", methods=["GET"])
+@gmx_bp.route("/<path:simulation_path>/log", methods=["GET"])
 @handle_exceptions()
-def get_gmx_job_log(experiment_id: str, tpr_name: str) -> Response:
+def get_gmx_job_log(experiment_id: str, simulation_path: str) -> Response:
     """
     Get log output for a GROMACS job.
 
     Returns:
         Response: JSON response with the requested log content.
     """
-    job: GromacsJob = GromacsJob.query.filter_by(experiment_id=experiment_id, tpr_name=tpr_name).first_or_404(
-        description=f"GROMACS job for {tpr_name} in experiment {experiment_id} not found"
-    )
+    job: GromacsJob = GromacsJob.query.filter_by(
+        experiment_id=experiment_id, simulation_path=simulation_path
+    ).first_or_404(description=f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
 
     log_type = request.args.get("type", "gmx").lower()
     tail_lines = request.args.get("tail", "10000")

@@ -39,8 +39,8 @@ def test_get_core_v1_loads_config_once(mocker: MockerFixture) -> None:
     from clients import k8s  # noqa: PLC0415
 
     k8s.reset_k8s_clients_for_tests()
-    load_config = mocker.patch("clients.k8s.config.load_incluster_config")
-    core_api = mocker.patch("clients.k8s.CoreV1Api")
+    load_config = mocker.patch("kubernetes.config.load_incluster_config")
+    core_api = mocker.patch("kubernetes.client.CoreV1Api")
 
     first = k8s.get_core_v1()
     second = k8s.get_core_v1()
@@ -55,8 +55,8 @@ def test_get_batch_v1_loads_config_once(mocker: MockerFixture) -> None:
     from clients import k8s  # noqa: PLC0415
 
     k8s.reset_k8s_clients_for_tests()
-    load_config = mocker.patch("clients.k8s.config.load_incluster_config")
-    batch_api = mocker.patch("clients.k8s.BatchV1Api")
+    load_config = mocker.patch("kubernetes.config.load_incluster_config")
+    batch_api = mocker.patch("kubernetes.client.BatchV1Api")
 
     first = k8s.get_batch_v1()
     second = k8s.get_batch_v1()

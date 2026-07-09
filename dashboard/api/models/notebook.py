@@ -8,7 +8,6 @@ from clients.k8s import parse_cpu, parse_memory
 from config import GPU_TYPE, MAX_NOTEBOOKS, NAMESPACE, NOTEBOOK_RESOURCES, PREFIX
 from enums import NotebookTier, PodStatus
 from extensions import db
-from kubernetes.client.rest import ApiException
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.exceptions import BadRequest, Conflict, Forbidden, InternalServerError
 
@@ -144,7 +143,7 @@ class Notebook(db.Model):  # type: ignore
                 gpu=self.gpu,
                 tier=tier,
             )
-        except ApiException as e:
+        except k8s.ApiException as e:
             if e.status == HTTPStatus.FORBIDDEN:
                 logger.debug("Quota exceeded when creating notebook pod.", exc_info=True)
                 raise Forbidden(description="Resource quota exceeded. Please stop other notebooks.")

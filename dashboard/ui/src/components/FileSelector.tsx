@@ -27,10 +27,11 @@ export interface FileSelectorProps {
   onFileSelected: (file: FileOption | null) => void
   className?: string
   ignoreFiles?: string[]
+  helperText?: string
 }
 
 const FileSelector = (props: FileSelectorProps) => {
-  const { experimentId, ext, selectedPath, onFileSelected, title, className, ignoreFiles = [] } = props
+  const { experimentId, ext, selectedPath, onFileSelected, title, className, ignoreFiles = [], helperText } = props
   const { data: availableFiles = [], isSuccess } = useFiles(experimentId, ext)
 
   const filteredFiles = useMemo(
@@ -83,6 +84,7 @@ const FileSelector = (props: FileSelectorProps) => {
           ))}
         </SelectContent>
       </Select>
+      {helperText && <p className="text-muted-foreground mt-1 text-xs">{helperText}</p>}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-# API container - Development version with hot reload and debug mode
+# API container - Development version matching prod gunicorn entrypoint
 
 FROM python:3.12-slim
 
@@ -36,4 +36,4 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
     CMD curl --fail http://localhost:5000/health || exit 1
 
-CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5000", "--reload"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "--threads", "2", "--access-logfile", "-", "--error-logfile", "-", "app:create_app()"]

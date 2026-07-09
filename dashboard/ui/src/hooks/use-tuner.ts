@@ -12,11 +12,11 @@ export function useTunerStatuses(experimentId: string) {
   })
 }
 
-export function useTunerStatus(experimentId: string, tprName: string) {
+export function useTunerStatus(experimentId: string, simulationPath: string, enabled = true) {
   return useQuery<TunerJob>({
-    queryKey: ["experiment", experimentId, "tuner", tprName],
-    queryFn: () => api.get(`/experiments/${experimentId}/tuner/${tprName}`).then((r) => r.data),
-    enabled: !!experimentId && !!tprName,
+    queryKey: ["experiment", experimentId, "tuner", simulationPath],
+    queryFn: () => api.get(`/experiments/${experimentId}/tuner/${simulationPath}`).then((r) => r.data),
+    enabled: enabled && !!experimentId && !!simulationPath,
     meta: { suppressError: true },
     refetchInterval: (query) => {
       const data = query.state.data
@@ -34,22 +34,20 @@ export function useTunerStatus(experimentId: string, tprName: string) {
 }
 
 interface RunTunerVariables {
-  tprName: string
+  simulationPath: string
   nsteps?: number
-  extra_args?: string
 }
 
 export function useRunTuner(experimentId: string) {
   const queryClient = useQueryClient()
 
   return useMutation<TunerJob, Error, RunTunerVariables>({
-    mutationFn: ({ tprName, nsteps = 25000, extra_args = "" }) =>
-      api
-        .post(`/experiments/${experimentId}/tuner/${tprName}`, null, { params: { nsteps, extra_args } })
-        .then((r) => r.data),
+    mutationFn: ({ simulationPath, nsteps = 25000 }) =>
+      api.post(`/experiments/${experimentId}/tuner`, { simulation_path: simulationPath, nsteps }).then((r) => r.data),
     onSuccess: (job) => {
-      queryClient.setQueryData(["experiment", experimentId, "tuner", job.tpr_name], job)
+      queryClient.setQueryData(["experiment", experimentId, "tuner", job.simulation_path], job)
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner"], exact: true })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "simulations"] })
     },
     onError: (error: Error) => toast.error(error.message),
   })
@@ -59,31 +57,32 @@ export function useStopTuner(experimentId: string) {
   const queryClient = useQueryClient()
 
   return useMutation<void, Error, string>({
-    mutationFn: async (tprName) => {
-      await api.post(`/experiments/${experimentId}/tuner/${tprName}/stop`)
+    mutationFn: async (simulationPath) => {
+      await api.post(`/experiments/${experimentId}/tuner/${simulationPath}/stop`)
     },
-    onSuccess: (_data, tprName) => {
-      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner", tprName] })
+    onSuccess: (_data, simulationPath) => {
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner", simulationPath] })
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner"], exact: true })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "simulations"] })
     },
     onError: (error: Error) => toast.error(error.message),
   })
 }
 
-export function useTunerTrialLogs(experimentId: string, tprName: string, trialId: string | null) {
-  const enabled = !!experimentId && !!tprName && !!trialId
+export function useTunerTrialLogs(experimentId: string, simulationPath: string, trialId: string | null) {
+  const enabled = !!experimentId && !!simulationPath && !!trialId
 
   const stdout = useQuery<string>({
-    queryKey: ["experiment", experimentId, "tuner", tprName, "trials", trialId, "stdout"],
+    queryKey: ["experiment", experimentId, "tuner", simulationPath, "trials", trialId, "stdout"],
     queryFn: () =>
-      api.get(`/experiments/${experimentId}/tuner/${tprName}/trials/${trialId}/stdout`).then((r) => r.data),
+      api.get(`/experiments/${experimentId}/tuner/${simulationPath}/trials/${trialId}/stdout`).then((r) => r.data),
     enabled,
   })
 
   const stderr = useQuery<string>({
-    queryKey: ["experiment", experimentId, "tuner", tprName, "trials", trialId, "stderr"],
+    queryKey: ["experiment", experimentId, "tuner", simulationPath, "trials", trialId, "stderr"],
     queryFn: () =>
-      api.get(`/experiments/${experimentId}/tuner/${tprName}/trials/${trialId}/stderr`).then((r) => r.data),
+      api.get(`/experiments/${experimentId}/tuner/${simulationPath}/trials/${trialId}/stderr`).then((r) => r.data),
     enabled,
   })
 
@@ -94,37 +93,13 @@ export function useDeleteTuner(experimentId: string) {
   const queryClient = useQueryClient()
 
   return useMutation<void, Error, string>({
-    mutationFn: async (tprName) => {
-      await api.delete(`/experiments/${experimentId}/tuner/${tprName}`)
+    mutationFn: async (simulationPath) => {
+      await api.delete(`/experiments/${experimentId}/tuner/${simulationPath}`)
     },
-    onSuccess: (_data, tprName) => {
-      queryClient.removeQueries({ queryKey: ["experiment", experimentId, "tuner", tprName] })
+    onSuccess: (_data, simulationPath) => {
+      queryClient.removeQueries({ queryKey: ["experiment", experimentId, "tuner", simulationPath] })
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner"], exact: true })
-    },
-    onError: (error: Error) => toast.error(error.message),
-  })
-}
-
-interface RunAmberTunerVariables {
-  prmtopName: string
-  inpcrdName: string
-  mdinName: string
-  nsteps?: number
-}
-
-export function useRunAmberTuner(experimentId: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation<TunerJob, Error, RunAmberTunerVariables>({
-    mutationFn: ({ prmtopName, inpcrdName, mdinName, nsteps = 25000 }) =>
-      api
-        .post(`/experiments/${experimentId}/tuner/${prmtopName}`, null, {
-          params: { inpcrd_name: inpcrdName, mdin_name: mdinName, nsteps },
-        })
-        .then((r) => r.data),
-    onSuccess: (job) => {
-      queryClient.setQueryData(["experiment", experimentId, "tuner", job.tpr_name], job)
-      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "tuner"], exact: true })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "simulations"] })
     },
     onError: (error: Error) => toast.error(error.message),
   })

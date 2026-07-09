@@ -1,6 +1,6 @@
 FROM cerit.io/xkrasa/amber:26 AS amber
 
-FROM quay.io/jupyter/base-notebook:latest
+FROM quay.io/jupyter/base-notebook:2026-06-29
 
 USER root
 

@@ -14,6 +14,7 @@ import responses
 from flask import redirect, request, session
 from token_manager import MDREPO_TOKEN_EXPIRES_AT, MDREPO_TOKEN_KEY
 
+from .files import ensure_schema_files
 from .mocks import install_all_mocks
 from .seed import seed_data
 from .state import demo_state
@@ -52,6 +53,7 @@ def setup_demo_profile(app: "Flask") -> None:
 
     # Install demo MDRepo auth bypass
     _install_demo_mdrepo_auth(app)
+    _install_demo_schema_guard(app)
 
     # Configure session for local development
     app.config["SESSION_COOKIE_SECURE"] = False
@@ -105,6 +107,18 @@ def _install_demo_mdrepo_auth(app: "Flask") -> None:
         return redirect(_with_query_param(return_url, "mdrepo_auth", "success"))
 
     app.view_functions[endpoint] = _demo_mdrepo_auth
+
+
+def _install_demo_schema_guard(app: "Flask") -> None:
+    """Ensure demo schema files exist before writing simulation manifests."""
+
+    @app.before_request
+    def _ensure_demo_schema_files() -> None:
+        if request.endpoint not in {"simulations.create_simulation_route", "simulations.update_simulation_route"}:
+            return
+        experiment_id = (request.view_args or {}).get("experiment_id")
+        if isinstance(experiment_id, str):
+            ensure_schema_files(experiment_id)
 
 
 def _with_query_param(url: str, key: str, value: str) -> str:

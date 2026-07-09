@@ -22,6 +22,7 @@ from routes import (
     misc_bp,
     notebook_bp,
     notebook_config_bp,
+    simulations_bp,
     tuner_bp,
 )
 from sqlalchemy import inspect as sa_inspect
@@ -57,9 +58,12 @@ def _run_migrations() -> None:
         try:
             script.get_revision(current_rev)
         except CommandError:
-            logger.info("Unknown DB revision; restamping to migration baseline...")
-            stamp(directory=str(MIGRATIONS_DIR), revision="001", purge=True)
-            current_rev = "001"
+            logger.error(
+                "DB revision '%s' not in migration scripts (head: '%s'). Downgrade the DB first.",
+                current_rev,
+                head_rev,
+            )
+            raise RuntimeError(f"DB revision '{current_rev}' is ahead of migration scripts.")
 
     _log_duration("db-revision-check", start)
 
@@ -81,6 +85,7 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(notebook_config_bp)
     app.register_blueprint(tuner_bp)
     app.register_blueprint(gmx_bp)
+    app.register_blueprint(simulations_bp)
     app.register_blueprint(files_bp)
     app.register_blueprint(misc_bp)
     app.register_blueprint(mdrepo_bp)
@@ -94,6 +99,8 @@ def create_app() -> Flask:
         Flask: Configured Flask application instance.
     """
     startup_start = time.perf_counter()
+    configure_logging(LOG_FORMAT, LOG_LEVEL)
+    enable_loggers()
     app = Flask(__name__)
 
     db_path = DATA_DIR / "experiments.db"
@@ -113,14 +120,7 @@ def create_app() -> Flask:
     _log_duration("route-registration", reg_start)
 
     with app.app_context():
-        try:
-            _run_migrations()
-        except (Exception, SystemExit) as e:
-            logger.warning("Migration upgrade failed: %s, falling back to create_all()", e)
-            db.create_all()
-
-    configure_logging(LOG_FORMAT, LOG_LEVEL)
-    enable_loggers()
+        _run_migrations()
 
     start_du_monitor(DATA_DIR, initial_delay=DU_MONITOR_START_DELAY_SECONDS)
     _log_duration("app-factory", startup_start)

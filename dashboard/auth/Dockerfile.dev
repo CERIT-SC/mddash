@@ -1,4 +1,4 @@
-# Auth container - Development version with debug mode
+# Auth container - Development version matching prod gunicorn entrypoint
 
 FROM python:3.12-alpine
 
@@ -28,4 +28,4 @@ EXPOSE 5001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD wget --spider --quiet http://localhost:5001/health || exit 1
 
-CMD ["python", "-m", "flask", "--app=auth", "run", "--host=0.0.0.0", "--port=5001", "--reload"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5001", "--workers", "1", "--access-logfile", "-", "--error-logfile", "-", "auth:app"]

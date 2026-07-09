@@ -1,9 +1,11 @@
 import { useState } from "react"
 
-import { Loader2, Pause, Play } from "lucide-react"
+import { Loader2, Pause, Play, Trash2 } from "lucide-react"
 
+import { simulationLaunchUnavailableReason } from "@/util/simulation"
 import { type GmxTunerTrial } from "@/util/types"
-import { useRunTuner, useTunerStatus } from "@/hooks/use-tuner"
+import { useSimulation } from "@/hooks/use-simulations"
+import { useDeleteTuner, useRunTuner, useTunerStatus } from "@/hooks/use-tuner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -17,28 +19,33 @@ import TunerTable from "./TunerTable"
 const DEFAULT_NSTEPS = 25000
 
 interface TunerViewProps extends WizardStepProps {
-  tprName: string
-  stopJob: (tprName: string) => void
+  simulationPath: string
+  hasTunerJob: boolean
+  stopJob: (simulationPath: string) => void
   onStartTuner?: () => void
 }
 
 const TunerView = (props: TunerViewProps) => {
-  const { experiment, tprName, stopJob, nextStep, changeStep, onStartTuner } = props
+  const { experiment, simulationPath, hasTunerJob, stopJob, nextStep, changeStep, onStartTuner } = props
 
   const [selectedTrial, setSelectedTrial] = useState<GmxTunerTrial | null>(null)
   const [nsteps, setNsteps] = useState<number | "">(DEFAULT_NSTEPS)
   const [confirmStopDialog, setConfirmStopDialog] = useState(false)
+  const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false)
+
+  const deleteTuner = useDeleteTuner(experiment.id)
 
   const runTuner = useRunTuner(experiment.id)
+  const { data: simulation } = useSimulation(experiment.id, simulationPath)
 
   const tunerStarted_condition = (tuner: ReturnType<typeof useTunerStatus>["data"]) =>
     !!tuner && !tuner.error_message && tuner.tuner_status !== "ERROR"
 
-  const { data: tuner, isLoading } = useTunerStatus(experiment.id, tprName)
+  const { data: tuner, isLoading } = useTunerStatus(experiment.id, simulationPath, hasTunerJob)
 
   const handleRunTuner = () => {
     const actualNsteps = nsteps === "" ? DEFAULT_NSTEPS : nsteps
-    runTuner.mutate({ tprName, nsteps: actualNsteps }, { onSuccess: () => onStartTuner?.() })
+    runTuner.mutate({ simulationPath, nsteps: actualNsteps }, { onSuccess: () => onStartTuner?.() })
   }
 
   const goToRunStep = () => {
@@ -56,9 +63,8 @@ const TunerView = (props: TunerViewProps) => {
 
   const displayStarted = tunerStarted_condition(tuner)
   const displayStopped = tuner?.is_stopped || false
-
-  // Cast trials to GmxTunerTrial[] since we know this is GMX engine
   const trials = (tuner?.trials || []) as GmxTunerTrial[]
+  const unavailableReason = simulationLaunchUnavailableReason(simulation ?? null, experiment.engine)
 
   return (
     <>
@@ -70,7 +76,7 @@ const TunerView = (props: TunerViewProps) => {
             setSelectedTrial={setSelectedTrial}
             tunerStopped={displayStopped}
             experimentId={experiment.id}
-            tprName={tprName}
+            simulationPath={simulationPath}
           />
 
           {!displayStopped && (
@@ -82,6 +88,19 @@ const TunerView = (props: TunerViewProps) => {
               >
                 <Pause className="mr-1 h-4 w-4" />
                 Stop
+              </Button>
+            </div>
+          )}
+
+          {displayStopped && (
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => setConfirmDeleteDialog(true)}
+              >
+                <Trash2 className="mr-1 h-4 w-4" />
+                Delete job
               </Button>
             </div>
           )}
@@ -98,14 +117,14 @@ const TunerView = (props: TunerViewProps) => {
           )}
         </div>
       ) : (
-        <div className="flex h-full flex-col items-center justify-center gap-4">
+        <div className="flex flex-col items-center justify-center gap-4">
           {tuner?.error_message && (
             <div className="border-destructive bg-destructive/10 text-destructive w-full rounded-md border p-3 text-sm">
               <strong>Error:</strong> {tuner.error_message}
             </div>
           )}
 
-          {!tuner?.error_message && <h3 className="text-lg font-semibold">Configure tuning job for {tprName}</h3>}
+          {!tuner?.error_message && <h3 className="text-lg font-semibold">Configure tuning job</h3>}
 
           {(!tuner || tuner.error_message) && (
             <Card className="w-fit">
@@ -122,7 +141,12 @@ const TunerView = (props: TunerViewProps) => {
                     }}
                   />
                 </div>
-                <Button variant="default" onClick={handleRunTuner} disabled={runTuner.isPending} className="w-48">
+                <Button
+                  variant="default"
+                  onClick={handleRunTuner}
+                  disabled={runTuner.isPending || !!unavailableReason}
+                  className="w-48"
+                >
                   {runTuner.isPending ? (
                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                   ) : (
@@ -130,6 +154,9 @@ const TunerView = (props: TunerViewProps) => {
                   )}
                   Start tune job
                 </Button>
+                {unavailableReason && (
+                  <p className="text-muted-foreground max-w-72 text-center text-xs">{unavailableReason}</p>
+                )}
               </CardContent>
             </Card>
           )}
@@ -141,9 +168,19 @@ const TunerView = (props: TunerViewProps) => {
         setOpen={setConfirmStopDialog}
         confirmColor="warning"
         onConfirm={async () => {
-          await stopJob(tprName)
+          await stopJob(simulationPath)
         }}
         message="Are you sure you want to stop the tuning job? Results collected so far will be saved, but any trials still in progress will be lost. This cannot be undone."
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteDialog}
+        setOpen={setConfirmDeleteDialog}
+        confirmColor="destructive"
+        onConfirm={async () => {
+          await deleteTuner.mutateAsync(simulationPath)
+        }}
+        message="Delete this tuning job? This cannot be undone."
       />
     </>
   )

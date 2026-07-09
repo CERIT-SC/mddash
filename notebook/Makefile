@@ -7,7 +7,7 @@ ENV ?= dev
 ifeq ($(ENV),dev)
   IMAGE_TAG ?= dev
 else
-  IMAGE_TAG ?= $(shell git rev-parse --short HEAD)
+  IMAGE_TAG ?= sha-$(shell git rev-parse --short HEAD)
 endif
 
 #config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)

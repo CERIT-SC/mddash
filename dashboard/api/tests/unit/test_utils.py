@@ -39,8 +39,7 @@ class TestGenerateId:
     def test_randomness(self) -> None:
         """Generated IDs should be random (not always the same)."""
         ids = {generate_id() for _ in range(RANDOM_SAMPLES_COUNT)}
-        # With 26^5 possible IDs, 100 samples should all be unique
-        assert len(ids) == RANDOM_SAMPLES_COUNT
+        assert len(ids) > 1  # collisions possible (birthday problem), don't assert uniqueness
 
 
 class TestGetUniqueId:

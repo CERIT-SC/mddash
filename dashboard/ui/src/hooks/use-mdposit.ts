@@ -18,16 +18,12 @@ export type MdPositHandoffResponse = {
   vre_lite_url: string | null
 }
 
-export type MdPositSelectedFiles = {
-  structure: string
-  topology: string
-  trajectory: string
-}
-
 export function useMdPositPublishData(experimentId: string) {
-  return useMutation<MdPositHandoffResponse, Error, MdPositSelectedFiles>({
-    mutationFn: (files) =>
-      api.post(`/experiments/${experimentId}/publish`, { target: "mdposit", files }).then((r) => r.data),
+  return useMutation<MdPositHandoffResponse, Error, string>({
+    mutationFn: (simulationPath) =>
+      api
+        .post(`/experiments/${experimentId}/publish`, { target: "mdposit", simulation_path: simulationPath })
+        .then((r) => r.data),
     onError: (error: Error) => toast.error(error.message),
   })
 }

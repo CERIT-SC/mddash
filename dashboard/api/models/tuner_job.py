@@ -1,16 +1,16 @@
 import logging
 from datetime import UTC, datetime
 from http import HTTPStatus
-from pathlib import Path
 
 from cache import tuner_last_known_status, tuner_status_cache
 from clients import tuner
-from config import DATA_DIR
 from enums import Engine, JobStatus
 from extensions import db
 from requests import HTTPError
 from sqlalchemy import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from models.simulation import Simulation
 
 from .experiment import Experiment
 
@@ -26,12 +26,8 @@ class TunerJob(db.Model):  # type: ignore
     id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
     # ID of the experiment this job belongs to
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
-    # name of the TPR file (GMX) or prmtop file (AMBER) being tuned
-    tpr_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
-    # name of the inpcrd file (AMBER only)
-    inpcrd_name: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
-    # name of the mdin file (AMBER only)
-    mdin_name: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
+    # Experiment-relative path to the .simulation.json manifest (job identity)
+    simulation_path: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # error message if job creation failed
     error_message: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
     # creation time
@@ -123,58 +119,55 @@ class TunerJob(db.Model):  # type: ignore
         return tuner_last_known_status.get(cache_key, {})
 
     @classmethod
-    def start(
-        cls,
-        experiment: Experiment,
-        tpr_path: Path,
-        inpcrd_path: Path | None = None,
-        mdin_path: Path | None = None,
-        nsteps: int = 25000,
-        extra_args: str = "",
-    ) -> "TunerJob":
+    def start(cls, experiment: Experiment, simulation_path: str, nsteps: int = 25000) -> "TunerJob":
         """
-        Start a tuner job for the given experiment and input files.
+        Start a tuner job for the given experiment and simulation manifest.
+
+        Launch files and ``extra_args`` are derived from the simulation JSON and
+        passed to the tuner client; they are not persisted in the dashboard DB.
 
         Args:
             experiment: The parent experiment.
-            tpr_path: Path to the TPR file (GMX) or prmtop file (AMBER).
-            inpcrd_path: Path to the inpcrd file (AMBER only).
-            mdin_path: Path to the mdin file (AMBER only).
+            simulation_path: Experiment-relative path to the ``.simulation.json``.
             nsteps: Number of steps for tuning runs (default: 25000, which is 50 ps).
-            extra_args: Additional mdrun/pmemd arguments (default: "").
 
         Returns:
             The created TunerJob instance.
 
         Raises:
-            ValueError: If AMBER engine is selected but required files are missing.
+            ValueError: If the engine is unknown.
         """
+        simulation = Simulation.get(experiment.id, simulation_path)
+        simulation.require_files(
+            ["run_input"] if experiment.engine == Engine.GMX else ["topology", "coordinates", "control"]
+        )
+        extra_args = simulation.extra_args
+
         match experiment.engine:
             case Engine.GMX:
+                tpr_path = simulation.resolve_role("run_input")
                 response = tuner.gmx_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
             case Engine.AMBER:
-                if not inpcrd_path or not mdin_path:
-                    raise ValueError("AMBER engine requires inpcrd_path and mdin_path")
-                response = tuner.amber_submit(tpr_path, inpcrd_path, mdin_path, nsteps=nsteps, extra_args=extra_args)
+                prmtop_path = simulation.resolve_role("topology")
+                inpcrd_path = simulation.resolve_role("coordinates")
+                mdin_path = simulation.resolve_role("control")
+                response = tuner.amber_submit(prmtop_path, inpcrd_path, mdin_path, nsteps=nsteps, extra_args=extra_args)
             case _:
                 raise ValueError(f"Unknown engine: {experiment.engine}")
-
-        tpr_rel_path = str(tpr_path.relative_to(DATA_DIR / experiment.id))
-        inpcrd_rel_path = str(inpcrd_path.relative_to(DATA_DIR / experiment.id)) if inpcrd_path else None
-        mdin_rel_path = str(mdin_path.relative_to(DATA_DIR / experiment.id)) if mdin_path else None
 
         job: TunerJob = cls(
             id=response["id"],
             experiment=experiment,
-            tpr_name=tpr_rel_path,
-            inpcrd_name=inpcrd_rel_path,
-            mdin_name=mdin_rel_path,
+            simulation_path=simulation_path,
         )
         db.session.add(job)
         db.session.commit()
 
+        simulation.mark_readonly()
+
         logger.info(
-            f"Tuner job {response['id']} started for experiment {experiment.id} with engine {experiment.engine}"
+            f"Tuner job {response['id']} started for experiment {experiment.id} "
+            f"with engine {experiment.engine} (simulation {simulation_path})"
         )
         return job
 
