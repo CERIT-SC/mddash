@@ -1,3 +1,4 @@
+- .rclone-bisync/**
 - #*#
 - *.swp
 - *.tmp
