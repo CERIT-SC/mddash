@@ -74,9 +74,7 @@ def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
 
     experiment = Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found")
     simulation = Simulation.get(experiment_id, simulation_path)
-    if not simulation.valid:
-        errors = simulation.errors or ["Simulation is invalid."]
-        raise BadRequest(f"Cannot analyze invalid simulation: {'; '.join(errors)}")
+    simulation.require_files(["trajectory"])
 
     trajectory_path = simulation.resolve_role("trajectory")
 

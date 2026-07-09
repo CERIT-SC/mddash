@@ -222,8 +222,8 @@ class TestValidation:
 class TestLocking:
     """Lock inference from file permissions and job references."""
 
-    def test_readonly_file_without_jobs_not_locked(self, app: Flask, tmp_path: Path) -> None:
-        """A read-only file with no jobs is not locked — file permissions alone don't lock."""
+    def test_readonly_file_without_jobs_is_locked(self, app: Flask, tmp_path: Path) -> None:
+        """A read-only file with no jobs is locked by file permissions."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
@@ -238,7 +238,7 @@ class TestLocking:
             sim = Simulation.get(exp_id, sim_path)
             assert not sim.locked
             sim.mark_readonly()
-            assert not sim.locked
+            assert sim.locked
 
     def test_writable_unlocked_file_not_locked(self, app: Flask, tmp_path: Path) -> None:
         """A writable file with no jobs is not locked."""

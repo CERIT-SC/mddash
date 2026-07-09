@@ -430,7 +430,7 @@ class Experiment(db.Model):  # type: ignore
         from .simulation import Simulation  # noqa: PLC0415
 
         for f in Simulation.list_files(self.id):
-            sim = Simulation.get(self.id, f.path)
+            sim = Simulation._from_file(self.id, f.path)  # noqa: SLF001
             if sim.valid and sim.engine == self.engine.value:
                 return True
         return False
@@ -621,9 +621,7 @@ class Experiment(db.Model):  # type: ignore
         from .simulation import Simulation  # noqa: PLC0415
 
         simulation = Simulation.get(self.id, simulation_path)
-        if not simulation.valid:
-            errors = simulation.errors or ["Simulation is invalid."]
-            raise BadRequest(description=f"Cannot publish invalid simulation: {'; '.join(errors)}")
+        simulation.require_files(["reference_structure", "run_input", "trajectory"])
 
         exp_dir = DATA_DIR / self.id
         if not exp_dir.exists():

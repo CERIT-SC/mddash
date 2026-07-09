@@ -159,7 +159,7 @@ graph TD
 
 ### Wizard Step Entry Points
 - `src/components/Wizard/SetupStep/SetupStep.tsx` - Setup, notebook spawning, and simulation manifest editing
-- `src/components/Wizard/SimulationSelector.tsx` - Shared simulation list selector (used by all wizard steps)
+- `src/components/Wizard/SimulationTabs.tsx` - Shared simulation list selector (used by all wizard steps)
 - `src/components/Wizard/SimulationPreview.tsx` - Read-only simulation manifest preview with validation status
 - `src/components/Wizard/SimulationEditor.tsx` - Create/edit simulation manifests in the setup step
 - `src/components/Wizard/TuneStep/TuneStep.tsx` - Engine-specific parameter tuning workflow for GROMACS or AMBER

@@ -469,7 +469,7 @@ class TestMdpositPublishFileValidation:
             app.app_context(),
         ):
             exp = Experiment.query.get("pubsh")
-            with pytest.raises(BadRequest, match="invalid simulation"):
+            with pytest.raises(BadRequest, match=r"Invalid simulation"):
                 exp.publish(target="mdposit", simulation_path=sim_path)
 
     def test_nonexistent_selected_file(self, app: Flask, tmp_path: Path) -> None:
@@ -490,7 +490,7 @@ class TestMdpositPublishFileValidation:
             app.app_context(),
         ):
             exp = Experiment.query.get("pubsh")
-            with pytest.raises(BadRequest, match="does not exist"):
+            with pytest.raises(BadRequest, match="Missing files"):
                 exp.publish(target="mdposit", simulation_path=sim_path)
 
     def test_unsupported_extension(self, app: Flask, tmp_path: Path) -> None:

@@ -150,7 +150,7 @@ class Simulation:  # noqa: PLR0904
 
     @property
     def locked(self) -> bool:
-        """Whether the simulation is locked (active tuner/simulation job references it)."""
+        """Whether the simulation is locked (read-only file or active job references)."""
         return self.is_locked(self.experiment_id, self.simulation_path)
 
     def to_dict(self) -> dict:
@@ -179,6 +179,9 @@ class Simulation:  # noqa: PLR0904
         """
         Resolve a file role to an absolute Path.
 
+        Roles are resolved relative to the experiment directory, consistent with
+        ``resolved_files`` and the manifest writer convention.
+
         Returns:
             Absolute Path to the role file.
 
@@ -188,9 +191,10 @@ class Simulation:  # noqa: PLR0904
         rel = self.files.get(role)
         if not isinstance(rel, str) or not rel:
             raise BadRequest(description=f"Simulation is missing file role '{role}'.")
-        resolved = (self._file.parent / rel).resolve()
+        exp_dir = (DATA_DIR / self.experiment_id).resolve()
+        resolved = (exp_dir / rel).resolve()
         try:
-            resolved.relative_to((DATA_DIR / self.experiment_id).resolve())
+            resolved.relative_to(exp_dir)
         except ValueError as exc:
             raise BadRequest(description=f"File role '{role}' escapes the experiment directory.") from exc
         return resolved
@@ -298,14 +302,21 @@ class Simulation:  # noqa: PLR0904
     @staticmethod
     def is_locked(experiment_id: str, simulation_path: str) -> bool:
         """
-        Return whether any tuner or production job references this simulation.
+        Return whether the simulation is locked.
+
+        A simulation is locked when its manifest file is read-only or when any
+        current tuner/production job references its ``simulation_path``.
 
         Returns:
-            True if a job references the simulation.
+            True if the simulation is locked.
         """
         # avoid circular dependency
         from .simulation_job import SimulationJob  # noqa: PLC0415
         from .tuner_job import TunerJob  # noqa: PLC0415
+
+        simulation_file = DATA_DIR / experiment_id / simulation_path
+        if not os.access(simulation_file, os.W_OK):
+            return True
 
         return bool(
             TunerJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first()
@@ -403,6 +414,7 @@ class Simulation:  # noqa: PLR0904
         Removes TunerJob, SimulationJob, and AnalysisJob records (and their K8s resources), then removes the manifest file. Data files are left untouched.
 
         Raises:
+            BadRequest: If the path is unsafe or does not end with '.simulation.json'.
             NotFound: If the manifest file does not exist.
         """
         # avoid circular dependency
@@ -411,6 +423,9 @@ class Simulation:  # noqa: PLR0904
         from .tuner_job import TunerJob  # noqa: PLC0415
 
         simulation_path = Path(simulation_path).as_posix()
+        check_path(simulation_path, DATA_DIR / experiment_id)
+        if not simulation_path.endswith(SIMULATION_SUFFIX):
+            raise BadRequest(description=f"Path must end with '{SIMULATION_SUFFIX}'.")
         simulation_file = DATA_DIR / experiment_id / simulation_path
         if not simulation_file.is_file():
             raise NotFound(description=f"Simulation '{simulation_path}' not found.")
@@ -420,6 +435,7 @@ class Simulation:  # noqa: PLR0904
             for job in jobs:
                 job.delete()
                 db.session.delete(job)
+        db.session.commit()
 
         try:
             if not os.access(simulation_file, os.W_OK):
@@ -437,11 +453,15 @@ class Simulation:  # noqa: PLR0904
             The updated Simulation instance.
 
         Raises:
+            BadRequest: If the path is unsafe, does not end with '.simulation.json',
+                is job-locked, or content is invalid.
             NotFound: If the file does not exist.
-            BadRequest: If job-locked or content is invalid.
         """
         experiment = Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found")
         simulation_path = Path(simulation_path).as_posix()
+        check_path(simulation_path, DATA_DIR / experiment_id)
+        if not simulation_path.endswith(SIMULATION_SUFFIX):
+            raise BadRequest(description=f"Path must end with '{SIMULATION_SUFFIX}'.")
         simulation_file = DATA_DIR / experiment_id / simulation_path
         if not simulation_file.is_file():
             raise NotFound(description=f"Simulation '{simulation_path}' not found.")
