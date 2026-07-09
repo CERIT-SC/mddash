@@ -39,10 +39,7 @@ class TestGenerateId:
     def test_randomness(self) -> None:
         """Generated IDs should be random (not always the same)."""
         ids = {generate_id() for _ in range(RANDOM_SAMPLES_COUNT)}
-        # The generator must produce varied output. Asserting all 100 draws are
-        # unique is a birthday-problem claim (P(collision) ≈ 0.04% per run over
-        # 26^5 IDs) that fails intermittently; instead verify genuine variety.
-        assert len(ids) > 1
+        assert len(ids) > 1  # collisions possible (birthday problem), don't assert uniqueness
 
 
 class TestGetUniqueId:
