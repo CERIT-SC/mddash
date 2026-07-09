@@ -1,9 +1,11 @@
 import { useState } from "react"
 
-import { Loader2, Pause, Play } from "lucide-react"
+import { Loader2, Pause, Play, Trash2 } from "lucide-react"
 
+import { simulationLaunchUnavailableReason } from "@/util/simulation"
 import { type AmberTunerTrial } from "@/util/types"
-import { useRunAmberTuner, useTunerStatus } from "@/hooks/use-tuner"
+import { useSimulation } from "@/hooks/use-simulations"
+import { useDeleteTuner, useRunTuner, useTunerStatus } from "@/hooks/use-tuner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -17,33 +19,33 @@ import AmberTunerTable from "./AmberTunerTable"
 const DEFAULT_NSTEPS = 25000
 
 interface AmberTunerViewProps extends WizardStepProps {
-  prmtopName: string
-  inpcrdName: string
-  mdinName: string
-  stopJob: (prmtopName: string) => void
+  simulationPath: string
+  hasTunerJob: boolean
+  stopJob: (simulationPath: string) => void
   onStartTuner?: () => void
 }
 
 const AmberTunerView = (props: AmberTunerViewProps) => {
-  const { experiment, prmtopName, inpcrdName, mdinName, stopJob, nextStep, changeStep, onStartTuner } = props
+  const { experiment, simulationPath, hasTunerJob, stopJob, nextStep, changeStep, onStartTuner } = props
 
   const [selectedTrial, setSelectedTrial] = useState<AmberTunerTrial | null>(null)
   const [nsteps, setNsteps] = useState<number | "">(DEFAULT_NSTEPS)
   const [confirmStopDialog, setConfirmStopDialog] = useState(false)
+  const [confirmDeleteDialog, setConfirmDeleteDialog] = useState(false)
 
-  const runAmberTuner = useRunAmberTuner(experiment.id)
+  const deleteTuner = useDeleteTuner(experiment.id)
+
+  const runTuner = useRunTuner(experiment.id)
+  const { data: simulation } = useSimulation(experiment.id, simulationPath)
 
   const tunerStarted_condition = (tuner: ReturnType<typeof useTunerStatus>["data"]) =>
     !!tuner && !tuner.error_message && tuner.tuner_status !== "ERROR"
 
-  const { data: tuner, isLoading } = useTunerStatus(experiment.id, prmtopName)
+  const { data: tuner, isLoading } = useTunerStatus(experiment.id, simulationPath, hasTunerJob)
 
   const handleRunTuner = () => {
     const actualNsteps = nsteps === "" ? DEFAULT_NSTEPS : nsteps
-    runAmberTuner.mutate(
-      { prmtopName, inpcrdName, mdinName, nsteps: actualNsteps },
-      { onSuccess: () => onStartTuner?.() }
-    )
+    runTuner.mutate({ simulationPath, nsteps: actualNsteps }, { onSuccess: () => onStartTuner?.() })
   }
 
   const goToRunStep = () => {
@@ -62,6 +64,7 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
   const displayStarted = tunerStarted_condition(tuner)
   const displayStopped = tuner?.is_stopped || false
   const trials = (tuner?.trials || []) as AmberTunerTrial[]
+  const unavailableReason = simulationLaunchUnavailableReason(simulation ?? null, experiment.engine)
 
   return (
     <>
@@ -73,7 +76,7 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
             setSelectedTrial={setSelectedTrial}
             tunerStopped={displayStopped}
             experimentId={experiment.id}
-            prmtopName={prmtopName}
+            simulationPath={simulationPath}
           />
 
           {!displayStopped && (
@@ -89,14 +92,25 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
             </div>
           )}
 
+          {displayStopped && (
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                onClick={() => setConfirmDeleteDialog(true)}
+              >
+                <Trash2 className="mr-1 h-4 w-4" />
+                Delete job
+              </Button>
+            </div>
+          )}
+
           {selectedTrial && (
             <AmberStartForm
               experiment={experiment}
               nextStep={nextStep}
               changeStep={changeStep}
-              prmtopName={prmtopName}
-              inpcrdName={inpcrdName}
-              mdinName={mdinName}
+              simulationPath={simulationPath}
               onStartJob={goToRunStep}
               binary={selectedTrial.binary}
               ewald={selectedTrial.ewald}
@@ -106,14 +120,14 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
           )}
         </div>
       ) : (
-        <div className="flex h-full flex-col items-center justify-center gap-4">
+        <div className="flex flex-col items-center justify-center gap-4">
           {tuner?.error_message && (
             <div className="border-destructive bg-destructive/10 text-destructive w-full rounded-md border p-3 text-sm">
               <strong>Error:</strong> {tuner.error_message}
             </div>
           )}
 
-          {!tuner?.error_message && <h3 className="text-lg font-semibold">Configure tuning job for {prmtopName}</h3>}
+          {!tuner?.error_message && <h3 className="text-lg font-semibold">Configure tuning job</h3>}
 
           {(!tuner || tuner.error_message) && (
             <Card className="w-fit">
@@ -130,14 +144,22 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
                     }}
                   />
                 </div>
-                <Button variant="default" onClick={handleRunTuner} disabled={runAmberTuner.isPending} className="w-48">
-                  {runAmberTuner.isPending ? (
+                <Button
+                  variant="default"
+                  onClick={handleRunTuner}
+                  disabled={runTuner.isPending || !!unavailableReason}
+                  className="w-48"
+                >
+                  {runTuner.isPending ? (
                     <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                   ) : (
                     <Play className="mr-1 h-4 w-4" />
                   )}
                   Start tune job
                 </Button>
+                {unavailableReason && (
+                  <p className="text-muted-foreground max-w-72 text-center text-xs">{unavailableReason}</p>
+                )}
               </CardContent>
             </Card>
           )}
@@ -149,9 +171,19 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
         setOpen={setConfirmStopDialog}
         confirmColor="warning"
         onConfirm={async () => {
-          await stopJob(prmtopName)
+          await stopJob(simulationPath)
         }}
         message="Are you sure you want to stop the tuning job? Results collected so far will be saved, but any trials still in progress will be lost. This cannot be undone."
+      />
+
+      <ConfirmDialog
+        open={confirmDeleteDialog}
+        setOpen={setConfirmDeleteDialog}
+        confirmColor="destructive"
+        onConfirm={async () => {
+          await deleteTuner.mutateAsync(simulationPath)
+        }}
+        message="Delete this tuning job? This cannot be undone."
       />
     </>
   )

@@ -110,4 +110,16 @@
   *::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--muted-foreground) / 0.6);
   }
+
+  .simulation-tabs-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.45) transparent;
+  }
+  .simulation-tabs-scroll::-webkit-scrollbar {
+    height: 8px;
+  }
+  .simulation-tabs-scroll::-webkit-scrollbar-thumb {
+    border-width: 2px;
+    border-radius: 999px;
+  }
 }

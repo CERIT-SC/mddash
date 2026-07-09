@@ -4,11 +4,14 @@ import { toast } from "sonner"
 import { api } from "@/lib/http"
 import type { AnalysisJob, AnalysisPreprocessingMode } from "@/util/analysis-types"
 
-export function useAnalysisJobs(experimentId: string) {
+export function useAnalysisJobs(experimentId: string, simulationPath: string | null) {
   return useQuery<AnalysisJob[]>({
-    queryKey: ["experiment", experimentId, "analysis"],
-    queryFn: () => api.get(`/experiments/${experimentId}/analysis`).then((r) => r.data),
-    enabled: !!experimentId,
+    queryKey: ["experiment", experimentId, "analysis", simulationPath],
+    queryFn: () =>
+      api
+        .get(`/experiments/${experimentId}/analysis`, { params: { simulation_path: simulationPath } })
+        .then((r) => r.data),
+    enabled: !!experimentId && !!simulationPath,
     refetchInterval: (query) => {
       const jobs = query.state.data
       if (!jobs?.length) return false
@@ -20,10 +23,8 @@ export function useAnalysisJobs(experimentId: string) {
 
 interface SubmitAnalysisVariables {
   analysis: string
-  structure_file?: string
-  trajectory_file: string
+  simulation_path: string
   preprocessing_mode: AnalysisPreprocessingMode
-  topology_file?: string
 }
 
 export function useSubmitAnalysis(experimentId: string) {
@@ -53,11 +54,16 @@ export function useDeleteAnalysis(experimentId: string) {
   })
 }
 
-export function useAnalysisData(experimentId: string, analysisName: string | null) {
+export function useAnalysisData(experimentId: string, simulationPath: string, analysisName: string | null) {
   return useQuery<unknown>({
-    queryKey: ["experiment", experimentId, "analysis-results", analysisName],
-    queryFn: () => api.get(`/experiments/${experimentId}/analysis/results/${analysisName}`).then((r) => r.data),
-    enabled: !!experimentId && !!analysisName,
+    queryKey: ["experiment", experimentId, "analysis-results", simulationPath, analysisName],
+    queryFn: () =>
+      api
+        .get(`/experiments/${experimentId}/analysis/results/${analysisName}`, {
+          params: { simulation_path: simulationPath },
+        })
+        .then((r) => r.data),
+    enabled: !!experimentId && !!simulationPath && !!analysisName,
   })
 }
 
@@ -76,19 +82,32 @@ export function useAnalysisLogs(experimentId: string, jobId: string | null, poll
   })
 }
 
-export function useAvailableAnalysisResults(experimentId: string) {
+export function useAvailableAnalysisResults(experimentId: string, simulationPath: string | null) {
   return useQuery<string[]>({
-    queryKey: ["experiment", experimentId, "analysis-results"],
-    queryFn: () => api.get(`/experiments/${experimentId}/analysis/results`).then((r) => r.data),
-    enabled: !!experimentId,
+    queryKey: ["experiment", experimentId, "analysis-results", simulationPath],
+    queryFn: () =>
+      api
+        .get(`/experiments/${experimentId}/analysis/results`, {
+          params: { simulation_path: simulationPath },
+        })
+        .then((r) => r.data),
+    enabled: !!experimentId && !!simulationPath,
   })
 }
 
-export function useAnalysisVariants(experimentId: string, baseResultName: string | null) {
+export function useAnalysisVariants(
+  experimentId: string,
+  simulationPath: string | null,
+  baseResultName: string | null
+) {
   return useQuery<AnalysisVariant[]>({
-    queryKey: ["experiment", experimentId, "analysis-variants", baseResultName],
+    queryKey: ["experiment", experimentId, "analysis-variants", simulationPath, baseResultName],
     queryFn: () =>
-      api.get(`/experiments/${experimentId}/analysis/results/${baseResultName}/variants`).then((r) => r.data),
-    enabled: !!experimentId && !!baseResultName,
+      api
+        .get(`/experiments/${experimentId}/analysis/results/${baseResultName}/variants`, {
+          params: { simulation_path: simulationPath },
+        })
+        .then((r) => r.data),
+    enabled: !!experimentId && !!simulationPath && !!baseResultName,
   })
 }

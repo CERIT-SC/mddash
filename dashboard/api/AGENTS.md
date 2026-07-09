@@ -7,7 +7,7 @@ Flask-based REST API that orchestrates molecular dynamics experiments across Kub
 ## Architecture & Patterns
 
 ### Design Patterns
-- **Blueprint Pattern**: Routes organized into modular Flask blueprints (`experiments_bp`, `notebook_bp`, `notebook_config_bp`, `tuner_bp`, `gmx_bp`, `amber_bp`, `analysis_bp`, `files_bp`, `misc_bp`, `mdrepo_bp`)
+- **Blueprint Pattern**: Routes organized into modular Flask blueprints (`experiments_bp`, `notebook_bp`, `notebook_config_bp`, `tuner_bp`, `gmx_bp`, `amber_bp`, `simulations_bp`, `analysis_bp`, `files_bp`, `misc_bp`, `mdrepo_bp`)
 - **Active Record Pattern**: SQLAlchemy models encapsulate business logic (e.g., `Experiment.from_pdb()`, `Experiment.publish()`)
 - **Schema Pattern**: Marshmallow schemas for serialization with `@pre_dump` hooks for side effects
 - **Decorator Pattern**: `@handle_exceptions(rollback=True)` for consistent error handling and transaction management
@@ -67,6 +67,14 @@ graph TD
 - No async framework used; threading for non-blocking operations
 
 ## The "Gotchas"
+
+### Simulation Manifests (`.simulation.json`)
+- **Single source of truth**: Each `.simulation.json` file declares file roles (`topology`, `structure`, `trajectory` for GMX; `topology`, `coordinates`, `control`, `trajectory` for AMBER) and `extra_args`. Job models no longer store these — they reference `simulation_path`.
+- **Discovery**: `list_simulation_files()` finds `*.simulation.json` anywhere under the experiment directory (not just `production/`).
+- **Validation**: `get_simulation()` validates against the JSON Schema referenced by `$schema` (e.g. `gromacs.schema.json`). Invalid simulations are returned with errors but cannot be used by downstream workflow steps.
+- **Locking**: Inferred — a simulation is locked when its JSON file is read-only or when a tuner/production job references its `simulation_path`. `mark_simulation_readonly()` chmods the file `0444`.
+- **Schema files**: `gromacs.schema.json` and `amber.schema.json` are cloned with the notebook repo and chmod'd read-only by `Experiment.prepare_env()`.
+- **Migration 007**: Destructive — purges all existing tuner/simulation jobs and drops engine-specific file columns (`tpr_name`, `prmtop_name`, `inpcrd_name`, `mdin_name`, `extra_args`), adding `simulation_path` as the new job identity.
 
 ### Database Migrations
 - **Run on startup**: `create_app()` checks the current migration revision and skips `flask_migrate.upgrade()` when already at head; otherwise runs upgrade against `dashboard/api/migrations/versions/`
@@ -135,9 +143,10 @@ graph TD
 - `routes/experiments.py` - Experiment CRUD operations
 - `routes/notebook.py` - Jupyter notebook pod management
 - `routes/notebook.py` (`notebook_config_bp`) - Notebook resource option discovery
-- `routes/tuner.py` - GROMACS tuner job orchestration
-- `routes/gmx.py` - GROMACS simulation job management
-- `routes/amber.py` - AMBER simulation job management
+- `routes/tuner.py` - GROMACS/AMBER tuner job orchestration (keyed by `simulation_path`)
+- `routes/gmx.py` - GROMACS simulation job management (keyed by `simulation_path`)
+- `routes/amber.py` - AMBER simulation job management (keyed by `simulation_path`)
+- `routes/simulations.py` - Simulation manifest CRUD (create, list, get, edit)
 - `routes/analysis.py` - Analysis job management
 - `routes/files.py` - File listing and download
 - `routes/mdrepo.py` - MDRepo OAuth flow and callbacks
@@ -149,6 +158,7 @@ graph TD
 - `models/gromacs_job.py` - GROMACS job lifecycle
 - `models/amber_job.py` - AMBER job lifecycle
 - `models/simulation_job.py` - Shared simulation job base model
+- `models/simulation.py` - Central simulation manifest helpers (discovery, validation, locking, writing)
 - `models/analysis_job.py` - Analysis job lifecycle
 - `models/tuner_job.py` - Tuner job lifecycle
 

@@ -1,6 +1,7 @@
 import logging
 import re
 from datetime import UTC, datetime
+from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -17,6 +18,8 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from utils import tail
 from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError, NotFound, UnprocessableEntity
+
+from models.simulation import Simulation
 
 from .simulation_job import SimulationJob
 
@@ -37,43 +40,43 @@ class AmberJob(SimulationJob):
 
     id: Mapped[str] = mapped_column(ForeignKey("simulation_jobs.id"), primary_key=True)
 
-    # AMBER topology file
-    prmtop_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
-    # AMBER coordinate file
-    inpcrd_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
-    # AMBER input file
-    mdin_name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # AMBER binary type
     binary: Mapped["AmberBinary"] = mapped_column(db.Enum(AmberBinary), nullable=False)
     # Ewald summation preset
     ewald: Mapped["EwaldPreset"] = mapped_column(db.Enum(EwaldPreset))
 
+    @cached_property
+    def _files(self) -> dict[str, str]:
+        return Simulation.get(self.experiment_id, self.simulation_path).resolved_files
+
     @property
     def _mdin_path(self) -> Path:
-        """Path to the mdin input file."""
-        return DATA_DIR / self.experiment_id / self.mdin_name
+        return DATA_DIR / self.experiment_id / self._files["control"]
+
+    @property
+    def _sim_dir(self) -> Path:
+        """Experiment-relative directory containing the mdin (where the simulation runs)."""
+        return Path(self._files["control"]).parent
 
     @property
     def _mdout_log(self) -> Path:
-        """Path to the AMBER mdout file (primary structured log)."""
-        base_name = Path(self.mdin_name).stem
-        return DATA_DIR / self.experiment_id / f"{base_name}.out"
+        base_name = Path(self._files["control"]).stem
+        return DATA_DIR / self.experiment_id / self._sim_dir / f"{base_name}.out"
 
     @property
     def _mdinfo_log(self) -> Path:
-        """Path to the AMBER mdinfo file (real-time progress info)."""
-        base_name = Path(self.mdin_name).stem
-        return DATA_DIR / self.experiment_id / f"{base_name}.mdinfo"
+        base_name = Path(self._files["control"]).stem
+        return DATA_DIR / self.experiment_id / self._sim_dir / f"{base_name}.mdinfo"
 
     @property
     def _stdout_log(self) -> Path:
         """Path to the stdout log file."""
-        return DATA_DIR / self.experiment_id / f"mdrun-{self.id}.out"
+        return DATA_DIR / self.experiment_id / self._sim_dir / f"mdrun-{self.id}.out"
 
     @property
     def _stderr_log(self) -> Path:
         """Path to the stderr log file."""
-        return DATA_DIR / self.experiment_id / f"mdrun-{self.id}.err"
+        return DATA_DIR / self.experiment_id / self._sim_dir / f"mdrun-{self.id}.err"
 
     @property
     def nsteps(self) -> int | None:
@@ -160,35 +163,25 @@ class AmberJob(SimulationJob):
     def start(
         cls,
         experiment: "Experiment",
-        prmtop_path: Path,
-        inpcrd_path: Path,
-        mdin_path: Path,
+        simulation_path: str,
         binary: "AmberBinary",
         ewald: "EwaldPreset",
         np: int,
         ntomp: int,
-        extra_args: str = "",
     ) -> "AmberJob":
         """
-        Start an AMBER job for the given experiment.
-
-        Args:
-            experiment: The experiment to associate with the job.
-            prmtop_path: Path to the PRMTOP file.
-            inpcrd_path: Path to the INPCRD file.
-            mdin_path: Path to the MDIN file.
-            binary: AMBER binary type (pmemd.cuda or pmemd.MPI).
-            ewald: Ewald summation preset.
-            np: Number of MPI processes.
-            ntomp: Number of OpenMP threads per MPI rank.
-            extra_args: Additional arguments for the job.
+        Start an AMBER job from a simulation manifest.
 
         Returns:
             The created AmberJob instance.
         """
-        prmtop_rel_path = str(prmtop_path.relative_to(DATA_DIR / experiment.id))
-        inpcrd_rel_path = str(inpcrd_path.relative_to(DATA_DIR / experiment.id))
-        mdin_rel_path = str(mdin_path.relative_to(DATA_DIR / experiment.id))
+        simulation = Simulation.get(experiment.id, simulation_path)
+        simulation.require_files(["topology", "coordinates", "control"])
+        resolved = simulation.resolved_files
+        prmtop_rel_path = resolved["topology"]
+        inpcrd_rel_path = resolved["coordinates"]
+        mdin_rel_path = resolved["control"]
+        extra_args = simulation.extra_args
 
         mdrun_job = mdrun.create_amber_job(
             experiment_id=experiment.id,
@@ -205,14 +198,11 @@ class AmberJob(SimulationJob):
 
         job = AmberJob(
             id=mdrun_job["id"],
-            prmtop_name=prmtop_rel_path,
-            inpcrd_name=inpcrd_rel_path,
-            mdin_name=mdin_rel_path,
+            simulation_path=simulation_path,
             binary=binary,
             ewald=ewald,
             np=np,
             ntomp=ntomp,
-            extra_args=extra_args,
             experiment_id=experiment.id,
             engine=Engine.AMBER,
         )
@@ -221,10 +211,8 @@ class AmberJob(SimulationJob):
         job._cleanup_files()
 
         db.session.commit()
-        logger.info(
-            f"Started AMBER job {job.id} for experiment {experiment.id} "
-            f"with PRMTOP {prmtop_rel_path}, INPCRD {inpcrd_rel_path}, MDIN {mdin_rel_path}"
-        )
+        simulation.mark_readonly()
+        logger.info(f"Started AMBER job {job.id} for experiment {experiment.id} (simulation {simulation_path})")
 
         return job
 
@@ -273,17 +261,10 @@ class AmberJob(SimulationJob):
             raise InternalServerError(description=f"System error reading log file: {e}")
 
     def _cleanup_files(self) -> None:
-        """
-        Clean up files associated with this AMBER job.
-
-        Deletes files with extensions defined in RESULT_EXTENSIONS based on the
-        mdin filename stem, then removes stdout/stderr log files.
-        """
-        # Use mdin filename stem as the base for output files
-        base_name = Path(self.mdin_name).stem
+        base_name = Path(self._files["control"]).stem
 
         for ext in self.RESULT_EXTENSIONS:
-            file = DATA_DIR / self.experiment_id / f"{base_name}.{ext}"
+            file = DATA_DIR / self.experiment_id / self._sim_dir / f"{base_name}.{ext}"
             if file.exists():
                 file.unlink()
                 logger.info(f"Deleted previous result file: {file}")

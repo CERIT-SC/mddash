@@ -59,6 +59,7 @@ graph TB
 | **Sidecar Container Pattern** | All user pods | Proxy, Auth, API, S3-Sync run alongside JupyterHub Singleuser |
 | **Pre-Spawn Hook Pattern** | JupyterHub | Dynamically provisions user infrastructure before notebook startup |
 | **Active Record Pattern** | Dashboard API, MDRun API | Models encapsulate data persistence and orchestration logic |
+| **Simulation Manifest Pattern** | Dashboard API, Dashboard UI | `.simulation.json` files are the single source of truth for file roles and `extra_args`; job models reference `simulation_path` instead of storing file names |
 | **Sidecar Polling Pattern** | MDRun API | Poller sidecar in the API pod queries job status on an interval and updates SQLite |
 | **TanStack Query Pattern** | Dashboard UI | Server state management via custom hooks with automatic polling |
 | **Repository Pattern** | Dashboard UI, Dashboard API | Centralized API clients with consistent error handling |

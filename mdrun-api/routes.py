@@ -105,7 +105,7 @@ def create_gmx_job() -> ResponseReturnValue:
     experiment_id = sanitize_experiment_id(cast("str", data.get("experiment_id")))
     tpr_name = sanitize_tpr_name(cast("str", data.get("tpr_name")))
     bucket_name = sanitize_bucket_name(cast("str", data.get("bucket_name")))
-    extra_args = sanitize_extra_args(cast("str", data.get("extra_args", "")))
+    extra_args = sanitize_extra_args(cast("str", data.get("extra_args", "")), "gmx")
 
     np = int(data["np"])
     ntomp = int(data["ntomp"])
@@ -186,7 +186,7 @@ def create_amber_job() -> ResponseReturnValue:
     inpcrd_name = sanitize_inpcrd_name(cast("str", data.get("inpcrd_name")))
     mdin_name = sanitize_mdin_name(cast("str", data.get("mdin_name")))
     bucket_name = sanitize_bucket_name(cast("str", data.get("bucket_name")))
-    extra_args = sanitize_extra_args(cast("str", data.get("extra_args", "")))
+    extra_args = sanitize_extra_args(cast("str", data.get("extra_args", "")), "amber")
 
     np = int(data["np"])
     ntomp = int(data["ntomp"])

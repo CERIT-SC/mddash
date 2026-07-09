@@ -198,6 +198,8 @@ async function loadStructureWithCoordinates(
 ) {
   const { structureUrl, structureFormat, coordsUrl, coordsFormat } = options
   const state = plugin.state.data
+  const structureName = fileNameFromUrl(structureUrl)
+  const coordsName = fileNameFromUrl(coordsUrl)
 
   // Download and parse structure/topology
   const structureIsBinary = !["pdb", "gro", "psf", "prmtop", "top"].includes(structureFormat)
@@ -265,13 +267,21 @@ async function loadStructureWithCoordinates(
       .commit({ revertOnError: true })
 
     if (!trajectory || !trajectory.isOk) {
-      throw new Error("Failed to create trajectory from structure and coordinates")
+      throw new Error(
+        `MolStar could not combine ${structureName} with ${coordsName}. The structure/topology and trajectory likely describe different atom sets.`
+      )
     }
 
     await plugin.builders.structure.hierarchy.applyPreset(trajectory, "default")
   } catch (e) {
+    const message = e instanceof Error ? e.message : String(e)
+    if (message.startsWith("MolStar could not combine")) throw e
     throw new Error(
-      `Failed to create trajectory from structure and coordinates: ${e instanceof Error ? e.message : String(e)}`
+      `MolStar could not combine ${structureName} with ${coordsName}. The structure/topology and trajectory likely describe different atom sets. Details: ${message}`
     )
   }
+}
+
+function fileNameFromUrl(url: string): string {
+  return decodeURIComponent(url.split("/").pop() ?? url)
 }

@@ -25,9 +25,22 @@ logger = logging.getLogger(__name__)
 
 ANALYSIS_RESULT_PREFIX = "mda."
 ANALYSIS_RESULT_SUFFIX = ".json"
-MWF_DIR = "mwf_analyses"
-MWF_INPUTS_DIR = "mwf_inputs"
+MWF_DIR = "analysis/mwf"
+MWF_INPUTS_DIR = "analysis/mwf/inputs"
 MWF_INCOMPLETE_PREFIX = "incomplete_"
+
+
+def mwf_output_dir(simulation_path: str) -> str:
+    """
+    Per-simulation MWF output directory, e.g. analysis/mwf/protein.
+
+    Returns:
+        MWF output subdirectory path relative to the experiment dir.
+    """
+    stem = Path(simulation_path).stem
+    return f"{MWF_DIR}/{stem}"
+
+
 AUTO_INTERACTION_ANALYSES = {
     AnalysisType.DIST,
     AnalysisType.ENERGIES,
@@ -54,7 +67,7 @@ def get_incomplete_task_dirs(task_name: str) -> list[Path]:
         Candidate project-relative and MD-relative incomplete task directories.
     """
     incomplete_dir = f"{MWF_INCOMPLETE_PREFIX}{task_name}"
-    return [Path(incomplete_dir), Path(MWF_DIR) / incomplete_dir]
+    return [Path(incomplete_dir)]
 
 
 def get_analysis_runtime_prep_commands(analysis_name: AnalysisType) -> list[str]:
@@ -81,29 +94,29 @@ def get_analysis_runtime_prep_commands(analysis_name: AnalysisType) -> list[str]
     return [f"mkdir -p {mkdir_args}"]
 
 
-def find_result_file(experiment_id: str, name: str) -> Path | None:
+def find_result_file(experiment_id: str, simulation_path: str, name: str) -> Path | None:
     """
-    Find a result file by normalized name under the mwf output directory.
+    Find a result file by normalized name under the simulation's mwf output directory.
 
     Returns:
         The first matching Path, or None if not found.
     """
     filename = f"{ANALYSIS_RESULT_PREFIX}{name.replace('-', '_')}{ANALYSIS_RESULT_SUFFIX}"
-    mwf_dir = DATA_DIR / experiment_id / MWF_DIR
+    mwf_dir = DATA_DIR / experiment_id / mwf_output_dir(simulation_path)
     if not mwf_dir.is_dir():
         return None
     matches = list(mwf_dir.rglob(filename))
     return matches[0] if matches else None
 
 
-def list_result_files(experiment_id: str) -> list[Path]:
+def list_result_files(experiment_id: str, simulation_path: str) -> list[Path]:
     """
-    List all mda.*.json result files under the mwf output directory.
+    List all mda.*.json result files under the simulation's mwf output directory.
 
     Returns:
         Sorted list of matching Paths, or empty list if directory doesn't exist.
     """
-    mwf_dir = DATA_DIR / experiment_id / MWF_DIR
+    mwf_dir = DATA_DIR / experiment_id / mwf_output_dir(simulation_path)
     if not mwf_dir.is_dir():
         return []
     return sorted(mwf_dir.rglob(f"{ANALYSIS_RESULT_PREFIX}*{ANALYSIS_RESULT_SUFFIX}"))
@@ -156,6 +169,7 @@ def format_mwf_analysis_command(
     trajectory_file: Path,
     topology_file: Path | None,
     preprocessing_mode: PreprocessingMode,
+    simulation_path: str,
     engine: Engine = Engine.GMX,
 ) -> str:
     """
@@ -206,15 +220,16 @@ def format_mwf_analysis_command(
 
     inputs_yaml = shlex.quote(format_mwf_inputs_yaml(analysis_name))
     prelude_commands = get_runtime_prelude_commands(analysis_name)
+    output_dir = mwf_output_dir(simulation_path)
 
     commands = [
-        f"mkdir -p {shlex.quote(MWF_INPUTS_DIR)} {shlex.quote(MWF_DIR)}",
+        f"mkdir -p {shlex.quote(MWF_INPUTS_DIR)} {shlex.quote(output_dir)}",
         *prelude_commands,
         *snapshot_commands,
         f"printf %s {inputs_yaml} > inputs.yaml",
         "conda run --no-capture-output -n mwf_env "
         f"mwf run -dir . {stru_flag}"
-        f"-md {shlex.quote(MWF_DIR)} {shlex.quote(trajectory_snapshot.as_posix())} "
+        f"-md {shlex.quote(output_dir)} {shlex.quote(trajectory_snapshot.as_posix())} "
         f"{' '.join(flags)} -i {analysis_name} {trust_flags}",
     ]
     return " && ".join(commands)
@@ -227,6 +242,7 @@ class AnalysisJob(db.Model):  # type: ignore
 
     id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
+    simulation_path: Mapped[str] = mapped_column(db.String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
 
     analysis_name: Mapped[AnalysisType] = mapped_column(db.Enum(AnalysisType), nullable=False)
@@ -267,6 +283,7 @@ class AnalysisJob(db.Model):  # type: ignore
     def start(
         cls,
         experiment: "Experiment",
+        simulation_path: str,
         analysis_name: AnalysisType,
         structure_file: Path | None,
         trajectory_file: Path,
@@ -278,6 +295,7 @@ class AnalysisJob(db.Model):  # type: ignore
 
         Args:
             experiment: The experiment to run analysis on.
+            simulation_path: The simulation manifest path this analysis belongs to.
             analysis_name: The mwf analysis task name (e.g. "rmsds", "pca").
             structure_file: Relative path to the structure file within the experiment dir.
                 May be None when topology_file serves as the structure source.
@@ -291,7 +309,7 @@ class AnalysisJob(db.Model):  # type: ignore
         Raises:
             Forbidden: If the job cannot be started due to insufficient cluster resources.
         """
-        previous_jobs = cls.query.filter_by(experiment_id=experiment.id).all()
+        previous_jobs = cls.query.filter_by(experiment_id=experiment.id, simulation_path=simulation_path).all()
         for prev in previous_jobs:
             with suppress(Exception):  # job may already be cleaned up by K8s
                 k8s.delete_job(f"analysis-{prev.id}")
@@ -302,16 +320,13 @@ class AnalysisJob(db.Model):  # type: ignore
         job_id = str(uuid.uuid4())[:12]
         job_name = f"analysis-{job_id}"
 
-        # conda run needed because create_job uses sh -c which bypasses the ENTRYPOINT.
-        # mwf_analyses/ is the MD dir; mwf forbids MD dir == project dir.
-        # No -k flag: with a single analysis there's nothing to "keep going" to,
-        # and it masks errors (mwf exits 0 even on InputError).
         command = format_mwf_analysis_command(
             analysis_name=analysis_name,
             structure_file=structure_file,
             trajectory_file=trajectory_file,
             topology_file=topology_file,
             preprocessing_mode=preprocessing_mode,
+            simulation_path=simulation_path,
             engine=experiment.engine,
         )
 
@@ -333,6 +348,7 @@ class AnalysisJob(db.Model):  # type: ignore
         job = AnalysisJob(
             id=job_id,  # type: ignore[call-arg]
             experiment_id=experiment.id,  # type: ignore[call-arg]
+            simulation_path=simulation_path,  # type: ignore[call-arg]
             analysis_name=analysis_name,  # type: ignore[call-arg]
             structure_file=structure_file.as_posix() if structure_file else None,  # type: ignore[call-arg]
             trajectory_file=trajectory_file.as_posix(),  # type: ignore[call-arg]
@@ -360,7 +376,7 @@ class AnalysisJob(db.Model):  # type: ignore
                 with suppress(Exception):
                     shutil.rmtree(exp_dir / incomplete_dir)
 
-        mwf_dir = exp_dir / MWF_DIR
+        mwf_dir = exp_dir / mwf_output_dir(self.simulation_path)
         if mwf_dir.is_dir():
             result_pattern = f"{ANALYSIS_RESULT_PREFIX}*{ANALYSIS_RESULT_SUFFIX}"
             for path in mwf_dir.rglob("*"):

@@ -54,9 +54,7 @@ def _make_tuner_job(experiment: Experiment) -> TunerJob:
     return TunerJob(
         id=JOB_ID,
         experiment_id=experiment.id,
-        tpr_name="topology.prmtop",
-        inpcrd_name="coords.inpcrd",
-        mdin_name="run.mdin",
+        simulation_path="production/test.simulation.json",
     )
 
 

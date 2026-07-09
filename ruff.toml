@@ -43,4 +43,5 @@ ignore = [
     "PLR0917", # too many positional arguments  — Flask view functions often have many path/query parameters that aren't easily refactorable
     "PLR6301", # method could be static — instance methods stay as such intentionally for consistent API surface and mock-ability in tests
     "PLW0717", # try clause contains too many statements — existing complex handlers shouldn't be force-split artificially
+    "D103",    # missing docstring in public function — test functions don't need docstrings, descriptive names suffice
 ]

@@ -1,3 +1,5 @@
+import type { ReactNode } from "react"
+
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
 import { formatDuration } from "@/util/helpers"
@@ -7,9 +9,10 @@ import { Progress } from "@/components/ui/progress"
 
 interface JobStatusDisplayProps {
   jobStatus: GromacsJob
+  actions?: ReactNode
 }
 
-const JobStatusDisplay = ({ jobStatus }: JobStatusDisplayProps) => {
+const JobStatusDisplay = ({ jobStatus, actions }: JobStatusDisplayProps) => {
   const isRunningWithProgress =
     jobStatus.status === "RUNNING" && jobStatus.nsteps !== null && jobStatus.nsteps_done !== null
 
@@ -20,11 +23,14 @@ const JobStatusDisplay = ({ jobStatus }: JobStatusDisplayProps) => {
     <div className="flex w-full flex-col gap-4">
       {/* Status card */}
       <div className="flex flex-col gap-3 rounded-md border p-3">
-        <div className="flex items-center justify-center gap-2">
-          <span className="text-sm font-medium">Status</span>
-          <Badge variant="outline" className={cn("text-xs", statusBadgeClass(variant))}>
-            {jobStatus.status}
-          </Badge>
+        <div className="flex min-h-9 items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">Status</span>
+            <Badge variant="outline" className={cn("text-xs", statusBadgeClass(variant))}>
+              {jobStatus.status}
+            </Badge>
+          </div>
+          {actions}
         </div>
 
         {isRunningWithProgress && (
@@ -80,12 +86,6 @@ const JobStatusDisplay = ({ jobStatus }: JobStatusDisplayProps) => {
             {jobStatus.pme} / {jobStatus.nb}
           </p>
         </div>
-        {jobStatus.extra_args && (
-          <div className="col-span-2 rounded-md border p-3">
-            <p className="text-muted-foreground text-xs">Extra Arguments</p>
-            <p className="text-sm">{jobStatus.extra_args}</p>
-          </div>
-        )}
       </div>
     </div>
   )

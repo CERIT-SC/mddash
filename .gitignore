@@ -5,3 +5,4 @@ __pycache__/
 .mcp.json
 .worktrees/
 .pnpm-store/
+.playwright-mcp/

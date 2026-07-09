@@ -1,19 +1,22 @@
 import json
 from http import HTTPStatus
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from clients import k8s
-from config import API_PREFIX, DATA_DIR
+from config import API_PREFIX
 from decorators import handle_exceptions
-from enums import AnalysisType, PreprocessingMode
+from enums import AnalysisType, Engine, PreprocessingMode
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import AnalysisJob, Experiment
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, find_result_file, list_result_files
+from models.simulation import Simulation
 from schemas import AnalysisJobSchema
-from validators import check_path, validate_analysis_structure_path, validate_analysis_topology_path
 from werkzeug.exceptions import BadRequest, NotFound, UnprocessableEntity
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 analysis_bp = Blueprint("analysis", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/analysis")
 
@@ -22,13 +25,20 @@ analysis_bp = Blueprint("analysis", __name__, url_prefix=f"{API_PREFIX}/experime
 @handle_exceptions()
 def get_analysis_jobs(experiment_id: str) -> Response:
     """
-    List all analysis jobs for an experiment.
+    List analysis jobs for an experiment, optionally filtered by simulation.
+
+    Query params:
+        simulation_path: Filter jobs by simulation manifest path.
 
     Returns:
         JSON response with serialized list of analysis jobs.
     """
+    query = AnalysisJob.query.filter_by(experiment_id=experiment_id)
+    simulation_path = request.args.get("simulation_path")
+    if simulation_path:
+        query = query.filter_by(simulation_path=simulation_path)
     schema = AnalysisJobSchema(many=True)
-    jobs: list[AnalysisJob] = AnalysisJob.query.filter_by(experiment_id=experiment_id).all()
+    jobs: list[AnalysisJob] = query.all()
     return jsonify(schema.dump(jobs))
 
 
@@ -36,24 +46,24 @@ def get_analysis_jobs(experiment_id: str) -> Response:
 @handle_exceptions(rollback=True)
 def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
     """
-    Submit a new analysis job. Rejects if a job is already running.
+    Submit a new analysis job from a simulation manifest.
+
+    Body: ``{"simulation_path": "...", "analysis": "...", "preprocessing_mode": "as-is"}``.
 
     Returns:
         JSON response with the created job on success, or an error response.
 
     Raises:
-        BadRequest: If the request body is missing or invalid.
-        NotFound: If the trajectory file does not exist.
+        BadRequest: If the request body is missing, invalid, or files are missing.
     """
     data = request.get_json()
     if not data:
         raise BadRequest("Request body is required.")
 
+    simulation_path = data.get("simulation_path", "")
     analysis_name = data.get("analysis", "")
-    structure_file = data.get("structure_file") or None
-    trajectory_file = data.get("trajectory_file", "")
-    if not analysis_name or not trajectory_file:
-        raise BadRequest("analysis and trajectory_file are required.")
+    if not simulation_path or not analysis_name:
+        raise BadRequest("simulation_path and analysis are required.")
 
     try:
         analysis_type = AnalysisType(analysis_name)
@@ -61,6 +71,12 @@ def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
         raise BadRequest(
             f"Unknown analysis '{analysis_name}'. Available: {', '.join(t.value for t in AnalysisType)}",
         )
+
+    experiment = Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found")
+    simulation = Simulation.get(experiment_id, simulation_path)
+    simulation.require_files(["trajectory"])
+
+    trajectory_path = simulation.resolve_role("trajectory")
 
     preprocessing_mode_name = data.get("preprocessing_mode", PreprocessingMode.AS_IS.value)
     try:
@@ -70,41 +86,35 @@ def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
             f"Unknown preprocessing_mode '{preprocessing_mode_name}'. Available: {', '.join(mode.value for mode in PreprocessingMode)}",
         )
 
-    topology_file = data.get("topology_file") or None
+    if not trajectory_path.is_file():
+        raise BadRequest(f"Trajectory file {trajectory_path} does not exist.")
 
-    experiment_dir = DATA_DIR / experiment_id
+    topology_path: Path | None = None
+    if experiment.engine == Engine.GMX and "run_input" in simulation.files:
+        topology_path = simulation.resolve_role("run_input")
+    elif "topology" in simulation.files:
+        topology_path = simulation.resolve_role("topology")
 
-    try:
-        structure_path = validate_analysis_structure_path(
-            structure_file=structure_file,
-            topology_file=topology_file,
-            experiment_dir=experiment_dir,
-        )
-    except BadRequest as error:
-        raise error
+    structure_path: Path | None = None
+    if "reference_structure" in simulation.files:
+        structure_path = simulation.resolve_role("reference_structure")
 
-    check_path(trajectory_file, experiment_dir)
-    trajectory_path = Path(trajectory_file)
-    if not (experiment_dir / trajectory_path).is_file():
-        raise NotFound(f"Trajectory file {trajectory_path.as_posix()} does not exist.")
+    if preprocessing_mode in {PreprocessingMode.IMAGE, PreprocessingMode.IMAGE_FIT} and (
+        not topology_path or topology_path.suffix.lower() != ".tpr"
+    ):
+        raise BadRequest("Trajectory preprocessing requires a simulation TPR file (.tpr).")
 
-    try:
-        topology_path = validate_analysis_topology_path(
-            topology_file=topology_file,
-            experiment_dir=experiment_dir,
-            analysis_name=analysis_name,
-            analysis_type=analysis_type,
-            preprocessing_mode=preprocessing_mode,
-        )
-    except BadRequest as error:
-        raise error
+    analysis_topology_path = topology_path
+    if experiment.engine == Engine.GMX and preprocessing_mode is PreprocessingMode.AS_IS and structure_path is not None:
+        analysis_topology_path = None
 
     job = AnalysisJob.start(
-        experiment=Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found"),
+        experiment=experiment,
+        simulation_path=simulation_path,
         analysis_name=analysis_type,
         structure_file=structure_path,
         trajectory_file=trajectory_path,
-        topology_file=topology_path,
+        topology_file=analysis_topology_path,
         preprocessing_mode=preprocessing_mode,
     )
     return jsonify(AnalysisJobSchema().dump(job)), HTTPStatus.CREATED
@@ -169,16 +179,21 @@ def get_analysis_job_logs(experiment_id: str, job_id: str) -> Response:
 @handle_exceptions()
 def list_analysis_results(experiment_id: str) -> Response:
     """
-    List all available analysis result names for an experiment.
+    List available analysis result names for a simulation.
 
-    Scans the mwf output directory directly so results remain visible even when no
-    job records exist in the database (e.g., after deleting a failed job whose prior
-    run had produced results).
+    Query params:
+        simulation_path: Required — the simulation manifest path to scope results.
 
     Returns:
         JSON response with a list of result name strings.
+
+    Raises:
+        BadRequest: If simulation_path is missing.
     """
-    files = list_result_files(experiment_id)
+    simulation_path = request.args.get("simulation_path", "")
+    if not simulation_path:
+        raise BadRequest("simulation_path query parameter is required.")
+    files = list_result_files(experiment_id, simulation_path)
     names = [f.name[len(ANALYSIS_RESULT_PREFIX) : -len(ANALYSIS_RESULT_SUFFIX)].replace("_", "-") for f in files]
     return jsonify(names)
 
@@ -189,13 +204,19 @@ def get_analysis_variants(experiment_id: str, name: str) -> Response:
     """
     Return variant options for a multi-file analysis from its summary JSON.
 
-    The summary file written by mwf for multi-file analyses is a list of
-    {name, analysis} objects — one entry per interaction pair or run variant.
+    Query params:
+        simulation_path: Required — the simulation manifest path to scope results.
 
     Returns:
         JSON response with a list of variant objects, or an empty list if not found.
+
+    Raises:
+        BadRequest: If simulation_path is missing.
     """
-    result_file = find_result_file(experiment_id, name)
+    simulation_path = request.args.get("simulation_path", "")
+    if not simulation_path:
+        raise BadRequest("simulation_path query parameter is required.")
+    result_file = find_result_file(experiment_id, simulation_path, name)
     if not result_file:
         return jsonify([])
 
@@ -204,7 +225,6 @@ def get_analysis_variants(experiment_id: str, name: str) -> Response:
     except (json.JSONDecodeError, UnicodeDecodeError):
         return jsonify([])
 
-    # Summary format: [{ "name": "Overall", "analysis": "rmsd-pairwise-00" }, …]
     if isinstance(data, list) and all(
         isinstance(item, dict) and "analysis" in item and "name" in item for item in data
     ):
@@ -219,14 +239,21 @@ def get_analysis_result(experiment_id: str, name: str) -> Response:
     """
     Get the JSON content of a specific analysis result.
 
+    Query params:
+        simulation_path: Required — the simulation manifest path to scope results.
+
     Returns:
         JSON response with the parsed analysis data, or an error response if not found.
 
     Raises:
+        BadRequest: If simulation_path is missing.
         NotFound: If the analysis result file does not exist.
         UnprocessableEntity: If the result file cannot be parsed as JSON.
     """
-    result_file = find_result_file(experiment_id, name)
+    simulation_path = request.args.get("simulation_path", "")
+    if not simulation_path:
+        raise BadRequest("simulation_path query parameter is required.")
+    result_file = find_result_file(experiment_id, simulation_path, name)
     if not result_file:
         raise NotFound(f"Analysis result '{name}' not found.")
 

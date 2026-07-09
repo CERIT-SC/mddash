@@ -17,7 +17,7 @@ import requests
 from clients import k8s
 from config import DATA_DIR
 from enums import JobStatus, PodStatus
-from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, MWF_DIR
+from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
 
 from ..state import demo_state
 
@@ -127,17 +127,23 @@ def _create_job(
     match = re.search(r"-i\s+(\w+)\s*$", command)
     analysis_name = match.group(1) if match else ""
 
+    # Extract simulation_path from the "-md analysis/mwf/<stem>" flag
+    md_match = re.search(r"-md\s+analysis/mwf/(\S+)", command)
+    simulation_stem = md_match.group(1) if md_match else ""
+    simulation_path = f"{simulation_stem}.simulation.json" if simulation_stem else ""
+
     demo_state.analysis_jobs[name] = {
         "status": JobStatus.RUNNING.value,
         "experiment_id": experiment_id,
         "analysis_name": analysis_name,
+        "simulation_path": simulation_path,
         "created_at": time.time(),
     }
 
     # Start background thread to fetch real analysis data from MDposit
     thread = threading.Thread(
         target=_fetch_and_store_analysis,
-        args=(name, experiment_id, analysis_name),
+        args=(name, experiment_id, simulation_path, analysis_name),
         daemon=True,
     )
     thread.start()
@@ -201,7 +207,7 @@ def _mdposit_get(path: str) -> requests.Response:
     return requests.get(f"{MDPOSIT_ANALYSES_URL}/{path}", headers=headers, timeout=30)
 
 
-def _fetch_and_store_analysis(job_name: str, experiment_id: str, analysis_name: str) -> None:
+def _fetch_and_store_analysis(job_name: str, experiment_id: str, simulation_path: str, analysis_name: str) -> None:
     """Fetch analysis data from MDposit and write result files, then mark the job done."""
     time.sleep(ANALYSIS_JOB_DURATION_SEC)
     try:
@@ -218,7 +224,7 @@ def _fetch_and_store_analysis(job_name: str, experiment_id: str, analysis_name: 
             return
 
         data = response.json()
-        mwf_dir = DATA_DIR / experiment_id / MWF_DIR
+        mwf_dir = DATA_DIR / experiment_id / mwf_output_dir(simulation_path)
         mwf_dir.mkdir(parents=True, exist_ok=True)
 
         # Use the mwf output name (= MDposit endpoint name), not the AnalysisType value.

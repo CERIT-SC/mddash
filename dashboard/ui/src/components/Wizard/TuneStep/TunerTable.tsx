@@ -21,16 +21,16 @@ interface TunerTableProps {
   setSelectedTrial: (trial: TunerTrial | null) => void
   tunerStopped?: boolean
   experimentId: string
-  tprName: string
+  simulationPath: string
 }
 
 const TunerTable = (props: TunerTableProps) => {
-  const { rows, selectedTrial, setSelectedTrial, tunerStopped = false, experimentId, tprName } = props
+  const { rows, selectedTrial, setSelectedTrial, tunerStopped = false, experimentId, simulationPath } = props
 
   const [confirmChoiceDialog, setConfirmChoiceDialog] = useState(false)
   const [logsTrialId, setLogsTrialId] = useState<string | null>(null)
 
-  const { stdout, stderr } = useTunerTrialLogs(experimentId, tprName, logsTrialId)
+  const { stdout, stderr } = useTunerTrialLogs(experimentId, simulationPath, logsTrialId)
 
   const sortedRows = useMemo(() => {
     const statusRank: Record<JobStatus, number> = {

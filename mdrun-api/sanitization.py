@@ -11,7 +11,31 @@ _TPR_SEGMENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,246}$")
 _BUCKET_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")
 
 _EXTRA_ARGS_FORBIDDEN_RE = re.compile(r"[;&|><`]|\$\(|\$\{|\n|\r|\x00")
-_EXTRA_ARGS_FORBIDDEN_FLAGS = {"-deffnm"}
+_EXTRA_ARGS_FORBIDDEN_FLAGS: dict[str, set[str]] = {
+    "gmx": {
+        "-deffnm",
+        "-s",
+        "-o",
+        "-x",
+        "-c",
+        "-e",
+        "-g",
+        "-cpo",
+        "-dhdl",
+        "-px",
+        "-pf",
+        "-mtx",
+    },
+    "amber": {
+        "-i",
+        "-p",
+        "-c",
+        "-o",
+        "-r",
+        "-x",
+        "-inf",
+    },
+}
 MAX_EXTRA_ARGS_TOKENS = 80
 
 
@@ -76,23 +100,29 @@ def sanitize_bucket_name(bucket_name: str) -> str:
     return bucket_name
 
 
-def sanitize_extra_args(extra_args: str) -> str:
+def sanitize_extra_args(extra_args: str, engine: str) -> str:
     """
-    Validate and normalize extra GROMACS mdrun args.
+    Validate and normalize extra simulation args (GROMACS or AMBER).
 
-    This is used inside a shell script in the K8s job container, so we block
-    shell metacharacters and also forbid overriding critical args.
+    Blocks shell metacharacters and harness-controlled input/output flags so results stay co-located with the primary input. Flag matching is case-sensitive.
+
+    Args:
+        extra_args: Raw extra arguments string.
+        engine: ``"gmx"`` or ``"amber"``.
 
     Returns:
-        str: Canonicalized extra args string, or an empty string if none were provided.
+        Canonicalized extra args string, or empty string if none provided.
 
     Raises:
-        ValidationError: If the args contain forbidden characters, forbidden flags,
-            exceed the token limit, or cannot be parsed by shlex.
+        ValidationError: If args contain forbidden characters/flags, are too long, or cannot be parsed by shlex.
     """
     extra_args = (extra_args or "").strip()
     if not extra_args:
         return ""
+
+    forbidden = _EXTRA_ARGS_FORBIDDEN_FLAGS.get(engine)
+    if forbidden is None:
+        raise ValidationError(f"Unknown engine for extra_args validation: {engine!r}")
 
     if _EXTRA_ARGS_FORBIDDEN_RE.search(extra_args):
         raise ValidationError("extra_args contains forbidden characters.")
@@ -105,9 +135,9 @@ def sanitize_extra_args(extra_args: str) -> str:
     if len(tokens) > MAX_EXTRA_ARGS_TOKENS:
         raise ValidationError("extra_args is too long.")
 
-    lowered = {t.lower() for t in tokens}
-    if lowered & _EXTRA_ARGS_FORBIDDEN_FLAGS:
-        raise ValidationError("extra_args must not override -deffnm.")
+    overridden = {t for t in tokens if t in forbidden}
+    if overridden:
+        raise ValidationError(f"extra_args must not override harness-controlled flags: {', '.join(sorted(overridden))}")
 
     # Canonicalize spacing/quoting.
     return shlex.join(tokens)

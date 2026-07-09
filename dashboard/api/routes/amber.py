@@ -1,6 +1,6 @@
 from http import HTTPStatus
 
-from config import API_PREFIX, DATA_DIR
+from config import API_PREFIX
 from decorators import handle_exceptions
 from enums import AmberBinary, EwaldPreset
 from extensions import db
@@ -8,8 +8,8 @@ from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import AmberJob, Experiment
 from schemas import AmberJobSchema
-from validators import check_path, check_positive_int
-from werkzeug.exceptions import NotFound
+from validators import check_positive_int
+from werkzeug.exceptions import BadRequest
 
 amber_bp = Blueprint("amber", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/amber")
 
@@ -28,92 +28,77 @@ def list_amber_jobs(experiment_id: str) -> Response:
     return jsonify(schema.dump(jobs))
 
 
-@amber_bp.route("/<path:prmtop_name>", methods=["GET"])
+@amber_bp.route("/<path:simulation_path>", methods=["GET"])
 @handle_exceptions()
-def get_amber_job(experiment_id: str, prmtop_name: str) -> Response:
+def get_amber_job(experiment_id: str, simulation_path: str) -> Response:
     """
-    Get a specific AMBER job by PRMTOP name.
+    Get a specific AMBER job by simulation path.
 
     Returns:
         Response: JSON response with the AMBER job data.
     """
     schema = AmberJobSchema()
-    job: AmberJob = AmberJob.query.filter_by(experiment_id=experiment_id, prmtop_name=prmtop_name).first_or_404(
-        description=f"AMBER job for {prmtop_name} in experiment {experiment_id} not found"
+    job: AmberJob = AmberJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first_or_404(
+        description=f"AMBER job for simulation {simulation_path} in experiment {experiment_id} not found"
     )
     return jsonify(schema.dump(job))
 
 
-@amber_bp.route("/<path:prmtop_name>", methods=["POST"])
+@amber_bp.route("/<path:simulation_path>", methods=["POST"])
 @handle_exceptions(rollback=True)
-def submit_amber_job(experiment_id: str, prmtop_name: str) -> ResponseReturnValue:
+def submit_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
-    Submit a new AMBER simulation job.
+    Submit an AMBER simulation job from a simulation manifest.
+
+    Body: ``{"binary": "pmemd.cuda", "ewald": "default", "np": 1, "ntomp": 8}``.
 
     Returns:
-        Response: JSON response with the created AMBER job, or an error if files do not exist.
+        Response: JSON response with the created AMBER job.
 
     Raises:
-        NotFound: If the PRMTOP, INPCRD, or MDIN file does not exist.
+        BadRequest: If compute parameters are invalid.
     """
-    check_path(prmtop_name, DATA_DIR / experiment_id)
     schema = AmberJobSchema()
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
-    job: AmberJob | None = AmberJob.query.filter_by(experiment_id=experiment_id, prmtop_name=prmtop_name).first()
-    prmtop_path = DATA_DIR / experiment_id / prmtop_name
-
-    if not prmtop_path.is_file():
-        raise NotFound(f"PRMTOP file {prmtop_name} does not exist.")
+    job: AmberJob | None = AmberJob.query.filter_by(
+        experiment_id=experiment_id, simulation_path=simulation_path
+    ).first()
 
     if not job:
-        inpcrd_name = request.form["inpcrd_name"]
-        mdin_name = request.form["mdin_name"]
-
-        check_path(inpcrd_name, DATA_DIR / experiment_id)
-        check_path(mdin_name, DATA_DIR / experiment_id)
-
-        inpcrd_path = DATA_DIR / experiment_id / inpcrd_name
-        mdin_path = DATA_DIR / experiment_id / mdin_name
-
-        if not inpcrd_path.is_file():
-            raise NotFound(f"INPCRD file {inpcrd_name} does not exist.")
-        if not mdin_path.is_file():
-            raise NotFound(f"MDIN file {mdin_name} does not exist.")
-
-        binary = AmberBinary.from_string(request.form["binary"])
-        ewald = EwaldPreset.from_string(request.form["ewald"])
-        np = int(request.form["np"])
-        ntomp = int(request.form["ntomp"])
-        extra_args = request.form.get("extra_args", "")
+        data = request.get_json(silent=True) or {}
+        try:
+            binary = AmberBinary.from_string(data.get("binary", request.form.get("binary", "")))
+            ewald = EwaldPreset.from_string(data.get("ewald", request.form.get("ewald", "")))
+            np = int(data.get("np", request.form.get("np", "")))
+            ntomp = int(data.get("ntomp", request.form.get("ntomp", "")))
+        except (ValueError, TypeError) as exc:
+            raise BadRequest(f"Invalid compute parameters: {exc}") from exc
 
         job = AmberJob.start(
             experiment=experiment,
-            prmtop_path=prmtop_path,
-            inpcrd_path=inpcrd_path,
-            mdin_path=mdin_path,
+            simulation_path=simulation_path,
             binary=binary,
             ewald=ewald,
             np=np,
             ntomp=ntomp,
-            extra_args=extra_args,
         )
 
     return jsonify(schema.dump(job)), HTTPStatus.CREATED
 
 
-@amber_bp.route("/<path:prmtop_name>", methods=["DELETE"])
+@amber_bp.route("/<path:simulation_path>", methods=["DELETE"])
 @handle_exceptions(rollback=True)
-def delete_amber_job(experiment_id: str, prmtop_name: str) -> ResponseReturnValue:
+def delete_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
     Delete an AMBER job and its associated Kubernetes resources.
 
     Returns:
         Response: Empty JSON response with 204 No Content on success.
     """
-    job: AmberJob = AmberJob.query.filter_by(experiment_id=experiment_id, prmtop_name=prmtop_name).first_or_404(
-        description=f"AMBER job for {prmtop_name} in experiment {experiment_id} not found"
+    job: AmberJob = AmberJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first_or_404(
+        description=f"AMBER job for simulation {simulation_path} in experiment {experiment_id} not found"
     )
     job.delete()
     db.session.delete(job)
@@ -121,17 +106,17 @@ def delete_amber_job(experiment_id: str, prmtop_name: str) -> ResponseReturnValu
     return "", HTTPStatus.NO_CONTENT
 
 
-@amber_bp.route("/<path:prmtop_name>/log", methods=["GET"])
+@amber_bp.route("/<path:simulation_path>/log", methods=["GET"])
 @handle_exceptions()
-def get_amber_log(experiment_id: str, prmtop_name: str) -> Response:
+def get_amber_log(experiment_id: str, simulation_path: str) -> Response:
     """
     Get log output for an AMBER job.
 
     Returns:
         Response: JSON response with the requested log content.
     """
-    job: AmberJob = AmberJob.query.filter_by(experiment_id=experiment_id, prmtop_name=prmtop_name).first_or_404(
-        description=f"AMBER job for {prmtop_name} in experiment {experiment_id} not found"
+    job: AmberJob = AmberJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first_or_404(
+        description=f"AMBER job for simulation {simulation_path} in experiment {experiment_id} not found"
     )
 
     log_type = request.args.get("type", "mdout").lower()

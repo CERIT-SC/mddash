@@ -13,8 +13,9 @@ import {
   type AnalysisType,
 } from "@/util/analysis-types"
 import { getAnalysisLabel } from "@/util/analysis-utils"
-import { Engine } from "@/util/const"
-import type { FileOption } from "@/util/types"
+import { Engine, SELECT_NONE } from "@/util/const"
+import { simulationAnalysisUnavailableReason } from "@/util/simulation"
+import type { Simulation } from "@/util/types"
 import { getJobStatusVariant } from "@/util/types"
 import {
   useAnalysisData,
@@ -35,10 +36,7 @@ import LogsView from "@/components/LogsView"
 interface AnalysisPanelProps {
   experimentId: string
   engine: Engine
-  structureFile: FileOption | null
-  coordsFile: FileOption | null
-  topologyFile: FileOption | null
-  topologyRequired: boolean
+  simulation: Simulation | null
   preprocessingMode: AnalysisPreprocessingModeValue
   setPreprocessingMode: (mode: AnalysisPreprocessingModeValue) => void
   selectedAnalysis: AnalysisType | null
@@ -54,10 +52,7 @@ const PREPROCESSING_OPTIONS: Array<{ value: AnalysisPreprocessingModeValue; labe
 const AnalysisPanel = ({
   experimentId,
   engine,
-  structureFile,
-  coordsFile,
-  topologyFile,
-  topologyRequired,
+  simulation,
   preprocessingMode,
   setPreprocessingMode,
   selectedAnalysis,
@@ -79,21 +74,23 @@ const AnalysisPanel = ({
   const queryClient = useQueryClient()
   const [confirmCancelDialog, setConfirmCancelDialog] = useState(false)
 
-  const { data: jobs } = useAnalysisJobs(experimentId)
+  const simulationPath = simulation?.simulation_path ?? null
+
+  const { data: jobs } = useAnalysisJobs(experimentId, simulationPath)
   const activeJob = useMemo(() => jobs?.find((j) => j.status === "RUNNING" || j.status === "PENDING"), [jobs])
 
-  const { data: availableResultsList } = useAvailableAnalysisResults(experimentId)
+  const { data: availableResultsList } = useAvailableAnalysisResults(experimentId, simulationPath)
 
   // Invalidate the results list and cached chart data when a job finishes.
   const hadActiveJobRef = useRef(false)
   useEffect(() => {
     const isActive = !!activeJob
     if (hadActiveJobRef.current && !isActive) {
-      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-results"] })
-      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-variants"] })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-results", simulationPath] })
+      queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "analysis-variants", simulationPath] })
     }
     hadActiveJobRef.current = isActive
-  }, [activeJob, queryClient, experimentId])
+  }, [activeJob, queryClient, experimentId, simulationPath])
   const submitAnalysis = useSubmitAnalysis(experimentId)
   const deleteAnalysis = useDeleteAnalysis(experimentId)
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null)
@@ -121,7 +118,6 @@ const AnalysisPanel = ({
   const analysisConfig = useMemo(() => AVAILABLE_ANALYSES.find((a) => a.value === resolvedAnalysis), [resolvedAnalysis])
   const selectedResultName = analysisConfig?.resultName ?? null
   const submissionAnalysis = selectedAnalysis ?? resolvedAnalysis
-  const submitRequiresTopology = topologyRequired || !!analysisConfig?.requiresTopology
 
   const variantResults = useMemo(() => {
     if (!analysisConfig?.hasVariants || !selectedResultName) return []
@@ -141,6 +137,7 @@ const AnalysisPanel = ({
 
   const { data: analysisVariants } = useAnalysisVariants(
     experimentId,
+    simulationPath,
     hasResult && analysisConfig?.hasVariants ? selectedResultName : null
   )
   const variantLabelMap = useMemo(() => {
@@ -155,32 +152,21 @@ const AnalysisPanel = ({
 
   const { data: analysisData, isLoading: isLoadingData } = useAnalysisData(
     experimentId,
+    simulationPath!,
     hasResult ? effectiveResultName : null
   )
 
+  const unavailableReason = simulationAnalysisUnavailableReason(simulation, engine)
   const canSubmit =
-    (!!structureFile || !!topologyFile) &&
-    !!coordsFile &&
-    !!submissionAnalysis &&
-    (!submitRequiresTopology || !!topologyFile) &&
-    !activeJob &&
-    !submitAnalysis.isPending
+    !!simulation && !unavailableReason && !!submissionAnalysis && !activeJob && !submitAnalysis.isPending
 
   const submitCurrentAnalysis = () => {
-    if (
-      (!structureFile && !topologyFile) ||
-      !coordsFile ||
-      !submissionAnalysis ||
-      (submitRequiresTopology && !topologyFile)
-    )
-      return
+    if (!simulation || unavailableReason || !submissionAnalysis) return
 
     submitAnalysis.mutate({
       analysis: submissionAnalysis,
-      trajectory_file: coordsFile.path,
+      simulation_path: simulation.simulation_path,
       preprocessing_mode: preprocessingMode,
-      ...(structureFile && { structure_file: structureFile.path }),
-      ...(topologyFile && { topology_file: topologyFile.path }),
     })
   }
 
@@ -218,13 +204,18 @@ const AnalysisPanel = ({
             Analysis
           </Label>
           <Select
-            value={resolvedAnalysis ?? undefined}
-            onValueChange={(value) => setSelectedAnalysis(value as AnalysisType)}
+            value={resolvedAnalysis ?? SELECT_NONE}
+            onValueChange={(value) => {
+              if (value !== SELECT_NONE) setSelectedAnalysis(value as AnalysisType)
+            }}
           >
             <SelectTrigger id="analysis-select" className="w-full">
               <SelectValue placeholder="Select analysis..." />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value={SELECT_NONE} disabled>
+                <em>Select analysis...</em>
+              </SelectItem>
               {AVAILABLE_ANALYSES.map((a) => (
                 <SelectItem key={a.value} value={a.value}>
                   <span className="flex items-center gap-2">
@@ -283,6 +274,8 @@ const AnalysisPanel = ({
             )}
           </>
         )}
+
+        {unavailableReason && simulation && <p className="text-muted-foreground w-full text-xs">{unavailableReason}</p>}
 
         {hasResult && variantResults.length > 0 && (
           <Select value={selectedVariant ?? undefined} onValueChange={setSelectedVariant}>
@@ -364,21 +357,15 @@ const AnalysisPanel = ({
         )}
       </div>
 
-      {resolvedAnalysis &&
-        !hasResult &&
-        ((!structureFile && !topologyFile) || !coordsFile || (submitRequiresTopology && !topologyFile)) && (
-          <p className="text-muted-foreground text-xs">
-            {submitRequiresTopology
-              ? preprocessingMode === AnalysisPreprocessingMode.AS_IS
-                ? "Select structure, trajectory, and topology files in the sidebar to run this analysis."
-                : "Select structure, trajectory, and simulation TPR files in the sidebar to run analyses with preprocessing."
-              : !structureFile && !topologyFile
-                ? "Select a structure file or a topology file and a trajectory file in the sidebar to run this analysis."
-                : !coordsFile
-                  ? "Select trajectory file in the sidebar to run this analysis."
-                  : "Select structure and trajectory files in the sidebar to run this analysis."}
-          </p>
-        )}
+      {resolvedAnalysis && !hasResult && (!simulation || !simulation.valid || simulation.missing_files.length > 0) && (
+        <p className="text-muted-foreground text-xs">
+          {!simulation
+            ? "Select a simulation in the sidebar to run this analysis."
+            : !simulation.valid
+              ? "The selected simulation is invalid. Repair it in the setup step."
+              : "The selected simulation is missing required files."}
+        </p>
+      )}
 
       {showLogs && <LogsView logs={jobLogs ?? ""} isLoading={jobLogsLoading} />}
 
@@ -424,11 +411,7 @@ const AnalysisPanel = ({
                 <BarChart3 className="text-muted-foreground/50 mx-auto h-12 w-12" />
                 <p className="text-muted-foreground text-sm">No results yet.</p>
                 <p className="text-muted-foreground/75 text-xs">
-                  {submitRequiresTopology
-                    ? preprocessingMode === AnalysisPreprocessingMode.AS_IS
-                      ? 'Select the required files and click "Calculate" to run this analysis.'
-                      : 'Select the simulation TPR and click "Calculate" to run this analysis.'
-                    : 'Select the required files and click "Calculate" to run this analysis.'}
+                  {'Select a simulation and click "Calculate" to run this analysis.'}
                 </p>
               </div>
             )}
