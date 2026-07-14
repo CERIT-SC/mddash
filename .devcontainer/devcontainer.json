@@ -7,13 +7,21 @@
 
 	// Features to add to the dev container. More info: https://containers.dev/features.
 	"features": {
-		"ghcr.io/devcontainers/features/docker-in-docker:2": {
+		"ghcr.io/devcontainers/features/node:2": {
+			"version": "26",
+			"pnpmVersion": "11.13.0"
+		},
+		"ghcr.io/devcontainers/features/python:1": {
+			"version": "3.12",
+			"toolsToInstall": "uv"
+		},
+		"ghcr.io/devcontainers/features/docker-in-docker:4": {
 			"moby": false,
 			"dockerDashComposeVersion": "none",
 			"installDockerComposeSwitch": false
 		},
 		"ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {
-			"minikube": "none"  // don't install minikube
+			"minikube": "none" // don't install minikube
 		},
 		"ghcr.io/devcontainers/features/github-cli:1": {}
 	},
@@ -55,7 +63,7 @@
 				},
 				"python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python",
 				"ruff.interpreter": ["${containerWorkspaceFolder}/.venv/bin/python"],
-				"ty.interpreter": ["${containerWorkspaceFolder}/.venv/bin/python"],
+				"ty.interpreter": "${containerWorkspaceFolder}/.venv/bin/python",
 				"terminal.integrated.env.linux": {
 					"PATH": "/home/vscode/.local/bin:${env:PATH}"
 				}
