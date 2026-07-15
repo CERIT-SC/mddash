@@ -14,12 +14,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
+  verify:
     runs-on: ubuntu-latest
     if: >
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'master'
+    outputs:
+      git-ref: ${{ github.event.workflow_run.head_sha }}
     steps:
       - name: Verify workflow run is from this repository
         env:
@@ -27,12 +29,14 @@ jobs:
         run: |
           REPO=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}" --jq '.head_repository.full_name')
           [ "$REPO" = "${{ github.repository }}" ] || { echo "::error::Workflow run is from '$REPO', not this repository"; exit 1; }
-      - name: Deploy
-        uses: ./.github/workflows/_deploy.yml
-        with:
-          environment: dev
-          image-version: dev
-          config-file: config.dev.yaml
-          release-mode: false
-          git-ref: ${{ github.event.workflow_run.head_sha }}
-        secrets: inherit
+
+  deploy:
+    needs: verify
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      environment: dev
+      image-version: dev
+      config-file: config.dev.yaml
+      release-mode: false
+      git-ref: ${{ needs.verify.outputs.git-ref }}
+    secrets: inherit
