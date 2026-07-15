@@ -177,5 +177,69 @@ def oauth_callback() -> tuple[str, int] | Response:
     return resp
 
 
+@app.route("/create-login-token", methods=["POST"])
+def create_login_token() -> tuple[dict, int]:
+    """
+    Generate a one-time use login token for passwordless access.
+
+    This endpoint must be called from an already authenticated session.
+    It creates a new session token and returns it so the client can construct
+    a shareable login URL.
+
+    Returns:
+        JSON response with 'token' and 'login_url' fields.
+    """
+    # Check that caller has a valid session (already authenticated)
+    auth_token = request.cookies.get(COOKIE_NAME)
+    if not auth_token or not is_valid_session(auth_token, USER):
+        return {"error": "Authentication required"}, HTTPStatus.UNAUTHORIZED
+
+    # Create a new session token for passwordless access
+    login_token_val = create_session(USER)
+
+    # Construct the one-time login URL
+    login_url = f"{SERVICE_PREFIX}/dash/auth/login-token?token={login_token_val}"
+
+    logger.info("Passwordless login token created for user %s", USER)
+
+    return {"token": login_token_val, "login_url": login_url, "expires_in": SESSION_LIFETIME}, HTTPStatus.OK
+
+
+@app.route("/login-token")
+def login_token_endpoint() -> Response:
+    """
+    Consume a one-time login token and establish a session cookie.
+
+    Query params:
+        token: The one-time use token obtained from /create-login-token
+
+    Returns:
+        Redirect to dashboard home with mddash-auth cookie set, or error response.
+    """
+    token = request.args.get("token")
+
+    if not token:
+        return make_response("Missing token parameter", HTTPStatus.BAD_REQUEST)
+
+    # Validate the token exists and belongs to this user
+    if not is_valid_session(token, USER):
+        logger.warning("Invalid or expired login token attempted for user %s", USER)
+        return make_response("Invalid or expired token", HTTPStatus.UNAUTHORIZED)
+
+    # Token is valid - consume it (one-time use) and set cookie
+    # Remove from session store to prevent reuse
+    if token in _sessions:
+        del _sessions[token]
+
+    # Create a fresh session for the browser
+    new_token = create_session(USER)
+
+    resp = make_response(redirect(f"{SERVICE_PREFIX}/dash/"))
+    resp.set_cookie(COOKIE_NAME, new_token, path=SERVICE_PREFIX, httponly=True, samesite="Lax")
+
+    logger.info("Passwordless login successful for user %s", USER)
+    return resp
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001)

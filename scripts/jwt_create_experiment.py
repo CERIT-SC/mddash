@@ -7,8 +7,16 @@ A standalone manual test script that:
 2. Waits for the singleuser server to be ready,
 3. Completes the OAuth flow for mddash session,
 4. Creates a molecular dynamics experiment (PDB: 1L2Y) via the dashboard API.
+5. Generates a passwordless login URL by requesting a token from the auth service.
 
 Requires a `TOKEN` environment variable containing a valid EGI JWT access token.
+
+Usage:
+    TOKEN=<jwt-token> python scripts/jwt_create_experiment.py
+
+Output:
+    - Experiment creation result
+    - Passwordless login URL that can be shared for direct access
 """
 
 import json
@@ -46,7 +54,7 @@ def create_experiment():
         print("Error: TOKEN environment variable missing.")
         return
 
-    base_url = "https://mddash-edc.dyn.cloud.e-infra.cz"
+    base_url = "https://mddash-edc-dev.dyn.cloud.e-infra.cz"
     login_url = f"{base_url}/hub/jwt_login"
     user_api_url = f"{base_url}/hub/api/user"
 
@@ -54,6 +62,9 @@ def create_experiment():
     EXPERIMENT_NAME = "test-experiment-1L2Y"
     PDB_ID = "1L2Y"
     NOTEBOOKS_REPO = "https://github.com/sb-ncbr/mddash-notebooks.git"
+
+    # Passwordless access configuration
+    GENERATE_PASSWORDLESS_URL = True  # Set to False to skip passwordless URL generation
 
     session = requests.Session()
 
@@ -180,6 +191,40 @@ def create_experiment():
             print(f"Experiment ID: {exp_id}")
     else:
         print(f"\nFailed to create experiment. Status: {resp.status_code}")
+
+    # Step 7: Request passwordless login URL from auth service
+    if GENERATE_PASSWORDLESS_URL:
+        print("--- Step 7: Requesting passwordless login URL ---")
+
+        # Call the /create-login-token endpoint which:
+        # 1. Validates the existing mddash-auth cookie
+        # 2. Creates a new session token server-side
+        # 3. Returns the token so we can construct the login URL
+        create_token_url = f"{base_url}{server_url_path}dash/auth/create-login-token"
+
+        log_request("POST", create_token_url)
+        resp = session.post(create_token_url)
+        log_response(resp, "CREATE_LOGIN_TOKEN")
+
+        if resp.status_code == 200:
+            result = resp.json()
+            login_token = result.get("token")
+            login_url = result.get("login_url")
+            expires_in = result.get("expires_in", 3600)
+
+            print("\n" + "=" * 60)
+            print("PASSWORDLESS LOGIN URL:")
+            print("=" * 60)
+            print(login_url)
+            print("=" * 60)
+            print(f"\nThis token is valid for {expires_in // 60} minutes.")
+            print("The token is one-time use: consuming it will invalidate it.")
+            print()
+        else:
+            print(f"\nFailed to generate passwordless URL. Status: {resp.status_code}")
+            error_detail = resp.json().get("error", resp.text) if resp.content else "Unknown error"
+            print(f"Error: {error_detail}")
+            print()
 
 
 if __name__ == "__main__":
