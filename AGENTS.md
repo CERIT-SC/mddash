@@ -65,7 +65,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 make fix            # always — format + auto-fix Python and frontend
 make type-check     # always — Python (ty) and TypeScript (tsc)
 make test           # always — Python unit/integration tests
-make lint-helm-fast # when editing Helm charts or config (requires helm + gomplate + yq)
+make validate-charts  # when editing Helm charts or config (requires helm + gomplate + yq)
 make lint-workflows # when editing GitHub Actions workflows (requires actionlint + zizmor)
 ```
 

@@ -62,15 +62,15 @@ format-check-ui: ## Check frontend formatting (dashboard/ui and landing via pret
 	cd landing && corepack pnpm run format:check
 
 .PHONY: lint-helm
-lint-helm: lint-helm-fast ## Validate Helm charts (full — includes umbrella dependency build). Requires helm + gomplate + yq.
+lint-helm: validate-charts ## Validate all Helm charts including umbrella dependency build. Requires helm + gomplate + yq.
 	helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ >/dev/null
 	helm repo update jupyterhub >/dev/null
 	helm dependency build helm/charts/mddash
 	helm lint helm/charts/mddash
 	helm template mddash helm/charts/mddash >/dev/null
 
-.PHONY: lint-helm-fast
-lint-helm-fast: ## Validate Helm charts (fast — mdrun-api lint + values render). Requires helm + gomplate + yq.
+.PHONY: validate-charts
+validate-charts: ## Lint mdrun-api chart and render values template. Requires helm + gomplate + yq.
 	helm lint helm/charts/mdrun-api
 	helm template mdrun-api helm/charts/mdrun-api >/dev/null
 	$(MAKE) -C helm render

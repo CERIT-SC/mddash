@@ -190,7 +190,7 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@59b1c81c6280f5abebb1fb1bc585696daa7dfb42 # v5
       - name: Lint and template charts
-        run: make lint-helm-fast
+        run: make validate-charts
 
   workflow-validation:
     runs-on: ubuntu-latest
