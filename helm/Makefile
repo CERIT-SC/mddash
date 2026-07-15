@@ -3,20 +3,19 @@ SHELL := /bin/bash
 
 ENV ?= dev
 
-# IMAGE_TAG inherited from parent Makefile (exported), or computed here
 ifeq ($(ENV),dev)
   IMAGE_TAG ?= dev
-else
-  IMAGE_TAG ?= sha-$(shell git rev-parse --short HEAD)
 endif
 
-#config = $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
 config := $(if $(wildcard ../config.${ENV}.yaml),../config.${ENV}.yaml,../config.yaml)
 
 package := $(shell yq .helm.package $(config))
 namespace := $(shell yq '.namespace' $(config))
+registry := $(shell yq '.registry' $(config))
 chart_path := charts/mddash
+chart_name := mddash-jupyterhub
 values_file := -f $(chart_path)/values.yaml
+timeout := --timeout 10m
 
 .PHONY: help
 help: ## Show this help
@@ -29,19 +28,31 @@ render: ## Render Helm values template
 	@IMAGE_TAG=$(IMAGE_TAG) gomplate -d config=$(config) \
 		-f $(chart_path)/values.yaml.tmpl \
 		-o $(chart_path)/values.yaml
-	@echo "✓ Rendered $(chart_path)/values.yaml"
+	@echo "Rendered $(chart_path)/values.yaml"
 
 .PHONY: install
 install: render update hub-templates ## Install Helm chart
-	helm install $(package) $(chart_path) --namespace $(namespace) \
-		$(values_file) \
+ifeq ($(ENV),prod)
+	helm install $(package) oci://$(registry)/$(chart_name) --version $(IMAGE_TAG) \
+		--namespace $(namespace) $(values_file) $(timeout) --atomic --wait \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
+else
+	helm install $(package) $(chart_path) --namespace $(namespace) \
+		$(values_file) $(timeout) --atomic --wait \
+		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
+endif
 
 .PHONY: upgrade
 upgrade: render hub-templates ## Upgrade Helm release
-	helm upgrade $(package) $(chart_path) --namespace $(namespace) \
-		$(values_file) \
+ifeq ($(ENV),prod)
+	helm upgrade --install $(package) oci://$(registry)/$(chart_name) --version $(IMAGE_TAG) \
+		--namespace $(namespace) $(values_file) $(timeout) --atomic --wait \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
+else
+	helm upgrade --install $(package) $(chart_path) --namespace $(namespace) \
+		$(values_file) $(timeout) --atomic --wait \
+		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
+endif
 
 .PHONY: deploy
 deploy: upgrade ## Deploy (alias for upgrade)
@@ -102,5 +113,5 @@ rollback: ## Rollback to previous revision (REVISION=N for specific)
 		echo "Rolling back to previous revision..."; \
 		helm rollback $(package) --namespace $(namespace); \
 	fi
-	@echo "✓ Rollback complete"
+	@echo "Rollback complete"
 	@$(MAKE) status

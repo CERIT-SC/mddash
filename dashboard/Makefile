@@ -6,11 +6,8 @@ ENV ?= dev
 # IMAGE_TAG inherited from parent Makefile (exported), or computed here
 ifeq ($(ENV),dev)
   IMAGE_TAG ?= dev
-else
-  IMAGE_TAG ?= sha-$(shell git rev-parse --short HEAD)
 endif
 
-#config := $(if $(filter dev,$(ENV)),../config.dev.yaml,../config.yaml)
 config := $(if $(wildcard ../config.${ENV}.yaml),../config.${ENV}.yaml,../config.yaml)
 
 platform := --platform $(shell yq '.sidecars.platform' $(config))
@@ -23,16 +20,7 @@ auth_image := $(registry)/$(shell yq '.sidecars.auth.image' $(config))
 api_image := $(registry)/$(shell yq '.sidecars.api.image' $(config))
 s3sync_image := $(registry)/$(shell yq '.sidecars.s3sync.image' $(config))
 
-ifeq ($(ENV),dev)
-	tag := dev
-	# Use dev Dockerfiles for Flask apps (debug mode, hot reload)
-	api_dockerfile := Dockerfile.dev
-	auth_dockerfile := Dockerfile.dev
-else
-	tag := $(IMAGE_TAG)
-	api_dockerfile := Dockerfile
-	auth_dockerfile := Dockerfile
-endif
+tag := $(IMAGE_TAG)
 
 .PHONY: help
 help: ## Show this help
@@ -72,11 +60,11 @@ build-proxy: build-ui ## Build proxy image (Caddy + UI static files)
 
 .PHONY: build-auth
 build-auth: ## Build auth image
-	docker build $(platform) -f auth/$(auth_dockerfile) -t $(auth_image):$(tag) ..
+	docker build $(platform) -f auth/Dockerfile -t $(auth_image):$(tag) ..
 
 .PHONY: build-api
 build-api: ## Build API image
-	docker build $(platform) -f api/$(api_dockerfile) -t $(api_image):$(tag) ..
+	docker build $(platform) -f api/Dockerfile -t $(api_image):$(tag) ..
 
 .PHONY: build-s3sync
 build-s3sync: ## Build s3-sync image

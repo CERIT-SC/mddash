@@ -15,7 +15,7 @@ imageTag: dev
 
 # Dashboard hostname
 dashboard:
-  hostname: mddash-dev.dyn.cloud.e-infra.cz
+  hostname: dev.mddash.dyn.cloud.e-infra.cz
 
 # OIDC provider for JupyterHub authentication
 oidc:

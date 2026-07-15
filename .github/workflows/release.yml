@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-prod
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.parse.outputs.version }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+      - name: Validate SemVer and master ancestry
+        id: parse
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::'$TAG' is not strict SemVer (vMAJOR.MINOR.PATCH)"; exit 1; }
+          git merge-base --is-ancestor "$TAG" origin/master || { echo "::error::'$TAG' is not an ancestor of origin/master"; exit 1; }
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+
+  ci:
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  deploy:
+    needs: [validate, ci]
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      environment: prod
+      image-version: ${{ needs.validate.outputs.version }}
+      config-file: config.yaml
+      release-mode: true
+    secrets: inherit
+
+  github-release:
+    needs: [validate, deploy]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false

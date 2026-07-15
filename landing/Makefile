@@ -5,8 +5,6 @@ ENV ?= dev
 
 ifeq ($(ENV),dev)
   IMAGE_TAG ?= dev
-else
-  IMAGE_TAG ?= sha-$(shell git rev-parse --short HEAD)
 endif
 
 config := $(if $(wildcard ../config.${ENV}.yaml),../config.${ENV}.yaml,../config.yaml)
@@ -15,11 +13,7 @@ registry := $(shell yq '.registry' $(config))
 image := $(registry)/$(shell yq '.landing.image' $(config))
 platform := --platform $(shell yq '.sidecars.platform' $(config))
 
-ifeq ($(ENV),dev)
-	tag := dev
-else
-	tag := $(IMAGE_TAG)
-endif
+tag := $(IMAGE_TAG)
 
 .PHONY: help
 help: ## Show this help
