@@ -34,6 +34,17 @@ http://:8888 {
 		}
 	}
 
+	# Auth service routes (passwordless login) - proxied to auth container without forward_auth
+	@auth_routes {
+		path {$CADDY_ROUTE_PREFIX}/dash/auth/*login-token*
+	}
+	handle @auth_routes {
+		uri strip_prefix {$CADDY_ROUTE_PREFIX}
+		reverse_proxy {$AUTH_HOST}:5001 {
+			lb_try_duration 5s
+		}
+	}
+
 	# API routes - authenticated via forward_auth to auth container
 	@api_routes {
 		path_regexp ^{$CADDY_ROUTE_PREFIX}/dash/api.*$
