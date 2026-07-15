@@ -39,7 +39,7 @@ http://:8888 {
 		path {$CADDY_ROUTE_PREFIX}/dash/auth/*login-token*
 	}
 	handle @auth_routes {
-		uri strip_prefix {$CADDY_ROUTE_PREFIX}
+		uri strip_prefix {$CADDY_ROUTE_PREFIX}/dash/auth
 		reverse_proxy {$AUTH_HOST}:5001 {
 			lb_try_duration 5s
 		}
