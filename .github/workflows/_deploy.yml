@@ -48,11 +48,14 @@ jobs:
       - name: Read config
         id: config
         run: |
-          echo "registry=$(yq '.registry' ${{ inputs.config-file }})" >> $GITHUB_OUTPUT
-          echo "registry-host=$(yq '.registry' ${{ inputs.config-file }} | cut -d'/' -f1)" >> $GITHUB_OUTPUT
-          echo "namespace=$(yq '.namespace' ${{ inputs.config-file }})" >> $GITHUB_OUTPUT
-          echo "package=$(yq '.helm.package' ${{ inputs.config-file }})" >> $GITHUB_OUTPUT
-          echo "hostname=$(yq '.dashboard.hostname' ${{ inputs.config-file }})" >> $GITHUB_OUTPUT
+          CONFIG="${{ inputs.config-file }}"
+          {
+            echo "registry=$(yq '.registry' "$CONFIG")"
+            echo "registry-host=$(yq '.registry' "$CONFIG" | cut -d'/' -f1)"
+            echo "namespace=$(yq '.namespace' "$CONFIG")"
+            echo "package=$(yq '.helm.package' "$CONFIG")"
+            echo "hostname=$(yq '.dashboard.hostname' "$CONFIG")"
+          } >> "$GITHUB_OUTPUT"
 
   build-sidecars:
     needs: setup
@@ -91,7 +94,7 @@ jobs:
         id: image
         run: |
           IMAGE_BASE="${{ needs.setup.outputs.registry }}/${{ matrix.image-suffix }}"
-          echo "base=${IMAGE_BASE}" >> $GITHUB_OUTPUT
+          echo "base=$IMAGE_BASE" >> "$GITHUB_OUTPUT"
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
@@ -127,8 +130,8 @@ jobs:
         id: image
         run: |
           IMAGE_BASE="${{ needs.setup.outputs.registry }}/mddash-proxy"
-          echo "base=${IMAGE_BASE}" >> $GITHUB_OUTPUT
-          echo "ui=${{ needs.setup.outputs.registry }}/mddash-ui:${{ inputs.image-version }}" >> $GITHUB_OUTPUT
+          echo "base=$IMAGE_BASE" >> "$GITHUB_OUTPUT"
+          echo "ui=${{ needs.setup.outputs.registry }}/mddash-ui:${{ inputs.image-version }}" >> "$GITHUB_OUTPUT"
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
@@ -182,7 +185,7 @@ jobs:
         id: image
         run: |
           IMAGE_BASE="${{ needs.setup.outputs.registry }}/${{ matrix.image-suffix }}"
-          echo "base=${IMAGE_BASE}" >> $GITHUB_OUTPUT
+          echo "base=$IMAGE_BASE" >> "$GITHUB_OUTPUT"
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
@@ -249,8 +252,8 @@ jobs:
         uses: azure/setup-helm@59b1c81c6280f5abebb1fb1bc585696daa7dfb42 # v5
       - name: Configure kubectl
         run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > "$HOME/.kube/config"
       - name: Update Helm dependencies
         if: inputs.release-mode != true
         run: make -C helm update ENV=${{ inputs.environment }}
@@ -258,29 +261,29 @@ jobs:
         run: |
           NAMESPACE="${{ needs.setup.outputs.namespace }}"
           PACKAGE="${{ needs.setup.outputs.package }}"
-          kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
           kubectl create secret generic oidc-credentials \
             --from-literal=client_id="${{ secrets.OAUTH_CLIENT_ID }}" \
             --from-literal=client_secret="${{ secrets.OAUTH_CLIENT_SECRET }}" \
-            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-          kubectl create secret generic ${PACKAGE}-s3-creds \
+            -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic "$PACKAGE"-s3-creds \
             --from-literal=S3_ACCESS_KEY="${{ secrets.S3_ACCESS_KEY }}" \
             --from-literal=S3_SECRET_KEY="${{ secrets.S3_SECRET_KEY }}" \
-            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-          kubectl create secret generic ${PACKAGE}-mdrepo-credentials \
+            -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic "$PACKAGE"-mdrepo-credentials \
             --from-literal=client_id="${{ secrets.MDREPO_CLIENT_ID }}" \
             --from-literal=client_secret="${{ secrets.MDREPO_CLIENT_SECRET }}" \
-            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+            -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
           kubectl create secret generic tuner-auth \
             --from-literal=user="${{ secrets.TUNER_USER }}" \
             --from-literal=password="${{ secrets.TUNER_PASSWORD }}" \
-            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+            -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
       - name: Deploy
         run: make -C helm deploy ENV=${{ inputs.environment }} IMAGE_TAG=${{ inputs.image-version }}
       - name: Verify health
         run: |
           URL="https://${{ needs.setup.outputs.hostname }}/hub/health"
-          for i in $(seq 1 30); do curl -sf "$URL" --max-time 10 && exit 0; sleep 10; done
+          for _ in $(seq 1 30); do curl -sf "$URL" --max-time 10 && exit 0; sleep 10; done
           echo "::error::Health check failed: $URL"; exit 1
       - name: Deployment diagnostics
         if: failure()

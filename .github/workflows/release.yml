@@ -27,7 +27,7 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::'$TAG' is not strict SemVer (vMAJOR.MINOR.PATCH)"; exit 1; }
           git merge-base --is-ancestor "$TAG" origin/master || { echo "::error::'$TAG' is not an ancestor of origin/master"; exit 1; }
-          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
   ci:
     needs: validate
