@@ -34,7 +34,7 @@ fix: ## Auto-fix formatting and lint issues (Python via ruff, frontend via prett
 	cd landing && corepack pnpm run format
 
 .PHONY: lint
-lint: lint-py lint-ui lint-helm-fast lint-workflows ## Check linting without auto-fix
+lint: lint-py lint-ui ## Check linting without auto-fix
 
 .PHONY: lint-py
 lint-py: ## Check Python linting
@@ -45,7 +45,7 @@ lint-ui: ## Check frontend linting (dashboard/ui via eslint)
 	cd dashboard/ui && corepack pnpm exec eslint . --max-warnings=0
 
 .PHONY: lint-workflows
-lint-workflows: ## Validate GitHub Actions workflows (actionlint + zizmor)
+lint-workflows: ## Validate GitHub Actions workflows (actionlint + zizmor). Requires actionlint + zizmor (in devcontainer).
 	actionlint
 	zizmor --no-exit-codes .
 
@@ -62,7 +62,7 @@ format-check-ui: ## Check frontend formatting (dashboard/ui and landing via pret
 	cd landing && corepack pnpm run format:check
 
 .PHONY: lint-helm
-lint-helm: lint-helm-fast ## Validate Helm charts (full — includes umbrella dependency build)
+lint-helm: lint-helm-fast ## Validate Helm charts (full — includes umbrella dependency build). Requires helm + gomplate + yq.
 	helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ >/dev/null
 	helm repo update jupyterhub >/dev/null
 	helm dependency build helm/charts/mddash
@@ -70,7 +70,7 @@ lint-helm: lint-helm-fast ## Validate Helm charts (full — includes umbrella de
 	helm template mddash helm/charts/mddash >/dev/null
 
 .PHONY: lint-helm-fast
-lint-helm-fast: ## Validate Helm charts (fast — mdrun-api lint + values render)
+lint-helm-fast: ## Validate Helm charts (fast — mdrun-api lint + values render). Requires helm + gomplate + yq.
 	helm lint helm/charts/mdrun-api
 	helm template mdrun-api helm/charts/mdrun-api >/dev/null
 	$(MAKE) -C helm render

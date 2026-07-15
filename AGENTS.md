@@ -62,11 +62,11 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - Run from repo root before claiming any code is correct — each must pass before the next:
 
 ```bash
-make fix
-make type-check
-make test
-make lint-helm-fast
-make lint-workflows
+make fix            # always — format + auto-fix Python and frontend
+make type-check     # always — Python (ty) and TypeScript (tsc)
+make test           # always — Python unit/integration tests
+make lint-helm-fast # when editing Helm charts or config (requires helm + gomplate + yq)
+make lint-workflows # when editing GitHub Actions workflows (requires actionlint + zizmor)
 ```
 
 - Build/deploy: `make build ENV={dev,prod}`, `make deploy ENV={dev,prod}`, `make rollback ENV=prod REVISION=N`.
