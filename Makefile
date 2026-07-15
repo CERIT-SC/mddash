@@ -34,7 +34,7 @@ fix: ## Auto-fix formatting and lint issues (Python via ruff, frontend via prett
 	cd landing && corepack pnpm run format
 
 .PHONY: lint
-lint: lint-py lint-ui ## Check linting without auto-fix
+lint: lint-py lint-ui lint-helm-fast lint-workflows ## Check linting without auto-fix
 
 .PHONY: lint-py
 lint-py: ## Check Python linting
@@ -43,6 +43,11 @@ lint-py: ## Check Python linting
 .PHONY: lint-ui
 lint-ui: ## Check frontend linting (dashboard/ui via eslint)
 	cd dashboard/ui && corepack pnpm exec eslint . --max-warnings=0
+
+.PHONY: lint-workflows
+lint-workflows: ## Validate GitHub Actions workflows (actionlint + zizmor)
+	actionlint
+	zizmor --no-exit-codes .
 
 .PHONY: format-check
 format-check: format-check-py format-check-ui ## Check formatting without modifying files

@@ -59,12 +59,14 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 ## Development & Feedback Loop
 
 - `make demo` runs the real Flask API (`dashboard/api/_demo/app.py`, test-style mocks + seeded data) plus the React dev server locally.
-- Run from repo root before claiming any Python code is correct — each must pass before the next:
+- Run from repo root before claiming any code is correct — each must pass before the next:
 
 ```bash
 make fix
 make type-check
 make test
+make lint-helm-fast
+make lint-workflows
 ```
 
 - Build/deploy: `make build ENV={dev,prod}`, `make deploy ENV={dev,prod}`, `make rollback ENV=prod REVISION=N`.

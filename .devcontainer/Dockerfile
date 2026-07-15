@@ -1,4 +1,5 @@
 FROM hairyhenderson/gomplate:v5.2.0 AS gomplate
+FROM rhysd/actionlint:v1.7.12 AS actionlint
 
 FROM mcr.microsoft.com/devcontainers/base:ubuntu26.04
 
@@ -7,6 +8,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 COPY --from=gomplate /gomplate /usr/local/bin/gomplate
+COPY --from=actionlint /usr/local/bin/actionlint /usr/local/bin/actionlint
 
 WORKDIR /workspaces/mddash
 
