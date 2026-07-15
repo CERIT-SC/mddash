@@ -201,7 +201,7 @@ jobs:
           curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz | \
             sudo tar -xzf - -C /usr/local/bin actionlint
       - name: Install zizmor
-        run: uv tool install zizmor
+        run: pip install zizmor
       - name: Validate workflow syntax
         run: actionlint
       - name: Security analysis

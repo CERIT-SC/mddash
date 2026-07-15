@@ -62,11 +62,11 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - Run from repo root before claiming any code is correct — each must pass before the next:
 
 ```bash
-make fix            # always — format + auto-fix Python and frontend
-make type-check     # always — Python (ty) and TypeScript (tsc)
-make test           # always — Python unit/integration tests
+make fix  # always — format + auto-fix Python and frontend
+make type-check  # always — Python (ty) and TypeScript (tsc)
+make test  # always — Python unit/integration tests
 make validate-charts  # when editing Helm charts or config (requires helm + gomplate + yq)
-make lint-workflows # when editing GitHub Actions workflows (requires actionlint + zizmor)
+make lint-workflows  # when editing GitHub Actions workflows (requires actionlint + zizmor)
 ```
 
 - Build/deploy: `make build ENV={dev,prod}`, `make deploy ENV={dev,prod}`, `make rollback ENV=prod REVISION=N`.
@@ -75,10 +75,6 @@ make lint-workflows # when editing GitHub Actions workflows (requires actionlint
 
 ## CI/CD
 
-- `ci.yml`: lint, test, type-check, Helm validation, and workflow validation (actionlint + zizmor) on every PR and `master` push. Supports `workflow_call` so `release.yml` can reuse it as a release quality gate.
-- `deploy-dev.yml`: triggered by a successful `CI` `workflow_run` for a `master` push. Verifies the run was a successful push from this repository, then deploys all images as `dev` to the dev environment via `_deploy.yml`.
-- `release.yml`: triggered by `v*` tags. Validates strict SemVer and `master` ancestry, calls `ci.yml` as a quality gate, then deploys immutable images and Helm charts to prod via `_deploy.yml`, verifies health, and creates a GitHub Release.
-- `_deploy.yml`: reusable workflow owning build matrices, OCI labels, BuildKit cache, Helm deployment (atomic + wait), health verification, and failure diagnostics. Called by both `deploy-dev.yml` and `release.yml`.
-- `codeql.yml`: CodeQL for Actions, JS/TS, Python on `master` pushes/PRs + weekly.
-- Tools (yq, gomplate, actionlint, zizmor) are installed from pinned release versions via inline `curl` (yq, gomplate) and `pip` (zizmor). All Actions are pinned to full commit SHAs with version comments. Dependabot updates Actions monthly.
+- `master` pushes deploy to dev; `v*` SemVer tags deploy to prod and create a GitHub Release. PRs run CI only.
+- Workflow details in `.github/workflows/AGENTS.md`.
 - Secrets are created in-namespace during deployment via GitHub Actions.
