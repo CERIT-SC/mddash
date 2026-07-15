@@ -20,7 +20,6 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'master'
-    environment: dev
     steps:
       - name: Verify workflow run is from this repository
         env:

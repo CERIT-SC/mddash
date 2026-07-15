@@ -30,7 +30,6 @@ concurrency:
 jobs:
   setup:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     outputs:
       registry: ${{ steps.config.outputs.registry }}
       registry-host: ${{ steps.config.outputs.registry-host }}
@@ -58,7 +57,6 @@ jobs:
   build-sidecars:
     needs: setup
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     strategy:
       fail-fast: false
       matrix:
@@ -115,7 +113,6 @@ jobs:
   build-proxy:
     needs: [setup, build-sidecars]
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
@@ -155,7 +152,6 @@ jobs:
   build-components:
     needs: setup
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     strategy:
       fail-fast: false
       matrix:
@@ -209,7 +205,6 @@ jobs:
     if: ${{ inputs.release-mode }}
     needs: setup
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
@@ -239,7 +234,6 @@ jobs:
       needs.build-components.result == 'success' &&
       (needs.push-charts.result == 'success' || needs.push-charts.result == 'skipped')
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
