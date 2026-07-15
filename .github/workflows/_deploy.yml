@@ -1,0 +1,293 @@
+name: Deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      image-version:
+        required: true
+        type: string
+      config-file:
+        required: true
+        type: string
+      release-mode:
+        required: true
+        type: boolean
+      git-ref:
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: ${{ inputs.environment == 'dev' }}
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      registry: ${{ steps.config.outputs.registry }}
+      registry-host: ${{ steps.config.outputs.registry-host }}
+      namespace: ${{ steps.config.outputs.namespace }}
+      package: ${{ steps.config.outputs.package }}
+      hostname: ${{ steps.config.outputs.hostname }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ inputs.git-ref }}
+      - name: Install yq
+        run: |
+          curl -sSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+      - name: Read config
+        id: config
+        run: |
+          echo "registry=$(yq '.registry' ${{ inputs.config-file }})" >> $GITHUB_OUTPUT
+          echo "registry-host=$(yq '.registry' ${{ inputs.config-file }} | cut -d'/' -f1)" >> $GITHUB_OUTPUT
+          echo "namespace=$(yq '.namespace' ${{ inputs.config-file }})" >> $GITHUB_OUTPUT
+          echo "package=$(yq '.helm.package' ${{ inputs.config-file }})" >> $GITHUB_OUTPUT
+          echo "hostname=$(yq '.dashboard.hostname' ${{ inputs.config-file }})" >> $GITHUB_OUTPUT
+
+  build-sidecars:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ui
+            context: dashboard/ui
+            dockerfile: dashboard/ui/Dockerfile
+            image-suffix: mddash-ui
+          - name: auth
+            context: .
+            dockerfile: dashboard/auth/Dockerfile
+            image-suffix: mddash-auth
+          - name: api
+            context: .
+            dockerfile: dashboard/api/Dockerfile
+            image-suffix: mddash-api
+          - name: s3sync
+            context: dashboard/s3-sync
+            dockerfile: dashboard/s3-sync/Dockerfile
+            image-suffix: mddash-s3sync
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ inputs.git-ref }}
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ${{ needs.setup.outputs.registry-host }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Compute image reference
+        id: image
+        run: |
+          IMAGE_BASE="${{ needs.setup.outputs.registry }}/${{ matrix.image-suffix }}"
+          echo "base=${IMAGE_BASE}" >> $GITHUB_OUTPUT
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ steps.image.outputs.base }}
+          tags: |
+            type=raw,value=${{ inputs.image-version }}
+      - name: Build and push ${{ matrix.name }}
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ steps.image.outputs.base }}:buildcache
+          cache-to: type=registry,ref=${{ steps.image.outputs.base }}:buildcache,mode=max
+
+  build-proxy:
+    needs: [setup, build-sidecars]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ inputs.git-ref }}
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ${{ needs.setup.outputs.registry-host }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Compute image reference
+        id: image
+        run: |
+          IMAGE_BASE="${{ needs.setup.outputs.registry }}/mddash-proxy"
+          echo "base=${IMAGE_BASE}" >> $GITHUB_OUTPUT
+          echo "ui=${{ needs.setup.outputs.registry }}/mddash-ui:${{ inputs.image-version }}" >> $GITHUB_OUTPUT
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ steps.image.outputs.base }}
+          tags: |
+            type=raw,value=${{ inputs.image-version }}
+      - name: Build and push proxy
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: dashboard/proxy
+          file: dashboard/proxy/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            UI_IMAGE=${{ steps.image.outputs.ui }}
+          cache-from: type=registry,ref=${{ steps.image.outputs.base }}:buildcache
+          cache-to: type=registry,ref=${{ steps.image.outputs.base }}:buildcache,mode=max
+
+  build-components:
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: notebook
+            context: notebook
+            dockerfile: notebook/Dockerfile
+            image-suffix: mddash-notebook
+          - name: mdrun-api
+            context: .
+            dockerfile: mdrun-api/Dockerfile
+            image-suffix: mdrun-api
+          - name: landing
+            context: landing
+            dockerfile: landing/Dockerfile
+            image-suffix: mddash-landing
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ inputs.git-ref }}
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ${{ needs.setup.outputs.registry-host }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Compute image reference
+        id: image
+        run: |
+          IMAGE_BASE="${{ needs.setup.outputs.registry }}/${{ matrix.image-suffix }}"
+          echo "base=${IMAGE_BASE}" >> $GITHUB_OUTPUT
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ steps.image.outputs.base }}
+          tags: |
+            type=raw,value=${{ inputs.image-version }}
+      - name: Build and push ${{ matrix.name }}
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ steps.image.outputs.base }}:buildcache
+          cache-to: type=registry,ref=${{ steps.image.outputs.base }}:buildcache,mode=max
+
+  push-charts:
+    if: ${{ inputs.release-mode }}
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ inputs.git-ref }}
+      - name: Install yq
+        run: |
+          curl -sSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+      - name: Install Helm
+        uses: azure/setup-helm@59b1c81c6280f5abebb1fb1bc585696daa7dfb42 # v5
+      - name: Login to registry
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | helm registry login ${{ needs.setup.outputs.registry-host }} \
+            --username ${{ secrets.REGISTRY_USERNAME }} \
+            --password-stdin
+      - name: Package and push charts
+        run: make push-mddash-chart ENV=${{ inputs.environment }} IMAGE_TAG=${{ inputs.image-version }}
+
+  deploy:
+    needs: [setup, build-sidecars, build-proxy, build-components, push-charts]
+    if: |
+      always() &&
+      needs.setup.result == 'success' &&
+      needs.build-sidecars.result == 'success' &&
+      needs.build-proxy.result == 'success' &&
+      needs.build-components.result == 'success' &&
+      (needs.push-charts.result == 'success' || needs.push-charts.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ inputs.git-ref }}
+      - name: Install yq and gomplate
+        run: |
+          curl -sSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
+          curl -sSL -o /usr/local/bin/gomplate \
+            https://github.com/hairyhenderson/gomplate/releases/download/v5.2.0/gomplate_linux-amd64
+          chmod +x /usr/local/bin/yq /usr/local/bin/gomplate
+      - name: Install Helm
+        uses: azure/setup-helm@59b1c81c6280f5abebb1fb1bc585696daa7dfb42 # v5
+      - name: Configure kubectl
+        run: |
+          mkdir -p $HOME/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > $HOME/.kube/config
+      - name: Update Helm dependencies
+        if: inputs.release-mode != true
+        run: make -C helm update ENV=${{ inputs.environment }}
+      - name: Setup namespace and secrets
+        run: |
+          NAMESPACE="${{ needs.setup.outputs.namespace }}"
+          PACKAGE="${{ needs.setup.outputs.package }}"
+          kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic oidc-credentials \
+            --from-literal=client_id="${{ secrets.OAUTH_CLIENT_ID }}" \
+            --from-literal=client_secret="${{ secrets.OAUTH_CLIENT_SECRET }}" \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic ${PACKAGE}-s3-creds \
+            --from-literal=S3_ACCESS_KEY="${{ secrets.S3_ACCESS_KEY }}" \
+            --from-literal=S3_SECRET_KEY="${{ secrets.S3_SECRET_KEY }}" \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic ${PACKAGE}-mdrepo-credentials \
+            --from-literal=client_id="${{ secrets.MDREPO_CLIENT_ID }}" \
+            --from-literal=client_secret="${{ secrets.MDREPO_CLIENT_SECRET }}" \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create secret generic tuner-auth \
+            --from-literal=user="${{ secrets.TUNER_USER }}" \
+            --from-literal=password="${{ secrets.TUNER_PASSWORD }}" \
+            -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+      - name: Deploy
+        run: make -C helm deploy ENV=${{ inputs.environment }} IMAGE_TAG=${{ inputs.image-version }}
+      - name: Verify health
+        run: |
+          URL="https://${{ needs.setup.outputs.hostname }}/hub/health"
+          for i in $(seq 1 30); do curl -sf "$URL" --max-time 10 && exit 0; sleep 10; done
+          echo "::error::Health check failed: $URL"; exit 1
+      - name: Deployment diagnostics
+        if: failure()
+        run: |
+          NS="${{ needs.setup.outputs.namespace }}"
+          PKG="${{ needs.setup.outputs.package }}"
+          helm status "$PKG" -n "$NS" || true
+          helm history "$PKG" -n "$NS" || true
+          kubectl get pods,deployments,events -n "$NS" --sort-by=.metadata.creationTimestamp || true
+          exit 1

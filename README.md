@@ -46,28 +46,41 @@
    - `TUNER_USER` - Username for Gromacs Tuner
    - `TUNER_PASSWORD` - Password for Gromacs Tuner
 
-2. **Push to deploy**:
-   - Push to `dev` → deploys to dev environment when application, Helm, or config paths changed (tag: `dev`)
-   - Push to `master` → deploys to production when application, Helm, or config paths changed (tag: `sha-<short-sha>`)
+2. **Branch and release model**:
+
+   | Purpose | Git ref | Environment | Artifact tag |
+   |---|---|---|---|
+   | Pull request validation | Pull request | None | None |
+   | Development deployment | `master` push | `dev` | `dev` |
+   | Production release | `vMAJOR.MINOR.PATCH` tag | `prod` | `MAJOR.MINOR.PATCH` |
+
+   - Push to `master` → CI runs, then deploys all images tagged `dev` to the dev environment
+   - Push a SemVer tag `v1.2.3` → CI runs as a release gate, then deploys immutable `1.2.3` images and Helm charts to production, followed by a generated GitHub Release
+   - Push to legacy `dev` branch → no CI or deployment triggers
+   - Production operational commands use `ENV=prod` without needing a version
 
 All secrets are automatically created in the namespace during deployment.
-CodeQL security scanning runs separately for `master` pushes, `master` pull requests, and the weekly scheduled scan.
+CodeQL security scanning runs for `master` pushes, `master` pull requests, and the weekly scheduled scan.
 
 
 ## Image Tagging Strategy
 
-| Environment | Branch   | Tag Format        | Sidecar Pull Policy |
-| ----------- | -------- | ----------------- | ------------------- |
-| **Dev**     | `dev`    | Static `dev`      | `Always`            |
-| **Prod**    | `master` | `sha-<short-sha>` | `IfNotPresent`      |
+| Environment | Git ref | Tag Format | Pull Policy |
+| ----------- | ------- | ----------- | ----------- |
+| **Dev** | `master` push | Static `dev` | `Always` |
+| **Prod** | `vMAJOR.MINOR.PATCH` tag | `MAJOR.MINOR.PATCH` (immutable) | `IfNotPresent` |
 
-Other services can override this policy in configuration; for example, Gromacs Tuner uses `Always`, and the rendered `mdrun-api` subchart currently uses `Always`.
+Dev images use the mutable `dev` tag with `Always` pull policy. Production images use immutable SemVer tags (without the leading `v`). Every `master` push rebuilds the complete image set as `dev`, repairing any partial pushes from cancelled runs.
+
+Production releases are triggered by a strict SemVer tag (`v0.1.0`, `v1.2.3`). The tag's commit must be an ancestor of `master`. SemVer image tags are immutable — a retry reuses an artifact only when its OCI source revision matches the tagged commit.
+
+Other services can override pull policy in configuration; for example, Gromacs Tuner uses `Always`, and the rendered `mdrun-api` subchart currently uses `Always`.
 
 ### Harbor Retention Policy
 
 Configure in Harbor UI (Project → Policy → Tag Retention):
 1. **Dev tags**: Repository `**`, tag `dev` → Retain always
-2. **Prod tags**: Repository `**`, tag `sha-*` → Keep last 10 pushed
+2. **Prod tags**: Repository `**`, tag matching `[0-9]+\.[0-9]+\.[0-9]+` → Keep last 10 pushed
 
 
 ## Configuration
@@ -97,7 +110,7 @@ make demo
 ```bash
 make build ENV=dev    # Build images
 make push ENV=dev     # Build and push images
-make all ENV=dev      # Build, push images, and deploy (does not push Helm chart packages)
+make all ENV=dev      # Build, push images, and deploy (dev only)
 make format           # Format Python and UI code
 make lint             # Check Python linting
 make type-check       # Type-check Python components and UI
@@ -107,6 +120,8 @@ make history ENV=prod # Show deployment history
 make rollback ENV=prod REVISION=3  # Rollback to specific revision
 make help             # Show all commands
 ```
+
+`ENV` defaults to `dev` and accepts only `dev` or `prod`. Production application releases must use a SemVer tag — `make all ENV=prod` is rejected. Supported production operational commands (`status`, `logs`, `history`, `rollback`) require only `ENV=prod`.
 
 Local commands expect `uv` for Python workflows and `pnpm` for the UI unless you are using the dev container.
 
@@ -132,7 +147,7 @@ Ensure you have the following tools installed (all are installed if using the de
 Choose your target environment and matching config file:
 
 ```bash
-export ENV=dev  # or prod, edc, ...
+export ENV=dev  # or prod
 
 # Use config.yaml for prod, config.dev.yaml for dev, config.edc.yaml for edc, etc.
 export CONFIG=config.dev.yaml

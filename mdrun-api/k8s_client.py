@@ -20,7 +20,7 @@ config.load_incluster_config()
 core_v1 = client.CoreV1Api()
 batch_v1 = client.BatchV1Api()
 
-_S3_SYNC_IMAGE = "rclone/rclone:latest"  # TODO: lock version
+_S3_SYNC_IMAGE = "rclone/rclone:1.74.4"
 _SHARED_VOLUME_NAME = "shared-data"
 _RUN_AS = {"runAsUser": 1000, "runAsGroup": 1000, "runAsNonRoot": True}
 _SECURITY_CONTEXT = {

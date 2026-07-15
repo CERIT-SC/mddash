@@ -1,18 +1,17 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-CURRENT_BRANCH := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-ENV ?= $(if $(filter master,$(CURRENT_BRANCH)),prod,dev)
+ENV ?= dev
 
-# Tagging: dev uses static 'dev' tag, prod uses 'sha-<short-sha>' for unique, traceable images
 ifeq ($(ENV),dev)
   IMAGE_TAG ?= dev
 else
-  IMAGE_TAG ?= sha-$(shell git rev-parse --short HEAD)
+  ifeq ($(IMAGE_TAG),)
+    $(error IMAGE_TAG is required for ENV=$(ENV) (e.g. IMAGE_TAG=0.1.0))
+  endif
 endif
 export IMAGE_TAG
 
-#config := $(if $(filter dev,$(ENV)),config.dev.yaml,config.yaml)
 config := $(if $(wildcard config.${ENV}.yaml),config.${ENV}.yaml,config.yaml)
 
 namespace := $(shell yq '.namespace' $(config))
@@ -23,7 +22,7 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
-	@echo "Current: BRANCH=$(CURRENT_BRANCH), ENV=$(ENV), TAG=$(IMAGE_TAG), NS=$(namespace)"
+	@echo "Current: ENV=$(ENV), TAG=$(IMAGE_TAG), NS=$(namespace)"
 
 # ==================== FORMAT / LINT ====================
 
@@ -58,15 +57,18 @@ format-check-ui: ## Check frontend formatting (dashboard/ui and landing via pret
 	cd landing && corepack pnpm run format:check
 
 .PHONY: lint-helm
-lint-helm: ## Validate Helm charts
-	helm lint helm/charts/mdrun-api
-	helm template mdrun-api helm/charts/mdrun-api >/dev/null
-	$(MAKE) -C helm render
+lint-helm: lint-helm-fast ## Validate Helm charts (full — includes umbrella dependency build)
 	helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ >/dev/null
 	helm repo update jupyterhub >/dev/null
 	helm dependency build helm/charts/mddash
 	helm lint helm/charts/mddash
 	helm template mddash helm/charts/mddash >/dev/null
+
+.PHONY: lint-helm-fast
+lint-helm-fast: ## Validate Helm charts (fast — mdrun-api lint + values render)
+	helm lint helm/charts/mdrun-api
+	helm template mdrun-api helm/charts/mdrun-api >/dev/null
+	$(MAKE) -C helm render
 
 # ==================== TYPE CHECK ====================
 
@@ -154,19 +156,42 @@ push-mdrun-api: ## Build and push mdrun-api image
 push-landing: ## Build and push landing page image
 	@$(MAKE) -C landing push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
+# ==================== HELM CHART PACKAGING ====================
+
 .PHONY: push-mdrun-api-chart
 push-mdrun-api-chart: ## Package and push mdrun-api Helm chart to OCI registry
-	$(eval CHART_VERSION := $(shell yq '.version' helm/charts/mdrun-api/Chart.yaml))
-	helm package helm/charts/mdrun-api --version $(CHART_VERSION) --app-version $(IMAGE_TAG)
+	$(eval CHART_VERSION := $(if $(IMAGE_TAG),$(IMAGE_TAG),$(shell yq '.version' helm/charts/mdrun-api/Chart.yaml)))
+	helm package helm/charts/mdrun-api --version $(CHART_VERSION) --app-version $(CHART_VERSION) --dependency-update
 	helm push mdrun-api-$(CHART_VERSION).tgz oci://$(registry)
 	rm -f mdrun-api-$(CHART_VERSION).tgz
 
+.PHONY: push-mddash-chart
+push-mddash-chart: push-mdrun-api-chart ## Package and push umbrella Helm chart to OCI registry
+	$(eval CHART_VERSION := $(if $(IMAGE_TAG),$(IMAGE_TAG),$(shell yq '.version' helm/charts/mddash/Chart.yaml)))
+	@cp helm/charts/mddash/Chart.yaml helm/charts/mddash/Chart.yaml.bak
+	@trap 'mv -f helm/charts/mddash/Chart.yaml.bak helm/charts/mddash/Chart.yaml' EXIT
+	@# Stage chart metadata for the requested release version without committing to the repo
+	yq -i '.dependencies[] | select(.name == "mdrun-api").version = "$(CHART_VERSION)"' helm/charts/mddash/Chart.yaml
+	yq -i '.version = "$(CHART_VERSION)"' helm/charts/mddash/Chart.yaml
+	yq -i '.appVersion = "$(CHART_VERSION)"' helm/charts/mddash/Chart.yaml
+	helm dependency update helm/charts/mddash
+	helm package helm/charts/mddash --version $(CHART_VERSION) --app-version $(CHART_VERSION)
+	helm push mddash-jupyterhub-$(CHART_VERSION).tgz oci://$(registry)
+	rm -f mddash-jupyterhub-$(CHART_VERSION).tgz
+
 .PHONY: deploy
 deploy: ## Deploy via Helm
-	@$(MAKE) -C helm deploy ENV=$(ENV)
+	@$(MAKE) -C helm deploy ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: all
-all: build push deploy ## Build, push, and deploy everything
+ifeq ($(ENV),prod)
+all:
+	@echo "Production application releases must use a SemVer tag (e.g. v0.1.0)." >&2
+	@echo "For operations: make {status|logs|history|rollback} ENV=prod" >&2
+	@exit 1
+else
+all: build push deploy ## Build, push, and deploy everything (dev only)
+endif
 
 .PHONY: clean
 clean: ## Uninstall Helm release
