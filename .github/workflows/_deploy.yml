@@ -47,14 +47,15 @@ jobs:
           chmod +x /usr/local/bin/yq
       - name: Read config
         id: config
+        env:
+          CONFIG_FILE: ${{ inputs.config-file }}
         run: |
-          CONFIG="${{ inputs.config-file }}"
           {
-            echo "registry=$(yq '.registry' "$CONFIG")"
-            echo "registry-host=$(yq '.registry' "$CONFIG" | cut -d'/' -f1)"
-            echo "namespace=$(yq '.namespace' "$CONFIG")"
-            echo "package=$(yq '.helm.package' "$CONFIG")"
-            echo "hostname=$(yq '.dashboard.hostname' "$CONFIG")"
+            echo "registry=$(yq '.registry' "$CONFIG_FILE")"
+            echo "registry-host=$(yq '.registry' "$CONFIG_FILE" | cut -d'/' -f1)"
+            echo "namespace=$(yq '.namespace' "$CONFIG_FILE")"
+            echo "package=$(yq '.helm.package' "$CONFIG_FILE")"
+            echo "hostname=$(yq '.dashboard.hostname' "$CONFIG_FILE")"
           } >> "$GITHUB_OUTPUT"
 
   build-sidecars:
@@ -92,9 +93,11 @@ jobs:
           password: ${{ secrets.REGISTRY_PASSWORD }}
       - name: Compute image reference
         id: image
+        env:
+          REGISTRY: ${{ needs.setup.outputs.registry }}
+          IMAGE_SUFFIX: ${{ matrix.image-suffix }}
         run: |
-          IMAGE_BASE="${{ needs.setup.outputs.registry }}/${{ matrix.image-suffix }}"
-          echo "base=$IMAGE_BASE" >> "$GITHUB_OUTPUT"
+          echo "base=$REGISTRY/$IMAGE_SUFFIX" >> "$GITHUB_OUTPUT"
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
@@ -128,10 +131,12 @@ jobs:
           password: ${{ secrets.REGISTRY_PASSWORD }}
       - name: Compute image reference
         id: image
+        env:
+          REGISTRY: ${{ needs.setup.outputs.registry }}
+          IMAGE_VERSION: ${{ inputs.image-version }}
         run: |
-          IMAGE_BASE="${{ needs.setup.outputs.registry }}/mddash-proxy"
-          echo "base=$IMAGE_BASE" >> "$GITHUB_OUTPUT"
-          echo "ui=${{ needs.setup.outputs.registry }}/mddash-ui:${{ inputs.image-version }}" >> "$GITHUB_OUTPUT"
+          echo "base=$REGISTRY/mddash-proxy" >> "$GITHUB_OUTPUT"
+          echo "ui=$REGISTRY/mddash-ui:$IMAGE_VERSION" >> "$GITHUB_OUTPUT"
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
@@ -183,9 +188,11 @@ jobs:
           password: ${{ secrets.REGISTRY_PASSWORD }}
       - name: Compute image reference
         id: image
+        env:
+          REGISTRY: ${{ needs.setup.outputs.registry }}
+          IMAGE_SUFFIX: ${{ matrix.image-suffix }}
         run: |
-          IMAGE_BASE="${{ needs.setup.outputs.registry }}/${{ matrix.image-suffix }}"
-          echo "base=$IMAGE_BASE" >> "$GITHUB_OUTPUT"
+          echo "base=$REGISTRY/$IMAGE_SUFFIX" >> "$GITHUB_OUTPUT"
       - name: Docker metadata
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
@@ -220,12 +227,19 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@59b1c81c6280f5abebb1fb1bc585696daa7dfb42 # v5
       - name: Login to registry
+        env:
+          REGISTRY_HOST: ${{ needs.setup.outputs.registry-host }}
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
         run: |
-          echo "${{ secrets.REGISTRY_PASSWORD }}" | helm registry login ${{ needs.setup.outputs.registry-host }} \
-            --username ${{ secrets.REGISTRY_USERNAME }} \
+          echo "$REGISTRY_PASSWORD" | helm registry login "$REGISTRY_HOST" \
+            --username "$REGISTRY_USERNAME" \
             --password-stdin
       - name: Package and push charts
-        run: make push-mddash-chart ENV=${{ inputs.environment }} IMAGE_TAG=${{ inputs.image-version }}
+        env:
+          ENV: ${{ inputs.environment }}
+          IMAGE_VERSION: ${{ inputs.image-version }}
+        run: make push-mddash-chart ENV="$ENV" IMAGE_TAG="$IMAGE_VERSION"
 
   deploy:
     needs: [setup, build-sidecars, build-proxy, build-components, push-charts]
@@ -256,11 +270,14 @@ jobs:
           echo "${{ secrets.KUBECONFIG }}" | base64 -d > "$HOME/.kube/config"
       - name: Update Helm dependencies
         if: inputs.release-mode != true
-        run: make -C helm update ENV=${{ inputs.environment }}
+        env:
+          ENV: ${{ inputs.environment }}
+        run: make -C helm update ENV="$ENV"
       - name: Setup namespace and secrets
+        env:
+          NAMESPACE: ${{ needs.setup.outputs.namespace }}
+          PACKAGE: ${{ needs.setup.outputs.package }}
         run: |
-          NAMESPACE="${{ needs.setup.outputs.namespace }}"
-          PACKAGE="${{ needs.setup.outputs.package }}"
           kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
           kubectl create secret generic oidc-credentials \
             --from-literal=client_id="${{ secrets.OAUTH_CLIENT_ID }}" \
@@ -279,17 +296,23 @@ jobs:
             --from-literal=password="${{ secrets.TUNER_PASSWORD }}" \
             -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
       - name: Deploy
-        run: make -C helm deploy ENV=${{ inputs.environment }} IMAGE_TAG=${{ inputs.image-version }}
+        env:
+          ENV: ${{ inputs.environment }}
+          IMAGE_VERSION: ${{ inputs.image-version }}
+        run: make -C helm deploy ENV="$ENV" IMAGE_TAG="$IMAGE_VERSION"
       - name: Verify health
+        env:
+          HOSTNAME: ${{ needs.setup.outputs.hostname }}
         run: |
-          URL="https://${{ needs.setup.outputs.hostname }}/hub/health"
+          URL="https://$HOSTNAME/hub/health"
           for _ in $(seq 1 30); do curl -sf "$URL" --max-time 10 && exit 0; sleep 10; done
           echo "::error::Health check failed: $URL"; exit 1
       - name: Deployment diagnostics
         if: failure()
+        env:
+          NS: ${{ needs.setup.outputs.namespace }}
+          PKG: ${{ needs.setup.outputs.package }}
         run: |
-          NS="${{ needs.setup.outputs.namespace }}"
-          PKG="${{ needs.setup.outputs.package }}"
           helm status "$PKG" -n "$NS" || true
           helm history "$PKG" -n "$NS" || true
           kubectl get pods,deployments,events -n "$NS" --sort-by=.metadata.creationTimestamp || true

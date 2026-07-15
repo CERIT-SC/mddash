@@ -26,9 +26,11 @@ jobs:
       - name: Verify workflow run is from this repository
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_FULL: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          REPO=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}" --jq '.head_repository.full_name')
-          [ "$REPO" = "${{ github.repository }}" ] || { echo "::error::Workflow run is from '$REPO', not this repository"; exit 1; }
+          REPO=$(gh api "repos/$REPO_FULL/actions/runs/$RUN_ID" --jq '.head_repository.full_name')
+          [ "$REPO" = "$REPO_FULL" ] || { echo "::error::Workflow run is from '$REPO', not this repository"; exit 1; }
 
   deploy:
     needs: verify
