@@ -228,8 +228,7 @@ def login_token_endpoint() -> Response:
 
     # Token is valid - consume it (one-time use) and set cookie
     # Remove from session store to prevent reuse
-    if token in _sessions:
-        del _sessions[token]
+    _sessions.pop(token, None)
 
     # Create a fresh session for the browser
     new_token = create_session(USER)
