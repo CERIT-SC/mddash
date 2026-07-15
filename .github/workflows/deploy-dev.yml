@@ -1,7 +1,5 @@
 name: Deploy Dev
 
-# zizmor:ignore[dangerous-triggers] - workflow_run is gated by a provenance check
-# that verifies the triggering run is a push from this repository
 on:
   workflow_run:
     workflows: [CI]

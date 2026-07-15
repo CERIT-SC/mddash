@@ -1,0 +1,6 @@
+rules:
+  dangerous-triggers:
+    ignore:
+      # workflow_run is gated by a provenance check verifying the
+      # triggering run is a push from this repository (deploy-dev.yml)
+      - deploy-dev.yml
