@@ -2,6 +2,8 @@ rules:
   dangerous-triggers:
     ignore:
       # workflow_run in deploy-dev.yml is safe because the job's if: condition
-      # requires event == 'push' — fork PRs trigger CI as pull_request, never push.
-      # zizmor can't verify the if: condition statically.
+      # requires event == 'push' AND head_repository == github.repository.
+      # Fork PRs trigger CI as pull_request (filtered by event check) and
+      # can't set head_repository to this repo. zizmor can't verify
+      # runtime if: conditions statically.
       - deploy-dev.yml
