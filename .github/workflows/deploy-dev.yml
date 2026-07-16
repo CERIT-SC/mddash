@@ -14,31 +14,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    runs-on: ubuntu-latest
+  deploy:
     if: >
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'master'
-    outputs:
-      git-ref: ${{ github.event.workflow_run.head_sha }}
-    steps:
-      - name: Verify workflow run is from this repository
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO_FULL: ${{ github.repository }}
-          RUN_ID: ${{ github.event.workflow_run.id }}
-        run: |
-          REPO=$(gh api "repos/$REPO_FULL/actions/runs/$RUN_ID" --jq '.head_repository.full_name')
-          [ "$REPO" = "$REPO_FULL" ] || { echo "::error::Workflow run is from '$REPO', not this repository"; exit 1; }
-
-  deploy:
-    needs: verify
     uses: ./.github/workflows/_deploy.yml
     with:
       environment: dev
       image-version: dev
       config-file: config.dev.yaml
       release-mode: false
-      git-ref: ${{ needs.verify.outputs.git-ref }}
+      git-ref: ${{ github.event.workflow_run.head_sha }}
     secrets: inherit
