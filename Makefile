@@ -47,7 +47,7 @@ lint-ui: ## Check frontend linting (dashboard/ui via eslint)
 .PHONY: lint-workflows
 lint-workflows: ## Validate GitHub Actions workflows (actionlint + zizmor). Requires actionlint + zizmor (in devcontainer).
 	actionlint
-	zizmor --no-exit-codes .
+	zizmor --min-severity high .
 
 .PHONY: format-check
 format-check: format-check-py format-check-ui ## Check formatting without modifying files
