@@ -1,6 +1,7 @@
 rules:
   dangerous-triggers:
     ignore:
-      # workflow_run is gated by a provenance check verifying the
-      # triggering run is a push from this repository (deploy-dev.yml)
+      # workflow_run in deploy-dev.yml is safe because the job's if: condition
+      # requires event == 'push' — fork PRs trigger CI as pull_request, never push.
+      # zizmor can't verify the if: condition statically.
       - deploy-dev.yml
