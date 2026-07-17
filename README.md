@@ -56,6 +56,7 @@
 
    - Push to `master` → CD calls CI as a quality gate, then deploys all images tagged `dev` to the dev environment
    - Push a SemVer tag `v1.2.3` → Release validates SemVer, calls CI, then deploys immutable `1.2.3` images and Helm charts to production, followed by a generated GitHub Release
+   - Run `make release VERSION=1.2.3` from a clean, up-to-date `master` checkout to create and push the release tag
    - Push to legacy `dev` branch → no CI or deployment triggers
    - Production operational commands use `ENV=prod` without needing a version
 

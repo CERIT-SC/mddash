@@ -188,6 +188,25 @@ push-mddash-chart: push-mdrun-api-chart ## Package and push umbrella Helm chart 
 deploy: ## Deploy via Helm
 	@$(MAKE) -C helm deploy ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
+.PHONY: release
+release: ## Create and push an annotated release tag (usage: make release VERSION=x.y.z)
+	@set -euo pipefail; \
+		version="$(VERSION)"; \
+		[[ "$$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$$ ]] || { echo "VERSION must be strict SemVer x.y.z (got '$$version')" >&2; exit 1; }; \
+		[[ -z "$$(git status --porcelain)" ]] || { echo "Working tree must be clean before releasing" >&2; exit 1; }; \
+		branch="$$(git symbolic-ref --quiet --short HEAD)" || { echo "Release must run from the master branch" >&2; exit 1; }; \
+		[[ "$$branch" == master ]] || { echo "Release must run from the master branch (current: $$branch)" >&2; exit 1; }; \
+		git fetch --quiet origin master; \
+		[[ "$$(git rev-parse HEAD)" == "$$(git rev-parse origin/master)" ]] || { echo "Local master must match origin/master" >&2; exit 1; }; \
+		tag="v$$version"; \
+		if git rev-parse --verify --quiet "refs/tags/$$tag" >/dev/null || git ls-remote --exit-code --tags origin "refs/tags/$$tag" >/dev/null 2>&1; then \
+			echo "Tag $$tag already exists" >&2; \
+			exit 1; \
+		fi; \
+		git tag --annotate "$$tag" --message "Release $$tag"; \
+		git push origin "$$tag"; \
+		echo "Pushed $$tag; release.yml will run CI, deploy production, and create the GitHub Release."
+
 .PHONY: all
 ifeq ($(ENV),prod)
 all:

@@ -70,7 +70,7 @@ make lint-workflows  # when editing GitHub Actions workflows (requires actionlin
 ```
 
 - Build/deploy: `make build ENV={dev,prod}`, `make deploy ENV={dev,prod}`, `make rollback ENV=prod REVISION=N`.
-- Production application releases use SemVer tags (`v0.1.0`). `make all ENV=prod` is rejected — operators only need `ENV=prod` for `status`/`logs`/`history`/`rollback`.
+- Production application releases use `make release VERSION=x.y.z`, which creates the SemVer tag and lets `release.yml` deploy prod and create the GitHub Release. `make all ENV=prod` is rejected — operators only need `ENV=prod` for `status`/`logs`/`history`/`rollback`.
 - Helm: `make -C helm render` (render values), `make -C helm update` (update deps).
 
 ## CI/CD
