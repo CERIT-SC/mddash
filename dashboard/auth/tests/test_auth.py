@@ -5,12 +5,15 @@ Tests session management, HMAC signing, and OAuth flow.
 """
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
+from urllib.parse import parse_qs, urlsplit
 
 import auth
 import pytest
 from auth import (
+    COOKIE_NAME,
     HMAC_SHA256_HEX_LENGTH,
     STATE_COOKIE,
     USER,
@@ -204,6 +207,97 @@ class TestOAuthCallback:
         returned_user = "wronguser"
 
         assert expected_user != returned_user
+
+
+@pytest.mark.usefixtures("clear_sessions")
+class TestLoginTokenEndpoints:
+    """Tests for passwordless login token creation and redemption."""
+
+    @staticmethod
+    def create_login_token(client: FlaskClient) -> str:
+        """
+        Create a login token through the authenticated endpoint.
+
+        Returns:
+            str: The token extracted from the generated URL fragment.
+        """
+        auth_token = create_session(USER)
+        client.set_cookie(COOKIE_NAME, auth_token)
+        response = client.post("/create-login-token")
+        fragment = urlsplit(response.get_json()["login_url"]).fragment
+        return parse_qs(fragment)["token"][0]
+
+    def test_create_login_token_keeps_token_out_of_url_query(self, client: FlaskClient) -> None:
+        """Generated login URLs should carry the token only in the fragment."""
+        auth_token = create_session(USER)
+        client.set_cookie(COOKIE_NAME, auth_token)
+
+        response = client.post("/create-login-token")
+
+        assert response.status_code == HTTPStatus.OK
+        payload = response.get_json()
+        assert payload is not None
+        assert "token" not in payload
+        assert payload["login_url"].startswith(f"/user/{USER}/dash/auth/login-token#token=")
+        assert "?token=" not in payload["login_url"]
+
+    def test_get_login_token_does_not_consume_token(self, client: FlaskClient) -> None:
+        """Loading the redemption page should not mutate token state."""
+        token = self.create_login_token(client)
+
+        response = client.get(f"/login-token?token={token}")
+
+        assert response.status_code == HTTPStatus.OK
+        assert COOKIE_NAME not in response.headers.get("Set-Cookie", "")
+        assert client.post("/login-token", json={"token": token}).status_code == HTTPStatus.OK
+
+    def test_post_login_token_consumes_token_once(self, app: Flask) -> None:
+        """Concurrent redemption attempts should produce only one session."""
+        with app.test_client() as client:
+            token = self.create_login_token(client)
+
+        def redeem() -> int:
+            with app.test_client() as client:
+                return client.post("/login-token", json={"token": token}).status_code
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            statuses = sorted(executor.map(lambda _: redeem(), range(2)))
+
+        assert statuses == [HTTPStatus.OK, HTTPStatus.UNAUTHORIZED]
+
+    def test_redeemed_session_cookie_is_secure(self, client: FlaskClient) -> None:
+        """Passwordless sessions should use hardened cookie attributes."""
+        token = self.create_login_token(client)
+
+        response = client.post("/login-token", json={"token": token})
+
+        assert response.status_code == HTTPStatus.OK
+        set_cookie = response.headers["Set-Cookie"]
+        assert "Secure" in set_cookie
+        assert "HttpOnly" in set_cookie
+        assert "SameSite=Lax" in set_cookie
+
+    def test_login_token_is_not_accepted_as_session_cookie(self, client: FlaskClient) -> None:
+        """One-time login credentials should not authenticate as sessions."""
+        token = self.create_login_token(client)
+        client.set_cookie(COOKIE_NAME, token)
+
+        response = client.get("/auth")
+
+        assert response.status_code == HTTPStatus.FOUND
+
+    def test_login_token_rejects_oversized_body(self, client: FlaskClient) -> None:
+        """The public redemption endpoint should bound request memory usage."""
+        response = client.post("/login-token", json={"token": "x" * 4097})
+
+        assert response.status_code == HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+
+    @pytest.mark.parametrize("payload", [["token"], "token", True])
+    def test_login_token_rejects_non_object_json(self, client: FlaskClient, payload: object) -> None:
+        """Malformed JSON shapes should receive a controlled client error."""
+        response = client.post("/login-token", json=payload)
+
+        assert response.status_code == HTTPStatus.BAD_REQUEST
 
 
 def test_health_logs_first_health_once(client: FlaskClient, caplog) -> None:  # ruff:ignore[missing-type-function-argument]

@@ -54,7 +54,7 @@ def create_experiment():
         print("Error: TOKEN environment variable missing.")
         return
 
-    base_url = "https://mddash-edc-dev.dyn.cloud.e-infra.cz"
+    base_url = "https://mddash-edc.dyn.cloud.e-infra.cz"
     login_url = f"{base_url}/hub/jwt_login"
     user_api_url = f"{base_url}/hub/api/user"
 
@@ -208,7 +208,6 @@ def create_experiment():
 
         if resp.status_code == 200:
             result = resp.json()
-            login_token = result.get("token")
             login_url = result.get("login_url")
             expires_in = result.get("expires_in", 3600)
 

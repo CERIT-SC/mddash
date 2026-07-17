@@ -36,7 +36,8 @@ http://:8888 {
 
 	# Auth service routes (passwordless login) - proxied to auth container without forward_auth
 	@auth_routes {
-		path {$CADDY_ROUTE_PREFIX}/dash/auth/*login-token*
+		path {$CADDY_ROUTE_PREFIX}/dash/auth/create-login-token
+		path {$CADDY_ROUTE_PREFIX}/dash/auth/login-token
 	}
 	handle @auth_routes {
 		uri strip_prefix {$CADDY_ROUTE_PREFIX}/dash/auth

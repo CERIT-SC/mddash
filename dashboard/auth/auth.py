@@ -3,6 +3,7 @@ import hmac
 import logging
 import os
 import secrets
+import threading
 import time
 from http import HTTPStatus
 
@@ -10,6 +11,7 @@ import requests
 from flask import Flask, Response, make_response, redirect, request
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 4096
 
 logger = logging.getLogger(__name__)
 _first_health_logged = False
@@ -39,9 +41,34 @@ HMAC_SHA256_HEX_LENGTH = 64
 
 # {token: (username, expiry_timestamp)}
 _sessions: dict[str, tuple[str, float]] = {}
+_login_tokens: dict[str, tuple[str, float]] = {}
+_token_store_lock = threading.Lock()
 SESSION_LIFETIME = 3600  # 1 hour
 _last_cleanup = time.time()
 CLEANUP_INTERVAL = 300  # 5 minutes
+
+LOGIN_TOKEN_PAGE = """<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>MDDash login</title></head>
+<body><p id="status">Signing in...</p><script>
+const status = document.getElementById("status");
+const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
+window.history.replaceState(null, "", window.location.pathname);
+if (!token) {
+  status.textContent = "Invalid login link.";
+} else {
+  fetch(window.location.pathname, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({token})
+  }).then(async response => {
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Login failed.");
+    window.location.replace(result.redirect_url);
+  }).catch(error => { status.textContent = error.message; });
+}
+</script></body>
+</html>"""
 
 
 def remove_expired_sessions() -> None:
@@ -54,9 +81,13 @@ def remove_expired_sessions() -> None:
 
     _last_cleanup = now
 
-    expired = [t for t, (_, exp) in _sessions.items() if exp < now]
-    for t in expired:
-        del _sessions[t]
+    with _token_store_lock:
+        expired = [t for t, (_, exp) in _sessions.items() if exp < now]
+        for t in expired:
+            del _sessions[t]
+        expired_login_tokens = [t for t, (_, exp) in _login_tokens.items() if exp < now]
+        for t in expired_login_tokens:
+            del _login_tokens[t]
 
 
 def is_valid_session(token: str, user: str) -> bool:
@@ -69,7 +100,8 @@ def is_valid_session(token: str, user: str) -> bool:
     if not token:
         return False
     now = time.time()
-    username, expiry = _sessions.get(token, (None, 0))
+    with _token_store_lock:
+        username, expiry = _sessions.get(token, (None, 0))
     return username == user and expiry > now
 
 
@@ -82,8 +114,38 @@ def create_session(user: str) -> str:
     """
     token = secrets.token_urlsafe(32)
     expiry = time.time() + SESSION_LIFETIME
-    _sessions[token] = (user, expiry)
+    with _token_store_lock:
+        _sessions[token] = (user, expiry)
     return token
+
+
+def create_login_token_value(user: str) -> str:
+    """
+    Create a one-time credential kept separate from browser sessions.
+
+    Returns:
+        str: A URL-safe random login token.
+    """
+    token = secrets.token_urlsafe(32)
+    expiry = time.time() + SESSION_LIFETIME
+    with _token_store_lock:
+        _login_tokens[token] = (user, expiry)
+    return token
+
+
+def consume_login_token(token: str, user: str) -> bool:
+    """
+    Atomically remove and validate a one-time login token.
+
+    Returns:
+        bool: True if the token existed, belonged to the user, and had not expired.
+    """
+    with _token_store_lock:
+        session = _login_tokens.pop(token, None)
+    if session is None:
+        return False
+    username, expiry = session
+    return username == user and expiry > time.time()
 
 
 def sign(data: str) -> str:
@@ -183,11 +245,10 @@ def create_login_token() -> tuple[dict, int]:
     Generate a one-time use login token for passwordless access.
 
     This endpoint must be called from an already authenticated session.
-    It creates a new session token and returns it so the client can construct
-    a shareable login URL.
+    It creates a new session token and returns a shareable login URL.
 
     Returns:
-        JSON response with 'token' and 'login_url' fields.
+        JSON response with 'login_url' and 'expires_in' fields.
     """
     # Check that caller has a valid session (already authenticated)
     auth_token = request.cookies.get(COOKIE_NAME)
@@ -195,46 +256,51 @@ def create_login_token() -> tuple[dict, int]:
         return {"error": "Authentication required"}, HTTPStatus.UNAUTHORIZED
 
     # Create a new session token for passwordless access
-    login_token_val = create_session(USER)
+    login_token_val = create_login_token_value(USER)
 
     # Construct the one-time login URL
-    login_url = f"{SERVICE_PREFIX}/dash/auth/login-token?token={login_token_val}"
+    login_url = f"{SERVICE_PREFIX}/dash/auth/login-token#token={login_token_val}"
 
     logger.info("Passwordless login token created for user %s", USER)
 
-    return {"token": login_token_val, "login_url": login_url, "expires_in": SESSION_LIFETIME}, HTTPStatus.OK
+    return {"login_url": login_url, "expires_in": SESSION_LIFETIME}, HTTPStatus.OK
 
 
-@app.route("/login-token")
+@app.route("/login-token", methods=["GET", "POST"])
 def login_token_endpoint() -> Response:
     """
-    Consume a one-time login token and establish a session cookie.
+    Serve the login page or consume a one-time token from a POST body.
 
-    Query params:
-        token: The one-time use token obtained from /create-login-token
+    The GET response reads the token from the URL fragment in the browser and
+    submits it as JSON to POST, keeping it out of request URLs and referrers.
 
     Returns:
-        Redirect to dashboard home with mddash-auth cookie set, or error response.
+        Login page for GET, or JSON with a redirect target for POST.
     """
-    token = request.args.get("token")
+    if request.method == "GET":
+        resp = make_response(LOGIN_TOKEN_PAGE, HTTPStatus.OK)
+        resp.headers["Content-Type"] = "text/html; charset=utf-8"
+        resp.headers["Cache-Control"] = "no-store"
+        resp.headers["Referrer-Policy"] = "no-referrer"
+        return resp
 
-    if not token:
-        return make_response("Missing token parameter", HTTPStatus.BAD_REQUEST)
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return make_response({"error": "Invalid JSON payload"}, HTTPStatus.BAD_REQUEST)
+    token = payload.get("token")
 
-    # Validate the token exists and belongs to this user
-    if not is_valid_session(token, USER):
+    if not isinstance(token, str) or not token:
+        return make_response({"error": "Missing token"}, HTTPStatus.BAD_REQUEST)
+
+    if not consume_login_token(token, USER):
         logger.warning("Invalid or expired login token attempted for user %s", USER)
-        return make_response("Invalid or expired token", HTTPStatus.UNAUTHORIZED)
-
-    # Token is valid - consume it (one-time use) and set cookie
-    # Remove from session store to prevent reuse
-    _sessions.pop(token, None)
+        return make_response({"error": "Invalid or expired token"}, HTTPStatus.UNAUTHORIZED)
 
     # Create a fresh session for the browser
     new_token = create_session(USER)
 
-    resp = make_response(redirect(f"{SERVICE_PREFIX}/dash/"))
-    resp.set_cookie(COOKIE_NAME, new_token, path=SERVICE_PREFIX, httponly=True, samesite="Lax")
+    resp = make_response({"redirect_url": f"{SERVICE_PREFIX}/dash/"}, HTTPStatus.OK)
+    resp.set_cookie(COOKIE_NAME, new_token, path=SERVICE_PREFIX, secure=True, httponly=True, samesite="Lax")
 
     logger.info("Passwordless login successful for user %s", USER)
     return resp
