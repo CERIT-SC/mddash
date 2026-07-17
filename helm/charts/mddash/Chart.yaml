@@ -11,7 +11,7 @@ dependencies:
     repository: "https://hub.jupyter.org/helm-chart/"
   - name: mdrun-api
     version: "0.1.0"
-    repository: "oci://cerit.io/xkrasa"
+    repository: "file://../mdrun-api"
   - name: gromacs-tuner
     version: "0.1.2"
     repository: "oci://cerit.io/xkrasa"

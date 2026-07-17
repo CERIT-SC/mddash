@@ -2,8 +2,6 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches: [master]
   workflow_call:
 
 permissions:
@@ -18,170 +16,137 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
-      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
+      - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
         with:
           version: 11.13.0
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 26
           cache: pnpm
           cache-dependency-path: "**/pnpm-lock.yaml"
-      - name: Enable Corepack
-        run: corepack enable
       - name: Install ruff
-        run: uv tool install ruff
-      - name: Install dashboard UI dependencies
-        run: corepack pnpm install --frozen-lockfile
+        run: uv tool install ruff==0.15.21
+      - run: pnpm install --frozen-lockfile
         working-directory: dashboard/ui
-      - name: Install landing dependencies
-        run: corepack pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
         working-directory: landing
-      - name: Check formatting
-        run: make format-check
-      - name: Check linting
-        run: make lint
-
-  test-dashboard-api:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: dashboard/api
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-      - run: uv sync --group dev
-      - run: uv run pytest
-
-  test-dashboard-auth:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: dashboard/auth
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-      - run: uv sync --group dev
-      - run: uv run pytest
-
-  test-mdrun-api:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mdrun-api
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-      - run: uv sync --group dev --no-install-project
-      - run: uv run pytest
-
-  test-pre-spawn-hook:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-      - run: uv sync --group dev
-      - run: uv run --group dev pytest helm/charts/mddash/tests/
-
-  type-check-dashboard-api:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: dashboard/api
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-      - run: uv sync --group dev
-      - run: uv run ty check .
-
-  type-check-dashboard-auth:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: dashboard/auth
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-      - run: uv sync --group dev
-      - run: uv run ty check .
-
-  type-check-mdrun-api:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mdrun-api
-    steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-      - run: uv sync --group dev --no-install-project
-      - run: uv run ty check .
+      - name: Check formatting and linting
+        run: make format-check lint
 
   type-check-ui:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
         with:
           version: 11.13.0
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 26
           cache: pnpm
           cache-dependency-path: "**/pnpm-lock.yaml"
-      - name: Enable Corepack
-        run: corepack enable
-      - run: corepack pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
         working-directory: dashboard/ui
-      - run: corepack pnpm run type-check
+      - run: pnpm run type-check
         working-directory: dashboard/ui
 
   type-check-landing:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-      - uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # v6
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
         with:
           version: 11.13.0
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 26
           cache: pnpm
           cache-dependency-path: "**/pnpm-lock.yaml"
-      - name: Enable Corepack
-        run: corepack enable
-      - run: corepack pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile
         working-directory: landing
-      - run: corepack pnpm run type-check
+      - run: pnpm run type-check
         working-directory: landing
 
-  helm-validation:
+  check-dashboard-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard/api
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - run: uv sync --group dev
+      - run: uv run pytest
+      - run: uv run ty check .
+
+  check-dashboard-auth:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard/auth
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - run: uv sync --group dev
+      - run: uv run pytest
+      - run: uv run ty check .
+
+  check-mdrun-api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mdrun-api
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - run: uv sync --group dev --no-install-project
+      - run: uv run pytest
+      - run: uv run ty check .
+
+  test-pre-spawn-hook:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - run: uv sync --group dev
+      - run: uv run --group dev pytest helm/charts/mddash/tests/
+
+  validate-charts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
       - name: Install gomplate
         run: |
           curl -sSL -o /usr/local/bin/gomplate \
@@ -190,19 +155,22 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@59b1c81c6280f5abebb1fb1bc585696daa7dfb42 # v5
       - name: Lint and template charts
-        run: make lint-helm-fast
+        run: make validate-charts
 
-  workflow-validation:
+  validate-workflows:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
       - name: Install actionlint
         run: |
           curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz | \
             sudo tar -xzf - -C /usr/local/bin actionlint
       - name: Install zizmor
-        run: pip install zizmor
+        run: uv tool install zizmor
       - name: Validate workflow syntax
         run: actionlint
       - name: Security analysis
-        run: zizmor .
+        run: zizmor --min-severity high .

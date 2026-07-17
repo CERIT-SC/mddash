@@ -34,23 +34,23 @@ render: ## Render Helm values template
 install: render update hub-templates ## Install Helm chart
 ifeq ($(ENV),prod)
 	helm install $(package) oci://$(registry)/$(chart_name) --version $(IMAGE_TAG) \
-		--namespace $(namespace) $(values_file) $(timeout) --atomic --wait \
+		--namespace $(namespace) $(values_file) $(timeout) --wait \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 else
 	helm install $(package) $(chart_path) --namespace $(namespace) \
-		$(values_file) $(timeout) --atomic --wait \
+		$(values_file) $(timeout) --wait \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 endif
 
 .PHONY: upgrade
 upgrade: render hub-templates ## Upgrade Helm release
 ifeq ($(ENV),prod)
-	helm upgrade --install $(package) oci://$(registry)/$(chart_name) --version $(IMAGE_TAG) \
-		--namespace $(namespace) $(values_file) $(timeout) --atomic --wait \
+		helm upgrade --install $(package) oci://$(registry)/$(chart_name) --version $(IMAGE_TAG) \
+		--namespace $(namespace) $(values_file) $(timeout) --rollback-on-failure --wait \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 else
 	helm upgrade --install $(package) $(chart_path) --namespace $(namespace) \
-		$(values_file) $(timeout) --atomic --wait \
+		$(values_file) $(timeout) --rollback-on-failure --wait \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 endif
 
@@ -58,10 +58,18 @@ endif
 deploy: upgrade ## Deploy (alias for upgrade)
 
 .PHONY: update
-update: ## Update Helm dependencies
+update: update-deps ## Update Helm dependencies and install kuberay-operator (requires cluster-admin)
 	helm repo add kuberay https://ray-project.github.io/kuberay-helm/ || true
 	helm install kuberay-operator kuberay/kuberay-operator || true
-	rm -rf $(chart_path)/charts/*.tgz $(chart_path)/Chart.lock
+
+.PHONY: update-deps
+update-deps: ## Update local Helm chart dependencies only
+	@# Package mdrun-api from local source — avoids pulling a broken OCI artifact
+	helm package charts/mdrun-api \
+		--version $$(yq -r '.version' charts/mdrun-api/Chart.yaml) \
+		--app-version $$(yq -r '.appVersion' charts/mdrun-api/Chart.yaml) \
+		--destination $(chart_path)/charts/
+	rm -rf $(chart_path)/Chart.lock
 	helm dependency update $(chart_path)
 
 .PHONY: uninstall

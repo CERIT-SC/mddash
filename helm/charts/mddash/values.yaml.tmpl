@@ -317,7 +317,6 @@ gromacs-tuner:
 
   # Ray cluster configuration
   ray:
-    version: "2.42.1"
     image: "{{ $cfg.gromacsTuner.ray.image }}"
     autoscaler:
       idleTimeoutSeconds: "{{ $cfg.gromacsTuner.ray.worker.idleTimeoutSeconds }}"

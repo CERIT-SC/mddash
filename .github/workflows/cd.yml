@@ -1,0 +1,26 @@
+name: CD
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-dev
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    uses: ./.github/workflows/_deploy.yml
+    with:
+      environment: dev
+      image-version: dev
+      config-file: config.dev.yaml
+      release-mode: false
+    secrets: inherit

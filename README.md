@@ -54,13 +54,13 @@
    | Development deployment | `master` push | `dev` | `dev` |
    | Production release | `vMAJOR.MINOR.PATCH` tag | `prod` | `MAJOR.MINOR.PATCH` |
 
-   - Push to `master` → CI runs, then deploys all images tagged `dev` to the dev environment
-   - Push a SemVer tag `v1.2.3` → CI runs as a release gate, then deploys immutable `1.2.3` images and Helm charts to production, followed by a generated GitHub Release
+   - Push to `master` → CD calls CI as a quality gate, then deploys all images tagged `dev` to the dev environment
+   - Push a SemVer tag `v1.2.3` → Release validates SemVer, calls CI, then deploys immutable `1.2.3` images and Helm charts to production, followed by a generated GitHub Release
    - Push to legacy `dev` branch → no CI or deployment triggers
    - Production operational commands use `ENV=prod` without needing a version
 
 All secrets are automatically created in the namespace during deployment.
-CodeQL security scanning runs for `master` pushes, `master` pull requests, and the weekly scheduled scan.
+CodeQL security scanning runs for `master` pull requests and the weekly scheduled scan.
 
 
 ## Image Tagging Strategy

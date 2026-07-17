@@ -44,6 +44,11 @@ lint-py: ## Check Python linting
 lint-ui: ## Check frontend linting (dashboard/ui via eslint)
 	cd dashboard/ui && corepack pnpm exec eslint . --max-warnings=0
 
+.PHONY: lint-workflows
+lint-workflows: ## Validate GitHub Actions workflows (actionlint + zizmor). Requires actionlint + zizmor (in devcontainer).
+	actionlint
+	zizmor --min-severity high .
+
 .PHONY: format-check
 format-check: format-check-py format-check-ui ## Check formatting without modifying files
 
@@ -57,15 +62,15 @@ format-check-ui: ## Check frontend formatting (dashboard/ui and landing via pret
 	cd landing && corepack pnpm run format:check
 
 .PHONY: lint-helm
-lint-helm: lint-helm-fast ## Validate Helm charts (full — includes umbrella dependency build)
+lint-helm: validate-charts ## Validate all Helm charts including umbrella dependency build. Requires helm + gomplate + yq.
 	helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ >/dev/null
 	helm repo update jupyterhub >/dev/null
 	helm dependency build helm/charts/mddash
 	helm lint helm/charts/mddash
 	helm template mddash helm/charts/mddash >/dev/null
 
-.PHONY: lint-helm-fast
-lint-helm-fast: ## Validate Helm charts (fast — mdrun-api lint + values render)
+.PHONY: validate-charts
+validate-charts: ## Lint mdrun-api chart and render values template. Requires helm + gomplate + yq.
 	helm lint helm/charts/mdrun-api
 	helm template mdrun-api helm/charts/mdrun-api >/dev/null
 	$(MAKE) -C helm render
@@ -168,16 +173,16 @@ push-mdrun-api-chart: ## Package and push mdrun-api Helm chart to OCI registry
 .PHONY: push-mddash-chart
 push-mddash-chart: push-mdrun-api-chart ## Package and push umbrella Helm chart to OCI registry
 	$(eval CHART_VERSION := $(if $(IMAGE_TAG),$(IMAGE_TAG),$(shell yq '.version' helm/charts/mddash/Chart.yaml)))
-	@cp helm/charts/mddash/Chart.yaml helm/charts/mddash/Chart.yaml.bak
-	@trap 'mv -f helm/charts/mddash/Chart.yaml.bak helm/charts/mddash/Chart.yaml' EXIT
-	@# Stage chart metadata for the requested release version without committing to the repo
-	yq -i '.dependencies[] | select(.name == "mdrun-api").version = "$(CHART_VERSION)"' helm/charts/mddash/Chart.yaml
-	yq -i '.version = "$(CHART_VERSION)"' helm/charts/mddash/Chart.yaml
-	yq -i '.appVersion = "$(CHART_VERSION)"' helm/charts/mddash/Chart.yaml
-	helm dependency update helm/charts/mddash
-	helm package helm/charts/mddash --version $(CHART_VERSION) --app-version $(CHART_VERSION)
-	helm push mddash-jupyterhub-$(CHART_VERSION).tgz oci://$(registry)
-	rm -f mddash-jupyterhub-$(CHART_VERSION).tgz
+	@cp helm/charts/mddash/Chart.yaml helm/charts/mddash/Chart.yaml.bak && \
+		trap 'mv -f helm/charts/mddash/Chart.yaml.bak helm/charts/mddash/Chart.yaml' EXIT && \
+		yq -i '.dependencies[] | select(.name == "mdrun-api").version = "$(CHART_VERSION)"' helm/charts/mddash/Chart.yaml && \
+		yq -i '.dependencies[] | select(.name == "mdrun-api").repository = "oci://$(registry)"' helm/charts/mddash/Chart.yaml && \
+		yq -i '.version = "$(CHART_VERSION)"' helm/charts/mddash/Chart.yaml && \
+		yq -i '.appVersion = "$(CHART_VERSION)"' helm/charts/mddash/Chart.yaml && \
+		helm dependency update helm/charts/mddash && \
+		helm package helm/charts/mddash --version $(CHART_VERSION) --app-version $(CHART_VERSION) && \
+		helm push mddash-jupyterhub-$(CHART_VERSION).tgz oci://$(registry) && \
+		rm -f mddash-jupyterhub-$(CHART_VERSION).tgz
 
 .PHONY: deploy
 deploy: ## Deploy via Helm
