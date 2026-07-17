@@ -11,7 +11,6 @@ import requests
 from flask import Flask, Response, make_response, redirect, request
 
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 4096
 
 logger = logging.getLogger(__name__)
 _first_health_logged = False
@@ -46,20 +45,6 @@ _token_store_lock = threading.Lock()
 SESSION_LIFETIME = 3600  # 1 hour
 _last_cleanup = time.time()
 CLEANUP_INTERVAL = 300  # 5 minutes
-
-LOGIN_TOKEN_BOOTSTRAP = """<script>
-const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
-window.history.replaceState(null, "", window.location.pathname);
-fetch(window.location.pathname, {
-  method: "POST",
-  headers: {"Content-Type": "application/json"},
-  body: JSON.stringify({token})
-}).then(async response => {
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error || "Login failed.");
-  window.location.replace(result.redirect_url);
-}).catch(error => { document.body.textContent = error.message; });
-</script>"""
 
 
 def remove_expired_sessions() -> None:
@@ -236,10 +221,10 @@ def create_login_token() -> tuple[dict, int]:
     Generate a one-time use login token for passwordless access.
 
     This endpoint must be called from an already authenticated session.
-    It creates a new session token and returns a shareable login URL.
+    It creates a new session token and returns it with a shareable login URL.
 
     Returns:
-        JSON response with 'login_url' and 'expires_in' fields.
+        JSON response with 'token', 'login_url', and 'expires_in' fields.
     """
     # Check that caller has a valid session (already authenticated)
     auth_token = request.cookies.get(COOKIE_NAME)
@@ -250,47 +235,36 @@ def create_login_token() -> tuple[dict, int]:
     login_token_val = create_login_token_value(USER)
 
     # Construct the one-time login URL
-    login_url = f"{SERVICE_PREFIX}/dash/auth/login-token#token={login_token_val}"
+    login_url = f"{SERVICE_PREFIX}/dash/auth/login-token?token={login_token_val}"
 
     logger.info("Passwordless login token created for user %s", USER)
 
-    return {"login_url": login_url, "expires_in": SESSION_LIFETIME}, HTTPStatus.OK
+    return {"token": login_token_val, "login_url": login_url, "expires_in": SESSION_LIFETIME}, HTTPStatus.OK
 
 
-@app.route("/login-token", methods=["GET", "POST"])
+@app.route("/login-token")
 def login_token_endpoint() -> Response:
     """
-    Serve the login page or consume a one-time token from a POST body.
+    Consume a one-time login token and establish a session cookie.
 
-    The GET response reads the token from the URL fragment in the browser and
-    submits it as JSON to POST, keeping it out of request URLs and referrers.
+    Query params:
+        token: The one-time use token obtained from /create-login-token.
 
     Returns:
-        Login page for GET, or JSON with a redirect target for POST.
+        Redirect to the dashboard with an authenticated session cookie.
     """
-    if request.method == "GET":
-        resp = make_response(LOGIN_TOKEN_BOOTSTRAP, HTTPStatus.OK)
-        resp.headers["Content-Type"] = "text/html; charset=utf-8"
-        resp.headers["Cache-Control"] = "no-store"
-        resp.headers["Referrer-Policy"] = "no-referrer"
-        return resp
-
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return make_response({"error": "Invalid JSON payload"}, HTTPStatus.BAD_REQUEST)
-    token = payload.get("token")
-
-    if not isinstance(token, str) or not token:
-        return make_response({"error": "Missing token"}, HTTPStatus.BAD_REQUEST)
+    token = request.args.get("token")
+    if not token:
+        return make_response("Missing token parameter", HTTPStatus.BAD_REQUEST)
 
     if not consume_login_token(token, USER):
         logger.warning("Invalid or expired login token attempted for user %s", USER)
-        return make_response({"error": "Invalid or expired token"}, HTTPStatus.UNAUTHORIZED)
+        return make_response("Invalid or expired token", HTTPStatus.UNAUTHORIZED)
 
     # Create a fresh session for the browser
     new_token = create_session(USER)
 
-    resp = make_response({"redirect_url": f"{SERVICE_PREFIX}/dash/"}, HTTPStatus.OK)
+    resp = make_response(redirect(f"{SERVICE_PREFIX}/dash/"))
     resp.set_cookie(COOKIE_NAME, new_token, path=SERVICE_PREFIX, secure=True, httponly=True, samesite="Lax")
 
     logger.info("Passwordless login successful for user %s", USER)
