@@ -47,28 +47,19 @@ SESSION_LIFETIME = 3600  # 1 hour
 _last_cleanup = time.time()
 CLEANUP_INTERVAL = 300  # 5 minutes
 
-LOGIN_TOKEN_PAGE = """<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>MDDash login</title></head>
-<body><p id="status">Signing in...</p><script>
-const status = document.getElementById("status");
+LOGIN_TOKEN_BOOTSTRAP = """<script>
 const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
 window.history.replaceState(null, "", window.location.pathname);
-if (!token) {
-  status.textContent = "Invalid login link.";
-} else {
-  fetch(window.location.pathname, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({token})
-  }).then(async response => {
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || "Login failed.");
-    window.location.replace(result.redirect_url);
-  }).catch(error => { status.textContent = error.message; });
-}
-</script></body>
-</html>"""
+fetch(window.location.pathname, {
+  method: "POST",
+  headers: {"Content-Type": "application/json"},
+  body: JSON.stringify({token})
+}).then(async response => {
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || "Login failed.");
+  window.location.replace(result.redirect_url);
+}).catch(error => { document.body.textContent = error.message; });
+</script>"""
 
 
 def remove_expired_sessions() -> None:
@@ -278,7 +269,7 @@ def login_token_endpoint() -> Response:
         Login page for GET, or JSON with a redirect target for POST.
     """
     if request.method == "GET":
-        resp = make_response(LOGIN_TOKEN_PAGE, HTTPStatus.OK)
+        resp = make_response(LOGIN_TOKEN_BOOTSTRAP, HTTPStatus.OK)
         resp.headers["Content-Type"] = "text/html; charset=utf-8"
         resp.headers["Cache-Control"] = "no-store"
         resp.headers["Referrer-Policy"] = "no-referrer"
