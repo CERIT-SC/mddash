@@ -43,7 +43,7 @@ def setup_demo_profile(app: "Flask") -> None:
     Args:
         app: The Flask application instance.
     """
-    global _responses_mock  # noqa: PLW0603
+    global _responses_mock  # ruff:ignore[global-statement]
 
     if demo_state.initialized:
         return
@@ -70,14 +70,14 @@ def setup_demo_profile(app: "Flask") -> None:
 
 def activate_responses() -> None:
     """Activate the responses mock for the current request context."""
-    global _responses_mock  # noqa: PLW0602
+    global _responses_mock  # ruff:ignore[global-variable-not-assigned]
     if _responses_mock is not None:
-        _responses_mock.__enter__()  # noqa: PLC2801
+        _responses_mock.__enter__()  # ruff:ignore[unnecessary-dunder-call]
 
 
 def deactivate_responses() -> None:
     """Deactivate the responses mock after request completion."""
-    global _responses_mock  # noqa: PLW0602
+    global _responses_mock  # ruff:ignore[global-variable-not-assigned]
     if _responses_mock is not None:
         with contextlib.suppress(Exception):
             _responses_mock.__exit__(None, None, None)

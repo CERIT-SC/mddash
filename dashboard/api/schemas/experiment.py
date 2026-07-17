@@ -21,12 +21,12 @@ class ExperimentSchema(BaseAutoSchema):
         include_relationships = True
 
     @pre_dump
-    def sync_mdrepo(self, data: Experiment, **kwargs: dict) -> Experiment:  # noqa: ARG002
+    def sync_mdrepo(self, data: Experiment, **kwargs: dict) -> Experiment:  # ruff:ignore[unused-method-argument]
         """
         Sync MDRepo status before serialization.
 
         Returns:
             Experiment: The same experiment instance after syncing its MDRepo status.
         """
-        data._sync_mdrepo_status()  # noqa: SLF001
+        data._sync_mdrepo_status()  # ruff:ignore[private-member-access]
         return data

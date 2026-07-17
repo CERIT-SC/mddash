@@ -14,7 +14,7 @@ from auth import (
     HMAC_SHA256_HEX_LENGTH,
     STATE_COOKIE,
     USER,
-    _sessions,  # noqa: PLC2701
+    _sessions,  # ruff:ignore[import-private-name]
     create_session,
     is_valid_session,
     remove_expired_sessions,
@@ -125,7 +125,7 @@ class TestSessionCleanup:
             _sessions["expired"] = ("user2", now - 100)
 
             # Force cleanup by resetting last cleanup time
-            auth._last_cleanup = 0  # noqa: SLF001
+            auth._last_cleanup = 0  # ruff:ignore[private-member-access]
 
             remove_expired_sessions()
 
@@ -206,11 +206,11 @@ class TestOAuthCallback:
         assert expected_user != returned_user
 
 
-def test_health_logs_first_health_once(client: FlaskClient, caplog) -> None:  # noqa: ANN001
+def test_health_logs_first_health_once(client: FlaskClient, caplog) -> None:  # ruff:ignore[missing-type-function-argument]
     """The first auth health response should be visible in startup diagnostics once."""
-    import auth  # noqa: PLC0415
+    import auth  # ruff:ignore[import-outside-top-level]
 
-    auth._first_health_logged = False  # noqa: SLF001
+    auth._first_health_logged = False  # ruff:ignore[private-member-access]
     caplog.set_level("INFO", logger="auth")
 
     client.get("/health")

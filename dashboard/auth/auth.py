@@ -46,7 +46,7 @@ CLEANUP_INTERVAL = 300  # 5 minutes
 
 def remove_expired_sessions() -> None:
     """Remove expired sessions from the in-memory store (throttled)."""
-    global _last_cleanup  # noqa: PLW0603
+    global _last_cleanup  # ruff:ignore[global-statement]
     now = time.time()
 
     if now - _last_cleanup < CLEANUP_INTERVAL:
@@ -104,7 +104,7 @@ def health() -> tuple[str, int]:
     Returns:
         tuple[str, int]: A plain-text OK body and a 200 status code.
     """
-    global _first_health_logged  # noqa: PLW0603
+    global _first_health_logged  # ruff:ignore[global-statement]
     if not _first_health_logged:
         logger.info("auth first health response served")
         _first_health_logged = True

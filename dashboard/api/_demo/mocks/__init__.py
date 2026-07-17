@@ -9,13 +9,13 @@ import logging
 
 import responses
 
-logger = logging.getLogger(__name__)  # noqa: RUF067
+logger = logging.getLogger(__name__)  # ruff:ignore[non-empty-init-module]
 
 # Global flag to prevent double installation
-_mocks_installed = False  # noqa: RUF067
+_mocks_installed = False  # ruff:ignore[non-empty-init-module]
 
 
-def install_all_mocks() -> None:  # noqa: RUF067
+def install_all_mocks() -> None:  # ruff:ignore[non-empty-init-module]
     """
     Install all demo mocks for external services.
 
@@ -25,15 +25,15 @@ def install_all_mocks() -> None:  # noqa: RUF067
     Uses the global `responses.mock` singleton so it works with all requests.
     Must be called before importing any modules that make HTTP requests.
     """
-    global _mocks_installed  # noqa: PLW0603
+    global _mocks_installed  # ruff:ignore[global-statement]
 
     if _mocks_installed:
         logger.debug("Mocks already installed, skipping")
         return
 
-    from .http import install_http_mocks  # noqa: PLC0415
-    from .k8s import install_k8s_mocks  # noqa: PLC0415
-    from .tuner_logs import install_tuner_log_mocks  # noqa: PLC0415
+    from .http import install_http_mocks  # ruff:ignore[import-outside-top-level]
+    from .k8s import install_k8s_mocks  # ruff:ignore[import-outside-top-level]
+    from .tuner_logs import install_tuner_log_mocks  # ruff:ignore[import-outside-top-level]
 
     # Install HTTP mocks on the global responses.mock singleton
     install_http_mocks(responses.mock)
@@ -51,9 +51,9 @@ def install_all_mocks() -> None:  # noqa: RUF067
     logger.info("All demo mocks installed")
 
 
-def stop_mocks() -> None:  # noqa: RUF067
+def stop_mocks() -> None:  # ruff:ignore[non-empty-init-module]
     """Stop HTTP mocking (call on shutdown)."""
-    global _mocks_installed  # noqa: PLW0603
+    global _mocks_installed  # ruff:ignore[global-statement]
     if _mocks_installed:
         responses.stop()
         responses.reset()

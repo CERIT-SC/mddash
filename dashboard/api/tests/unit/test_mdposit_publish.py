@@ -1,6 +1,6 @@
 """Unit tests for MDPosit-aware publish routing and from_repo logic."""
 
-# ruff: noqa: ARG002 — @patch decorators inject unused mock params by design
+# ruff:file-ignore[unused-method-argument ]— @patch decorators inject unused mock params by design
 
 import json
 import os

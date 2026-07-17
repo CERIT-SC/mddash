@@ -12,7 +12,7 @@ HTTP_REDIRECT_MIN = 300
 class HealthCheckFilter(Logger):
     """Suppress successful health-check access logs."""
 
-    def access(self, resp: Any, req: Any, environ: dict[str, Any], request_time: timedelta) -> None:  # noqa: ANN401
+    def access(self, resp: Any, req: Any, environ: dict[str, Any], request_time: timedelta) -> None:  # ruff:ignore[any-type]
         """Log non-health requests and failed health probes."""
         status_code = _get_status_code(resp)
         path = environ.get("PATH_INFO", "")
@@ -21,7 +21,7 @@ class HealthCheckFilter(Logger):
         super().access(resp, req, environ, request_time)
 
 
-def _get_status_code(resp: Any) -> int | None:  # noqa: ANN401
+def _get_status_code(resp: Any) -> int | None:  # ruff:ignore[any-type]
     status_int = getattr(resp, "status_int", None)
     if isinstance(status_int, int):
         return status_int

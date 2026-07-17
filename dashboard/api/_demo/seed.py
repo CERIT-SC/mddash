@@ -26,7 +26,7 @@ from .state import build_model, demo_state
 logger = logging.getLogger(__name__)
 
 
-def seed_data() -> None:  # noqa: PLR0914
+def seed_data() -> None:  # ruff:ignore[too-many-locals]
     demo_state.reset()
 
     if Experiment.query.count() > 0:
@@ -582,7 +582,7 @@ def _fetch_and_write_analysis_results(experiment_id: str, simulation_path: str, 
             logger.exception("Failed to fetch analysis %s for seeding", mdposit_name)
 
 
-def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
+def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
     """Rehydrate runtime state from existing database records."""
     membrane = Experiment.query.filter_by(id="aaaaa").first()
     enzyme = Experiment.query.filter_by(id="bbbbb").first()
@@ -706,16 +706,16 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
 
     # Rehydrate GROMACS jobs from database
     for gmx_job in GromacsJob.query.all():
-        status = JobStatus.TERMINATED.value if gmx_job._finish_timestamp else JobStatus.RUNNING.value  # noqa: SLF001
-        from models.simulation import Simulation  # noqa: PLC0415
+        status = JobStatus.TERMINATED.value if gmx_job._finish_timestamp else JobStatus.RUNNING.value  # ruff:ignore[private-member-access]
+        from models.simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
         files = Simulation.get(gmx_job.experiment_id, gmx_job.simulation_path).resolved_files
         demo_state.mdrun_jobs[gmx_job.id] = {
             "status": status,
             "experiment_id": gmx_job.experiment_id,
             "tpr_name": files.get("topology", "md.tpr"),
-            "nsteps": gmx_job._nsteps or 100000,  # noqa: SLF001
-            "created_at": float(gmx_job._start_timestamp or time.time()),  # noqa: SLF001
+            "nsteps": gmx_job._nsteps or 100000,  # ruff:ignore[private-member-access]
+            "created_at": float(gmx_job._start_timestamp or time.time()),  # ruff:ignore[private-member-access]
             "duration_sec": 30.0,
             "log_line_index": 0,
             "log_total_lines": 500,
@@ -723,8 +723,8 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
 
     # Rehydrate AMBER jobs from database
     for amber_job in AmberJob.query.all():
-        status = JobStatus.TERMINATED.value if amber_job._finish_timestamp else JobStatus.RUNNING.value  # noqa: SLF001
-        from models.simulation import Simulation  # noqa: PLC0415
+        status = JobStatus.TERMINATED.value if amber_job._finish_timestamp else JobStatus.RUNNING.value  # ruff:ignore[private-member-access]
+        from models.simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
         files = Simulation.get(amber_job.experiment_id, amber_job.simulation_path).resolved_files
         demo_state.mdrun_jobs[amber_job.id] = {
@@ -733,8 +733,8 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
             "prmtop_name": files.get("topology", "md.prmtop"),
             "inpcrd_name": files.get("coordinates", "md.inpcrd"),
             "mdin_name": files.get("control", "md.mdin"),
-            "nsteps": amber_job._nsteps or 100000,  # noqa: SLF001
-            "created_at": float(amber_job._start_timestamp or time.time()),  # noqa: SLF001
+            "nsteps": amber_job._nsteps or 100000,  # ruff:ignore[private-member-access]
+            "created_at": float(amber_job._start_timestamp or time.time()),  # ruff:ignore[private-member-access]
             "duration_sec": 30.0,
             "log_line_index": 0,
             "log_total_lines": 500,
@@ -747,7 +747,7 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
             demo_state.tuner_jobs[tuner_job.id] = {
                 "status": JobStatus.TERMINATED.value,
                 "created_at": time.time() - 3600,
-                "max_trials": len(tuner_job._preserved_trials or []),  # noqa: SLF001
+                "max_trials": len(tuner_job._preserved_trials or []),  # ruff:ignore[private-member-access]
                 "trials": [
                     {
                         "id": t.get("id", f"{tuner_job.id[:10]}-{i:05d}"),
@@ -758,7 +758,7 @@ def _rehydrate_runtime_state() -> None:  # noqa: PLR0912
                         "pme": t.get("pme", "cpu"),
                         "performance": t.get("performance"),
                     }
-                    for i, t in enumerate(tuner_job._preserved_trials or [])  # noqa: SLF001
+                    for i, t in enumerate(tuner_job._preserved_trials or [])  # ruff:ignore[private-member-access]
                 ],
             }
         elif tuner_job.error_message:

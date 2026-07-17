@@ -87,12 +87,12 @@ def create_demo_app() -> "Flask":
         patch("kubernetes.client.CoreV1Api"),
         patch("kubernetes.client.BatchV1Api"),
     ):
-        from _demo.mocks import install_all_mocks  # noqa: PLC0415
-        from _demo.profile import setup_demo_profile  # noqa: PLC0415
+        from _demo.mocks import install_all_mocks  # ruff:ignore[import-outside-top-level]
+        from _demo.profile import setup_demo_profile  # ruff:ignore[import-outside-top-level]
 
         install_all_mocks()
 
-        from app import create_app  # noqa: PLC0415
+        from app import create_app  # ruff:ignore[import-outside-top-level]
 
         app = create_app()
 

@@ -196,7 +196,7 @@ def test_namespace_manifest_carries_rancher_annotations_and_quota(monkeypatch: p
     """The namespace manifest embeds the Rancher project id and a resource-quota JSON annotation."""
     module = _load_module(monkeypatch)
 
-    manifest = module._get_namespace_manifest("ns-1", "proj-abc", "32", "64Gi", "4", "8Gi")  # noqa: SLF001
+    manifest = module._get_namespace_manifest("ns-1", "proj-abc", "32", "64Gi", "4", "8Gi")  # ruff:ignore[private-member-access]
 
     assert manifest["kind"] == "Namespace"
     assert manifest["metadata"]["name"] == "ns-1"
@@ -211,8 +211,8 @@ def test_role_manifest_adds_pvc_only_when_requested(monkeypatch: pytest.MonkeyPa
     """The user Role omits PVC access; the hub Role grants it."""
     module = _load_module(monkeypatch)
 
-    base = module._get_role_manifest("user-role")  # noqa: SLF001
-    with_pvc = module._get_role_manifest("hub-role", include_pvc=True)  # noqa: SLF001
+    base = module._get_role_manifest("user-role")  # ruff:ignore[private-member-access]
+    with_pvc = module._get_role_manifest("hub-role", include_pvc=True)  # ruff:ignore[private-member-access]
 
     base_resources = base["rules"][0]["resources"]
     pvc_resources = with_pvc["rules"][0]["resources"]
@@ -224,8 +224,8 @@ def test_role_binding_manifest_includes_subject_namespace_only_when_given(monkey
     """The hub binding spans namespaces (subject namespace set); the user binding does not."""
     module = _load_module(monkeypatch)
 
-    same_ns = module._get_role_binding_manifest("user-binding", "default", "user-role")  # noqa: SLF001
-    cross_ns = module._get_role_binding_manifest("hub-binding", "hub", "hub-role", namespace="hub-ns")  # noqa: SLF001
+    same_ns = module._get_role_binding_manifest("user-binding", "default", "user-role")  # ruff:ignore[private-member-access]
+    cross_ns = module._get_role_binding_manifest("hub-binding", "hub", "hub-role", namespace="hub-ns")  # ruff:ignore[private-member-access]
 
     assert "namespace" not in same_ns["subjects"][0]
     assert cross_ns["subjects"][0]["namespace"] == "hub-ns"
@@ -237,8 +237,8 @@ def test_pvc_manifest_uses_defaults_and_overrides(monkeypatch: pytest.MonkeyPatc
     """PVC defaults to 10Gi/nfs-csi but honours explicit size and class."""
     module = _load_module(monkeypatch)
 
-    default = module._get_pvc_manifest("claim")  # noqa: SLF001
-    custom = module._get_pvc_manifest("claim", storage_size="50Gi", storage_class="fast")  # noqa: SLF001
+    default = module._get_pvc_manifest("claim")  # ruff:ignore[private-member-access]
+    custom = module._get_pvc_manifest("claim", storage_size="50Gi", storage_class="fast")  # ruff:ignore[private-member-access]
 
     assert default["spec"] == {
         "storageClassName": "nfs-csi",
@@ -258,7 +258,7 @@ def test_security_context_is_hardened_non_root(monkeypatch: pytest.MonkeyPatch) 
     """Sidecar security contexts enforce non-root, dropped caps and seccomp."""
     module = _load_module(monkeypatch)
 
-    sc = module._get_security_context()  # noqa: SLF001
+    sc = module._get_security_context()  # ruff:ignore[private-member-access]
 
     assert sc == {
         "allowPrivilegeEscalation": False,
@@ -283,13 +283,13 @@ def test_ensure_resource_ignores_conflict_but_propagates_other_errors(monkeypatc
     conflict = _Recorder(handler=_raises(_api_exception(HTTPStatus.CONFLICT)))
     server_error = _Recorder(handler=_raises(_api_exception(HTTPStatus.INTERNAL_SERVER_ERROR)))
 
-    _run(module._ensure_resource(ok, body={}))  # noqa: SLF001
+    _run(module._ensure_resource(ok, body={}))  # ruff:ignore[private-member-access]
     assert len(ok.calls) == 1
 
-    _run(module._ensure_resource(conflict, body={}))  # noqa: SLF001  must not raise
+    _run(module._ensure_resource(conflict, body={}))  # ruff:ignore[private-member-access]  must not raise
 
     with pytest.raises(ApiException):
-        _run(module._ensure_resource(server_error, body={}))  # noqa: SLF001
+        _run(module._ensure_resource(server_error, body={}))  # ruff:ignore[private-member-access]
 
 
 @pytest.mark.parametrize(
@@ -307,7 +307,7 @@ def test_resource_exists_handles_found_and_missing(
     module = _load_module(monkeypatch)
 
     method = _Recorder(handler=handler)
-    assert _run(module._resource_exists(method, name="x")) is expected  # noqa: SLF001
+    assert _run(module._resource_exists(method, name="x")) is expected  # ruff:ignore[private-member-access]
 
 
 def test_resource_exists_re_raises_unexpected_status(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -316,7 +316,7 @@ def test_resource_exists_re_raises_unexpected_status(monkeypatch: pytest.MonkeyP
     method = _Recorder(handler=_raises(_api_exception(HTTPStatus.INTERNAL_SERVER_ERROR)))
 
     with pytest.raises(ApiException):
-        _run(module._resource_exists(method, name="x"))  # noqa: SLF001
+        _run(module._resource_exists(method, name="x"))  # ruff:ignore[private-member-access]
 
 
 def test_wait_for_resource_returns_once_available(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -324,7 +324,7 @@ def test_wait_for_resource_returns_once_available(monkeypatch: pytest.MonkeyPatc
     module = _load_module(monkeypatch)
     method = _Recorder()
 
-    _run(module._wait_for_resource(method, timeout_s=1.0, interval=0.01, name="x"))  # noqa: SLF001
+    _run(module._wait_for_resource(method, timeout_s=1.0, interval=0.01, name="x"))  # ruff:ignore[private-member-access]
 
     assert len(method.calls) == 1
 
@@ -335,7 +335,7 @@ def test_wait_for_resource_times_out_when_never_present(monkeypatch: pytest.Monk
     method = _Recorder(handler=_raises(_api_exception(HTTPStatus.NOT_FOUND)))
 
     with pytest.raises(TimeoutError, match="Timed out"):
-        _run(module._wait_for_resource(method, timeout_s=0.05, interval=0.01, name="x"))  # noqa: SLF001
+        _run(module._wait_for_resource(method, timeout_s=0.05, interval=0.01, name="x"))  # ruff:ignore[private-member-access]
 
 
 @pytest.mark.parametrize(
@@ -370,7 +370,7 @@ def test_ns_has_conditions_parses_rancher_status(
 ) -> None:
     """Malformed/missing/partial Rancher status resolves to False; only full matches are True."""
     module = _load_module(monkeypatch)
-    assert module._ns_has_conditions(annotations, required) is expected  # noqa: SLF001
+    assert module._ns_has_conditions(annotations, required) is expected  # ruff:ignore[private-member-access]
 
 
 def test_wait_for_ns_conditions_returns_when_satisfied(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -379,7 +379,7 @@ def test_wait_for_ns_conditions_returns_when_satisfied(monkeypatch: pytest.Monke
     core_api = _FakeCoreV1Api()
     core_api.read_namespace.handler = lambda **_kw: _ns_with_conditions("InitialRolesPopulated")
 
-    _run(module._wait_for_ns_conditions(core_api, "ns", {"InitialRolesPopulated"}, timeout_s=1.0))  # noqa: SLF001
+    _run(module._wait_for_ns_conditions(core_api, "ns", {"InitialRolesPopulated"}, timeout_s=1.0))  # ruff:ignore[private-member-access]
 
     assert len(core_api.read_namespace.calls) == 1
 
@@ -404,7 +404,7 @@ def test_wait_for_ns_conditions_swallows_propagation_errors_then_succeeds(monkey
     core_api.read_namespace.handler = handler
     expected_reads = 3
 
-    _run(module._wait_for_ns_conditions(core_api, "ns", {"InitialRolesPopulated"}, timeout_s=1.0, interval=0.01))  # noqa: SLF001
+    _run(module._wait_for_ns_conditions(core_api, "ns", {"InitialRolesPopulated"}, timeout_s=1.0, interval=0.01))  # ruff:ignore[private-member-access]
     assert len(core_api.read_namespace.calls) == expected_reads
 
 
@@ -415,7 +415,7 @@ def test_wait_for_ns_conditions_times_out_when_never_ready(monkeypatch: pytest.M
     core_api.read_namespace.handler = lambda **_kw: SimpleNamespace(metadata=SimpleNamespace(annotations={}))
 
     with pytest.raises(TimeoutError, match="Rancher namespace conditions"):
-        _run(module._wait_for_ns_conditions(core_api, "ns", {"InitialRolesPopulated"}, timeout_s=0.05, interval=0.01))  # noqa: SLF001
+        _run(module._wait_for_ns_conditions(core_api, "ns", {"InitialRolesPopulated"}, timeout_s=0.05, interval=0.01))  # ruff:ignore[private-member-access]
 
 
 def test_wait_for_resource_quota_active_returns_when_non_zero(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -426,7 +426,7 @@ def test_wait_for_resource_quota_active_returns_when_non_zero(monkeypatch: pytes
         items=[SimpleNamespace(status=SimpleNamespace(hard={"requests.cpu": "2500m", "requests.memory": "6Gi"}))]
     )
 
-    _run(module._wait_for_resource_quota_active(core_api, "ns", timeout_s=1.0, interval=0.01))  # noqa: SLF001
+    _run(module._wait_for_resource_quota_active(core_api, "ns", timeout_s=1.0, interval=0.01))  # ruff:ignore[private-member-access]
     assert len(core_api.list_namespaced_resource_quota.calls) == 1
 
 
@@ -439,7 +439,7 @@ def test_wait_for_resource_quota_active_times_out_when_zero(monkeypatch: pytest.
     )
 
     with pytest.raises(TimeoutError, match="ResourceQuota"):
-        _run(module._wait_for_resource_quota_active(core_api, "ns", timeout_s=0.05, interval=0.01))  # noqa: SLF001
+        _run(module._wait_for_resource_quota_active(core_api, "ns", timeout_s=0.05, interval=0.01))  # ruff:ignore[private-member-access]
 
 
 # =============================================================================
@@ -461,7 +461,7 @@ def _assert_valid_dns1123(label: str) -> None:
 def test_dns1123_label_sanitizes_invalid_usernames(monkeypatch: pytest.MonkeyPatch, username: str) -> None:
     """Invalid usernames become valid labels distinct from the original."""
     module = _load_module(monkeypatch)
-    slug = module._dns1123_label(username)  # noqa: SLF001
+    slug = module._dns1123_label(username)  # ruff:ignore[private-member-access]
     assert slug != username
     _assert_valid_dns1123(slug)
 
@@ -470,7 +470,7 @@ def test_dns1123_label_passes_through_valid_names(monkeypatch: pytest.MonkeyPatc
     """Valid names pass through unchanged so existing deployments keep their namespaces."""
     module = _load_module(monkeypatch)
     for valid in ("alice", "john-doe", "user123", "a"):
-        assert module._dns1123_label(valid) == valid  # noqa: SLF001
+        assert module._dns1123_label(valid) == valid  # ruff:ignore[private-member-access]
 
 
 @pytest.mark.parametrize("bad", ["", "...", "@@@@", "___"])
@@ -478,14 +478,14 @@ def test_dns1123_label_rejects_names_with_no_valid_chars(monkeypatch: pytest.Mon
     """A username with no usable characters must fail loudly, not silently collide."""
     module = _load_module(monkeypatch)
     with pytest.raises(ValueError, match="valid DNS-1123"):
-        module._dns1123_label(bad)  # noqa: SLF001
+        module._dns1123_label(bad)  # ruff:ignore[private-member-access]
 
 
 def test_dns1123_label_disambiguates_collapsing_usernames(monkeypatch: pytest.MonkeyPatch) -> None:
     """``john.doe`` and ``john-doe`` must not collapse into the same namespace."""
     module = _load_module(monkeypatch)
-    dotted = module._dns1123_label("john.doe")  # noqa: SLF001
-    hyphenated = module._dns1123_label("john-doe")  # noqa: SLF001
+    dotted = module._dns1123_label("john.doe")  # ruff:ignore[private-member-access]
+    hyphenated = module._dns1123_label("john-doe")  # ruff:ignore[private-member-access]
     assert dotted != hyphenated
     assert dotted.startswith("john-doe-")
     assert hyphenated == "john-doe"
@@ -495,8 +495,8 @@ def test_dns1123_label_truncates_long_names_within_budget(monkeypatch: pytest.Mo
     """Long names truncate to fit max_length while remaining valid and unique."""
     module = _load_module(monkeypatch)
     budget = 20
-    first = module._dns1123_label("a" * 200, max_length=budget)  # noqa: SLF001
-    second = module._dns1123_label("a" * 199 + "b", max_length=budget)  # noqa: SLF001
+    first = module._dns1123_label("a" * 200, max_length=budget)  # ruff:ignore[private-member-access]
+    second = module._dns1123_label("a" * 199 + "b", max_length=budget)  # ruff:ignore[private-member-access]
     assert len(first) == budget
     _assert_valid_dns1123(first)
     assert first != second
@@ -509,7 +509,7 @@ def test_namespace_and_bucket_fit_dns1123_limit(monkeypatch: pytest.MonkeyPatch)
     budget = module.DNS1123_LABEL_MAX - len(f"{helm_package}-user-") - len("-ns")
 
     for username in ("john.doe", "alice", "x" * 200, "User.With.Many.Dots"):
-        slug = module._dns1123_label(username, max_length=budget)  # noqa: SLF001
+        slug = module._dns1123_label(username, max_length=budget)  # ruff:ignore[private-member-access]
         namespace = f"{helm_package}-user-{slug}-ns"
         bucket = f"{helm_package}-user-{slug}"
         assert len(namespace) <= module.DNS1123_LABEL_MAX, namespace
@@ -526,7 +526,7 @@ def test_namespace_and_bucket_fit_dns1123_limit(monkeypatch: pytest.MonkeyPatch)
 def test_proxy_start_command_gates_on_health_before_caddy(monkeypatch: pytest.MonkeyPatch) -> None:
     """The proxy waits for both health endpoints with ``--fail`` before starting Caddy."""
     module = _load_module(monkeypatch)
-    cmd = module._proxy_start_command("/user/alice")  # noqa: SLF001
+    cmd = module._proxy_start_command("/user/alice")  # ruff:ignore[private-member-access]
 
     assert cmd.startswith("until ")
     assert "curl --fail" in cmd
@@ -540,9 +540,9 @@ def test_proxy_container_built_from_image_env(monkeypatch: pytest.MonkeyPatch) -
     """The proxy container is built from PROXY_IMAGE and carries route/user/env."""
     module = _load_module(monkeypatch)
     _set_images(monkeypatch, PROXY_IMAGE="proxy:1", MDPOSIT_URL="https://mdposit.example.com")
-    sc = module._get_security_context()  # noqa: SLF001
+    sc = module._get_security_context()  # ruff:ignore[private-member-access]
 
-    container = module._proxy_container("/user/alice", "alice", sc)  # noqa: SLF001
+    container = module._proxy_container("/user/alice", "alice", sc)  # ruff:ignore[private-member-access]
 
     assert container is not None
     assert container["name"] == "proxy"
@@ -560,9 +560,9 @@ def test_auth_container_reads_jupyterhub_env(monkeypatch: pytest.MonkeyPatch) ->
     """The auth container forwards JupyterHub OAuth env and the cross-namespace hub API URL."""
     module = _load_module(monkeypatch)
     _set_images(monkeypatch, AUTH_IMAGE="auth:1")
-    sc = module._get_security_context()  # noqa: SLF001
+    sc = module._get_security_context()  # ruff:ignore[private-member-access]
 
-    container = module._auth_container(  # noqa: SLF001
+    container = module._auth_container(  # ruff:ignore[private-member-access]
         "/user/alice",
         "alice",
         "hub-ns",
@@ -585,9 +585,9 @@ def test_api_container_passes_through_config_env(monkeypatch: pytest.MonkeyPatch
     """The API container receives namespace, bucket, PVC and passthrough config env."""
     module = _load_module(monkeypatch)
     _set_images(monkeypatch, API_IMAGE="api:1", S3_ENDPOINT="https://s3.example", NS_MAX_NOTEBOOKS="5")
-    sc = module._get_security_context()  # noqa: SLF001
+    sc = module._get_security_context()  # ruff:ignore[private-member-access]
 
-    container = module._api_container(  # noqa: SLF001
+    container = module._api_container(  # ruff:ignore[private-member-access]
         "/user/alice", "alice", "mddash-user-alice-ns", "hub-ns", "bucket", "pvc", "vol", sc
     )
 
@@ -608,9 +608,9 @@ def test_s3_sync_container_mounts_shared_volume(monkeypatch: pytest.MonkeyPatch)
     _set_images(
         monkeypatch, S3_SYNC_IMAGE="sync:1", S3_ENDPOINT="https://s3.example", S3_ACCESS_KEY="ak", S3_SECRET_KEY="sk"
     )
-    sc = module._get_security_context()  # noqa: SLF001
+    sc = module._get_security_context()  # ruff:ignore[private-member-access]
 
-    container = module._s3_sync_container("bucket", "vol", sc)  # noqa: SLF001
+    container = module._s3_sync_container("bucket", "vol", sc)  # ruff:ignore[private-member-access]
 
     assert container is not None
     env = {e["name"]: e["value"] for e in container["env"]}
@@ -627,10 +627,10 @@ def test_sidecar_builders_return_none_without_image(monkeypatch: pytest.MonkeyPa
     monkeypatch.delenv("API_IMAGE", raising=False)
     monkeypatch.delenv("S3_SYNC_IMAGE", raising=False)
 
-    assert module._proxy_container("/u", "u", {}) is None  # noqa: SLF001
-    assert module._auth_container("/u", "u", "ns", {}, {}) is None  # noqa: SLF001
-    assert module._api_container("/u", "u", "ns", "ns", "b", "p", "v", {}) is None  # noqa: SLF001
-    assert module._s3_sync_container("b", "v", {}) is None  # noqa: SLF001
+    assert module._proxy_container("/u", "u", {}) is None  # ruff:ignore[private-member-access]
+    assert module._auth_container("/u", "u", "ns", {}, {}) is None  # ruff:ignore[private-member-access]
+    assert module._api_container("/u", "u", "ns", "ns", "b", "p", "v", {}) is None  # ruff:ignore[private-member-access]
+    assert module._s3_sync_container("b", "v", {}) is None  # ruff:ignore[private-member-access]
 
 
 def test_get_sidecar_containers_orders_and_filters(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -639,7 +639,7 @@ def test_get_sidecar_containers_orders_and_filters(monkeypatch: pytest.MonkeyPat
     _set_images(monkeypatch, PROXY_IMAGE="proxy:1", API_IMAGE="api:1", S3_SYNC_IMAGE="sync:1")  # no AUTH_IMAGE
 
     spawner = _FakeSpawner(username="alice", env={"JUPYTERHUB_CLIENT_ID": "cid"})
-    containers = module._get_sidecar_containers(spawner, "bucket", "pvc", "vol", "mddash-user-alice-ns")  # noqa: SLF001
+    containers = module._get_sidecar_containers(spawner, "bucket", "pvc", "vol", "mddash-user-alice-ns")  # ruff:ignore[private-member-access]
 
     assert [c["name"] for c in containers] == ["proxy", "api", "s3-sync"]
 
@@ -654,8 +654,8 @@ def test_progress_queue_is_created_once_per_spawner(monkeypatch: pytest.MonkeyPa
     module = _load_module(monkeypatch)
     spawner = _FakeSpawner()
 
-    q1 = module._get_or_create_progress_queue(spawner)  # noqa: SLF001
-    q2 = module._get_or_create_progress_queue(spawner)  # noqa: SLF001
+    q1 = module._get_or_create_progress_queue(spawner)  # ruff:ignore[private-member-access]
+    q2 = module._get_or_create_progress_queue(spawner)  # ruff:ignore[private-member-access]
 
     assert q1 is q2
 
@@ -665,21 +665,21 @@ def test_report_progress_enqueues_message(monkeypatch: pytest.MonkeyPatch) -> No
     module = _load_module(monkeypatch)
     spawner = _FakeSpawner()
 
-    _run(module._report_progress(spawner, "working", 42))  # noqa: SLF001
+    _run(module._report_progress(spawner, "working", 42))  # ruff:ignore[private-member-access]
 
-    assert _run(spawner._mddash_progress_queue.get()) == {"message": "working", "progress": 42}  # noqa: SLF001
+    assert _run(spawner._mddash_progress_queue.get()) == {"message": "working", "progress": 42}  # ruff:ignore[private-member-access]
 
 
 def test_spawn_progress_terminates_on_sentinel_and_emits_final(monkeypatch: pytest.MonkeyPatch) -> None:
     """The generator stops on the None sentinel and always emits the final waiting message."""
     module = _load_module(monkeypatch)
     spawner = _FakeSpawner()
-    queue = module._get_or_create_progress_queue(spawner)  # noqa: SLF001
+    queue = module._get_or_create_progress_queue(spawner)  # ruff:ignore[private-member-access]
     _run(queue.put({"message": "step", "progress": 10}))
     _run(queue.put(None))
 
     async def drain() -> list[dict[str, object]]:
-        return [item async for item in module._spawn_progress(spawner)]  # noqa: SLF001
+        return [item async for item in module._spawn_progress(spawner)]  # ruff:ignore[private-member-access]
 
     items = _run(drain())
     assert items == [
@@ -808,7 +808,7 @@ def test_pre_spawn_hook_provisions_full_user_environment(monkeypatch: pytest.Mon
     assert core_api.read_namespace.calls
     assert core_api.list_namespaced_resource_quota.calls
     assert api_client.closed
-    queue = spawner._mddash_progress_queue  # noqa: SLF001
+    queue = spawner._mddash_progress_queue  # ruff:ignore[private-member-access]
     enqueued: list[object] = []
     while not queue.empty():
         enqueued.append(queue.get_nowait())

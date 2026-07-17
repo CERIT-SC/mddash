@@ -272,8 +272,8 @@ def write_running_gmx_log(experiment_id: str, deffnm: str, initial_lines: int = 
 def write_finished_gmx_log(
     experiment_id: str,
     deffnm: str,
-    nsteps: int,  # noqa: ARG001
-    performance: float,  # noqa: ARG001
+    nsteps: int,  # ruff:ignore[unused-function-argument]
+    performance: float,  # ruff:ignore[unused-function-argument]
     append_only: bool = False,
 ) -> None:
     if append_only:

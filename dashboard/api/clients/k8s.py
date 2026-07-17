@@ -10,8 +10,8 @@ if TYPE_CHECKING:
     from enums import NotebookTier
 
     # Available at runtime via _load_k8s() populating module globals.
-    from kubernetes import config  # noqa: TC004
-    from kubernetes.client import (  # noqa: TC004
+    from kubernetes import config  # ruff:ignore[runtime-import-in-type-checking-block]
+    from kubernetes.client import (  # ruff:ignore[runtime-import-in-type-checking-block]
         BatchV1Api,
         CoreV1Api,
         V1DeleteOptions,
@@ -23,7 +23,7 @@ if TYPE_CHECKING:
         V1ServicePort,
         V1ServiceSpec,
     )
-    from kubernetes.client.rest import ApiException  # noqa: TC004
+    from kubernetes.client.rest import ApiException  # ruff:ignore[runtime-import-in-type-checking-block]
 
 from config import (
     CPU_LIMIT_QUOTA,
@@ -50,11 +50,11 @@ _batch_v1: BatchV1Api | None = None
 
 def _load_k8s() -> None:
     """Import kubernetes symbols into module globals on first k8s use."""
-    global _k8s_loaded  # noqa: PLW0603
+    global _k8s_loaded  # ruff:ignore[global-statement]
     if _k8s_loaded:
         return
-    import kubernetes.config  # noqa: PLC0415
-    from kubernetes.client import (  # noqa: PLC0415
+    import kubernetes.config  # ruff:ignore[import-outside-top-level]
+    from kubernetes.client import (  # ruff:ignore[import-outside-top-level]
         BatchV1Api,
         CoreV1Api,
         V1DeleteOptions,
@@ -63,7 +63,7 @@ def _load_k8s() -> None:
         V1ServicePort,
         V1ServiceSpec,
     )
-    from kubernetes.client.rest import ApiException  # noqa: PLC0415
+    from kubernetes.client.rest import ApiException  # ruff:ignore[import-outside-top-level]
 
     g = globals()
     g["config"] = kubernetes.config
@@ -81,7 +81,7 @@ def _load_k8s() -> None:
 
 
 def _ensure_k8s_config() -> None:
-    global _k8s_config_loaded  # noqa: PLW0603
+    global _k8s_config_loaded  # ruff:ignore[global-statement]
     if not _k8s_config_loaded:
         _load_k8s()
         config.load_incluster_config()
@@ -89,8 +89,8 @@ def _ensure_k8s_config() -> None:
 
 
 def get_core_v1() -> CoreV1Api:
-    """Return a cached CoreV1Api client, loading in-cluster config on first use."""  # noqa: DOC201
-    global _core_v1  # noqa: PLW0603
+    """Return a cached CoreV1Api client, loading in-cluster config on first use."""  # ruff:ignore[docstring-missing-returns]
+    global _core_v1  # ruff:ignore[global-statement]
     if _core_v1 is None:
         with _k8s_lock:
             if _core_v1 is None:
@@ -100,8 +100,8 @@ def get_core_v1() -> CoreV1Api:
 
 
 def get_batch_v1() -> BatchV1Api:
-    """Return a cached BatchV1Api client, loading in-cluster config on first use."""  # noqa: DOC201
-    global _batch_v1  # noqa: PLW0603
+    """Return a cached BatchV1Api client, loading in-cluster config on first use."""  # ruff:ignore[docstring-missing-returns]
+    global _batch_v1  # ruff:ignore[global-statement]
     if _batch_v1 is None:
         with _k8s_lock:
             if _batch_v1 is None:
@@ -112,7 +112,7 @@ def get_batch_v1() -> BatchV1Api:
 
 def reset_k8s_clients_for_tests() -> None:
     """Reset cached Kubernetes clients for isolated unit tests."""
-    global _batch_v1, _core_v1, _k8s_config_loaded, _k8s_loaded  # noqa: PLW0603
+    global _batch_v1, _core_v1, _k8s_config_loaded, _k8s_loaded  # ruff:ignore[global-statement]
     _core_v1 = None
     _batch_v1 = None
     _k8s_config_loaded = False

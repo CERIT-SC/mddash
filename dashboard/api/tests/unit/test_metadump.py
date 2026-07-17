@@ -22,7 +22,7 @@ _SAMPLE_METADATA = {
 def _make_response(status_code: int, body: dict) -> MagicMock:
     mock = MagicMock()
     mock.status_code = status_code
-    mock.ok = status_code < 400  # noqa: PLR2004
+    mock.ok = status_code < 400  # ruff:ignore[magic-value-comparison]
     mock.json.return_value = body
     mock.text = json.dumps(body)
     return mock
@@ -131,7 +131,7 @@ class TestExtractMetadataBulk:
 
             results = extract_metadata_bulk([tpr_a, tpr_b])
 
-        assert len(results) == 2  # noqa: PLR2004
+        assert len(results) == 2  # ruff:ignore[magic-value-comparison]
         # Order must match [tpr_a, tpr_b]
         assert results[0]["metadata"] == metadata_a
         assert results[1]["metadata"] == metadata_b
@@ -282,4 +282,4 @@ class TestExtractMetadata:
     def test_max_polls_constant(self) -> None:
         """MAX_POLLS should equal TIMEOUT_SEC // POLL_INTERVAL_SEC."""
         assert metadump_module.MAX_POLLS == metadump_module.TIMEOUT_SEC // metadump_module.POLL_INTERVAL_SEC
-        assert metadump_module.MAX_POLLS == 30  # noqa: PLR2004
+        assert metadump_module.MAX_POLLS == 30  # ruff:ignore[magic-value-comparison]

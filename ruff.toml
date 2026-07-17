@@ -30,18 +30,18 @@ select = [
     "ASYNC", # flake8-async — detects blocking calls (sleep, open, subprocess) inside async functions
 ]
 ignore = [
-    "D413",    # no blank line required after the last docstring section
-    "D212",    # multi-line summary on second line (we use D213 style: summary on first line)
-    "D100",    # missing docstring in public module (too noisy for service code)
-    "D104",    # missing docstring in public package (same reason)
-    "D105",    # undocumented magic method  (we don't need docstrings on __str__, __dict__ etc. unless they do something non-obvious)
-    "D203",    # conflicts with D211 (no-blank-line-before-class)
-    "G004",    # allow f-strings in logging calls (we prefer readability over lazy evaluation here)
-    "PLR0913", # too many arguments — Flask view functions and constructors often need many params
-    "PLR0915", # too many statements — complex route handlers shouldn't be force-split artificially
-    "PLR0911", # too many return statements — guard clauses produce many early returns by design
-    "PLR0917", # too many positional arguments  — Flask view functions often have many path/query parameters that aren't easily refactorable
-    "PLR6301", # method could be static — instance methods stay as such intentionally for consistent API surface and mock-ability in tests
-    "PLW0717", # try clause contains too many statements — existing complex handlers shouldn't be force-split artificially
-    "D103",    # missing docstring in public function — test functions don't need docstrings, descriptive names suffice
+    "missing-blank-line-after-last-section",    # prefer compact docstrings
+    "multi-line-summary-first-line",    # use D213 style: summary on first line
+    "undocumented-public-module",    # too noisy for service code
+    "undocumented-public-package",    # too noisy for service code
+    "undocumented-magic-method",    # docstrings on __str__, __dict__, etc. add noise without value
+    "incorrect-blank-line-before-class",    # conflicts with D211
+    "logging-f-string",    # prefer readability over lazy evaluation
+    "too-many-arguments",    # Flask view functions and constructors often need many params
+    "too-many-statements",    # complex route handlers shouldn't be force-split artificially
+    "too-many-return-statements",    # guard clauses produce many early returns by design
+    "too-many-positional-arguments",    # Flask view functions often have many path/query parameters
+    "no-self-use",    # keep instance methods for consistent API surface and mock-ability in tests
+    "too-many-statements-in-try-clause",    # complex handlers shouldn't be force-split artificially
+    "undocumented-public-function",    # test functions don't need docstrings, descriptive names suffice
 ]

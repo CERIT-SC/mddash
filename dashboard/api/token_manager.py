@@ -115,7 +115,7 @@ class MDRepoTokenManager:
             return False
 
         # Use lock to serialize refresh attempts within this process
-        with self._refresh_lock:  # noqa: PLR1702
+        with self._refresh_lock:  # ruff:ignore[too-many-nested-blocks]
             # Check again after acquiring lock in case another thread already refreshed
             if not self.is_token_expired():
                 logger.info("Token was refreshed by another thread, using existing token")

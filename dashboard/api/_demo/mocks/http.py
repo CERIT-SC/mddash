@@ -919,23 +919,23 @@ def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
         job_data["performance"] = 62.5
 
         try:
-            from extensions import db  # noqa: PLC0415
-            from models import AmberJob, GromacsJob  # noqa: PLC0415
+            from extensions import db  # ruff:ignore[import-outside-top-level]
+            from models import AmberJob, GromacsJob  # ruff:ignore[import-outside-top-level]
 
             # Determine job type by checking for engine-specific fields
             if job_data.get("prmtop_name"):
                 # AMBER job
                 amber_job = AmberJob.query.filter_by(id=job_id).first()
                 if amber_job is not None:
-                    amber_job._performance = 62.5  # noqa: SLF001
-                    amber_job._finish_timestamp = int(time.time())  # noqa: SLF001
+                    amber_job._performance = 62.5  # ruff:ignore[private-member-access]
+                    amber_job._finish_timestamp = int(time.time())  # ruff:ignore[private-member-access]
                     db.session.commit()
             else:
                 # GROMACS job (default)
                 gmx_job = GromacsJob.query.filter_by(id=job_id).first()
                 if gmx_job is not None:
-                    gmx_job._performance = 62.5  # noqa: SLF001
-                    gmx_job._finish_timestamp = int(time.time())  # noqa: SLF001
+                    gmx_job._performance = 62.5  # ruff:ignore[private-member-access]
+                    gmx_job._finish_timestamp = int(time.time())  # ruff:ignore[private-member-access]
                     db.session.commit()
         except Exception:
             pass

@@ -112,7 +112,7 @@ def _get_pvc_manifest(pvc_name: str, storage_size: str = "10Gi", storage_class: 
 # =============================================================================
 
 
-async def _ensure_resource(method: Any, **kwargs: object) -> None:  # noqa: ANN401
+async def _ensure_resource(method: Any, **kwargs: object) -> None:  # ruff:ignore[any-type]
     """
     Create a Kubernetes resource, ignoring AlreadyExists errors.
 
@@ -126,7 +126,7 @@ async def _ensure_resource(method: Any, **kwargs: object) -> None:  # noqa: ANN4
             raise
 
 
-async def _resource_exists(method: Any, **kwargs: object) -> bool:  # noqa: ANN401
+async def _resource_exists(method: Any, **kwargs: object) -> bool:  # ruff:ignore[any-type]
     """
     Check if a Kubernetes resource exists.
 
@@ -146,7 +146,7 @@ async def _resource_exists(method: Any, **kwargs: object) -> bool:  # noqa: ANN4
         raise
 
 
-async def _wait_for_resource(method: Any, timeout_s: float = 30.0, interval: float = 0.1, **kwargs: object) -> None:  # noqa: ANN401
+async def _wait_for_resource(method: Any, timeout_s: float = 30.0, interval: float = 0.1, **kwargs: object) -> None:  # ruff:ignore[any-type]
     """
     Wait until a Kubernetes resource exists (or time out).
 
@@ -542,15 +542,15 @@ def _get_sidecar_containers(
 
 def _get_or_create_progress_queue(spawner: "KubeSpawner") -> asyncio.Queue:
     if not hasattr(spawner, "_mddash_progress_queue"):
-        spawner._mddash_progress_queue = asyncio.Queue()  # type: ignore  # noqa: SLF001
-    return spawner._mddash_progress_queue  # type: ignore  # noqa: SLF001
+        spawner._mddash_progress_queue = asyncio.Queue()  # type: ignore  # ruff:ignore[private-member-access]
+    return spawner._mddash_progress_queue  # type: ignore  # ruff:ignore[private-member-access]
 
 
 async def _report_progress(spawner: "KubeSpawner", message: str, progress: int) -> None:
     await _get_or_create_progress_queue(spawner).put({"message": message, "progress": progress})
 
 
-async def _spawn_progress(self: "KubeSpawner") -> Any:  # type: ignore[override]  # noqa: ANN401
+async def _spawn_progress(self: "KubeSpawner") -> Any:  # type: ignore[override]  # ruff:ignore[any-type]
     """
     Yield spawn progress messages sourced from the pre_spawn_hook via an asyncio.Queue.
 
@@ -574,7 +574,7 @@ async def _spawn_progress(self: "KubeSpawner") -> Any:  # type: ignore[override]
 # =============================================================================
 
 
-async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
+async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # ruff:ignore[too-many-locals]
     """
     Prepare user environment before spawning the notebook server.
 
@@ -696,7 +696,7 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # noqa: PLR0914
     await _get_or_create_progress_queue(spawner).put(None)
 
 
-def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:  # noqa: ARG001
+def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:  # ruff:ignore[unused-function-argument]
     """
     Apply security hardening to the notebook container (e-INFRA requirement).
 
@@ -720,7 +720,7 @@ def modify_pod_hook(spawner: "KubeSpawner", pod: V1Pod) -> V1Pod:  # noqa: ARG00
     return pod
 
 
-async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # noqa: ARG001
+async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # ruff:ignore[unused-function-argument]
     """
     Clean up after user pod stops.
 
@@ -751,9 +751,9 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # n
 # Hook Registration
 # =============================================================================
 
-c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore # noqa: F821
-c.KubeSpawner.modify_pod_hook = modify_pod_hook  # type: ignore # noqa: F821
-c.KubeSpawner.post_stop_hook = post_stop_hook  # type: ignore # noqa: F821
+c.KubeSpawner.pre_spawn_hook = pre_spawn_hook  # type: ignore # ruff:ignore[undefined-name]
+c.KubeSpawner.modify_pod_hook = modify_pod_hook  # type: ignore # ruff:ignore[undefined-name]
+c.KubeSpawner.post_stop_hook = post_stop_hook  # type: ignore # ruff:ignore[undefined-name]
 
 # progress is a plain method (not a traitlet), so c.KubeSpawner.progress is silently ignored.
 # Direct monkey-patch is required to override it.

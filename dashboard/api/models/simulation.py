@@ -82,7 +82,7 @@ def _validate_content_or_raise(experiment_id: str, simulation_path: str, content
         raise BadRequest(description="Simulation engine does not match the experiment engine.")
 
 
-class Simulation:  # noqa: PLR0904
+class Simulation:  # ruff:ignore[too-many-public-methods]
     """File-backed simulation manifest (`.simulation.json`)."""
 
     def __init__(
@@ -311,8 +311,8 @@ class Simulation:  # noqa: PLR0904
             True if the simulation is locked.
         """
         # avoid circular dependency
-        from .simulation_job import SimulationJob  # noqa: PLC0415
-        from .tuner_job import TunerJob  # noqa: PLC0415
+        from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
+        from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
 
         simulation_file = DATA_DIR / experiment_id / simulation_path
         if not os.access(simulation_file, os.W_OK):
@@ -418,9 +418,9 @@ class Simulation:  # noqa: PLR0904
             NotFound: If the manifest file does not exist.
         """
         # avoid circular dependency
-        from .analysis_job import AnalysisJob  # noqa: PLC0415
-        from .simulation_job import SimulationJob  # noqa: PLC0415
-        from .tuner_job import TunerJob  # noqa: PLC0415
+        from .analysis_job import AnalysisJob  # ruff:ignore[import-outside-top-level]
+        from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
+        from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
 
         simulation_path = Path(simulation_path).as_posix()
         check_path(simulation_path, DATA_DIR / experiment_id)

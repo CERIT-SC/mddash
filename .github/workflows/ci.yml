@@ -31,7 +31,7 @@ jobs:
           cache: pnpm
           cache-dependency-path: "**/pnpm-lock.yaml"
       - name: Install ruff
-        run: uv tool install ruff==0.15.21
+        run: uv tool install ruff
       - run: pnpm install --frozen-lockfile
         working-directory: dashboard/ui
       - run: pnpm install --frozen-lockfile

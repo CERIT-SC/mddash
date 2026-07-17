@@ -44,7 +44,7 @@ def _list_simulations(experiment_id: str) -> list["Simulation"]:
     Returns:
         List of Simulation instances.
     """
-    from .simulation import Simulation  # noqa: PLC0415
+    from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
     return Simulation.list(experiment_id)
 
@@ -427,10 +427,10 @@ class Experiment(db.Model):  # type: ignore
         Returns:
             True if a valid simulation exists, False otherwise.
         """
-        from .simulation import Simulation  # noqa: PLC0415
+        from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
         for f in Simulation.list_files(self.id):
-            sim = Simulation._from_file(self.id, f.path)  # noqa: SLF001
+            sim = Simulation._from_file(self.id, f.path)  # ruff:ignore[private-member-access]
             if sim.valid and sim.engine == self.engine.value:
                 return True
         return False
@@ -618,7 +618,7 @@ class Experiment(db.Model):  # type: ignore
         if not MDPOSIT_URL:
             raise BadRequest(description="MDPosit is not configured. Set MDPOSIT_URL to enable MDPosit publishing.")
 
-        from .simulation import Simulation  # noqa: PLC0415
+        from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
         simulation = Simulation.get(self.id, simulation_path)
         simulation.require_files(["reference_structure", "run_input", "trajectory"])

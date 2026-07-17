@@ -121,7 +121,7 @@ class TestAnalysisJobStartQuotaCheck:
         exp.id = "exp-test"
         return exp
 
-    def test_raises_forbidden_when_quota_exceeded(self, app: object, tmp_path: Path) -> None:  # noqa: ARG002
+    def test_raises_forbidden_when_quota_exceeded(self, app: object, tmp_path: Path) -> None:  # ruff:ignore[unused-method-argument]
         """start() must raise Forbidden and not create a job when quota is insufficient."""
         with (
             patch("models.analysis_job.k8s.check_quota_headroom", return_value="CPU quota exceeded"),
@@ -149,7 +149,7 @@ class TestAnalysisJobStartQuotaCheck:
 
             mock_create_job.assert_not_called()
 
-    def test_creates_job_with_analysis_resources_when_headroom_sufficient(self, app: object, tmp_path: Path) -> None:  # noqa: ARG002
+    def test_creates_job_with_analysis_resources_when_headroom_sufficient(self, app: object, tmp_path: Path) -> None:  # ruff:ignore[unused-method-argument]
         """start() must pass ANALYSIS_RESOURCES to create_job when quota has headroom."""
         with (
             patch("models.analysis_job.k8s.check_quota_headroom", return_value=None),

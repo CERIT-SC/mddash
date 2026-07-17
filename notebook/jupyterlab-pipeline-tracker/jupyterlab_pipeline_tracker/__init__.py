@@ -1,6 +1,6 @@
 """JupyterLab Pipeline Tracker extension."""
 
-# ruff: noqa: RUF067
+# ruff:file-ignore[non-empty-init-module]
 
 __version__ = "0.1.0"
 

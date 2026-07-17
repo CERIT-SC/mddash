@@ -156,7 +156,7 @@ class DemoState:
 demo_state = DemoState()
 
 
-def build_model(model_cls: type[ModelType], **attrs: Any) -> ModelType:  # noqa: ANN401
+def build_model(model_cls: type[ModelType], **attrs: Any) -> ModelType:  # ruff:ignore[any-type]
     """
     Build a model instance for demo seeding.
 

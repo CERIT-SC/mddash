@@ -13,7 +13,7 @@ LOOP_INTERVAL = 5
 EXPECTED_LOOP_POLLS = 2
 
 
-def test_poll_once_updates_active_jobs_only(app, db_session: Session, mocker) -> None:  # noqa: ANN001
+def test_poll_once_updates_active_jobs_only(app, db_session: Session, mocker) -> None:  # ruff:ignore[missing-type-function-argument]
     """One-shot polling should touch only active jobs."""
     active_job = MdrunJob(id="active", job_name="mdrun-active", experiment_id="exp1", last_status=JobStatus.RUNNING)
     done_job = MdrunJob(id="done", job_name="mdrun-done", experiment_id="exp2", last_status=JobStatus.TERMINATED)
@@ -26,7 +26,7 @@ def test_poll_once_updates_active_jobs_only(app, db_session: Session, mocker) ->
     status.assert_called_once_with()
 
 
-def test_poll_once_continues_when_job_status_refresh_fails(app, db_session: Session, mocker) -> None:  # noqa: ANN001
+def test_poll_once_continues_when_job_status_refresh_fails(app, db_session: Session, mocker) -> None:  # ruff:ignore[missing-type-function-argument]
     """A single failed job refresh should not abort the poll run."""
     first_job = MdrunJob(id="first", job_name="mdrun-first", experiment_id="exp1", last_status=JobStatus.RUNNING)
     second_job = MdrunJob(id="second", job_name="mdrun-second", experiment_id="exp2", last_status=JobStatus.PENDING)
@@ -44,7 +44,7 @@ def test_poll_once_continues_when_job_status_refresh_fails(app, db_session: Sess
     assert status.call_count == EXPECTED_POLLED_JOBS
 
 
-def test_run_loops_and_sleeps_between_polls(app, mocker) -> None:  # noqa: ANN001
+def test_run_loops_and_sleeps_between_polls(app, mocker) -> None:  # ruff:ignore[missing-type-function-argument]
     """The poller should poll, sleep, then poll again."""
     poll = mocker.patch("polling.poll_once", side_effect=[None, StopIteration])
     sleep = mocker.patch("polling.time.sleep")

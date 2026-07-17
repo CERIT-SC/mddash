@@ -75,9 +75,9 @@ def _create_notebook_pod(
     experiment_id: str,
     _prefix: str,
     _token: str,
-    notebook_resources: dict | None = None,  # noqa: ARG001
-    gpu: bool = False,  # noqa: ARG001
-    tier: str | None = None,  # noqa: ARG001
+    notebook_resources: dict | None = None,  # ruff:ignore[unused-function-argument]
+    gpu: bool = False,  # ruff:ignore[unused-function-argument]
+    tier: str | None = None,  # ruff:ignore[unused-function-argument]
 ) -> None:
     """Create a mock notebook pod."""
     logger.debug("Mock creating notebook pod %s for experiment %s", name, experiment_id)
@@ -92,7 +92,7 @@ def _delete_pod(name: str) -> None:
     demo_state.notebook_status[experiment_id] = PodStatus.DOWN
 
 
-def _create_service(name: str, target_name: str) -> None:  # noqa: ARG001
+def _create_service(name: str, target_name: str) -> None:  # ruff:ignore[unused-function-argument]
     """Create a mock service (no-op)."""
     logger.debug("Mock creating service %s", name)
 
@@ -117,10 +117,10 @@ def _get_pod_resource_requests() -> dict[str, int]:
 
 def _create_job(
     name: str,
-    image: str,  # noqa: ARG001
+    image: str,  # ruff:ignore[unused-function-argument]
     experiment_id: str,
     command: str,
-    resources: dict | None = None,  # noqa: ARG001
+    resources: dict | None = None,  # ruff:ignore[unused-function-argument]
 ) -> None:
     """Create a mock analysis job."""
     # Extract the mwf analysis name from the "-i <name>" flag at the end of the command
@@ -170,7 +170,7 @@ def _delete_job(name: str) -> None:
     demo_state.analysis_jobs.pop(name, None)
 
 
-def _get_job_logs(name: str, tail_lines: int = 200) -> str:  # noqa: ARG001
+def _get_job_logs(name: str, tail_lines: int = 200) -> str:  # ruff:ignore[unused-function-argument]
     """
     Get mock job logs.
 

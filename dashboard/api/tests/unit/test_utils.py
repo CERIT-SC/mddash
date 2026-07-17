@@ -145,7 +145,7 @@ class TestDuMonitor:
         thread_cls = mocker.patch("utils.threading.Thread")
         mocker.patch("utils.threading.enumerate", return_value=[])
 
-        from utils import start_du_monitor  # noqa: PLC0415
+        from utils import start_du_monitor  # ruff:ignore[import-outside-top-level]
 
         start_du_monitor(tmp_path, initial_delay=7.5)
 
@@ -160,7 +160,7 @@ class TestDuMonitor:
         sleep = mocker.patch("utils.time.sleep", side_effect=RuntimeError("stop"))
         run = mocker.patch("utils.subprocess.run")
 
-        from utils import _du_loop  # noqa: PLC2701, PLC0415
+        from utils import _du_loop  # ruff:ignore[import-private-name, import-outside-top-level]
 
         with contextlib.suppress(RuntimeError):
             _du_loop(tmp_path, initial_delay=3.0)

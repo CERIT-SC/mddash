@@ -83,7 +83,7 @@ def fmt_cpu(millicores: int) -> str:
     Returns:
         str: e.g. ``"2"`` for 2000m, ``"500m"`` for 500m.
     """
-    if millicores >= 1000 and millicores % 1000 == 0:  # noqa: PLR2004
+    if millicores >= 1000 and millicores % 1000 == 0:  # ruff:ignore[PLR2004]
         return f"{millicores // 1000}"
     return f"{millicores}m"
 
@@ -147,7 +147,7 @@ def compare_quota(label: str, recommended: int, configured_str: str, is_cpu: boo
     return ok
 
 
-def main(config: str) -> None:  # noqa: PLR0914
+def main(config: str) -> None:  # ruff:ignore[PLR0914]
     """Print a full resource budget summary for both user and hub namespaces."""
     print(f"\nResource Budget — {config}")
     print("=" * 72)
@@ -346,7 +346,7 @@ def main(config: str) -> None:  # noqa: PLR0914
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:  # noqa: PLR2004
+    if len(sys.argv) != 2:  # ruff:ignore[PLR2004]
         print(f"Usage: {sys.argv[0]} <config.yaml>", file=sys.stderr)
         sys.exit(1)
     main(sys.argv[1])

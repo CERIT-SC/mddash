@@ -29,7 +29,7 @@ def get_metrics() -> Response:
     Returns:
         Response: JSON response with current resource requests and configured limits for CPU, memory, and storage.
     """
-    from clients import k8s  # noqa: PLC0415
+    from clients import k8s  # ruff:ignore[import-outside-top-level]
 
     if "pod_resources" in metrics_cache:
         pod_requests = metrics_cache["pod_resources"]
