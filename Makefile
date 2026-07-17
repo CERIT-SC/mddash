@@ -14,8 +14,9 @@ export IMAGE_TAG
 
 config := $(if $(wildcard config.${ENV}.yaml),config.${ENV}.yaml,config.yaml)
 
-namespace := $(shell yq '.namespace' $(config))
-registry := $(shell yq '.registry' $(config))
+namespace := $(shell yq -r '.namespace' $(config))
+registry := $(shell yq -r '.registry' $(config))
+chart_registry := $(registry)/charts
 
 .PHONY: help
 help: ## Show this help
@@ -165,24 +166,24 @@ push-landing: ## Build and push landing page image
 
 .PHONY: push-mdrun-api-chart
 push-mdrun-api-chart: ## Package and push mdrun-api Helm chart to OCI registry
-	$(eval CHART_VERSION := $(if $(IMAGE_TAG),$(IMAGE_TAG),$(shell yq '.version' helm/charts/mdrun-api/Chart.yaml)))
+	$(eval CHART_VERSION := $(if $(VERSION),$(VERSION),$(IMAGE_TAG)))
+	@[[ "$(CHART_VERSION)" =~ ^[0-9]+\.[0-9]+\.[0-9]+$$ ]] || { echo "VERSION or IMAGE_TAG must be strict SemVer x.y.z (got '$(CHART_VERSION)')" >&2; exit 1; }
 	helm package helm/charts/mdrun-api --version $(CHART_VERSION) --app-version $(CHART_VERSION) --dependency-update
-	helm push mdrun-api-$(CHART_VERSION).tgz oci://$(registry)
+	helm push mdrun-api-$(CHART_VERSION).tgz oci://$(chart_registry)
 	rm -f mdrun-api-$(CHART_VERSION).tgz
 
 .PHONY: push-mddash-chart
 push-mddash-chart: push-mdrun-api-chart ## Package and push umbrella Helm chart to OCI registry
-	$(eval CHART_VERSION := $(if $(IMAGE_TAG),$(IMAGE_TAG),$(shell yq '.version' helm/charts/mddash/Chart.yaml)))
-	@cp helm/charts/mddash/Chart.yaml helm/charts/mddash/Chart.yaml.bak && \
-		trap 'mv -f helm/charts/mddash/Chart.yaml.bak helm/charts/mddash/Chart.yaml' EXIT && \
-		yq -i '.dependencies[] | select(.name == "mdrun-api").version = "$(CHART_VERSION)"' helm/charts/mddash/Chart.yaml && \
-		yq -i '.dependencies[] | select(.name == "mdrun-api").repository = "oci://$(registry)"' helm/charts/mddash/Chart.yaml && \
-		yq -i '.version = "$(CHART_VERSION)"' helm/charts/mddash/Chart.yaml && \
-		yq -i '.appVersion = "$(CHART_VERSION)"' helm/charts/mddash/Chart.yaml && \
-		helm dependency update helm/charts/mddash && \
-		helm package helm/charts/mddash --version $(CHART_VERSION) --app-version $(CHART_VERSION) && \
-		helm push mddash-jupyterhub-$(CHART_VERSION).tgz oci://$(registry) && \
-		rm -f mddash-jupyterhub-$(CHART_VERSION).tgz
+	$(eval CHART_VERSION := $(if $(VERSION),$(VERSION),$(IMAGE_TAG)))
+	@[[ "$(CHART_VERSION)" =~ ^[0-9]+\.[0-9]+\.[0-9]+$$ ]] || { echo "VERSION or IMAGE_TAG must be strict SemVer x.y.z (got '$(CHART_VERSION)')" >&2; exit 1; }
+	@set -euo pipefail; \
+		tmpdir="$$(mktemp -d)"; \
+		trap 'rm -rf "$$tmpdir"' EXIT; \
+		cp -a helm/charts/mddash/. "$$tmpdir"; \
+		yq -i '(.dependencies[] | select(.name == "mdrun-api").version) = "$(CHART_VERSION)" | (.dependencies[] | select(.name == "mdrun-api").repository) = "oci://$(chart_registry)"' "$$tmpdir/Chart.yaml"; \
+		helm dependency update "$$tmpdir"; \
+		helm package "$$tmpdir" --destination "$$tmpdir" --version $(CHART_VERSION) --app-version $(CHART_VERSION); \
+		helm push "$$tmpdir/mddash-jupyterhub-$(CHART_VERSION).tgz" oci://$(chart_registry)
 
 .PHONY: deploy
 deploy: ## Deploy via Helm

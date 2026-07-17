@@ -9,9 +9,10 @@ endif
 
 config := $(if $(wildcard ../config.${ENV}.yaml),../config.${ENV}.yaml,../config.yaml)
 
-package := $(shell yq .helm.package $(config))
-namespace := $(shell yq '.namespace' $(config))
-registry := $(shell yq '.registry' $(config))
+package := $(shell yq -r .helm.package $(config))
+namespace := $(shell yq -r '.namespace' $(config))
+registry := $(shell yq -r '.registry' $(config))
+chart_registry := $(registry)/charts
 chart_path := charts/mddash
 chart_name := mddash-jupyterhub
 values_file := -f $(chart_path)/values.yaml
@@ -33,7 +34,7 @@ render: ## Render Helm values template
 .PHONY: install
 install: render update hub-templates ## Install Helm chart
 ifeq ($(ENV),prod)
-	helm install $(package) oci://$(registry)/$(chart_name) --version $(IMAGE_TAG) \
+	helm install $(package) oci://$(chart_registry)/$(chart_name) --version $(IMAGE_TAG) \
 		--namespace $(namespace) $(values_file) $(timeout) --wait \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 else
@@ -45,7 +46,7 @@ endif
 .PHONY: upgrade
 upgrade: render hub-templates ## Upgrade Helm release
 ifeq ($(ENV),prod)
-		helm upgrade --install $(package) oci://$(registry)/$(chart_name) --version $(IMAGE_TAG) \
+		helm upgrade --install $(package) oci://$(chart_registry)/$(chart_name) --version $(IMAGE_TAG) \
 		--namespace $(namespace) $(values_file) $(timeout) --rollback-on-failure --wait \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 else

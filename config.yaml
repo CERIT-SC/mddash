@@ -9,7 +9,7 @@ rancherProjectId: "c-m-qvndqhf6:p-hshk2"
 # Global storage class for all persistent volumes
 storageClassName: nfs-csi
 
-# Container and helm chart registry
+# Container image registry. Helm charts are pushed under its /charts path.
 registry: cerit.io/xkrasa
 imageTag: latest  # Overridden by CI/CD or make deploy, see README.md
 
