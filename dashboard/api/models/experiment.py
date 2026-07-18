@@ -75,6 +75,27 @@ def _fetch_pdb(url: str, *, max_redirects: int = 5) -> requests.Response:
     raise InternalServerError(description="Too many redirects while downloading PDB file.")
 
 
+_PDB_STRUCTURE_RECORDS = {"ATOM", "HETATM"}
+
+
+def _validate_pdb_content(content: bytes) -> None:
+    """
+    Reject downloaded content that is not a PDB structure file.
+
+    PDB record types occupy columns 1-6 of each line; a structural PDB file
+    must contain at least one ATOM or HETATM record. This catches HTML error
+    pages, login redirects, and binary responses that nonetheless return 200.
+
+    Raises:
+        BadRequest: If no ATOM/HETATM record is present.
+    """
+    text = content.decode("utf-8", errors="replace")
+    for line in text.splitlines():
+        if line[:6].strip() in _PDB_STRUCTURE_RECORDS:
+            return
+    raise BadRequest(description="Downloaded content is not a valid PDB file (no ATOM or HETATM records).")
+
+
 _SCHEMA_FILES = ("gromacs.schema.json", "amber.schema.json")
 
 
@@ -346,6 +367,8 @@ class Experiment(db.Model):  # type: ignore
                 raise NotFound(description=f"PDB source '{source}' not found.")
             if response.status_code != HTTPStatus.OK:
                 raise InternalServerError(description=f"Failed to download PDB file: {response.status_code}")
+
+            _validate_pdb_content(response.content)
 
             with (DATA_DIR / experiment_id / "input.pdb").open("wb") as f:
                 f.write(response.content)

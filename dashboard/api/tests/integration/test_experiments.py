@@ -174,6 +174,62 @@ class TestCreateExperiment:
             mock_get.assert_called_once_with(pdb_url, timeout=30, allow_redirects=False)
             mock_clone.assert_called_once()
 
+    def test_create_from_pdb_url_rejects_html_response(self, client: FlaskClient, tmp_path: Path) -> None:
+        """Should return 400 when a PDB URL returns HTML instead of a PDB file."""
+        pdb_url = "https://example.org/login"
+        html_content = b"<!DOCTYPE html><html><body>Please log in</body></html>"
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo"),
+            patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
+        ):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = html_content
+            mock_get.return_value = mock_response
+
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "HTML Response",
+                    "pdb": pdb_url,
+                    "notebooks-repo": "https://github.com/test/repo.git",
+                },
+            )
+
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            # The invalid content must not be persisted as input.pdb
+            assert not any((tmp_path / d / "input.pdb").exists() for d in tmp_path.iterdir() if d.is_dir())
+
+    def test_create_from_pdb_id_rejects_non_pdb_response(self, client: FlaskClient, tmp_path: Path) -> None:
+        """Should return 400 when an RCSB PDB ID returns non-PDB content."""
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo"),
+        ):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = b"<html><body>not a pdb</body></html>"
+            mock_get.return_value = mock_response
+
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "Bad RCSB",
+                    "pdb": "1ABC",
+                    "notebooks-repo": "https://github.com/test/repo.git",
+                },
+            )
+
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            mock_get.assert_called_once_with(
+                "https://files.rcsb.org/download/1ABC.pdb", timeout=30, allow_redirects=False
+            )
+
     def test_create_from_pdb_url_not_found(self, client: FlaskClient, tmp_path: Path) -> None:
         """Should return 404 when a PDB URL returns 404."""
         pdb_url = "https://example.org/missing.pdb"
