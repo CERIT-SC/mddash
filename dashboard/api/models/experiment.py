@@ -7,7 +7,7 @@ from http import HTTPStatus
 from pathlib import Path
 from shutil import move, rmtree
 from typing import TYPE_CHECKING
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import requests
 import yaml
@@ -21,6 +21,7 @@ from flask import session
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from token_manager import MDRepoTokenManager
 from utils import download_git_repo, get_unique_id
+from validators import validate_fetch_target, validate_http_url
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 from werkzeug.utils import secure_filename
@@ -47,6 +48,31 @@ def _list_simulations(experiment_id: str) -> list["Simulation"]:
     from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
     return Simulation.list(experiment_id)
+
+
+_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
+
+
+def _fetch_pdb(url: str, *, max_redirects: int = 5) -> requests.Response:
+    """
+    Fetch a PDB URL without auto-following redirects; each hop is SSRF-validated.
+
+    Returns:
+        The final non-redirect response.
+
+    Raises:
+        InternalServerError: If the redirect chain exceeds max_redirects.
+    """
+    for _ in range(max_redirects + 1):
+        validate_fetch_target(url)
+        response = requests.get(url, timeout=30, allow_redirects=False)
+        if response.status_code not in _REDIRECT_STATUSES:
+            return response
+        location = response.headers.get("Location")
+        if not location:
+            return response
+        url = validate_http_url(urljoin(url, location))
+    raise InternalServerError(description="Too many redirects while downloading PDB file.")
 
 
 _SCHEMA_FILES = ("gromacs.schema.json", "amber.schema.json")
@@ -273,17 +299,22 @@ class Experiment(db.Model):  # type: ignore
     def from_pdb(
         cls,
         name: str,
-        pdb_id: str,
+        pdb_source: str,
         notebooks_repo: str,
         access_token: str | None = None,
         engine: Engine = Engine.GMX,
     ) -> "Experiment":
         """
-        Create experiment from PDB ID with database persistence.
+        Create experiment from a PDB ID or a direct URL to a PDB file.
+
+        A value without a URL scheme (e.g. ``1A2B``) is treated as an RCSB PDB ID
+        and downloaded from ``files.rcsb.org``. A value with a URL scheme (e.g.
+        ``https://...``) is treated as a direct URL to a PDB file and fetched
+        as-is; only ``http`` and ``https`` schemes are accepted.
 
         Args:
             name: Name of the experiment.
-            pdb_id: PDB ID to download (e.g., 1A2B).
+            pdb_source: PDB ID (e.g., 1A2B) or a direct URL to a PDB file.
             notebooks_repo: Git repository URL containing setup notebooks.
             access_token: Optional GitHub access token for private repositories.
             engine: Molecular dynamics engine (default: GMX).
@@ -292,26 +323,33 @@ class Experiment(db.Model):  # type: ignore
             The created Experiment instance.
 
         Raises:
-            NotFound: If the PDB ID is not found.
+            NotFound: If the PDB ID or URL is not found.
             InternalServerError: If the PDB file download fails.
         """
         experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
-        pdb_id = pdb_id.strip().upper()
+        source = pdb_source.strip()
+        is_url = bool(urlparse(source).scheme)
 
         try:
+            if is_url:
+                url: str = validate_http_url(source)
+                message: str = f"Created by downloading PDB file from '{source}'."
+            else:
+                pdb_id = source.upper()
+                url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
+                message = f"Created by downloading '{pdb_id}' from RCSB PDB."
+
             # Download PDB file
-            url: str = f"https://files.rcsb.org/download/{pdb_id}.pdb"
-            response = requests.get(url, timeout=30)
+            response = _fetch_pdb(url)
 
             if response.status_code == HTTPStatus.NOT_FOUND:
-                raise NotFound(description=f"PDB ID '{pdb_id}' not found.")
+                raise NotFound(description=f"PDB source '{source}' not found.")
             if response.status_code != HTTPStatus.OK:
                 raise InternalServerError(description=f"Failed to download PDB file: {response.status_code}")
 
             with (DATA_DIR / experiment_id / "input.pdb").open("wb") as f:
                 f.write(response.content)
 
-            message: str = f"Created by downloading '{pdb_id}' from RCSB PDB."
             experiment = cls(
                 id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo, engine=engine
             )

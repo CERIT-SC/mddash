@@ -1,6 +1,8 @@
+import ipaddress
 import re
+import socket
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 from enums import AnalysisType, PreprocessingMode
 from werkzeug.exceptions import BadRequest, Forbidden
@@ -207,11 +209,109 @@ def validate_git_url(git_url: str) -> None:
     if url.startswith("git@") and ":" in url:
         return
 
-    # HTTPS/HTTP URLs
-    parsed = urlparse(url)
-    if parsed.scheme not in {"http", "https"}:
-        raise BadRequest("Only http://, https://, or git@ URLs are allowed.")
+    _assert_http_url_safe(
+        urlparse(url),
+        allowed_schemes={"http", "https"},
+        scheme_msg="Only http://, https://, or git@ URLs are allowed.",
+        missing_host_msg="Invalid git URL: missing host.",
+    )
+
+
+def _assert_http_url_safe(
+    parsed: ParseResult,
+    *,
+    allowed_schemes: set[str],
+    scheme_msg: str,
+    missing_host_msg: str,
+) -> None:
+    """
+    Shared HTTP(S) safety core: scheme allow-list, no embedded credentials, host present.
+
+    Raises:
+        BadRequest: If the scheme is unsupported, credentials are embedded, or the host is missing.
+    """
+    if parsed.scheme not in allowed_schemes:
+        raise BadRequest(scheme_msg)
     if parsed.username or parsed.password:
         raise BadRequest("URLs with embedded credentials are not allowed.")
     if not parsed.netloc:
-        raise BadRequest("Invalid git URL: missing host.")
+        raise BadRequest(missing_host_msg)
+
+
+def _is_reserved_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """
+    Check whether an IP is loopback, private, link-local, reserved, multicast, or unspecified.
+
+    Returns:
+        True if the IP is internal/reserved and must not be fetched.
+    """
+    return ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified
+
+
+def _getaddrinfo_ips(hostname: str) -> list[str]:
+    """
+    Resolve hostname to deduplicated literal IP strings via getaddrinfo.
+
+    Returns:
+        The deduplicated list of resolved IP strings.
+
+    Raises:
+        BadRequest: If the hostname cannot be resolved.
+    """
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except socket.gaierror as exc:
+        raise BadRequest(f"Could not resolve host '{hostname}': {exc}")
+    seen: list[str] = []
+    for info in infos:
+        ip = str(info[4][0])
+        if ip not in seen:
+            seen.append(ip)
+    return seen
+
+
+def validate_http_url(url: str) -> str:
+    """
+    Validate an HTTP(S) URL for server-side fetching.
+
+    Rejects non-http(s) schemes, embedded credentials, and missing hosts.
+    Reserved-IP checks are handled by :func:`validate_fetch_target`.
+
+    Returns:
+        The validated, normalized URL.
+
+    Raises:
+        BadRequest: If the URL is empty, has an unsupported scheme, embeds credentials, or is missing a host.
+    """
+    if not url or not url.strip():
+        raise BadRequest("URL cannot be empty.")
+
+    parsed = urlparse(url.strip())
+    _assert_http_url_safe(
+        parsed,
+        allowed_schemes={"http", "https"},
+        scheme_msg="Only http:// and https:// URLs are allowed.",
+        missing_host_msg="Invalid URL: missing host.",
+    )
+    return parsed.geturl()
+
+
+def validate_fetch_target(url: str) -> None:
+    """
+    Reject URLs whose host is or resolves to a reserved/internal IP (SSRF guard).
+
+    Literal IPs are checked directly; hostnames are resolved via
+    :func:`_getaddrinfo_ips` and every resolved IP is checked. Targets are
+    matched by resolved address rather than an enumerated hostname list.
+
+    Raises:
+        BadRequest: If the host is or resolves to a reserved/internal IP.
+    """
+    hostname = urlparse(url).hostname or ""
+    try:
+        ips: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [ipaddress.ip_address(hostname)]
+    except ValueError:
+        ips = [ipaddress.ip_address(ip) for ip in _getaddrinfo_ips(hostname)]
+
+    if any(_is_reserved_ip(ip) for ip in ips):
+        raise BadRequest("Internal or reserved host targets are not allowed.")

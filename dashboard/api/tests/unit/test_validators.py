@@ -1,6 +1,7 @@
 """Unit tests for input validators."""
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from enums import AnalysisType, PreprocessingMode
@@ -11,7 +12,9 @@ from validators import (
     check_path,
     check_positive_int,
     validate_analysis_topology_path,
+    validate_fetch_target,
     validate_git_url,
+    validate_http_url,
 )
 from werkzeug.exceptions import BadRequest, Forbidden
 
@@ -330,3 +333,122 @@ class TestValidateGitUrl:
         """Unsupported protocol ftp:// should be rejected."""
         with pytest.raises(BadRequest):
             validate_git_url("ftp://server.com/repo.git")
+
+
+class TestValidateHttpUrl:
+    """Tests for the validate_http_url function."""
+
+    def test_accepts_https_url(self) -> None:
+        """Valid HTTPS URL should be accepted and returned."""
+        url = "https://www.ebi.ac.uk/pdbe/entry-files/download/pdb3vte.ent"
+        assert validate_http_url(url) == url
+
+    def test_accepts_http_url(self) -> None:
+        """Valid HTTP URL should be accepted."""
+        assert validate_http_url("http://example.org/file.pdb") == "http://example.org/file.pdb"
+
+    def test_strips_surrounding_whitespace(self) -> None:
+        """Leading/trailing whitespace should be stripped before validation."""
+        url = "https://example.org/file.pdb"
+        assert validate_http_url(f"  {url}  ") == url
+
+    def test_rejects_empty_url(self) -> None:
+        """Empty URL should be rejected."""
+        with pytest.raises(BadRequest):
+            validate_http_url("")
+
+    def test_rejects_whitespace_only(self) -> None:
+        """Whitespace-only URL should be rejected."""
+        with pytest.raises(BadRequest):
+            validate_http_url("   ")
+
+    def test_rejects_file_protocol(self) -> None:
+        """file:// URL should be rejected to prevent local file access."""
+        with pytest.raises(BadRequest):
+            validate_http_url("file:///etc/passwd")
+
+    def test_rejects_ftp_protocol(self) -> None:
+        """Unsupported protocol ftp:// should be rejected."""
+        with pytest.raises(BadRequest):
+            validate_http_url("ftp://server.com/file.pdb")
+
+    def test_rejects_url_with_credentials(self) -> None:
+        """URL with embedded credentials should be rejected."""
+        with pytest.raises(BadRequest):
+            validate_http_url("https://user:password@example.org/file.pdb")
+
+    def test_rejects_url_with_username_only(self) -> None:
+        """URL with embedded username should be rejected."""
+        with pytest.raises(BadRequest):
+            validate_http_url("https://user@example.org/file.pdb")
+
+    def test_rejects_missing_host(self) -> None:
+        """URL without a host should be rejected."""
+        with pytest.raises(BadRequest):
+            validate_http_url("https:///file.pdb")
+
+    def test_accepts_internal_literal_ip_at_format_level(self) -> None:
+        """Format validation does not inspect IPs; reserved IPs are handled by validate_fetch_target."""
+        validate_http_url("http://127.0.0.1/file.pdb")  # Should not raise
+
+
+class TestValidateFetchTarget:
+    """Tests for the SSRF guard (reserved/internal IP rejection)."""
+
+    def test_rejects_loopback_literal_ip(self) -> None:
+        """Loopback IP targets must be rejected."""
+        with pytest.raises(BadRequest):
+            validate_fetch_target("http://127.0.0.1/file.pdb")
+
+    def test_rejects_ipv6_loopback(self) -> None:
+        """IPv6 loopback must be rejected."""
+        with pytest.raises(BadRequest):
+            validate_fetch_target("http://[::1]/file.pdb")
+
+    def test_rejects_private_literal_ip(self) -> None:
+        """RFC1918 private ranges must be rejected."""
+        with pytest.raises(BadRequest):
+            validate_fetch_target("http://10.0.0.1/file.pdb")
+
+    def test_rejects_link_local_metadata_ip(self) -> None:
+        """Cloud metadata endpoint (169.254.169.254) must be rejected."""
+        with pytest.raises(BadRequest):
+            validate_fetch_target("http://169.254.169.254/latest/meta-data/")
+
+    def test_accepts_public_literal_ip(self) -> None:
+        """A public literal IP should be accepted."""
+        validate_fetch_target("http://8.8.8.8/file.pdb")  # Should not raise
+
+    def test_accepts_literal_ip_with_port(self) -> None:
+        """A public literal IP with an explicit port should be accepted."""
+        validate_fetch_target("http://8.8.8.8:8080/file.pdb")  # Should not raise
+
+    def test_rejects_hostname_resolving_to_loopback(self) -> None:
+        """A hostname resolving to a loopback IP must be rejected."""
+        with patch("validators._getaddrinfo_ips", return_value=["127.0.0.1"]), pytest.raises(BadRequest):
+            validate_fetch_target("http://localhost/file.pdb")
+
+    def test_rejects_hostname_resolving_to_private(self) -> None:
+        """A cluster-internal hostname resolving to a private IP must be rejected."""
+        with patch("validators._getaddrinfo_ips", return_value=["10.43.0.1"]), pytest.raises(BadRequest):
+            validate_fetch_target("https://kubernetes.default.svc/api")
+
+    def test_rejects_hostname_resolving_to_metadata(self) -> None:
+        """A hostname resolving to the link-local metadata IP must be rejected."""
+        with patch("validators._getaddrinfo_ips", return_value=["169.254.169.254"]), pytest.raises(BadRequest):
+            validate_fetch_target("http://metadata.google.internal/computeMetadata/v1/")
+
+    def test_rejects_when_any_resolved_ip_is_reserved(self) -> None:
+        """If any resolved IP is reserved, the target must be rejected."""
+        with patch("validators._getaddrinfo_ips", return_value=["8.8.8.8", "10.0.0.1"]), pytest.raises(BadRequest):
+            validate_fetch_target("http://example.org/file.pdb")
+
+    def test_accepts_hostname_resolving_to_public_ip(self) -> None:
+        """A hostname resolving only to public IPs should be accepted."""
+        with patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]):
+            validate_fetch_target("https://example.org/file.pdb")  # Should not raise
+
+    def test_rejects_unresolvable_host(self) -> None:
+        """A hostname that cannot be resolved should be rejected."""
+        with patch("validators._getaddrinfo_ips", side_effect=BadRequest("nope")), pytest.raises(BadRequest):
+            validate_fetch_target("http://nonexistent.invalid/file.pdb")

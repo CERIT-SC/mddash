@@ -106,7 +106,7 @@ class TestCreateExperiment:
                 data={
                     "type": "pdb",
                     "experiment-name": "Test PDB Experiment",
-                    "pdb-id": "1ABC",
+                    "pdb": "1ABC",
                     "notebooks-repo": "https://github.com/test/repo.git",
                 },
             )
@@ -134,12 +134,160 @@ class TestCreateExperiment:
                 data={
                     "type": "pdb",
                     "experiment-name": "Invalid PDB",
-                    "pdb-id": "XXXX",
+                    "pdb": "XXXX",
                     "notebooks-repo": "https://github.com/test/repo.git",
                 },
             )
 
             assert response.status_code == HTTPStatus.NOT_FOUND
+
+    def test_create_from_pdb_url_success(self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path) -> None:
+        """Should create experiment from a direct URL to a PDB file."""
+        pdb_url = "https://www.ebi.ac.uk/pdbe/entry-files/download/pdb3vte.ent"
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo") as mock_clone,
+            patch("validators._getaddrinfo_ips", return_value=["193.62.193.80"]),
+        ):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = sample_pdb_content
+            mock_get.return_value = mock_response
+
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "PDB URL Experiment",
+                    "pdb": pdb_url,
+                    "notebooks-repo": "https://github.com/test/repo.git",
+                },
+            )
+
+            assert response.status_code == HTTPStatus.CREATED
+            data = json.loads(response.data)
+            assert data["name"] == "PDB URL Experiment"
+            assert pdb_url in data["source_message"]
+            assert len(data["id"]) == EXPERIMENT_ID_LENGTH
+            # The URL should be fetched directly, not the RCSB ID URL
+            mock_get.assert_called_once_with(pdb_url, timeout=30, allow_redirects=False)
+            mock_clone.assert_called_once()
+
+    def test_create_from_pdb_url_not_found(self, client: FlaskClient, tmp_path: Path) -> None:
+        """Should return 404 when a PDB URL returns 404."""
+        pdb_url = "https://example.org/missing.pdb"
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo"),
+            patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
+        ):
+            mock_response = MagicMock()
+            mock_response.status_code = 404
+            mock_get.return_value = mock_response
+
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "Missing URL",
+                    "pdb": pdb_url,
+                    "notebooks-repo": "https://github.com/test/repo.git",
+                },
+            )
+
+            assert response.status_code == HTTPStatus.NOT_FOUND
+
+    def test_create_from_pdb_url_rejects_file_scheme(self, client: FlaskClient, tmp_path: Path) -> None:
+        """Should return 400 when a PDB URL uses a non-http(s) scheme."""
+        with (
+            patch("models.experiment.requests.get"),
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo"),
+        ):
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "Bad Scheme",
+                    "pdb": "file:///etc/passwd",
+                    "notebooks-repo": "https://github.com/test/repo.git",
+                },
+            )
+
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_create_from_pdb_url_rejects_internal_host(self, client: FlaskClient, tmp_path: Path) -> None:
+        """Should return 400 when a PDB URL points at an internal SSRF target."""
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo"),
+        ):
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "SSRF Attempt",
+                    "pdb": "http://169.254.169.254/latest/meta-data/",
+                    "notebooks-repo": "https://github.com/test/repo.git",
+                },
+            )
+
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            mock_get.assert_not_called()
+
+    def test_create_from_pdb_url_rejects_hostname_resolving_internal(self, client: FlaskClient, tmp_path: Path) -> None:
+        """Should return 400 when a PDB URL hostname resolves to an internal IP."""
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo"),
+            patch("validators._getaddrinfo_ips", return_value=["10.43.0.1"]),
+        ):
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "SSRF Hostname",
+                    "pdb": "https://kubernetes.default.svc/api",
+                    "notebooks-repo": "https://github.com/test/repo.git",
+                },
+            )
+
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            mock_get.assert_not_called()
+
+    def test_create_from_pdb_url_rejects_redirect_to_internal(self, client: FlaskClient, tmp_path: Path) -> None:
+        """Should reject a redirect chain that lands on an internal target."""
+        external_url = "https://example.org/pdb3vte.ent"
+        internal_url = "http://169.254.169.254/latest/meta-data/"
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo"),
+            patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
+        ):
+            redirect_resp = MagicMock()
+            redirect_resp.status_code = 302
+            redirect_resp.headers = {"Location": internal_url}
+
+            mock_get.side_effect = [redirect_resp]
+
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "Redirect SSRF",
+                    "pdb": external_url,
+                    "notebooks-repo": "https://github.com/test/repo.git",
+                },
+            )
+
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            # Only the first (external) hop should have been fetched.
+            mock_get.assert_called_once_with(external_url, timeout=30, allow_redirects=False)
 
     def test_create_uses_default_notebooks_repo(
         self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path
@@ -161,7 +309,7 @@ class TestCreateExperiment:
                 data={
                     "type": "pdb",
                     "experiment-name": "Test Default Repo",
-                    "pdb-id": "1ABC",
+                    "pdb": "1ABC",
                     # No notebooks-repo provided - should use default
                 },
             )
@@ -190,7 +338,7 @@ class TestCreateExperiment:
                 data={
                     "type": "pdb",
                     "experiment-name": "Clone Fail Test",
-                    "pdb-id": "1ABC",
+                    "pdb": "1ABC",
                     "notebooks-repo": "https://github.com/test/repo.git",
                 },
             )
@@ -204,7 +352,7 @@ class TestCreateExperiment:
             data={
                 "type": "pdb",
                 "experiment-name": "Invalid URL Test",
-                "pdb-id": "1ABC",
+                "pdb": "1ABC",
                 "notebooks-repo": "file:///etc/passwd",
             },
         )
