@@ -169,7 +169,7 @@ const New = () => {
                   id="pdb"
                   value={pdb}
                   onChange={(e) => setPdb(e.target.value)}
-                  placeholder="e.g. 1ABC or https://www.ebi.ac.uk/pdbe/entry-files/download/pdb3vte.ent"
+                  placeholder="e.g. 1ABC or https://files.rcsb.org/download/1AKI.pdb"
                   className={typeAuxError ? "border-destructive" : ""}
                 />
                 <p className="text-muted-foreground text-xs">
