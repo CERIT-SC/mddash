@@ -172,7 +172,7 @@ def create_experiment():
     experiment_data = {
         "experiment-name": EXPERIMENT_NAME,
         "type": "pdb",
-        "pdb-id": PDB_ID,
+        "pdb": PDB_ID,
         "notebooks-repo": NOTEBOOKS_REPO,
     }
 

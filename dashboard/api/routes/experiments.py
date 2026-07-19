@@ -45,7 +45,7 @@ def create_experiment() -> ResponseReturnValue:
     form = request.form
 
     name = form["experiment-name"]
-    pdb_id = form.get("pdb-id")
+    pdb_source = form.get("pdb")
     repo_url = form.get("repo-url")
     notebooks_repo = form.get("notebooks-repo", DEFAULT_NOTEBOOKS_REPO)
     access_token = form.get("access-token")
@@ -61,8 +61,8 @@ def create_experiment() -> ResponseReturnValue:
     validate_git_url(notebooks_repo)
 
     match form["type"]:
-        case "pdb" if pdb_id:
-            experiment = Experiment.from_pdb(name, pdb_id, notebooks_repo, access_token, engine=engine)
+        case "pdb" if pdb_source:
+            experiment = Experiment.from_pdb(name, pdb_source, notebooks_repo, access_token, engine=engine)
         case "repo" if repo_url:
             experiment = Experiment.from_repo(name, repo_url, notebooks_repo, access_token, engine=engine)
         case "file" if simulation_files:

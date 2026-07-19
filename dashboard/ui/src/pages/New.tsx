@@ -37,7 +37,7 @@ const New = () => {
   const [name, setName] = useState("")
   const [engine, setEngine] = useState<EngineType>(Engine.GMX)
   const [type, setType] = useState("")
-  const [pdbId, setPdbId] = useState("")
+  const [pdb, setPdb] = useState("")
   const [repoUrl, setRepoUrl] = useState("")
   const [files, setFiles] = useState<File[]>([])
   const [notebooksRepo, setNotebooksRepo] = useState(DEFAULT_NOTEBOOKS_REPO)
@@ -64,7 +64,7 @@ const New = () => {
     let auxErr = false
     const notebooksInvalid = !isValidGitUrl(notebooksRepo)
 
-    if ((type === "pdb" && !pdbId) || (type === "repo" && !repoUrl) || (type === "file" && files.length === 0))
+    if ((type === "pdb" && !pdb) || (type === "repo" && !repoUrl) || (type === "file" && files.length === 0))
       auxErr = true
 
     setNameError(!name)
@@ -88,7 +88,7 @@ const New = () => {
     formData.append("engine", engine)
     formData.append("type", type)
     formData.append("notebooks-repo", notebooksRepo)
-    if (type === "pdb") formData.append("pdb-id", pdbId)
+    if (type === "pdb") formData.append("pdb", pdb)
     if (type === "repo") formData.append("repo-url", repoUrl)
     if (type === "file" && files.length > 0) {
       files.forEach((file) => formData.append("simulation-files", file))
@@ -105,7 +105,7 @@ const New = () => {
 
   const handleTypeChange = (newType: string) => {
     setType(newType)
-    setPdbId("")
+    setPdb("")
     setRepoUrl("")
     setFiles([])
   }
@@ -150,7 +150,7 @@ const New = () => {
                     Upload Files
                   </TabsTrigger>
                   <TabsTrigger value="pdb" className="flex-1">
-                    PDB ID
+                    PDB
                   </TabsTrigger>
                   <TabsTrigger value="repo" className="flex-1">
                     DOI / Repository
@@ -164,13 +164,17 @@ const New = () => {
 
             {type === "pdb" && (
               <div className="flex flex-col gap-1">
-                <Label htmlFor="pdb-id">PDB ID</Label>
+                <Label htmlFor="pdb">PDB ID or URL</Label>
                 <Input
-                  id="pdb-id"
-                  value={pdbId}
-                  onChange={(e) => setPdbId(e.target.value)}
+                  id="pdb"
+                  value={pdb}
+                  onChange={(e) => setPdb(e.target.value)}
+                  placeholder="e.g. 1ABC or https://files.rcsb.org/download/1AKI.pdb"
                   className={typeAuxError ? "border-destructive" : ""}
                 />
+                <p className="text-muted-foreground text-xs">
+                  Enter an RCSB PDB ID (e.g. 1ABC) or a direct URL to a PDB file
+                </p>
               </div>
             )}
             {type === "repo" && (
