@@ -28,7 +28,7 @@ os.environ["JUPYTERHUB_DEFAULT_URL"] = "/lab"
 os.environ["JUPYTERHUB_SERVICE_PREFIX"] = "/user/testuser"
 
 # Import after environment is set to prevent validation errors at import time
-from auth import _sessions  # ruff:ignore[import-private-name]
+from auth import _login_tokens, _sessions  # ruff:ignore[import-private-name]
 from auth import app as auth_app
 
 
@@ -59,5 +59,7 @@ def client(app: Flask) -> FlaskClient:
 def clear_sessions() -> Generator[None, None, None]:
     """Clear session store before and after each test."""
     _sessions.clear()
+    _login_tokens.clear()
     yield
     _sessions.clear()
+    _login_tokens.clear()

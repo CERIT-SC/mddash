@@ -5,12 +5,14 @@ Tests session management, HMAC signing, and OAuth flow.
 """
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from http import HTTPStatus
 from unittest.mock import MagicMock, patch
 
 import auth
 import pytest
 from auth import (
+    COOKIE_NAME,
     HMAC_SHA256_HEX_LENGTH,
     STATE_COOKIE,
     USER,
@@ -204,6 +206,88 @@ class TestOAuthCallback:
         returned_user = "wronguser"
 
         assert expected_user != returned_user
+
+
+@pytest.mark.usefixtures("clear_sessions")
+class TestLoginTokenEndpoints:
+    """Tests for passwordless login token creation and redemption."""
+
+    @staticmethod
+    def create_login_token(client: FlaskClient) -> str:
+        """
+        Create a login token through the authenticated endpoint.
+
+        Returns:
+            str: The generated one-time token.
+        """
+        auth_token = create_session(USER)
+        client.set_cookie(COOKIE_NAME, auth_token)
+        response = client.post("/create-login-token")
+        return response.get_json()["token"]
+
+    def test_create_login_token_matches_dispatcher_contract(self, client: FlaskClient) -> None:
+        """Token responses should match the Dispatcher integration contract."""
+        auth_token = create_session(USER)
+        client.set_cookie(COOKIE_NAME, auth_token)
+
+        response = client.post("/create-login-token")
+
+        assert response.status_code == HTTPStatus.OK
+        payload = response.get_json()
+        assert payload is not None
+        assert isinstance(payload["token"], str)
+        assert payload["login_url"] == f"/user/{USER}/dash/auth/login-token?token={payload['token']}"
+
+    def test_get_login_token_consumes_token_and_redirects(self, client: FlaskClient) -> None:
+        """Dispatcher login links should establish a session and redirect."""
+        token = self.create_login_token(client)
+
+        response = client.get(f"/login-token?token={token}")
+
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == f"/user/{USER}/dash/"
+        assert client.get(f"/login-token?token={token}").status_code == HTTPStatus.UNAUTHORIZED
+
+    def test_get_login_token_consumes_token_once(self, app: Flask) -> None:
+        """Concurrent redemption attempts should produce only one session."""
+        with app.test_client() as client:
+            token = self.create_login_token(client)
+
+        def redeem() -> int:
+            with app.test_client() as client:
+                return client.get(f"/login-token?token={token}").status_code
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            statuses = sorted(executor.map(lambda _: redeem(), range(2)))
+
+        assert statuses == [HTTPStatus.FOUND, HTTPStatus.UNAUTHORIZED]
+
+    def test_redeemed_session_cookie_is_secure(self, client: FlaskClient) -> None:
+        """Passwordless sessions should use hardened cookie attributes."""
+        token = self.create_login_token(client)
+
+        response = client.get(f"/login-token?token={token}")
+
+        assert response.status_code == HTTPStatus.FOUND
+        set_cookie = response.headers["Set-Cookie"]
+        assert "Secure" in set_cookie
+        assert "HttpOnly" in set_cookie
+        assert "SameSite=Lax" in set_cookie
+
+    def test_login_token_is_not_accepted_as_session_cookie(self, client: FlaskClient) -> None:
+        """One-time login credentials should not authenticate as sessions."""
+        token = self.create_login_token(client)
+        client.set_cookie(COOKIE_NAME, token)
+
+        response = client.get("/auth")
+
+        assert response.status_code == HTTPStatus.FOUND
+
+    def test_login_token_requires_token_query_parameter(self, client: FlaskClient) -> None:
+        """Redemption should reject requests without a token."""
+        response = client.get("/login-token")
+
+        assert response.status_code == HTTPStatus.BAD_REQUEST
 
 
 def test_health_logs_first_health_once(client: FlaskClient, caplog) -> None:  # ruff:ignore[missing-type-function-argument]
