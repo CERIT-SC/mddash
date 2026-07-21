@@ -8,7 +8,7 @@
 
 ## Background
 
-The platform currently supports only GROMACS (`gmx`) as its MD engine. The Gromacs Tuner service already exposes AMBER endpoints (`/tuning-jobs/amber`), and an AMBER Docker image (`cerit.io/xkrasa/amber:24`) exists. The MDDB analysis workflow (`mwf`) natively supports AMBER inputs without conversion.
+The platform currently supports only GROMACS (`gmx`) as its MD engine. The Gromacs Tuner service already exposes AMBER endpoints (`/tuning-jobs/amber`), and an AMBER Docker image (`cerit.io/mddash/amber:24`) exists. The MDDB analysis workflow (`mwf`) natively supports AMBER inputs without conversion.
 
 AMBER input files: `.prmtop`/`.parm7` (topology), `.inpcrd`/`.rst7`/`.nc` (coordinates), `.mdin` (run control).  
 AMBER run parameters tuned by the tuner: `binary` (`pmemd.cuda` | `pmemd.MPI`), `np`, `ntomp`, `ewald` (`default` | `optimized`).  
@@ -232,7 +232,7 @@ The dashboard API client `clients/mdrun.py` gains `get_gmx_job(id)` / `get_amber
 
 Same structure as `create_gromacs_job()`:
 - S3 init container downloads `prmtop`, `inpcrd`, `mdin` files from S3
-- Main container image: `cerit.io/xkrasa/amber:24`
+- Main container image: `cerit.io/mddash/amber:24`
 - Command: `pmemd.cuda ...` or `mpirun -np {np} pmemd.MPI ...` depending on `binary`
 - S3 sync sidecar uploads results (`.nc`, `.rst7`, `.mdinfo`, `.out`)
 - Same security context (non-root UID 1000), same resource pattern

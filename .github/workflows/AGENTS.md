@@ -23,7 +23,7 @@ CodeQL for Actions, JS/TS, Python on PRs + weekly schedule.
 
 ## Gotchas
 
-- **Chart OCI namespace**: container images use `cerit.io/xkrasa/<image>`; Helm charts use `cerit.io/xkrasa/charts/<chart>`. They must stay separate because image and chart tags otherwise overwrite each other.
+- **Chart OCI namespace**: container images use `cerit.io/mddash/<image>`; Helm charts use `cerit.io/mddash/charts/<chart>`. They must stay separate because image and chart tags otherwise overwrite each other.
 - **`file://` dependency for mdrun-api**: `Chart.yaml` uses `file://../mdrun-api` so dev deploys resolve the sibling chart from local source instead of OCI. The `push-mddash-chart` Makefile target replaces it in a temporary chart copy with the chart OCI namespace for prod packaging.
 - **Template injection**: inputs/secrets are passed via `env:` blocks, not `${{ }}` interpolation in `run:` scripts.
 - **Actions pinned to SHAs**: all actions use full commit SHAs with version comments. Dependabot updates monthly.

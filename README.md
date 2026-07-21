@@ -224,7 +224,7 @@ helm registry login <registry-host>
 make push ENV=${ENV}
 
 # 3. Package and push the mdrun-api Helm chart when the subchart changed.
-# The parent chart currently pulls this dependency from oci://cerit.io/xkrasa; for non-xkrasa registries, update the dependency repository before relying on this push.
+# The parent chart currently pulls this dependency from oci://cerit.io/mddash; for non-mddash registries, update the dependency repository before relying on this push.
 make push-mdrun-api-chart ENV=${ENV}
 
 # 4. Update Helm dependencies when charts or config changed

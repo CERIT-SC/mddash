@@ -23,7 +23,7 @@ Remove the gmx sidecar. Install GROMACS and AmberTools binaries directly in the 
 ### Notebook Image (multi-stage Dockerfile)
 
 ```
-Stage 1: cerit.io/xkrasa/amber:24   (pmemd + AmberTools, compiled from source)
+Stage 1: cerit.io/mddash/amber:24   (pmemd + AmberTools, compiled from source)
 Final:   quay.io/jupyter/base-notebook:latest
 ```
 
@@ -175,7 +175,7 @@ ENV CONDA_OVERRIDE_CUDA=12.0
 ## Open Items for Implementation
 
 1. ~~Inspect GROMACS image: `docker run --rm cerit.io/ljocha/gromacs:... ldd $(which gmx)` -- enumerate all non-CUDA `.so` deps and their paths~~ -- **Done:** Too complex (~4GB transitive deps), replaced with conda-forge install.
-2. **Inspect AMBER image:** `docker run --rm cerit.io/xkrasa/amber:24 find /opt/pmemd24 -type d` -- verified: `bin`, `lib` directories exist. AmberTools tools (tleap, antechamber, etc.) must come from conda-forge, not this image.
+2. **Inspect AMBER image:** `docker run --rm cerit.io/mddash/amber:24 find /opt/pmemd24 -type d` -- verified: `bin`, `lib` directories exist. AmberTools tools (tleap, antechamber, etc.) must come from conda-forge, not this image.
 3. **Verify `tleap` works** with `AMBERHOME=/opt/conda/envs/amber` by running a minimal tleap command in the built image -- **Done:** `tleap -v` exits cleanly with correct dat paths.
 4. **Verify `gmx mdrun` GPU acceleration** works in built image with NVIDIA runtime (test on GPU node).
 5. **Verify `pmemd.cuda` GPU acceleration** works when NVIDIA runtime mounts CUDA libs at pod startup.

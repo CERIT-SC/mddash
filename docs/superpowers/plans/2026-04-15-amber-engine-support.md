@@ -333,7 +333,7 @@ match tuner_job.engine:
 - Modify: `mdrun-api/config.py`
 - Modify: `mdrun-api/k8s_client.py`
 
-**`config.py`:** Add `AMBER_IMAGE = os.environ.get("AMBER_IMAGE", "cerit.io/xkrasa/amber:24")`. Add warning log if unset.
+**`config.py`:** Add `AMBER_IMAGE = os.environ.get("AMBER_IMAGE", "cerit.io/mddash/amber:24")`. Add warning log if unset.
 
 **`k8s_client.py` — `create_amber_job()`:** Follows the same structure as `create_gromacs_job()`:
 - S3 init container downloads `prmtop`, `inpcrd`, `mdin` files from S3

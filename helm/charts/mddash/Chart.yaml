@@ -14,4 +14,4 @@ dependencies:
     repository: "file://../mdrun-api"
   - name: gromacs-tuner
     version: "0.1.2"
-    repository: "oci://cerit.io/xkrasa"
+    repository: "oci://cerit.io/mddash"

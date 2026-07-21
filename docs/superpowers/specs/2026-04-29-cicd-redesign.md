@@ -114,7 +114,7 @@ build-sidecars:
         context: ...
         push: true
         tags: |
-          ${{ needs.setup.outputs.registry }}/xkrasa/mddash-${{ matrix.sidecar }}:${{ needs.setup.outputs.tag }}
+          ${{ needs.setup.outputs.registry }}/mddash/mddash-${{ matrix.sidecar }}:${{ needs.setup.outputs.tag }}
 ```
 
 ### Notebook & MDRun-API
