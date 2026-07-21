@@ -6,6 +6,9 @@ metadata:
     app: mdrun-api
 spec:
   replicas: {{ .Values.replicaCount }}
+  # Recreate: RWO PVC + replicas=1 deadlocks RollingUpdate (new pod can't attach while old holds PVC).
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: mdrun-api
