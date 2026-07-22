@@ -241,10 +241,7 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
           </div>
           {statusFiles > 0 && (
             <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
-              <div
-                className="h-full bg-blue-500 transition-all"
-                style={{ width: `${progressPercent}%` }}
-              />
+              <div className="h-full bg-blue-500 transition-all" style={{ width: `${progressPercent}%` }} />
             </div>
           )}
           <div className="text-muted-foreground text-xs">
