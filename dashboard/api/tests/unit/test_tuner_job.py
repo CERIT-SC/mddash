@@ -160,3 +160,45 @@ class TestTunerJobNotFound:
 
         assert status == ok_status
         assert job.is_stopped is False
+
+
+class TestTunerJobErrorStatus:
+    """An ERROR status from the tuner must always populate error_message."""
+
+    def setup_method(self) -> None:
+        """Clear tuner caches before each test."""
+        tuner_status_cache.clear()
+        tuner_last_known_status.clear()
+
+    def teardown_method(self) -> None:
+        """Clear tuner caches after each test."""
+        tuner_status_cache.clear()
+        tuner_last_known_status.clear()
+
+    def test_error_status_with_message_sets_error_message(self, app: Flask, db_session: Session) -> None:  # ruff:ignore[unused-method-argument]
+        """A tuner ERROR response with an error field must persist that message."""
+        experiment = _make_experiment(db_session)
+        job = _make_tuner_job(experiment)
+        db_session.add(job)
+        db_session.commit()
+
+        error_status = {"status": JobStatus.ERROR, "error": "Tuner exploded", "trials": []}
+        with patch("models.tuner_job.tuner.amber_poll_status", return_value=error_status):
+            status = job._status()  # ruff:ignore[private-member-access]
+
+        assert status == error_status
+        assert job.error_message == "Tuner exploded"
+
+    def test_error_status_without_message_sets_default_error_message(self, app: Flask, db_session: Session) -> None:  # ruff:ignore[unused-method-argument]
+        """A tuner ERROR response without an error field must get a default message."""
+        experiment = _make_experiment(db_session)
+        job = _make_tuner_job(experiment)
+        db_session.add(job)
+        db_session.commit()
+
+        error_status = {"status": JobStatus.ERROR, "trials": []}
+        with patch("models.tuner_job.tuner.amber_poll_status", return_value=error_status):
+            status = job._status()  # ruff:ignore[private-member-access]
+
+        assert status == error_status
+        assert job.error_message == "Tuning job failed on the tuner."

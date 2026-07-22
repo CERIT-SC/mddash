@@ -43,6 +43,8 @@ const TunerView = (props: TunerViewProps) => {
 
   const { data: tuner, isLoading } = useTunerStatus(experiment.id, simulationPath, hasTunerJob)
 
+  const tunerErrorMessage = tuner?.error_message ?? (tuner?.tuner_status === "ERROR" ? "Tuning job failed." : null)
+
   const handleRunTuner = () => {
     const actualNsteps = nsteps === "" ? DEFAULT_NSTEPS : nsteps
     runTuner.mutate({ simulationPath, nsteps: actualNsteps }, { onSuccess: () => onStartTuner?.() })
@@ -118,15 +120,15 @@ const TunerView = (props: TunerViewProps) => {
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center gap-4">
-          {tuner?.error_message && (
+          {tunerErrorMessage && (
             <div className="border-destructive bg-destructive/10 text-destructive w-full rounded-md border p-3 text-sm">
-              <strong>Error:</strong> {tuner.error_message}
+              <strong>Error:</strong> {tunerErrorMessage}
             </div>
           )}
 
-          {!tuner?.error_message && <h3 className="text-lg font-semibold">Configure tuning job</h3>}
+          {!tunerErrorMessage && <h3 className="text-lg font-semibold">Configure tuning job</h3>}
 
-          {(!tuner || tuner.error_message) && (
+          {(!tuner || tunerErrorMessage) && (
             <Card className="w-fit">
               <CardContent className="flex flex-col items-center gap-4 pt-4">
                 <div className="flex w-72 flex-col gap-1">

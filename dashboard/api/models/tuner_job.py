@@ -57,6 +57,13 @@ class TunerJob(db.Model):  # type: ignore
             return self._preserved_trials
         return self._status().get("trials", [])
 
+    def _update_error_message(self, status: dict) -> None:
+        """Persist an error message when the tuner reports an error status."""
+        if status.get("status") != JobStatus.ERROR or self.error_message:
+            return
+        self.error_message = status.get("error") or "Tuning job failed on the tuner."
+        db.session.commit()
+
     def _status(self) -> dict:
         """
         Fetch tuner job status with caching and fallback on errors.
@@ -89,9 +96,7 @@ class TunerJob(db.Model):  # type: ignore
                 case _:
                     raise ValueError(f"Unknown engine: {self.engine}")
 
-            if err_msg := status.get("error"):
-                self.error_message = err_msg
-                db.session.commit()
+            self._update_error_message(status)
 
             # Validate response completeness
             if "status" not in status or "trials" not in status:
