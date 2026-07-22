@@ -771,3 +771,144 @@ def wait_for_job(
 
     thread = threading.Thread(target=wait_and_callback, daemon=True)
     thread.start()
+
+
+def create_secret(name: str, string_data: dict[str, str]) -> None:
+    """
+    Delete and recreate if the Secret already exists (stale credentials from a previous attempt).
+
+    Raises:
+        ApiException: If creation fails for a reason other than 409.
+    """
+    manifest: dict[str, object] = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": name, "namespace": NAMESPACE},
+        "type": "Opaque",
+        "stringData": string_data,
+    }
+
+    core_v1 = get_core_v1()
+    try:
+        core_v1.create_namespaced_secret(namespace=NAMESPACE, body=manifest)
+    except ApiException as e:
+        if e.status != HTTPStatus.CONFLICT:
+            raise
+        # Secret exists from a previous attempt — delete and recreate with fresh credentials.
+        try:
+            core_v1.delete_namespaced_secret(name=name, namespace=NAMESPACE)
+        except ApiException as del_e:
+            if del_e.status != HTTPStatus.NOT_FOUND:
+                raise
+        core_v1.create_namespaced_secret(namespace=NAMESPACE, body=manifest)
+
+
+def delete_secret(name: str) -> None:
+    """
+    No-op if not found.
+
+    Raises:
+        ApiException: If the delete fails for a reason other than 404.
+    """
+    if not ping_resource("secret", name):
+        return
+    core_v1 = get_core_v1()
+    try:
+        core_v1.delete_namespaced_secret(name=name, namespace=NAMESPACE)
+    except ApiException as e:
+        if e.status != HTTPStatus.NOT_FOUND:
+            raise
+
+
+def read_job(name: str) -> object | None:
+    """
+    Return None if not found (404).
+
+    Returns:
+        The Job object, or None.
+
+    Raises:
+        ApiException: If the read fails for a reason other than 404.
+    """
+    try:
+        batch_v1 = get_batch_v1()
+        return batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE)
+    except ApiException as e:
+        if e.status == HTTPStatus.NOT_FOUND:
+            return None
+        raise
+
+
+def delete_job_foreground(name: str) -> None:
+    """
+    Foreground propagation blocks until pods are deleted.
+
+    Raises:
+        ApiException: If the delete fails for a reason other than 404.
+    """
+    if not ping_resource("job", name):
+        return
+    batch_v1 = get_batch_v1()
+    try:
+        batch_v1.delete_namespaced_job(
+            name=name,
+            namespace=NAMESPACE,
+            body=V1DeleteOptions(
+                propagation_policy="Foreground",
+                grace_period_seconds=0,
+            ),
+        )
+    except ApiException as e:
+        if e.status != HTTPStatus.NOT_FOUND:
+            raise
+
+
+def list_pods_by_label(label_selector: str) -> list:
+    """
+    List pods matching a label selector.
+
+    Returns:
+        List of pod objects.
+    """
+    core_v1 = get_core_v1()
+    result = core_v1.list_namespaced_pod(namespace=NAMESPACE, label_selector=label_selector)
+    return result.items if result and result.items else []
+
+
+def wait_for_pod_admission(label_selector: str, timeout: int = 30) -> bool:
+    """
+    Poll until a pod reaches Running, Succeeded, or Failed (i.e. admitted, not Pending).
+
+    Returns:
+        True if admitted, False if timed out.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        pods = list_pods_by_label(label_selector)
+        for pod in pods:
+            phase = getattr(getattr(pod, "status", None), "phase", None)
+            if phase in {"Running", "Succeeded", "Failed"}:
+                return True
+        time.sleep(1)
+    return False
+
+
+def wait_for_resource_absence(resource_type: str, name: str, timeout: int = 30) -> bool:
+    """
+    Poll until a resource is gone.
+
+    Returns:
+        True if gone, False if still exists after timeout.
+    """
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not ping_resource(resource_type, name):
+            return True
+        time.sleep(1)
+    return False
+
+
+def create_job_raw(manifest: dict) -> None:
+    """Accept a complete manifest dict (unlike create_job which builds it from params)."""
+    batch_v1 = get_batch_v1()
+    batch_v1.create_namespaced_job(namespace=NAMESPACE, body=manifest)

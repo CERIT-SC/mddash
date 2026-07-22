@@ -1,15 +1,12 @@
 import logging
-import tempfile
 import threading
-import zipfile
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
-from shutil import move, rmtree
+from shutil import rmtree
 from typing import TYPE_CHECKING
-from urllib.parse import quote, urljoin, urlparse
+from urllib.parse import quote, urlparse
 
-import requests
 import yaml
 from cache import mdrepo_status_cache, step_status_cache
 from cachetools import cached
@@ -19,7 +16,11 @@ from config import (
     DATA_DIR,
     MDPOSIT_URL,
     MDPOSIT_VRE_LITE_URL,
+    MDREPO_API_URL,
+    MDREPO_CLIENT_ID,
+    MDREPO_CLIENT_SECRET,
     MDREPO_RECORD_NAME,
+    MDREPO_TOKEN_URL,
     MDREPO_URL,
 )
 from enums import Engine, JobStatus, PodStatus
@@ -28,171 +29,41 @@ from flask import session
 from notebook_modules import NotebookModule
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from token_manager import MDRepoTokenManager
+from upload.status import (
+    REASON_JOB_MISSING,
+    UploadState,
+    read_status,
+)
+from upload.submission import (
+    build_credential_secret_data,
+    delete_upload_resources,
+    is_upload_active,
+    submit_upload_job,
+)
 from utils import download_git_repo, download_git_repo_module, get_unique_id
-from validators import validate_fetch_target, validate_http_url
+from validators import validate_http_url
 from werkzeug.datastructures import FileStorage
-from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
+from werkzeug.exceptions import BadRequest, Conflict, InternalServerError, NotFound
 from werkzeug.utils import secure_filename
 
+from .experiment_sources import (
+    chmod_schema_files_readonly,
+    fetch_pdb,
+    import_invenio_repo,
+    import_mdposit_repo,
+    list_simulations,
+    resolve_repo_link,
+    validate_pdb_content,
+)
 from .notebook import Notebook
 
 if TYPE_CHECKING:
     from .analysis_job import AnalysisJob
-    from .simulation import Simulation
     from .simulation_job import SimulationJob
     from .tuner_job import TunerJob
 
 
 logger = logging.getLogger(__name__)
-
-
-def _list_simulations(experiment_id: str) -> list["Simulation"]:
-    """
-    List simulations for an experiment, deferring the import to avoid a circular dependency.
-
-    Returns:
-        List of Simulation instances.
-    """
-    from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
-
-    return Simulation.list(experiment_id)
-
-
-_REDIRECT_STATUSES = {301, 302, 303, 307, 308}
-
-
-def _fetch_pdb(url: str, *, max_redirects: int = 5) -> requests.Response:
-    """
-    Fetch a PDB URL without auto-following redirects; each hop is SSRF-validated.
-
-    Returns:
-        The final non-redirect response.
-
-    Raises:
-        InternalServerError: If the redirect chain exceeds max_redirects.
-    """
-    for _ in range(max_redirects + 1):
-        validate_fetch_target(url)
-        response = requests.get(url, timeout=30, allow_redirects=False)
-        if response.status_code not in _REDIRECT_STATUSES:
-            return response
-        location = response.headers.get("Location")
-        if not location:
-            return response
-        url = validate_http_url(urljoin(url, location))
-    raise InternalServerError(description="Too many redirects while downloading PDB file.")
-
-
-_PDB_STRUCTURE_RECORDS = {"ATOM", "HETATM"}
-
-
-def _validate_pdb_content(content: bytes) -> None:
-    """
-    Reject downloaded content that is not a PDB structure file.
-
-    PDB record types occupy columns 1-6 of each line; a structural PDB file
-    must contain at least one ATOM or HETATM record. This catches HTML error
-    pages, login redirects, and binary responses that nonetheless return 200.
-
-    Raises:
-        BadRequest: If no ATOM/HETATM record is present.
-    """
-    text = content.decode("utf-8", errors="replace")
-    for line in text.splitlines():
-        if line[:6].strip() in _PDB_STRUCTURE_RECORDS:
-            return
-    raise BadRequest(description="Downloaded content is not a valid PDB file (no ATOM or HETATM records).")
-
-
-_SCHEMA_FILES = ("gromacs.schema.json", "amber.schema.json")
-
-
-def _chmod_schema_files_readonly(experiment_dir: Path) -> None:
-    """Best-effort chmod notebook schema files read-only (0444)."""
-    for name in _SCHEMA_FILES:
-        schema_path = experiment_dir / name
-        if schema_path.is_file():
-            try:
-                Path(schema_path).chmod(0o444)
-            except OSError:
-                logger.warning("Failed to chmod schema file '%s' read-only", name, exc_info=True)
-
-
-def _resolve_repo_link(repo_link: str) -> str:
-    resolved = repo_link.strip().rstrip("/")
-    if urlparse(resolved).netloc == "doi.org":
-        response = requests.head(resolved, allow_redirects=True, timeout=30)
-        resolved = response.url.rstrip("/")
-
-    return resolved
-
-
-def _safe_extract_zip(zf: zipfile.ZipFile, output_dir: Path) -> None:
-    resolved_output_dir = output_dir.resolve()
-    for member in zf.infolist():
-        output_path = (output_dir / member.filename).resolve()
-        try:
-            output_path.relative_to(resolved_output_dir)
-        except ValueError as exc:
-            raise BadRequest(description=f"Unsafe path in repository archive: {member.filename}") from exc
-
-        zf.extract(member, output_dir)
-
-
-def _import_invenio_repo(repo_link: str, experiment_id: str) -> None:
-    # Parse InvenioRDM-compatible URL (Zenodo, MDRepo, etc.)
-    # UI URL format:  {scheme}://{host}/[collection/]records/{id}
-    # API URL format: {scheme}://{host}/api/{collection_or_records}/{id}/files-archive
-    parsed = urlparse(repo_link)
-    path_parts = [p for p in parsed.path.split("/") if p]
-    record_id: str = path_parts[-1]
-    records_idx: int = path_parts.index("records")  # raises ValueError if missing
-    prefix_parts: list[str] = path_parts[:records_idx]
-    api_segment: str = "/".join(prefix_parts) if prefix_parts else "records"
-    url: str = f"{parsed.scheme}://{parsed.netloc}/api/{api_segment}/{record_id}/files-archive"
-
-    with tempfile.NamedTemporaryFile(suffix=".zip") as tmp_file:
-        tmp_path = Path(tmp_file.name)
-        with requests.get(url, stream=True, timeout=300) as response:
-            if response.status_code == HTTPStatus.NOT_FOUND:
-                raise NotFound(description=f"Repository '{repo_link}' not found.")
-            if response.status_code != HTTPStatus.OK:
-                raise InternalServerError(description=f"Failed to download repository: {response.status_code}")
-
-            # 128KB chunk size for better performance with large files
-            for chunk in response.iter_content(chunk_size=128 * 1024):
-                tmp_file.write(chunk)
-
-        tmp_file.flush()
-        with zipfile.ZipFile(tmp_path) as zf:
-            _safe_extract_zip(zf, DATA_DIR / experiment_id)
-
-
-def _import_mdposit_repo(repo_link: str, experiment_id: str) -> None:
-    accession = mdposit.extract_accession(repo_link)
-    if not accession:
-        raise BadRequest(description="Missing MDPosit project accession.")
-
-    output_dir = DATA_DIR / experiment_id
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        mdposit.get_project(accession)
-        with tempfile.TemporaryDirectory(dir=output_dir) as tmp_dir_name:
-            tmp_dir = Path(tmp_dir_name)
-            downloaded_paths = mdposit.download_project(accession, tmp_dir)
-            resolved_tmp_dir = tmp_dir.resolve()
-
-            for downloaded_path in downloaded_paths:
-                source_path = Path(downloaded_path)
-                relative_path = source_path.resolve().relative_to(resolved_tmp_dir)
-                destination_path = output_dir / relative_path
-                destination_path.parent.mkdir(parents=True, exist_ok=True)
-                move(source_path, destination_path)
-    except ValueError as exc:
-        raise BadRequest(description=str(exc)) from exc
-    except requests.HTTPError as exc:
-        raise InternalServerError(description=f"Failed to download MDPosit project: {exc}") from exc
 
 
 class Experiment(db.Model):  # type: ignore
@@ -277,6 +148,11 @@ class Experiment(db.Model):  # type: ignore
             return f"{MDREPO_URL}/{MDREPO_RECORD_NAME}/uploads/{self.mdrepo_id}"
         return None
 
+    @property
+    def upload_state(self) -> str | None:
+        """Current durable upload state, inferred from PVC status file and live Job existence."""
+        return self._read_upload_state()
+
     @classmethod
     def prepare_env(
         cls,
@@ -308,7 +184,7 @@ class Experiment(db.Model):  # type: ignore
             rmtree(experiment_dir, ignore_errors=True)
             raise
 
-        _chmod_schema_files_readonly(experiment_dir)
+        chmod_schema_files_readonly(experiment_dir)
         return experiment_id
 
     @classmethod
@@ -379,14 +255,14 @@ class Experiment(db.Model):  # type: ignore
                 message = f"Created by downloading '{pdb_id}' from RCSB PDB."
 
             # Download PDB file
-            response = _fetch_pdb(url)
+            response = fetch_pdb(url)
 
             if response.status_code == HTTPStatus.NOT_FOUND:
                 raise NotFound(description=f"PDB source '{source}' not found.")
             if response.status_code != HTTPStatus.OK:
                 raise InternalServerError(description=f"Failed to download PDB file: {response.status_code}")
 
-            _validate_pdb_content(response.content)
+            validate_pdb_content(response.content)
 
             with (DATA_DIR / experiment_id / "input.pdb").open("wb") as f:
                 f.write(response.content)
@@ -430,11 +306,11 @@ class Experiment(db.Model):  # type: ignore
         experiment_id: str = cls.prepare_env(notebooks_repo, access_token, notebook_module)
 
         try:
-            resolved_repo_link = _resolve_repo_link(repo_link)
+            resolved_repo_link = resolve_repo_link(repo_link)
             if mdposit.is_mdposit_url(resolved_repo_link):
-                _import_mdposit_repo(resolved_repo_link, experiment_id)
+                import_mdposit_repo(resolved_repo_link, experiment_id)
             else:
-                _import_invenio_repo(resolved_repo_link, experiment_id)
+                import_invenio_repo(resolved_repo_link, experiment_id)
 
             message: str = f"Created by downloading repository from '{repo_link}'."
             experiment = cls(
@@ -587,7 +463,19 @@ class Experiment(db.Model):  # type: ignore
             logger.exception(f"Failed to check MDRepo status for experiment '{self.mdrepo_id}'")
 
     def delete(self) -> None:
-        """Delete the experiment and all its related resources."""
+        """
+        Delete the experiment and all its related resources.
+
+        Raises:
+            Conflict: If an MDRepo upload is queued or running.
+        """
+        # Reject deletion while an upload is active (check PVC + live Job).
+        upload_state = self._read_upload_state()
+        if upload_state in UploadState.active():
+            raise Conflict(
+                description="Cannot delete experiment during active MDRepo upload. "
+                "Wait for completion or retry after failure."
+            )
         # Delete notebook pod if it exists
         if self.notebook and self.notebook.status == PodStatus.RUNNING:
             self.notebook.stop()
@@ -639,16 +527,20 @@ class Experiment(db.Model):  # type: ignore
 
     def _publish_invenio(self, community: str) -> dict:
         """
-        Publish the experiment to MDRepo into a draft state.
+        Publish the experiment to MDRepo as a draft and start a durable upload Job.
+
+        Returns 202-style metadata after the upload pod is admitted. If an active
+        upload already exists, returns its identity without creating a new one.
 
         Args:
             community: Community slug to publish the experiment to.
 
         Returns:
-            Metadata of the published experiment from MDRepo.
+            Metadata including the draft ID, draft URL, upload ID, and upload state.
 
         Raises:
             InternalServerError: If there is no valid access token or MDRepo creation fails.
+            Conflict: If a published record exists or an active upload is in progress.
         """
         token_manager = MDRepoTokenManager(session)
         access_token = token_manager.get_valid_token()
@@ -658,7 +550,84 @@ class Experiment(db.Model):  # type: ignore
                 description="No valid MDRepo access token available. Please authenticate with MDRepo."
             )
 
-        gmx_simulations = [s for s in _list_simulations(self.id) if s.engine == Engine.GMX.value and s.valid]
+        # A published record cannot be retried as a draft upload.
+        if self.mdrepo_published is True:
+            raise Conflict(description="Experiment is already published. Cannot retry as draft upload.")
+
+        upload_state = self._read_upload_state()
+
+        # A completed upload should not be re-submitted.
+        if upload_state == UploadState.COMPLETED.value:
+            raise Conflict(description="Upload already completed. Use MDRepo to view or edit the published record.")
+
+        # If an upload is already active, return it (idempotent retry).
+        if upload_state in UploadState.active():
+            status = read_status(self.id, DATA_DIR)
+            return {
+                "id": self.mdrepo_id or "",
+                "links": {},
+                "upload_id": status.attempt_id if status else "",
+                "upload_state": upload_state,
+                "draft_url": self.mdrepo_record_url,
+            }
+
+        # If a previous attempt failed, clean up its K8s resources before retrying.
+        if upload_state == UploadState.FAILED.value:
+            delete_upload_resources(self.id)
+
+        # Create or reuse the Invenio draft.
+        if self.mdrepo_id:
+            mdrepo_id = self.mdrepo_id
+            mdrepo_experiment: dict = {"id": mdrepo_id, "links": {}}
+        else:
+            mdrepo_experiment = self._create_draft(access_token, community)
+            mdrepo_id = self.mdrepo_id or ""
+
+        if not mdrepo_id:
+            raise InternalServerError(description="Failed to create experiment in MDRepo.")
+
+        # Submit the upload Job. This writes queued status to the PVC, creates
+        # the Secret + Job, and waits for pod admission before returning.
+        attempt_id = submit_upload_job(
+            experiment_id=self.id,
+            mdrepo_id=mdrepo_id,
+            credential_data=build_credential_secret_data(
+                access_token=access_token,
+                refresh_token=session.get("mdrepo_refresh_token", ""),
+                token_expires_at=float(session.get("mdrepo_token_expires_at", 0)),
+                client_id=MDREPO_CLIENT_ID,
+                client_secret=MDREPO_CLIENT_SECRET,
+                api_url=MDREPO_API_URL,
+                record_name=MDREPO_RECORD_NAME,
+                token_url=MDREPO_TOKEN_URL,
+            ),
+            data_dir=DATA_DIR,
+        )
+
+        logger.info("Durable upload Job submitted for experiment %s (attempt %s)", self.id, attempt_id)
+        return {
+            "id": mdrepo_id,
+            "links": mdrepo_experiment.get("links", {}),
+            "upload_id": attempt_id,
+            "upload_state": UploadState.QUEUED.value,
+            "draft_url": self.mdrepo_record_url,
+        }
+
+    def _create_draft(self, access_token: str, community: str) -> dict:
+        """
+        Create a new Invenio draft and persist its ID.
+
+        Args:
+            access_token: Valid MDRepo OAuth2 access token.
+            community: Community slug.
+
+        Returns:
+            The MDRepo experiment response.
+
+        Raises:
+            InternalServerError: If draft creation fails.
+        """
+        gmx_simulations = [s for s in list_simulations(self.id) if s.engine == Engine.GMX.value and s.valid]
         tpr_paths = []
         for sim in gmx_simulations:
             topology = sim.resolved_files.get("topology")
@@ -666,12 +635,8 @@ class Experiment(db.Model):  # type: ignore
                 tpr_paths.append(DATA_DIR / self.id / topology)
         simulations = metadump.extract_metadata_bulk(tpr_paths) if tpr_paths else []
 
-        metadata: dict = {"simulations": simulations}
-
-        # Create experiment in MDRepo
-        mdrepo_experiment = mdrepo.create_experiment(access_token, community, metadata)
+        mdrepo_experiment = mdrepo.create_experiment(access_token, community, {"simulations": simulations})
         mdrepo_id = mdrepo_experiment.get("id")
-
         if mdrepo_id is None:
             raise InternalServerError(description="Failed to create experiment in MDRepo.")
 
@@ -679,13 +644,75 @@ class Experiment(db.Model):  # type: ignore
         self.mdrepo_published = False
         db.session.commit()
 
-        logger.info(f"Created MDRepo experiment with ID '{mdrepo_id}' for experiment '{self.id}'")
-
-        # Start background thread (daemon) to perform uploads and return immediately
-        mdrepo.start_upload_worker(access_token, experiment_id=mdrepo_id, experiment_dir=DATA_DIR / self.id)
-
-        logger.info(f"Queued file upload job '{self.id}' to MDRepo.")
+        logger.info("Created MDRepo experiment with ID '%s' for experiment '%s'", mdrepo_id, self.id)
         return mdrepo_experiment
+
+    def _read_upload_state(self) -> str | None:
+        """
+        Determine the current upload state from the PVC status file and live Job.
+
+        If the PVC status says queued/running but the Job no longer exists,
+        reports ``failed`` with reason ``job_missing``. Returns None if no
+        status file exists.
+
+        Returns:
+            The current upload state string, or None.
+        """
+        status = read_status(self.id, DATA_DIR)
+        if status is None:
+            return None
+
+        if status.state in UploadState.terminal():
+            return status.state
+
+        if status.state in UploadState.active() and not is_upload_active(self.id):
+            return UploadState.FAILED.value
+
+        return status.state
+
+    def get_publish_status(self) -> dict:
+        """
+        Return the durable MDRepo upload status for this experiment.
+
+        Merges the PVC status document with live Job state. The PVC document is
+        authoritative for completed worker output; Kubernetes is authoritative
+        when the worker hasn't recorded a terminal state yet.
+
+        Returns:
+            A dict with the upload state, reason, progress, and draft metadata.
+        """
+        status = read_status(self.id, DATA_DIR)
+
+        # Resolve the effective state (may differ from the file if Job is gone).
+        effective_state = self._read_upload_state()
+
+        result: dict = {
+            "experiment_id": self.id,
+            "mdrepo_id": self.mdrepo_id,
+            "draft_url": self.mdrepo_record_url,
+            "upload_state": effective_state,
+            "reason": None,
+            "total_files": 0,
+            "completed_files": 0,
+            "total_bytes": 0,
+            "completed_bytes": 0,
+            "failed_files": [],
+        }
+
+        if status is not None:
+            result["upload_attempt_id"] = status.attempt_id
+            # If the state was overridden (job_missing), reflect that.
+            if effective_state == UploadState.FAILED.value and status.state in UploadState.active():
+                result["reason"] = REASON_JOB_MISSING
+            else:
+                result["reason"] = status.reason
+            result["total_files"] = status.total_files
+            result["completed_files"] = status.completed_files
+            result["total_bytes"] = status.total_bytes
+            result["completed_bytes"] = status.completed_bytes
+            result["failed_files"] = [{"key": f.key, "error": f.error} for f in status.failed_files]
+
+        return result
 
     def _publish_mdposit(self, simulation_path: str) -> dict:
         """

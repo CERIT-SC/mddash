@@ -91,7 +91,7 @@ class TestCreateExperiment:
     def test_create_from_pdb_success(self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path) -> None:
         """Should create experiment from valid PDB ID."""
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_clone,
         ):
@@ -121,7 +121,7 @@ class TestCreateExperiment:
     def test_create_from_pdb_not_found(self, client: FlaskClient, tmp_path: Path) -> None:
         """Should return 404 when PDB ID doesn't exist."""
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
         ):
@@ -145,7 +145,7 @@ class TestCreateExperiment:
         """Should create experiment from a direct URL to a PDB file."""
         pdb_url = "https://www.ebi.ac.uk/pdbe/entry-files/download/pdb3vte.ent"
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_clone,
             patch("validators._getaddrinfo_ips", return_value=["193.62.193.80"]),
@@ -179,7 +179,7 @@ class TestCreateExperiment:
         pdb_url = "https://example.org/login"
         html_content = b"<!DOCTYPE html><html><body>Please log in</body></html>"
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
             patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
@@ -206,7 +206,7 @@ class TestCreateExperiment:
     def test_create_from_pdb_id_rejects_non_pdb_response(self, client: FlaskClient, tmp_path: Path) -> None:
         """Should return 400 when an RCSB PDB ID returns non-PDB content."""
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
         ):
@@ -234,7 +234,7 @@ class TestCreateExperiment:
         """Should return 404 when a PDB URL returns 404."""
         pdb_url = "https://example.org/missing.pdb"
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
             patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
@@ -258,7 +258,7 @@ class TestCreateExperiment:
     def test_create_from_pdb_url_rejects_file_scheme(self, client: FlaskClient, tmp_path: Path) -> None:
         """Should return 400 when a PDB URL uses a non-http(s) scheme."""
         with (
-            patch("models.experiment.requests.get"),
+            patch("models.experiment_sources.requests.get"),
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
         ):
@@ -277,7 +277,7 @@ class TestCreateExperiment:
     def test_create_from_pdb_url_rejects_internal_host(self, client: FlaskClient, tmp_path: Path) -> None:
         """Should return 400 when a PDB URL points at an internal SSRF target."""
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
         ):
@@ -297,7 +297,7 @@ class TestCreateExperiment:
     def test_create_from_pdb_url_rejects_hostname_resolving_internal(self, client: FlaskClient, tmp_path: Path) -> None:
         """Should return 400 when a PDB URL hostname resolves to an internal IP."""
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
             patch("validators._getaddrinfo_ips", return_value=["10.43.0.1"]),
@@ -320,7 +320,7 @@ class TestCreateExperiment:
         external_url = "https://example.org/pdb3vte.ent"
         internal_url = "http://169.254.169.254/latest/meta-data/"
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
             patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
@@ -350,7 +350,7 @@ class TestCreateExperiment:
     ) -> None:
         """Should use default notebooks repo when not provided."""
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_clone,
             patch("routes.experiments.DEFAULT_NOTEBOOKS_REPO", "https://github.com/default/repo.git"),
@@ -378,7 +378,7 @@ class TestCreateExperiment:
     def test_create_fails_on_clone_error(self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path) -> None:
         """Should return error when git clone fails."""
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_clone,
         ):
@@ -721,3 +721,109 @@ class TestDeleteExperiment:
         response = client.delete("/dash/api/experiments/nope2")
 
         assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+class TestPublishStatus:
+    """Tests for GET /api/experiments/<id>/publish/status."""
+
+    def _seed_experiment(self, db_session: Session, tmp_path: Path) -> None:
+        """Seed a minimal experiment for status tests."""
+        (tmp_path / "pstat").mkdir(parents=True, exist_ok=True)
+        exp = Experiment()
+        exp.id = "pstat"
+        exp.name = "Status Test"
+        exp.source_message = "test"
+        db_session.add(exp)
+        db_session.flush()
+        nb = Notebook()
+        nb.experiment_id = "pstat"
+        db_session.add(nb)
+        db_session.commit()
+
+    def test_status_no_upload(self, client: FlaskClient, db_session: Session, tmp_path: Path) -> None:
+        """Status with no upload returns null state."""
+        with patch("models.experiment.DATA_DIR", tmp_path):
+            self._seed_experiment(db_session, tmp_path)
+            response = client.get("/dash/api/experiments/pstat/publish/status")
+
+        assert response.status_code == HTTPStatus.OK
+        data = json.loads(response.data)
+        assert data["upload_state"] is None
+        assert data["total_files"] == 0
+
+    @patch("models.experiment.is_upload_active", return_value=True)
+    def test_status_active_upload(
+        self, mock_active: MagicMock, client: FlaskClient, db_session: Session, tmp_path: Path
+    ) -> None:
+        """Status with an active upload reflects the PVC file."""
+        from upload.status import create_queued_status, write_status
+
+        with patch("models.experiment.DATA_DIR", tmp_path):
+            self._seed_experiment(db_session, tmp_path)
+            status = create_queued_status("att-1")
+            write_status(status, "pstat", tmp_path)
+
+            response = client.get("/dash/api/experiments/pstat/publish/status")
+
+        assert response.status_code == HTTPStatus.OK
+        data = json.loads(response.data)
+        assert data["upload_state"] == "queued"
+        assert data["upload_attempt_id"] == "att-1"
+
+    @patch("models.experiment.is_upload_active", return_value=False)
+    def test_status_job_missing_reports_failed(
+        self, mock_active: MagicMock, client: FlaskClient, db_session: Session, tmp_path: Path
+    ) -> None:
+        """PVC says running but Job is gone → failed with job_missing reason."""
+        from upload.status import UploadState, UploadStatus, write_status
+
+        with patch("models.experiment.DATA_DIR", tmp_path):
+            self._seed_experiment(db_session, tmp_path)
+            status = UploadStatus(
+                attempt_id="att-1",
+                state=UploadState.RUNNING.value,
+            )
+            write_status(status, "pstat", tmp_path)
+
+            response = client.get("/dash/api/experiments/pstat/publish/status")
+
+        assert response.status_code == HTTPStatus.OK
+        data = json.loads(response.data)
+        assert data["upload_state"] == "failed"
+        assert data["reason"] == "job_missing"
+
+    def test_status_nonexistent_experiment(self, client: FlaskClient) -> None:
+        """Status for a non-existent experiment returns 404."""
+        response = client.get("/dash/api/experiments/nope3/publish/status")
+        assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+class TestDeleteDuringUpload:
+    """Tests for experiment deletion during active upload."""
+
+    @patch("models.experiment.is_upload_active", return_value=True)
+    @patch("models.experiment.read_status")
+    def test_delete_blocked_during_active_upload(
+        self, mock_read: MagicMock, mock_active: MagicMock, client: FlaskClient, db_session: Session, tmp_path: Path
+    ) -> None:
+        """Cannot delete an experiment with an active upload."""
+        from upload.status import UploadState
+
+        mock_read.return_value = MagicMock(state=UploadState.RUNNING.value, attempt_id="att-1")
+
+        with patch("models.experiment.DATA_DIR", tmp_path):
+            (tmp_path / "delup").mkdir(parents=True, exist_ok=True)
+            exp = Experiment()
+            exp.id = "delup"
+            exp.name = "Upload Active"
+            exp.source_message = "test"
+            db_session.add(exp)
+            db_session.flush()
+            nb = Notebook()
+            nb.experiment_id = "delup"
+            db_session.add(nb)
+            db_session.commit()
+
+            response = client.delete("/dash/api/experiments/delup")
+
+        assert response.status_code == HTTPStatus.CONFLICT

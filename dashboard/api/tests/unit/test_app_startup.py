@@ -42,7 +42,7 @@ def test_importing_app_module_does_not_run_migrations(tmp_path: Path, monkeypatc
 
 def test_run_migrations_skips_upgrade_when_database_is_at_head(app: Flask, mocker: MockerFixture) -> None:
     """Already-current databases should avoid full Alembic upgrade machinery."""
-    import app as app_module  # ruff:ignore[import-outside-top-level]
+    import app as app_module
 
     migration_context = MagicMock()
     migration_context.get_current_revision.return_value = "006"
@@ -56,7 +56,7 @@ def test_run_migrations_skips_upgrade_when_database_is_at_head(app: Flask, mocke
     inspect_db = mocker.patch("app.sa_inspect")
 
     with app.app_context():
-        app_module._run_migrations()  # ruff:ignore[private-member-access]
+        app_module._run_migrations()
 
     upgrade.assert_not_called()
     stamp.assert_not_called()
@@ -65,7 +65,7 @@ def test_run_migrations_skips_upgrade_when_database_is_at_head(app: Flask, mocke
 
 def test_run_migrations_upgrades_when_database_is_behind_head(app: Flask, mocker: MockerFixture) -> None:
     """Behind-head databases must still be upgraded before serving requests."""
-    import app as app_module  # ruff:ignore[import-outside-top-level]
+    import app as app_module
 
     migration_context = MagicMock()
     migration_context.get_current_revision.return_value = "005"
@@ -79,7 +79,7 @@ def test_run_migrations_upgrades_when_database_is_behind_head(app: Flask, mocker
     stamp = mocker.patch("app.stamp")
 
     with app.app_context():
-        app_module._run_migrations()  # ruff:ignore[private-member-access]
+        app_module._run_migrations()
 
     stamp.assert_not_called()
     upgrade.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR))
@@ -87,7 +87,7 @@ def test_run_migrations_upgrades_when_database_is_behind_head(app: Flask, mocker
 
 def test_run_migrations_stamps_unversioned_database_with_tables(app: Flask, mocker: MockerFixture) -> None:
     """Legacy unversioned DBs with existing tables keep baseline stamping behavior."""
-    import app as app_module  # ruff:ignore[import-outside-top-level]
+    import app as app_module
 
     migration_context = MagicMock()
     migration_context.get_current_revision.return_value = None
@@ -103,7 +103,7 @@ def test_run_migrations_stamps_unversioned_database_with_tables(app: Flask, mock
     upgrade = mocker.patch("app.upgrade")
 
     with app.app_context():
-        app_module._run_migrations()  # ruff:ignore[private-member-access]
+        app_module._run_migrations()
 
     stamp.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR), revision="001", purge=True)
     upgrade.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR))
@@ -111,8 +111,8 @@ def test_run_migrations_stamps_unversioned_database_with_tables(app: Flask, mock
 
 def test_run_migrations_restamps_unknown_revision(app: Flask, mocker: MockerFixture) -> None:
     """Unknown DB revisions ahead of the script directory must fail fast."""
-    import app as app_module  # ruff:ignore[import-outside-top-level]
-    from alembic.util.exc import CommandError  # ruff:ignore[import-outside-top-level]
+    import app as app_module
+    from alembic.util.exc import CommandError
 
     migration_context = MagicMock()
     migration_context.get_current_revision.return_value = "old-rev"
@@ -129,7 +129,7 @@ def test_run_migrations_restamps_unknown_revision(app: Flask, mocker: MockerFixt
         app.app_context(),
         pytest.raises(RuntimeError, match="ahead of migration scripts"),
     ):
-        app_module._run_migrations()  # ruff:ignore[private-member-access]
+        app_module._run_migrations()
 
     stamp.assert_not_called()
     upgrade.assert_not_called()
@@ -137,7 +137,7 @@ def test_run_migrations_restamps_unknown_revision(app: Flask, mocker: MockerFixt
 
 def test_run_migrations_upgrades_fresh_empty_database(app: Flask, mocker: MockerFixture) -> None:
     """Brand-new empty databases should go straight to upgrade without stamping."""
-    import app as app_module  # ruff:ignore[import-outside-top-level]
+    import app as app_module
 
     migration_context = MagicMock()
     migration_context.get_current_revision.return_value = None
@@ -153,7 +153,7 @@ def test_run_migrations_upgrades_fresh_empty_database(app: Flask, mocker: Mocker
     upgrade = mocker.patch("app.upgrade")
 
     with app.app_context():
-        app_module._run_migrations()  # ruff:ignore[private-member-access]
+        app_module._run_migrations()
 
     stamp.assert_not_called()
     upgrade.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR))

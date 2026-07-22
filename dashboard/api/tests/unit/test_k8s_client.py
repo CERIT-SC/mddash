@@ -23,7 +23,7 @@ def test_importing_k8s_client_does_not_load_incluster_config(
     core_api = mocker.patch("kubernetes.client.CoreV1Api")
     batch_api = mocker.patch("kubernetes.client.BatchV1Api")
 
-    from clients import k8s  # ruff:ignore[import-outside-top-level]
+    from clients import k8s
 
     importlib.reload(k8s)
 
@@ -36,7 +36,7 @@ def test_importing_k8s_client_does_not_load_incluster_config(
 
 def test_get_core_v1_loads_config_once(mocker: MockerFixture) -> None:
     """First Kubernetes use should initialize config once and cache clients."""
-    from clients import k8s  # ruff:ignore[import-outside-top-level]
+    from clients import k8s
 
     k8s.reset_k8s_clients_for_tests()
     load_config = mocker.patch("kubernetes.config.load_incluster_config")
@@ -52,7 +52,7 @@ def test_get_core_v1_loads_config_once(mocker: MockerFixture) -> None:
 
 def test_get_batch_v1_loads_config_once(mocker: MockerFixture) -> None:
     """Batch client creation should share the same in-cluster config load."""
-    from clients import k8s  # ruff:ignore[import-outside-top-level]
+    from clients import k8s
 
     k8s.reset_k8s_clients_for_tests()
     load_config = mocker.patch("kubernetes.config.load_incluster_config")

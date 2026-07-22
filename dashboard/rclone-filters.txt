@@ -11,13 +11,13 @@
 - **/.cache/**
 - migrations/**
 - **/migrations/**
-- **/*.edr/**
-- **/*.xtc/**
-- **/*.fit.xtc/**
-- **/*.tpr/**
-- **/*.cpt/**
-- **/*.gro/**
-- **/*.log/**
+- **/*.edr
+- **/*.xtc
+- **/*.fit.xtc
+- **/*.tpr
+- **/*.cpt
+- **/*.gro
+- **/*.log
 - .local/**
 - **/.local/**
 - .config/**
@@ -33,3 +33,5 @@
 - .duc.db
 - **/mwf_analyses/**
 - **/mwf_inputs/**
+- **/.mdrepo-upload.json
+- **/.mdrepo-upload.json.tmp

@@ -83,6 +83,8 @@ sidecars:
     image: mddash-api
   s3sync:
     image: mddash-s3sync
+  mdrepoUploader:
+    image: mddash-mdrepo-uploader
 
 # S3 object storage configuration
 s3:

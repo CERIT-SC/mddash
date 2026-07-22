@@ -45,3 +45,17 @@ ignore = [
     "too-many-statements-in-try-clause",    # complex handlers shouldn't be force-split artificially
     "undocumented-public-function",    # test functions don't need docstrings, descriptive names suffice
 ]
+
+[lint.per-file-ignores]
+# Test files — mock-injected params, inline imports, and magic values are idiomatic
+"**/tests/**" = [
+    "ARG",                              # mock decorators inject params that tests don't reference
+    "PTH",                              # os.path is fine in test fixtures
+    "magic-value-comparison",           # literal values in assertions are clearer than constants
+    "compare-to-empty-string",          # `== ""` reads better than `not` in assertions
+    "DOC",                              # test functions don't need docstring content validation
+    "typing-only-standard-library-import",  # inline imports in tests are intentional
+    "too-many-arguments",               # mock decorators inflate parameter counts
+    "private-member-access",            # tests routinely access private members
+    "import-outside-top-level",         # deferred imports avoid import-order side effects in tests
+]

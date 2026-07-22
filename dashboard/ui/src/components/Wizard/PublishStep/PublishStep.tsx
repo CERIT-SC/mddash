@@ -18,10 +18,10 @@ import { toast } from "sonner"
 import { DEBUG, Engine, MDPOSIT_URL } from "@/util/const"
 import { formatFileSize } from "@/util/helpers"
 import { simulationMdpositUnavailableReason } from "@/util/simulation"
-import { type Experiment, type Simulation } from "@/util/types"
+import { type Experiment, type Simulation, type UploadState } from "@/util/types"
 import { useFiles } from "@/hooks/use-files"
 import { useMdPositPublishData, type MdPositHandoffFile } from "@/hooks/use-mdposit"
-import { getMDRepoAuthUrl, useMDRepoStatus, usePublishExperiment } from "@/hooks/use-mdrepo"
+import { getMDRepoAuthUrl, useMDRepoStatus, usePublishExperiment, usePublishStatus } from "@/hooks/use-mdrepo"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -83,9 +83,17 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
   const { data: files = [], isLoading: loadingFiles } = useFiles(experiment.id)
   const publishExperiment = usePublishExperiment()
 
+  const hasDraft = experiment.mdrepo_id !== null
   const isAuthenticated = mdrepoStatus?.authenticated ?? false
-  const isPublished = experiment.mdrepo_id !== null
   const isLoading = loadingAuth || loadingFiles
+
+  // Poll whenever there's a draft and the upload isn't terminal.
+  const isPolling = hasDraft && experiment.upload_state !== "completed" && experiment.upload_state !== "failed"
+  const { data: publishStatus } = usePublishStatus(experiment.id, isPolling)
+
+  // Use the polled status as the source of truth when available, falling back
+  // to the experiment cache (set on publish success or page load).
+  const uploadState: UploadState | null = publishStatus?.upload_state ?? experiment.upload_state ?? null
 
   const fileCount = files.length
   const totalSize = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files])
@@ -115,7 +123,7 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
   }
 
   const handlePublishClick = () => {
-    if (isPublished) {
+    if (hasDraft && uploadState === "completed") {
       if (!isAuthenticated) {
         toast.error("You need to authenticate with MDRepo to view the published experiment.")
         return
@@ -126,35 +134,57 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
 
     publishExperiment.mutate(experiment.id, {
       onSuccess: (data) => {
-        const recordUrl = data.links?.edit_html || data.links?.self_html
+        const recordUrl = data.draft_url || data.links?.edit_html || data.links?.self_html
         queryClient.setQueryData<Experiment>(["experiment", experiment.id], (old) =>
           old
             ? {
                 ...old,
                 mdrepo_id: data.id,
                 mdrepo_record_url: recordUrl || old.mdrepo_record_url,
+                upload_state: data.upload_state ?? old.upload_state,
               }
             : old
         )
+        queryClient.invalidateQueries({ queryKey: ["publish", "status", experiment.id] })
         if (recordUrl) window.open(recordUrl, "_blank")
         else if (experiment.mdrepo_record_url) window.open(experiment.mdrepo_record_url, "_blank")
       },
     })
   }
 
+  const isUploadComplete = uploadState === "completed"
+  const isUploadFailed = uploadState === "failed"
+  const isUploadActive = uploadState === "queued" || uploadState === "running"
+
+  const statusFiles = publishStatus?.total_files ?? 0
+  const statusCompleted = publishStatus?.completed_files ?? 0
+  const statusTotalBytes = publishStatus?.total_bytes ?? 0
+  const statusCompletedBytes = publishStatus?.completed_bytes ?? 0
+  const progressPercent = statusFiles > 0 ? Math.round((statusCompleted / statusFiles) * 100) : 0
+
   return (
     <>
       {/* Status banner */}
       <div
         className={`w-full rounded-md border p-3 text-sm ${
-          isPublished
+          isUploadComplete
             ? "border-green-500 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-200"
-            : "border-blue-400 bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200"
+            : isUploadFailed
+              ? "border-red-400 bg-red-50 text-red-800 dark:bg-red-950 dark:text-red-200"
+              : hasDraft
+                ? "border-yellow-400 bg-yellow-50 text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200"
+                : "border-blue-400 bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-200"
         }`}
       >
-        {isPublished
-          ? "This experiment is already published to MDRepo. Click below to view or edit the published version."
-          : "Publishing will upload your experiment data to MDRepo, making it publicly accessible and citable with a DOI."}
+        {isUploadComplete
+          ? "Upload complete. Your experiment data has been published to MDRepo."
+          : isUploadFailed
+            ? "Upload failed. You can retry the publication — your draft and already-uploaded files are preserved."
+            : hasDraft && isUploadActive
+              ? "Files are being uploaded to MDRepo in the background. The draft is openable but incomplete."
+              : hasDraft
+                ? "A draft exists in MDRepo. Click below to view or retry the upload."
+                : "Publishing will upload your experiment data to MDRepo, making it publicly accessible and citable with a DOI."}
       </div>
 
       {/* Stats */}
@@ -175,22 +205,65 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
             <span className="text-muted-foreground font-medium">Total Size:</span>
             <span>{formatFileSize(totalSize)}</span>
           </div>
-          {isPublished && (
+          {isUploadComplete && (
             <div className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground font-medium">Status:</span>
               <Badge className="gap-1 bg-green-500 text-xs text-white">
                 <CheckCircle className="h-3 w-3" />
-                Published
+                Uploaded
               </Badge>
+            </div>
+          )}
+          {isUploadFailed && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground font-medium">Status:</span>
+              <Badge className="gap-1 bg-red-500 text-xs text-white">Upload Failed</Badge>
             </div>
           )}
           {!isAuthenticated && (
             <div className="rounded-md border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
               You need to authenticate with MDRepo to{" "}
-              {isPublished ? "view or edit the published experiment" : "publish your experiment"}. This is a one-time
+              {hasDraft ? "view or edit the published experiment" : "publish your experiment"}. This is a one-time
               authorization using your e-INFRA CZ account.
             </div>
           )}
+        </div>
+      )}
+
+      {/* Upload progress */}
+      {isUploadActive && publishStatus && (
+        <div className="w-full space-y-2 rounded-md border p-3">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {uploadState === "queued"
+              ? "Upload queued, waiting for pod..."
+              : `Uploading files... (${statusCompleted}/${statusFiles})`}
+          </div>
+          {statusFiles > 0 && (
+            <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
+              <div
+                className="h-full bg-blue-500 transition-all"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          )}
+          <div className="text-muted-foreground text-xs">
+            {formatFileSize(statusCompletedBytes)} / {formatFileSize(statusTotalBytes)}
+          </div>
+        </div>
+      )}
+
+      {/* Failed files list */}
+      {isUploadFailed && publishStatus?.failed_files && publishStatus.failed_files.length > 0 && (
+        <div className="w-full space-y-1 rounded-md border border-red-300 p-3 text-sm">
+          <p className="font-medium">Failed files:</p>
+          <ul className="text-muted-foreground space-y-1">
+            {publishStatus.failed_files.slice(0, 10).map((f, i) => (
+              <li key={i} className="truncate">
+                {f.key || "(general)"}: {f.error}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -205,24 +278,31 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
           variant="default"
           size="lg"
           onClick={handlePublishClick}
-          disabled={publishExperiment.isPending || isLoading}
+          disabled={publishExperiment.isPending || isLoading || isUploadActive}
           className="min-w-48"
         >
           {publishExperiment.isPending ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : isPublished ? (
+          ) : isUploadComplete ? (
             <Pencil className="mr-2 h-4 w-4" />
+          ) : isUploadFailed ? (
+            <CloudUpload className="mr-2 h-4 w-4" />
           ) : (
             <CloudUpload className="mr-2 h-4 w-4" />
           )}
-          {isPublished ? "View in MDRepo" : "Publish to MDRepo"}
+          {isUploadComplete
+            ? "View in MDRepo"
+            : isUploadFailed
+              ? "Retry Upload"
+              : hasDraft
+                ? "Retry Upload"
+                : "Publish to MDRepo"}
         </Button>
       )}
 
-      {!isPublished && isAuthenticated && (
+      {hasDraft && !isUploadComplete && isAuthenticated && (
         <p className="text-muted-foreground text-center text-xs">
-          After clicking the button, you'll be redirected to MDRepo to complete the metadata and finalize the
-          publication. Your files will be uploaded in the background.
+          The MDRepo draft is openable immediately. A warning is shown until the upload completes.
         </p>
       )}
     </>

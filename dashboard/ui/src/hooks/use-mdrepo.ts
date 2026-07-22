@@ -3,18 +3,11 @@ import { toast } from "sonner"
 
 import { api } from "@/lib/http"
 import { API_BASE } from "@/util/const"
+import type { PublishResponse, PublishStatus } from "@/util/types"
 
 interface MDRepoStatus {
   authenticated: boolean
   mdrepo_url?: string
-}
-
-export interface PublishResponse {
-  id: string
-  links?: {
-    edit_html?: string
-    self_html?: string
-  }
 }
 
 export function getMDRepoAuthUrl(returnUrl: string): string {
@@ -32,5 +25,20 @@ export function usePublishExperiment() {
   return useMutation<PublishResponse, Error, string>({
     mutationFn: (id) => api.post(`/experiments/${id}/publish`).then((r) => r.data),
     onError: (error: Error) => toast.error(error.message),
+  })
+}
+
+export function usePublishStatus(experimentId: string | undefined, enabled: boolean) {
+  return useQuery<PublishStatus>({
+    queryKey: ["publish", "status", experimentId],
+    queryFn: () => api.get(`/experiments/${experimentId}/publish/status`).then((r) => r.data),
+    enabled: !!experimentId && enabled,
+    refetchInterval: (query) => {
+      const state = query.state.data?.upload_state
+      if (state === "queued" || state === "running") {
+        return 3000
+      }
+      return false
+    },
   })
 }
