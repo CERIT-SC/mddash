@@ -35,7 +35,6 @@ from upload.status import (
     read_status,
 )
 from upload.submission import (
-    build_credential_secret_data,
     delete_upload_resources,
     is_upload_active,
     submit_upload_job,
@@ -591,16 +590,16 @@ class Experiment(db.Model):  # type: ignore
         attempt_id = submit_upload_job(
             experiment_id=self.id,
             mdrepo_id=mdrepo_id,
-            credential_data=build_credential_secret_data(
-                access_token=access_token,
-                refresh_token=session.get("mdrepo_refresh_token", ""),
-                token_expires_at=float(session.get("mdrepo_token_expires_at", 0)),
-                client_id=MDREPO_CLIENT_ID,
-                client_secret=MDREPO_CLIENT_SECRET,
-                api_url=MDREPO_API_URL,
-                record_name=MDREPO_RECORD_NAME,
-                token_url=MDREPO_TOKEN_URL,
-            ),
+            credential_data={
+                "access_token": access_token,
+                "refresh_token": session.get("mdrepo_refresh_token", ""),
+                "expires_at": str(session.get("mdrepo_token_expires_at", 0)),
+                "client_id": MDREPO_CLIENT_ID,
+                "client_secret": MDREPO_CLIENT_SECRET,
+                "api_url": MDREPO_API_URL,
+                "record_name": MDREPO_RECORD_NAME,
+                "token_url": MDREPO_TOKEN_URL,
+            },
             data_dir=DATA_DIR,
         )
 

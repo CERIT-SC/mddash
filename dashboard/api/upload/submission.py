@@ -3,6 +3,10 @@ Durable MDRepo upload Kubernetes Job submission.
 
 The Job name is deterministic by experiment ID, so a repeated publish request
 returns the existing Job instead of creating a duplicate.
+
+Credentials are passed to the worker via container environment variables.
+The values come from the API sidecar's session/config and are embedded in the
+Job manifest; this avoids Kubernetes Secrets and keeps the implementation simple.
 """
 
 from __future__ import annotations
@@ -66,50 +70,32 @@ def job_name(experiment_id: str) -> str:
     return _dns1123_name("mdrepo-upload", experiment_id)
 
 
-def secret_name(experiment_id: str) -> str:
-    """
-    Deterministic name for an experiment's upload Secret.
-
-    Returns:
-        DNS-1123 compliant name.
-    """
-    return _dns1123_name("mdrepo-upload-cred", experiment_id)
-
-
-def build_credential_secret_data(
-    access_token: str,
-    refresh_token: str,
-    token_expires_at: float,
-    client_id: str,
-    client_secret: str,
-    api_url: str,
-    record_name: str,
-    token_url: str,
-) -> dict[str, str]:
-    """
-    Build credential string data for the upload Secret.
-
-    Only OAuth credentials and MDRepo endpoint info. The worker receives
-    experiment_id, mdrepo_id, and attempt_id as CLI arguments, so they must
-    not appear in the Secret (visible in the API object).
-
-    Returns:
-        Env-var key-value pairs for the Secret.
-    """
-    return {
-        "MDREPO_ACCESS_TOKEN": access_token,
-        "MDREPO_REFRESH_TOKEN": refresh_token,
-        "MDREPO_TOKEN_EXPIRES_AT": str(token_expires_at),
-        "MDREPO_CLIENT_ID": client_id,
-        "MDREPO_CLIENT_SECRET": client_secret,
-        "MDREPO_API_URL": api_url,
-        "MDREPO_RECORD_NAME": record_name,
-        "MDREPO_TOKEN_URL": token_url,
-    }
-
-
 class SubmissionError(Exception):
     """Raised when upload Job submission fails."""
+
+
+def build_credential_env(credential_data: dict[str, str]) -> list[dict[str, Any]]:
+    """
+    Convert credential data to a container `env` list.
+
+    The values are embedded directly in the Job manifest for simplicity. This
+    is acceptable because the Job runs in the user's own namespace and the
+    values are the user's own MDRepo tokens.
+
+    Returns:
+        List of {"name": ..., "value": ...} dicts for the container spec.
+    """
+    key_map = {
+        "access_token": "MDREPO_ACCESS_TOKEN",
+        "refresh_token": "MDREPO_REFRESH_TOKEN",
+        "expires_at": "MDREPO_TOKEN_EXPIRES_AT",
+        "client_id": "MDREPO_CLIENT_ID",
+        "client_secret": "MDREPO_CLIENT_SECRET",
+        "api_url": "MDREPO_API_URL",
+        "record_name": "MDREPO_RECORD_NAME",
+        "token_url": "MDREPO_TOKEN_URL",
+    }
+    return [{"name": key_map[key], "value": value} for key, value in credential_data.items()]
 
 
 def submit_upload_job(
@@ -123,8 +109,8 @@ def submit_upload_job(
 
     If the Job already exists and is active, returns the existing attempt ID
     without creating a new one. Otherwise: generates a fresh attempt ID, writes
-    queued status to the PVC, creates the Secret and Job, and waits for pod
-    admission. On failure, cleans up all created resources.
+    queued status to the PVC, creates the Job with credentials in container env,
+    and waits for pod admission. On failure, cleans up all created resources.
 
     Returns:
         The attempt ID.
@@ -133,7 +119,6 @@ def submit_upload_job(
         SubmissionError: If submission fails before pod admission.
     """
     j_name = job_name(experiment_id)
-    s_name = secret_name(experiment_id)
 
     existing_status = _read_attempt_id(experiment_id, data_dir)
     if is_upload_active(experiment_id):
@@ -166,9 +151,16 @@ def submit_upload_job(
         "imagePullPolicy": IMAGE_PULL_POLICY,
         "resources": UPLOAD_RESOURCES,
         "command": ["python", "/worker.py"],
-        "args": ["--experiment-id", experiment_id, "--mdrepo-id", mdrepo_id, "--attempt-id", attempt_id],
+        "args": [
+            "--experiment-id",
+            experiment_id,
+            "--mdrepo-id",
+            mdrepo_id,
+            "--attempt-id",
+            attempt_id,
+        ],
+        "env": build_credential_env(credential_data),
         "volumeMounts": [{"mountPath": "/mddash", "name": "shared-data"}],
-        "envFrom": [{"secretRef": {"name": s_name}}],
     }
 
     job_manifest: dict[str, Any] = {
@@ -198,8 +190,6 @@ def submit_upload_job(
     }
 
     try:
-        # Secret must exist before the pod starts (envFrom at startup).
-        k8s.create_secret(s_name, credential_data)
         k8s.create_job_raw(job_manifest)
 
         label_selector = f"{EXPERIMENT_LABEL}={experiment_id}"
@@ -236,13 +226,10 @@ def is_upload_active(experiment_id: str) -> bool:
 
 
 def delete_upload_resources(experiment_id: str) -> None:
-    """Foreground-delete the Job and explicitly delete the credential Secret."""
+    """Foreground-delete the upload Job."""
     j_name = job_name(experiment_id)
-    s_name = secret_name(experiment_id)
     k8s.delete_job_foreground(j_name)
-    k8s.delete_secret(s_name)
     k8s.wait_for_resource_absence("job", j_name, timeout=30)
-    k8s.wait_for_resource_absence("secret", s_name, timeout=10)
 
 
 def _read_attempt_id(experiment_id: str, data_dir: Path) -> str | None:

@@ -211,7 +211,7 @@ class WorkerTokenManager:
     """Manage OAuth2 token refresh for the upload worker lifetime."""
 
     def __init__(self) -> None:
-        """Load credentials from environment variables set via the K8s Secret."""
+        """Load credentials from environment variables set by the API Job manifest."""
         self.access_token = os.environ.get("MDREPO_ACCESS_TOKEN", "")
         self.refresh_token = os.environ.get("MDREPO_REFRESH_TOKEN", "")
         self.client_id = os.environ.get("MDREPO_CLIENT_ID", "")

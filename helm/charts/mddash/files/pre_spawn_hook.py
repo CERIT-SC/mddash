@@ -68,12 +68,6 @@ def _get_role_manifest(role_name: str, include_pvc: bool = False) -> dict:
             {"apiGroups": [""], "resources": resources, "verbs": ["create", "delete", "get", "list", "watch"]},
             {"apiGroups": [""], "resources": ["pods/log"], "verbs": ["get", "list"]},
             {
-                # MDRepo upload Jobs create Secrets for credential passing.
-                "apiGroups": [""],
-                "resources": ["secrets"],
-                "verbs": ["create", "get", "delete"],
-            },
-            {
                 "apiGroups": ["batch"],
                 "resources": ["jobs"],
                 "verbs": ["create", "get", "list", "watch", "update", "patch", "delete"],

@@ -8,7 +8,7 @@ Flask REST API that orchestrates molecular dynamics experiments across Kubernete
 
 - Business logic lives on SQLAlchemy models (e.g. `Experiment.from_pdb()`, `Experiment.publish()`).
 - Use `@handle_exceptions()` on JSON route handlers; set `rollback=True` on routes that modify the DB. Success returns `jsonify(data)`; errors raise `HTTPException` which `@handle_exceptions` converts to `{detail: "..."}`. Redirect-only OAuth routes handle redirects directly (no decorator).
-- MDRepo file uploads run in daemon threads (`mdrepo.start_upload_worker()`); no async framework.
+- MDRepo file uploads run as durable Kubernetes Jobs (`upload/submission.py`); credentials are passed to the worker via container environment variables in the Job manifest.
 
 ## Non-Obvious Gotchas
 

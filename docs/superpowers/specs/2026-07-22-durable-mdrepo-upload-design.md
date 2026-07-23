@@ -56,23 +56,23 @@ The worker mounts the existing per-user `ReadWriteMany` PVC at `/mddash`. It run
 
 Each upload uses deterministic names derived from the local experiment and MDRepo draft IDs:
 
-- one Kubernetes Job;
-- one credential Secret owned by that Job; and
+- one Kubernetes Job; and
 - one pod created by the Job controller.
 
-The Job and pod template carry `mddash.io/preserve-on-stop=true` and labels identifying the experiment and unique attempt ID. Defaults are `restartPolicy: Never`, `backoffLimit: 0`, `activeDeadlineSeconds: 86400`, and `ttlSecondsAfterFinished: 300`; deployment configuration can override the two time limits. All recoverable network behavior is retried inside the worker so Kubernetes never starts a second process with stale rotated credentials or a different file listing. After the five-minute TTL, Kubernetes asynchronously deletes the finished Job and owner-bound Secret; controller delays mean deletion is eventual rather than bounded to exactly five minutes.
+OAuth credentials are passed to the worker via container environment variables in the Job manifest.
 
-Submission uses a suspended Job to establish ownership safely:
+The Job and pod template carry `mddash.io/preserve-on-stop=true` and labels identifying the experiment and unique attempt ID. Defaults are `restartPolicy: Never`, `backoffLimit: 0`, `activeDeadlineSeconds: 86400`, and `ttlSecondsAfterFinished: 300`; deployment configuration can override the two time limits. All recoverable network behavior is retried inside the worker so Kubernetes never starts a second process with stale rotated credentials or a different file listing. After the five-minute TTL, Kubernetes asynchronously deletes the finished Job; controller delays mean deletion is eventual rather than bounded to exactly five minutes.
+
+Submission creates the Job directly with credentials in container env:
 
 1. Create or reconcile the suspended Job and obtain its UID.
-2. Create or reconcile the Secret with an owner reference to that Job.
-3. Unsuspend the Job.
-4. Wait up to 30 seconds for its pod object to be admitted.
-5. Return `202 Accepted`.
+2. Unsuspend the Job with credentials supplied via container `env`.
+3. Wait up to 30 seconds for its pod object to be admitted.
+4. Return `202 Accepted`.
 
-A failure before step 5 is not an acknowledged handoff. An admission timeout foreground-deletes the Job, waits for its pod and owner-bound Secret to disappear, and records a failed submission reason. Repeating the publish request reconciles a suspended submission or starts a new attempt without creating another draft.
+A failure before step 4 is not an acknowledged handoff. An admission timeout foreground-deletes the Job, waits for its pod to disappear, and records a failed submission reason. Repeating the publish request reconciles a suspended submission or starts a new attempt without creating another draft.
 
-Suspended Jobs carry a five-minute submission-lease annotation. API startup, each publish request, and the JupyterHub pre-spawn hook foreground-delete expired suspended submissions. The post-stop hook foreground-deletes every suspended or otherwise unadmitted upload Job because none has crossed the acknowledged handoff boundary. This bounds credential retention if the API exits between Secret creation and Job unsuspension.
+Suspended Jobs carry a five-minute submission-lease annotation. API startup, each publish request, and the JupyterHub pre-spawn hook foreground-delete expired suspended submissions. The post-stop hook foreground-deletes every suspended or otherwise unadmitted upload Job because none has crossed the acknowledged handoff boundary.
 
 ### Server Shutdown And Quota
 
@@ -84,14 +84,14 @@ The durability guarantee starts at the `202 Accepted` response because that resp
 
 ### Credentials And RBAC
 
-The short-lived Secret contains only values required by the worker:
+Credentials are passed to the worker via container environment variables in the Job manifest. The variables contain only values required by the worker:
 
 - MDRepo access token, refresh token, access-token expiry, client ID, and client secret;
 - the MDRepo API URL and record collection where appropriate.
 
-The Secret is mounted as read-only data or exposed through `secretKeyRef`; credentials must not appear as literal values in the Job specification, labels, annotations, logs, status documents, or API responses.
+This avoids creating Kubernetes Secrets and keeps the implementation simple. The values are visible in the Job manifest, but the Job runs in the user's own namespace and the values are the user's own MDRepo tokens. Credentials must not appear in logs, status documents, or API responses.
 
-The user pod's existing default service account is the submitter. Its namespace Role gains only `create`, `patch`, and `delete` on Secrets; it already manages Jobs in that user's namespace. The notebook and API sidecars already share this namespace identity and the API already receives the MDRepo client secret, so the per-user pod and namespace remain one trust boundary. This design does not grant cross-tenant access, but it does not attempt to isolate platform credentials from code run by that same user. Achieving that stronger boundary requires moving the API to a separate pod identity or introducing a trusted broker, both outside this design. The uploader Job uses a dedicated `mdrepo-uploader` service account with `automountServiceAccountToken: false` and no RBAC bindings. Kubelet can mount the referenced Secret without granting the uploader Kubernetes API access.
+The user pod's existing default service account continues to manage Jobs in its namespace; no Secrets permission is added. The notebook and API sidecars already share this namespace identity and the API already receives the MDRepo client secret, so the per-user pod and namespace remain one trust boundary. This design does not grant cross-tenant access, but it does not attempt to isolate platform credentials from code run by that same user. Achieving that stronger boundary requires moving the API to a separate pod identity or introducing a trusted broker, both outside this design. The uploader Job uses `automountServiceAccountToken: false` and no RBAC bindings, so the uploader pod has no Kubernetes API access.
 
 ## API Flow
 
@@ -101,11 +101,11 @@ The user pod's existing default service account is the submitter. Its namespace 
 2. Atomically reserve publication on the experiment row with a conditional database update, recording `creating`, an attempt ID, and a short creation lease. A concurrent request that loses this compare-and-set returns the existing operation instead of calling MDRepo.
 3. If `mdrepo_id` is absent, extract metadata and create one Invenio draft, then persist its ID immediately. If it already identifies a draft with an incomplete or failed upload, reuse it.
 4. Atomically write the attempt's queued state in the experiment directory on the PVC.
-5. Reconcile and start the Secret and Job.
+5. Start the Job with credentials in the container `env`.
 6. Wait for the upload pod to be admitted.
 7. Mark the durable handoff on the experiment row and return `202 Accepted` with the existing draft metadata, draft URL, upload ID, and queued/running state.
 
-The experiment model gains upload attempt, state, and creation-lease fields through a database migration. They serialize concurrent Gunicorn threads and survive process restart. A published MDRepo record cannot be retried as a draft upload. An active upload returns its existing identity and does not rewrite status. A failed upload can be retried through the same publish operation and targets the same draft. Before retrying, the API foreground-deletes the old Job, waits for its pod and Secret to disappear, and creates a new attempt ID.
+The experiment model gains upload attempt, state, and creation-lease fields through a database migration. They serialize concurrent Gunicorn threads and survive process restart. A published MDRepo record cannot be retried as a draft upload. An active upload returns its existing identity and does not rewrite status. A failed upload can be retried through the same publish operation and targets the same draft. Before retrying, the API foreground-deletes the old Job, waits for its pod to disappear, and creates a new attempt ID.
 
 Add `GET /experiments/<experiment_id>/publish/status`. It merges the durable PVC state document with live Job state when the Job still exists. The PVC document is authoritative for completed worker output; Kubernetes is authoritative for pending, active, and controller-level failure conditions that prevented the worker from recording a terminal state.
 
@@ -133,7 +133,7 @@ Remote draft files that are absent from the local listing are left untouched bec
 
 ## OAuth Refresh
 
-The worker owns a request-independent token manager initialized from the Secret. Before each MDRepo operation it refreshes the access token when it is expired or within the configured safety window. A `401 Unauthorized` causes one refresh and replay when a refresh token is available.
+The worker owns a request-independent token manager initialized from container environment variables. Before each MDRepo operation it refreshes the access token when it is expired or within the configured safety window. A `401 Unauthorized` causes one refresh and replay when a refresh token is available.
 
 Refreshed tokens remain in worker memory. Refresh-token rotation is honored for the lifetime of that process. Kubernetes does not restart the worker, and replacement-process recovery after quota reaches zero is outside scope, so persisting rotated refresh tokens back to Kubernetes is unnecessary for this design.
 
@@ -175,8 +175,8 @@ After `POST /publish` returns, the UI immediately opens the MDRepo draft, preser
 
 ## Error Cases
 
-- Draft creation failure creates neither a Secret nor a Job.
-- Secret or Job creation failure preserves the existing draft and records a retryable submission failure without creating another draft.
+- Draft creation failure creates neither env vars nor a Job.
+- Job creation failure preserves the existing draft and records a retryable submission failure without creating another draft.
 - API termination before `202 Accepted` leaves an unacknowledged operation that the next request or lifecycle-hook lease cleanup reconciles.
 - API termination after MDRepo creates a draft but before its ID is persisted can leave an orphan remote draft; see Accepted Limitations.
 - Missing experiment directories and empty eligible file sets fail rather than producing a misleading successful upload.
@@ -209,7 +209,7 @@ After `POST /publish` returns, the UI immediately opens the MDRepo draft, preser
 - repeated and interrupted submissions reconcile deterministic resources;
 - concurrent publish requests create only one active local operation;
 - failed uploads retry against the same draft;
-- Secret values are referenced, never embedded in Job manifests;
+- Credentials passed via container `env` in the Job manifest;
 - suspended Job, owner reference, unsuspend, and pod-admission ordering;
 - bounded admission timeout and foreground cleanup;
 - expired submission-lease cleanup at startup and lifecycle hooks;
@@ -227,7 +227,7 @@ After `POST /publish` returns, the UI immediately opens the MDRepo draft, preser
 - preserve-on-stop labels on Job and pod template;
 - post-stop deletion excludes upload pods;
 - quota is still reduced to zero after normal server stop;
-- Job and Secret TTL ownership cleanup; and
+- Job TTL cleanup; and
 - an admitted upload pod remains after invoking `post_stop_hook` and completes while quota is zero.
 
 ### UI Tests
@@ -250,7 +250,8 @@ After `POST /publish` returns, the UI immediately opens the MDRepo draft, preser
 - Kubernetes does not restart a failed uploader process; application-level retries remain inside one process and user retry creates a fenced new attempt.
 - Partial uploads are reported as failed, not completed.
 - Upload status remains readable from the PVC after API restart and after Kubernetes TTL cleanup.
-- Job manifests, status files, API responses, and logs contain no OAuth credentials.
+- Status files, API responses, and logs contain no OAuth credentials.
+- No Kubernetes Secret is created for upload credentials.
 
 ## Accepted Limitations
 

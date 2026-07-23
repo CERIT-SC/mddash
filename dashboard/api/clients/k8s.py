@@ -773,53 +773,6 @@ def wait_for_job(
     thread.start()
 
 
-def create_secret(name: str, string_data: dict[str, str]) -> None:
-    """
-    Delete and recreate if the Secret already exists (stale credentials from a previous attempt).
-
-    Raises:
-        ApiException: If creation fails for a reason other than 409.
-    """
-    manifest: dict[str, object] = {
-        "apiVersion": "v1",
-        "kind": "Secret",
-        "metadata": {"name": name, "namespace": NAMESPACE},
-        "type": "Opaque",
-        "stringData": string_data,
-    }
-
-    core_v1 = get_core_v1()
-    try:
-        core_v1.create_namespaced_secret(namespace=NAMESPACE, body=manifest)
-    except ApiException as e:
-        if e.status != HTTPStatus.CONFLICT:
-            raise
-        # Secret exists from a previous attempt — delete and recreate with fresh credentials.
-        try:
-            core_v1.delete_namespaced_secret(name=name, namespace=NAMESPACE)
-        except ApiException as del_e:
-            if del_e.status != HTTPStatus.NOT_FOUND:
-                raise
-        core_v1.create_namespaced_secret(namespace=NAMESPACE, body=manifest)
-
-
-def delete_secret(name: str) -> None:
-    """
-    No-op if not found.
-
-    Raises:
-        ApiException: If the delete fails for a reason other than 404.
-    """
-    if not ping_resource("secret", name):
-        return
-    core_v1 = get_core_v1()
-    try:
-        core_v1.delete_namespaced_secret(name=name, namespace=NAMESPACE)
-    except ApiException as e:
-        if e.status != HTTPStatus.NOT_FOUND:
-            raise
-
-
 def read_job(name: str) -> object | None:
     """
     Return None if not found (404).
