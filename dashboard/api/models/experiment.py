@@ -14,13 +14,21 @@ import yaml
 from cache import mdrepo_status_cache, step_status_cache
 from cachetools import cached
 from clients import mdposit, mdrepo, metadump
-from config import API_PREFIX, DATA_DIR, MDPOSIT_URL, MDPOSIT_VRE_LITE_URL, MDREPO_RECORD_NAME, MDREPO_URL
+from config import (
+    API_PREFIX,
+    DATA_DIR,
+    MDPOSIT_URL,
+    MDPOSIT_VRE_LITE_URL,
+    MDREPO_RECORD_NAME,
+    MDREPO_URL,
+)
 from enums import Engine, JobStatus, PodStatus
 from extensions import db
 from flask import session
+from notebook_modules import NotebookModule
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from token_manager import MDRepoTokenManager
-from utils import download_git_repo, get_unique_id
+from utils import download_git_repo, download_git_repo_module, get_unique_id
 from validators import validate_fetch_target, validate_http_url
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
@@ -270,15 +278,17 @@ class Experiment(db.Model):  # type: ignore
         return None
 
     @classmethod
-    def prepare_env(cls, notebooks_repo: str, access_token: str | None = None) -> str:
+    def prepare_env(
+        cls,
+        notebooks_repo: str,
+        access_token: str | None = None,
+        notebook_module: NotebookModule | None = None,
+    ) -> str:
         """
-        Prepare environment directory for new experiment.
+        Create a unique experiment directory and populate it with notebooks.
 
-        Creates a unique experiment directory and clones the notebooks repository into it.
-
-        Args:
-            notebooks_repo: Git repository URL containing setup notebooks.
-            access_token: Optional GitHub access token for private repositories.
+        Curated mode (``notebook_module`` set) sparse-checks out the module (root-path
+        ``"."`` uses full clone); custom mode clones the whole repository.
 
         Returns:
             The unique experiment ID.
@@ -287,7 +297,13 @@ class Experiment(db.Model):  # type: ignore
         experiment_dir = DATA_DIR / experiment_id
         experiment_dir.mkdir(parents=True, exist_ok=True)
         try:
-            download_git_repo(notebooks_repo, experiment_dir, access_token)
+            if notebook_module is not None:
+                if notebook_module.is_root:
+                    download_git_repo(notebooks_repo, experiment_dir, access_token)
+                else:
+                    download_git_repo_module(notebooks_repo, notebook_module.path, experiment_dir, access_token)
+            else:
+                download_git_repo(notebooks_repo, experiment_dir, access_token)
         except Exception:
             rmtree(experiment_dir, ignore_errors=True)
             raise
@@ -324,6 +340,7 @@ class Experiment(db.Model):  # type: ignore
         notebooks_repo: str,
         access_token: str | None = None,
         engine: Engine = Engine.GMX,
+        notebook_module: NotebookModule | None = None,
     ) -> "Experiment":
         """
         Create experiment from a PDB ID or a direct URL to a PDB file.
@@ -337,8 +354,9 @@ class Experiment(db.Model):  # type: ignore
             name: Name of the experiment.
             pdb_source: PDB ID (e.g., 1A2B) or a direct URL to a PDB file.
             notebooks_repo: Git repository URL containing setup notebooks.
-            access_token: Optional GitHub access token for private repositories.
+            access_token: Optional access token for private repositories.
             engine: Molecular dynamics engine (default: GMX).
+            notebook_module: Optional curated module for selective checkout.
 
         Returns:
             The created Experiment instance.
@@ -347,7 +365,7 @@ class Experiment(db.Model):  # type: ignore
             NotFound: If the PDB ID or URL is not found.
             InternalServerError: If the PDB file download fails.
         """
-        experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
+        experiment_id: str = cls.prepare_env(notebooks_repo, access_token, notebook_module)
         source = pdb_source.strip()
         is_url = bool(urlparse(source).scheme)
 
@@ -393,6 +411,7 @@ class Experiment(db.Model):  # type: ignore
         notebooks_repo: str,
         access_token: str | None = None,
         engine: Engine = Engine.GMX,
+        notebook_module: NotebookModule | None = None,
     ) -> "Experiment":
         """
         Create experiment from a supported repository URL.
@@ -401,13 +420,14 @@ class Experiment(db.Model):  # type: ignore
             name: Name of the experiment.
             repo_link: Repository record URL.
             notebooks_repo: Git repository URL containing setup notebooks.
-            access_token: Optional GitHub access token for private repositories.
+            access_token: Optional access token for private repositories.
             engine: Molecular dynamics engine (default: GMX).
+            notebook_module: Optional curated module for selective checkout.
 
         Returns:
             The created Experiment instance.
         """
-        experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
+        experiment_id: str = cls.prepare_env(notebooks_repo, access_token, notebook_module)
 
         try:
             resolved_repo_link = _resolve_repo_link(repo_link)
@@ -437,6 +457,7 @@ class Experiment(db.Model):  # type: ignore
         notebooks_repo: str,
         access_token: str | None = None,
         engine: Engine = Engine.GMX,
+        notebook_module: NotebookModule | None = None,
     ) -> "Experiment":
         """
         Create experiment from file uploads with database persistence.
@@ -445,8 +466,9 @@ class Experiment(db.Model):  # type: ignore
             name: Name of the experiment.
             files: List of uploaded files.
             notebooks_repo: Git repository URL containing setup notebooks.
-            access_token: Optional GitHub access token for private repositories.
+            access_token: Optional access token for private repositories.
             engine: Molecular dynamics engine (default: GMX).
+            notebook_module: Optional curated module for selective checkout.
 
         Returns:
             The created Experiment instance.
@@ -457,7 +479,7 @@ class Experiment(db.Model):  # type: ignore
         if not files:
             raise BadRequest(description="No files provided")
 
-        experiment_id: str = cls.prepare_env(notebooks_repo, access_token)
+        experiment_id: str = cls.prepare_env(notebooks_repo, access_token, notebook_module)
 
         try:
             filenames = []

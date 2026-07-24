@@ -1,0 +1,43 @@
+{
+  "$schema": "./notebook-modules.schema.json",
+  "modules": [
+    {
+      "id": "gromacs-protein",
+      "name": "Protein",
+      "description": "Prepare and analyze a solvated protein with GROMACS.",
+      "engine": "GMX",
+      "path": "gromacs/protein"
+    },
+    {
+      "id": "amber-protein",
+      "name": "Protein",
+      "description": "Prepare a solvated protein with AMBER.",
+      "engine": "AMBER",
+      "path": "amber/protein"
+    },
+    {
+      "id": "biobb-protein-gmx",
+      "name": "Protein (BioBB)",
+      "description": "Set up a solvated protein system using BioExcel Building Blocks and GROMACS.",
+      "engine": "GMX",
+      "path": ".",
+      "repository": "https://github.com/bioexcel/biobb_wf_md_setup.git"
+    },
+    {
+      "id": "biobb-protein-amber",
+      "name": "Protein (BioBB)",
+      "description": "Set up a solvated protein system using BioExcel Building Blocks and AmberTools.",
+      "engine": "AMBER",
+      "path": ".",
+      "repository": "https://github.com/bioexcel/biobb_wf_amber.git"
+    },
+    {
+      "id": "biobb-membrane-gmx",
+      "name": "Membrane protein (BioBB)",
+      "description": "Set up a membrane protein system using BioExcel Building Blocks and GROMACS.",
+      "engine": "GMX",
+      "path": ".",
+      "repository": "https://github.com/bioexcel/biobb_wf_md_setup_membrane.git"
+    }
+  ]
+}

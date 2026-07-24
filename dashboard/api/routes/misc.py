@@ -2,6 +2,7 @@ from cache import metrics_cache
 from config import API_PREFIX, CPU_REQUEST_QUOTA, DATA_DIR, MEMORY_REQUEST_QUOTA, PVC_SIZE
 from decorators import handle_exceptions
 from flask import Blueprint, Response, jsonify
+from notebook_modules import load_catalog
 from utils import get_du_size
 
 misc_bp = Blueprint("misc", __name__, url_prefix=API_PREFIX)
@@ -18,6 +19,19 @@ def index() -> Response:
         Response: JSON response confirming the API is running.
     """
     return jsonify("API is up!")
+
+
+@misc_bp.route("/notebook-modules", methods=["GET"])
+@handle_exceptions()
+def get_notebook_modules() -> Response:
+    """
+    Return curated notebook module display metadata (no internal paths or URLs).
+
+    Returns:
+        JSON response with the list of curated notebook modules.
+    """
+    catalog = load_catalog()
+    return jsonify(catalog.to_public())
 
 
 @misc_bp.route("/metrics", methods=["GET"])

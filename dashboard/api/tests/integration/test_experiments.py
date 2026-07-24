@@ -497,6 +497,139 @@ class TestCreateExperiment:
             assert (exp_dir / expected_name_2).exists()
 
 
+class TestCreateExperimentCuratedModule:
+    """Tests for POST /api/experiments with curated notebook module selection."""
+
+    def test_curated_uses_selective_checkout(
+        self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path
+    ) -> None:
+        """Curated creation should use the selective module checkout, not the full clone."""
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo") as mock_full,
+            patch("models.experiment.download_git_repo_module") as mock_module,
+            patch("routes.experiments.DEFAULT_NOTEBOOKS_REPO", "https://github.com/default/repo.git"),
+        ):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = sample_pdb_content
+            mock_get.return_value = mock_response
+
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "Curated Experiment",
+                    "pdb": "1ABC",
+                    "engine": "GMX",
+                    "notebook-module": "gromacs-protein",
+                },
+            )
+
+            assert response.status_code == HTTPStatus.CREATED
+            mock_full.assert_not_called()
+            mock_module.assert_called_once()
+            data = json.loads(response.data)
+            assert data["notebooks_repo"] == "https://github.com/default/repo.git"
+
+    def test_curated_rejects_invalid_module(self, client: FlaskClient, tmp_path: Path) -> None:
+        """Curated creation should reject an unknown or engine-incompatible module ID."""
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo_module") as mock_module,
+        ):
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "file",
+                    "experiment-name": "Invalid Module",
+                    "engine": "AMBER",
+                    "notebook-module": "gromacs-protein",
+                    "simulation-files": [(io.BytesIO(b"content"), "test.gro")],
+                },
+                content_type="multipart/form-data",
+            )
+
+            assert response.status_code == HTTPStatus.BAD_REQUEST
+            mock_module.assert_not_called()
+
+    def test_custom_mode_without_module_uses_full_clone(
+        self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path
+    ) -> None:
+        """Without a module ID, custom mode should use the full clone path."""
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo") as mock_full,
+            patch("models.experiment.download_git_repo_module") as mock_module,
+        ):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = sample_pdb_content
+            mock_get.return_value = mock_response
+
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "Custom Experiment",
+                    "pdb": "1ABC",
+                    "notebooks-repo": "https://github.com/custom/repo.git",
+                },
+            )
+
+            assert response.status_code == HTTPStatus.CREATED
+            mock_full.assert_called_once()
+            mock_module.assert_not_called()
+
+    def test_curated_module_with_repository_stores_module_url(
+        self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path
+    ) -> None:
+        """A curated module with a repository field should store that URL in the experiment."""
+        import notebook_modules  # ruff:ignore[import-outside-top-level]
+
+        binder_module = notebook_modules.NotebookModule(
+            id="binder-gmx",
+            name="Binder",
+            description="d",
+            engine="GMX",
+            path=".",
+            repository="https://github.com/bioexcel/biobb_wf_md_setup_membrane.git",
+        )
+        catalog = notebook_modules.NotebookModulesCatalog(modules=(binder_module,))
+
+        with (
+            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.experiment.download_git_repo") as mock_full,
+            patch("models.experiment.download_git_repo_module") as mock_module,
+            patch("routes.experiments.load_catalog", return_value=catalog),
+        ):
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.content = sample_pdb_content
+            mock_get.return_value = mock_response
+
+            response = client.post(
+                "/dash/api/experiments",
+                data={
+                    "type": "pdb",
+                    "experiment-name": "Binder Experiment",
+                    "pdb": "1ABC",
+                    "engine": "GMX",
+                    "notebook-module": "binder-gmx",
+                },
+            )
+
+            assert response.status_code == HTTPStatus.CREATED
+            data = json.loads(response.data)
+            assert data["notebooks_repo"] == "https://github.com/bioexcel/biobb_wf_md_setup_membrane.git"
+            # Root-path module uses full clone, not sparse checkout
+            mock_full.assert_called_once()
+            mock_module.assert_not_called()
+
+
 class TestEditExperiment:
     """Tests for PATCH /api/experiments/<id>."""
 

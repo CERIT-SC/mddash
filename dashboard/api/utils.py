@@ -2,6 +2,7 @@ import fnmatch
 import logging
 import os
 import random
+import re
 import shutil
 import subprocess
 import tempfile
@@ -12,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-from werkzeug.exceptions import InternalServerError
+from werkzeug.exceptions import InternalServerError, NotFound
 
 logger = logging.getLogger(__name__)
 
@@ -281,63 +282,177 @@ def start_du_monitor(data_dir: Path, initial_delay: float = 0.0) -> None:
 # Timeout for git clone operations (seconds)
 GIT_CLONE_TIMEOUT = 120
 
+# Matches the ``://userinfo@`` segment of a URL so captured git stderr can be scrubbed.
+_URL_USERINFO_RE = re.compile(r"(://)[^@\s/]+(@)")
+
 
 def download_git_repo(git_url: str, target_dir: Path, access_token: str | None = None) -> None:
+    """Shallow-clone a git repository into ``target_dir`` (no subdirectory, no ``.git``)."""
+    target_dir.mkdir(parents=True, exist_ok=True)
+    clone_url = _inject_token(git_url, access_token)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        clone_dir = Path(tmp_dir) / "repo"
+        _git(
+            ["clone", "--depth", "1", "--single-branch", "--no-tags", "--", clone_url, str(clone_dir)],
+            label="clone",
+            secret=access_token,
+        )
+
+        git_dir = clone_dir / ".git"
+        if git_dir.exists():
+            shutil.rmtree(git_dir)
+
+        _move_contents(clone_dir, target_dir)
+
+        logger.info("Downloaded git repository from %s", git_url)
+
+
+def _inject_token(git_url: str, access_token: str | None) -> str:
     """
-    Download files from a git repository without history.
+    Inject an access token into an HTTPS git URL for cloning.
 
-    Files are placed directly in target_dir (no subdirectory, no .git folder).
-    Caller is responsible for validating the URL before calling this function.
+    Returns:
+        The URL with the token embedded, or the original URL if no token applies.
+    """
+    if not access_token or git_url.startswith("git@"):
+        return git_url
+    parsed = urlparse(git_url)
+    if parsed.scheme not in {"http", "https"}:
+        return git_url
+    return parsed._replace(netloc=f"{access_token}@{parsed.netloc}").geturl()
 
-    Args:
-        git_url: Git repository URL to clone.
-        target_dir: Directory to download files to.
-        access_token: Optional access token for private HTTPS repositories.
-                      Not applicable to SSH URLs (git@...).
+
+def _redact(text: str | None, secret: str | None) -> str:
+    """
+    Strip the literal secret and any ``://userinfo@`` segment from git output.
+
+    Returns:
+        The scrubbed text.
+    """
+    if not text:
+        return ""
+    if secret:
+        text = text.replace(secret, "***")
+    return _URL_USERINFO_RE.sub(r"\1***\2", text)
+
+
+def _git(args: list[str], *, cwd: Path | None = None, label: str = "operation", secret: str | None = None) -> None:
+    """
+    Run a git subprocess, logging only the redacted stderr.
 
     Raises:
-        InternalServerError: If git clone fails.
+        InternalServerError: If the git command fails or times out.
+    """
+    try:
+        subprocess.run(
+            ["git", *args],
+            check=True,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=GIT_CLONE_TIMEOUT,
+        )
+    except subprocess.CalledProcessError as e:
+        raw = e.stderr if isinstance(e.stderr, str) else ""
+        detail = _redact((raw or str(e)).strip(), secret)
+        logger.error("Git %s failed: %s", label, detail or "git operation failed")
+        raise InternalServerError(description=f"Git {label} failed: {detail or 'git operation failed'}") from e
+    except subprocess.TimeoutExpired as e:
+        raise InternalServerError(description=f"Git {label} timed out after {GIT_CLONE_TIMEOUT}s") from e
+
+
+def _is_partial_clone_unsupported(exc: BaseException) -> bool:
+    """
+    Return True when the clone failed because the server rejects partial-clone filtering.
+
+    Returns:
+        True for partial-clone failures, False for timeouts/auth/network errors.
+    """
+    cause = exc.__cause__
+    if not isinstance(cause, subprocess.CalledProcessError):
+        return False
+    stderr = cause.stderr if isinstance(cause.stderr, str) else ""
+    text = stderr.lower()
+    return "filter" in text or "partial" in text
+
+
+def _is_outside(path: Path, base: Path) -> bool:
+    """
+    Return True when ``path`` resolves outside ``base`` (e.g. a symlink escape).
+
+    Returns:
+        True if the path escapes the base directory.
+    """
+    try:
+        path.resolve().relative_to(base.resolve())
+    except ValueError:
+        return True
+    return False
+
+
+def _move_contents(src_dir: Path, target_dir: Path) -> None:
+    """Move every entry of ``src_dir`` into ``target_dir``, replacing existing entries."""
+    for item in src_dir.iterdir():
+        dest = target_dir / item.name
+        if dest.exists():
+            shutil.rmtree(dest) if dest.is_dir() else dest.unlink()
+        shutil.move(item, dest)
+
+
+def download_git_repo_module(git_url: str, module_path: str, target_dir: Path, access_token: str | None = None) -> None:
+    """
+    Sparse-checkout a single module subdirectory into ``target_dir``.
+
+    Raises:
+        NotFound: If ``module_path`` does not exist in the repository or escapes the clone.
+        InternalServerError: If a git operation fails or times out.
     """
     target_dir.mkdir(parents=True, exist_ok=True)
-
-    # Inject token into HTTPS URLs
-    clone_url = git_url
-    if access_token and not git_url.startswith("git@"):
-        # Parse and reconstruct URL with token
-        parsed = urlparse(git_url)
-        if parsed.scheme in {"http", "https"}:
-            # Construct authenticated URL: https://token@host/path
-            netloc_with_token = f"{access_token}@{parsed.netloc}"
-            clone_url = parsed._replace(netloc=netloc_with_token).geturl()
+    clone_url = _inject_token(git_url, access_token)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         clone_dir = Path(tmp_dir) / "repo"
 
         try:
-            subprocess.run(
-                ["git", "clone", "--depth", "1", "--single-branch", "--no-tags", "--", clone_url, str(clone_dir)],
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=GIT_CLONE_TIMEOUT,
+            _git(
+                [
+                    "clone",
+                    "--depth",
+                    "1",
+                    "--single-branch",
+                    "--no-tags",
+                    "--no-checkout",
+                    "--filter=blob:none",
+                    "--",
+                    clone_url,
+                    str(clone_dir),
+                ],
+                label="clone",
+                secret=access_token,
+            )
+        except InternalServerError as exc:
+            # Retry only on partial-clone-unsupported; surface all other failures.
+            if not _is_partial_clone_unsupported(exc):
+                raise
+            shutil.rmtree(clone_dir, ignore_errors=True)
+            _git(
+                ["clone", "--depth", "1", "--single-branch", "--no-tags", "--", clone_url, str(clone_dir)],
+                label="clone",
+                secret=access_token,
             )
 
-            git_dir = clone_dir / ".git"
-            if git_dir.exists():
-                shutil.rmtree(git_dir)
+        # Configure sparse checkout for the selected module directory.
+        _git(["sparse-checkout", "init", "--no-cone"], cwd=clone_dir, label="sparse-checkout init", secret=access_token)
+        _git(["sparse-checkout", "set", module_path], cwd=clone_dir, label="sparse-checkout set", secret=access_token)
+        _git(["checkout"], cwd=clone_dir, label="checkout", secret=access_token)
 
-            for item in clone_dir.iterdir():
-                dest = target_dir / item.name
-                if dest.exists():
-                    shutil.rmtree(dest) if dest.is_dir() else dest.unlink()
-                shutil.move(item, dest)
+        # Reject symlink/traversal escapes before copying (could move other tenants' data).
+        clone_root = clone_dir.resolve()
+        module_dir = clone_dir / module_path
+        if not module_dir.resolve().is_dir() or _is_outside(module_dir, clone_root):
+            raise NotFound(description=f"Notebook module path '{module_path}' not found in repository.")
 
-            logger.info("Downloaded git repository from %s", git_url)
+        _move_contents(module_dir, target_dir)
 
-        except subprocess.CalledProcessError as e:
-            stderr = (e.stderr or "").strip() if isinstance(e.stderr, str) else str(e).strip()
-            logger.error("Git clone failed: %s", stderr or str(e))
-            raise InternalServerError(description=f"Failed to clone repository: {stderr or 'git clone failed'}")
-
-        except subprocess.TimeoutExpired:
-            raise InternalServerError(description=f"Git clone timed out after {GIT_CLONE_TIMEOUT}s")
+        logger.info("Downloaded notebook module '%s' from %s", module_path, git_url)

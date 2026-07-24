@@ -1,12 +1,13 @@
 import React, { useState } from "react"
 
 import { useNavigate } from "@tanstack/react-router"
-import { ChevronDown, ChevronUp, Loader2, RotateCcw } from "lucide-react"
+import { ArrowLeft, ChevronDown, ChevronUp, Loader2, RotateCcw, Settings2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { DEFAULT_NOTEBOOKS_REPO, Engine } from "@/util/const"
 import type { Engine as EngineType } from "@/util/const"
 import { useCreateExperiment } from "@/hooks/use-experiments"
+import { useNotebookModules } from "@/hooks/use-notebook-modules"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -33,6 +34,12 @@ const isValidGitUrl = (url: string): boolean => {
 const New = () => {
   const navigate = useNavigate()
   const createExperiment = useCreateExperiment()
+  const {
+    data: modules,
+    isLoading: modulesLoading,
+    isError: modulesError,
+    refetch: refetchModules,
+  } = useNotebookModules()
 
   const [name, setName] = useState("")
   const [engine, setEngine] = useState<EngineType>(Engine.GMX)
@@ -40,6 +47,8 @@ const New = () => {
   const [pdb, setPdb] = useState("")
   const [repoUrl, setRepoUrl] = useState("")
   const [files, setFiles] = useState<File[]>([])
+  const [selectedModuleId, setSelectedModuleId] = useState<string>("")
+  const [useCustomRepo, setUseCustomRepo] = useState(false)
   const [notebooksRepo, setNotebooksRepo] = useState(DEFAULT_NOTEBOOKS_REPO)
   const [accessToken, setAccessToken] = useState("")
   const [showTokenInput, setShowTokenInput] = useState(false)
@@ -48,8 +57,15 @@ const New = () => {
   const [typeError, setTypeError] = useState(false)
   const [typeAuxError, setTypeAuxError] = useState(false)
   const [notebooksRepoError, setNotebooksRepoError] = useState(false)
+  const [moduleError, setModuleError] = useState(false)
 
   const isHttpsRepo = notebooksRepo.startsWith("http://") || notebooksRepo.startsWith("https://")
+  const engineModules = (modules ?? []).filter((m) => m.engine === engine)
+
+  const handleEngineChange = (newEngine: EngineType) => {
+    setEngine(newEngine)
+    setSelectedModuleId("")
+  }
 
   const handleNotebooksRepoChange = (value: string) => {
     setNotebooksRepo(value)
@@ -60,9 +76,23 @@ const New = () => {
     }
   }
 
+  const handleUseCustomRepo = () => {
+    setUseCustomRepo(true)
+    setSelectedModuleId("")
+  }
+
+  const handleBackToCurated = () => {
+    setUseCustomRepo(false)
+    setNotebooksRepo(DEFAULT_NOTEBOOKS_REPO)
+    setAccessToken("")
+    setShowTokenInput(false)
+    setNotebooksRepoError(false)
+  }
+
   const validateForm = () => {
     let auxErr = false
-    const notebooksInvalid = !isValidGitUrl(notebooksRepo)
+    const notebooksInvalid = useCustomRepo && !isValidGitUrl(notebooksRepo)
+    const moduleMissing = !useCustomRepo && !selectedModuleId
 
     if ((type === "pdb" && !pdb) || (type === "repo" && !repoUrl) || (type === "file" && files.length === 0))
       auxErr = true
@@ -71,8 +101,9 @@ const New = () => {
     setTypeError(!type)
     setTypeAuxError(auxErr)
     setNotebooksRepoError(notebooksInvalid)
+    setModuleError(moduleMissing)
 
-    if (name && type && !auxErr && !notebooksInvalid) return true
+    if (name && type && !auxErr && !notebooksInvalid && !moduleMissing) return true
 
     toast.error("Please fill in all required fields")
     return false
@@ -87,13 +118,18 @@ const New = () => {
     formData.append("experiment-name", name)
     formData.append("engine", engine)
     formData.append("type", type)
-    formData.append("notebooks-repo", notebooksRepo)
     if (type === "pdb") formData.append("pdb", pdb)
     if (type === "repo") formData.append("repo-url", repoUrl)
     if (type === "file" && files.length > 0) {
       files.forEach((file) => formData.append("simulation-files", file))
     }
-    if (accessToken) formData.append("access-token", accessToken)
+
+    if (useCustomRepo) {
+      formData.append("notebooks-repo", notebooksRepo)
+      if (accessToken) formData.append("access-token", accessToken)
+    } else {
+      formData.append("notebook-module", selectedModuleId)
+    }
 
     createExperiment.mutate(formData, {
       onSuccess: (data) => {
@@ -130,7 +166,7 @@ const New = () => {
 
             <div className="flex flex-col gap-1">
               <Label>MD Engine</Label>
-              <Tabs value={engine} onValueChange={(v) => setEngine(v as EngineType)}>
+              <Tabs value={engine} onValueChange={(v) => handleEngineChange(v as EngineType)}>
                 <TabsList className="w-full">
                   <TabsTrigger value={Engine.GMX} className="flex-1">
                     GROMACS
@@ -194,65 +230,131 @@ const New = () => {
             {type === "file" && <Dropzone inputName="simulation-files" onFilesChange={setFiles} />}
 
             <div className="flex flex-col gap-2">
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="notebooks-repo">Notebooks Repository</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="notebooks-repo"
-                    value={notebooksRepo}
-                    onChange={(e) => handleNotebooksRepoChange(e.target.value)}
-                    className={notebooksRepoError ? "border-destructive flex-1" : "flex-1"}
-                  />
-                  {notebooksRepo !== DEFAULT_NOTEBOOKS_REPO && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          onClick={() => handleNotebooksRepoChange(DEFAULT_NOTEBOOKS_REPO)}
-                          aria-label="Reset to default"
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Reset to default</TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-                <p className="text-muted-foreground text-xs">
-                  {notebooksRepoError
-                    ? "Enter a valid git repository"
-                    : "Git repository with notebooks. Supports Binder and standard repos."}
-                </p>
-              </div>
-
-              {notebooksRepo !== DEFAULT_NOTEBOOKS_REPO && isHttpsRepo && (
-                <Collapsible open={showTokenInput} onOpenChange={setShowTokenInput}>
-                  <CollapsibleTrigger asChild>
-                    <button
-                      type="button"
-                      className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors"
-                    >
-                      {showTokenInput ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      {showTokenInput ? "Hide access token" : "Provide access token"}
-                    </button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="mt-2 flex flex-col gap-1">
-                    <Label htmlFor="access-token">Git Access Token</Label>
-                    <Input
-                      id="access-token"
-                      type="password"
-                      value={accessToken}
-                      onChange={(e) => setAccessToken(e.target.value)}
-                      placeholder="e.g. ghp_xxxxx, glpat_xxxxx, github_pat_xxxxx"
-                    />
-                    <p className="text-muted-foreground text-xs">
-                      Required for private HTTPS repositories. Not applicable for SSH URLs. Only used for cloning, not
-                      stored.
+              {!useCustomRepo ? (
+                <div className="flex flex-col gap-2">
+                  <Label>Notebook Workflow</Label>
+                  {modulesLoading && (
+                    <p className="text-muted-foreground flex items-center gap-2 text-sm">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading workflows...
                     </p>
-                  </CollapsibleContent>
-                </Collapsible>
+                  )}
+                  {modulesError && (
+                    <div className="flex flex-col gap-1">
+                      <p className="text-destructive text-xs">Failed to load workflows.</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="self-start"
+                        onClick={() => refetchModules()}
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  )}
+                  {engineModules.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedModuleId(m.id)
+                        setModuleError(false)
+                      }}
+                      className={`hover:border-primary rounded-lg border p-3 text-left transition-colors ${
+                        selectedModuleId === m.id ? "border-primary bg-primary/5" : "border-border"
+                      } ${moduleError ? "border-destructive" : ""}`}
+                    >
+                      <span className="font-medium">{m.name}</span>
+                      {m.description && <span className="text-muted-foreground block text-xs">{m.description}</span>}
+                    </button>
+                  ))}
+                  {moduleError && <p className="text-destructive text-xs">Select a notebook workflow.</p>}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleUseCustomRepo}
+                    className="text-muted-foreground hover:text-foreground mt-1 self-start"
+                  >
+                    <Settings2 className="h-4 w-4" />
+                    Use custom notebooks repository
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-col gap-1">
+                    <Label htmlFor="notebooks-repo">Notebook Repository URL</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="notebooks-repo"
+                        value={notebooksRepo}
+                        onChange={(e) => handleNotebooksRepoChange(e.target.value)}
+                        className={notebooksRepoError ? "border-destructive flex-1" : "flex-1"}
+                      />
+                      {notebooksRepo !== DEFAULT_NOTEBOOKS_REPO && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => handleNotebooksRepoChange(DEFAULT_NOTEBOOKS_REPO)}
+                              aria-label="Reset to default"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Reset to default</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+                    <p className="text-muted-foreground text-xs">
+                      {notebooksRepoError
+                        ? "Enter a valid git repository"
+                        : "Git repository with notebooks. Supports Binder and standard repos."}
+                    </p>
+                  </div>
+
+                  {isHttpsRepo && (
+                    <Collapsible open={showTokenInput} onOpenChange={setShowTokenInput}>
+                      <CollapsibleTrigger asChild>
+                        <button
+                          type="button"
+                          className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors"
+                        >
+                          {showTokenInput ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          {showTokenInput ? "Hide access token" : "Provide access token"}
+                        </button>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2 flex flex-col gap-1">
+                        <Label htmlFor="access-token">Git Access Token</Label>
+                        <Input
+                          id="access-token"
+                          type="password"
+                          value={accessToken}
+                          onChange={(e) => setAccessToken(e.target.value)}
+                          placeholder="e.g. ghp_xxxxx, glpat_xxxxx, github_pat_xxxxx"
+                        />
+                        <p className="text-muted-foreground text-xs">
+                          Required for private HTTPS repositories. Not applicable for SSH URLs. Only used for cloning,
+                          not stored.
+                        </p>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleBackToCurated}
+                    className="text-muted-foreground hover:text-foreground mt-1 self-start"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to curated workflows
+                  </Button>
+                </div>
               )}
             </div>
 
