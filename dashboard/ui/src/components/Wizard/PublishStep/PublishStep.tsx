@@ -95,8 +95,12 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
   // to the experiment cache (set on publish success or page load).
   const uploadState: UploadState | null = publishStatus?.upload_state ?? experiment.upload_state ?? null
 
-  const fileCount = files.length
-  const totalSize = useMemo(() => files.reduce((sum, file) => sum + file.size, 0), [files])
+  const fileCount = publishStatus?.total_files ?? files.length
+  const totalSize = useMemo(
+    () =>
+      publishStatus?.total_bytes ?? files.reduce((sum, file) => sum + file.size, 0),
+    [files, publishStatus?.total_bytes],
+  )
 
   // Handle OAuth callback result in URL params
   useEffect(() => {
