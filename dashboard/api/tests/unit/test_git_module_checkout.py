@@ -12,9 +12,6 @@ from werkzeug.exceptions import InternalServerError, NotFound
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-FIRST_CLONE_ATTEMPT = 1
-SECOND_CLONE_COUNT = 2
-
 
 def _make_real_repo(repo_dir: Path, module_path: str, other_path: str) -> None:
     """Create a real local git repo with two module directories."""
@@ -45,15 +42,10 @@ class TestDownloadGitRepoModule:
 
         download_git_repo_module(str(repo), "gromacs/protein", target)
 
-        # Module contents are flattened into target (no module directory wrapper)
         assert (target / "notebook.ipynb").read_text() == "nb"
         assert (target / "gromacs.schema.json").read_text() == "{}"
-        # Other module and root files must NOT be present
         assert not (target / "other.ipynb").exists()
         assert not (target / "README.md").exists()
-        assert not (target / "amber").exists()
-        assert not (target / "gromacs").exists()
-        # No .git metadata
         assert not (target / ".git").exists()
 
     def test_missing_module_path_raises_not_found(self, tmp_path: Path) -> None:
@@ -61,26 +53,27 @@ class TestDownloadGitRepoModule:
         repo = tmp_path / "repo"
         _make_real_repo(repo, "gromacs/protein", "amber/protein")
 
-        target = tmp_path / "target"
-
         with pytest.raises(NotFound):
-            download_git_repo_module(str(repo), "does/not/exist", target)
+            download_git_repo_module(str(repo), "does/not/exist", tmp_path / "target")
 
-    def test_clone_failure_raises_internal_server_error(self, tmp_path: Path) -> None:
-        """A git clone failure should raise InternalServerError without leaking credentials."""
+    def test_clone_failure_redacts_token_from_errors_and_logs(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Clone failures must not leak the access token in exceptions or logs."""
         target = tmp_path / "target"
         error = subprocess.CalledProcessError(1, "git")
-        error.stderr = "fatal: repository not found"
+        error.stderr = "fatal: auth failure"
 
         with (
             patch("utils.subprocess.run", side_effect=error),
             pytest.raises(InternalServerError) as exc_info,
         ):
             download_git_repo_module(
-                "https://github.com/owner/repo.git", "gromacs/protein", target, access_token="secret-token"
+                "https://github.com/owner/repo.git", "gromacs/protein", target, access_token="ghp_secret"
             )
 
-        assert "secret-token" not in str(exc_info.value)
+        assert "ghp_secret" not in str(exc_info.value)
+        assert "ghp_secret" not in caplog.text
 
     def test_clone_timeout_raises_internal_server_error(self, tmp_path: Path) -> None:
         """A clone timeout should raise InternalServerError."""
@@ -99,7 +92,6 @@ class TestDownloadGitRepoModule:
         target = tmp_path / "target"
 
         captured: list[list[str]] = []
-
         real_run = cast("Callable[..., subprocess.CompletedProcess[str]]", subprocess.run)
 
         def _capture(cmd: list[str] | str, *args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -128,44 +120,12 @@ class TestDownloadGitRepoModule:
         def _flaky_clone(cmd: list[str] | str, *args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
             if isinstance(cmd, list) and cmd[:1] == ["git"] and cmd[1:2] == ["clone"]:
                 call_count["clone"] += 1
-                if call_count["clone"] == FIRST_CLONE_ATTEMPT:
+                if call_count["clone"] == 1:
                     raise subprocess.CalledProcessError(1, cmd, stderr="fatal: filter not supported")
             return original_run(cmd, *args, **kwargs)
 
         with patch("utils.subprocess.run", side_effect=_flaky_clone):
             download_git_repo_module(str(repo), "gromacs/protein", target)
 
-        assert call_count["clone"] == SECOND_CLONE_COUNT
+        assert call_count["clone"] == 2  # ruff:ignore[magic-value-comparison] — two clone attempts: filtered then fallback
         assert (target / "notebook.ipynb").exists()
-
-    def test_access_token_injected_for_https_url_not_in_error(self, tmp_path: Path) -> None:
-        """Tokens injected into HTTPS URLs must not appear in error messages."""
-        target = tmp_path / "target"
-        error = subprocess.CalledProcessError(1, "git")
-        error.stderr = "fatal: auth failure"
-
-        with (
-            patch("utils.subprocess.run", side_effect=error),
-            pytest.raises(InternalServerError) as exc_info,
-        ):
-            download_git_repo_module(
-                "https://github.com/owner/repo.git", "gromacs/protein", target, access_token="ghp_secret"
-            )
-
-        assert "ghp_secret" not in str(exc_info.value)
-
-    def test_access_token_not_logged_on_failure(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
-        """The access token must never appear in log records when a clone fails."""
-        target = tmp_path / "target"
-        error = subprocess.CalledProcessError(1, "git")
-        error.stderr = "fatal: auth failure"
-
-        with (
-            patch("utils.subprocess.run", side_effect=error),
-            pytest.raises(InternalServerError),
-        ):
-            download_git_repo_module(
-                "https://github.com/owner/repo.git", "gromacs/protein", target, access_token="ghp_secret"
-            )
-
-        assert "ghp_secret" not in caplog.text

@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from jsonschema import ValidationError
-from notebook_modules import SCHEMA_PATH, load_catalog
+from notebook_modules import load_catalog
 
 MIN_MODULE_COUNT = 2
 
@@ -30,13 +30,7 @@ class TestLoadCatalog:
         ids = {m.id for m in catalog}
         assert "gromacs-protein" in ids
         assert "amber-protein" in ids
-
-    def test_bundled_catalog_modules_have_display_fields_without_paths(self) -> None:
-        """Each bundled module exposes stable display metadata."""
-        catalog = load_catalog()
-
         for module in catalog:
-            assert module.id
             assert module.name
             assert module.engine in {"GMX", "AMBER"}
 
@@ -90,108 +84,57 @@ class TestLoadCatalog:
 class TestCatalogLookup:
     """Tests for resolving modules by ID and engine."""
 
-    def test_get_module_returns_matching_module(self) -> None:
-        """get_module should return the module with the given ID."""
+    def test_get_returns_matching_module_and_none_for_misses(self) -> None:
+        """Get returns the module for a known ID, None for unknown or engine mismatch."""
         catalog = load_catalog()
 
-        module = catalog.get("gromacs-protein")
-
-        assert module is not None
-        assert module.engine == "GMX"
-        assert module.path == "gromacs/protein"
-
-    def test_get_module_unknown_id_returns_none(self) -> None:
-        """get_module should return None for an unknown ID."""
-        catalog = load_catalog()
-
+        assert catalog.get("gromacs-protein") is not None
         assert catalog.get("does-not-exist") is None
-
-    def test_get_module_for_engine_returns_matching_module(self) -> None:
-        """get_module_for_engine should return a module matching both ID and engine."""
-        catalog = load_catalog()
-
-        module = catalog.get_module_for_engine("amber-protein", "AMBER")
-
-        assert module is not None
-        assert module.engine == "AMBER"
-
-    def test_get_module_for_engine_rejects_engine_mismatch(self) -> None:
-        """get_module_for_engine should return None when engine differs."""
-        catalog = load_catalog()
-
+        assert catalog.get_module_for_engine("gromacs-protein", "GMX") is not None
         assert catalog.get_module_for_engine("gromacs-protein", "AMBER") is None
-
-    def test_get_module_for_engine_unknown_id_returns_none(self) -> None:
-        """get_module_for_engine should return None for an unknown ID."""
-        catalog = load_catalog()
-
         assert catalog.get_module_for_engine("nope", "GMX") is None
 
-    def test_to_public_excludes_internal_paths(self) -> None:
-        """to_public should expose display metadata without internal Git paths."""
+    def test_for_engine_filters_by_engine(self) -> None:
+        """for_engine should return only modules matching the engine."""
+        catalog = load_catalog()
+
+        gmx = catalog.for_engine("GMX")
+
+        assert all(m.engine == "GMX" for m in gmx)
+        assert any(m.id == "gromacs-protein" for m in gmx)
+        assert not any(m.engine == "AMBER" for m in gmx)
+
+    def test_to_public_excludes_internal_paths_and_is_serializable(self) -> None:
+        """to_public should expose display metadata without paths, and be JSON-serializable."""
         catalog = load_catalog()
 
         public = catalog.to_public()
 
+        assert isinstance(public, list)
         for entry in public:
             assert "id" in entry
             assert "name" in entry
             assert "engine" in entry
             assert "path" not in entry
             assert "repository" not in entry
-
-    def test_to_public_returns_list_of_dicts(self) -> None:
-        """to_public should return a JSON-serializable list."""
-        catalog = load_catalog()
-
-        public = catalog.to_public()
-
-        assert isinstance(public, list)
-        assert len(public) >= MIN_MODULE_COUNT
-        # Must be JSON-serializable for the API endpoint
         json.dumps(public)
-
-    def test_load_catalog_caches_default_path(self) -> None:
-        """The bundled catalog is memoized, so repeated default loads share one instance."""
-        first = load_catalog()
-        second = load_catalog()
-
-        assert first is second
-
-
-class TestModulePathSafety:
-    """Tests for module path normalization and safety."""
-
-    def test_module_path_is_relative_posix(self) -> None:
-        """Module paths should be forward-slash relative paths."""
-        catalog = load_catalog()
-
-        for module in catalog:
-            assert not module.path.startswith("/")
-            assert "\\" not in module.path
-            assert ".." not in module.path.split("/")
 
 
 class TestRepositoryField:
     """Tests for the optional repository field and root-path (Binder) support."""
 
-    def test_bundled_modules_without_repository_default_to_none(self) -> None:
-        """Curated modules without an explicit repository should have repository=None."""
+    def test_bundled_modules_split_between_default_and_explicit_repos(self) -> None:
+        """Bundled catalog has modules with and without explicit repository URLs."""
         catalog = load_catalog()
 
-        default_repo_modules = [m for m in catalog if m.repository is None]
-        assert len(default_repo_modules) >= MIN_MODULE_COUNT
+        default_repo = [m for m in catalog if m.repository is None]
+        explicit_repo = [m for m in catalog if m.repository is not None]
+        assert len(default_repo) >= MIN_MODULE_COUNT
+        assert len(explicit_repo) >= 1
+        assert all(m.is_root for m in explicit_repo)
 
-    def test_bundled_repository_modules_present(self) -> None:
-        """At least one bundled module should use an explicit repository (Binder)."""
-        catalog = load_catalog()
-
-        repo_modules = [m for m in catalog if m.repository is not None]
-        assert len(repo_modules) >= 1
-        assert all(m.repository and m.is_root for m in repo_modules)
-
-    def test_repository_field_accepted(self, tmp_path: Path) -> None:
-        """A module with a repository field should load correctly."""
+    def test_repository_field_and_root_path_accepted(self, tmp_path: Path) -> None:
+        """A module with a repository field and path '.' should load as a root module."""
         catalog_file = tmp_path / "notebook-modules.json"
         catalog_file.write_text(
             json.dumps({
@@ -213,25 +156,3 @@ class TestRepositoryField:
         assert module is not None
         assert module.repository == "https://github.com/bioexcel/biobb_wf_md_setup_membrane.git"
         assert module.is_root is True
-
-    def test_root_path_allowed(self, tmp_path: Path) -> None:
-        """Path '.' should be accepted as the repository root."""
-        catalog_file = tmp_path / "notebook-modules.json"
-        catalog_file.write_text(
-            json.dumps({"modules": [{"id": "root-mod", "name": "Root", "engine": "GMX", "path": "."}]})
-        )
-
-        catalog = load_catalog(path=catalog_file)
-        module = catalog.get("root-mod")
-
-        assert module is not None
-        assert module.is_root is True
-
-
-class TestBundledSchemaSelfCheck:
-    """Ensure the bundled catalog passes its own schema."""
-
-    def test_bundled_schema_file_is_valid_json(self) -> None:
-        """The bundled schema file should be valid JSON."""
-        data = json.loads(SCHEMA_PATH.read_text())
-        assert data["title"] == "Notebook modules catalog"

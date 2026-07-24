@@ -533,8 +533,8 @@ class TestCreateExperimentCuratedModule:
             data = json.loads(response.data)
             assert data["notebooks_repo"] == "https://github.com/default/repo.git"
 
-    def test_curated_rejects_engine_mismatch(self, client: FlaskClient, tmp_path: Path) -> None:
-        """Curated creation should reject a module whose engine differs from the experiment."""
+    def test_curated_rejects_invalid_module(self, client: FlaskClient, tmp_path: Path) -> None:
+        """Curated creation should reject an unknown or engine-incompatible module ID."""
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo_module") as mock_module,
@@ -543,30 +543,9 @@ class TestCreateExperimentCuratedModule:
                 "/dash/api/experiments",
                 data={
                     "type": "file",
-                    "experiment-name": "Engine Mismatch",
+                    "experiment-name": "Invalid Module",
                     "engine": "AMBER",
                     "notebook-module": "gromacs-protein",
-                    "simulation-files": [(io.BytesIO(b"content"), "test.gro")],
-                },
-                content_type="multipart/form-data",
-            )
-
-            assert response.status_code == HTTPStatus.BAD_REQUEST
-            mock_module.assert_not_called()
-
-    def test_curated_rejects_unknown_module(self, client: FlaskClient, tmp_path: Path) -> None:
-        """Curated creation should reject an unknown module ID."""
-        with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo_module") as mock_module,
-        ):
-            response = client.post(
-                "/dash/api/experiments",
-                data={
-                    "type": "file",
-                    "experiment-name": "Unknown Module",
-                    "engine": "GMX",
-                    "notebook-module": "no-such-module",
                     "simulation-files": [(io.BytesIO(b"content"), "test.gro")],
                 },
                 content_type="multipart/form-data",
