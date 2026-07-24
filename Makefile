@@ -31,8 +31,8 @@ help: ## Show this help
 fix: ## Auto-fix formatting and lint issues (Python via ruff, frontend via prettier/eslint)
 	ruff format .
 	ruff check . --fix
-	cd dashboard/ui && corepack pnpm run format && corepack pnpm exec eslint . --fix
-	cd landing && corepack pnpm run format
+	cd dashboard/ui && pnpm run format && pnpm exec eslint . --fix
+	cd landing && pnpm run format
 
 .PHONY: lint
 lint: lint-py lint-ui ## Check linting without auto-fix
@@ -43,7 +43,7 @@ lint-py: ## Check Python linting
 
 .PHONY: lint-ui
 lint-ui: ## Check frontend linting (dashboard/ui via eslint)
-	cd dashboard/ui && corepack pnpm exec eslint . --max-warnings=0
+	cd dashboard/ui && pnpm exec eslint . --max-warnings=0
 
 .PHONY: lint-workflows
 lint-workflows: ## Validate GitHub Actions workflows (actionlint + zizmor). Requires actionlint + zizmor (in devcontainer).
@@ -59,8 +59,8 @@ format-check-py: ## Check Python formatting
 
 .PHONY: format-check-ui
 format-check-ui: ## Check frontend formatting (dashboard/ui and landing via prettier)
-	cd dashboard/ui && corepack pnpm run format:check
-	cd landing && corepack pnpm run format:check
+	cd dashboard/ui && pnpm run format:check
+	cd landing && pnpm run format:check
 
 .PHONY: lint-helm
 lint-helm: validate-charts ## Validate all Helm charts including umbrella dependency build. Requires helm + gomplate + yq.
@@ -95,11 +95,11 @@ type-check-mdrun-api: ## Type-check mdrun-api
 
 .PHONY: type-check-ui
 type-check-ui: ## Type-check dashboard UI (TypeScript)
-	cd dashboard/ui && corepack pnpm run type-check
+	cd dashboard/ui && pnpm run type-check
 
 .PHONY: type-check-landing
 type-check-landing: ## Type-check landing page (TypeScript)
-	cd landing && corepack pnpm run type-check
+	cd landing && pnpm run type-check
 
 # ==================== TEST ====================
 
@@ -251,7 +251,7 @@ demo: ## Run local demo (real Flask API in demo profile + React dev server)
 	API_PID=$$!; \
 	echo "Flask API started (PID: $$API_PID)"; \
 	echo "Starting React dev server..."; \
-	cd dashboard/ui && corepack pnpm run dev & \
+	cd dashboard/ui && pnpm run dev & \
 	VITE_PID=$$!; \
 	echo "React dev server started (PID: $$VITE_PID)"; \
 	echo "Demo running - Press Ctrl+C to stop"; \

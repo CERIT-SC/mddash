@@ -57,7 +57,7 @@ Two-stage build: Node build stage → Caddy runtime stage. Mirrors `dashboard/pr
 ```dockerfile
 FROM node:24-slim AS build
 WORKDIR /app
-RUN corepack enable pnpm
+RUN npm install -g pnpm@11.9.0 --quiet
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .
