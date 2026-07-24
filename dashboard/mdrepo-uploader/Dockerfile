@@ -1,6 +1,6 @@
 FROM rclone/rclone:1.74.4 AS rclone
 
-FROM python:3.12-alpine
+FROM python:3.13-alpine
 
 COPY --from=rclone /usr/local/bin/rclone /usr/bin/rclone
 RUN apk add --no-cache ca-certificates
