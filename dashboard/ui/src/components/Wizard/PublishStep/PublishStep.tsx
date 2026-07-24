@@ -192,7 +192,7 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
           <div className="flex items-center gap-2 text-sm">
             <HardDrive className="text-muted-foreground h-4 w-4" />
             <span className="text-muted-foreground font-medium">Total Size:</span>
-            <span>{totalSize != null ? formatFileSize(totalSize) : "n/a"}</span>
+            <span>{totalSize !== undefined ? formatFileSize(totalSize) : "n/a"}</span>
           </div>
           {isUploadComplete && (
             <div className="flex items-center gap-2 text-sm">

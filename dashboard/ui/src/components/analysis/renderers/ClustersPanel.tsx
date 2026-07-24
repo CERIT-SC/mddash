@@ -76,7 +76,7 @@ const ClustersPanel: FC<{ data: ClustersAnalysis }> = ({ data }) => {
     transitions.forEach((transition) => {
       const fromIdx = resolveClusterIndex(transition?.from)
       const toIdx = resolveClusterIndex(transition?.to)
-      if (fromIdx == null || toIdx == null) return
+      if (fromIdx === null || fromIdx === undefined || toIdx === null || toIdx === undefined) return
       const count = typeof transition?.count === "number" && Number.isFinite(transition.count) ? transition.count : 0
       matrix[fromIdx][toIdx] += count
     })
@@ -111,7 +111,7 @@ const ClustersPanel: FC<{ data: ClustersAnalysis }> = ({ data }) => {
         from: resolveClusterIndex(transition.from),
         to: resolveClusterIndex(transition.to),
       }))
-      .filter((entry) => entry.from != null && entry.to != null)
+      .filter((entry) => entry.from !== null && entry.from !== undefined && entry.to !== null && entry.to !== undefined)
       .sort((a, b) => b.count - a.count)
       .slice(0, 6)
   }, [transitions, resolveClusterIndex, hasClusters])
