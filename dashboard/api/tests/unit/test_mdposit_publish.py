@@ -475,6 +475,46 @@ class TestInvenioPublishRetryAfterDraftDeleted:
             assert result["id"] == "rec-existing"
             mock_create.assert_not_called()
 
+    @patch("models.experiment.is_upload_active", return_value=False)
+    @patch("models.experiment.submit_upload_job", return_value="attempt-002")
+    @patch("models.experiment.mdrepo.create_experiment", return_value={"id": "rec-new"})
+    @patch("models.experiment.metadump.extract_metadata_bulk", return_value=[])
+    def test_retry_after_completed_status_orphaned(
+        self,
+        mock_meta: Mock,
+        mock_create: Mock,
+        mock_submit: Mock,
+        mock_active: Mock,
+        app: Flask,
+        tmp_path: Path,
+    ) -> None:
+        """Test test_retry_after_completed_status_orphaned."""
+        _seed_experiment(app)
+        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+
+        completed_status = UploadStatus(attempt_id="attempt-001", state="completed")
+
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
+            patch("models.experiment.read_status", return_value=completed_status),
+            app.app_context(),
+        ):
+            exp = Experiment.query.get("pubsh")
+            exp.mdrepo_id = None
+            exp.mdrepo_published = None
+            db.session.commit()
+
+            token_manager = Mock()
+            token_manager.get_valid_token.return_value = "valid-token"
+            with patch("models.experiment.MDRepoTokenManager", return_value=token_manager):
+                result = exp.publish(target="invenio", community="ceitec")
+
+            db.session.refresh(exp)
+            assert exp.mdrepo_id == "rec-new"
+            assert result["id"] == "rec-new"
+            mock_create.assert_called_once()
+
 
 class TestMdpositHandoffSelectedFiles:
     """Handoff contains individual file links and valid metadata YAML."""

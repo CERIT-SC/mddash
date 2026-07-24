@@ -535,8 +535,9 @@ class Experiment(db.Model):  # type: ignore
 
         upload_state = self._read_upload_state()
 
-        # A completed upload should not be re-submitted.
-        if upload_state == UploadState.COMPLETED.value:
+        # A completed upload should not be re-submitted — unless the draft was
+        # deleted, leaving an orphaned status file with no mdrepo_id.
+        if upload_state == UploadState.COMPLETED.value and self.mdrepo_id:
             raise Conflict(description="Upload already completed. Use MDRepo to view or edit the published record.")
 
         # If an upload is already active, return it (idempotent retry).
