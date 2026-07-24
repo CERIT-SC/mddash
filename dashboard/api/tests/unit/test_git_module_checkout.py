@@ -127,7 +127,7 @@ class TestDownloadGitRepoModule:
         with patch("utils.subprocess.run", side_effect=_flaky_clone):
             download_git_repo_module(str(repo), "gromacs/protein", target)
 
-        assert call_count["clone"] == 2  # ruff:ignore[magic-value-comparison] — two clone attempts: filtered then fallback
+        assert call_count["clone"] == 2
         assert (target / "notebook.ipynb").exists()
 
     def test_clone_failure_redacts_token_echoed_in_stderr(

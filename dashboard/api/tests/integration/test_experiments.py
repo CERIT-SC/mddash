@@ -505,7 +505,7 @@ class TestCreateExperimentCuratedModule:
     ) -> None:
         """Curated creation should use the selective module checkout, not the full clone."""
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_full,
             patch("models.experiment.download_git_repo_module") as mock_module,
@@ -559,7 +559,7 @@ class TestCreateExperimentCuratedModule:
     ) -> None:
         """Without a module ID, custom mode should use the full clone path."""
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_full,
             patch("models.experiment.download_git_repo_module") as mock_module,
@@ -587,7 +587,7 @@ class TestCreateExperimentCuratedModule:
         self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path
     ) -> None:
         """A curated module with a repository field should store that URL in the experiment."""
-        import notebook_modules  # ruff:ignore[import-outside-top-level]
+        import notebook_modules
 
         binder_module = notebook_modules.NotebookModule(
             id="binder-gmx",
@@ -600,7 +600,7 @@ class TestCreateExperimentCuratedModule:
         catalog = notebook_modules.NotebookModulesCatalog(modules=(binder_module,))
 
         with (
-            patch("models.experiment.requests.get") as mock_get,
+            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_full,
             patch("models.experiment.download_git_repo_module") as mock_module,
