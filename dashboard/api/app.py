@@ -120,10 +120,7 @@ def create_app() -> Flask:
     _register_blueprints(app)
     _log_duration("route-registration", reg_start)
 
-    # Validate the bundled notebook modules catalog at startup. Invalid product
-    # configuration is a startup error, not a recoverable user error. Runs before
-    # DB migrations so a bad catalog fails fast without leaving the database at a
-    # newer head than the (crashed) app.
+    # Validate bundled catalog before migrations so a bad catalog fails fast.
     catalog_start = time.perf_counter()
     load_catalog_or_exit()
     _log_duration("notebook-catalog", catalog_start)

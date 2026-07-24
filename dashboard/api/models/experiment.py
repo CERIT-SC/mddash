@@ -286,19 +286,12 @@ class Experiment(db.Model):  # type: ignore
         notebook_module_id: str | None = None,
     ) -> str:
         """
-        Prepare environment directory for new experiment.
+        Create a unique experiment directory and populate it with notebooks.
 
-        When ``notebook_module_id`` is provided (curated mode), the module is
-        resolved from the bundled catalog, its engine is verified against
-        ``engine``, and only that module's directory is selectively checked out
-        from ``notebooks_repo`` (the configured default repository). Otherwise
-        (custom mode), the complete repository is cloned as before.
-
-        Args:
-            notebooks_repo: Git repository URL containing setup notebooks.
-            access_token: Optional access token for private repositories.
-            engine: Experiment engine; required when ``notebook_module_id`` is set.
-            notebook_module_id: Optional curated module ID for selective checkout.
+        Curated mode (``notebook_module_id`` set): resolve the module from the
+        catalog, verify engine match, and sparse-checkout its directory.
+        Root-path modules (``"."``) use full clone. Otherwise (custom mode),
+        clone the complete repository as before.
 
         Returns:
             The unique experiment ID.
@@ -372,7 +365,7 @@ class Experiment(db.Model):  # type: ignore
             name: Name of the experiment.
             pdb_source: PDB ID (e.g., 1A2B) or a direct URL to a PDB file.
             notebooks_repo: Git repository URL containing setup notebooks.
-            access_token: Optional GitHub access token for private repositories.
+            access_token: Optional access token for private repositories.
             engine: Molecular dynamics engine (default: GMX).
             notebook_module_id: Optional curated module ID for selective checkout.
 
@@ -438,7 +431,7 @@ class Experiment(db.Model):  # type: ignore
             name: Name of the experiment.
             repo_link: Repository record URL.
             notebooks_repo: Git repository URL containing setup notebooks.
-            access_token: Optional GitHub access token for private repositories.
+            access_token: Optional access token for private repositories.
             engine: Molecular dynamics engine (default: GMX).
             notebook_module_id: Optional curated module ID for selective checkout.
 
@@ -484,7 +477,7 @@ class Experiment(db.Model):  # type: ignore
             name: Name of the experiment.
             files: List of uploaded files.
             notebooks_repo: Git repository URL containing setup notebooks.
-            access_token: Optional GitHub access token for private repositories.
+            access_token: Optional access token for private repositories.
             engine: Molecular dynamics engine (default: GMX).
             notebook_module_id: Optional curated module ID for selective checkout.
 

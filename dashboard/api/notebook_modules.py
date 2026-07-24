@@ -33,35 +33,12 @@ class NotebookModule:
 
     @property
     def is_root(self) -> bool:
-        """Whether this module uses the repository root (full clone, no sparse checkout)."""
+        """True when path is '.', meaning full clone (preserves root Binder config)."""
         return self.path == ROOT_PATH
-
-    def resolve_path(self, base_dir: Path) -> Path:
-        """
-        Resolve this module's relative path against a base directory.
-
-        Returns:
-            The absolute path of the module directory inside ``base_dir``.
-        """
-        return base_dir / self.path
-
-    def to_dict(self) -> dict:
-        """
-        Return the internal representation including the server-side path.
-
-        Returns:
-            A dictionary with id, name, engine, path, and optional description/repository.
-        """
-        data: dict = {"id": self.id, "name": self.name, "engine": self.engine, "path": self.path}
-        if self.description is not None:
-            data["description"] = self.description
-        if self.repository is not None:
-            data["repository"] = self.repository
-        return data
 
     def to_public(self) -> dict:
         """
-        Return display metadata for the UI, excluding internal Git paths.
+        Display metadata for the UI, excluding internal Git paths.
 
         Returns:
             A dictionary with id, name, engine, and optional description.
@@ -89,7 +66,7 @@ class NotebookModulesCatalog:
         Return the module with the given ID, optionally requiring a matching engine.
 
         Returns:
-            The matching module, or None if no module matches.
+            The matching module, or None.
         """
         for module in self.modules:
             if module.id == module_id:
@@ -100,12 +77,21 @@ class NotebookModulesCatalog:
 
     def get_module_for_engine(self, module_id: str, engine: str) -> NotebookModule | None:
         """
-        Return the module matching both ID and engine, or None.
+        Return the module matching both ID and engine.
 
         Returns:
-            The matching module, or None if the ID is unknown or the engine differs.
+            The matching module, or None.
         """
         return self.get(module_id, engine)
+
+    def for_engine(self, engine: str) -> list[NotebookModule]:
+        """
+        Return all modules compatible with the given engine.
+
+        Returns:
+            A list of modules whose engine matches.
+        """
+        return [m for m in self.modules if m.engine == engine]
 
     def to_public(self) -> list[dict]:
         """
@@ -121,21 +107,12 @@ class NotebookModulesCatalog:
 
 
 def _load_schema() -> dict:
-    """
-    Load the bundled JSON Schema document.
-
-    Returns:
-        The parsed JSON Schema dictionary.
-    """
     return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
 def _build_catalog(data: dict) -> NotebookModulesCatalog:
     """
     Construct a NotebookModulesCatalog from validated raw data, enforcing unique IDs.
-
-    Args:
-        data: The raw parsed catalog dictionary.
 
     Returns:
         The validated NotebookModulesCatalog.
@@ -166,14 +143,7 @@ def _build_catalog(data: dict) -> NotebookModulesCatalog:
 @lru_cache(maxsize=1)
 def load_catalog(path: Path | None = None) -> NotebookModulesCatalog:
     """
-    Load and validate the curated notebook modules catalog.
-
-    The bundled catalog is immutable and already validated once at startup, so
-    results are memoized (keyed on ``path``). Test-only loads via an explicit
-    ``path`` use distinct keys and are not shared with the default entry.
-
-    Args:
-        path: Optional path to a catalog file. Defaults to the bundled catalog.
+    Load and validate the curated notebook modules catalog from the bundled JSON file.
 
     Returns:
         The validated NotebookModulesCatalog.
@@ -187,10 +157,7 @@ def load_catalog(path: Path | None = None) -> NotebookModulesCatalog:
 
 def load_catalog_or_exit(path: Path | None = None) -> NotebookModulesCatalog:
     """
-    Load the catalog, logging a fatal error and exiting on failure.
-
-    Used at application startup where invalid bundled product configuration
-    is a startup error, not a recoverable user error.
+    Load the catalog or exit with a fatal error. Used at startup.
 
     Returns:
         The validated NotebookModulesCatalog.

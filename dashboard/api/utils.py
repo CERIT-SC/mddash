@@ -284,16 +284,10 @@ GIT_CLONE_TIMEOUT = 120
 
 def download_git_repo(git_url: str, target_dir: Path, access_token: str | None = None) -> None:
     """
-    Download files from a git repository without history.
+    Shallow-clone a git repository into ``target_dir`` without history.
 
-    Files are placed directly in target_dir (no subdirectory, no .git folder).
-    Caller is responsible for validating the URL before calling this function.
-
-    Args:
-        git_url: Git repository URL to clone.
-        target_dir: Directory to download files to.
-        access_token: Optional access token for private HTTPS repositories.
-                      Not applicable to SSH URLs (git@...).
+    The caller is responsible for validating the URL. Files are placed directly
+    in ``target_dir`` (no subdirectory, no ``.git`` folder).
     """
     target_dir.mkdir(parents=True, exist_ok=True)
     clone_url = _inject_token(git_url, access_token)
@@ -320,7 +314,7 @@ def download_git_repo(git_url: str, target_dir: Path, access_token: str | None =
 
 def _inject_token(git_url: str, access_token: str | None) -> str:
     """
-    Inject an access token into an HTTPS git URL, returning the clone URL.
+    Inject an access token into an HTTPS git URL for cloning.
 
     Returns:
         The git URL with the token embedded, or the original URL if no token applies.
@@ -330,21 +324,12 @@ def _inject_token(git_url: str, access_token: str | None) -> str:
     parsed = urlparse(git_url)
     if parsed.scheme not in {"http", "https"}:
         return git_url
-    netloc_with_token = f"{access_token}@{parsed.netloc}"
-    return parsed._replace(netloc=netloc_with_token).geturl()
+    return parsed._replace(netloc=f"{access_token}@{parsed.netloc}").geturl()
 
 
 def _git(args: list[str], *, cwd: Path | None = None, label: str = "operation") -> None:
     """
-    Run a git subprocess, raising InternalServerError on failure.
-
-    Only ``label`` and the captured ``stderr`` are logged; the raw ``args``
-    (which may contain a token-bearing URL) are never logged.
-
-    Args:
-        args: Git command arguments (without the leading ``git``).
-        cwd: Optional working directory for the git command.
-        label: Short, non-sensitive operation name used in logs and errors.
+    Run a git subprocess. Only ``label`` and stderr are logged; args may contain tokens.
 
     Raises:
         InternalServerError: If the git command fails or times out.
@@ -368,23 +353,13 @@ def _git(args: list[str], *, cwd: Path | None = None, label: str = "operation") 
 
 def download_git_repo_module(git_url: str, module_path: str, target_dir: Path, access_token: str | None = None) -> None:
     """
-    Check out a single module subdirectory from a git repository.
+    Sparse-checkout a single module subdirectory from a git repository.
 
-    Perform a shallow partial clone with blob filtering and sparse-check out
-    only ``module_path``. The directory's *contents* (not the directory itself)
-    are copied into ``target_dir``. No ``.git`` metadata remains.
-
-    Fall back to a normal shallow clone when the server does not support blob
-    filtering, but still copy only the selected module.
-
-    Args:
-        git_url: Git repository URL to clone.
-        module_path: Repository-relative directory path to check out.
-        target_dir: Directory to copy the module contents into.
-        access_token: Optional access token for private HTTPS repositories.
+    Copies the directory's *contents* (not the directory itself) into ``target_dir``.
+    Falls back to a normal shallow clone if the server doesn't support blob filtering.
 
     Raises:
-        NotFound: If the module path does not exist in the repository.
+        NotFound: If ``module_path`` does not exist in the repository.
     """
     target_dir.mkdir(parents=True, exist_ok=True)
     clone_url = _inject_token(git_url, access_token)

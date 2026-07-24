@@ -61,15 +61,12 @@ def create_experiment() -> ResponseReturnValue:
         raise BadRequest(f"Invalid engine: {engine_str}")
 
     if notebook_module_id is not None:
-        # Curated mode: resolve the module from the bundled catalog and use its
-        # configured repository (defaults to the platform default). No
-        # client-provided repository URL or path is trusted.
+        # Curated mode: server resolves module and repository; no client URL trusted.
         module = load_catalog().get_module_for_engine(notebook_module_id, engine.value)
         if module is None:
             raise BadRequest(f"Unknown or incompatible notebook module: {notebook_module_id}")
         notebooks_repo = module.repository or DEFAULT_NOTEBOOKS_REPO
     else:
-        # Custom mode: validate the client-provided repository URL.
         validate_git_url(notebooks_repo)
 
     match form["type"]:

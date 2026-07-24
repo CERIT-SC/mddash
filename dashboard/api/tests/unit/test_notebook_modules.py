@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from jsonschema import ValidationError
-from notebook_modules import SCHEMA_PATH, NotebookModule, load_catalog
+from notebook_modules import SCHEMA_PATH, load_catalog
 
 MIN_MODULE_COUNT = 2
 
@@ -171,24 +171,6 @@ class TestModulePathSafety:
             assert "\\" not in module.path
             assert ".." not in module.path.split("/")
 
-    def test_module_resolved_relative_to_dir(self, tmp_path: Path) -> None:
-        """resolve_path should produce a path inside the given base directory."""
-        module = NotebookModule(id="x", name="X", description=None, engine="GMX", path="gromacs/protein")
-
-        resolved = module.resolve_path(tmp_path)
-
-        assert resolved == tmp_path / "gromacs" / "protein"
-        resolved.relative_to(tmp_path)
-
-    def test_module_to_dict_includes_path(self) -> None:
-        """The internal module representation includes the path for server-side use."""
-        module = NotebookModule(id="x", name="X", description="d", engine="GMX", path="gromacs/protein")
-
-        data = module.to_dict()
-
-        assert data["path"] == "gromacs/protein"
-        assert data["engine"] == "GMX"
-
 
 class TestRepositoryField:
     """Tests for the optional repository field and root-path (Binder) support."""
@@ -244,24 +226,6 @@ class TestRepositoryField:
 
         assert module is not None
         assert module.is_root is True
-
-    def test_to_dict_includes_repository_when_present(self) -> None:
-        """to_dict should include repository when set."""
-        module = NotebookModule(
-            id="x", name="X", description=None, engine="GMX", path=".", repository="https://example.com/repo.git"
-        )
-
-        data = module.to_dict()
-
-        assert data["repository"] == "https://example.com/repo.git"
-
-    def test_to_dict_omits_repository_when_absent(self) -> None:
-        """to_dict should not include repository when not set."""
-        module = NotebookModule(id="x", name="X", description=None, engine="GMX", path="gromacs/protein")
-
-        data = module.to_dict()
-
-        assert "repository" not in data
 
 
 class TestBundledSchemaSelfCheck:

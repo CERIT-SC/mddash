@@ -25,13 +25,10 @@ def index() -> Response:
 @handle_exceptions()
 def get_notebook_modules() -> Response:
     """
-    Get the curated notebook modules catalog for display.
-
-    Returns display metadata (id, name, engine, description) only. Internal
-    Git paths and repository URLs are not exposed to the client.
+    Return curated notebook module display metadata (no internal paths or URLs).
 
     Returns:
-        Response: JSON response with the list of curated notebook modules.
+        JSON response with the list of curated notebook modules.
     """
     catalog = load_catalog()
     return jsonify(catalog.to_public())
