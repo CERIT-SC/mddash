@@ -295,8 +295,11 @@ class InvenioClient:
         """Initialize a file upload slot in the draft."""
         try:
             resp = self._request("POST", self._url(draft_id), json=[{"key": key}], timeout=INIT_TIMEOUT)
+            if not resp.ok:
+                logger.error("initialize_file %s failed: %d %s", key, resp.status_code, resp.text[:200])
             return resp.ok
-        except Exception:
+        except Exception as e:
+            logger.exception("initialize_file %s raised: %s", key, e)
             return False
 
     def stream_content(self, draft_id: str, key: str, file_path: Path) -> bool:
@@ -304,8 +307,11 @@ class InvenioClient:
         try:
             with file_path.open("rb") as f:
                 resp = self._request("PUT", self._url(draft_id, key, "content"), data=f, timeout=UPLOAD_TIMEOUT)
+            if not resp.ok:
+                logger.error("stream_content %s failed: %d %s", key, resp.status_code, resp.text[:200])
             return resp.ok
-        except Exception:
+        except Exception as e:
+            logger.exception("stream_content %s raised: %s", key, e)
             return False
 
     def commit_file(self, draft_id: str, key: str) -> dict[str, Any] | None:
@@ -314,12 +320,14 @@ class InvenioClient:
             resp = self._request("POST", self._url(draft_id, key, "commit"), timeout=COMMIT_TIMEOUT)
             if resp.ok:
                 return resp.json()
-        except Exception:
-            pass
+            logger.error("commit_file %s failed: %d %s", key, resp.status_code, resp.text[:200])
+        except Exception as e:
+            logger.exception("commit_file %s raised: %s", key, e)
         return None
 
     def _request(self, method: str, url: str, **kwargs: Any) -> requests.Response:  # ruff:ignore[any-type]  # passthrough to requests.request
         """Execute an HTTP request with retry and 401-refresh logic."""
+        resp: requests.Response | None = None
         for attempt in range(MAX_RETRIES):
             headers = self._headers()
             kwargs.setdefault("headers", {}).update(headers)
@@ -340,7 +348,10 @@ class InvenioClient:
                     time.sleep(delay)
                     continue
                 raise
-        return resp  # type: ignore[possibly-undefined]
+        if resp is not None:
+            logger.error("Retries exhausted on %s %s: %d %s", method, url, resp.status_code, resp.text[:200])
+            return resp
+        raise RuntimeError(f"Retries exhausted on {method} {url} with no response")
 
 
 def list_eligible_files(experiment_id: str) -> list[tuple[str, Path]]:
