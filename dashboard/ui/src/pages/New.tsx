@@ -230,10 +230,9 @@ const New = () => {
             {type === "file" && <Dropzone inputName="simulation-files" onFilesChange={setFiles} />}
 
             <div className="flex flex-col gap-2">
-              <Label>Notebook Workflow</Label>
-
               {!useCustomRepo ? (
                 <div className="flex flex-col gap-2">
+                  <Label>Notebook Workflow</Label>
                   {modulesLoading && (
                     <p className="text-muted-foreground flex items-center gap-2 text-sm">
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -285,7 +284,7 @@ const New = () => {
               ) : (
                 <div className="flex flex-col gap-2">
                   <div className="flex flex-col gap-1">
-                    <Label htmlFor="notebooks-repo">Repository URL</Label>
+                    <Label htmlFor="notebooks-repo">Notebook Repository URL</Label>
                     <div className="flex gap-2">
                       <Input
                         id="notebooks-repo"
