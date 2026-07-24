@@ -1,6 +1,6 @@
 # Auth container - OAuth forward authentication service for Caddy
 
-FROM python:3.12-alpine
+FROM python:3.13-alpine
 
 COPY --from=ghcr.io/astral-sh/uv:0.11 /uv /uvx /bin/
 

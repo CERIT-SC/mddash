@@ -12,7 +12,7 @@
 			"pnpmVersion": "11.13.0"
 		},
 		"ghcr.io/devcontainers/features/python:1": {
-			"version": "3.12",
+			"version": "3.13",
 			"toolsToInstall": "uv"
 		},
 		"ghcr.io/devcontainers/features/docker-in-docker:4": {

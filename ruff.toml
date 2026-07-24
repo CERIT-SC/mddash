@@ -1,4 +1,4 @@
-target-version = "py312"
+target-version = "py313"
 line-length = 120
 preview = true  # required for DOC (pydoclint) rules
 extend-exclude = ["scripts", "docs", ".worktrees"]
