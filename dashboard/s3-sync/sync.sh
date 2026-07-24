@@ -50,17 +50,6 @@ EOF
     # Stage filters into the workdir: bisync writes its filter-hash .md5 next to them.
     mkdir -p "$WORKDIR"
     cp "$SRC_FILTERS" "$FILTERS_FILE"
-
-    # If the filter changed since last run, invalidate bisync state so the next
-    # cycle does --resync (otherwise bisync aborts on filter-hash mismatch).
-    NEW_HASH=$(md5sum "$FILTERS_FILE" | cut -d' ' -f1)
-    OLD_HASH=""
-    [ -f "$WORKDIR/filters.md5" ] && OLD_HASH=$(cat "$WORKDIR/filters.md5")
-    if [ "$NEW_HASH" != "$OLD_HASH" ]; then
-        log "Filter file changed (old=${OLD_HASH:-none} new=$NEW_HASH), invalidating bisync state"
-        rm -f "$WORKDIR"/*.lst "$WORKDIR"/*.lst-err 2>/dev/null || true
-        echo "$NEW_HASH" > "$WORKDIR/filters.md5"
-    fi
 }
 
 is_first_run() {
