@@ -60,23 +60,29 @@ def create_experiment() -> ResponseReturnValue:
     except ValueError:
         raise BadRequest(f"Invalid engine: {engine_str}")
 
+    module = None
     if notebook_module_id is not None:
         # Curated mode: server resolves module and repository; no client URL trusted.
         module = load_catalog().get_module_for_engine(notebook_module_id, engine.value)
         if module is None:
             raise BadRequest(f"Unknown or incompatible notebook module: {notebook_module_id}")
         notebooks_repo = module.repository or DEFAULT_NOTEBOOKS_REPO
+        if module.repository is not None:
+            # Guard against unsafe schemes even on trusted catalog URLs.
+            validate_git_url(module.repository)
+        # Never forward a client token to a curated (server-trusted) repository.
+        access_token = None
     else:
         validate_git_url(notebooks_repo)
 
     match form["type"]:
         case "pdb" if pdb_source:
             experiment = Experiment.from_pdb(
-                name, pdb_source, notebooks_repo, access_token, engine=engine, notebook_module_id=notebook_module_id
+                name, pdb_source, notebooks_repo, access_token, engine=engine, notebook_module=module
             )
         case "repo" if repo_url:
             experiment = Experiment.from_repo(
-                name, repo_url, notebooks_repo, access_token, engine=engine, notebook_module_id=notebook_module_id
+                name, repo_url, notebooks_repo, access_token, engine=engine, notebook_module=module
             )
         case "file" if simulation_files:
             experiment = Experiment.from_files(
@@ -85,7 +91,7 @@ def create_experiment() -> ResponseReturnValue:
                 notebooks_repo,
                 access_token,
                 engine=engine,
-                notebook_module_id=notebook_module_id,
+                notebook_module=module,
             )
         case _:
             raise BadRequest("Invalid experiment type or missing data.")

@@ -129,3 +129,38 @@ class TestDownloadGitRepoModule:
 
         assert call_count["clone"] == 2  # ruff:ignore[magic-value-comparison] — two clone attempts: filtered then fallback
         assert (target / "notebook.ipynb").exists()
+
+    def test_clone_failure_redacts_token_echoed_in_stderr(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A token echoed by git in the failure URL must be redacted from errors and logs."""
+        target = tmp_path / "target"
+        # git echoes the authenticated URL (token as userinfo) when it cannot read a password.
+        leaked = "fatal: could not read Password for 'http://ghp_secret@github.com':"
+        error = subprocess.CalledProcessError(1, "git")
+        error.stderr = leaked
+
+        with (
+            patch("utils.subprocess.run", side_effect=error),
+            pytest.raises(InternalServerError) as exc_info,
+        ):
+            download_git_repo_module(
+                "https://github.com/owner/repo.git", "gromacs/protein", target, access_token="ghp_secret"
+            )
+
+        assert "ghp_secret" not in str(exc_info.value)
+        assert "ghp_secret" not in caplog.text
+        assert "***" in str(exc_info.value)
+
+    def test_clone_timeout_does_not_retry(self, tmp_path: Path) -> None:
+        """A clone timeout must surface immediately without a fallback re-clone."""
+        target = tmp_path / "target"
+
+        with (
+            patch("utils.subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="git", timeout=1)) as mock_run,
+            pytest.raises(InternalServerError),
+        ):
+            download_git_repo_module("https://github.com/owner/repo.git", "gromacs/protein", target)
+
+        # Only the first (filtered) clone attempt runs; the timeout is not retried.
+        assert mock_run.call_count == 1

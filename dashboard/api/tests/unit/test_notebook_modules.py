@@ -94,16 +94,6 @@ class TestCatalogLookup:
         assert catalog.get_module_for_engine("gromacs-protein", "AMBER") is None
         assert catalog.get_module_for_engine("nope", "GMX") is None
 
-    def test_for_engine_filters_by_engine(self) -> None:
-        """for_engine should return only modules matching the engine."""
-        catalog = load_catalog()
-
-        gmx = catalog.for_engine("GMX")
-
-        assert all(m.engine == "GMX" for m in gmx)
-        assert any(m.id == "gromacs-protein" for m in gmx)
-        assert not any(m.engine == "AMBER" for m in gmx)
-
     def test_to_public_excludes_internal_paths_and_is_serializable(self) -> None:
         """to_public should expose display metadata without paths, and be JSON-serializable."""
         catalog = load_catalog()

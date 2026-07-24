@@ -84,15 +84,6 @@ class NotebookModulesCatalog:
         """
         return self.get(module_id, engine)
 
-    def for_engine(self, engine: str) -> list[NotebookModule]:
-        """
-        Return all modules compatible with the given engine.
-
-        Returns:
-            A list of modules whose engine matches.
-        """
-        return [m for m in self.modules if m.engine == engine]
-
     def to_public(self) -> list[dict]:
         """
         Return display metadata for all modules, excluding internal Git paths.

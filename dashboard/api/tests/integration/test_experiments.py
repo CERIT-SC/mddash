@@ -605,7 +605,6 @@ class TestCreateExperimentCuratedModule:
             patch("models.experiment.download_git_repo") as mock_full,
             patch("models.experiment.download_git_repo_module") as mock_module,
             patch("routes.experiments.load_catalog", return_value=catalog),
-            patch("models.experiment.load_catalog", return_value=catalog),
         ):
             mock_response = MagicMock()
             mock_response.status_code = 200
