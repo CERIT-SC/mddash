@@ -560,27 +560,23 @@ def _upload_single_file(
     attempt_id: str,
 ) -> bool:
     if not client.initialize_file(mdrepo_id, key):
-        _record_failure(status, failed_files, key, f"Failed to initialize file: {key}", experiment_id, attempt_id)
+        _record_failure(status, failed_files, key, "failed to initialize", experiment_id, attempt_id)
         return False
 
     if not verify_file_identity(path, identity):
-        _record_failure(
-            status, failed_files, key, f"Source file changed before upload: {key}", experiment_id, attempt_id
-        )
+        _record_failure(status, failed_files, key, "file changed during upload", experiment_id, attempt_id)
         return False
 
     if not client.stream_content(mdrepo_id, key, path):
-        _record_failure(status, failed_files, key, f"Failed to stream file content: {key}", experiment_id, attempt_id)
+        _record_failure(status, failed_files, key, "failed to upload content", experiment_id, attempt_id)
         return False
 
     if client.commit_file(mdrepo_id, key) is None:
-        _record_failure(status, failed_files, key, f"Failed to commit file: {key}", experiment_id, attempt_id)
+        _record_failure(status, failed_files, key, "failed to commit", experiment_id, attempt_id)
         return False
 
     if not verify_file_identity(path, identity):
-        _record_failure(
-            status, failed_files, key, f"Source file changed after upload: {key}", experiment_id, attempt_id
-        )
+        _record_failure(status, failed_files, key, "file changed during upload", experiment_id, attempt_id)
         return False
 
     return True

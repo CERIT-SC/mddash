@@ -253,13 +253,16 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
       {/* Failed files list */}
       {isUploadFailed && publishStatus?.failed_files && publishStatus.failed_files.length > 0 && (
         <div className="w-full space-y-1 rounded-md border border-red-300 p-3 text-sm">
-          <p className="font-medium">Failed files:</p>
-          <ul className="text-muted-foreground space-y-1">
+          <p className="font-medium">{publishStatus.failed_files.length} file(s) failed to upload:</p>
+          <ul className="text-muted-foreground space-y-0.5">
             {publishStatus.failed_files.slice(0, 10).map((f, i) => (
               <li key={i} className="truncate">
-                {f.key || "(general)"}: {f.error}
+                {f.key || "(general)"}
               </li>
             ))}
+            {publishStatus.failed_files.length > 10 && (
+              <li className="italic">...and {publishStatus.failed_files.length - 10} more</li>
+            )}
           </ul>
         </div>
       )}
