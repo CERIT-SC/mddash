@@ -13,6 +13,7 @@ from flask import Flask
 from flask.testing import FlaskClient
 from models import Experiment, Notebook
 from routes import experiments_bp, mdrepo_bp
+from upload.status import UploadStatus
 from werkzeug.exceptions import BadRequest, InternalServerError
 
 GMX_SCHEMA = {
@@ -380,6 +381,99 @@ class TestInvenioPublishUnchanged:
                 pytest.raises(InternalServerError, match="No valid MDRepo access token"),
             ):
                 exp.publish(target="invenio")
+
+
+class TestInvenioPublishRetryAfterDraftDeleted:
+    """Retry after the user deleted the draft in MDRepo creates a fresh draft."""
+
+    @patch("models.experiment.delete_upload_resources")
+    @patch("models.experiment.is_upload_active", return_value=False)
+    @patch("models.experiment.submit_upload_job", return_value="attempt-002")
+    @patch("models.experiment.mdrepo.check_experiment_status", return_value=None)
+    @patch("models.experiment.mdrepo.create_experiment", return_value={"id": "rec-new"})
+    @patch("models.experiment.metadump.extract_metadata_bulk", return_value=[])
+    def test_retry_after_draft_deleted_creates_new_draft(
+        self,
+        mock_meta: Mock,
+        mock_create: Mock,
+        mock_check_status: Mock,
+        mock_submit: Mock,
+        mock_active: Mock,
+        mock_delete_resources: Mock,
+        app: Flask,
+        tmp_path: Path,
+    ) -> None:
+        """When the draft was deleted in MDRepo, retry creates a new draft instead of targeting the dead ID."""
+        _seed_experiment(app)
+        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+
+        failed_status = UploadStatus(attempt_id="attempt-001", state="failed", reason="remote")
+
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
+            patch("models.experiment.read_status", return_value=failed_status),
+            app.app_context(),
+        ):
+            exp = Experiment.query.get("pubsh")
+            exp.mdrepo_id = "rec-deleted"
+            exp.mdrepo_published = False
+            db.session.commit()
+
+            token_manager = Mock()
+            token_manager.get_valid_token.return_value = "valid-token"
+            with patch("models.experiment.MDRepoTokenManager", return_value=token_manager):
+                result = exp.publish(target="invenio", community="ceitec")
+
+            db.session.refresh(exp)
+            assert exp.mdrepo_id == "rec-new"
+            assert result["id"] == "rec-new"
+            mock_create.assert_called_once()
+            mock_delete_resources.assert_called_once()
+
+    @patch("models.experiment.delete_upload_resources")
+    @patch("models.experiment.is_upload_active", return_value=False)
+    @patch("models.experiment.submit_upload_job", return_value="attempt-002")
+    @patch("models.experiment.mdrepo.check_experiment_status", return_value=False)
+    @patch("models.experiment.mdrepo.create_experiment", return_value={"id": "rec-new"})
+    @patch("models.experiment.metadump.extract_metadata_bulk", return_value=[])
+    def test_retry_when_draft_exists_reuses_draft(
+        self,
+        mock_meta: Mock,
+        mock_create: Mock,
+        mock_check_status: Mock,
+        mock_submit: Mock,
+        mock_active: Mock,
+        mock_delete_resources: Mock,
+        app: Flask,
+        tmp_path: Path,
+    ) -> None:
+        """When the draft still exists, retry reuses it instead of creating a new one."""
+        _seed_experiment(app)
+        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+
+        failed_status = UploadStatus(attempt_id="attempt-001", state="failed", reason="remote")
+
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
+            patch("models.experiment.read_status", return_value=failed_status),
+            app.app_context(),
+        ):
+            exp = Experiment.query.get("pubsh")
+            exp.mdrepo_id = "rec-existing"
+            exp.mdrepo_published = False
+            db.session.commit()
+
+            token_manager = Mock()
+            token_manager.get_valid_token.return_value = "valid-token"
+            with patch("models.experiment.MDRepoTokenManager", return_value=token_manager):
+                result = exp.publish(target="invenio", community="ceitec")
+
+            db.session.refresh(exp)
+            assert exp.mdrepo_id == "rec-existing"
+            assert result["id"] == "rec-existing"
+            mock_create.assert_not_called()
 
 
 class TestMdpositHandoffSelectedFiles:
