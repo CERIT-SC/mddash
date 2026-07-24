@@ -554,13 +554,11 @@ class Experiment(db.Model):  # type: ignore
         if upload_state == UploadState.FAILED.value:
             delete_upload_resources(self.id)
 
-        # Reuse the existing draft only if it still exists — the user may have
-        # deleted it in MDRepo between upload attempts.
+        # Reuse the draft only if it still exists — the user may have deleted it in MDRepo.
         if self.mdrepo_id and mdrepo.check_experiment_status(access_token, self.mdrepo_id) is not None:
             mdrepo_id = self.mdrepo_id
             mdrepo_experiment: dict = {"id": mdrepo_id, "links": {}}
         else:
-            # Draft was deleted in MDRepo (or never existed); create a fresh one.
             self.mdrepo_id = None
             self.mdrepo_published = None
             mdrepo_experiment = self._create_draft(access_token, community)

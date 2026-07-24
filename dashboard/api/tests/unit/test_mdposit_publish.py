@@ -384,7 +384,7 @@ class TestInvenioPublishUnchanged:
 
 
 class TestInvenioPublishRetryAfterDraftDeleted:
-    """Retry after the user deleted the draft in MDRepo creates a fresh draft."""
+    """Retry after draft deletion in MDRepo creates a fresh draft."""
 
     @patch("models.experiment.delete_upload_resources")
     @patch("models.experiment.is_upload_active", return_value=False)
@@ -403,7 +403,7 @@ class TestInvenioPublishRetryAfterDraftDeleted:
         app: Flask,
         tmp_path: Path,
     ) -> None:
-        """When the draft was deleted in MDRepo, retry creates a new draft instead of targeting the dead ID."""
+        """Test test_retry_after_draft_deleted_creates_new_draft."""
         _seed_experiment(app)
         (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
 
@@ -448,7 +448,7 @@ class TestInvenioPublishRetryAfterDraftDeleted:
         app: Flask,
         tmp_path: Path,
     ) -> None:
-        """When the draft still exists, retry reuses it instead of creating a new one."""
+        """Test test_retry_when_draft_exists_reuses_draft."""
         _seed_experiment(app)
         (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
 
