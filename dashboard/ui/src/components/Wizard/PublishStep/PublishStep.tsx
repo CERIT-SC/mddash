@@ -298,9 +298,14 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
       )}
 
       {hasDraft && !isUploadComplete && isAuthenticated && (
-        <p className="text-muted-foreground text-center text-xs">
-          The MDRepo draft is openable immediately. A warning is shown until the upload completes.
-        </p>
+        <a
+          href={experiment.mdrepo_record_url ?? undefined}
+          target="_blank"
+          rel="noreferrer"
+          className="text-muted-foreground hover:text-foreground text-center text-xs underline"
+        >
+          View the draft in MDRepo while files upload.
+        </a>
       )}
     </>
   )
