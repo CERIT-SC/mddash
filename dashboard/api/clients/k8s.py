@@ -89,7 +89,7 @@ def _ensure_k8s_config() -> None:
 
 
 def get_core_v1() -> CoreV1Api:
-    """Return a cached CoreV1Api client, loading in-cluster config on first use."""  # ruff:ignore[docstring-missing-returns]
+    """Return a cached CoreV1Api client, loading in-cluster config on first use."""
     global _core_v1  # ruff:ignore[global-statement]
     if _core_v1 is None:
         with _k8s_lock:
@@ -100,7 +100,7 @@ def get_core_v1() -> CoreV1Api:
 
 
 def get_batch_v1() -> BatchV1Api:
-    """Return a cached BatchV1Api client, loading in-cluster config on first use."""  # ruff:ignore[docstring-missing-returns]
+    """Return a cached BatchV1Api client, loading in-cluster config on first use."""
     global _batch_v1  # ruff:ignore[global-statement]
     if _batch_v1 is None:
         with _k8s_lock:
@@ -774,15 +774,7 @@ def wait_for_job(
 
 
 def read_job(name: str) -> object | None:
-    """
-    Return None if not found (404).
-
-    Returns:
-        The Job object, or None.
-
-    Raises:
-        ApiException: If the read fails for a reason other than 404.
-    """
+    """Return None if not found (404); re-raises other API errors."""
     try:
         batch_v1 = get_batch_v1()
         return batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE)
@@ -793,12 +785,7 @@ def read_job(name: str) -> object | None:
 
 
 def delete_job_foreground(name: str) -> None:
-    """
-    Foreground propagation blocks until pods are deleted.
-
-    Raises:
-        ApiException: If the delete fails for a reason other than 404.
-    """
+    """Foreground propagation; blocks until pods are deleted."""
     if not ping_resource("job", name):
         return
     batch_v1 = get_batch_v1()
@@ -817,24 +804,13 @@ def delete_job_foreground(name: str) -> None:
 
 
 def list_pods_by_label(label_selector: str) -> list:
-    """
-    List pods matching a label selector.
-
-    Returns:
-        List of pod objects.
-    """
     core_v1 = get_core_v1()
     result = core_v1.list_namespaced_pod(namespace=NAMESPACE, label_selector=label_selector)
     return result.items if result and result.items else []
 
 
 def wait_for_pod_admission(label_selector: str, timeout: int = 30) -> bool:
-    """
-    Poll until a pod reaches Running, Succeeded, or Failed (i.e. admitted, not Pending).
-
-    Returns:
-        True if admitted, False if timed out.
-    """
+    """Poll until a pod reaches Running, Succeeded, or Failed (admitted, not Pending)."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         pods = list_pods_by_label(label_selector)
@@ -847,12 +823,6 @@ def wait_for_pod_admission(label_selector: str, timeout: int = 30) -> bool:
 
 
 def wait_for_resource_absence(resource_type: str, name: str, timeout: int = 30) -> bool:
-    """
-    Poll until a resource is gone.
-
-    Returns:
-        True if gone, False if still exists after timeout.
-    """
     deadline = time.time() + timeout
     while time.time() < deadline:
         if not ping_resource(resource_type, name):

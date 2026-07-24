@@ -147,11 +147,6 @@ class Experiment(db.Model):  # type: ignore
             return f"{MDREPO_URL}/{MDREPO_RECORD_NAME}/uploads/{self.mdrepo_id}"
         return None
 
-    @property
-    def upload_state(self) -> str | None:
-        """Current durable upload state, inferred from PVC status file and live Job existence."""
-        return self._read_upload_state()
-
     @classmethod
     def prepare_env(
         cls,
@@ -525,22 +520,7 @@ class Experiment(db.Model):  # type: ignore
         raise BadRequest(description=f"Unknown publish target: {target}")
 
     def _publish_invenio(self, community: str) -> dict:
-        """
-        Publish the experiment to MDRepo as a draft and start a durable upload Job.
-
-        Returns 202-style metadata after the upload pod is admitted. If an active
-        upload already exists, returns its identity without creating a new one.
-
-        Args:
-            community: Community slug to publish the experiment to.
-
-        Returns:
-            Metadata including the draft ID, draft URL, upload ID, and upload state.
-
-        Raises:
-            InternalServerError: If there is no valid access token or MDRepo creation fails.
-            Conflict: If a published record exists or an active upload is in progress.
-        """
+        """Publish to MDRepo as a draft and start a durable upload Job (idempotent: returns existing active upload)."""
         token_manager = MDRepoTokenManager(session)
         access_token = token_manager.get_valid_token()
 
@@ -613,19 +593,7 @@ class Experiment(db.Model):  # type: ignore
         }
 
     def _create_draft(self, access_token: str, community: str) -> dict:
-        """
-        Create a new Invenio draft and persist its ID.
-
-        Args:
-            access_token: Valid MDRepo OAuth2 access token.
-            community: Community slug.
-
-        Returns:
-            The MDRepo experiment response.
-
-        Raises:
-            InternalServerError: If draft creation fails.
-        """
+        """Create a new Invenio draft and persist its ID."""
         gmx_simulations = [s for s in list_simulations(self.id) if s.engine == Engine.GMX.value and s.valid]
         tpr_paths = []
         for sim in gmx_simulations:
@@ -647,16 +615,7 @@ class Experiment(db.Model):  # type: ignore
         return mdrepo_experiment
 
     def _read_upload_state(self) -> str | None:
-        """
-        Determine the current upload state from the PVC status file and live Job.
-
-        If the PVC status says queued/running but the Job no longer exists,
-        reports ``failed`` with reason ``job_missing``. Returns None if no
-        status file exists.
-
-        Returns:
-            The current upload state string, or None.
-        """
+        """Reconcile upload state from the PVC status file and live Job (reports failed/job_missing if the Job is gone)."""
         status = read_status(self.id, DATA_DIR)
         if status is None:
             return None
@@ -670,16 +629,7 @@ class Experiment(db.Model):  # type: ignore
         return status.state
 
     def get_publish_status(self) -> dict:
-        """
-        Return the durable MDRepo upload status for this experiment.
-
-        Merges the PVC status document with live Job state. The PVC document is
-        authoritative for completed worker output; Kubernetes is authoritative
-        when the worker hasn't recorded a terminal state yet.
-
-        Returns:
-            A dict with the upload state, reason, progress, and draft metadata.
-        """
+        """Return the durable MDRepo upload status, merging the PVC document with live Job state."""
         status = read_status(self.id, DATA_DIR)
 
         # Resolve the effective state (may differ from the file if Job is gone).

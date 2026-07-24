@@ -79,34 +79,18 @@ class UploadStatus:
     failed_files: list[FailedFile] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
-        """
-        Serialise to a JSON-compatible dict.
-
-        Returns:
-            Dictionary representation.
-        """
+        """Serialise to a JSON-compatible dict."""
         return asdict(self)
 
 
 def _truncate(text: str, max_len: int) -> str:
-    """
-    Append ellipsis if shortened.
-
-    Returns:
-        Truncated string.
-    """
     if len(text) <= max_len:
         return text
     return text[: max_len - 3] + "..."
 
 
 def _sanitize_error(text: str) -> str:
-    """
-    Redact OAuth credentials that may leak into error messages.
-
-    Returns:
-        Redacted, truncated string.
-    """
+    """Redact OAuth credentials that may leak into error messages."""
     sanitized = text
     for redact in ("Bearer ", "access_token=", "refresh_token=", "client_secret="):
         if redact in sanitized:
@@ -116,22 +100,11 @@ def _sanitize_error(text: str) -> str:
 
 
 def status_path(experiment_id: str) -> Path:
-    """
-    Path to the status file.
-
-    Returns:
-        Absolute path to .mdrepo-upload.json.
-    """
     return DATA_DIR / experiment_id / STATUS_FILENAME
 
 
 def read_status(experiment_id: str) -> UploadStatus | None:
-    """
-    Read the upload status from the PVC.
-
-    Returns:
-        Parsed status, or None if the file is missing or corrupt.
-    """
+    """Return None if the file is missing or corrupt."""
     path = status_path(experiment_id)
     try:
         content = path.read_text(encoding="utf-8")
@@ -160,18 +133,7 @@ def read_status(experiment_id: str) -> UploadStatus | None:
 
 
 def write_status(status: UploadStatus, experiment_id: str, *, expected_attempt_id: str | None = None) -> bool:
-    """
-    Atomically write the status document (temp file, fsync, rename).
-
-    If ``expected_attempt_id`` is provided and the on-disk attempt ID differs,
-    the write is skipped (attempt fencing) and False is returned.
-
-    Returns:
-        True if written, False if fenced.
-
-    Raises:
-        OSError: If the atomic write fails after fencing check passes.
-    """
+    """Atomic write (temp file, fsync, rename); returns False if attempt-fenced."""
     path = status_path(experiment_id)
 
     if expected_attempt_id is not None:
@@ -223,12 +185,7 @@ class WorkerTokenManager:
             self.expires_at = 0.0
 
     def get_valid_token(self) -> str | None:
-        """
-        Return a valid access token, refreshing if within the safety window.
-
-        Returns:
-            Access token string, or None if no token is available.
-        """
+        """Return a valid access token, refreshing if within the safety window."""
         if not self.access_token:
             return None
         if time.time() >= self.expires_at - TOKEN_SAFETY_WINDOW:
@@ -236,12 +193,6 @@ class WorkerTokenManager:
         return self.access_token if self.access_token else None
 
     def _refresh(self) -> None:
-        """
-        Refresh the access token using the refresh-token grant.
-
-        Raises:
-            RuntimeError: If the refresh token is missing, invalid, or all retries fail.
-        """
         if not self.refresh_token:
             logger.error("No refresh token available for worker")
             raise RuntimeError("No refresh token available")
@@ -282,12 +233,7 @@ class WorkerTokenManager:
         raise RuntimeError("Token refresh failed after all retries")
 
     def handle_401(self) -> bool:
-        """
-        Attempt one refresh on 401 Unauthorized.
-
-        Returns:
-            True if the token was refreshed, False otherwise.
-        """
+        """Attempt one refresh on 401 Unauthorized."""
         if not self.refresh_token:
             return False
         try:
@@ -307,39 +253,19 @@ class InvenioClient:
         self.record_name = os.environ.get("MDREPO_RECORD_NAME", "datasets")
 
     def _headers(self) -> dict[str, str]:
-        """
-        Return authorization headers with a valid token.
-
-        Returns:
-            Dict with Authorization header.
-
-        Raises:
-            RuntimeError: If no valid token is available.
-        """
         token = self.tm.get_valid_token()
         if not token:
             raise RuntimeError("No valid access token")
         return {"Authorization": f"Bearer {token}"}
 
     def _url(self, draft_id: str, *parts: str) -> str:
-        """
-        Build a draft files API URL.
-
-        Returns:
-            Fully-qualified URL string.
-        """
         base = f"{self.api_url}/{self.record_name}/{draft_id}/draft/files"
         if parts:
             base += "/" + "/".join(parts)
         return base
 
     def list_files(self, draft_id: str) -> dict[str, dict[str, Any]]:
-        """
-        Return a dict of key -> file metadata from the draft.
-
-        Returns:
-            Dict mapping file key to {size, checksum, completed}.
-        """
+        """Return a dict of key -> file metadata from the draft."""
         result: dict[str, dict[str, Any]] = {}
         try:
             resp = self._request("GET", self._url(draft_id), timeout=INIT_TIMEOUT)
@@ -357,12 +283,7 @@ class InvenioClient:
         return result
 
     def delete_file(self, draft_id: str, key: str) -> bool:
-        """
-        Delete a file from the draft (idempotent — 404 is success).
-
-        Returns:
-            True if deleted or already gone, False on error.
-        """
+        """Delete a file from the draft (idempotent — 404 is success)."""
         try:
             resp = self._request("DELETE", self._url(draft_id, key), timeout=INIT_TIMEOUT)
             return resp.ok or resp.status_code == HTTP_NOT_FOUND
@@ -371,12 +292,7 @@ class InvenioClient:
             return False
 
     def initialize_file(self, draft_id: str, key: str) -> bool:
-        """
-        Initialize a file upload slot in the draft.
-
-        Returns:
-            True if initialized, False on error.
-        """
+        """Initialize a file upload slot in the draft."""
         try:
             resp = self._request("POST", self._url(draft_id), json=[{"key": key}], timeout=INIT_TIMEOUT)
             return resp.ok
@@ -384,12 +300,7 @@ class InvenioClient:
             return False
 
     def stream_content(self, draft_id: str, key: str, file_path: Path) -> bool:
-        """
-        Stream file content to the draft.
-
-        Returns:
-            True if uploaded, False on error.
-        """
+        """Stream file content to the draft."""
         try:
             with file_path.open("rb") as f:
                 resp = self._request("PUT", self._url(draft_id, key, "content"), data=f, timeout=UPLOAD_TIMEOUT)
@@ -398,12 +309,7 @@ class InvenioClient:
             return False
 
     def commit_file(self, draft_id: str, key: str) -> dict[str, Any] | None:
-        """
-        Commit an uploaded file in the draft.
-
-        Returns:
-            Commit response dict, or None on failure.
-        """
+        """Commit an uploaded file in the draft."""
         try:
             resp = self._request("POST", self._url(draft_id, key, "commit"), timeout=COMMIT_TIMEOUT)
             if resp.ok:
@@ -413,16 +319,7 @@ class InvenioClient:
         return None
 
     def _request(self, method: str, url: str, **kwargs: Any) -> requests.Response:  # ruff:ignore[any-type]  # passthrough to requests.request
-        """
-        Execute an HTTP request with retry and 401-refresh logic.
-
-        Returns:
-            The HTTP response.
-
-        Raises:
-            requests.ConnectionError: If the connection fails after all retries.
-            requests.Timeout: If the request times out after all retries.
-        """
+        """Execute an HTTP request with retry and 401-refresh logic."""
         for attempt in range(MAX_RETRIES):
             headers = self._headers()
             kwargs.setdefault("headers", {}).update(headers)
@@ -447,16 +344,7 @@ class InvenioClient:
 
 
 def list_eligible_files(experiment_id: str) -> list[tuple[str, Path]]:
-    """
-    List eligible files under the experiment directory using the rclone filter.
-
-    Returns:
-        List of (relative_key, absolute_path) tuples.
-
-    Raises:
-        subprocess.CalledProcessError: If rclone fails.
-        subprocess.TimeoutExpired: If rclone times out.
-    """
+    """List eligible files under the experiment directory using the rclone filter."""
     try:
         result = subprocess.run(
             [
@@ -499,12 +387,6 @@ def list_eligible_files(experiment_id: str) -> list[tuple[str, Path]]:
 
 
 def compute_file_md5(file_path: Path) -> str:
-    """
-    Compute the MD5 hex digest of a file.
-
-    Returns:
-        MD5 hex digest string.
-    """
     md5 = hashlib.md5()
     with file_path.open("rb") as f:
         for chunk in iter(lambda: f.read(128 * 1024), b""):
@@ -513,12 +395,6 @@ def compute_file_md5(file_path: Path) -> str:
 
 
 def get_file_identity(file_path: Path) -> dict[str, Any]:
-    """
-    Return size, mtime, and inode for a file path.
-
-    Returns:
-        Dict with size, mtime, and inode keys.
-    """
     stat = file_path.stat()
     return {
         "size": stat.st_size,
@@ -528,12 +404,6 @@ def get_file_identity(file_path: Path) -> dict[str, Any]:
 
 
 def verify_file_identity(file_path: Path, original: dict[str, Any]) -> bool:
-    """
-    Verify that a file's size, mtime, and inode haven't changed.
-
-    Returns:
-        True if unchanged, False otherwise.
-    """
     current = get_file_identity(file_path)
     return (
         current["size"] == original["size"]
@@ -547,29 +417,18 @@ def _is_already_committed(
     identity: dict[str, Any],
     existing: dict[str, Any],
 ) -> bool:
-    """
-    Check if a file is already committed with matching size and checksum.
-
-    Returns:
-        True if the file is already committed and unchanged, False otherwise.
-    """
     if not existing.get("completed"):
         return False
-    local_md5 = compute_file_md5(path)
     remote_checksum = existing.get("checksum", "")
     remote_md5 = ""
     if ":" in remote_checksum:
         remote_md5 = remote_checksum.split(":", 1)[1]
-    return existing.get("size") == identity["size"] and bool(remote_md5) and local_md5 == remote_md5
+    if existing.get("size") != identity["size"] or not remote_md5:
+        return False
+    return compute_file_md5(path) == remote_md5
 
 
 def run_worker(experiment_id: str, mdrepo_id: str, attempt_id: str) -> int:
-    """
-    Run the upload worker entry point.
-
-    Returns:
-        Exit code (0 = success, 1 = failure).
-    """
     logging.basicConfig(
         level=logging.INFO,
         format="[%(asctime)s] %(levelname)s\t%(name)s: %(message)s",
@@ -605,7 +464,6 @@ def _record_failure(
     experiment_id: str,
     attempt_id: str,
 ) -> None:
-    """Append a failed file, update status, and persist."""
     failed_files.append(FailedFile(key=key, error=_sanitize_error(error)))
     status.failed_files = failed_files[:MAX_FAILED_KEYS]
     write_status(status, experiment_id, expected_attempt_id=attempt_id)
@@ -618,12 +476,6 @@ def _do_upload(
     tm: WorkerTokenManager,
     status: UploadStatus,
 ) -> int:
-    """
-    Execute the upload flow.
-
-    Returns:
-        Exit code (0 = success, 1 = failure).
-    """
     files = list_eligible_files(experiment_id)
     if not files:
         logger.error("No eligible files found for experiment %s", experiment_id)
@@ -657,17 +509,13 @@ def _do_upload(
         identity = file_identities[key]
         existing = draft_files.get(key)
 
-        # Skip if already committed with matching checksum.
         if existing and _is_already_committed(path, identity, existing):
             logger.info("Skipping already committed file: %s", key)
             completed_bytes += identity["size"]
             completed_count += 1
             status.completed_files = completed_count
             status.completed_bytes = completed_bytes
-            write_status(status, experiment_id, expected_attempt_id=attempt_id)
             continue
-
-        # Remove or replace incomplete/mismatched entries.
         if existing:
             logger.info("Removing incomplete/mismatched draft file: %s", key)
             client.delete_file(mdrepo_id, key)
@@ -711,25 +559,14 @@ def _upload_single_file(
     experiment_id: str,
     attempt_id: str,
 ) -> bool:
-    """
-    Initialize, stream, and commit a single file.
-
-    Returns:
-        True on success, False on failure.
-    """
     if not client.initialize_file(mdrepo_id, key):
         _record_failure(status, failed_files, key, f"Failed to initialize file: {key}", experiment_id, attempt_id)
         return False
 
-    # Verify source identity before and after reading to detect mutations.
     if not verify_file_identity(path, identity):
         _record_failure(
             status, failed_files, key, f"Source file changed before upload: {key}", experiment_id, attempt_id
         )
-        return False
-
-    if not verify_file_identity(path, identity):
-        _record_failure(status, failed_files, key, f"Source file changed during read: {key}", experiment_id, attempt_id)
         return False
 
     if not client.stream_content(mdrepo_id, key, path):
@@ -750,7 +587,6 @@ def _upload_single_file(
 
 
 def _write_failed(experiment_id: str, attempt_id: str, reason: str, error: str) -> None:
-    """Write a terminal failed status document."""
     status = UploadStatus(
         attempt_id=attempt_id,
         state=STATE_FAILED,
@@ -761,7 +597,6 @@ def _write_failed(experiment_id: str, attempt_id: str, reason: str, error: str) 
 
 
 def main() -> None:
-    """Parse CLI arguments and run the worker."""
     parser = argparse.ArgumentParser(description="MDRepo upload worker")
     parser.add_argument("--experiment-id", required=True, help="Local experiment ID")
     parser.add_argument("--mdrepo-id", required=True, help="MDRepo draft ID")

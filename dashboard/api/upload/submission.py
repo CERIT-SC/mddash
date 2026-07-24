@@ -1,13 +1,4 @@
-"""
-Durable MDRepo upload Kubernetes Job submission.
-
-The Job name is deterministic by experiment ID, so a repeated publish request
-returns the existing Job instead of creating a duplicate.
-
-Credentials are passed to the worker via container environment variables.
-The values come from the API sidecar's session/config and are embedded in the
-Job manifest; this avoids Kubernetes Secrets and keeps the implementation simple.
-"""
+"""Durable MDRepo upload Kubernetes Job submission (deterministic name, credentials via container env)."""
 
 from __future__ import annotations
 
@@ -42,12 +33,7 @@ UPLOAD_RESOURCES = {
 
 
 def _dns1123_name(*parts: str) -> str:
-    """
-    Append a hash suffix if truncation is needed to stay under the 63-char limit.
-
-    Returns:
-        DNS-1123 compliant name.
-    """
+    """Append a hash suffix if truncation is needed to stay under the 63-char limit."""
     raw = "-".join(p for p in parts if p)
     safe = re.sub(r"[^a-z0-9-]+", "-", raw.lower()).strip("-")
     safe = re.sub(r"-+", "-", safe)
@@ -61,12 +47,7 @@ def _dns1123_name(*parts: str) -> str:
 
 
 def job_name(experiment_id: str) -> str:
-    """
-    Deterministic name for an experiment's upload Job.
-
-    Returns:
-        DNS-1123 compliant name.
-    """
+    """Deterministic name for an experiment's upload Job."""
     return _dns1123_name("mdrepo-upload", experiment_id)
 
 
@@ -75,16 +56,7 @@ class SubmissionError(Exception):
 
 
 def build_credential_env(credential_data: dict[str, str]) -> list[dict[str, Any]]:
-    """
-    Convert credential data to a container `env` list.
-
-    The values are embedded directly in the Job manifest for simplicity. This
-    is acceptable because the Job runs in the user's own namespace and the
-    values are the user's own MDRepo tokens.
-
-    Returns:
-        List of {"name": ..., "value": ...} dicts for the container spec.
-    """
+    """Convert credential data to a container env list (values embedded directly in the manifest)."""
     key_map = {
         "access_token": "MDREPO_ACCESS_TOKEN",
         "refresh_token": "MDREPO_REFRESH_TOKEN",
@@ -104,20 +76,7 @@ def submit_upload_job(
     credential_data: dict[str, str],
     data_dir: Path,
 ) -> str:
-    """
-    Submit a durable MDRepo upload as a Kubernetes Job.
-
-    If the Job already exists and is active, returns the existing attempt ID
-    without creating a new one. Otherwise: generates a fresh attempt ID, writes
-    queued status to the PVC, creates the Job with credentials in container env,
-    and waits for pod admission. On failure, cleans up all created resources.
-
-    Returns:
-        The attempt ID.
-
-    Raises:
-        SubmissionError: If submission fails before pod admission.
-    """
+    """Idempotently submit the upload Job (returns existing attempt if active, else creates and waits for admission)."""
     j_name = job_name(experiment_id)
 
     existing_status = _read_attempt_id(experiment_id, data_dir)
@@ -210,12 +169,6 @@ def submit_upload_job(
 
 
 def is_upload_active(experiment_id: str) -> bool:
-    """
-    Check whether the upload Job for the given experiment is still active.
-
-    Returns:
-        True if the Job exists and has an active pod.
-    """
     j_name = job_name(experiment_id)
     job_obj = k8s.read_job(j_name)
     if job_obj is None:
@@ -233,11 +186,5 @@ def delete_upload_resources(experiment_id: str) -> None:
 
 
 def _read_attempt_id(experiment_id: str, data_dir: Path) -> str | None:
-    """
-    Attempt ID from the PVC status file, or None if no status exists.
-
-    Returns:
-        The attempt ID string, or None.
-    """
     status = read_status(experiment_id, data_dir)
     return status.attempt_id if status else None

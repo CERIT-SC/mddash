@@ -44,6 +44,8 @@ ignore = [
     "no-self-use",    # keep instance methods for consistent API surface and mock-ability in tests
     "too-many-statements-in-try-clause",    # complex handlers shouldn't be force-split artificially
     "undocumented-public-function",    # test functions don't need docstrings, descriptive names suffice
+    "docstring-missing-returns",    # Returns: sections restate type annotations — one-line docstrings suffice
+    "docstring-missing-exception",    # Raises: sections restate raise statements — one-line docstrings suffice
 ]
 
 [lint.per-file-ignores]

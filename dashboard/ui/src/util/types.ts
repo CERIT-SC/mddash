@@ -16,7 +16,7 @@ export interface Experiment {
   notebooks_repo: string | null
   mdrepo_id: string | null
   mdrepo_record_url: string | null
-  upload_state: UploadState | null
+  upload_state?: UploadState | null
   step: number
   status: string
   engine: Engine
