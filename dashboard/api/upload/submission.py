@@ -177,8 +177,8 @@ def is_upload_active(experiment_id: str) -> bool:
     if job_obj is None:
         return False
     status = getattr(job_obj, "status", None)
-    active = getattr(status, "active", 0) if status else 0
-    return active > 0
+    active = getattr(status, "active", None) if status else None
+    return (active or 0) > 0
 
 
 def delete_upload_resources(experiment_id: str) -> None:
