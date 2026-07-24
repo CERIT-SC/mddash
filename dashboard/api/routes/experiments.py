@@ -206,16 +206,33 @@ def publish_experiment(experiment_id: str) -> ResponseReturnValue:
         # TODO: Add endpoint to fetch available communities from MDRepo and allow user to select from a dropdown in the publish UI.
         #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.
         result = experiment.publish(target="invenio", community="ceitec")
-    elif target == "mdposit":
+        return jsonify(result), HTTPStatus.ACCEPTED
+    if target == "mdposit":
         simulation_path = data.get("simulation_path")
         if not isinstance(simulation_path, str) or not simulation_path:
             raise BadRequest("MDPosit publish requires simulation_path.")
 
         result = experiment.publish(target="mdposit", simulation_path=simulation_path)
-    else:
-        raise BadRequest(f"Unknown publish target: {target}")
+        return jsonify(result), HTTPStatus.CREATED
+    raise BadRequest(f"Unknown publish target: {target}")
 
-    return jsonify(result), HTTPStatus.CREATED
+
+@experiments_bp.route("/<experiment_id>/publish/status", methods=["GET"])
+@handle_exceptions()
+def get_publish_status(experiment_id: str) -> Response:
+    """
+    Get the durable MDRepo upload status for an experiment.
+
+    Merges the PVC state document with live Kubernetes Job state.
+
+    Returns:
+        Response: JSON response with upload state, progress, and draft metadata.
+    """
+    experiment: Experiment = Experiment.query.get_or_404(
+        experiment_id, description=f"Experiment {experiment_id} not found"
+    )
+    status = experiment.get_publish_status()
+    return jsonify(status)
 
 
 @experiments_bp.route("/<experiment_id>/step", methods=["GET"])

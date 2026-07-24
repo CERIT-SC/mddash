@@ -71,7 +71,7 @@ class TestTunerJobNotFound:
         tuner_status_cache.clear()
         tuner_last_known_status.clear()
 
-    def test_404_marks_job_stopped(self, app: Flask, db_session: Session) -> None:  # ruff:ignore[unused-method-argument]
+    def test_404_marks_job_stopped(self, app: Flask, db_session: Session) -> None:
         """A 404 from the tuner must flip the job to the stopped state."""
         experiment = _make_experiment(db_session)
         job = _make_tuner_job(experiment)
@@ -82,12 +82,12 @@ class TestTunerJobNotFound:
             patch("models.tuner_job.tuner.amber_poll_status", side_effect=_not_found()),
             patch("models.tuner_job.tuner.amber_delete_job", side_effect=_not_found()),
         ):
-            status = job._status()  # ruff:ignore[private-member-access]
+            status = job._status()
 
         assert status == {}
         assert job.is_stopped is True
 
-    def test_404_preserves_last_known_trials(self, app: Flask, db_session: Session) -> None:  # ruff:ignore[unused-method-argument]
+    def test_404_preserves_last_known_trials(self, app: Flask, db_session: Session) -> None:
         """Trials from the last known status must be preserved when the job goes missing."""
         experiment = _make_experiment(db_session)
         job = _make_tuner_job(experiment)
@@ -106,14 +106,14 @@ class TestTunerJobNotFound:
             patch("models.tuner_job.tuner.amber_poll_status", side_effect=_not_found()),
             patch("models.tuner_job.tuner.amber_delete_job", side_effect=_not_found()),
         ):
-            job._status()  # ruff:ignore[private-member-access]
+            job._status()
 
         assert job.is_stopped is True
         preserved = job.trials
         assert len(preserved) == 1
         assert preserved[0]["performance"] == pytest.approx(EXPECTED_PERFORMANCE)
 
-    def test_stopped_job_does_not_re_poll(self, app: Flask, db_session: Session) -> None:  # ruff:ignore[unused-method-argument]
+    def test_stopped_job_does_not_re_poll(self, app: Flask, db_session: Session) -> None:
         """Once marked gone, subsequent status reads must not hit the tuner again."""
         experiment = _make_experiment(db_session)
         job = _make_tuner_job(experiment)
@@ -124,13 +124,13 @@ class TestTunerJobNotFound:
             patch("models.tuner_job.tuner.amber_poll_status", side_effect=_not_found()) as mock_poll,
             patch("models.tuner_job.tuner.amber_delete_job", side_effect=_not_found()),
         ):
-            job._status()  # ruff:ignore[private-member-access]
-            job._status()  # ruff:ignore[private-member-access]
-            job._status()  # ruff:ignore[private-member-access]
+            job._status()
+            job._status()
+            job._status()
 
         assert mock_poll.call_count == 1
 
-    def test_non_404_error_does_not_mark_stopped(self, app: Flask, db_session: Session) -> None:  # ruff:ignore[unused-method-argument]
+    def test_non_404_error_does_not_mark_stopped(self, app: Flask, db_session: Session) -> None:
         """A 5xx (non-404) error must not permanently mark the job stopped."""
         experiment = _make_experiment(db_session)
         job = _make_tuner_job(experiment)
@@ -142,12 +142,12 @@ class TestTunerJobNotFound:
             "models.tuner_job.tuner.amber_poll_status",
             side_effect=HTTPError("boom", response=server_error_response),
         ):
-            status = job._status()  # ruff:ignore[private-member-access]
+            status = job._status()
 
         assert status == {}
         assert job.is_stopped is False
 
-    def test_successful_poll_does_not_mark_stopped(self, app: Flask, db_session: Session) -> None:  # ruff:ignore[unused-method-argument]
+    def test_successful_poll_does_not_mark_stopped(self, app: Flask, db_session: Session) -> None:
         """A successful status poll must leave the job running."""
         experiment = _make_experiment(db_session)
         job = _make_tuner_job(experiment)
@@ -156,7 +156,7 @@ class TestTunerJobNotFound:
 
         ok_status = {"status": JobStatus.RUNNING, "trials": []}
         with patch("models.tuner_job.tuner.amber_poll_status", return_value=ok_status):
-            status = job._status()  # ruff:ignore[private-member-access]
+            status = job._status()
 
         assert status == ok_status
         assert job.is_stopped is False
@@ -175,7 +175,7 @@ class TestTunerJobErrorStatus:
         tuner_status_cache.clear()
         tuner_last_known_status.clear()
 
-    def test_error_status_with_message_sets_error_message(self, app: Flask, db_session: Session) -> None:  # ruff:ignore[unused-method-argument]
+    def test_error_status_with_message_sets_error_message(self, app: Flask, db_session: Session) -> None:
         """A tuner ERROR response with an error field must persist that message."""
         experiment = _make_experiment(db_session)
         job = _make_tuner_job(experiment)
@@ -184,12 +184,12 @@ class TestTunerJobErrorStatus:
 
         error_status = {"status": JobStatus.ERROR, "error": "Tuner exploded", "trials": []}
         with patch("models.tuner_job.tuner.amber_poll_status", return_value=error_status):
-            status = job._status()  # ruff:ignore[private-member-access]
+            status = job._status()
 
         assert status == error_status
         assert job.error_message == "Tuner exploded"
 
-    def test_error_status_without_message_sets_default_error_message(self, app: Flask, db_session: Session) -> None:  # ruff:ignore[unused-method-argument]
+    def test_error_status_without_message_sets_default_error_message(self, app: Flask, db_session: Session) -> None:
         """A tuner ERROR response without an error field must get a default message."""
         experiment = _make_experiment(db_session)
         job = _make_tuner_job(experiment)
@@ -198,7 +198,7 @@ class TestTunerJobErrorStatus:
 
         error_status = {"status": JobStatus.ERROR, "trials": []}
         with patch("models.tuner_job.tuner.amber_poll_status", return_value=error_status):
-            status = job._status()  # ruff:ignore[private-member-access]
+            status = job._status()
 
         assert status == error_status
         assert job.error_message == "Tuning job failed on the tuner."

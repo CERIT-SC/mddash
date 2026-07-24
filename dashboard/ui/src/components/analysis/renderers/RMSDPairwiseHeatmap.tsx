@@ -39,7 +39,9 @@ const RMSDPairwiseHeatmap: FC<RMSDPairwiseHeatmapProps> = ({ data }) => {
   const step = data.step
 
   const formatFrameLabel = (index: number) =>
-    start != null && step != null ? String(start + index * step) : String(index)
+    start !== null && start !== undefined && step !== null && step !== undefined
+      ? String(start + index * step)
+      : String(index)
 
   const buildRangeLabel = ({ start: originStart, end: originEnd }: { start: number; end: number }) => {
     if (originStart === originEnd) {

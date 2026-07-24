@@ -75,9 +75,13 @@ jobs:
             dockerfile: dashboard/api/Dockerfile
             image-suffix: mddash-api
           - name: s3sync
-            context: dashboard/s3-sync
+            context: dashboard
             dockerfile: dashboard/s3-sync/Dockerfile
             image-suffix: mddash-s3sync
+          - name: mdrepo-uploader
+            context: dashboard
+            dockerfile: dashboard/mdrepo-uploader/Dockerfile
+            image-suffix: mddash-mdrepo-uploader
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:

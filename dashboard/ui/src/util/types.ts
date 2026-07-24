@@ -16,12 +16,40 @@ export interface Experiment {
   notebooks_repo: string | null
   mdrepo_id: string | null
   mdrepo_record_url: string | null
+  upload_state?: UploadState | null
   step: number
   status: string
   engine: Engine
   notebook: Notebook
   tuner_jobs: TunerJob[]
   simulation_jobs: SimulationJob[]
+}
+
+export type UploadState = "queued" | "running" | "completed" | "failed"
+
+export interface PublishStatus {
+  experiment_id: string
+  mdrepo_id: string | null
+  draft_url: string | null
+  upload_attempt_id: string | null
+  upload_state: UploadState | null
+  reason: string | null
+  total_files: number
+  completed_files: number
+  total_bytes: number
+  completed_bytes: number
+  failed_files: { key: string; error: string }[]
+}
+
+export interface PublishResponse {
+  id: string
+  links?: {
+    edit_html?: string
+    self_html?: string
+  }
+  upload_id?: string
+  upload_state?: UploadState
+  draft_url?: string | null
 }
 
 export interface Simulation {

@@ -83,7 +83,7 @@ def fmt_cpu(millicores: int) -> str:
     Returns:
         str: e.g. ``"2"`` for 2000m, ``"500m"`` for 500m.
     """
-    if millicores >= 1000 and millicores % 1000 == 0:  # ruff:ignore[PLR2004]
+    if millicores >= 1000 and millicores % 1000 == 0:  # ruff:ignore[magic-value-comparison]
         return f"{millicores // 1000}"
     return f"{millicores}m"
 
@@ -147,7 +147,7 @@ def compare_quota(label: str, recommended: int, configured_str: str, is_cpu: boo
     return ok
 
 
-def main(config: str) -> None:  # ruff:ignore[PLR0914]
+def main(config: str) -> None:  # ruff:ignore[too-many-locals]
     """Print a full resource budget summary for both user and hub namespaces."""
     print(f"\nResource Budget — {config}")
     print("=" * 72)
@@ -227,10 +227,15 @@ def main(config: str) -> None:  # ruff:ignore[PLR0914]
     section("Analysis job  (on-demand, 1 at a time)")
     row("analysis", an_cpu_req, an_mem_req, an_cpu_lim, an_mem_lim, indent=1)
 
-    total_u_cr = pod_cpu_req + max_nb * per_nb_cr + an_cpu_req
-    total_u_mr = pod_mem_req + max_nb * per_nb_mr + an_mem_req
-    total_u_cl = pod_cpu_lim + max_nb * per_nb_cl + an_cpu_lim
-    total_u_ml = pod_mem_lim + max_nb * per_nb_ml + an_mem_lim
+    # MDRepo upload Job (on-demand, 1 at a time, hardcoded in upload/submission.py)
+    section("MDRepo upload job  (on-demand, 1 at a time)")
+    up_cr, up_mr, up_cl, up_ml = 100, 128 * 1024**2, 500, 256 * 1024**2
+    row("uploader", up_cr, up_mr, up_cl, up_ml, indent=1)
+
+    total_u_cr = pod_cpu_req + max_nb * per_nb_cr + an_cpu_req + up_cr
+    total_u_mr = pod_mem_req + max_nb * per_nb_mr + an_mem_req + up_mr
+    total_u_cl = pod_cpu_lim + max_nb * per_nb_cl + an_cpu_lim + up_cl
+    total_u_ml = pod_mem_lim + max_nb * per_nb_ml + an_mem_lim + up_ml
 
     print()
     print("  " + "═" * (COL + W * 4 + 4))
@@ -239,18 +244,10 @@ def main(config: str) -> None:  # ruff:ignore[PLR0914]
     print()
     print("  User namespace quota comparison (worst-case: all notebooks at highest tier):")
     ok_u = all([
-        compare_quota(
-            "NS_REQUESTS_CPU", total_u_cr, yq(".resources.namespaceQuota.requestsCpu", config), True
-        ),
-        compare_quota(
-            "NS_REQUESTS_MEMORY", total_u_mr, yq(".resources.namespaceQuota.requestsMemory", config), False
-        ),
-        compare_quota(
-            "NS_LIMITS_CPU", total_u_cl, yq(".resources.namespaceQuota.limitsCpu", config), True
-        ),
-        compare_quota(
-            "NS_LIMITS_MEMORY", total_u_ml, yq(".resources.namespaceQuota.limitsMemory", config), False
-        ),
+        compare_quota("NS_REQUESTS_CPU", total_u_cr, yq(".resources.namespaceQuota.requestsCpu", config), True),
+        compare_quota("NS_REQUESTS_MEMORY", total_u_mr, yq(".resources.namespaceQuota.requestsMemory", config), False),
+        compare_quota("NS_LIMITS_CPU", total_u_cl, yq(".resources.namespaceQuota.limitsCpu", config), True),
+        compare_quota("NS_LIMITS_MEMORY", total_u_ml, yq(".resources.namespaceQuota.limitsMemory", config), False),
     ])
     if not ok_u:
         print("\n  WARNING: Increase the under-provisioned values in resources.namespaceQuota and redeploy.")
@@ -346,7 +343,7 @@ def main(config: str) -> None:  # ruff:ignore[PLR0914]
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:  # ruff:ignore[PLR2004]
+    if len(sys.argv) != 2:  # ruff:ignore[magic-value-comparison]
         print(f"Usage: {sys.argv[0]} <config.yaml>", file=sys.stderr)
         sys.exit(1)
     main(sys.argv[1])

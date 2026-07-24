@@ -115,6 +115,8 @@ jupyterhub:
         value: "{{ $registry }}/{{ $cfg.sidecars.api.image }}:{{ $imageTag }}"
       S3_SYNC_IMAGE:
         value: "{{ $registry }}/{{ $cfg.sidecars.s3sync.image }}:{{ $imageTag }}"
+      MDREPO_UPLOADER_IMAGE:
+        value: "{{ $registry }}/{{ $cfg.sidecars.mdrepoUploader.image }}:{{ $imageTag }}"
       NOTEBOOK_IMAGE:
         value: "{{ $registry }}/{{ $cfg.notebook.image }}:{{ $imageTag }}"
       ANALYSIS_IMAGE:

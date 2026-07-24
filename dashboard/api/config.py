@@ -117,3 +117,9 @@ METADUMP_API_URL: str | None = os.environ.get("METADUMP_API_URL")
 
 if not METADUMP_API_URL:
     logger.warning("METADUMP_API_URL environment variable is not set. MetaDump metadata extraction will be skipped.")
+
+# MDRepo upload Job image — injected from Helm like other sidecar images.
+MDREPO_UPLOADER_IMAGE = os.environ.get("MDREPO_UPLOADER_IMAGE", "")
+
+if not MDREPO_UPLOADER_IMAGE:
+    logger.warning("MDREPO_UPLOADER_IMAGE is not set. Durable MDRepo uploads will not work.")

@@ -127,7 +127,7 @@ class TestSessionCleanup:
             _sessions["expired"] = ("user2", now - 100)
 
             # Force cleanup by resetting last cleanup time
-            auth._last_cleanup = 0  # ruff:ignore[private-member-access]
+            auth._last_cleanup = 0
 
             remove_expired_sessions()
 
@@ -292,9 +292,9 @@ class TestLoginTokenEndpoints:
 
 def test_health_logs_first_health_once(client: FlaskClient, caplog) -> None:  # ruff:ignore[missing-type-function-argument]
     """The first auth health response should be visible in startup diagnostics once."""
-    import auth  # ruff:ignore[import-outside-top-level]
+    import auth
 
-    auth._first_health_logged = False  # ruff:ignore[private-member-access]
+    auth._first_health_logged = False
     caplog.set_level("INFO", logger="auth")
 
     client.get("/health")

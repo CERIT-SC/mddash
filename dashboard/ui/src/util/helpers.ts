@@ -5,7 +5,7 @@
  * @returns human-readable duration string
  */
 export function formatDuration(seconds: number): string {
-  if (seconds == null || isNaN(seconds)) return "?"
+  if (seconds === null || seconds === undefined || isNaN(seconds)) return "?"
   const units = [
     { label: "day", secs: 86400 },
     { label: "hour", secs: 3600 },

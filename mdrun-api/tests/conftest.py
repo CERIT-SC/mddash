@@ -64,7 +64,7 @@ def mock_k8s() -> Generator[MagicMock, None, None]:
 
 
 @pytest.fixture
-def app(mock_k8s: MagicMock) -> Generator[Flask, None, None]:  # ruff:ignore[unused-function-argument]
+def app(mock_k8s: MagicMock) -> Generator[Flask, None, None]:
     """
     Create a Flask application configured for testing.
 

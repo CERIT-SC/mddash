@@ -23,6 +23,8 @@ from kubespawner import KubeSpawner
 
 logger = logging.getLogger(__name__)
 
+PRESERVE_LABEL = "mddash.io/preserve-on-stop"
+
 
 # =============================================================================
 # Kubernetes Manifest Builders
@@ -442,6 +444,7 @@ _API_PASSTHROUGH_ENV = [
     "TUNER_PASSWORD",
     "DEFAULT_NOTEBOOKS_REPO",
     "METADUMP_API_URL",
+    "MDREPO_UPLOADER_IMAGE",
 ]
 
 
@@ -724,7 +727,10 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # r
     """
     Clean up after user pod stops.
 
-    Sets namespace quota to zero and deletes all pods to free resources.
+    Sets namespace quota to zero and deletes all non-preserved pods to free
+    resources. Pods owned by a labeled MDRepo upload Job with
+    ``mddash.io/preserve-on-stop=true`` are retained so durable uploads
+    continue after server stop.
     """
     config.load_incluster_config()
     api_client = ApiClient()
@@ -739,10 +745,21 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # r
         zero_quota_manifest = _get_namespace_manifest(user_namespace, rancher_project_id, "0", "0", "0", "0")
         await core_api.patch_namespace(name=user_namespace, body=zero_quota_manifest)  # type: ignore[misc]
 
+        # Delete all pods except those owned by a labeled MDRepo upload Job.
         try:
-            await core_api.delete_collection_namespaced_pod(namespace=user_namespace)
+            pods = await core_api.list_namespaced_pod(namespace=user_namespace)
+            for pod in pods.items:
+                pod_labels = getattr(getattr(pod, "metadata", None), "labels", None) or {}
+                if pod_labels.get(PRESERVE_LABEL) == "true":
+                    logger.info("Retaining upload pod %s during server stop", pod.metadata.name)
+                    continue
+                try:
+                    await core_api.delete_namespaced_pod(name=pod.metadata.name, namespace=user_namespace)
+                except ApiException as e:
+                    if e.status != HTTPStatus.NOT_FOUND:
+                        logger.warning("Failed to delete pod %s: %s", pod.metadata.name, e)
         except ApiException as e:
-            logger.exception("Error deleting pods in namespace %s: %s", user_namespace, e)
+            logger.exception("Error listing/deleting pods in namespace %s: %s", user_namespace, e)
     finally:
         await api_client.close()
 

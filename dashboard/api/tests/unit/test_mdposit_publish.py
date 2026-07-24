@@ -1,7 +1,5 @@
 """Unit tests for MDPosit-aware publish routing and from_repo logic."""
 
-# ruff:file-ignore[unused-method-argument ]— @patch decorators inject unused mock params by design
-
 import json
 import os
 from collections.abc import Generator
@@ -15,6 +13,7 @@ from flask import Flask
 from flask.testing import FlaskClient
 from models import Experiment, Notebook
 from routes import experiments_bp, mdrepo_bp
+from upload.status import UploadStatus
 from werkzeug.exceptions import BadRequest, InternalServerError
 
 GMX_SCHEMA = {
@@ -161,14 +160,18 @@ class TestDefaultPublishTargetInvenio:
             )
             assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
-    @patch("models.experiment.mdrepo.start_upload_worker")
+    @patch("models.experiment.is_upload_active", return_value=False)
+    @patch("models.experiment.submit_upload_job", return_value="attempt-001")
+    @patch("models.experiment.read_status", return_value=None)
     @patch("models.experiment.mdrepo.create_experiment", return_value={"id": "rec-001"})
     @patch("models.experiment.metadump.extract_metadata_bulk", return_value=[])
     def test_publish_invenio_with_token_succeeds(
         self,
         mock_meta: Mock,
         mock_create: Mock,
-        mock_upload: Mock,
+        mock_read_status: Mock,
+        mock_submit: Mock,
+        mock_active: Mock,
         app: Flask,
         tmp_path: Path,
     ) -> None:
@@ -187,7 +190,8 @@ class TestDefaultPublishTargetInvenio:
             with patch("models.experiment.MDRepoTokenManager", return_value=token_manager):
                 result = exp.publish(target="invenio", community="ceitec")
 
-            assert result == {"id": "rec-001"}
+            assert result["id"] == "rec-001"
+            assert result["upload_state"] == "queued"
             mock_create.assert_called_once()
 
 
@@ -313,14 +317,18 @@ class TestMdpositPublishNoDbMutation:
 class TestInvenioPublishUnchanged:
     """Invenio publish still sets mdrepo_id and mdrepo_published=False."""
 
-    @patch("models.experiment.mdrepo.start_upload_worker")
+    @patch("models.experiment.is_upload_active", return_value=False)
+    @patch("models.experiment.submit_upload_job", return_value="attempt-999")
+    @patch("models.experiment.read_status", return_value=None)
     @patch("models.experiment.mdrepo.create_experiment", return_value={"id": "rec-999"})
     @patch("models.experiment.metadump.extract_metadata_bulk", return_value=[])
     def test_invenio_publish_sets_mdrepo_fields(
         self,
         mock_meta: Mock,
         mock_create: Mock,
-        mock_upload: Mock,
+        mock_read_status: Mock,
+        mock_submit: Mock,
+        mock_active: Mock,
         app: Flask,
         tmp_path: Path,
     ) -> None:
@@ -343,16 +351,15 @@ class TestInvenioPublishUnchanged:
             db.session.refresh(exp)
             assert exp.mdrepo_id == "rec-999"
             assert exp.mdrepo_published is False
-            assert result == {"id": "rec-999"}
+            assert result["id"] == "rec-999"
+            assert result["upload_state"] == "queued"
 
-    @patch("models.experiment.mdrepo.start_upload_worker")
     @patch("models.experiment.mdrepo.create_experiment", return_value={"id": "rec-999"})
     @patch("models.experiment.metadump.extract_metadata_bulk", return_value=[])
     def test_invenio_publish_raises_without_token(
         self,
         mock_meta: Mock,
         mock_create: Mock,
-        mock_upload: Mock,
         app: Flask,
         tmp_path: Path,
     ) -> None:
@@ -374,6 +381,139 @@ class TestInvenioPublishUnchanged:
                 pytest.raises(InternalServerError, match="No valid MDRepo access token"),
             ):
                 exp.publish(target="invenio")
+
+
+class TestInvenioPublishRetryAfterDraftDeleted:
+    """Retry after draft deletion in MDRepo creates a fresh draft."""
+
+    @patch("models.experiment.delete_upload_resources")
+    @patch("models.experiment.is_upload_active", return_value=False)
+    @patch("models.experiment.submit_upload_job", return_value="attempt-002")
+    @patch("models.experiment.mdrepo.check_experiment_status", return_value=None)
+    @patch("models.experiment.mdrepo.create_experiment", return_value={"id": "rec-new"})
+    @patch("models.experiment.metadump.extract_metadata_bulk", return_value=[])
+    def test_retry_after_draft_deleted_creates_new_draft(
+        self,
+        mock_meta: Mock,
+        mock_create: Mock,
+        mock_check_status: Mock,
+        mock_submit: Mock,
+        mock_active: Mock,
+        mock_delete_resources: Mock,
+        app: Flask,
+        tmp_path: Path,
+    ) -> None:
+        """Test test_retry_after_draft_deleted_creates_new_draft."""
+        _seed_experiment(app)
+        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+
+        failed_status = UploadStatus(attempt_id="attempt-001", state="failed", reason="remote")
+
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
+            patch("models.experiment.read_status", return_value=failed_status),
+            app.app_context(),
+        ):
+            exp = Experiment.query.get("pubsh")
+            exp.mdrepo_id = "rec-deleted"
+            exp.mdrepo_published = False
+            db.session.commit()
+
+            token_manager = Mock()
+            token_manager.get_valid_token.return_value = "valid-token"
+            with patch("models.experiment.MDRepoTokenManager", return_value=token_manager):
+                result = exp.publish(target="invenio", community="ceitec")
+
+            db.session.refresh(exp)
+            assert exp.mdrepo_id == "rec-new"
+            assert result["id"] == "rec-new"
+            mock_create.assert_called_once()
+            mock_delete_resources.assert_called_once()
+
+    @patch("models.experiment.delete_upload_resources")
+    @patch("models.experiment.is_upload_active", return_value=False)
+    @patch("models.experiment.submit_upload_job", return_value="attempt-002")
+    @patch("models.experiment.mdrepo.check_experiment_status", return_value=False)
+    @patch("models.experiment.mdrepo.create_experiment", return_value={"id": "rec-new"})
+    @patch("models.experiment.metadump.extract_metadata_bulk", return_value=[])
+    def test_retry_when_draft_exists_reuses_draft(
+        self,
+        mock_meta: Mock,
+        mock_create: Mock,
+        mock_check_status: Mock,
+        mock_submit: Mock,
+        mock_active: Mock,
+        mock_delete_resources: Mock,
+        app: Flask,
+        tmp_path: Path,
+    ) -> None:
+        """Test test_retry_when_draft_exists_reuses_draft."""
+        _seed_experiment(app)
+        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+
+        failed_status = UploadStatus(attempt_id="attempt-001", state="failed", reason="remote")
+
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
+            patch("models.experiment.read_status", return_value=failed_status),
+            app.app_context(),
+        ):
+            exp = Experiment.query.get("pubsh")
+            exp.mdrepo_id = "rec-existing"
+            exp.mdrepo_published = False
+            db.session.commit()
+
+            token_manager = Mock()
+            token_manager.get_valid_token.return_value = "valid-token"
+            with patch("models.experiment.MDRepoTokenManager", return_value=token_manager):
+                result = exp.publish(target="invenio", community="ceitec")
+
+            db.session.refresh(exp)
+            assert exp.mdrepo_id == "rec-existing"
+            assert result["id"] == "rec-existing"
+            mock_create.assert_not_called()
+
+    @patch("models.experiment.is_upload_active", return_value=False)
+    @patch("models.experiment.submit_upload_job", return_value="attempt-002")
+    @patch("models.experiment.mdrepo.create_experiment", return_value={"id": "rec-new"})
+    @patch("models.experiment.metadump.extract_metadata_bulk", return_value=[])
+    def test_retry_after_completed_status_orphaned(
+        self,
+        mock_meta: Mock,
+        mock_create: Mock,
+        mock_submit: Mock,
+        mock_active: Mock,
+        app: Flask,
+        tmp_path: Path,
+    ) -> None:
+        """Test test_retry_after_completed_status_orphaned."""
+        _seed_experiment(app)
+        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+
+        completed_status = UploadStatus(attempt_id="attempt-001", state="completed")
+
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("models.simulation.DATA_DIR", tmp_path),
+            patch("models.experiment.read_status", return_value=completed_status),
+            app.app_context(),
+        ):
+            exp = Experiment.query.get("pubsh")
+            exp.mdrepo_id = None
+            exp.mdrepo_published = None
+            db.session.commit()
+
+            token_manager = Mock()
+            token_manager.get_valid_token.return_value = "valid-token"
+            with patch("models.experiment.MDRepoTokenManager", return_value=token_manager):
+                result = exp.publish(target="invenio", community="ceitec")
+
+            db.session.refresh(exp)
+            assert exp.mdrepo_id == "rec-new"
+            assert result["id"] == "rec-new"
+            mock_create.assert_called_once()
 
 
 class TestMdpositHandoffSelectedFiles:
@@ -571,7 +711,7 @@ class TestImportMdpositRepo:
         mock_dl_proj.side_effect = fake_download
 
         with (
-            patch("models.experiment._resolve_repo_link", return_value="https://mdposit.mddbr.eu/projects/PRJ1"),
+            patch("models.experiment.resolve_repo_link", return_value="https://mdposit.mddbr.eu/projects/PRJ1"),
             patch("models.experiment.mdposit.extract_accession", return_value="PRJ1"),
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.simulation.DATA_DIR", tmp_path),
@@ -602,7 +742,7 @@ class TestImportMdpositRepo:
         (tmp_path / "mpacc1").mkdir(parents=True, exist_ok=True)
 
         with (
-            patch("models.experiment._resolve_repo_link", return_value="https://mdposit.mddbr.eu/"),
+            patch("models.experiment.resolve_repo_link", return_value="https://mdposit.mddbr.eu/"),
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
@@ -632,7 +772,7 @@ class TestImportMdpositRepo:
         (tmp_path / "mpnf1").mkdir(parents=True, exist_ok=True)
 
         with (
-            patch("models.experiment._resolve_repo_link", return_value="https://mdposit.mddbr.eu/projects/EMPTY"),
+            patch("models.experiment.resolve_repo_link", return_value="https://mdposit.mddbr.eu/projects/EMPTY"),
             patch("models.experiment.mdposit.extract_accession", return_value="EMPTY"),
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.simulation.DATA_DIR", tmp_path),
@@ -650,7 +790,7 @@ class TestImportMdpositRepo:
 class TestFromRepoRouting:
     """from_repo delegates to _import_mdposit_repo or _import_invenio_repo based on URL."""
 
-    @patch("models.experiment._import_invenio_repo")
+    @patch("models.experiment.import_invenio_repo")
     @patch("models.experiment.mdposit.is_mdposit_url", return_value=False)
     @patch("models.experiment.download_git_repo")
     def test_from_repo_invenio_url(
@@ -665,7 +805,7 @@ class TestFromRepoRouting:
         (tmp_path / "inv01").mkdir(parents=True, exist_ok=True)
 
         with (
-            patch("models.experiment._resolve_repo_link", return_value="https://zenodo.org/records/12345"),
+            patch("models.experiment.resolve_repo_link", return_value="https://zenodo.org/records/12345"),
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
@@ -678,7 +818,7 @@ class TestFromRepoRouting:
             )
             mock_import.assert_called_once()
 
-    @patch("models.experiment._import_mdposit_repo")
+    @patch("models.experiment.import_mdposit_repo")
     @patch("models.experiment.mdposit.is_mdposit_url", return_value=True)
     @patch("models.experiment.download_git_repo")
     def test_from_repo_mdposit_url(
@@ -693,7 +833,7 @@ class TestFromRepoRouting:
         (tmp_path / "mp01").mkdir(parents=True, exist_ok=True)
 
         with (
-            patch("models.experiment._resolve_repo_link", return_value="https://mdposit.mddbr.eu/projects/P1"),
+            patch("models.experiment.resolve_repo_link", return_value="https://mdposit.mddbr.eu/projects/P1"),
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.simulation.DATA_DIR", tmp_path),
             app.app_context(),
