@@ -1,5 +1,12 @@
 import type { Engine } from "./const"
 
+export interface NotebookModule {
+  id: string
+  name: string
+  description: string
+  engine: Engine
+}
+
 export interface Experiment {
   id: string
   created_at: string

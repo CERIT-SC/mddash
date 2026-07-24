@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mddash/schemas/notebook-modules.schema.json",
+  "title": "Notebook modules catalog",
+  "description": "Curated notebook modules shipped with the default notebooks repository.",
+  "type": "object",
+  "required": ["modules"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "$comment": "Optional reference to this schema, for editor/tooling validation of the catalog document."
+    },
+    "modules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "engine", "path"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": {
+            "type": "string"
+          },
+          "engine": {
+            "enum": ["GMX", "AMBER"]
+          },
+          "repository": {
+            "type": "string",
+            "$comment": "Optional Git repository URL. Defaults to the configured default notebooks repository when absent.",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "$comment": "Repository-relative directory path. Use '.' for the repository root (full clone, preserves Binder setup files at root).",
+            "minLength": 1,
+            "pattern": "^(?:\\.|[a-zA-Z0-9][a-zA-Z0-9 _./-]*)$"
+          }
+        }
+      }
+    }
+  }
+}

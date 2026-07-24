@@ -7,6 +7,7 @@ from extensions import db
 from flask import Blueprint, Response, jsonify, request, session
 from flask.typing import ResponseReturnValue
 from models import Experiment
+from notebook_modules import load_catalog
 from schemas import ExperimentSchema
 from token_manager import MDRepoTokenManager
 from validators import validate_git_url
@@ -49,6 +50,7 @@ def create_experiment() -> ResponseReturnValue:
     repo_url = form.get("repo-url")
     notebooks_repo = form.get("notebooks-repo", DEFAULT_NOTEBOOKS_REPO)
     access_token = form.get("access-token")
+    notebook_module_id = form.get("notebook-module") or None
     simulation_files = request.files.getlist("simulation-files")
 
     # Get engine from form, default to GMX
@@ -58,15 +60,36 @@ def create_experiment() -> ResponseReturnValue:
     except ValueError:
         raise BadRequest(f"Invalid engine: {engine_str}")
 
-    validate_git_url(notebooks_repo)
+    if notebook_module_id is not None:
+        # Curated mode: resolve the module from the bundled catalog and use its
+        # configured repository (defaults to the platform default). No
+        # client-provided repository URL or path is trusted.
+        module = load_catalog().get_module_for_engine(notebook_module_id, engine.value)
+        if module is None:
+            raise BadRequest(f"Unknown or incompatible notebook module: {notebook_module_id}")
+        notebooks_repo = module.repository or DEFAULT_NOTEBOOKS_REPO
+    else:
+        # Custom mode: validate the client-provided repository URL.
+        validate_git_url(notebooks_repo)
 
     match form["type"]:
         case "pdb" if pdb_source:
-            experiment = Experiment.from_pdb(name, pdb_source, notebooks_repo, access_token, engine=engine)
+            experiment = Experiment.from_pdb(
+                name, pdb_source, notebooks_repo, access_token, engine=engine, notebook_module_id=notebook_module_id
+            )
         case "repo" if repo_url:
-            experiment = Experiment.from_repo(name, repo_url, notebooks_repo, access_token, engine=engine)
+            experiment = Experiment.from_repo(
+                name, repo_url, notebooks_repo, access_token, engine=engine, notebook_module_id=notebook_module_id
+            )
         case "file" if simulation_files:
-            experiment = Experiment.from_files(name, simulation_files, notebooks_repo, access_token, engine=engine)
+            experiment = Experiment.from_files(
+                name,
+                simulation_files,
+                notebooks_repo,
+                access_token,
+                engine=engine,
+                notebook_module_id=notebook_module_id,
+            )
         case _:
             raise BadRequest("Invalid experiment type or missing data.")
 

@@ -12,6 +12,7 @@ from extensions import db, ma, migrate
 from flask import Flask
 from flask_migrate import stamp, upgrade
 from logging_utils import configure_logging, enable_loggers
+from notebook_modules import load_catalog_or_exit
 from routes import (
     amber_bp,
     analysis_bp,
@@ -118,6 +119,14 @@ def create_app() -> Flask:
     reg_start = time.perf_counter()
     _register_blueprints(app)
     _log_duration("route-registration", reg_start)
+
+    # Validate the bundled notebook modules catalog at startup. Invalid product
+    # configuration is a startup error, not a recoverable user error. Runs before
+    # DB migrations so a bad catalog fails fast without leaving the database at a
+    # newer head than the (crashed) app.
+    catalog_start = time.perf_counter()
+    load_catalog_or_exit()
+    _log_duration("notebook-catalog", catalog_start)
 
     with app.app_context():
         _run_migrations()
