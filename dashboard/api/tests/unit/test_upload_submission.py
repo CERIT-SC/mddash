@@ -103,6 +103,7 @@ class TestSubmitUploadJob:
     @patch("upload.submission.write_status")
     @patch("upload.submission.create_queued_status")
     @patch("upload.submission.k8s")
+    @patch("upload.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
     def test_creates_job_with_env_credentials_and_waits_for_admission(
         self,
         mock_k8s: Mock,
@@ -161,6 +162,7 @@ class TestSubmitUploadJob:
     @patch("upload.submission.write_status")
     @patch("upload.submission.create_queued_status")
     @patch("upload.submission.k8s")
+    @patch("upload.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
     def test_admission_timeout_cleans_up(
         self,
         mock_k8s: Mock,
@@ -187,6 +189,7 @@ class TestSubmitUploadJob:
         assert mock_delete.call_count >= 1
 
     @patch("upload.submission.k8s")
+    @patch("upload.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
     @patch("upload.submission.is_upload_active", return_value=False)
     @patch("upload.submission.read_status", return_value=None)
     @patch("upload.submission.write_status")
@@ -221,6 +224,7 @@ class TestSubmitUploadJob:
         assert pod_labels["mddash.io/preserve-on-stop"] == "true"
 
     @patch("upload.submission.k8s")
+    @patch("upload.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
     @patch("upload.submission.is_upload_active", return_value=False)
     @patch("upload.submission.read_status", return_value=None)
     @patch("upload.submission.write_status")

@@ -90,6 +90,9 @@ def submit_upload_job(
     attempt_id = secrets.token_hex(8)
     write_status(create_queued_status(attempt_id), experiment_id, data_dir)
 
+    if not MDREPO_UPLOADER_IMAGE:
+        raise SubmissionError("MDREPO_UPLOADER_IMAGE is not set. Redeploy the Helm chart and restart the server.")
+
     labels = {
         "app": UPLOAD_APP_LABEL,
         EXPERIMENT_LABEL: experiment_id,
