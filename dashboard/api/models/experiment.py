@@ -535,8 +535,7 @@ class Experiment(db.Model):  # type: ignore
 
         upload_state = self._read_upload_state()
 
-        # A completed upload should not be re-submitted — unless the draft was
-        # deleted, leaving an orphaned status file with no mdrepo_id.
+        # Skip retry only when a completed upload still has a live draft.
         if upload_state == UploadState.COMPLETED.value and self.mdrepo_id:
             raise Conflict(description="Upload already completed. Use MDRepo to view or edit the published record.")
 
@@ -568,8 +567,7 @@ class Experiment(db.Model):  # type: ignore
         if not mdrepo_id:
             raise InternalServerError(description="Failed to create experiment in MDRepo.")
 
-        # Submit the upload Job. This writes queued status to the PVC, creates
-        # the Secret + Job, and waits for pod admission before returning.
+        # Submit the upload Job: writes queued status, creates Secret+Job, waits for admission.
         attempt_id = submit_upload_job(
             experiment_id=self.id,
             mdrepo_id=mdrepo_id,
