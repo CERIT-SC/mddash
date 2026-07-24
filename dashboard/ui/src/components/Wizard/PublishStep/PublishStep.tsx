@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 
 import { useQueryClient } from "@tanstack/react-query"
 import {
@@ -19,7 +19,6 @@ import { DEBUG, Engine, MDPOSIT_URL } from "@/util/const"
 import { formatFileSize } from "@/util/helpers"
 import { simulationMdpositUnavailableReason } from "@/util/simulation"
 import { type Experiment, type Simulation, type UploadState } from "@/util/types"
-import { useFiles } from "@/hooks/use-files"
 import { useMdPositPublishData, type MdPositHandoffFile } from "@/hooks/use-mdposit"
 import { getMDRepoAuthUrl, useMDRepoStatus, usePublishExperiment, usePublishStatus } from "@/hooks/use-mdrepo"
 import { Badge } from "@/components/ui/badge"
@@ -79,28 +78,19 @@ const PublishStep = (props: WizardStepProps) => {
 const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
   const queryClient = useQueryClient()
 
-  const { data: mdrepoStatus, isLoading: loadingAuth } = useMDRepoStatus()
-  const { data: files = [], isLoading: loadingFiles } = useFiles(experiment.id)
+  const { data: mdrepoStatus } = useMDRepoStatus()
   const publishExperiment = usePublishExperiment()
 
   const hasDraft = experiment.mdrepo_id !== null
   const isAuthenticated = mdrepoStatus?.authenticated ?? false
-  const isLoading = loadingAuth || loadingFiles
 
-  // Poll whenever there's a draft and the upload isn't terminal.
   const isPolling = hasDraft && experiment.upload_state !== "completed" && experiment.upload_state !== "failed"
   const { data: publishStatus } = usePublishStatus(experiment.id, isPolling)
 
-  // Use the polled status as the source of truth when available, falling back
-  // to the experiment cache (set on publish success or page load).
   const uploadState: UploadState | null = publishStatus?.upload_state ?? experiment.upload_state ?? null
 
-  const fileCount = publishStatus?.total_files ?? files.length
-  const totalSize = useMemo(
-    () =>
-      publishStatus?.total_bytes ?? files.reduce((sum, file) => sum + file.size, 0),
-    [files, publishStatus?.total_bytes],
-  )
+  const fileCount = publishStatus?.total_files
+  const totalSize = publishStatus?.total_bytes
 
   // Handle OAuth callback result in URL params
   useEffect(() => {
@@ -192,22 +182,17 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
       </div>
 
       {/* Stats */}
-      {isLoading ? (
-        <div className="text-muted-foreground flex items-center gap-2 text-sm">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading...
-        </div>
-      ) : (
+      {publishStatus && (
         <div className="flex w-full flex-col gap-2">
           <div className="flex items-center gap-2 text-sm">
             <Folder className="text-muted-foreground h-4 w-4" />
             <span className="text-muted-foreground font-medium">Files:</span>
-            <span>{fileCount}</span>
+            <span>{fileCount ?? "n/a"}</span>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <HardDrive className="text-muted-foreground h-4 w-4" />
             <span className="text-muted-foreground font-medium">Total Size:</span>
-            <span>{formatFileSize(totalSize)}</span>
+            <span>{totalSize != null ? formatFileSize(totalSize) : "n/a"}</span>
           </div>
           {isUploadComplete && (
             <div className="flex items-center gap-2 text-sm">
@@ -224,13 +209,13 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
               <Badge className="gap-1 bg-red-500 text-xs text-white">Upload Failed</Badge>
             </div>
           )}
-          {!isAuthenticated && (
-            <div className="rounded-md border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
-              You need to authenticate with MDRepo to{" "}
-              {hasDraft ? "view or edit the published experiment" : "publish your experiment"}. This is a one-time
-              authorization using your e-INFRA CZ account.
-            </div>
-          )}
+        </div>
+      )}
+      {!isAuthenticated && (
+        <div className="rounded-md border border-yellow-400 bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-950 dark:text-yellow-200">
+          You need to authenticate with MDRepo to{" "}
+          {hasDraft ? "view or edit the published experiment" : "publish your experiment"}. This is a one-time
+          authorization using your e-INFRA CZ account.
         </div>
       )}
 
@@ -273,7 +258,7 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
 
       {/* Action button */}
       {!isAuthenticated ? (
-        <Button variant="default" size="lg" onClick={handleAuthClick} disabled={isLoading} className="min-w-48">
+        <Button variant="default" size="lg" onClick={handleAuthClick} className="min-w-48">
           <LogIn className="mr-2 h-4 w-4" />
           Connect to MDRepo
         </Button>
@@ -282,7 +267,7 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
           variant="default"
           size="lg"
           onClick={handlePublishClick}
-          disabled={publishExperiment.isPending || isLoading || isUploadActive}
+          disabled={publishExperiment.isPending || isUploadActive}
           className="min-w-48"
         >
           {publishExperiment.isPending ? (
