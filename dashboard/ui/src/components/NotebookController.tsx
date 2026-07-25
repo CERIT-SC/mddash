@@ -16,7 +16,9 @@ import {
 
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
+import { buildNotebookUrl, pickNotebookFile, type NotebookRole } from "@/util/notebook"
 import { getPodStatusVariant, type Notebook, type NotebookTier } from "@/util/types"
+import { useFiles } from "@/hooks/use-files"
 import { useNotebook, useNotebookConfig, useSpawnNotebook, useStopNotebook } from "@/hooks/use-notebook"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -72,6 +74,7 @@ interface NotebookControllerProps {
   className?: string
   compact?: boolean
   inline?: boolean
+  role?: NotebookRole
 }
 
 function formatCpu(cpu: string): string {
@@ -88,7 +91,13 @@ function formatMemory(mem: string): string {
   return mem
 }
 
-const NotebookController = ({ experimentId, className, compact = false, inline = false }: NotebookControllerProps) => {
+const NotebookController = ({
+  experimentId,
+  className,
+  compact = false,
+  inline = false,
+  role,
+}: NotebookControllerProps) => {
   const isTransitioning_status = (s: Notebook["status"]) =>
     s === "PENDING" || s === "INITIALIZING" || s === "TERMINATING"
 
@@ -100,6 +109,8 @@ const NotebookController = ({ experimentId, className, compact = false, inline =
   const { data: config } = useNotebookConfig()
   const spawnNotebook = useSpawnNotebook(experimentId)
   const stopNotebook = useStopNotebook(experimentId)
+
+  const { data: notebookFiles } = useFiles(experimentId, "ipynb")
 
   const [selectedTier, setSelectedTier] = useState<NotebookTier | "">("")
   const [gpuEnabled, setGpuEnabled] = useState(false)
@@ -149,6 +160,9 @@ const NotebookController = ({ experimentId, className, compact = false, inline =
   const variant = getPodStatusVariant(displayStatus)
 
   const runningTierInfo = notebook.tier ? config?.tiers.find((t) => t.value === notebook.tier) : null
+
+  const openTarget = role ? pickNotebookFile(role, notebookFiles) : undefined
+  const openHref = openTarget ? buildNotebookUrl(notebook.path, notebook.token, openTarget.path) : notebook.path
 
   return (
     <div
@@ -263,7 +277,7 @@ const NotebookController = ({ experimentId, className, compact = false, inline =
           <div className="flex flex-wrap justify-center gap-2">
             {displayStatus === "RUNNING" && (
               <Button variant="default" asChild>
-                <a href={notebook.path} target="_blank" rel="noopener noreferrer">
+                <a href={openHref} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="mr-1 h-4 w-4" />
                   Open
                 </a>

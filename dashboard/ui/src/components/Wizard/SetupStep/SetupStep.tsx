@@ -32,7 +32,7 @@ const SetupStep = (props: WizardStepProps) => {
           </CardContent>
         </Card>
 
-        <NotebookController experimentId={experiment.id} compact className="w-full" />
+        <NotebookController experimentId={experiment.id} compact role="setup" className="w-full" />
       </div>
 
       <div>
