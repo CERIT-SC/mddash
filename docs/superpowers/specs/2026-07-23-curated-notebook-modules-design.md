@@ -32,22 +32,23 @@ Custom repositories may continue to contain Binder configuration. The existing n
 
 Experiment creation currently accepts an always-visible notebooks repository URL. The API shallow-clones the remote default branch, removes `.git`, and moves all repository-root content into the experiment directory. The selected engine does not affect the clone.
 
-The current `mddash-notebooks` default branch contains seven root-level files:
+The `mddash-notebooks` default branch is organized into per-engine, per-module directories. Each module is self-contained and uses the canonical notebook names `setup.ipynb` (setup role) and `analysis.ipynb` (analysis role, where the module provides one):
 
 ```text
-amber-protein-setup.ipynb
-amber.schema.json
-amber_wrapper.py
-gromacs.schema.json
-mdanalysis_utils.py
-protein-analysis.ipynb
-protein-setup.ipynb
+gromacs/protein/
+  setup.ipynb
+  analysis.ipynb
+  mdanalysis_utils.py
+
+amber/protein/
+  setup.ipynb
+  amber_wrapper.py
 ```
 
-The files form two self-contained groups:
+The modules form two self-contained groups:
 
-- GROMACS protein: `protein-setup.ipynb`, `protein-analysis.ipynb`, `mdanalysis_utils.py`, and `gromacs.schema.json`.
-- AMBER protein: `amber-protein-setup.ipynb`, `amber_wrapper.py`, and `amber.schema.json`.
+- GROMACS protein: `setup.ipynb`, `analysis.ipynb`, and `mdanalysis_utils.py`.
+- AMBER protein: `setup.ipynb` and `amber_wrapper.py`.
 
 The repository has no Binder configuration. Both setup notebooks expect `input.pdb` and write their simulation manifest and generated directories relative to the experiment root.
 
@@ -58,21 +59,19 @@ The initial repository organization is:
 ```text
 gromacs/
   protein/
-    protein-setup.ipynb
-    protein-analysis.ipynb
+    setup.ipynb
+    analysis.ipynb
     mdanalysis_utils.py
-    gromacs.schema.json
 
 amber/
   protein/
-    amber-protein-setup.ipynb
+    setup.ipynb
     amber_wrapper.py
-    amber.schema.json
 ```
 
 Future modules use the same engine/module shape, for example `gromacs/membrane/` or `amber/protein-ligand/`. The shape is a first-party organization convention, not a discovery contract for custom repositories.
 
-Each module must be self-contained. Notebooks, local Python helpers, schemas, and optional environment or Binder files required by that workflow live inside the module directory. MDDash copies the directory's contents, not the directory itself, into the experiment root. This preserves the current assumptions about `input.pdb`, local imports, schema paths, and generated simulation files.
+Each module must be self-contained. Notebooks, local Python helpers, and optional environment or Binder files required by that workflow live inside the module directory. MDDash copies the directory's contents, not the directory itself, into the experiment root. This preserves the current assumptions about `input.pdb`, local imports, and generated simulation files.
 
 ## Module Catalog
 
@@ -200,7 +199,7 @@ An older MDDash version continues to find root notebooks during step 2. The new 
 
 ### Repository Migration
 
-- Verify each reorganized module contains every notebook, helper, and schema it needs when copied alone into an empty experiment directory.
+- Verify each reorganized module contains every notebook and helper it needs when copied alone into an empty experiment directory.
 - Smoke-test GROMACS and AMBER protein setup from `input.pdb` after selective checkout.
 
 ## Future Extensions

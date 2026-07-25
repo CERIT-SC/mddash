@@ -61,7 +61,7 @@ const AnalyzeStep = (props: WizardStepProps) => {
   return (
     <div className="flex w-full flex-col items-center gap-4">
       <div className="flex w-full flex-col gap-4">
-        <NotebookController experimentId={experiment.id} compact inline className="w-full" />
+        <NotebookController experimentId={experiment.id} compact inline role="analysis" className="w-full" />
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0 flex-1">
           <div className="flex items-center justify-between">
