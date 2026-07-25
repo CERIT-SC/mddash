@@ -1,12 +1,13 @@
 import io
 import json
-import os
 import shutil
 import zipfile
 from functools import lru_cache
 from pathlib import Path
 
 from config import DATA_DIR
+from enums import Engine
+from manifest_schema import schema_url
 
 DEMO_DATA_DIR = Path(__file__).resolve().parent / "data"
 DEFAULT_TPR_FILE = DEMO_DATA_DIR / "md.tpr"
@@ -26,73 +27,6 @@ MDPOSIT_DEMO_FILES = {
     "mdposit/trajectory.xtc": DEFAULT_XTC_FILE,
 }
 
-GMX_SCHEMA = {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "MDDash GROMACS simulation manifest",
-    "type": "object",
-    "required": ["name", "engine", "files", "extra_args"],
-    "additionalProperties": False,
-    "properties": {
-        "$schema": {"type": "string"},
-        "name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
-        "engine": {"const": "GMX"},
-        "files": {
-            "type": "object",
-            "required": ["run_input", "reference_structure", "trajectory"],
-            "additionalProperties": False,
-            "properties": {
-                "run_input": {"type": "string"},
-                "run_structure": {"type": "string"},
-                "reference_structure": {"type": "string"},
-                "trajectory": {"type": "string"},
-            },
-        },
-        "extra_args": {"type": "string"},
-    },
-}
-
-AMBER_SCHEMA = {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "MDDash AMBER simulation manifest",
-    "type": "object",
-    "required": ["name", "engine", "files", "extra_args"],
-    "additionalProperties": False,
-    "properties": {
-        "$schema": {"type": "string"},
-        "name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
-        "engine": {"const": "AMBER"},
-        "files": {
-            "type": "object",
-            "required": ["topology", "coordinates", "control", "reference_structure", "trajectory"],
-            "additionalProperties": False,
-            "properties": {
-                "topology": {"type": "string"},
-                "coordinates": {"type": "string"},
-                "control": {"type": "string"},
-                "reference_structure": {"type": "string"},
-                "trajectory": {"type": "string"},
-            },
-        },
-        "extra_args": {"type": "string"},
-    },
-}
-
-
-def ensure_schema_files(experiment_id: str) -> None:
-    experiment_dir = DATA_DIR / experiment_id
-    experiment_dir.mkdir(parents=True, exist_ok=True)
-    _write_json_if_missing(experiment_dir / "gromacs.schema.json", GMX_SCHEMA)
-    _write_json_if_missing(experiment_dir / "amber.schema.json", AMBER_SCHEMA)
-
-
-def _write_json_if_missing(path: Path, data: dict) -> None:
-    if not path.exists():
-        path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
-
-
-def _schema_ref(schema_path: Path, sim_dir: Path) -> str:
-    return os.path.relpath(schema_path, start=sim_dir)
-
 
 def write_gmx_simulation(
     experiment_id: str,
@@ -107,9 +41,8 @@ def write_gmx_simulation(
     sim_path = simulation_path or f"{name}.simulation.json"
     sim_file = experiment_dir / sim_path
     sim_file.parent.mkdir(parents=True, exist_ok=True)
-    sim_dir = sim_file.parent
     content = {
-        "$schema": _schema_ref(experiment_dir / "gromacs.schema.json", sim_dir),
+        "$schema": schema_url(Engine.GMX),
         "name": name,
         "engine": "GMX",
         "files": {
@@ -137,9 +70,8 @@ def write_amber_simulation(
     sim_path = simulation_path or f"{name}.simulation.json"
     sim_file = experiment_dir / sim_path
     sim_file.parent.mkdir(parents=True, exist_ok=True)
-    sim_dir = sim_file.parent
     content = {
-        "$schema": _schema_ref(experiment_dir / "amber.schema.json", sim_dir),
+        "$schema": schema_url(Engine.AMBER),
         "name": name,
         "engine": "AMBER",
         "files": {

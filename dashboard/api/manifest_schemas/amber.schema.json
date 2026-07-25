@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MDDash AMBER simulation manifest",
+  "type": "object",
+  "required": ["name", "engine", "files", "extra_args"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "name": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+    "engine": { "const": "AMBER" },
+    "files": {
+      "type": "object",
+      "required": ["topology", "coordinates", "control", "reference_structure", "trajectory"],
+      "additionalProperties": false,
+      "properties": {
+        "topology": { "$ref": "#/$defs/relpath" },
+        "coordinates": { "$ref": "#/$defs/relpath" },
+        "control": { "$ref": "#/$defs/relpath" },
+        "reference_structure": { "$ref": "#/$defs/relpath" },
+        "trajectory": { "$ref": "#/$defs/relpath" }
+      }
+    },
+    "extra_args": { "type": "string" }
+  },
+  "$defs": {
+    "relpath": {
+      "type": "string",
+      "description": "Path relative to the experiment directory.",
+      "pattern": "^[A-Za-z0-9_./-]+$",
+      "not": { "pattern": "^/|\\.\\.|//" }
+    }
+  }
+}

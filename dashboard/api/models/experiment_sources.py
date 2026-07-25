@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 _PDB_STRUCTURE_RECORDS = {"ATOM", "HETATM"}
-_SCHEMA_FILES = ("gromacs.schema.json", "amber.schema.json")
 
 
 def list_simulations(experiment_id: str) -> list["Simulation"]:
@@ -86,17 +85,6 @@ def validate_pdb_content(content: bytes) -> None:
         if line[:6].strip() in _PDB_STRUCTURE_RECORDS:
             return
     raise BadRequest(description="Downloaded content is not a valid PDB file (no ATOM or HETATM records).")
-
-
-def chmod_schema_files_readonly(experiment_dir: Path) -> None:
-    """Best-effort — failures are logged, not raised."""
-    for name in _SCHEMA_FILES:
-        schema_path = experiment_dir / name
-        if schema_path.is_file():
-            try:
-                Path(schema_path).chmod(0o444)
-            except OSError:
-                logger.warning("Failed to chmod schema file '%s' read-only", name, exc_info=True)
 
 
 def resolve_repo_link(repo_link: str) -> str:

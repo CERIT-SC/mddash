@@ -46,7 +46,6 @@ from werkzeug.exceptions import BadRequest, Conflict, InternalServerError, NotFo
 from werkzeug.utils import secure_filename
 
 from .experiment_sources import (
-    chmod_schema_files_readonly,
     fetch_pdb,
     import_invenio_repo,
     import_mdposit_repo,
@@ -178,7 +177,6 @@ class Experiment(db.Model):  # type: ignore
             rmtree(experiment_dir, ignore_errors=True)
             raise
 
-        chmod_schema_files_readonly(experiment_dir)
         return experiment_id
 
     @classmethod
