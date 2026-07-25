@@ -110,7 +110,7 @@ const NotebookController = ({
   const spawnNotebook = useSpawnNotebook(experimentId)
   const stopNotebook = useStopNotebook(experimentId)
 
-  const { data: notebookFiles } = useFiles(experimentId, role ? "ipynb" : undefined)
+  const { data: notebookFiles } = useFiles(experimentId, "ipynb")
 
   const [selectedTier, setSelectedTier] = useState<NotebookTier | "">("")
   const [gpuEnabled, setGpuEnabled] = useState(false)
