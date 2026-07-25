@@ -15,7 +15,6 @@ from .files import (
     ensure_amber_demo_files,
     ensure_demo_files,
     ensure_mdposit_demo_files,
-    ensure_schema_files,
     write_amber_simulation,
     write_finished_gmx_log,
     write_gmx_simulation,
@@ -464,11 +463,9 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     # MDPosit import study: mirrors the project file layout exposed by HTTP mocks.
     ensure_mdposit_demo_files(mdposit_demo.id)
 
-    # Seed schema files and simulation manifests for each experiment
-    ensure_schema_files(membrane.id)
+    # Seed simulation manifests for each experiment
     write_gmx_simulation(membrane.id, "gpcr_membrane", topology="gpcr_membrane.tpr")
 
-    ensure_schema_files(enzyme.id)
     write_gmx_simulation(enzyme.id, "md", simulation_path="md.simulation.json", topology="production/md.tpr")
     write_gmx_simulation(enzyme.id, "npt_equilibration", simulation_path="npt_equilibration.simulation.json")
     write_gmx_simulation(
@@ -478,7 +475,6 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         topology="hiv_protease_apo_enzyme_wild_type_production_run_2024.tpr",
     )
 
-    ensure_schema_files(published.id)
     write_gmx_simulation(
         published.id,
         "lysozyme_hewl",
@@ -486,7 +482,6 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         topology="lysozyme_hewl.tpr",
     )
 
-    ensure_schema_files(amber_folding.id)
     write_amber_simulation(
         amber_folding.id,
         "villin",
@@ -504,7 +499,6 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         control="equilibration.mdin",
     )
 
-    ensure_schema_files(amber_dna.id)
     write_amber_simulation(
         amber_dna.id,
         "dna",
@@ -640,13 +634,11 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
         demo_state.notebook_status[mdposit_demo.id] = PodStatus.DOWN
         ensure_mdposit_demo_files(mdposit_demo.id)
 
-    # Re-seed schema files and simulation manifests for rehydrated experiments
+    # Re-seed simulation manifests for rehydrated experiments
     if membrane is not None:
-        ensure_schema_files(membrane.id)
         write_gmx_simulation(membrane.id, "gpcr_membrane", topology="gpcr_membrane.tpr")
 
     if enzyme is not None:
-        ensure_schema_files(enzyme.id)
         write_gmx_simulation(enzyme.id, "md", simulation_path="md.simulation.json", topology="production/md.tpr")
         write_gmx_simulation(enzyme.id, "npt_equilibration", simulation_path="npt_equilibration.simulation.json")
         write_gmx_simulation(
@@ -657,7 +649,6 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
         )
 
     if published is not None:
-        ensure_schema_files(published.id)
         write_gmx_simulation(
             published.id,
             "lysozyme_hewl",
@@ -666,7 +657,6 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
         )
 
     if amber_folding is not None:
-        ensure_schema_files(amber_folding.id)
         write_amber_simulation(
             amber_folding.id,
             "villin",
@@ -685,7 +675,6 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
         )
 
     if amber_dna is not None:
-        ensure_schema_files(amber_dna.id)
         write_amber_simulation(
             amber_dna.id,
             "dna",

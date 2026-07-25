@@ -1,45 +1,23 @@
 """Unit tests for MDPosit-aware publish routing and from_repo logic."""
 
 import json
-import os
 from collections.abc import Generator
 from http import HTTPStatus
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+from enums import Engine
 from extensions import db, ma
 from flask import Flask
 from flask.testing import FlaskClient
+from manifest_schema import schema_url
 from models import Experiment, Notebook
 from routes import experiments_bp, mdrepo_bp
 from upload.status import UploadStatus
 from werkzeug.exceptions import BadRequest, InternalServerError
 
-GMX_SCHEMA = {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "MDDash GROMACS simulation manifest",
-    "type": "object",
-    "required": ["name", "engine", "files", "extra_args"],
-    "additionalProperties": False,
-    "properties": {
-        "$schema": {"type": "string"},
-        "name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
-        "engine": {"const": "GMX"},
-        "files": {
-            "type": "object",
-            "required": ["run_input", "reference_structure", "trajectory"],
-            "additionalProperties": False,
-            "properties": {
-                "run_input": {"type": "string"},
-                "run_structure": {"type": "string"},
-                "reference_structure": {"type": "string"},
-                "trajectory": {"type": "string"},
-            },
-        },
-        "extra_args": {"type": "string"},
-    },
-}
+GMX_SCHEMA_URL = schema_url(Engine.GMX)
 
 
 @pytest.fixture
@@ -114,17 +92,15 @@ def _write_gmx_simulation(
     files: dict[str, str] | None = None,
 ) -> str:
     """
-    Write schema files and a GMX simulation manifest.
+    Write a GMX simulation manifest.
 
     Returns:
         The simulation_path.
     """
-    (exp_dir / "gromacs.schema.json").write_text(json.dumps(GMX_SCHEMA))
     sim_file = exp_dir / simulation_path
     sim_file.parent.mkdir(parents=True, exist_ok=True)
-    sim_dir = sim_file.parent
     content = {
-        "$schema": os.path.relpath(exp_dir / "gromacs.schema.json", sim_dir),
+        "$schema": GMX_SCHEMA_URL,
         "name": name,
         "engine": "GMX",
         "files": files or {"run_input": "topol.tpr", "reference_structure": "struct.pdb", "trajectory": "traj.xtc"},

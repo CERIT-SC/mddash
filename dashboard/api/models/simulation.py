@@ -1,13 +1,13 @@
 import json
 import logging
 import os
-from functools import lru_cache
 from pathlib import Path
 
 import jsonschema
 from config import DATA_DIR
 from enums import Engine
 from extensions import db
+from manifest_schema import resolve_schema_url, schema_url
 from utils import FileInfo, get_files_with_extensions
 from validators import check_path
 from werkzeug.exceptions import BadRequest, NotFound
@@ -17,22 +17,8 @@ from .experiment import Experiment
 logger = logging.getLogger(__name__)
 
 SIMULATION_SUFFIX = ".simulation.json"
-ENGINE_SCHEMA_FILE: dict[Engine, str] = {
-    Engine.GMX: "gromacs.schema.json",
-    Engine.AMBER: "amber.schema.json",
-}
 READONLY_MODE = 0o444
 WRITABLE_MODE = 0o644
-
-
-@lru_cache(maxsize=16)
-def _load_schema(schema_path: Path) -> dict | None:
-    try:
-        if not schema_path.is_file():
-            return None
-        return json.loads(schema_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
 
 
 def _safe_default_path(name: str) -> str:
@@ -40,18 +26,13 @@ def _safe_default_path(name: str) -> str:
     return f"{safe_name}{SIMULATION_SUFFIX}"
 
 
-def _build_content(experiment_id: str, simulation_path: str, engine: Engine, payload: dict) -> dict:
-    schema_filename = ENGINE_SCHEMA_FILE[engine]
-    exp_dir = DATA_DIR / experiment_id
-    sim_dir = (exp_dir / simulation_path).parent
-    schema_ref = os.path.relpath(exp_dir / schema_filename, start=sim_dir)
-
+def _build_content(engine: Engine, payload: dict) -> dict:
     files = payload.get("files")
     if not isinstance(files, dict):
         raise BadRequest(description="'files' must be an object.")
 
     return {
-        "$schema": schema_ref,
+        "$schema": schema_url(engine),
         "name": payload.get("name", ""),
         "engine": engine.value,
         "files": files,
@@ -59,20 +40,10 @@ def _build_content(experiment_id: str, simulation_path: str, engine: Engine, pay
     }
 
 
-def _validate_content_or_raise(experiment_id: str, simulation_path: str, content: dict, engine: Engine) -> None:
-    exp_dir = DATA_DIR / experiment_id
-    simulation_file = exp_dir / simulation_path
-    schema_ref = content.get("$schema")
-    if not isinstance(schema_ref, str) or not schema_ref:
-        raise BadRequest(description="Missing or invalid '$schema' reference.")
-    schema_path = (simulation_file.parent / schema_ref).resolve()
-    try:
-        schema_path.relative_to(exp_dir.resolve())
-    except ValueError:
-        raise BadRequest(description=f"Schema file escapes experiment directory: {schema_ref}")
-    schema = _load_schema(schema_path)
+def _validate_content_or_raise(content: dict, engine: Engine) -> None:
+    schema = resolve_schema_url(content.get("$schema"))
     if schema is None:
-        raise BadRequest(description=f"Schema file is missing or unreadable: {schema_ref}")
+        raise BadRequest(description="Missing or invalid '$schema' reference; expected a mddash schema URL.")
     try:
         jsonschema.validate(content, schema)
     except jsonschema.ValidationError as exc:
@@ -260,14 +231,10 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         resolved = self.resolved_files
         exp_dir = DATA_DIR / self.experiment_id
 
-        schema_path = self._resolve_schema_path(exp_dir)
-        schema = _load_schema(schema_path) if schema_path is not None else None
-        if schema_path is None:
-            errors.append("Missing or invalid '$schema' reference.")
-        elif schema is None:
-            errors.append(f"Schema file missing or unreadable: {self._raw.get('$schema')}")
-
-        if schema is not None:
+        schema = resolve_schema_url(self._raw.get("$schema"))
+        if schema is None:
+            errors.append("Missing or invalid '$schema' reference; expected a mddash schema URL.")
+        else:
             try:
                 jsonschema.validate(self._raw, schema)
             except jsonschema.ValidationError as exc:
@@ -287,17 +254,6 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         self._validation = not errors, errors, missing
         return self._validation
-
-    def _resolve_schema_path(self, exp_dir: Path) -> Path | None:
-        schema_ref = self._raw.get("$schema")
-        if not isinstance(schema_ref, str) or not schema_ref:
-            return None
-        resolved = (self._file.parent / schema_ref).resolve()
-        try:
-            resolved.relative_to(exp_dir.resolve())
-        except ValueError:
-            return None
-        return resolved
 
     @staticmethod
     def is_locked(experiment_id: str, simulation_path: str) -> bool:
@@ -399,8 +355,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if simulation_file.exists():
             raise BadRequest(description=f"Simulation '{simulation_path}' already exists.")
 
-        content = _build_content(experiment_id, simulation_path, experiment.engine, payload)
-        _validate_content_or_raise(experiment_id, simulation_path, content, experiment.engine)
+        content = _build_content(experiment.engine, payload)
+        _validate_content_or_raise(content, experiment.engine)
 
         simulation_file.parent.mkdir(parents=True, exist_ok=True)
         simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -469,8 +425,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if cls.is_locked(experiment_id, simulation_path):
             raise BadRequest(description=f"Simulation '{simulation_path}' is locked.")
 
-        content = _build_content(experiment_id, simulation_path, experiment.engine, payload)
-        _validate_content_or_raise(experiment_id, simulation_path, content, experiment.engine)
+        content = _build_content(experiment.engine, payload)
+        _validate_content_or_raise(content, experiment.engine)
 
         if simulation_file.exists() and not os.access(simulation_file, os.W_OK):
             try:

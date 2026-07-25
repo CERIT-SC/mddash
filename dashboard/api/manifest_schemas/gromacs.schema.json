@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MDDash GROMACS simulation manifest",
+  "type": "object",
+  "required": ["name", "engine", "files", "extra_args"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "name": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+    "engine": { "const": "GMX" },
+    "files": {
+      "type": "object",
+      "required": ["run_input", "reference_structure", "trajectory"],
+      "additionalProperties": false,
+      "properties": {
+        "run_input": { "$ref": "#/$defs/relpath" },
+        "run_structure": { "$ref": "#/$defs/relpath" },
+        "reference_structure": { "$ref": "#/$defs/relpath" },
+        "trajectory": { "$ref": "#/$defs/relpath" }
+      }
+    },
+    "extra_args": { "type": "string" }
+  },
+  "$defs": {
+    "relpath": {
+      "type": "string",
+      "description": "Path relative to the experiment directory.",
+      "pattern": "^[A-Za-z0-9_./-]+$",
+      "not": { "pattern": "^/|\\.\\.|//" }
+    }
+  }
+}

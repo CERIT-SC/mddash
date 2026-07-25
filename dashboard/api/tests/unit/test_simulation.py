@@ -1,40 +1,18 @@
 """Unit tests for the Simulation class."""
 
 import json
-import os
 from pathlib import Path
 
 import pytest
+from enums import Engine
 from extensions import db
 from flask import Flask
+from manifest_schema import schema_url
 from models import Experiment, Notebook
 from models.simulation import Simulation
 from werkzeug.exceptions import BadRequest
 
-GMX_SCHEMA = {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "title": "MDDash GROMACS simulation manifest",
-    "type": "object",
-    "required": ["name", "engine", "files", "extra_args"],
-    "additionalProperties": False,
-    "properties": {
-        "$schema": {"type": "string"},
-        "name": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+$"},
-        "engine": {"const": "GMX"},
-        "files": {
-            "type": "object",
-            "required": ["run_input", "reference_structure", "trajectory"],
-            "additionalProperties": False,
-            "properties": {
-                "run_input": {"type": "string"},
-                "run_structure": {"type": "string"},
-                "reference_structure": {"type": "string"},
-                "trajectory": {"type": "string"},
-            },
-        },
-        "extra_args": {"type": "string"},
-    },
-}
+GMX_SCHEMA_URL = schema_url(Engine.GMX)
 
 
 def _seed_experiment(app: Flask, exp_id: str = "simts") -> str:
@@ -54,10 +32,6 @@ def _seed_experiment(app: Flask, exp_id: str = "simts") -> str:
         return exp_id
 
 
-def _write_schema(exp_dir: Path) -> None:
-    (exp_dir / "gromacs.schema.json").write_text(json.dumps(GMX_SCHEMA))
-
-
 def _write_sim_file(exp_dir: Path, simulation_path: str, files: dict, name: str = "protein") -> str:
     """
     Write a GMX simulation manifest.
@@ -67,9 +41,8 @@ def _write_sim_file(exp_dir: Path, simulation_path: str, files: dict, name: str 
     """
     sim_file = exp_dir / simulation_path
     sim_file.parent.mkdir(parents=True, exist_ok=True)
-    sim_dir = sim_file.parent
     content = {
-        "$schema": os.path.relpath(exp_dir / "gromacs.schema.json", sim_dir),
+        "$schema": GMX_SCHEMA_URL,
         "name": name,
         "engine": "GMX",
         "files": files,
@@ -87,7 +60,6 @@ class TestDiscovery:
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_schema(exp_dir)
         _write_sim_file(
             exp_dir,
             "protein.simulation.json",
@@ -118,7 +90,6 @@ class TestDiscovery:
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_schema(exp_dir)
         _write_sim_file(
             exp_dir,
             "z.simulation.json",
@@ -148,7 +119,7 @@ class TestValidation:
         sim_file = exp_dir / sim_path
         sim_file.parent.mkdir(parents=True, exist_ok=True)
         content = {
-            "$schema": "../gromacs.schema.json",
+            "$schema": "https://example.com/not-allowed.schema.json",
             "name": "protein",
             "engine": "GMX",
             "files": {
@@ -170,7 +141,6 @@ class TestValidation:
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_schema(exp_dir)
         _write_sim_file(
             exp_dir,
             "protein.simulation.json",
@@ -196,7 +166,6 @@ class TestValidation:
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_schema(exp_dir)
         _write_sim_file(
             exp_dir,
             "protein.simulation.json",
@@ -227,7 +196,6 @@ class TestLocking:
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_schema(exp_dir)
         sim_path = _write_sim_file(
             exp_dir,
             "protein.simulation.json",
@@ -245,7 +213,6 @@ class TestLocking:
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_schema(exp_dir)
         sim_path = _write_sim_file(
             exp_dir,
             "protein.simulation.json",
@@ -265,7 +232,6 @@ class TestWriteSimulation:
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_schema(exp_dir)
 
         with app.app_context():
             sim = Simulation.write(
@@ -289,7 +255,6 @@ class TestWriteSimulation:
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_schema(exp_dir)
 
         with app.app_context():
             Simulation.write(
@@ -324,7 +289,6 @@ class TestWriteSimulation:
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_schema(exp_dir)
 
         with app.app_context(), pytest.raises(BadRequest):
             Simulation.write(
