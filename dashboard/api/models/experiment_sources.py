@@ -140,7 +140,7 @@ def import_invenio_repo(repo_link: str, experiment_id: str) -> None:
             if response.status_code == HTTPStatus.NOT_FOUND:
                 raise NotFound(description=f"Repository '{repo_link}' not found.")
             if response.status_code != HTTPStatus.OK:
-                raise InternalServerError(description=f"Failed to download repository: {response.status_code}")
+                raise InternalServerError(description="Failed to download repository.")
 
             for chunk in response.iter_content(chunk_size=128 * 1024):
                 tmp_file.write(chunk)
@@ -181,4 +181,4 @@ def import_mdposit_repo(repo_link: str, experiment_id: str) -> None:
     except ValueError as exc:
         raise BadRequest(description=str(exc)) from exc
     except requests.HTTPError as exc:
-        raise InternalServerError(description=f"Failed to download MDPosit project: {exc}") from exc
+        raise InternalServerError(description="Failed to download MDPosit project.") from exc

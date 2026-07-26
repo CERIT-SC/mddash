@@ -1,6 +1,5 @@
 from cache import metrics_cache
 from config import API_PREFIX, CPU_REQUEST_QUOTA, DATA_DIR, MEMORY_REQUEST_QUOTA, PVC_SIZE
-from decorators import handle_exceptions
 from flask import Blueprint, Response, jsonify
 from notebook_modules import load_catalog
 from utils import get_du_size
@@ -10,7 +9,6 @@ misc_bp = Blueprint("misc", __name__, url_prefix=API_PREFIX)
 
 @misc_bp.route("/", methods=["GET"])
 @misc_bp.route("/health", methods=["GET"])
-@handle_exceptions()
 def index() -> Response:
     """
     Health check endpoint.
@@ -22,7 +20,6 @@ def index() -> Response:
 
 
 @misc_bp.route("/notebook-modules", methods=["GET"])
-@handle_exceptions()
 def get_notebook_modules() -> Response:
     """
     Return curated notebook module display metadata (no internal paths or URLs).
@@ -35,7 +32,6 @@ def get_notebook_modules() -> Response:
 
 
 @misc_bp.route("/metrics", methods=["GET"])
-@handle_exceptions()
 def get_metrics() -> Response:
     """
     Get resource usage metrics for the current user.

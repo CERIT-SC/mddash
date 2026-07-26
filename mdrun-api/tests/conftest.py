@@ -39,6 +39,7 @@ with (
     patch("kubernetes.client.BatchV1Api"),
 ):
     from enums import JobStatus
+    from errors import register_error_handlers
     from extensions import db
     from routes import amber_bp, gmx_bp, health_bp
 
@@ -99,6 +100,7 @@ def app(mock_k8s: MagicMock) -> Generator[Flask, None, None]:
         test_app.register_blueprint(health_bp)
         test_app.register_blueprint(gmx_bp)
         test_app.register_blueprint(amber_bp)
+        register_error_handlers(test_app)
 
         with test_app.app_context():
             db.create_all()

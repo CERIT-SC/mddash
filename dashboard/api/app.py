@@ -8,6 +8,7 @@ from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from alembic.util.exc import CommandError
 from config import DATA_DIR, LOG_FORMAT, LOG_LEVEL
+from errors import register_error_handlers
 from extensions import db, ma, migrate
 from flask import Flask
 from flask_migrate import stamp, upgrade
@@ -118,6 +119,7 @@ def create_app() -> Flask:
 
     reg_start = time.perf_counter()
     _register_blueprints(app)
+    register_error_handlers(app)
     _log_duration("route-registration", reg_start)
 
     # Validate bundled catalog before migrations so a bad catalog fails fast.

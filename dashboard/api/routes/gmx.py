@@ -1,7 +1,6 @@
 from http import HTTPStatus
 
 from config import API_PREFIX
-from decorators import handle_exceptions
 from enums import DeviceType
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
@@ -15,7 +14,6 @@ gmx_bp = Blueprint("gmx", __name__, url_prefix=f"{API_PREFIX}/experiments/<exper
 
 
 @gmx_bp.route("", methods=["GET"])
-@handle_exceptions()
 def get_gmx_jobs(experiment_id: str) -> Response:
     """
     List all GROMACS jobs for an experiment.
@@ -29,7 +27,6 @@ def get_gmx_jobs(experiment_id: str) -> Response:
 
 
 @gmx_bp.route("/<path:simulation_path>", methods=["GET"])
-@handle_exceptions()
 def get_gmx_job(experiment_id: str, simulation_path: str) -> Response:
     """
     Get a specific GROMACS job by simulation path.
@@ -45,7 +42,6 @@ def get_gmx_job(experiment_id: str, simulation_path: str) -> Response:
 
 
 @gmx_bp.route("/<path:simulation_path>", methods=["POST"])
-@handle_exceptions(rollback=True)
 def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
     Submit a GROMACS simulation job from a simulation manifest.
@@ -74,7 +70,7 @@ def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
             pme = DeviceType.from_string(data.get("pme", request.form.get("pme", "")))
             nb = DeviceType.from_string(data.get("nb", request.form.get("nb", "")))
         except (ValueError, TypeError) as exc:
-            raise BadRequest(f"Invalid compute parameters: {exc}") from exc
+            raise BadRequest("Invalid compute parameters.") from exc
 
         job = GromacsJob.start(
             experiment=experiment,
@@ -89,7 +85,6 @@ def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
 
 
 @gmx_bp.route("/<path:simulation_path>", methods=["DELETE"])
-@handle_exceptions(rollback=True)
 def delete_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
     Delete a GROMACS job and its associated Kubernetes resources.
@@ -107,7 +102,6 @@ def delete_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
 
 
 @gmx_bp.route("/<path:simulation_path>/log", methods=["GET"])
-@handle_exceptions()
 def get_gmx_job_log(experiment_id: str, simulation_path: str) -> Response:
     """
     Get log output for a GROMACS job.

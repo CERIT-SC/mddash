@@ -1,7 +1,6 @@
 from http import HTTPStatus
 
 from config import API_PREFIX
-from decorators import handle_exceptions
 from enums import AmberBinary, EwaldPreset
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
@@ -15,7 +14,6 @@ amber_bp = Blueprint("amber", __name__, url_prefix=f"{API_PREFIX}/experiments/<e
 
 
 @amber_bp.route("", methods=["GET"])
-@handle_exceptions()
 def list_amber_jobs(experiment_id: str) -> Response:
     """
     List all AMBER jobs for an experiment.
@@ -29,7 +27,6 @@ def list_amber_jobs(experiment_id: str) -> Response:
 
 
 @amber_bp.route("/<path:simulation_path>", methods=["GET"])
-@handle_exceptions()
 def get_amber_job(experiment_id: str, simulation_path: str) -> Response:
     """
     Get a specific AMBER job by simulation path.
@@ -45,7 +42,6 @@ def get_amber_job(experiment_id: str, simulation_path: str) -> Response:
 
 
 @amber_bp.route("/<path:simulation_path>", methods=["POST"])
-@handle_exceptions(rollback=True)
 def submit_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
     Submit an AMBER simulation job from a simulation manifest.
@@ -74,7 +70,7 @@ def submit_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturn
             np = int(data.get("np", request.form.get("np", "")))
             ntomp = int(data.get("ntomp", request.form.get("ntomp", "")))
         except (ValueError, TypeError) as exc:
-            raise BadRequest(f"Invalid compute parameters: {exc}") from exc
+            raise BadRequest("Invalid compute parameters.") from exc
 
         job = AmberJob.start(
             experiment=experiment,
@@ -89,7 +85,6 @@ def submit_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturn
 
 
 @amber_bp.route("/<path:simulation_path>", methods=["DELETE"])
-@handle_exceptions(rollback=True)
 def delete_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
     Delete an AMBER job and its associated Kubernetes resources.
@@ -107,7 +102,6 @@ def delete_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturn
 
 
 @amber_bp.route("/<path:simulation_path>/log", methods=["GET"])
-@handle_exceptions()
 def get_amber_log(experiment_id: str, simulation_path: str) -> Response:
     """
     Get log output for an AMBER job.

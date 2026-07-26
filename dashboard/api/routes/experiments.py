@@ -1,14 +1,13 @@
 from http import HTTPStatus
 
 from config import API_PREFIX, DEFAULT_NOTEBOOKS_REPO
-from decorators import handle_exceptions
 from enums import Engine
 from extensions import db
 from flask import Blueprint, Response, jsonify, request, session
 from flask.typing import ResponseReturnValue
 from models import Experiment
 from notebook_modules import load_catalog
-from schemas import ExperimentSchema
+from schemas import ExperimentSchema, PublishSchema
 from token_manager import MDRepoTokenManager
 from validators import validate_git_url
 from werkzeug.exceptions import BadRequest, Unauthorized
@@ -17,7 +16,6 @@ experiments_bp = Blueprint("experiments", __name__, url_prefix=f"{API_PREFIX}/ex
 
 
 @experiments_bp.route("", methods=["GET"])
-@handle_exceptions()
 def list_experiments() -> Response:
     """
     List all experiments.
@@ -31,7 +29,6 @@ def list_experiments() -> Response:
 
 
 @experiments_bp.route("", methods=["POST"])
-@handle_exceptions(rollback=True)
 def create_experiment() -> ResponseReturnValue:
     """
     Create a new experiment from PDB, repository URL, or uploaded files.
@@ -102,7 +99,6 @@ def create_experiment() -> ResponseReturnValue:
 
 
 @experiments_bp.route("/<experiment_id>", methods=["GET"])
-@handle_exceptions()
 def get_experiment(experiment_id: str) -> Response:
     """
     Get an experiment by ID.
@@ -118,7 +114,6 @@ def get_experiment(experiment_id: str) -> Response:
 
 
 @experiments_bp.route("/<experiment_id>", methods=["DELETE"])
-@handle_exceptions(rollback=True)
 def delete_experiment(experiment_id: str) -> ResponseReturnValue:
     """
     Delete an experiment and all associated resources.
@@ -136,7 +131,6 @@ def delete_experiment(experiment_id: str) -> ResponseReturnValue:
 
 
 @experiments_bp.route("/<experiment_id>", methods=["PATCH"])
-@handle_exceptions(rollback=True)
 def edit_experiment(experiment_id: str) -> Response:
     """
     Update experiment properties.
@@ -169,7 +163,6 @@ def edit_experiment(experiment_id: str) -> Response:
 
 
 @experiments_bp.route("/<experiment_id>/publish", methods=["POST"])
-@handle_exceptions(rollback=True)
 def publish_experiment(experiment_id: str) -> ResponseReturnValue:
     """
     Publish experiment to the requested target.
@@ -184,18 +177,8 @@ def publish_experiment(experiment_id: str) -> ResponseReturnValue:
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
-    if request.get_data(cache=True):
-        if not request.is_json:
-            raise BadRequest("Publish request body must be JSON.")
-        data = request.get_json()
-        if not isinstance(data, dict):
-            raise BadRequest("Publish request body must be a JSON object.")
-    else:
-        data = {}
-
-    target = data.get("target", "invenio")
-    if not isinstance(target, str):
-        raise BadRequest("Publish target must be a string.")
+    data = PublishSchema().load(request.get_json(silent=True) or {})
+    target = data["target"]
 
     if target == "invenio":
         token_manager = MDRepoTokenManager(session)
@@ -209,7 +192,7 @@ def publish_experiment(experiment_id: str) -> ResponseReturnValue:
         return jsonify(result), HTTPStatus.ACCEPTED
     if target == "mdposit":
         simulation_path = data.get("simulation_path")
-        if not isinstance(simulation_path, str) or not simulation_path:
+        if not simulation_path:
             raise BadRequest("MDPosit publish requires simulation_path.")
 
         result = experiment.publish(target="mdposit", simulation_path=simulation_path)
@@ -218,7 +201,6 @@ def publish_experiment(experiment_id: str) -> ResponseReturnValue:
 
 
 @experiments_bp.route("/<experiment_id>/publish/status", methods=["GET"])
-@handle_exceptions()
 def get_publish_status(experiment_id: str) -> Response:
     """
     Get the durable MDRepo upload status for an experiment.
@@ -236,7 +218,6 @@ def get_publish_status(experiment_id: str) -> Response:
 
 
 @experiments_bp.route("/<experiment_id>/step", methods=["GET"])
-@handle_exceptions()
 def get_experiment_step(experiment_id: str) -> Response:
     """
     Get the current workflow step for an experiment.

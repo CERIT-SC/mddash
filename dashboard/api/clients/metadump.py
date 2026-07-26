@@ -36,7 +36,7 @@ def _submit_job(tpr_path: Path) -> tuple[str, str]:
     uuid = data.get("uuid")
     pin = data.get("pin")
     if not uuid or not pin:
-        raise InternalServerError(description=f"MetaDump returned unexpected response for '{tpr_path.name}': {data}")
+        raise InternalServerError(description=f"MetaDump returned unexpected response for '{tpr_path.name}'.")
 
     return uuid, pin
 

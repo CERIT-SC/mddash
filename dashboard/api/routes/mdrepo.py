@@ -22,7 +22,6 @@ from config import (
     MDREPO_TOKEN_URL,
     MDREPO_URL,
 )
-from decorators import handle_exceptions
 from flask import Blueprint, Response, jsonify, redirect, request, session
 from models.experiment import mdrepo_status_cache
 from token_manager import (
@@ -51,7 +50,6 @@ def get_mdrepo_token() -> str | None:
 
 
 @mdrepo_bp.route("/status", methods=["GET"])
-@handle_exceptions()
 def get_status() -> Response:
     """
     Check if user has a valid MDRepo token.
@@ -193,7 +191,6 @@ def oauth_callback() -> WerkzeugResponse:
 
 
 @mdrepo_bp.route("/logout", methods=["POST"])
-@handle_exceptions()
 def logout() -> Response:
     """
     Remove all MDRepo tokens from session.

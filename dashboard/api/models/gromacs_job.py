@@ -290,7 +290,7 @@ class GromacsJob(SimulationJob):
         except UnicodeDecodeError:
             raise UnprocessableEntity(description=f"Unable to decode log file: {log_file.name}")
         except OSError as e:
-            raise InternalServerError(description=f"System error reading log file: {e}")
+            raise InternalServerError(description="System error reading log file.") from e
 
     def _cleanup_files(self) -> None:
         """

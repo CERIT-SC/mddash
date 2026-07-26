@@ -1,6 +1,7 @@
 import os
 
 from config import DB_URL
+from errors import register_error_handlers
 from extensions import db, ma
 from flask import Flask
 from flask_cors import CORS
@@ -36,6 +37,8 @@ def create_app() -> Flask:
     app.register_blueprint(gmx_bp)
     app.register_blueprint(amber_bp)
     app.register_blueprint(health_bp)
+
+    register_error_handlers(app)
 
     with app.app_context():
         db.create_all()

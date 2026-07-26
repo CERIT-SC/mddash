@@ -164,13 +164,21 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         """
         match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/(?P<job_id>[^/]+)", request.url)
         if not match:
-            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"detail": "Job not found"}))
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "about:blank", "title": "Not Found", "detail": "Job not found"}),
+            )
 
         job_id = match.group("job_id")
         job_data = demo_state.mdrun_jobs.get(job_id)
 
         if job_data is None:
-            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"detail": f"Job {job_id} not found"}))
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "about:blank", "title": "Not Found", "detail": f"Job {job_id} not found"}),
+            )
 
         _advance_mdrun_job(job_id, job_data)
 
@@ -186,13 +194,21 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         """
         match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/(?P<job_id>[^/]+)", request.url)
         if not match:
-            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"detail": "Job not found"}))
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "about:blank", "title": "Not Found", "detail": "Job not found"}),
+            )
 
         job_id = match.group("job_id")
         job_data = demo_state.mdrun_jobs.get(job_id)
 
         if job_data is None:
-            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"detail": f"Job {job_id} not found"}))
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "about:blank", "title": "Not Found", "detail": f"Job {job_id} not found"}),
+            )
 
         _advance_mdrun_job(job_id, job_data)
 
@@ -820,7 +836,11 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
         accession = _extract_mdposit_accession(request.url)
         project = demo_state.mdposit_projects.get(accession)
         if project is None:
-            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"detail": "Project not found"}))
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "about:blank", "title": "Not Found", "detail": "Project not found"}),
+            )
         response_body = {key: value for key, value in project.items() if key != "files"}
         return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(response_body))
 
@@ -828,7 +848,11 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
         accession = _extract_mdposit_accession(request.url)
         project = demo_state.mdposit_projects.get(accession)
         if project is None:
-            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"detail": "Project not found"}))
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "about:blank", "title": "Not Found", "detail": "Project not found"}),
+            )
         response_body = [{"name": filename} for filename in project.get("files", [])]
         return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(response_body))
 
@@ -856,7 +880,11 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
             return (
                 HTTPStatus.NOT_FOUND,
                 {},
-                json.dumps({"detail": f"Analysis '{analysis_name}' not found"}),
+                json.dumps({
+                    "type": "about:blank",
+                    "title": "Not Found",
+                    "detail": f"Analysis '{analysis_name}' not found",
+                }),
             )
         return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(fixture))
 

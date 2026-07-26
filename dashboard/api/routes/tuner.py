@@ -2,7 +2,6 @@ from http import HTTPStatus
 
 from clients import tuner
 from config import API_PREFIX
-from decorators import handle_exceptions
 from enums import Engine
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
@@ -15,7 +14,6 @@ tuner_bp = Blueprint("tuner", __name__, url_prefix=f"{API_PREFIX}/experiments/<e
 
 
 @tuner_bp.route("", methods=["GET"])
-@handle_exceptions()
 def list_tuner_jobs(experiment_id: str) -> Response:
     """
     List all tuner jobs for an experiment.
@@ -29,7 +27,6 @@ def list_tuner_jobs(experiment_id: str) -> Response:
 
 
 @tuner_bp.route("", methods=["POST"])
-@handle_exceptions(rollback=True)
 def start_tuner_job(experiment_id: str) -> ResponseReturnValue:
     """
     Start a tuner job from a simulation manifest.
@@ -71,7 +68,6 @@ def start_tuner_job(experiment_id: str) -> ResponseReturnValue:
 
 
 @tuner_bp.route("/<path:simulation_path>", methods=["GET"])
-@handle_exceptions()
 def get_tuner_job(experiment_id: str, simulation_path: str) -> Response:
     """
     Get a specific tuner job by simulation path.
@@ -87,7 +83,6 @@ def get_tuner_job(experiment_id: str, simulation_path: str) -> Response:
 
 
 @tuner_bp.route("/<path:simulation_path>/stop", methods=["POST"])
-@handle_exceptions(rollback=True)
 def stop_tuner_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
     Stop a running tuner job.
@@ -104,7 +99,6 @@ def stop_tuner_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
 
 
 @tuner_bp.route("/<path:simulation_path>/trials/<trial_id>/stdout", methods=["GET"])
-@handle_exceptions()
 def get_trial_stdout(experiment_id: str, simulation_path: str, trial_id: str) -> Response:
     """
     Get stdout log for a specific tuning trial.
@@ -129,7 +123,6 @@ def get_trial_stdout(experiment_id: str, simulation_path: str, trial_id: str) ->
 
 
 @tuner_bp.route("/<path:simulation_path>/trials/<trial_id>/stderr", methods=["GET"])
-@handle_exceptions()
 def get_trial_stderr(experiment_id: str, simulation_path: str, trial_id: str) -> Response:
     """
     Get stderr log for a specific tuning trial.
@@ -154,7 +147,6 @@ def get_trial_stderr(experiment_id: str, simulation_path: str, trial_id: str) ->
 
 
 @tuner_bp.route("/<path:simulation_path>", methods=["DELETE"])
-@handle_exceptions(rollback=True)
 def delete_tuner_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
     Delete a tuner job and its associated resources.

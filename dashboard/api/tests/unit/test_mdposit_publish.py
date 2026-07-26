@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from enums import Engine
+from errors import register_error_handlers
 from extensions import db, ma
 from flask import Flask
 from flask.testing import FlaskClient
@@ -40,6 +41,7 @@ def app(tmp_path: Path) -> Generator[Flask, None, None]:
     with patch.dict("config.__dict__", {"DATA_DIR": tmp_path}), patch("models.simulation.DATA_DIR", tmp_path):
         test_app.register_blueprint(experiments_bp)
         test_app.register_blueprint(mdrepo_bp)
+        register_error_handlers(test_app)
 
         with test_app.app_context():
             db.create_all()

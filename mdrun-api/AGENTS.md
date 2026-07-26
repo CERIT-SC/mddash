@@ -19,3 +19,4 @@ Manage GROMACS and AMBER molecular dynamics simulation jobs on Kubernetes with a
 - **S3 + GPU**: `S3_ENDPOINT`/`S3_ACCESS_KEY`/`S3_SECRET_KEY` must be set or the API logs errors on startup. GPU resource type comes from `GPU_TYPE` (set via `gpuType` in config.yaml); defaults to empty if unset.
 - **K8s jobs** are named `mdrun-{uuid}` — never manually create jobs with this prefix.
 - **Health logs**: successful `/api/health` probe access logs are suppressed (Gunicorn logger class) to avoid log congestion; failed probes, 4xx/5xx, startup logs, and app errors stay visible.
+- **Problem-details errors**: routes raise `HTTPException` or `ValidationError`; global `@app.errorhandler` handlers in `errors.py` convert to RFC 9457 `{"type": "about:blank", "title": "...", "detail": "..."}` responses. No `@handle_exceptions` decorator. Rollback is automatic. Validation uses `schema.load()` — `np`/`ntomp` use `Range(gt=0)`, enums convert via `@post_load`.

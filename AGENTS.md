@@ -52,9 +52,11 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - **MDRun API**: `db.create_all()` only — no Alembic migrations. SQLite WAL mode for concurrent reads/writes.
 
 ### Error Handling
-- Dashboard API routes return raw resources via `jsonify()` on success and raise `HTTPException` (`BadRequest`, `NotFound`, …) for errors. `@handle_exceptions` catches them and returns `{detail: "..."}` with the correct status code.
-- Use `@handle_exceptions()` on JSON route handlers; set `rollback=True` on routes that modify the database.
-- Missing env vars log warnings but don't crash (graceful degradation).
+- Dashboard API and MDRun API routes raise `HTTPException` subclasses (`BadRequest`, `NotFound`, etc.) or marshmallow `ValidationError`. Flask native `@app.errorhandler` handlers (registered in each service's `errors.py` via `register_error_handlers(app)`) convert them to RFC 9457 problem-details responses: `{"type": "about:blank", "title": "<HTTP phrase>", "detail": "<message>"}` with `Content-Type: application/problem+json`. No `status` field in the body — the HTTP status line carries it.
+- Routing 404/405, `get_or_404`, `abort()`, and HTTPExceptions raised in any route (decorated or not) are all caught by the global handlers — no more Werkzeug HTML error pages.
+- Unexpected (non-HTTP) exceptions trigger automatic `db.session.rollback()` and return a generic `"Internal server error. Please try again later."` detail. Full tracebacks are logged server-side only; `str(e)` and internal details never reach the client.
+- Validation uses marshmallow `schema.load()` for JSON/form/query parsing. Both APIs converge on `ValidationError` → problem details (flattened to a single `detail` string).
+- The UI reads errors via an `ApiError` class (`dashboard/ui/src/lib/http.ts`) with `error.message = detail`, so `toast.error(error.message)` works unchanged.
 
 ## Development & Feedback Loop
 

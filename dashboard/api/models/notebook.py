@@ -150,8 +150,7 @@ class Notebook(db.Model):  # type: ignore
             if e.status == HTTPStatus.CONFLICT:
                 raise Conflict(description="Notebook pod already exists.")
 
-            logger.exception("Failed to create notebook pod.")
-            raise InternalServerError(description=f"Failed to create notebook pod: {e.reason}")
+            raise InternalServerError(description="Failed to create notebook pod.") from e
 
         try:
             k8s.create_service(svc_name, pod_name)

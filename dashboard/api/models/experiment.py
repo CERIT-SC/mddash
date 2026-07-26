@@ -252,7 +252,7 @@ class Experiment(db.Model):  # type: ignore
             if response.status_code == HTTPStatus.NOT_FOUND:
                 raise NotFound(description=f"PDB source '{source}' not found.")
             if response.status_code != HTTPStatus.OK:
-                raise InternalServerError(description=f"Failed to download PDB file: {response.status_code}")
+                raise InternalServerError(description="Failed to download PDB file.")
 
             validate_pdb_content(response.content)
 
@@ -723,7 +723,7 @@ class Experiment(db.Model):  # type: ignore
         try:
             metadata_file.write_text(yaml.safe_dump(metadata, sort_keys=False), encoding="utf-8")
         except OSError as exc:
-            raise InternalServerError(description=f"Failed to generate metadata file: {exc}") from exc
+            raise InternalServerError(description="Failed to generate metadata file.") from exc
 
         return {
             "metadata_file": {
