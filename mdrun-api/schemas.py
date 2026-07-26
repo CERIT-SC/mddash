@@ -8,7 +8,7 @@ def _enum_from_string(from_string: Callable[[str], object], value: str, field_na
     try:
         return from_string(value)
     except ValueError:
-        raise ValidationError(f"Invalid {field_name}: {value!r}")
+        raise ValidationError(f"Invalid {field_name}: {value!r}", field_name=field_name)
 
 
 class GmxJobCreateRequestSchema(Schema):
