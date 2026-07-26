@@ -1,3 +1,5 @@
+requires-python = ">=3.13,<3.14"
+
 [tool.uv.workspace]
 members = ["dashboard/api", "dashboard/auth", "mdrun-api", "tuner"]
 
