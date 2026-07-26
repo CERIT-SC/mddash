@@ -1,0 +1,128 @@
+apiVersion: ray.io/v1
+kind: RayCluster
+metadata:
+  name: tuner-raycluster
+  labels:
+    app.kubernetes.io/name: tuner
+    app.kubernetes.io/component: ray
+spec:
+  rayVersion: {{ .Values.ray.version | quote }}
+  enableInTreeAutoscaling: true
+  autoscalerOptions:
+    idleTimeoutSeconds: {{ .Values.ray.autoscaler.idleTimeoutSeconds }}
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 100
+      seccompProfile:
+        type: RuntimeDefault
+  headGroupSpec:
+    serviceType: ClusterIP
+    rayStartParams:
+      dashboard-host: "0.0.0.0"
+      num-cpus: "0"
+    template:
+      metadata:
+        labels:
+          app.kubernetes.io/name: tuner
+          app.kubernetes.io/component: ray-head
+      spec:
+        securityContext:
+          fsGroup: 1000
+          fsGroupChangePolicy: OnRootMismatch
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        containers:
+          - name: ray-head
+            image: {{ .Values.ray.image | quote }}
+            imagePullPolicy: {{ .Values.ray.imagePullPolicy }}
+            ports:
+              - containerPort: 6379
+                name: gcs
+              - containerPort: 8265
+                name: dashboard
+              - containerPort: 10001
+                name: client
+            lifecycle:
+              preStop:
+                exec:
+                  command: ["/bin/sh", "-c", "ray stop"]
+            volumeMounts:
+              - mountPath: /tmp/ray
+                name: ray-logs
+              - mountPath: /tmp/tpr
+                name: jobs
+            resources:
+              {{- toYaml .Values.ray.head.resources | nindent 14 }}
+            securityContext:
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                  - ALL
+              runAsNonRoot: true
+              runAsUser: 1000
+              runAsGroup: 100
+              seccompProfile:
+                type: RuntimeDefault
+        volumes:
+          - name: ray-logs
+            emptyDir: {}
+          - name: jobs
+            persistentVolumeClaim:
+              claimName: tuner-jobs
+  workerGroupSpecs:
+    - groupName: workers
+      replicas: {{ .Values.ray.worker.replicas }}
+      minReplicas: {{ .Values.ray.worker.minReplicas }}
+      maxReplicas: {{ .Values.ray.worker.maxReplicas }}
+      rayStartParams:
+        num-cpus: {{ .Values.ray.worker.numCpu | quote }}
+        num-gpus: {{ .Values.ray.worker.numGpu | quote }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: tuner
+            app.kubernetes.io/component: ray-worker
+        spec:
+          securityContext:
+            fsGroup: 1000
+            fsGroupChangePolicy: OnRootMismatch
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: ray-worker
+              image: {{ .Values.ray.image | quote }}
+              imagePullPolicy: {{ .Values.ray.imagePullPolicy }}
+              lifecycle:
+                preStop:
+                  exec:
+                    command: ["/bin/sh", "-c", "ray stop"]
+              volumeMounts:
+                - mountPath: /tmp/ray
+                  name: ray-logs
+                - mountPath: /tmp/tpr
+                  name: jobs
+              resources:
+                {{- toYaml .Values.ray.worker.resources | nindent 16 }}
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                runAsNonRoot: true
+                runAsUser: 1000
+                runAsGroup: 100
+                seccompProfile:
+                  type: RuntimeDefault
+          volumes:
+            - name: ray-logs
+              emptyDir: {}
+            - name: jobs
+              persistentVolumeClaim:
+                claimName: tuner-jobs

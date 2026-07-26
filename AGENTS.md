@@ -2,14 +2,14 @@
 
 ## Mission
 
-Multi-tenant JupyterHub-based platform for molecular dynamics simulations. Orchestrates GROMACS and AMBER jobs, provides wizard-driven experiment workflows, and integrates with external services (MDRepo, S3, Gromacs Tuner) through isolated per-user Kubernetes namespaces with sidecar containers.
+Multi-tenant JupyterHub-based platform for molecular dynamics simulations. Orchestrates GROMACS and AMBER jobs through the in-repository MDRun API and Tuner, provides wizard-driven experiment workflows, and integrates with external services (MDRepo, S3) through isolated per-user Kubernetes namespaces with sidecar containers.
 
 ## Architecture
 
 Each user gets a dedicated Kubernetes namespace with resource quotas managed via Rancher project annotations. JupyterHub spawns an isolated user pod containing sidecar containers alongside the notebook:
 
 ```
-Admin namespace:  JupyterHub Hub, MDRun API, Gromacs Tuner, Landing Page (Caddy)
+Admin namespace:  JupyterHub Hub, MDRun API, Tuner, Landing Page (Caddy)
 User namespace:   Proxy (Caddy) -> Auth (Flask), API (Flask), S3-Sync (rclone), JupyterHub Singleuser
 External:         MDRepo, S3-compatible storage
 ```

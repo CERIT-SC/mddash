@@ -11,7 +11,7 @@ from flask import Flask
 from pytest_mock import MockerFixture
 
 
-def _fresh_import_app(tmp_path: Path, monkeypatch, mocker: MockerFixture) -> ModuleType:  # ruff:ignore[missing-type-function-argument]
+def _fresh_import_app(tmp_path: Path, monkeypatch, mocker: MockerFixture) -> ModuleType:
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     monkeypatch.setenv("JUPYTERHUB_USER", "testuser")
     monkeypatch.setenv("JUPYTERHUB_SERVICE_PREFIX", "/user/testuser")
@@ -29,7 +29,7 @@ def _fresh_import_app(tmp_path: Path, monkeypatch, mocker: MockerFixture) -> Mod
     return importlib.import_module("app")
 
 
-def test_importing_app_module_does_not_run_migrations(tmp_path: Path, monkeypatch, mocker: MockerFixture) -> None:  # ruff:ignore[missing-type-function-argument]
+def test_importing_app_module_does_not_run_migrations(tmp_path: Path, monkeypatch, mocker: MockerFixture) -> None:
     """Gunicorn factory imports should not construct the Flask app eagerly."""
     upgrade = mocker.patch("flask_migrate.upgrade")
 

@@ -38,7 +38,7 @@ const WIZARD_STEPS: WizardStep[] = [
     label: "Tune",
     tagline: "Optimal performance, automatically",
     description:
-      "Integrated GROMACS Tuner runs short benchmarks across MPI, OpenMP, and GPU configurations in parallel. The best-performing configuration (measured in ns/day) is offered automatically — no manual guesswork, no wasted compute on long production runs.",
+      "Integrated Tuner runs short GROMACS and AMBER benchmarks across MPI, OpenMP, and GPU configurations in parallel. The best-performing configuration is offered automatically — no manual guesswork, no wasted compute on long production runs.",
     img: tuneImg,
     alt: "MDDash tune step with benchmark results",
     width: 2256,

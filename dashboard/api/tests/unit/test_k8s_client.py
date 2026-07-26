@@ -8,7 +8,7 @@ from pytest_mock import MockerFixture
 
 def test_importing_k8s_client_does_not_load_incluster_config(
     tmp_path: Path,
-    monkeypatch,  # ruff:ignore[missing-type-function-argument]
+    monkeypatch,
     mocker: MockerFixture,
 ) -> None:
     """Importing the client module should not touch Kubernetes configuration."""

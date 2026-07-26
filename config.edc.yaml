@@ -58,11 +58,11 @@ notebook:
 analysis:
   image: cerit.io/mddash/mddb_wf:0.1.11-gmx2026
 
-# GPU resource type used by mdrun-api jobs and gromacs-tuner workers
+# GPU resource type used by mdrun-api jobs and Tuner workers
 gpuType: "nvidia.com/mig-1g.10gb"
 
 # Container images used for mdrun-api simulation jobs
-gmxImage: "cerit.io/mddash/gromacs-tuner-worker:gmx-2026.1_amber-26_ray-2.54.0_py-3.13"
+gmxImage: "cerit.io/mddash/tuner-worker:gmx-2026.1_amber-26_ray-2.54.0_py-3.13"
 amberImage: "cerit.io/mddash/amber:24"
 
 # Landing page image (served at / on the dashboard hostname)
@@ -173,15 +173,11 @@ mdrunApi:
     cpuPerJob: "2"
     memoryPerJob: "12Gi"
 
-# Gromacs Tuner service
-gromacsTuner:
-  image:
-    repository: cerit.io/mddash/gromacs-tuner-api
-    tag: "latest"  # TODO: lock version
-    pullPolicy: Always
-  storage:
-    size: 100Gi
+# Tuner service
+tuner:
   api:
+    image: tuner-api
+    pullPolicy: IfNotPresent
     resources:
       limits:
         cpu: "1"
@@ -189,8 +185,14 @@ gromacsTuner:
       requests:
         cpu: "0.5"
         memory: "1Gi"
+  databaseStorage:
+    size: 1Gi
+    storageClassName: csi-ceph-rbd-du
+  jobStorage:
+    size: 100Gi
+    storageClassName: nfs-csi
   ray:
-    image: "cerit.io/mddash/gromacs-tuner-worker:gmx-2026.1_amber-26_ray-2.54.0_py-3.13"
+    version: "2.54.0"
     head:
       resources:
         limits:
@@ -199,15 +201,17 @@ gromacsTuner:
         requests:
           cpu: "500m"
           memory: "4Gi"
-    worker:
-      maxReplicas: 1  # TODO: increase to 3 when more resources are available
-      idleTimeoutSeconds: 3600
-      resources:
-        limits:
-          cpu: "2"  # TODO: ask for more (should be at least 32)
-          memory: "64Gi"
-          nvidia.com/mig-1g.10gb: "1"
-        requests:
-          cpu: "2"  # should be same as limit
-          memory: "16Gi"
-          nvidia.com/mig-1g.10gb: "1"
+  worker:
+    image: "cerit.io/mddash/tuner-worker:gmx-2026.1_amber-26_ray-2.54.0_py-3.13"
+    pullPolicy: IfNotPresent
+    maxReplicas: 1  # TODO: increase to 3 when more resources are available
+    idleTimeoutSeconds: 3600
+    resources:
+      limits:
+        cpu: "2"  # TODO: ask for more (should be at least 32)
+        memory: "64Gi"
+        nvidia.com/mig-1g.10gb: "1"
+      requests:
+        cpu: "2"  # should be same as limit
+        memory: "16Gi"
+        nvidia.com/mig-1g.10gb: "1"

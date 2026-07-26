@@ -43,8 +43,6 @@
    - `S3_SECRET_KEY` - S3 secret key
    - `MDREPO_CLIENT_ID` - MDRepo OAuth client ID for publishing experiments
    - `MDREPO_CLIENT_SECRET` - MDRepo OAuth client secret
-   - `TUNER_USER` - Username for Gromacs Tuner
-   - `TUNER_PASSWORD` - Password for Gromacs Tuner
 
 2. **Branch and release model**:
 
@@ -75,7 +73,7 @@ Dev images use the mutable `dev` tag with `Always` pull policy. Production image
 
 Production releases are triggered by a strict SemVer tag (`v0.1.0`, `v1.2.3`). The tag's commit must be an ancestor of `master`. SemVer image tags are immutable — a retry reuses an artifact only when its OCI source revision matches the tagged commit.
 
-Other services can override pull policy in configuration; for example, Gromacs Tuner uses `Always`, and the rendered `mdrun-api` subchart currently uses `Always`.
+Services can override pull policy in configuration. The Tuner API follows platform release tags, while its large worker image uses a separately managed static stack tag.
 
 ### Harbor Retention Policy
 
@@ -203,10 +201,10 @@ kubectl create secret generic ${PACKAGE}-mdrepo-credentials \
   --from-literal=client_secret="YOUR_MDREPO_CLIENT_SECRET" \
   -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
-# Gromacs Tuner Credentials
+# Tuner Credentials (static user, random password)
 kubectl create secret generic tuner-auth \
-  --from-literal=user="YOUR_TUNER_USER" \
-  --from-literal=password="YOUR_TUNER_PASSWORD" \
+  --from-literal=user="tuner" \
+  --from-literal=password="$(openssl rand -base64 32)" \
   -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 ```
 
@@ -223,9 +221,9 @@ helm registry login <registry-host>
 # 2. Build and push all docker images
 make push ENV=${ENV}
 
-# 3. Package and push the mdrun-api Helm chart when the subchart changed.
-# The parent chart currently pulls this dependency from oci://cerit.io/mddash; for non-mddash registries, update the dependency repository before relying on this push.
+# 3. Package and push local subcharts when they changed.
 make push-mdrun-api-chart ENV=${ENV}
+make push-tuner-chart ENV=${ENV}
 
 # 4. Update Helm dependencies when charts or config changed
 make -C helm update ENV=${ENV}
@@ -252,8 +250,8 @@ Shared infrastructure components that manage the platform and compute resources.
 - **MDRun API**
   - *Location*: `mdrun-api/`, `helm/charts/mdrun-api` (Configured in `helm/charts/mddash/values.yaml.tmpl`)
   - *Purpose*: Decouples simulation execution from user sessions, ensuring long-running GROMACS and AMBER jobs continue even if the user logs out.
-- **Gromacs Tuner**
-  - *Location*: [source code](https://github.com/CERIT-SC/gromacs-tuner) (Configured in `helm/charts/mddash/values.yaml.tmpl`)
+- **Tuner**
+  - *Location*: `tuner/`, `helm/charts/tuner` (Configured in `helm/charts/mddash/values.yaml.tmpl`)
   - *Purpose*: Automatically benchmarks and selects the most efficient simulation parameters to optimize performance and resource usage.
 - **Landing Page**
   - *Location*: `landing/`

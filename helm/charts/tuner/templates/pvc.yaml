@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tuner-db
+  labels:
+    app.kubernetes.io/name: tuner
+    app.kubernetes.io/component: database
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.databaseStorage.size }}
+  {{- with .Values.databaseStorage.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: tuner-jobs
+  labels:
+    app.kubernetes.io/name: tuner
+    app.kubernetes.io/component: jobs
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: {{ .Values.jobStorage.size }}
+  {{- with .Values.jobStorage.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}

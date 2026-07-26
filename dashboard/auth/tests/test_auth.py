@@ -16,7 +16,7 @@ from auth import (
     HMAC_SHA256_HEX_LENGTH,
     STATE_COOKIE,
     USER,
-    _sessions,  # ruff:ignore[import-private-name]
+    _sessions,
     create_session,
     is_valid_session,
     remove_expired_sessions,
@@ -290,7 +290,7 @@ class TestLoginTokenEndpoints:
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
 
-def test_health_logs_first_health_once(client: FlaskClient, caplog) -> None:  # ruff:ignore[missing-type-function-argument]
+def test_health_logs_first_health_once(client: FlaskClient, caplog) -> None:
     """The first auth health response should be visible in startup diagnostics once."""
     import auth
 

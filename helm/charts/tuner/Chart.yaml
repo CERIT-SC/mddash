@@ -1,0 +1,6 @@
+apiVersion: v2
+name: tuner
+description: Helm chart for the MDDash Tuner API and Ray cluster
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
