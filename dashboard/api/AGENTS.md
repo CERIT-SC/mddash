@@ -13,7 +13,7 @@ Flask REST API that orchestrates molecular dynamics experiments across Kubernete
 ## Non-Obvious Gotchas
 
 ### Simulation Manifests (`.simulation.json`)
-- **Single source of truth**: each manifest declares file roles (`topology`, `structure`, `trajectory` for GMX; `topology`, `coordinates`, `control`, `trajectory` for AMBER) and `extra_args`. Job models reference `simulation_path` — they no longer store file names.
+- **Single source of truth**: each manifest declares file roles (`run_input`, `reference_structure`, `trajectory` for GMX; `topology`, `coordinates`, `control`, `reference_structure`, `trajectory` for AMBER) and `extra_args`. Job models reference `simulation_path` — they no longer store file names.
 - `list_simulation_files()` finds `*.simulation.json` anywhere under the experiment directory (not just `production/`).
 - `get_simulation()` validates against the JSON Schema referenced by `$schema` (which must be a mddash schema URL — see `manifest_schema.py`); invalid simulations are returned with errors and can't be used by downstream steps.
 - A simulation is locked when its file is read-only or when a tuner/production job references its `simulation_path`. `mark_simulation_readonly()` chmods the file `0444`.

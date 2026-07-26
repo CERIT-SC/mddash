@@ -20,6 +20,24 @@ SIMULATION_SUFFIX = ".simulation.json"
 READONLY_MODE = 0o444
 WRITABLE_MODE = 0o644
 
+ROLE_LABELS: dict[str, str] = {
+    "run_input": "Run input",
+    "run_structure": "Final run structure",
+    "reference_structure": "Reference structure",
+    "trajectory": "Trajectory",
+    "topology": "Topology",
+    "coordinates": "Coordinates",
+    "control": "Run control",
+}
+
+
+def _humanize_validation_message(message: str) -> str:
+    """Translate jsonschema property names in error messages to user-friendly labels."""
+    result = message
+    for role, label in ROLE_LABELS.items():
+        result = result.replace(f"'{role}'", f"'{label}'")
+    return result
+
 
 def _safe_default_path(name: str) -> str:
     safe_name = Path(name).name if name else "simulation"
@@ -47,7 +65,9 @@ def _validate_content_or_raise(content: dict, engine: Engine) -> None:
     try:
         jsonschema.validate(content, schema)
     except jsonschema.ValidationError as exc:
-        raise BadRequest(description=f"Simulation content is invalid: {exc.message}") from exc
+        raise BadRequest(
+            description=f"Simulation content is invalid: {_humanize_validation_message(exc.message)}"
+        ) from exc
 
     if content.get("engine") != engine.value:
         raise BadRequest(description="Simulation engine does not match the experiment engine.")
@@ -238,7 +258,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             try:
                 jsonschema.validate(self._raw, schema)
             except jsonschema.ValidationError as exc:
-                errors.append(f"Schema validation failed: {exc.message}")
+                errors.append(f"Schema validation failed: {_humanize_validation_message(exc.message)}")
 
         experiment = db.session.get(Experiment, self.experiment_id)
         if experiment is not None:
@@ -248,7 +268,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         for role, rel in resolved.items():
             if rel and rel.startswith("/"):
-                errors.append(f"File role '{role}' must be a relative path.")
+                label = ROLE_LABELS.get(role, role)
+                errors.append(f"File path for '{label}' must be relative, not absolute.")
 
         missing = [role for role, rel in resolved.items() if not (exp_dir / rel).is_file()]
 
@@ -353,7 +374,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         simulation_file = DATA_DIR / experiment_id / simulation_path
         if simulation_file.exists():
-            raise BadRequest(description=f"Simulation '{simulation_path}' already exists.")
+            display_name = payload.get("name") or simulation_path.removesuffix(SIMULATION_SUFFIX)
+            raise BadRequest(description=f"Simulation '{display_name}' already exists.")
 
         content = _build_content(experiment.engine, payload)
         _validate_content_or_raise(content, experiment.engine)
