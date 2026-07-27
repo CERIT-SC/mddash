@@ -21,8 +21,8 @@ PME_OPTIONS = ["cpu", "gpu"]
 AMBER_NP_OPTIONS = [2, 4, 8]
 AMBER_NTOMP_OPTIONS = [1, 2, 4]
 
-MAX_UPLOAD_SIZE = 10 * 1024**3  # 10 GB
-MAX_REQUEST_SIZE = int(os.getenv("MAX_REQUEST_SIZE", str(MAX_UPLOAD_SIZE)))
+MAX_UPLOAD_SIZE = 10 * 1024**3  # 10 GB per file
+MAX_REQUEST_SIZE = int(os.getenv("MAX_REQUEST_SIZE", str(MAX_UPLOAD_SIZE * 3)))  # AMBER submits up to 3 files
 
 # Early stopping config
 EARLY_STOP_ENABLED = True

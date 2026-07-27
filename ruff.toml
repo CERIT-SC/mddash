@@ -62,9 +62,6 @@ ignore = [
     "compare-to-empty-string",    # explicit empty-string comparisons are clearer in assertions
     "PTH",    # os.path is fine in test fixtures
     "magic-value-comparison",    # literal values in assertions are clearer than constants
-    "compare-to-empty-string",    # `== ""` reads better than `not` in assertions
-    "float-equality-comparison",    # exact parsed benchmark values are deterministic
-    "import-private-name",    # tests validate private parsing helpers directly
     "typing-only-standard-library-import",    # inline imports in tests are intentional
     "too-many-arguments",    # mock decorators inflate parameter counts
     "private-member-access",    # tests routinely access private members

@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import PlainTextResponse
 from fastapi.security import HTTPBasicCredentials
+from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 
 from api.auth import verify_credentials
@@ -23,13 +24,17 @@ async def _get_trial_log(
     expected_engine: MDEngine,
     log_type: Literal["stdout", "stderr"],
 ) -> str:
-    job = await run_in_threadpool(get_job, job_id)
-    if not job or job.engine != expected_engine:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
-    trial = await run_in_threadpool(get_trial, trial_id, job_id)
-    if not trial:
-        raise HTTPException(status_code=404, detail=f"Trial '{trial_id}' not found")
-    return await run_in_threadpool(read_trial_log, job_id, str(trial_id), log_type)
+    try:
+        job = await run_in_threadpool(get_job, job_id)
+        if not job or job.engine != expected_engine:
+            raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+        trial = await run_in_threadpool(get_trial, trial_id, job_id)
+        if not trial:
+            raise HTTPException(status_code=404, detail=f"Trial '{trial_id}' not found")
+        return await run_in_threadpool(read_trial_log, job_id, str(trial_id), log_type)
+    except OperationalError:
+        logger.exception("Database timeout for job %s", job_id)
+        raise HTTPException(status_code=503, detail="Database is busy. Please try again later.") from None
 
 
 async def _delete_tuning_job(job_id: str, expected_engine: MDEngine) -> Response:
@@ -37,17 +42,22 @@ async def _delete_tuning_job(job_id: str, expected_engine: MDEngine) -> Response
     Cancel, delete from DB, and clean up files for a tuning job.
 
     Raises:
-        HTTPException: 404 if the job is not found.
+        HTTPException: 404 if the job is not found, 503 on DB timeout.
     """
-    job = await run_in_threadpool(get_job, job_id)
-    if not job or job.engine != expected_engine:
-        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    try:
+        job = await run_in_threadpool(get_job, job_id)
+        if not job or job.engine != expected_engine:
+            raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
 
-    cancelled = await run_in_threadpool(cancel_job, job_id)
-    await run_in_threadpool(delete_job, job_id)
-    await run_in_threadpool(cleanup_job_files, job_id)
+        cancelled = await run_in_threadpool(cancel_job, job_id)
+        await run_in_threadpool(delete_job, job_id)
+        await run_in_threadpool(cleanup_job_files, job_id)
 
-    logger.info("Deleted job %s: cancelled=%s", job_id, cancelled)
+        logger.info("Deleted job %s: cancelled=%s", job_id, cancelled)
+    except OperationalError:
+        logger.exception("Database timeout for job %s", job_id)
+        raise HTTPException(status_code=503, detail="Database is busy. Please try again later.") from None
+
     return Response(status_code=204)
 
 

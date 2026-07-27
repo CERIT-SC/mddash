@@ -16,9 +16,7 @@ from api.utils import get_cluster_status
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="MD Tuner API", openapi_url="/api/openapi.json")
-app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(RequestSizeLimitMiddleware, max_bytes=MAX_REQUEST_SIZE)
 
 app.include_router(gmx_router, prefix="/api/tuning-jobs/gmx")

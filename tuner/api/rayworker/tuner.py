@@ -240,7 +240,8 @@ def _run_tuning_async(job_id: str, engine: Engine, extra_args: str = "", nsteps:
             logger.info("Job %s finished after cancellation; status already set", job_id)
         else:
             logger.info("All trials completed for job %s (best: %.1f steps/s)", job_id, best_steps_per_sec)
-            update_job_status(job_id, JobStatus.TERMINATED)
+            if not _job_context.is_cancelled(job_id):
+                update_job_status(job_id, JobStatus.TERMINATED)
     except Exception as e:
         logger.exception("Tuning job %s failed", job_id)
         for trial_id in pending_trial_ids:

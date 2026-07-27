@@ -201,11 +201,12 @@ kubectl create secret generic ${PACKAGE}-mdrepo-credentials \
   --from-literal=client_secret="YOUR_MDREPO_CLIENT_SECRET" \
   -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
-# Tuner Credentials (static user, random password)
-kubectl create secret generic tuner-auth \
+# Tuner Credentials (static user, random password — created once)
+kubectl get secret tuner-auth -n ${NAMESPACE} >/dev/null 2>&1 || \
+  kubectl create secret generic tuner-auth \
   --from-literal=user="tuner" \
   --from-literal=password="$(openssl rand -base64 32)" \
-  -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+  -n ${NAMESPACE}
 ```
 
 ### 4. Build and Deploy

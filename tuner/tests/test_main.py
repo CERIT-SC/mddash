@@ -1,8 +1,8 @@
+from api.config import MAX_REQUEST_SIZE
 from api.main import app
 from fastapi.testclient import TestClient
 
 AUTH = ("test-user", "test-password")
-MAX_REQUEST_SIZE = 10 * 1024**3
 
 
 def test_openapi_schema_is_generated_under_api_prefix() -> None:
