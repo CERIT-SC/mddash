@@ -79,7 +79,9 @@ Services can override pull policy in configuration. The Tuner API follows platfo
 
 Configure in Harbor UI (Project → Policy → Tag Retention):
 1. **Dev tags**: Repository `**`, tag `dev` → Retain always
-2. **Prod tags**: Repository `**`, tag matching `[0-9]+\.[0-9]+\.[0-9]+` → Keep last 10 pushed
+2. **Prod tags**: Repository `**`, tag matching `[0-9]+\.[0-9]+\.[0-9]+` → Retain always
+
+Prod SemVer tags are immutable and must be retained indefinitely: `make rollback ENV=prod REVISION=N` restores a Helm release revision whose values reference a specific image tag, so evicting a live or recently-live tag makes the rollback pod fail to pull. A count-based rule on push time (e.g. "last 10 pushed") can evict the currently-running tag during fast hotfix cycles, since push order diverges from deploy order. Release cadence bounds the count naturally at this project's scale.
 
 
 ## Configuration
