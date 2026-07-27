@@ -39,7 +39,7 @@ HUB_NAMESPACE = os.environ.get("HUB_NAMESPACE", NAMESPACE)
 
 MDRUN_API_URL = f"http://mdrun-api.{HUB_NAMESPACE}.svc.cluster.local/api"
 
-TUNER_URL = f"http://gromacs-tuner-api-svc.{HUB_NAMESPACE}.svc.cluster.local:8000/api"
+TUNER_URL = f"http://tuner-api-svc.{HUB_NAMESPACE}.svc.cluster.local:8000/api"
 TUNER_USER = os.environ.get("TUNER_USER", "")
 TUNER_PASSWORD = os.environ.get("TUNER_PASSWORD", "")
 

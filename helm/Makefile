@@ -59,16 +59,18 @@ endif
 deploy: upgrade ## Deploy (alias for upgrade)
 
 .PHONY: update
-update: update-deps ## Update Helm dependencies and install kuberay-operator (requires cluster-admin)
-	helm repo add kuberay https://ray-project.github.io/kuberay-helm/ || true
-	helm install kuberay-operator kuberay/kuberay-operator || true
+update: update-deps ## Update local Helm chart dependencies
 
 .PHONY: update-deps
 update-deps: ## Update local Helm chart dependencies only
-	@# Package mdrun-api from local source — avoids pulling a broken OCI artifact
+	mkdir -p $(chart_path)/charts
 	helm package charts/mdrun-api \
 		--version $$(yq -r '.version' charts/mdrun-api/Chart.yaml) \
 		--app-version $$(yq -r '.appVersion' charts/mdrun-api/Chart.yaml) \
+		--destination $(chart_path)/charts/
+	helm package charts/tuner \
+		--version $$(yq -r '.version' charts/tuner/Chart.yaml) \
+		--app-version $$(yq -r '.appVersion' charts/tuner/Chart.yaml) \
 		--destination $(chart_path)/charts/
 	rm -rf $(chart_path)/Chart.lock
 	helm dependency update $(chart_path)
@@ -76,7 +78,6 @@ update-deps: ## Update local Helm chart dependencies only
 .PHONY: uninstall
 uninstall: ## Uninstall Helm release
 	helm uninstall $(package) --namespace $(namespace)
-	helm uninstall kuberay-operator || true
 
 .PHONY: hub-templates
 hub-templates: ## Create hub templates ConfigMap

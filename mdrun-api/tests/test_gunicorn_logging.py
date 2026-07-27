@@ -7,7 +7,7 @@ from gunicorn.glogging import Logger
 from gunicorn_logging import HealthCheckFilter
 
 
-def test_successful_health_probe_access_log_is_suppressed(mocker) -> None:  # ruff:ignore[missing-type-function-argument]
+def test_successful_health_probe_access_log_is_suppressed(mocker) -> None:
     """Successful health probes should be filtered using Gunicorn's WSGI environ."""
     mocker.patch.object(Logger, "setup")
     base_access = mocker.patch.object(Logger, "access")
@@ -21,7 +21,7 @@ def test_successful_health_probe_access_log_is_suppressed(mocker) -> None:  # ru
     base_access.assert_not_called()
 
 
-def test_failed_health_probe_access_log_is_preserved(mocker) -> None:  # ruff:ignore[missing-type-function-argument]
+def test_failed_health_probe_access_log_is_preserved(mocker) -> None:
     """Failed health probes should remain visible in access logs."""
     mocker.patch.object(Logger, "setup")
     base_access = mocker.patch.object(Logger, "access")

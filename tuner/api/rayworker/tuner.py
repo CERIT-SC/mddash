@@ -1,0 +1,306 @@
+"""MD engine tuning orchestration using Ray workers."""
+
+import logging
+import threading
+from typing import Any
+
+import ray
+from ray.exceptions import RayError
+
+from api.config import (
+    EARLY_STOP_BASELINE_TRIALS,
+    EARLY_STOP_BATCH_SIZE,
+    RAY_ADDRESS,
+    RUNTIME_WORKDIR,
+)
+from api.db.operations import (
+    create_job,
+    create_trial_result,
+    get_job,
+    update_job_status,
+    update_trial_result,
+)
+from api.engines.protocol import Engine, TrialConfig
+from api.schemas.common import JobStatus, MDEngine
+
+RAY_RUNTIME_ENV = {"working_dir": RUNTIME_WORKDIR}
+logger = logging.getLogger(__name__)
+
+logger.info("Tuner module initialized")
+
+
+class JobState:
+    """Per-job state: background thread, cancellation event, and active Ray futures."""
+
+    def __init__(self, thread: threading.Thread) -> None:
+        """Store the job thread and initialise cancellation/futures tracking."""
+        self.thread = thread
+        self.cancelled = threading.Event()
+        self.futures: set[ray.ObjectRef] = set()
+
+
+class JobContext:
+    """Thread-safe registry of all in-flight tuning jobs."""
+
+    def __init__(self) -> None:
+        """Initialise an empty job registry with a reentrant lock."""
+        self._jobs: dict[str, JobState] = {}
+        self._lock = threading.Lock()
+
+    def add_job(self, job_id: str, thread: threading.Thread) -> None:
+        """Register a new job with its background thread."""
+        with self._lock:
+            self._jobs[job_id] = JobState(thread)
+
+    def remove_job(self, job_id: str) -> None:
+        """Remove a job from the registry (no-op if not present)."""
+        with self._lock:
+            self._jobs.pop(job_id, None)
+
+    def is_cancelled(self, job_id: str) -> bool:
+        """Return True if the job has been marked for cancellation."""
+        with self._lock:
+            state = self._jobs.get(job_id)
+            return state is not None and state.cancelled.is_set()
+
+    def mark_cancelled(self, job_id: str) -> threading.Event:
+        """Set the cancellation flag for a job and return its event."""
+        with self._lock:
+            state = self._jobs.get(job_id)
+            if state:
+                state.cancelled.set()
+                return state.cancelled
+            event = threading.Event()
+            event.set()
+            return event
+
+    def add_futures(self, job_id: str, futures: set[ray.ObjectRef]) -> None:
+        """Register Ray futures belonging to a job for later cancellation."""
+        with self._lock:
+            state = self._jobs.get(job_id)
+            if state:
+                state.futures.update(futures)
+
+    def remove_future(self, job_id: str, future: ray.ObjectRef) -> None:
+        """Remove a completed future from the job's tracking set."""
+        with self._lock:
+            state = self._jobs.get(job_id)
+            if state:
+                state.futures.discard(future)
+
+    def get_futures(self, job_id: str) -> set[ray.ObjectRef]:
+        """Return a snapshot of all active futures for a job."""
+        with self._lock:
+            state = self._jobs.get(job_id)
+            return state.futures.copy() if state else set()
+
+    def is_thread_alive(self, job_id: str) -> bool:
+        """Return True if the job's background thread is still running."""
+        with self._lock:
+            state = self._jobs.get(job_id)
+            return state is not None and state.thread.is_alive()
+
+
+_job_context = JobContext()
+
+TrialConfigEntry = tuple[int, TrialConfig]
+
+
+def _ensure_ray_initialized() -> None:
+    if not ray.is_initialized():
+        ray.init(address=RAY_ADDRESS, runtime_env=RAY_RUNTIME_ENV, ignore_reinit_error=True)
+        logger.info("Connected to Ray cluster at %s", RAY_ADDRESS)
+
+
+@ray.remote(max_retries=3)
+def _run_single_trial(
+    job_id: str,
+    trial_id: str,
+    config: TrialConfig,
+    engine: Engine,
+    extra_args: str,
+    nsteps: int = 25_000,
+    best_steps_per_sec: float = 0.0,
+) -> dict[str, Any]:
+    """Execute a single trial on a Ray worker."""
+    logger.info("Running trial %s: params=%s, nsteps=%d", trial_id, config.params, nsteps)
+    result = engine.run_trial(config, trial_id, job_id, nsteps, extra_args, best_steps_per_sec)
+    status = JobStatus.TERMINATED if result.performance > 0 or result.early_stopped else JobStatus.ERROR
+    logger.info(
+        "Trial %s completed: status=%s, performance=%.2f ns/day, steps/sec=%.1f",
+        trial_id,
+        status,
+        result.performance or 0.0,
+        result.steps_per_sec,
+    )
+    return {
+        "trial_id": trial_id,
+        "status": status,
+        "performance": result.performance,
+        "steps_per_sec": result.steps_per_sec,
+        "early_stopped": result.early_stopped,
+    }
+
+
+def _order_trial_configs(trial_configs: list[TrialConfigEntry]) -> list[TrialConfigEntry]:
+    return sorted(trial_configs, key=lambda item: (-item[1].priority, -item[1].num_gpus, -item[1].num_cpus))
+
+
+def _submit_trials(
+    job_id: str,
+    extra_args: str,
+    trials: list[TrialConfigEntry],
+    engine: Engine,
+    nsteps: int,
+    best_steps_per_sec: float,
+) -> dict[ray.ObjectRef, int]:
+    future_to_trial: dict[ray.ObjectRef, int] = {}
+    for trial_id, cfg in trials:
+        future = _run_single_trial.options(num_cpus=cfg.num_cpus, num_gpus=cfg.num_gpus).remote(
+            job_id,
+            str(trial_id),
+            cfg,
+            engine,
+            extra_args,
+            nsteps,  # ty: ignore[too-many-positional-arguments]  # Ray stub omits optional params.
+            best_steps_per_sec,
+        )
+        future_to_trial[future] = trial_id
+        update_trial_result(trial_id, JobStatus.RUNNING, None)
+    _job_context.add_futures(job_id, set(future_to_trial.keys()))
+    return future_to_trial
+
+
+def _process_trial_results(
+    job_id: str,
+    future_to_trial: dict[ray.ObjectRef, int],
+    best_steps_per_sec: float,
+) -> float:
+    pending_futures = list(future_to_trial.keys())
+    new_best = best_steps_per_sec
+
+    while pending_futures:
+        done, pending_futures = ray.wait(pending_futures, num_returns=1)
+        trial_id = future_to_trial[done[0]]
+        try:
+            res: dict[str, Any] = ray.get(done[0])
+            if res:
+                early_stopped = res.get("early_stopped", False)
+                perf_value = None if early_stopped else res.get("performance")
+                update_trial_result(trial_id, res.get("status", JobStatus.ERROR), perf_value)
+                steps_per_sec = res.get("steps_per_sec", 0.0)
+                if steps_per_sec > new_best and not early_stopped:
+                    new_best = steps_per_sec
+                    logger.info("Job %s: New best steps/sec: %.1f", job_id, new_best)
+            else:
+                logger.warning("Trial %d returned no result", trial_id)
+                update_trial_result(trial_id, JobStatus.ERROR, None)
+        except RayError as e:
+            logger.warning("Trial %d failed: %s", trial_id, e)
+            update_trial_result(trial_id, JobStatus.ERROR, None)
+        finally:
+            _job_context.remove_future(job_id, done[0])
+
+    return new_best
+
+
+def _run_tuning_async(job_id: str, engine: Engine, extra_args: str = "", nsteps: int = 25_000) -> None:
+    pending_trial_ids: list[int] = []
+    try:
+        # Create trial records before connecting to Ray so GET returns them immediately.
+        all_configs = engine.generate_configs()
+        trial_configs = [(create_trial_result(job_id, cfg.params, JobStatus.PENDING, None), cfg) for cfg in all_configs]
+        pending_trial_ids = [tid for tid, _ in trial_configs]
+        trial_configs = _order_trial_configs(trial_configs)
+
+        _ensure_ray_initialized()
+        pending_trial_ids = []  # Ray is up; trials will be managed by the run loop from here
+        update_job_status(job_id, JobStatus.RUNNING)
+
+        best_steps_per_sec = 0.0
+
+        baseline_count = min(EARLY_STOP_BASELINE_TRIALS, len(trial_configs))
+        baseline_trials = trial_configs[:baseline_count]
+        remaining_trials = trial_configs[baseline_count:]
+
+        if baseline_trials:
+            future_to_trial = _submit_trials(job_id, extra_args, baseline_trials, engine, nsteps, best_steps_per_sec)
+            best_steps_per_sec = _process_trial_results(job_id, future_to_trial, best_steps_per_sec)
+
+        batch_size = max(1, EARLY_STOP_BATCH_SIZE)
+        for idx in range(0, len(remaining_trials), batch_size):
+            if _job_context.is_cancelled(job_id):
+                logger.info("Job %s cancelled, skipping remaining trials", job_id)
+                break
+            batch = remaining_trials[idx : idx + batch_size]
+            future_to_trial = _submit_trials(job_id, extra_args, batch, engine, nsteps, best_steps_per_sec)
+            best_steps_per_sec = _process_trial_results(job_id, future_to_trial, best_steps_per_sec)
+
+        if _job_context.is_cancelled(job_id):
+            logger.info("Job %s finished after cancellation; status already set", job_id)
+        else:
+            logger.info("All trials completed for job %s (best: %.1f steps/s)", job_id, best_steps_per_sec)
+            if not _job_context.is_cancelled(job_id):
+                update_job_status(job_id, JobStatus.TERMINATED)
+    except Exception as e:
+        logger.exception("Tuning job %s failed", job_id)
+        for trial_id in pending_trial_ids:
+            update_trial_result(trial_id, JobStatus.ERROR, None)
+        update_job_status(job_id, JobStatus.ERROR, str(e))
+    finally:
+        _job_context.remove_job(job_id)
+
+
+def submit_tuning_job(
+    job_id: str,
+    engine: Engine,
+    md_engine: MDEngine,
+    extra_args: str = "",
+    nsteps: int = 25_000,
+) -> str:
+    """Submit a tuning job for any engine."""
+    create_job(job_id, md_engine)
+    thread = threading.Thread(target=_run_tuning_async, args=(job_id, engine, extra_args, nsteps), daemon=True)
+    _job_context.add_job(job_id, thread)
+    thread.start()
+    logger.info("Submitted tuning job %s (engine=%s)", job_id, md_engine.value)
+    return job_id
+
+
+def cancel_job(job_id: str) -> bool:
+    """Cancel an in-flight job and its active Ray trials; returns False if job not found."""
+    if not get_job(job_id):
+        logger.warning("Cannot cancel: job %s not found", job_id)
+        return False
+    _job_context.mark_cancelled(job_id)
+    futures_to_cancel = _job_context.get_futures(job_id)
+    if futures_to_cancel:
+        logger.info("Cancelling %d active trials for job %s", len(futures_to_cancel), job_id)
+        for future in futures_to_cancel:
+            try:
+                ray.cancel(future, force=False)
+            except Exception as e:
+                logger.warning("Failed to cancel trial for job %s: %s", job_id, e)
+    update_job_status(job_id, JobStatus.ERROR, "Cancelled by user")
+    logger.info("Marked job %s as cancelled", job_id)
+    return True
+
+
+def sync_job_status(job_id: str) -> JobStatus | None:
+    """Reconcile DB status with live thread/cancellation state; returns None if job not found."""
+    job = get_job(job_id)
+    if not job:
+        return None
+    if job.status in {JobStatus.TERMINATED, JobStatus.ERROR}:
+        return job.status
+    if _job_context.is_cancelled(job_id):
+        return JobStatus.ERROR
+    if _job_context.is_thread_alive(job_id):
+        return JobStatus.RUNNING
+    if job.status == JobStatus.RUNNING:
+        update_job_status(job_id, JobStatus.ERROR, "Job thread terminated unexpectedly")
+        return JobStatus.ERROR
+    if job.status == JobStatus.PENDING:
+        update_job_status(job_id, JobStatus.ERROR, "Job failed to start - no active thread")
+        return JobStatus.ERROR
+    return job.status

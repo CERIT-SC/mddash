@@ -71,15 +71,21 @@ lint-helm: validate-charts ## Validate all Helm charts including umbrella depend
 	helm template mddash helm/charts/mddash >/dev/null
 
 .PHONY: validate-charts
-validate-charts: ## Lint mdrun-api chart and render values template. Requires helm + gomplate + yq.
-	helm lint helm/charts/mdrun-api
-	helm template mdrun-api helm/charts/mdrun-api >/dev/null
-	$(MAKE) -C helm render
+validate-charts: ## Lint and template all charts for every environment. Requires helm + gomplate + yq.
+	@for chart in mdrun-api tuner; do \
+		helm lint helm/charts/$$chart; \
+		helm template $$chart helm/charts/$$chart >/dev/null; \
+	done
+	$(MAKE) -C helm update-deps ENV=dev IMAGE_TAG=dev
+	@for env in dev prod edc; do \
+		$(MAKE) -C helm render ENV=$$env IMAGE_TAG=dev; \
+		helm template mddash helm/charts/mddash -f helm/charts/mddash/values.yaml >/dev/null; \
+	done
 
 # ==================== TYPE CHECK ====================
 
 .PHONY: type-check
-type-check: type-check-dashboard-api type-check-dashboard-auth type-check-mdrun-api type-check-ui type-check-landing ## Run type checks on all components
+type-check: type-check-dashboard-api type-check-dashboard-auth type-check-mdrun-api type-check-tuner type-check-ui type-check-landing ## Run type checks on all components
 
 .PHONY: type-check-dashboard-api
 type-check-dashboard-api: ## Type-check dashboard API
@@ -93,6 +99,10 @@ type-check-dashboard-auth: ## Type-check dashboard auth
 type-check-mdrun-api: ## Type-check mdrun-api
 	cd mdrun-api && uv run ty check .
 
+.PHONY: type-check-tuner
+type-check-tuner: ## Type-check Tuner API
+	cd tuner && uv run ty check api
+
 .PHONY: type-check-ui
 type-check-ui: ## Type-check dashboard UI (TypeScript)
 	cd dashboard/ui && pnpm run type-check
@@ -104,7 +114,7 @@ type-check-landing: ## Type-check landing page (TypeScript)
 # ==================== TEST ====================
 
 .PHONY: test
-test: test-dashboard-api test-dashboard-auth test-mdrun-api test-pre-spawn-hook ## Run all tests
+test: test-dashboard-api test-dashboard-auth test-mdrun-api test-tuner test-pre-spawn-hook ## Run all tests
 
 .PHONY: test-dashboard-api
 test-dashboard-api: ## Run dashboard API tests
@@ -118,6 +128,10 @@ test-dashboard-auth: ## Run dashboard auth tests
 test-mdrun-api: ## Run mdrun-api tests
 	cd mdrun-api && uv run pytest
 
+.PHONY: test-tuner
+test-tuner: ## Run Tuner API tests
+	cd tuner && uv run pytest
+
 .PHONY: test-pre-spawn-hook
 test-pre-spawn-hook: ## Run pre-spawn hook unit tests
 	uv run --group dev pytest helm/charts/mddash/tests/
@@ -125,7 +139,7 @@ test-pre-spawn-hook: ## Run pre-spawn hook unit tests
 # ==================== BUILD ====================
 
 .PHONY: build
-build: build-dashboard build-notebook build-mdrun-api build-landing ## Build all images
+build: build-dashboard build-notebook build-mdrun-api build-tuner-api build-landing ## Build all automated images
 
 .PHONY: build-dashboard
 build-dashboard: ## Build dashboard sidecar images (ui, proxy, auth, api, s3sync)
@@ -139,12 +153,16 @@ build-notebook: ## Build notebook image
 build-mdrun-api: ## Build mdrun-api image
 	@$(MAKE) -C mdrun-api build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
+.PHONY: build-tuner-api
+build-tuner-api: ## Build Tuner API image (worker image remains manual)
+	@$(MAKE) -C tuner build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
+
 .PHONY: build-landing
 build-landing: ## Build landing page image
 	@$(MAKE) -C landing build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push
-push: push-dashboard push-notebook push-mdrun-api push-landing ## Build and push all images
+push: push-dashboard push-notebook push-mdrun-api push-tuner-api push-landing ## Build and push all automated images
 
 .PHONY: push-dashboard
 push-dashboard: ## Build and push dashboard sidecar images
@@ -157,6 +175,10 @@ push-notebook: ## Build and push notebook image
 .PHONY: push-mdrun-api
 push-mdrun-api: ## Build and push mdrun-api image
 	@$(MAKE) -C mdrun-api push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
+
+.PHONY: push-tuner-api
+push-tuner-api: ## Build and push Tuner API image (worker image remains manual)
+	@$(MAKE) -C tuner push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push-landing
 push-landing: ## Build and push landing page image
@@ -172,15 +194,23 @@ push-mdrun-api-chart: ## Package and push mdrun-api Helm chart to OCI registry
 	helm push mdrun-api-$(CHART_VERSION).tgz oci://$(chart_registry)
 	rm -f mdrun-api-$(CHART_VERSION).tgz
 
+.PHONY: push-tuner-chart
+push-tuner-chart: ## Package and push Tuner Helm chart to OCI registry
+	$(eval CHART_VERSION := $(if $(VERSION),$(VERSION),$(IMAGE_TAG)))
+	@[[ "$(CHART_VERSION)" =~ ^[0-9]+\.[0-9]+\.[0-9]+$$ ]] || { echo "VERSION or IMAGE_TAG must be strict SemVer x.y.z (got '$(CHART_VERSION)')" >&2; exit 1; }
+	helm package helm/charts/tuner --version $(CHART_VERSION) --app-version $(CHART_VERSION) --dependency-update
+	helm push tuner-$(CHART_VERSION).tgz oci://$(chart_registry)
+	rm -f tuner-$(CHART_VERSION).tgz
+
 .PHONY: push-mddash-chart
-push-mddash-chart: push-mdrun-api-chart ## Package and push umbrella Helm chart to OCI registry
+push-mddash-chart: push-mdrun-api-chart push-tuner-chart ## Package and push umbrella Helm chart to OCI registry
 	$(eval CHART_VERSION := $(if $(VERSION),$(VERSION),$(IMAGE_TAG)))
 	@[[ "$(CHART_VERSION)" =~ ^[0-9]+\.[0-9]+\.[0-9]+$$ ]] || { echo "VERSION or IMAGE_TAG must be strict SemVer x.y.z (got '$(CHART_VERSION)')" >&2; exit 1; }
 	@set -euo pipefail; \
 		tmpdir="$$(mktemp -d)"; \
 		trap 'rm -rf "$$tmpdir"' EXIT; \
 		cp -a helm/charts/mddash/. "$$tmpdir"; \
-		yq -i '(.dependencies[] | select(.name == "mdrun-api").version) = "$(CHART_VERSION)" | (.dependencies[] | select(.name == "mdrun-api").repository) = "oci://$(chart_registry)"' "$$tmpdir/Chart.yaml"; \
+		yq -i '(.dependencies[] | select(.name == "mdrun-api" or .name == "tuner").version) = "$(CHART_VERSION)" | (.dependencies[] | select(.name == "mdrun-api" or .name == "tuner").repository) = "oci://$(chart_registry)"' "$$tmpdir/Chart.yaml"; \
 		helm dependency update "$$tmpdir"; \
 		helm package "$$tmpdir" --destination "$$tmpdir" --version $(CHART_VERSION) --app-version $(CHART_VERSION); \
 		helm push "$$tmpdir/mddash-jupyterhub-$(CHART_VERSION).tgz" oci://$(chart_registry)

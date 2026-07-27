@@ -15,3 +15,6 @@ config*.yaml
 **/.pytest_cache/
 **/.coverage
 **/htmlcov/
+**/*.tar.bz2
+/tuner/tests/
+/tuner/demo/

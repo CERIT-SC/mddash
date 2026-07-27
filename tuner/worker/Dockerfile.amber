@@ -1,0 +1,99 @@
+# Builds the private AMBER image from the licensed pmemd26 and AmberTools26 source tarballs.
+# Place pmemd26*.tar.bz2 and ambertools26*.tar.bz2 in the worker/ build context before building.
+# Download from https://ambermd.org/GetAmber.php (requires a valid AMBER 26 license).
+# WARNING: compilation takes 40-90 minutes.
+
+# Stage 1: Compile pmemd with CUDA and MPI support.
+# Needs the full CUDA toolkit (nvcc) to compile GPU kernels.
+FROM nvidia/cuda:12.8.1-devel-ubuntu22.04 AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tcsh make cmake bzip2 \
+    gcc g++ gfortran \
+    flex bison patch bc wget \
+    xorg-dev \
+    zlib1g-dev libbz2-dev \
+    python3 \
+    openmpi-bin libopenmpi-dev openssh-client \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG PMEMD_TARBALL=pmemd26.tar.bz2
+COPY ${PMEMD_TARBALL} /tmp/
+RUN tar -xjf /tmp/${PMEMD_TARBALL} -C /tmp \
+    && rm /tmp/${PMEMD_TARBALL} \
+    # Only SM7.5 (T4, RTX 2080/Ti), SM8.0 (A100), SM8.6 (A40) — the cluster's GPUs. Default is 7 archs.
+    && grep -q '${SM70FLAGS} ${SM75FLAGS} ${SM80FLAGS} ${SM86FLAGS} ${SM89FLAGS} ${SM90FLAGS} ${SM100FLAGS} ${SM120FLAGS}' \
+            /tmp/pmemd26_src/cmake/CudaConfig.cmake \
+        || { echo "ERROR: expected GPU arch list not found in CudaConfig.cmake; pmemd26 source layout may have changed" >&2; exit 1; } \
+     && sed -i 's/${SM70FLAGS} ${SM75FLAGS} ${SM80FLAGS} ${SM86FLAGS} ${SM89FLAGS} ${SM90FLAGS} ${SM100FLAGS} ${SM120FLAGS}/${SM75FLAGS} ${SM80FLAGS} ${SM86FLAGS}/' \
+        /tmp/pmemd26_src/cmake/CudaConfig.cmake
+
+RUN cmake -S /tmp/pmemd26_src -B /tmp/pmemd26_build \
+        -DCMAKE_INSTALL_PREFIX=/opt/pmemd26 \
+        -DCOMPILER=GNU \
+        -DCUDA=TRUE \
+        -DMPI=TRUE \
+        -DPMEMD_ONLY=TRUE \
+        -DBUILD_PERL=FALSE \
+        -DBUILD_GUI=FALSE \
+        -DINSTALL_TESTS=FALSE \
+        -DDOWNLOAD_MINICONDA=FALSE \
+        -DBUILD_PYTHON=FALSE \
+        -DCHECK_UPDATES=FALSE \
+    # ~4 GB RAM per parallel job; raise only if you have headroom
+    && cmake --build /tmp/pmemd26_build --parallel 4 \
+    && cmake --install /tmp/pmemd26_build
+
+ARG AMBERTOOLS_TARBALL=ambertools26.tar.bz2
+COPY ${AMBERTOOLS_TARBALL} /tmp/
+RUN tar -xjf /tmp/${AMBERTOOLS_TARBALL} -C /tmp \
+    && rm /tmp/${AMBERTOOLS_TARBALL} \
+    && grep -q '${SM70FLAGS} ${SM75FLAGS} ${SM80FLAGS} ${SM86FLAGS} ${SM89FLAGS} ${SM90FLAGS} ${SM100FLAGS} ${SM120FLAGS}' \
+            /tmp/ambertools26_src/cmake/CudaConfig.cmake \
+        || { echo "ERROR: expected GPU arch list not found in CudaConfig.cmake; ambertools26 source layout may have changed" >&2; exit 1; } \
+     && sed -i 's/${SM70FLAGS} ${SM75FLAGS} ${SM80FLAGS} ${SM86FLAGS} ${SM89FLAGS} ${SM90FLAGS} ${SM100FLAGS} ${SM120FLAGS}/${SM75FLAGS} ${SM80FLAGS} ${SM86FLAGS}/' \
+        /tmp/ambertools26_src/cmake/CudaConfig.cmake
+
+RUN cmake -S /tmp/ambertools26_src -B /tmp/ambertools26_build \
+        -DCMAKE_INSTALL_PREFIX=/opt/ambertools26 \
+        -DCOMPILER=GNU \
+        -DCUDA=TRUE \
+        -DMPI=TRUE \
+        -DBUILD_PERL=FALSE \
+        -DBUILD_GUI=FALSE \
+        -DINSTALL_TESTS=FALSE \
+        -DDOWNLOAD_MINICONDA=TRUE \
+        -DBUILD_PYTHON=TRUE \
+        -DCHECK_UPDATES=FALSE \
+    && cmake --build /tmp/ambertools26_build --parallel 4 \
+    && cmake --install /tmp/ambertools26_build
+
+# Install reduce manually because AmberTools doesn't include it.
+ARG REDUCE_VERSION=4.15
+RUN /opt/ambertools26/miniconda/bin/conda install \
+        -p /opt/ambertools26/miniconda \
+        -c conda-forge \
+        -c bioconda \
+        -y "reduce=${REDUCE_VERSION}" \
+    && ln -sf /opt/ambertools26/miniconda/bin/reduce /opt/ambertools26/bin/reduce \
+    && printf '%s\n' /opt/ambertools26/lib/python3.12/site-packages \
+        > /opt/ambertools26/miniconda/lib/python3.12/site-packages/ambertools-install.pth \
+    && /opt/ambertools26/miniconda/bin/conda clean -afy
+
+# Stage 2: Minimal runtime image.
+FROM nvidia/cuda:12.8.1-runtime-ubuntu22.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openmpi-bin libopenmpi3 openssh-client \
+    libgomp1 \
+    libgfortran5 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder --chown=1000:1000 /opt/pmemd26 /opt/pmemd26
+COPY --from=builder --chown=1000:1000 /opt/ambertools26 /opt/ambertools26
+ENV AMBERHOME=/opt/ambertools26
+ENV PATH="${AMBERHOME}/miniconda/bin:${AMBERHOME}/bin:/opt/pmemd26/bin:${PATH}"
+ENV LD_LIBRARY_PATH="${AMBERHOME}/miniconda/lib:${AMBERHOME}/lib:/opt/pmemd26/lib:${LD_LIBRARY_PATH}"
+ENV PYTHONPATH="${AMBERHOME}/miniconda/lib/python3.12/site-packages:${AMBERHOME}/lib/python3.12/site-packages"
+
+USER 1000

@@ -175,6 +175,10 @@ jobs:
             context: .
             dockerfile: mdrun-api/Dockerfile
             image-suffix: mdrun-api
+          - name: tuner-api
+            context: .
+            dockerfile: tuner/Dockerfile
+            image-suffix: tuner-api
           - name: landing
             context: landing
             dockerfile: landing/Dockerfile
@@ -280,9 +284,11 @@ jobs:
             --username "$REGISTRY_USERNAME" \
             --password-stdin
       - name: Configure kubectl
+        env:
+          KUBECONFIG_B64: ${{ secrets.KUBECONFIG }}
         run: |
           mkdir -p "$HOME/.kube"
-          echo "${{ secrets.KUBECONFIG }}" | base64 -d > "$HOME/.kube/config"
+          echo "$KUBECONFIG_B64" | base64 -d > "$HOME/.kube/config"
       - name: Update Helm dependencies
         env:
           ENV: ${{ inputs.environment }}
@@ -291,24 +297,31 @@ jobs:
         env:
           NAMESPACE: ${{ needs.setup.outputs.namespace }}
           PACKAGE: ${{ needs.setup.outputs.package }}
+          OAUTH_CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
+          OAUTH_CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
+          S3_ACCESS_KEY: ${{ secrets.S3_ACCESS_KEY }}
+          S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
+          MDREPO_CLIENT_ID: ${{ secrets.MDREPO_CLIENT_ID }}
+          MDREPO_CLIENT_SECRET: ${{ secrets.MDREPO_CLIENT_SECRET }}
         run: |
           kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
           kubectl create secret generic oidc-credentials \
-            --from-literal=client_id="${{ secrets.OAUTH_CLIENT_ID }}" \
-            --from-literal=client_secret="${{ secrets.OAUTH_CLIENT_SECRET }}" \
+            --from-literal=client_id="$OAUTH_CLIENT_ID" \
+            --from-literal=client_secret="$OAUTH_CLIENT_SECRET" \
             -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
           kubectl create secret generic "$PACKAGE"-s3-creds \
-            --from-literal=S3_ACCESS_KEY="${{ secrets.S3_ACCESS_KEY }}" \
-            --from-literal=S3_SECRET_KEY="${{ secrets.S3_SECRET_KEY }}" \
+            --from-literal=S3_ACCESS_KEY="$S3_ACCESS_KEY" \
+            --from-literal=S3_SECRET_KEY="$S3_SECRET_KEY" \
             -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
           kubectl create secret generic "$PACKAGE"-mdrepo-credentials \
-            --from-literal=client_id="${{ secrets.MDREPO_CLIENT_ID }}" \
-            --from-literal=client_secret="${{ secrets.MDREPO_CLIENT_SECRET }}" \
+            --from-literal=client_id="$MDREPO_CLIENT_ID" \
+            --from-literal=client_secret="$MDREPO_CLIENT_SECRET" \
             -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-          kubectl create secret generic tuner-auth \
-            --from-literal=user="${{ secrets.TUNER_USER }}" \
-            --from-literal=password="${{ secrets.TUNER_PASSWORD }}" \
-            -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          kubectl get secret tuner-auth -n "$NAMESPACE" >/dev/null 2>&1 || \
+            kubectl create secret generic tuner-auth \
+            --from-literal=user="tuner" \
+            --from-literal=password="$(openssl rand -base64 32)" \
+            -n "$NAMESPACE"
       - name: Deploy
         env:
           ENV: ${{ inputs.environment }}

@@ -160,7 +160,7 @@ class TestDuMonitor:
         sleep = mocker.patch("utils.time.sleep", side_effect=RuntimeError("stop"))
         run = mocker.patch("utils.subprocess.run")
 
-        from utils import _du_loop  # ruff:ignore[import-private-name]
+        from utils import _du_loop
 
         with contextlib.suppress(RuntimeError):
             _du_loop(tmp_path, initial_delay=3.0)

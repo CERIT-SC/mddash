@@ -6,3 +6,5 @@ __pycache__/
 .worktrees/
 .pnpm-store/
 .playwright-mcp/
+pmemd*.tar.bz2
+ambertools*.tar.bz2

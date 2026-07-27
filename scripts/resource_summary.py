@@ -263,21 +263,21 @@ def main(config: str) -> None:  # ruff:ignore[too-many-locals]
     mdrun_polling_cl = parse_cpu(yq(".mdrunApi.polling.resources.limits.cpu", config))
     mdrun_polling_ml = parse_memory(yq(".mdrunApi.polling.resources.limits.memory", config))
 
-    ta_cr = parse_cpu(yq(".gromacsTuner.api.resources.requests.cpu", config))
-    ta_mr = parse_memory(yq(".gromacsTuner.api.resources.requests.memory", config))
-    ta_cl = parse_cpu(yq(".gromacsTuner.api.resources.limits.cpu", config))
-    ta_ml = parse_memory(yq(".gromacsTuner.api.resources.limits.memory", config))
+    ta_cr = parse_cpu(yq(".tuner.api.resources.requests.cpu", config))
+    ta_mr = parse_memory(yq(".tuner.api.resources.requests.memory", config))
+    ta_cl = parse_cpu(yq(".tuner.api.resources.limits.cpu", config))
+    ta_ml = parse_memory(yq(".tuner.api.resources.limits.memory", config))
 
-    rh_cr = parse_cpu(yq(".gromacsTuner.ray.head.resources.requests.cpu", config))
-    rh_mr = parse_memory(yq(".gromacsTuner.ray.head.resources.requests.memory", config))
-    rh_cl = parse_cpu(yq(".gromacsTuner.ray.head.resources.limits.cpu", config))
-    rh_ml = parse_memory(yq(".gromacsTuner.ray.head.resources.limits.memory", config))
+    rh_cr = parse_cpu(yq(".tuner.ray.head.resources.requests.cpu", config))
+    rh_mr = parse_memory(yq(".tuner.ray.head.resources.requests.memory", config))
+    rh_cl = parse_cpu(yq(".tuner.ray.head.resources.limits.cpu", config))
+    rh_ml = parse_memory(yq(".tuner.ray.head.resources.limits.memory", config))
 
-    rw_cr = parse_cpu(yq(".gromacsTuner.ray.worker.resources.requests.cpu", config))
-    rw_mr = parse_memory(yq(".gromacsTuner.ray.worker.resources.requests.memory", config))
-    rw_cl = parse_cpu(yq(".gromacsTuner.ray.worker.resources.limits.cpu", config))
-    rw_ml = parse_memory(yq(".gromacsTuner.ray.worker.resources.limits.memory", config))
-    rw_replicas = int(yq(".gromacsTuner.ray.worker.maxReplicas", config))
+    rw_cr = parse_cpu(yq(".tuner.worker.resources.requests.cpu", config))
+    rw_mr = parse_memory(yq(".tuner.worker.resources.requests.memory", config))
+    rw_cl = parse_cpu(yq(".tuner.worker.resources.limits.cpu", config))
+    rw_ml = parse_memory(yq(".tuner.worker.resources.limits.memory", config))
+    rw_replicas = int(yq(".tuner.worker.maxReplicas", config))
 
     hub_cr = parse_cpu(yq(".hub.resources.requests.cpu", config))
     hub_mr = parse_memory(yq(".hub.resources.requests.memory", config))
@@ -304,7 +304,7 @@ def main(config: str) -> None:  # ruff:ignore[too-many-locals]
     row("jupyterhub-hub", hub_cr, hub_mr, hub_cl, hub_ml, indent=1)
     row("mdrun-api", mdrun_cr, mdrun_mr, mdrun_cl, mdrun_ml, indent=1)
     row("mdrun-api poller", mdrun_polling_cr, mdrun_polling_mr, mdrun_polling_cl, mdrun_polling_ml, indent=1)
-    row("gromacs-tuner-api", ta_cr, ta_mr, ta_cl, ta_ml, indent=1)
+    row("tuner-api", ta_cr, ta_mr, ta_cl, ta_ml, indent=1)
     row("ray-head", rh_cr, rh_mr, rh_cl, rh_ml, indent=1)
     row(
         f"ray-worker (x {rw_replicas})",

@@ -1,0 +1,5 @@
+Internal API:
+  http://tuner-api-svc.{{ .Release.Namespace }}.svc.cluster.local:8000/api
+
+Port-forward for manual access:
+  kubectl --namespace {{ .Release.Namespace }} port-forward service/tuner-api-svc 18000:8000

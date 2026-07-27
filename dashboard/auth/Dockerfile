@@ -12,6 +12,7 @@ COPY pyproject.toml uv.lock ./
 COPY dashboard/api/pyproject.toml dashboard/api/
 COPY dashboard/auth/pyproject.toml dashboard/auth/
 COPY mdrun-api/pyproject.toml mdrun-api/
+COPY tuner/pyproject.toml tuner/
 
 RUN uv sync --frozen --no-dev --package dashboard-auth --no-install-project
 

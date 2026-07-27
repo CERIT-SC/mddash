@@ -1,0 +1,57 @@
+image:
+  repository: cerit.io/mddash/tuner-api
+  tag: "dev"
+  pullPolicy: Always
+
+api:
+  resources:
+    limits:
+      cpu: "1"
+      memory: "2Gi"
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+  livenessProbe:
+    initialDelaySeconds: 10
+    periodSeconds: 30
+  readinessProbe:
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+databaseStorage:
+  size: "1Gi"
+  storageClassName: "csi-ceph-rbd-du"
+
+jobStorage:
+  size: "100Gi"
+  storageClassName: "nfs-csi"
+
+ray:
+  version: "2.54.0"
+  image: "cerit.io/mddash/tuner-worker:gmx-2026.1_amber-26_ray-2.54.0_py-3.13"
+  imagePullPolicy: IfNotPresent
+  autoscaler:
+    idleTimeoutSeconds: 300
+  head:
+    resources:
+      limits:
+        cpu: "1"
+        memory: "8Gi"
+      requests:
+        cpu: "500m"
+        memory: "4Gi"
+  worker:
+    replicas: 0
+    minReplicas: 0
+    maxReplicas: 5
+    numCpu: 32
+    numGpu: 1
+    resources:
+      limits:
+        cpu: "32"
+        memory: "128Gi"
+        nvidia.com/mig-1g.10gb: "1"
+      requests:
+        cpu: "32"
+        memory: "16Gi"
+        nvidia.com/mig-1g.10gb: "1"

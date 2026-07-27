@@ -297,45 +297,44 @@ mdrun-api:
     - name: GPU_TYPE
       value: "{{ $cfg.gpuType }}"
 
-gromacs-tuner:
+tuner:
   image:
-    repository: {{ $cfg.gromacsTuner.image.repository }}
-    tag: "{{ $cfg.gromacsTuner.image.tag }}"
-    pullPolicy: "{{ $cfg.gromacsTuner.image.pullPolicy }}"
-
-  ingress:
-    enabled: false
-    host: "gromacs-tuner.local"
+    repository: {{ $cfg.registry }}/{{ $cfg.tuner.api.image }}
+    tag: "{{ env.Getenv "IMAGE_TAG" }}"
+    pullPolicy: "{{ $cfg.tuner.api.pullPolicy }}"
 
   # API resources
   api:
     resources:
-{{ $cfg.gromacsTuner.api.resources | toYAML | indent 6 }}
+{{ $cfg.tuner.api.resources | toYAML | indent 6 }}
 
-  # Storage configuration
-  storage:
-    size: "{{ $cfg.gromacsTuner.storage.size }}"
-    storageClassName: "{{ $cfg.storageClassName }}"
+  databaseStorage:
+{{ $cfg.tuner.databaseStorage | toYAML | indent 4 }}
+
+  jobStorage:
+{{ $cfg.tuner.jobStorage | toYAML | indent 4 }}
 
   # Ray cluster configuration
   ray:
-    image: "{{ $cfg.gromacsTuner.ray.image }}"
+    version: "{{ $cfg.tuner.ray.version }}"
+    image: "{{ $cfg.tuner.worker.image }}"
+    imagePullPolicy: "{{ $cfg.tuner.worker.pullPolicy }}"
     autoscaler:
-      idleTimeoutSeconds: "{{ $cfg.gromacsTuner.ray.worker.idleTimeoutSeconds }}"
+      idleTimeoutSeconds: {{ $cfg.tuner.worker.idleTimeoutSeconds }}
 
     head:
       resources:
-{{ $cfg.gromacsTuner.ray.head.resources | toYAML | indent 8 }}
+{{ $cfg.tuner.ray.head.resources | toYAML | indent 8 }}
 
     worker:
-      maxReplicas: {{ $cfg.gromacsTuner.ray.worker.maxReplicas }}
-      numCpu: {{ $cfg.gromacsTuner.ray.worker.resources.limits.cpu }}
+      maxReplicas: {{ $cfg.tuner.worker.maxReplicas }}
+      numCpu: {{ $cfg.tuner.worker.resources.limits.cpu }}
       {{- $numGpu := 0 -}}
-      {{- range $k, $v := $cfg.gromacsTuner.ray.worker.resources.limits -}}
+      {{- range $k, $v := $cfg.tuner.worker.resources.limits -}}
         {{- if or (strings.HasPrefix "nvidia.com/" $k) (strings.Contains (strings.ToLower $k) "gpu") -}}
           {{- $numGpu = $v -}}
         {{- end -}}
       {{- end }}
       numGpu: {{ $numGpu }}
       resources:
-{{ $cfg.gromacsTuner.ray.worker.resources | toYAML | indent 8 }}
+{{ $cfg.tuner.worker.resources | toYAML | indent 8 }}

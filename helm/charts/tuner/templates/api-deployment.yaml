@@ -1,0 +1,91 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tuner-api
+  labels:
+    app.kubernetes.io/name: tuner
+    app.kubernetes.io/component: api
+spec:
+  replicas: 1
+  # Recreate prevents two API pods from contending for the RWO SQLite volume.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: tuner
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: tuner
+        app.kubernetes.io/component: api
+    spec:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+            - name: RAY_ADDRESS
+              value: "ray://tuner-raycluster-head-svc:10001"
+            - name: TUNER_DB
+              value: "/data/tuner.db"
+            - name: TMPDIR
+              value: "/tmp/tpr"
+            - name: TUNER_USER
+              valueFrom:
+                secretKeyRef:
+                  name: tuner-auth
+                  key: user
+            - name: TUNER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tuner-auth
+                  key: password
+            - name: MAX_CPU
+              value: {{ .Values.ray.worker.numCpu | quote }}
+            - name: MAX_GPU
+              value: {{ .Values.ray.worker.numGpu | quote }}
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: {{ .Values.api.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.livenessProbe.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: {{ .Values.api.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.api.readinessProbe.periodSeconds }}
+          volumeMounts:
+            - name: jobs
+              mountPath: /tmp/tpr
+            - name: database
+              mountPath: /data
+      volumes:
+        - name: jobs
+          persistentVolumeClaim:
+            claimName: tuner-jobs
+        - name: database
+          persistentVolumeClaim:
+            claimName: tuner-db

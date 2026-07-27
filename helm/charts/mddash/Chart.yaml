@@ -12,6 +12,6 @@ dependencies:
   - name: mdrun-api
     version: "0.1.0"
     repository: "file://../mdrun-api"
-  - name: gromacs-tuner
-    version: "0.1.2"
-    repository: "oci://cerit.io/mddash"
+  - name: tuner
+    version: "0.1.0"
+    repository: "file://../tuner"
