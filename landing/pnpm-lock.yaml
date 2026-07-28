@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@e-infra/design-system':
-        specifier: ^0.1.6
-        version: 0.1.6(dfa7b7415f8a7e73ea2511c9a9dbf28f)
+        specifier: ^0.1.8
+        version: 0.1.8(dfa7b7415f8a7e73ea2511c9a9dbf28f)
       lucide-react:
         specifier: ^1.16.0
         version: 1.25.0(react@19.2.7)
@@ -149,8 +149,8 @@ packages:
   '@date-fns/tz@1.5.0':
     resolution: {integrity: sha512-lwYN/vDPeNRULcepoE/LO2Pgx+7/RV+S9ARfbc9lr2DtGkOD7pAiruHvbR1RX3Qyf6ja47EWJDMsNK5vK08DJg==}
 
-  '@e-infra/design-system@0.1.6':
-    resolution: {integrity: sha512-EEh+V7AC0SGrcy5fLcwDz9vUN2vdrZnIWqOQoSvH5SyklKSRUaZsTMsQpLjhZ7pYcDHVz2ysxm4NpIsmXTviSg==}
+  '@e-infra/design-system@0.1.8':
+    resolution: {integrity: sha512-FRElLtavr5h5LKUXGIpIYf57paGX3N44N392CKqEsMqDiILoqSGjFZ7eEPZS6d0rtuzP5TBFZyG4uaBbv1LTnw==}
     peerDependencies:
       '@hookform/resolvers': ^5.0.0
       '@radix-ui/react-accordion': ^1.0.0
@@ -2828,7 +2828,7 @@ snapshots:
 
   '@date-fns/tz@1.5.0': {}
 
-  '@e-infra/design-system@0.1.6(dfa7b7415f8a7e73ea2511c9a9dbf28f)':
+  '@e-infra/design-system@0.1.8(dfa7b7415f8a7e73ea2511c9a9dbf28f)':
     dependencies:
       '@hookform/resolvers': 5.4.0(react-hook-form@7.76.1(react@19.2.7))
       '@radix-ui/react-accordion': 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)

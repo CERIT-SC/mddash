@@ -1,14 +1,46 @@
-import { Footer } from "@e-infra/design-system"
+import {
+  Footer,
+  FooterContent,
+  FooterLeft,
+  FooterLeftText,
+  FooterLogo,
+  FooterMeta,
+  FooterNavLink,
+} from "@e-infra/design-system"
 
+import einfraPurpleLogo from "../assets/einfra_purple.svg"
+import einfraWhiteLogo from "../assets/einfra_white.svg"
 import { GlowSeparator } from "./GlowSeparator"
 
 export function SiteFooter() {
   return (
     <>
       <GlowSeparator />
-      {/* sr-only h3 bridges the h2→h4 gap introduced by the design system Footer */}
-      <h3 className="sr-only">Site footer</h3>
-      <Footer tag="Developed with support from e-INFRA CZ (ID: 90254), Ministry of Education, Youth and Sports of the Czech Republic" />
+      <Footer>
+        <FooterContent>
+          <FooterLeft>
+            <FooterLogo>
+              <img src={einfraPurpleLogo} alt="e-INFRA CZ" className="h-12 w-auto dark:hidden" />
+              <img src={einfraWhiteLogo} alt="e-INFRA CZ" className="hidden h-12 w-auto dark:block" />
+            </FooterLogo>
+            <FooterLeftText>
+              Developed with support from e-INFRA CZ (ID: 90254), Ministry of Education, Youth and Sports of the Czech
+              Republic
+            </FooterLeftText>
+          </FooterLeft>
+        </FooterContent>
+        <FooterMeta>
+          <div className="flex items-center gap-1">
+            <p className="text-text-muted text-sm">Copyright © {new Date().getFullYear()} e-INFRA CZ</p>
+            <span className="text-text-muted px-1 text-sm" aria-hidden="true">
+              |
+            </span>
+            <FooterNavLink href="https://www.e-infra.cz/en/personal-data-processing">
+              Personal data processing
+            </FooterNavLink>
+          </div>
+        </FooterMeta>
+      </Footer>
     </>
   )
 }

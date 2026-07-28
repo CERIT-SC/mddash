@@ -18,7 +18,7 @@ export function HeroSection() {
           </div>
 
           <h1 className="font-display text-text-heading text-5xl leading-[1.08] font-bold tracking-tight lg:text-6xl">
-            A Virtual Research Environment for <span className="text-secondary block">Molecular Dynamics</span>
+            A Virtual Research Environment for <span className="text-text block">Molecular Dynamics</span>
           </h1>
 
           <p className="text-text-muted max-w-lg text-lg leading-relaxed">
