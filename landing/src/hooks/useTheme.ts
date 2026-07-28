@@ -9,8 +9,13 @@ function systemPrefersDark(): boolean {
 }
 
 function storedTheme(): Theme | null {
-  const value = localStorage.getItem(STORAGE_KEY)
-  return value === "light" || value === "dark" ? value : null
+  try {
+    const value = localStorage.getItem(STORAGE_KEY)
+    return value === "light" || value === "dark" ? value : null
+  } catch {
+    // Storage unavailable (e.g. privacy mode) — behave as "no stored choice".
+    return null
+  }
 }
 
 function resolveTheme(): Theme {
@@ -30,17 +35,24 @@ export function useTheme() {
   // While no explicit choice has been made, keep following the OS preference.
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)")
-    const onChange = (event: MediaQueryListEvent) => {
+    const sync = () => {
       if (storedTheme() !== null) return
-      setThemeState(event.matches ? "dark" : "light")
+      setThemeState(mq.matches ? "dark" : "light")
     }
-    mq.addEventListener("change", onChange)
-    return () => mq.removeEventListener("change", onChange)
+    // Re-sync on attach: initial theme derives at mount, but an OS preference
+    // change could land between first render and listener attachment.
+    sync()
+    mq.addEventListener("change", sync)
+    return () => mq.removeEventListener("change", sync)
   }, [])
 
   // An explicit choice is applied and persisted.
   const setTheme = useCallback((next: Theme) => {
-    localStorage.setItem(STORAGE_KEY, next)
+    try {
+      localStorage.setItem(STORAGE_KEY, next)
+    } catch {
+      // Storage unavailable (privacy mode) — apply for this session only.
+    }
     setThemeState(next)
   }, [])
 

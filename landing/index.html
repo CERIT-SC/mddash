@@ -17,7 +17,10 @@
           el.classList.toggle("dark", dark);
           el.style.colorScheme = dark ? "dark" : "light";
         } catch (e) {
-          document.documentElement.classList.add("dark");
+          // Privacy-restricted contexts throw on storage access. Match the
+          // React-side default (light) instead of forcing dark. No .dark class
+          // is added, so the document resolves light; only color-scheme is set.
+          document.documentElement.style.colorScheme = "light";
         }
       })();
     </script>

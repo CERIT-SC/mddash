@@ -6,6 +6,7 @@ import {
   FooterLogo,
   FooterMeta,
   FooterNavLink,
+  Separator,
 } from "@e-infra/design-system"
 
 import einfraPurpleLogo from "../assets/einfra_purple.svg"
@@ -30,11 +31,9 @@ export function SiteFooter() {
           </FooterLeft>
         </FooterContent>
         <FooterMeta>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-2">
             <p className="text-text-muted text-sm">Copyright © {new Date().getFullYear()} e-INFRA CZ</p>
-            <span className="text-text-muted px-1 text-sm" aria-hidden="true">
-              |
-            </span>
+            <Separator orientation="vertical" className="h-4" />
             <FooterNavLink href="https://www.e-infra.cz/en/personal-data-processing">
               Personal data processing
             </FooterNavLink>
