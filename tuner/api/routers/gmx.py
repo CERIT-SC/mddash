@@ -13,6 +13,7 @@ from starlette.concurrency import run_in_threadpool
 from api.auth import verify_credentials
 from api.config import MAX_UPLOAD_SIZE, TPR_DIR
 from api.db.operations import get_job, get_trials_by_job_id
+from api.engines.gmx.config import GmxTrialConfig
 from api.engines.gmx.engine import GmxEngine
 from api.rayworker import submit_tuning_job, sync_job_status
 from api.routers._shared import register_job_management_routes
@@ -83,20 +84,27 @@ async def get_gmx_status(
         logger.exception("Database timeout for job %s", job_id)
         raise HTTPException(status_code=503, detail="Database is busy. Please try again later.") from e
 
-    trials = [
-        GmxTrialResponse(
-            id=str(t.id),
-            status=t.status,
-            ntomp=t.config_json.get("ntomp", 0),
-            np=t.config_json.get("np", 1),
-            nb=t.config_json.get("nb", "auto"),
-            pme=t.config_json.get("pme", "auto"),
-            performance=t.performance,
+    trials = []
+    for t in raw_trials:
+        cfg = GmxTrialConfig.from_dict(t.config_json)
+        estimated_time, estimated_cost = cfg.footprint.estimate(job.sim_length_ns, t.performance)
+        trials.append(
+            GmxTrialResponse(
+                id=str(t.id),
+                status=t.status,
+                ntomp=cfg.ntomp,
+                np=cfg.np,
+                nb=cfg.nb.value,
+                pme=cfg.pme.value,
+                performance=t.performance,
+                estimated_time=estimated_time,
+                estimated_cost=estimated_cost,
+            )
         )
-        for t in raw_trials
-    ]
 
-    return GmxJobStatusResponse(id=job_id, status=job.status, error=job.error, trials=trials)
+    return GmxJobStatusResponse(
+        id=job_id, status=job.status, error=job.error, sim_length_ns=job.sim_length_ns, trials=trials
+    )
 
 
 register_job_management_routes(router, MDEngine.GMX)

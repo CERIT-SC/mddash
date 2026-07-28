@@ -24,7 +24,7 @@ POLL_INTERVAL_SECONDS = 10
 POLL_TIMEOUT_SECONDS = 1800
 N_STEPS = "1000"
 ROOT_DIR = Path(__file__).resolve().parents[2]
-TERMINAL_STATUSES = {"TERMINATED", "ERROR"}
+TERMINAL_STATUSES = {"FINISHED", "ERROR"}
 ACTIVE_STATUSES = {"PENDING", "RUNNING"}
 
 pytestmark = pytest.mark.e2e
@@ -97,7 +97,7 @@ def test_gromacs_api_flow(client: httpx.Client) -> None:
     try:
         status = _poll_until_finished(client, "gmx", job_id)
         assert status["trials"]
-        assert status["status"] == "TERMINATED", status.get("error")
+        assert status["status"] == "FINISHED", status.get("error")
     finally:
         if job_id:
             _delete_job(client, "gmx", job_id)
@@ -137,7 +137,7 @@ def test_amber_api_flow(client: httpx.Client) -> None:
     try:
         status = _poll_until_finished(client, "amber", job_id)
         assert status["trials"]
-        assert status["status"] == "TERMINATED", status.get("error")
+        assert status["status"] == "FINISHED", status.get("error")
     finally:
         if job_id:
             _delete_job(client, "amber", job_id)

@@ -25,7 +25,7 @@ export function useTunerStatus(experimentId: string, simulationPath: string, ena
         data.error_message ||
         data.tuner_status === "ERROR" ||
         data.is_stopped ||
-        data.tuner_status === "TERMINATED"
+        data.tuner_status === "FINISHED"
       )
         return false
       return 5000

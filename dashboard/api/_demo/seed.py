@@ -734,13 +734,13 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
         if tuner_job.is_stopped:
             # Stopped jobs use preserved trials
             demo_state.tuner_jobs[tuner_job.id] = {
-                "status": JobStatus.TERMINATED.value,
+                "status": "FINISHED",
                 "created_at": time.time() - 3600,
                 "max_trials": len(tuner_job._preserved_trials or []),  # ruff:ignore[private-member-access]
                 "trials": [
                     {
                         "id": t.get("id", f"{tuner_job.id[:10]}-{i:05d}"),
-                        "status": t.get("status", JobStatus.TERMINATED.value),
+                        "status": t.get("status", "FINISHED"),
                         "np": t.get("np", 2),
                         "ntomp": t.get("ntomp", 4),
                         "nb": t.get("nb", "cpu"),
@@ -768,7 +768,7 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
                 "trials": [
                     {
                         "id": f"{tuner_job.id[:10]}-00000",
-                        "status": JobStatus.TERMINATED.value,
+                        "status": "FINISHED",
                         "np": 8,
                         "ntomp": 1,
                         "nb": "gpu",

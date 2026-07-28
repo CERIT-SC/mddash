@@ -41,3 +41,7 @@ class Engine(Protocol):
     ) -> TrialResult:
         """Execute a single trial and return its performance result."""
         ...
+
+    def simulation_length_ns(self, job_id: str) -> float | None:
+        """Production simulation length (ns) from the original input files; None if unknown."""
+        ...

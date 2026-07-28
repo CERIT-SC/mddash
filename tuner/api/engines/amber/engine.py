@@ -1,10 +1,15 @@
 """AmberEngine — adapts AmberTrialConfig and run_pmemd to the Engine protocol."""
 
+import logging
 from dataclasses import dataclass
 
+from api.config import TPR_DIR
 from api.engines.amber.config import AmberTrialConfig
+from api.engines.amber.mdin import simulation_length_ns as mdin_simulation_length_ns
 from api.engines.amber.runner import run_pmemd
 from api.engines.protocol import TrialConfig, TrialResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -37,3 +42,12 @@ class AmberEngine:
             best_steps_per_sec,
         )
         return TrialResult(performance=perf, steps_per_sec=sps, early_stopped=early)
+
+    def simulation_length_ns(self, job_id: str) -> float | None:
+        """Parse nstlim * dt from the job's original uploaded mdin file."""
+        try:
+            content = (TPR_DIR / f"{job_id}_md.mdin").read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            logger.warning("Could not read mdin for job %s", job_id)
+            return None
+        return mdin_simulation_length_ns(content)

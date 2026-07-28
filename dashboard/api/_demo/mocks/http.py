@@ -40,6 +40,12 @@ DEFAULT_GMX_NSTEPS = 100_000
 DEFAULT_GMX_DURATION_SEC = 30.0
 DEFAULT_TUNER_MAX_TRIALS = 3
 TUNER_TRIAL_DURATION_SEC = 10.0
+# Full production simulation length (ns) and hourly rates used by demo cost estimates.
+# Resource math in _gmx_public_trial/_amber_public_trial mirrors tuner/api/pricing.py.
+DEMO_TUNER_SIM_LENGTH_NS = 250.0
+DEMO_RATE_CPU_CORE_HOUR = 0.04
+DEMO_RATE_GPU_HOUR = 3.0
+DEMO_RATE_GB_RAM_HOUR = 0.005
 
 
 def install_http_mocks(rsps: responses.RequestsMock) -> None:
@@ -283,10 +289,11 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
             "engine": "gmx",
             "created_at": started_at,
             "max_trials": DEFAULT_TUNER_MAX_TRIALS,
+            "sim_length_ns": DEMO_TUNER_SIM_LENGTH_NS,
             "trials": [
                 {
                     "id": f"{job_id[:10]}-00000",
-                    "status": "TERMINATED",
+                    "status": "FINISHED",
                     "np": 8,
                     "ntomp": 1,
                     "nb": "gpu",
@@ -335,10 +342,11 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
             "engine": "amber",
             "created_at": started_at,
             "max_trials": DEFAULT_TUNER_MAX_TRIALS,
+            "sim_length_ns": DEMO_TUNER_SIM_LENGTH_NS,
             "trials": [
                 {
                     "id": f"{job_id[:10]}-00000",
-                    "status": "TERMINATED",
+                    "status": "FINISHED",
                     "np": 4,
                     "ntomp": 1,
                     "binary": "pmemd.cuda",
@@ -384,28 +392,24 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
         job_state = demo_state.tuner_jobs.get(job_id)
 
         if job_state is None:
-            return (HTTPStatus.OK, {}, json.dumps({"id": job_id, "status": "UNKNOWN", "trials": []}))
+            return (
+                HTTPStatus.OK,
+                {},
+                json.dumps({"id": job_id, "status": "UNKNOWN", "sim_length_ns": None, "trials": []}),
+            )
 
         _advance_gmx_tuner_status(job_state)
 
+        sim_length_ns = float(job_state.get("sim_length_ns", DEMO_TUNER_SIM_LENGTH_NS))
         public_trials = [
-            {
-                "id": trial.get("id", ""),
-                "status": trial.get("status", "UNKNOWN"),
-                "np": trial.get("np", 2),
-                "ntomp": trial.get("ntomp", 4),
-                "nb": trial.get("nb", "cpu"),
-                "pme": trial.get("pme", "cpu"),
-                "performance": trial.get("performance"),
-            }
-            for trial in job_state.get("trials", [])
-            if isinstance(trial, dict)
+            _gmx_public_trial(trial, sim_length_ns) for trial in job_state.get("trials", []) if isinstance(trial, dict)
         ]
 
         response_body = {
             "id": job_id,
             "status": job_state.get("status", "UNKNOWN"),
             "error": None,
+            "sim_length_ns": sim_length_ns,
             "trials": public_trials,
         }
         return (HTTPStatus.OK, {}, json.dumps(response_body))
@@ -422,20 +426,17 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
         job_state = demo_state.tuner_jobs.get(job_id)
 
         if job_state is None:
-            return (HTTPStatus.OK, {}, json.dumps({"id": job_id, "status": "UNKNOWN", "trials": []}))
+            return (
+                HTTPStatus.OK,
+                {},
+                json.dumps({"id": job_id, "status": "UNKNOWN", "sim_length_ns": None, "trials": []}),
+            )
 
         _advance_amber_tuner_status(job_state)
 
+        sim_length_ns = float(job_state.get("sim_length_ns", DEMO_TUNER_SIM_LENGTH_NS))
         public_trials = [
-            {
-                "id": trial.get("id", ""),
-                "status": trial.get("status", "UNKNOWN"),
-                "np": trial.get("np", 1),
-                "ntomp": trial.get("ntomp", 1),
-                "binary": trial.get("binary", "pmemd.MPI"),
-                "ewald": trial.get("ewald", "default"),
-                "performance": trial.get("performance"),
-            }
+            _amber_public_trial(trial, sim_length_ns)
             for trial in job_state.get("trials", [])
             if isinstance(trial, dict)
         ]
@@ -444,6 +445,7 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
             "id": job_id,
             "status": job_state.get("status", "UNKNOWN"),
             "error": None,
+            "sim_length_ns": sim_length_ns,
             "trials": public_trials,
         }
         return (HTTPStatus.OK, {}, json.dumps(response_body))
@@ -969,11 +971,66 @@ def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
             pass
 
 
+def _tuner_trial_estimates(
+    performance: float | None, sim_length_ns: float, cores: int, gpus: int, ram_gb: float
+) -> tuple[float | None, float | None]:
+    """Demo estimated time (hours) and cost for a tuning trial, mirroring the tuner's pricing."""
+    if performance is None or performance <= 0:
+        return None, None
+    hours = sim_length_ns / performance * 24.0
+    cost = hours * (cores * DEMO_RATE_CPU_CORE_HOUR + gpus * DEMO_RATE_GPU_HOUR + ram_gb * DEMO_RATE_GB_RAM_HOUR)
+    return hours, cost
+
+
+def _gmx_public_trial(trial: dict, sim_length_ns: float) -> dict:
+    """Serialize a demo GMX trial with time/cost estimates."""
+    np, ntomp = trial.get("np", 2), trial.get("ntomp", 4)
+    nb, pme = trial.get("nb", "cpu"), trial.get("pme", "cpu")
+    performance = trial.get("performance")
+    estimated_time, estimated_cost = _tuner_trial_estimates(
+        performance, sim_length_ns, np * max(ntomp, 1), int(nb == "gpu" or pme == "gpu"), 4.0 * np
+    )
+    return {
+        "id": trial.get("id", ""),
+        "status": trial.get("status", "UNKNOWN"),
+        "np": np,
+        "ntomp": ntomp,
+        "nb": nb,
+        "pme": pme,
+        "performance": performance,
+        "estimated_time": estimated_time,
+        "estimated_cost": estimated_cost,
+    }
+
+
+def _amber_public_trial(trial: dict, sim_length_ns: float) -> dict:
+    """Serialize a demo AMBER trial with time/cost estimates."""
+    binary = trial.get("binary", "pmemd.MPI")
+    np, ntomp = trial.get("np", 1), trial.get("ntomp", 1)
+    performance = trial.get("performance")
+    if binary == "pmemd.MPI":
+        cores, gpus, ram_gb = np * max(ntomp, 1), 0, 4.0 * np
+    else:
+        cores, gpus, ram_gb = max(ntomp, 1), 1, 4.0
+    estimated_time, estimated_cost = _tuner_trial_estimates(performance, sim_length_ns, cores, gpus, ram_gb)
+    return {
+        "id": trial.get("id", ""),
+        "status": trial.get("status", "UNKNOWN"),
+        "np": np,
+        "ntomp": ntomp,
+        "binary": binary,
+        "ewald": trial.get("ewald", "default"),
+        "performance": performance,
+        "estimated_time": estimated_time,
+        "estimated_cost": estimated_cost,
+    }
+
+
 def _advance_gmx_tuner_status(status: dict) -> None:
     """
     Advance GMX tuner job state based on elapsed time.
 
-    Deterministic pattern: even-indexed trials TERMINATE, odd-indexed trials ERROR.
+    Deterministic pattern: even-indexed trials FINISH, odd-indexed trials ERROR.
     """
     if status.get("status") != "RUNNING":
         return
@@ -991,7 +1048,7 @@ def _advance_gmx_tuner_status(status: dict) -> None:
         if now - started_at >= TUNER_TRIAL_DURATION_SEC:
             trial_idx = trials.index(running_trial)
             if trial_idx % 2 == 0:
-                running_trial["status"] = "TERMINATED"
+                running_trial["status"] = "FINISHED"
                 base_perf = 55.0
                 np = running_trial.get("np", 2)
                 nb = running_trial.get("nb", "cpu")
@@ -1005,7 +1062,7 @@ def _advance_gmx_tuner_status(status: dict) -> None:
 
     max_trials = int(status.get("max_trials", DEFAULT_TUNER_MAX_TRIALS))
     if len(trials) >= max_trials:
-        status["status"] = "TERMINATED"
+        status["status"] = "FINISHED"
         return
 
     trial_configs = [
@@ -1048,7 +1105,7 @@ def _advance_amber_tuner_status(status: dict) -> None:
         if now - started_at >= TUNER_TRIAL_DURATION_SEC:
             trial_idx = trials.index(running_trial)
             if trial_idx % 2 == 0:
-                running_trial["status"] = "TERMINATED"
+                running_trial["status"] = "FINISHED"
                 base_perf = 60.0
                 if running_trial.get("binary") == "pmemd.cuda":
                     base_perf += 20.0
@@ -1062,7 +1119,7 @@ def _advance_amber_tuner_status(status: dict) -> None:
 
     max_trials = int(status.get("max_trials", DEFAULT_TUNER_MAX_TRIALS))
     if len(trials) >= max_trials:
-        status["status"] = "TERMINATED"
+        status["status"] = "FINISHED"
         return
 
     trial_configs = [

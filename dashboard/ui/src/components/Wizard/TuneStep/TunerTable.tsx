@@ -4,7 +4,8 @@ import { Loader2, Star, Terminal } from "lucide-react"
 
 import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
-import { getJobStatusVariant, type JobStatus, type GmxTunerTrial as TunerTrial } from "@/util/types"
+import { formatEstimatedCost, formatEstimatedTime } from "@/util/estimate-format"
+import { getTunerJobStatusVariant, tunerTrialRank, type GmxTunerTrial as TunerTrial } from "@/util/types"
 import { useTunerTrialLogs } from "@/hooks/use-tuner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -33,20 +34,12 @@ const TunerTable = (props: TunerTableProps) => {
   const { stdout, stderr } = useTunerTrialLogs(experimentId, simulationPath, logsTrialId)
 
   const sortedRows = useMemo(() => {
-    const statusRank: Record<JobStatus, number> = {
-      TERMINATED: 0,
-      RUNNING: 1,
-      ERROR: 2,
-      PENDING: 3,
-      UNKNOWN: 4,
-    }
-
     return [...rows].sort((a: TunerTrial, b: TunerTrial) => {
-      if (a.performance === null && b.performance === null) return statusRank[a.status] - statusRank[b.status]
+      if (a.performance === null && b.performance === null) return tunerTrialRank(a.status) - tunerTrialRank(b.status)
       if (a.performance === null) return 1
       if (b.performance === null) return -1
       if (a.performance !== b.performance) return b.performance - a.performance
-      return statusRank[a.status] - statusRank[b.status]
+      return tunerTrialRank(a.status) - tunerTrialRank(b.status)
     })
   }, [rows])
 
@@ -98,6 +91,22 @@ const TunerTable = (props: TunerTableProps) => {
               <TableHead className="text-primary-foreground text-right">
                 <Tooltip>
                   <TooltipTrigger asChild>
+                    <span className="cursor-help">Est. Time</span>
+                  </TooltipTrigger>
+                  <TooltipContent>Estimated time to run the full simulation with this configuration</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead className="text-primary-foreground text-right">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help">Est. Cost</span>
+                  </TooltipTrigger>
+                  <TooltipContent>Estimated cost of the full simulation, from hourly CPU/GPU/RAM rates</TooltipContent>
+                </Tooltip>
+              </TableHead>
+              <TableHead className="text-primary-foreground text-right">
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <span className="cursor-help">PME</span>
                   </TooltipTrigger>
                   <TooltipContent>Device type for PME calculations</TooltipContent>
@@ -132,7 +141,7 @@ const TunerTable = (props: TunerTableProps) => {
           <TableBody>
             {sortedRows.map((row, idx) => {
               const isOptimal = idx === 0 && row.performance !== null
-              const variant = getJobStatusVariant(row.status as JobStatus)
+              const variant = getTunerJobStatusVariant(row.status)
               return (
                 <TableRow key={row.id} className={cn(isOptimal && "bg-primary/5 dark:bg-primary/10")}>
                   <TableCell className="relative">
@@ -184,6 +193,8 @@ const TunerTable = (props: TunerTableProps) => {
                   <TableCell className="text-right">
                     {row.performance !== null ? row.performance.toFixed(2) : "N/A"}
                   </TableCell>
+                  <TableCell className="text-right">{formatEstimatedTime(row.estimated_time)}</TableCell>
+                  <TableCell className="text-right">{formatEstimatedCost(row.estimated_cost)}</TableCell>
                   <TableCell className="text-right">{row.pme}</TableCell>
                   <TableCell className="text-right">{row.nb}</TableCell>
                   <TableCell className="text-right">{row.np}</TableCell>

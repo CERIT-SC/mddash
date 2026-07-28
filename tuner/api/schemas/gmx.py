@@ -15,6 +15,10 @@ class GmxTrialResponse(BaseModel):
     nb: str
     pme: str
     performance: float | None
+    # estimated wall-clock hours to run the full production simulation with this config
+    estimated_time: float | None
+    # estimated cost to run the full production simulation with this config
+    estimated_cost: float | None
 
 
 class GmxJobStatusResponse(BaseModel):
@@ -23,4 +27,6 @@ class GmxJobStatusResponse(BaseModel):
     id: str
     status: JobStatus
     error: str | None
+    # full production simulation length (ns) extracted from the original tpr
+    sim_length_ns: float | None
     trials: list[GmxTrialResponse]

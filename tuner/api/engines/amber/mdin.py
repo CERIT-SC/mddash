@@ -6,6 +6,25 @@ from typing import Any
 from api.engines.amber.config import EwaldPreset
 
 
+def simulation_length_ns(content: str) -> float | None:
+    """Production simulation length (ns) from an mdin file: nstlim * dt. None if unparsable."""
+    nstlim = _read_param(content, "nstlim")
+    dt = _read_param(content, "dt")
+    if nstlim is None or dt is None:
+        return None
+    return float(nstlim) * dt / 1000.0  # dt is in ps
+
+
+def _read_param(content: str, key: str) -> float | None:
+    """Read a numeric `key = value,` namelist parameter (case-insensitive)."""
+    match = re.search(
+        rf"^\s*{re.escape(key)}\s*=\s*([+-]?[\d.]+(?:[eE][+-]?\d+)?)\s*,?",
+        content,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    return float(match.group(1)) if match else None
+
+
 def patch_mdin_for_benchmark(content: str, nsteps: int, ewald: EwaldPreset) -> str:
     """
     Patch an AMBER mdin file for benchmarking.

@@ -11,7 +11,7 @@ class JobStatus(str, Enum):
     UNKNOWN = "UNKNOWN"
     PENDING = "PENDING"
     RUNNING = "RUNNING"
-    TERMINATED = "TERMINATED"
+    FINISHED = "FINISHED"
     ERROR = "ERROR"
 
 

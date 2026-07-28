@@ -93,31 +93,36 @@ export interface TunerJob {
   experiment_id: string
   engine: Engine
   simulation_path: string
-  tuner_status: JobStatus | null
+  tuner_status: TunerJobStatus | null
   error_message: string | null
   created_at: string
   is_stopped: boolean
+  sim_length_ns: number | null
   trials: GmxTunerTrial[] | AmberTunerTrial[]
 }
 
 export interface GmxTunerTrial {
   id: string
-  status: JobStatus
+  status: TunerJobStatus
   np: number
   ntomp: number
   pme: DeviceType
   nb: DeviceType
   performance: number | null
+  estimated_time: number | null
+  estimated_cost: number | null
 }
 
 export interface AmberTunerTrial {
   id: string
-  status: JobStatus
+  status: TunerJobStatus
   np: number
   ntomp: number
   binary: AmberBinary
   ewald: EwaldPreset
   performance: number | null
+  estimated_time: number | null
+  estimated_cost: number | null
 }
 
 export type DeviceType = "auto" | "cpu" | "gpu"
@@ -229,5 +234,39 @@ export function getJobStatusVariant(status: JobStatus): StatusVariant {
       return "info"
     case "ERROR":
       return "destructive"
+  }
+}
+
+// Tuner job/trial statuses: the tuner reports FINISHED when a trial or job
+// completes successfully. Unknown/legacy values degrade to "secondary".
+export type TunerJobStatus = "UNKNOWN" | "PENDING" | "RUNNING" | "FINISHED" | "ERROR"
+
+export function getTunerJobStatusVariant(status: string): StatusVariant {
+  switch (status) {
+    case "FINISHED":
+      return "success"
+    case "RUNNING":
+    case "PENDING":
+      return "warning"
+    case "ERROR":
+      return "destructive"
+    default:
+      return "secondary"
+  }
+}
+
+// Sort rank for tuner trial statuses: finished first, unknown/legacy last.
+export function tunerTrialRank(status: string): number {
+  switch (status) {
+    case "FINISHED":
+      return 0
+    case "RUNNING":
+      return 1
+    case "ERROR":
+      return 2
+    case "PENDING":
+      return 3
+    default:
+      return 4
   }
 }

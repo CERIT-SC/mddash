@@ -29,6 +29,16 @@ def update_job_status(job_id: str, status: JobStatus, error: str | None = None) 
         return False
 
 
+def update_job_sim_length(job_id: str, sim_length_ns: float | None) -> bool:
+    """Update a job's full production simulation length; returns True if job found."""
+    with get_session() as session:
+        if job := session.execute(select(Job).where(Job.id == job_id)).scalar_one_or_none():
+            job.sim_length_ns = sim_length_ns
+            session.commit()
+            return True
+        return False
+
+
 def get_job(job_id: str) -> Job | None:
     """Fetch a job by ID, or None if not found."""
     with get_session() as session:
