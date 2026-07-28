@@ -702,7 +702,7 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
         demo_state.mdrun_jobs[gmx_job.id] = {
             "status": status,
             "experiment_id": gmx_job.experiment_id,
-            "tpr_name": files.get("topology", "md.tpr"),
+            "tpr_name": files.get("run_input", "md.tpr"),
             "nsteps": gmx_job._nsteps or 100000,  # ruff:ignore[private-member-access]
             "created_at": float(gmx_job._start_timestamp or time.time()),  # ruff:ignore[private-member-access]
             "duration_sec": 30.0,

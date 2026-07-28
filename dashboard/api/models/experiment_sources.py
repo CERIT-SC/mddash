@@ -20,6 +20,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 from clients import mdposit
 from config import DATA_DIR
+from errors import ApiError
 from validators import validate_fetch_target, validate_http_url
 from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 
@@ -124,7 +125,6 @@ def import_invenio_repo(repo_link: str, experiment_id: str) -> None:
 
     Raises:
         NotFound: If the repository is not found.
-        InternalServerError: If the download fails.
     """
     parsed = urlparse(repo_link)
     path_parts = [p for p in parsed.path.split("/") if p]
@@ -140,7 +140,12 @@ def import_invenio_repo(repo_link: str, experiment_id: str) -> None:
             if response.status_code == HTTPStatus.NOT_FOUND:
                 raise NotFound(description=f"Repository '{repo_link}' not found.")
             if response.status_code != HTTPStatus.OK:
-                raise InternalServerError(description=f"Failed to download repository: {response.status_code}")
+                raise ApiError(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to download repository.",
+                    "urn:mddash:upstream-download-failed",
+                    "The repository couldn't be fetched; check the URL or try again in a moment.",
+                )
 
             for chunk in response.iter_content(chunk_size=128 * 1024):
                 tmp_file.write(chunk)
@@ -156,7 +161,6 @@ def import_mdposit_repo(repo_link: str, experiment_id: str) -> None:
 
     Raises:
         BadRequest: If the accession is missing or the project has no files.
-        InternalServerError: If the download fails.
     """
     accession = mdposit.extract_accession(repo_link)
     if not accession:
@@ -181,4 +185,9 @@ def import_mdposit_repo(repo_link: str, experiment_id: str) -> None:
     except ValueError as exc:
         raise BadRequest(description=str(exc)) from exc
     except requests.HTTPError as exc:
-        raise InternalServerError(description=f"Failed to download MDPosit project: {exc}") from exc
+        raise ApiError(
+            HTTPStatus.INTERNAL_SERVER_ERROR,
+            "Failed to download MDPosit project.",
+            "urn:mddash:upstream-download-failed",
+            "The MDPosit project couldn't be fetched; try again in a moment.",
+        ) from exc

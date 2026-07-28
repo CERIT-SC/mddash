@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from clients.k8s import create_notebook_pod
 from enums import NotebookTier
+from errors import ApiError
 from models.notebook import Notebook
 from werkzeug.exceptions import BadRequest, Forbidden
 
@@ -20,15 +21,17 @@ class TestNotebookStartQuotaCheck:
         return nb
 
     def test_raises_forbidden_when_concurrent_limit_reached(self) -> None:
-        """start() must raise Forbidden without creating a pod when notebook count is at the limit."""
+        """start() must raise a 403 ApiError without creating a pod when notebook count is at the limit."""
         with (
             patch("models.notebook.k8s.count_notebook_pods", return_value=2),
             patch("models.notebook.MAX_NOTEBOOKS", 2),
             patch("models.notebook.k8s.create_notebook_pod") as mock_create,
         ):
-            with pytest.raises(Forbidden):
+            with pytest.raises(ApiError) as exc_info:
                 Notebook.start(self._make_notebook())
 
+            assert exc_info.value.code == 403
+            assert exc_info.value.problem_type == "urn:mddash:notebook-quota-exceeded"
             mock_create.assert_not_called()
 
     def test_raises_forbidden_when_quota_headroom_insufficient(self) -> None:

@@ -24,6 +24,7 @@ from config import (
     MDREPO_URL,
 )
 from enums import Engine, JobStatus, PodStatus
+from errors import ApiError
 from extensions import db
 from flask import session
 from notebook_modules import NotebookModule
@@ -231,7 +232,6 @@ class Experiment(db.Model):  # type: ignore
 
         Raises:
             NotFound: If the PDB ID or URL is not found.
-            InternalServerError: If the PDB file download fails.
         """
         experiment_id: str = cls.prepare_env(notebooks_repo, access_token, notebook_module)
         source = pdb_source.strip()
@@ -252,7 +252,12 @@ class Experiment(db.Model):  # type: ignore
             if response.status_code == HTTPStatus.NOT_FOUND:
                 raise NotFound(description=f"PDB source '{source}' not found.")
             if response.status_code != HTTPStatus.OK:
-                raise InternalServerError(description=f"Failed to download PDB file: {response.status_code}")
+                raise ApiError(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to download PDB file.",
+                    "urn:mddash:upstream-download-failed",
+                    "The structure source couldn't be fetched; try again, or use a different PDB ID / file.",
+                )
 
             validate_pdb_content(response.content)
 
@@ -563,7 +568,12 @@ class Experiment(db.Model):  # type: ignore
             mdrepo_id = self.mdrepo_id or ""
 
         if not mdrepo_id:
-            raise InternalServerError(description="Failed to create experiment in MDRepo.")
+            raise ApiError(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "Failed to create experiment in MDRepo.",
+                "urn:mddash:upstream-unavailable",
+                "MDRepo didn't respond as expected; try again in a moment.",
+            )
 
         # Submit the upload Job: writes queued status, creates Secret+Job, waits for admission.
         attempt_id = submit_upload_job(
@@ -604,7 +614,12 @@ class Experiment(db.Model):  # type: ignore
         mdrepo_experiment = mdrepo.create_experiment(access_token, community, {"simulations": simulations})
         mdrepo_id = mdrepo_experiment.get("id")
         if mdrepo_id is None:
-            raise InternalServerError(description="Failed to create experiment in MDRepo.")
+            raise ApiError(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "Failed to create experiment in MDRepo.",
+                "urn:mddash:upstream-unavailable",
+                "MDRepo didn't respond as expected; try again in a moment.",
+            )
 
         self.mdrepo_id = mdrepo_id
         self.mdrepo_published = False
@@ -674,9 +689,14 @@ class Experiment(db.Model):  # type: ignore
             InternalServerError: If metadata generation fails.
         """
         if not MDPOSIT_URL:
-            raise BadRequest(description="MDPosit is not configured. Set MDPOSIT_URL to enable MDPosit publishing.")
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "MDPosit is not configured. Set MDPOSIT_URL to enable MDPosit publishing.",
+                "urn:mddash:mdposit-not-configured",
+                "MDPosit publishing isn't enabled on this deployment; contact the administrator.",
+            )
 
-        from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
+        from .simulation import Simulation, property_label  # ruff:ignore[import-outside-top-level]
 
         simulation = Simulation.get(self.id, simulation_path)
         simulation.require_files(["reference_structure", "run_input", "trajectory"])
@@ -697,16 +717,20 @@ class Experiment(db.Model):  # type: ignore
 
         for manifest_role, (publish_role, exts) in publish_roles.items():
             if manifest_role not in simulation.files:
-                raise BadRequest(description=f"Simulation is missing file role '{manifest_role}' for MDPosit.")
+                raise BadRequest(
+                    description=f"The simulation does not define a '{property_label(manifest_role)}' file, which MDPosit publishing requires."
+                )
 
             file_path = simulation.resolve_role(manifest_role)
             if not file_path.is_file():
-                raise BadRequest(description=f"Selected file for role '{manifest_role}' does not exist.")
+                raise BadRequest(description=f"The '{property_label(manifest_role)}' file does not exist.")
 
             extension = file_path.suffix.lstrip(".").lower()
             if extension not in exts:
                 allowed = ", ".join(sorted(exts))
-                raise BadRequest(description=f"Invalid file extension for role '{manifest_role}'. Allowed: {allowed}")
+                raise BadRequest(
+                    description=f"The '{property_label(manifest_role)}' file has an unsupported extension '.{extension}'. Allowed: {allowed}."
+                )
 
             relative_path = str(file_path.relative_to(exp_dir_resolved))
             selected_paths[publish_role] = file_path
@@ -723,7 +747,7 @@ class Experiment(db.Model):  # type: ignore
         try:
             metadata_file.write_text(yaml.safe_dump(metadata, sort_keys=False), encoding="utf-8")
         except OSError as exc:
-            raise InternalServerError(description=f"Failed to generate metadata file: {exc}") from exc
+            raise InternalServerError(description="Failed to generate metadata file.") from exc
 
         return {
             "metadata_file": {

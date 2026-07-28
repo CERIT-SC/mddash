@@ -184,7 +184,7 @@ class TestValidation:
 
             sim.require_files(["run_input"])
 
-            with pytest.raises(BadRequest, match="reference_structure, trajectory"):
+            with pytest.raises(BadRequest, match="Missing files for: 'Reference structure', 'Trajectory'"):
                 sim.require_files()
 
 
@@ -290,7 +290,7 @@ class TestWriteSimulation:
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
 
-        with app.app_context(), pytest.raises(BadRequest):
+        with app.app_context(), pytest.raises(BadRequest, match="Missing required file role: 'Reference structure'"):
             Simulation.write(
                 exp_id,
                 {
@@ -299,3 +299,27 @@ class TestWriteSimulation:
                     "extra_args": "",
                 },
             )
+
+    def test_validation_message_is_human_readable(self, app: Flask, tmp_path: Path) -> None:
+        """Regexes and jsonschema wording must not leak into user-facing errors."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+
+        with app.app_context(), pytest.raises(BadRequest) as exc_info:
+            Simulation.write(
+                exp_id,
+                {
+                    "name": "🙋🏿",
+                    "files": {
+                        "run_input": "production/protein.tpr",
+                        "reference_structure": "analysis/protein-reference.gro",
+                        "trajectory": "production/protein.xtc",
+                    },
+                    "extra_args": "",
+                },
+            )
+
+        message = str(exc_info.value.description)
+        assert "^[A-Za-z" not in message
+        assert "unsupported characters" in message

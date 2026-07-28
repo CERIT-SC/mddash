@@ -22,7 +22,7 @@ from config import (
     MDREPO_TOKEN_URL,
     MDREPO_URL,
 )
-from decorators import handle_exceptions
+from errors import ApiError
 from flask import Blueprint, Response, jsonify, redirect, request, session
 from models.experiment import mdrepo_status_cache
 from token_manager import (
@@ -32,7 +32,6 @@ from token_manager import (
     MDREPO_TOKEN_KEY,
     MDRepoTokenManager,
 )
-from werkzeug.exceptions import ServiceUnavailable
 from werkzeug.wrappers import Response as WerkzeugResponse
 
 logger = logging.getLogger(__name__)
@@ -51,7 +50,6 @@ def get_mdrepo_token() -> str | None:
 
 
 @mdrepo_bp.route("/status", methods=["GET"])
-@handle_exceptions()
 def get_status() -> Response:
     """
     Check if user has a valid MDRepo token.
@@ -89,12 +87,14 @@ def initiate_auth() -> Response | WerkzeugResponse:
 
     Returns:
         Response: Redirect to the MDRepo authorization URL, or a JSON error if OAuth is not configured.
-
-    Raises:
-        ServiceUnavailable: If MDRepo OAuth is not configured.
     """
     if not all([MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET, MDREPO_REDIRECT_URI]):
-        raise ServiceUnavailable("MDRepo OAuth is not configured. Contact administrator.")
+        raise ApiError(
+            HTTPStatus.SERVICE_UNAVAILABLE,
+            "MDRepo OAuth is not configured. Contact administrator.",
+            "urn:mddash:mdrepo-not-configured",
+            "MDRepo integration isn't enabled on this deployment; contact the administrator.",
+        )
 
     # Store return URL and state in session
     return_url = request.args.get("return_url", "/")
@@ -193,7 +193,6 @@ def oauth_callback() -> WerkzeugResponse:
 
 
 @mdrepo_bp.route("/logout", methods=["POST"])
-@handle_exceptions()
 def logout() -> Response:
     """
     Remove all MDRepo tokens from session.

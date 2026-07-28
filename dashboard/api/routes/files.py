@@ -1,7 +1,6 @@
 from dataclasses import asdict
 
 from config import API_PREFIX, DATA_DIR
-from decorators import handle_exceptions
 from flask import Blueprint, Response, jsonify, request, send_file
 from utils import get_files_with_extensions
 from validators import check_experiment_id, check_path
@@ -11,7 +10,6 @@ files_bp = Blueprint("files", __name__, url_prefix=f"{API_PREFIX}/experiments/<e
 
 
 @files_bp.route("", methods=["GET"])
-@handle_exceptions()
 def get_files(experiment_id: str) -> Response:
     """
     List files in an experiment directory, optionally filtered by extension.
@@ -35,7 +33,6 @@ def get_files(experiment_id: str) -> Response:
 
 
 @files_bp.route("/<path:path>", methods=["GET"])
-@handle_exceptions()
 def get_file(experiment_id: str, path: str) -> Response:
     """
     Download a file from an experiment directory.

@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from clients import k8s
 from config import API_PREFIX
-from decorators import handle_exceptions
 from enums import AnalysisType, Engine, PreprocessingMode
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
@@ -12,7 +11,7 @@ from flask.typing import ResponseReturnValue
 from models import AnalysisJob, Experiment
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, find_result_file, list_result_files
 from models.simulation import Simulation
-from schemas import AnalysisJobSchema
+from schemas import AnalysisJobSchema, SubmitAnalysisSchema
 from werkzeug.exceptions import BadRequest, NotFound, UnprocessableEntity
 
 if TYPE_CHECKING:
@@ -22,7 +21,6 @@ analysis_bp = Blueprint("analysis", __name__, url_prefix=f"{API_PREFIX}/experime
 
 
 @analysis_bp.route("", methods=["GET"])
-@handle_exceptions()
 def get_analysis_jobs(experiment_id: str) -> Response:
     """
     List analysis jobs for an experiment, optionally filtered by simulation.
@@ -43,7 +41,6 @@ def get_analysis_jobs(experiment_id: str) -> Response:
 
 
 @analysis_bp.route("", methods=["POST"])
-@handle_exceptions(rollback=True)
 def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
     """
     Submit a new analysis job from a simulation manifest.
@@ -56,21 +53,10 @@ def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
     Raises:
         BadRequest: If the request body is missing, invalid, or files are missing.
     """
-    data = request.get_json()
-    if not data:
-        raise BadRequest("Request body is required.")
+    data = SubmitAnalysisSchema().load(request.get_json(silent=True) or {})
 
-    simulation_path = data.get("simulation_path", "")
-    analysis_name = data.get("analysis", "")
-    if not simulation_path or not analysis_name:
-        raise BadRequest("simulation_path and analysis are required.")
-
-    try:
-        analysis_type = AnalysisType(analysis_name)
-    except ValueError:
-        raise BadRequest(
-            f"Unknown analysis '{analysis_name}'. Available: {', '.join(t.value for t in AnalysisType)}",
-        )
+    simulation_path = data["simulation_path"]
+    analysis_type: AnalysisType = data["analysis"]
 
     experiment = Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found")
     simulation = Simulation.get(experiment_id, simulation_path)
@@ -78,13 +64,7 @@ def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
 
     trajectory_path = simulation.resolve_role("trajectory")
 
-    preprocessing_mode_name = data.get("preprocessing_mode", PreprocessingMode.AS_IS.value)
-    try:
-        preprocessing_mode = PreprocessingMode(preprocessing_mode_name)
-    except ValueError:
-        raise BadRequest(
-            f"Unknown preprocessing_mode '{preprocessing_mode_name}'. Available: {', '.join(mode.value for mode in PreprocessingMode)}",
-        )
+    preprocessing_mode: PreprocessingMode = data["preprocessing_mode"]
 
     if not trajectory_path.is_file():
         raise BadRequest(f"Trajectory file {trajectory_path} does not exist.")
@@ -121,7 +101,6 @@ def submit_analysis_job(experiment_id: str) -> ResponseReturnValue:
 
 
 @analysis_bp.route("/<job_id>", methods=["GET"])
-@handle_exceptions()
 def get_analysis_job(experiment_id: str, job_id: str) -> Response:
     """
     Get a specific analysis job by ID.
@@ -137,7 +116,6 @@ def get_analysis_job(experiment_id: str, job_id: str) -> Response:
 
 
 @analysis_bp.route("/<job_id>", methods=["DELETE"])
-@handle_exceptions(rollback=True)
 def delete_analysis_job(experiment_id: str, job_id: str) -> ResponseReturnValue:
     """
     Delete an analysis job and its results.
@@ -155,7 +133,6 @@ def delete_analysis_job(experiment_id: str, job_id: str) -> ResponseReturnValue:
 
 
 @analysis_bp.route("/<job_id>/logs", methods=["GET"])
-@handle_exceptions()
 def get_analysis_job_logs(experiment_id: str, job_id: str) -> Response:
     """
     Get K8s pod logs for an analysis job.
@@ -176,7 +153,6 @@ def get_analysis_job_logs(experiment_id: str, job_id: str) -> Response:
 
 
 @analysis_bp.route("/results", methods=["GET"])
-@handle_exceptions()
 def list_analysis_results(experiment_id: str) -> Response:
     """
     List available analysis result names for a simulation.
@@ -199,7 +175,6 @@ def list_analysis_results(experiment_id: str) -> Response:
 
 
 @analysis_bp.route("/results/<name>/variants", methods=["GET"])
-@handle_exceptions()
 def get_analysis_variants(experiment_id: str, name: str) -> Response:
     """
     Return variant options for a multi-file analysis from its summary JSON.
@@ -234,7 +209,6 @@ def get_analysis_variants(experiment_id: str, name: str) -> Response:
 
 
 @analysis_bp.route("/results/<name>", methods=["GET"])
-@handle_exceptions()
 def get_analysis_result(experiment_id: str, name: str) -> Response:
     """
     Get the JSON content of a specific analysis result.
@@ -260,6 +234,6 @@ def get_analysis_result(experiment_id: str, name: str) -> Response:
     try:
         data = json.loads(result_file.read_text())
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
-        raise UnprocessableEntity(f"Failed to read analysis result: {e}")
+        raise UnprocessableEntity("Failed to read analysis result.") from e
 
     return jsonify(data)

@@ -8,7 +8,7 @@ React + TypeScript wizard-driven web interface for creating, configuring, and ma
 
 - All fetching/mutations go through TanStack Query hooks in `src/hooks/` (polling via `refetchInterval`). Use the configured `api` instance in `lib/http.ts`, never raw `axios`; call `api.get/post/patch/delete(path).then(r => r.data)` directly (no wrapper functions).
 - Manual route tree in `src/router.tsx` with `basepath: BASE_PATH` (no file-based routing).
-- Backend returns resources directly — `r.data` is the payload (no envelope); the axios error interceptor extracts the `detail` field from `{detail: "..."}` errors.
+- Backend returns resources directly — `r.data` is the payload (no envelope); the axios error interceptor builds an `ApiError` from RFC 9457 problem-details responses (`{type, title, detail[, solution]}` with `Content-Type: application/problem+json`). `error.message` is the toast line (`solution ?? detail ?? title`) so `toast.error(error.message)` works unchanged and shows the actionable line when a `solution` is present. `type` is the support-reportable error code. A React `ErrorBoundary` wraps the app root for render-time crashes.
 
 ## Non-Obvious Gotchas
 

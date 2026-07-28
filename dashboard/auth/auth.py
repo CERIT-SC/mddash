@@ -8,9 +8,12 @@ import time
 from http import HTTPStatus
 
 import requests
+from errors import ApiError, register_error_handlers
 from flask import Flask, Response, make_response, redirect, request
+from werkzeug.exceptions import BadRequest, Unauthorized
 
 app = Flask(__name__)
+register_error_handlers(app)
 
 logger = logging.getLogger(__name__)
 _first_health_logged = False
@@ -174,7 +177,7 @@ def auth() -> tuple[str, int] | Response:
 
 
 @app.route("/oauth_callback")
-def oauth_callback() -> tuple[str, int] | Response:
+def oauth_callback() -> Response:
     """
     Handle OAuth callback, exchange code for token, and create session.
 
@@ -188,24 +191,29 @@ def oauth_callback() -> tuple[str, int] | Response:
 
     # Verify state by checking HMAC signature
     if not code or not state or not signed_state:
-        return "Invalid state", HTTPStatus.BAD_REQUEST
+        raise BadRequest("Invalid state")
     if not hmac.compare_digest(signed_state, sign(state)):
-        return "Invalid state", HTTPStatus.BAD_REQUEST
+        raise BadRequest("Invalid state")
 
     # Exchange code for token
     data = {"client_id": CLIENT_ID, "client_secret": API_TOKEN, "grant_type": "authorization_code", "code": code}
     r = requests.post(f"{API_URL}/oauth2/token", data=data, timeout=5)
     if r.status_code != HTTPStatus.OK:
-        return "Token exchange failed", HTTPStatus.BAD_REQUEST
+        raise BadRequest("Token exchange failed")
     access_token = r.json().get("access_token")
     if not access_token:
-        return "No access token", HTTPStatus.BAD_REQUEST
+        raise BadRequest("No access token")
 
     # Get user info
     headers = {"Authorization": f"token {access_token}"}
     r = requests.get(f"{API_URL}/user", headers=headers, timeout=5)
     if r.status_code != HTTPStatus.OK or r.json().get("name") != USER:
-        return "User mismatch", HTTPStatus.FORBIDDEN
+        raise ApiError(
+            HTTPStatus.FORBIDDEN,
+            "User mismatch",
+            "urn:mddash:auth-forbidden",
+            "This account is not permitted; contact the administrator.",
+        )
 
     # Create session and set cookie
     token = create_session(USER)
@@ -229,7 +237,12 @@ def create_login_token() -> tuple[dict, int]:
     # Check that caller has a valid session (already authenticated)
     auth_token = request.cookies.get(COOKIE_NAME)
     if not auth_token or not is_valid_session(auth_token, USER):
-        return {"error": "Authentication required"}, HTTPStatus.UNAUTHORIZED
+        raise ApiError(
+            HTTPStatus.UNAUTHORIZED,
+            "Authentication required",
+            "urn:mddash:auth-required",
+            "Your session has expired; log in again.",
+        )
 
     # Create a new session token for passwordless access
     login_token_val = create_login_token_value(USER)
@@ -255,11 +268,11 @@ def login_token_endpoint() -> Response:
     """
     token = request.args.get("token")
     if not token:
-        return make_response("Missing token parameter", HTTPStatus.BAD_REQUEST)
+        raise BadRequest("Missing token parameter")
 
     if not consume_login_token(token, USER):
         logger.warning("Invalid or expired login token attempted for user %s", USER)
-        return make_response("Invalid or expired token", HTTPStatus.UNAUTHORIZED)
+        raise Unauthorized("Invalid or expired token")
 
     # Create a fresh session for the browser
     new_token = create_session(USER)

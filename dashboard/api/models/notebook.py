@@ -7,9 +7,10 @@ from clients import caddy, k8s
 from clients.k8s import parse_cpu, parse_memory
 from config import GPU_TYPE, MAX_NOTEBOOKS, NAMESPACE, NOTEBOOK_RESOURCES, PREFIX
 from enums import NotebookTier, PodStatus
+from errors import ApiError
 from extensions import db
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from werkzeug.exceptions import BadRequest, Conflict, Forbidden, InternalServerError
+from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError
 
 if TYPE_CHECKING:
     from .experiment import Experiment
@@ -101,7 +102,6 @@ class Notebook(db.Model):  # type: ignore
         Raises:
             BadRequest: If the tier is not a valid NotebookTier value.
             Forbidden: If the resource quota is exceeded when creating the pod.
-            Conflict: If the notebook pod already exists.
             InternalServerError: If the pod creation fails or the proxy route cannot be created.
         """
         pod_name = f"notebook-{self.experiment_id}"
@@ -116,7 +116,12 @@ class Notebook(db.Model):  # type: ignore
                 raise BadRequest(description=f"Unknown notebook tier: {tier}. Available: {valid}")
 
         if gpu and not GPU_TYPE:
-            raise BadRequest(description="GPU is not available in this environment.")
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "GPU is not available in this environment.",
+                "urn:mddash:gpu-unavailable",
+                "GPU acceleration isn't enabled here; start the notebook without GPU.",
+            )
 
         self.tier = tier
         self.gpu = bool(gpu)
@@ -124,7 +129,12 @@ class Notebook(db.Model):  # type: ignore
         nb_res = get_tier_resources(tier)
 
         if k8s.count_notebook_pods() >= MAX_NOTEBOOKS:
-            raise Forbidden(description=f"Maximum of {MAX_NOTEBOOKS} concurrent notebook(s) reached. Stop one first.")
+            raise ApiError(
+                HTTPStatus.FORBIDDEN,
+                f"Maximum of {MAX_NOTEBOOKS} concurrent notebook(s) reached. Stop one first.",
+                "urn:mddash:notebook-quota-exceeded",
+                "Stop another notebook first, then start this one.",
+            )
 
         nb_cpu = parse_cpu(nb_res["requests"]["cpu"])
         nb_mem = parse_memory(nb_res["requests"]["memory"])
@@ -148,10 +158,14 @@ class Notebook(db.Model):  # type: ignore
                 logger.debug("Quota exceeded when creating notebook pod.", exc_info=True)
                 raise Forbidden(description="Resource quota exceeded. Please stop other notebooks.")
             if e.status == HTTPStatus.CONFLICT:
-                raise Conflict(description="Notebook pod already exists.")
+                raise ApiError(
+                    HTTPStatus.CONFLICT,
+                    "Notebook pod already exists.",
+                    "urn:mddash:notebook-already-exists",
+                    "The notebook is already running; open it instead of starting a new one.",
+                )
 
-            logger.exception("Failed to create notebook pod.")
-            raise InternalServerError(description=f"Failed to create notebook pod: {e.reason}")
+            raise InternalServerError(description="Failed to create notebook pod.") from e
 
         try:
             k8s.create_service(svc_name, pod_name)

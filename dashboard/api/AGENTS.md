@@ -7,13 +7,13 @@ Flask REST API that orchestrates molecular dynamics experiments across Kubernete
 ## Core Practices
 
 - Business logic lives on SQLAlchemy models (e.g. `Experiment.from_pdb()`, `Experiment.publish()`).
-- Use `@handle_exceptions()` on JSON route handlers; set `rollback=True` on routes that modify the DB. Success returns `jsonify(data)`; errors raise `HTTPException` which `@handle_exceptions` converts to `{detail: "..."}`. Redirect-only OAuth routes handle redirects directly (no decorator).
+- Routes raise `HTTPException` subclasses or marshmallow `ValidationError` — the global `@app.errorhandler` handlers (in `errors.py`, registered via `register_error_handlers(app)`) convert them to RFC 9457 problem-details responses: `{"type": "urn:mddash:<token>", "title": "<Problem>", "detail": "<Cause>"[, "solution"]}`. No `@handle_exceptions` decorator needed. Rollback is automatic on uncaught exceptions. Success returns `jsonify(data)`; use marshmallow `schema.load()` for request parsing. The `type` token is the support-reportable code; raise value-add errors as `ApiError(code, description, type_, solution=...)` (renders itself); otherwise the token derives from the HTTP status phrase. Redirect-only OAuth routes handle redirects directly.
 - MDRepo file uploads run as durable Kubernetes Jobs (`upload/submission.py`); credentials are passed to the worker via container environment variables in the Job manifest.
 
 ## Non-Obvious Gotchas
 
 ### Simulation Manifests (`.simulation.json`)
-- **Single source of truth**: each manifest declares file roles (`topology`, `structure`, `trajectory` for GMX; `topology`, `coordinates`, `control`, `trajectory` for AMBER) and `extra_args`. Job models reference `simulation_path` — they no longer store file names.
+- **Single source of truth**: each manifest declares file roles (`run_input`, `reference_structure`, `trajectory` for GMX; `topology`, `coordinates`, `control`, `reference_structure`, `trajectory` for AMBER) and `extra_args`. Job models reference `simulation_path` — they no longer store file names.
 - `list_simulation_files()` finds `*.simulation.json` anywhere under the experiment directory (not just `production/`).
 - `get_simulation()` validates against the JSON Schema referenced by `$schema` (which must be a mddash schema URL — see `manifest_schema.py`); invalid simulations are returned with errors and can't be used by downstream steps.
 - A simulation is locked when its file is read-only or when a tuner/production job references its `simulation_path`. `mark_simulation_readonly()` chmods the file `0444`.

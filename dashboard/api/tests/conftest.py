@@ -43,6 +43,7 @@ with (
     patch("kubernetes.client.CoreV1Api"),
     patch("kubernetes.client.BatchV1Api"),
 ):
+    from errors import register_error_handlers
     from extensions import db, ma
     from routes import (
         amber_bp,
@@ -116,6 +117,7 @@ def app(mock_k8s: MagicMock, tmp_path: Path) -> Generator[Flask, None, None]:
         test_app.register_blueprint(misc_bp)
         test_app.register_blueprint(mdrepo_bp)
         test_app.register_blueprint(simulations_bp)
+        register_error_handlers(test_app)
 
         with test_app.app_context():
             db.create_all()

@@ -1,7 +1,6 @@
 from http import HTTPStatus
 
 from config import API_PREFIX
-from decorators import handle_exceptions
 from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import Simulation
@@ -11,7 +10,6 @@ simulations_bp = Blueprint("simulations", __name__, url_prefix=f"{API_PREFIX}/ex
 
 
 @simulations_bp.route("", methods=["GET"])
-@handle_exceptions()
 def list_simulations_route(experiment_id: str) -> Response:
     """
     List all simulations for an experiment.
@@ -23,7 +21,6 @@ def list_simulations_route(experiment_id: str) -> Response:
 
 
 @simulations_bp.route("/<path:simulation_path>", methods=["GET"])
-@handle_exceptions()
 def get_simulation_route(experiment_id: str, simulation_path: str) -> Response:
     """
     Get a single simulation by its experiment-relative path.
@@ -35,7 +32,6 @@ def get_simulation_route(experiment_id: str, simulation_path: str) -> Response:
 
 
 @simulations_bp.route("", methods=["POST"])
-@handle_exceptions(rollback=True)
 def create_simulation_route(experiment_id: str) -> ResponseReturnValue:
     """
     Create a new simulation manifest.
@@ -54,7 +50,6 @@ def create_simulation_route(experiment_id: str) -> ResponseReturnValue:
 
 
 @simulations_bp.route("/<path:simulation_path>", methods=["PATCH"])
-@handle_exceptions(rollback=True)
 def update_simulation_route(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
     Edit an unlocked simulation manifest.
@@ -73,7 +68,6 @@ def update_simulation_route(experiment_id: str, simulation_path: str) -> Respons
 
 
 @simulations_bp.route("/<path:simulation_path>", methods=["DELETE"])
-@handle_exceptions(rollback=True)
 def delete_simulation_route(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
     Delete a simulation manifest and cascade-delete all related jobs.

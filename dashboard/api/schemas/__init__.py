@@ -4,6 +4,7 @@ from .amber_job import AmberJobSchema
 from .analysis_job import AnalysisJobSchema
 from .experiment import ExperimentSchema
 from .gromacs_job import GromacsJobSchema
+from .inputs import PublishSchema, StartNotebookSchema, SubmitAnalysisSchema
 from .notebook import NotebookSchema
 from .simulation_job import SimulationJobSchema
 from .tuner_job import TunerJobSchema
@@ -14,6 +15,9 @@ __all__ = [
     "ExperimentSchema",
     "GromacsJobSchema",
     "NotebookSchema",
+    "PublishSchema",
     "SimulationJobSchema",
+    "StartNotebookSchema",
+    "SubmitAnalysisSchema",
     "TunerJobSchema",
 ]
