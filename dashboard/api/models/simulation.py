@@ -1,11 +1,13 @@
 import json
 import logging
 import os
+from http import HTTPStatus
 from pathlib import Path
 
 import jsonschema
 from config import DATA_DIR
 from enums import Engine
+from errors import ApiError
 from extensions import db
 from manifest_schema import resolve_schema_url, schema_url
 from utils import FileInfo, get_files_with_extensions
@@ -445,7 +447,12 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             raise NotFound(description=f"Simulation '{simulation_path}' not found.")
 
         if cls.is_locked(experiment_id, simulation_path):
-            raise BadRequest(description=f"Simulation '{simulation_path}' is locked.")
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                f"Simulation '{simulation_path}' is locked.",
+                "urn:mddash:simulation-locked",
+                "This simulation is in use by a running job; stop the job before editing it.",
+            )
 
         content = _build_content(experiment.engine, payload)
         _validate_content_or_raise(content, experiment.engine)

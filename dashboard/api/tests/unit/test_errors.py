@@ -10,27 +10,41 @@ from marshmallow import ValidationError
 
 
 class TestProblemResponse:
-    """Tests for problem() and flatten_messages()."""
+    """Tests for ApiError.to_response() and flatten_messages()."""
 
-    def test_problem_sets_content_type_and_status(self, app: Flask) -> None:
-        """problem() returns correct status, mimetype, and body fields."""
+    def test_api_error_renders_problem_response(self, app: Flask) -> None:
+        """ApiError.to_response() returns correct status, mimetype, and body fields."""
         with app.test_request_context():
-            from errors import problem
+            from errors import ApiError
 
-            resp = problem("Not Found", "Resource missing", 404)
+            resp = ApiError(HTTPStatus.NOT_FOUND, "Resource missing", "urn:mddash:not-found").to_response()
             assert resp.status_code == 404
             assert resp.mimetype == "application/problem+json"
             data = resp.get_json()
-            assert data["type"] == "about:blank"
+            assert data["type"] == "urn:mddash:not-found"
             assert data["title"] == "Not Found"
             assert data["detail"] == "Resource missing"
 
-    def test_problem_no_status_in_body(self, app: Flask) -> None:
+    def test_api_error_includes_solution(self, app: Flask) -> None:
+        """ApiError.to_response() emits a `solution` member when provided."""
+        with app.test_request_context():
+            from errors import ApiError
+
+            resp = ApiError(
+                HTTPStatus.CONFLICT,
+                "Notebook pod already exists.",
+                "urn:mddash:notebook-already-exists",
+                "Open it instead.",
+            ).to_response()
+            data = resp.get_json()
+            assert data["solution"] == "Open it instead."
+
+    def test_api_error_no_status_in_body(self, app: Flask) -> None:
         """Status code must not appear in the JSON body."""
         with app.test_request_context():
-            from errors import problem
+            from errors import ApiError
 
-            resp = problem("Error", "msg", 500)
+            resp = ApiError(HTTPStatus.INTERNAL_SERVER_ERROR, "msg", "urn:mddash:internal-error").to_response()
             assert "status" not in resp.get_json()
 
     def test_flatten_string(self) -> None:
@@ -70,16 +84,19 @@ class TestRoutingErrors:
         assert resp.status_code == HTTPStatus.NOT_FOUND
         assert resp.mimetype == "application/problem+json"
         data = resp.get_json()
-        assert data["type"] == "about:blank"
+        assert data["type"] == "urn:mddash:not-found"
         assert data["title"] == "Not Found"
         assert "detail" in data
+        assert "solution" not in data  # routing 404 has no value-add solution
 
     def test_wrong_method_405_returns_json(self, client: FlaskClient) -> None:
         """Wrong-method request returns JSON problem details."""
         resp = client.delete("/dash/api/")
         assert resp.status_code == HTTPStatus.METHOD_NOT_ALLOWED
         assert resp.mimetype == "application/problem+json"
-        assert resp.get_json()["title"] == "Method Not Allowed"
+        data = resp.get_json()
+        assert data["title"] == "Method Not Allowed"
+        assert data["type"] == "urn:mddash:method-not-allowed"
 
 
 class TestAuthoredErrors:
@@ -90,7 +107,7 @@ class TestAuthoredErrors:
         resp = client.get("/dash/api/experiments/nonexistent")
         assert resp.status_code == HTTPStatus.NOT_FOUND
         data = resp.get_json()
-        assert data["type"] == "about:blank"
+        assert data["type"] == "urn:mddash:not-found"
         assert data["title"] == "Not Found"
         assert "nonexistent" in data["detail"]
 
@@ -105,6 +122,8 @@ class TestAuthoredErrors:
         assert resp.status_code == HTTPStatus.BAD_REQUEST
         data = resp.get_json()
         assert data["title"] == "Bad Request"
+        assert data["type"] == "urn:mddash:validation-error"
+        assert "solution" not in data  # validation has no solution (detail implies the fix)
         assert "field" in data["detail"]
         assert "Missing data" in data["detail"]
 
@@ -121,7 +140,28 @@ class TestAuthoredErrors:
         assert resp.status_code == HTTPStatus.BAD_REQUEST
         data = resp.get_json()
         assert data["title"] == "Bad Request"
+        assert data["type"] == "urn:mddash:bad-request"  # ad-hoc BadRequest → status-based default
         assert data["detail"] == "Custom bad request message"
+
+    def test_value_add_token_returns_type_and_solution(self, app: Flask, client: FlaskClient) -> None:
+        """An ApiError carries its type token + solution through to the response."""
+
+        @app.route("/_test/value-add")
+        def _value_add() -> ResponseReturnValue:
+            from errors import ApiError
+
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "Notebook pod already exists.",
+                "urn:mddash:notebook-already-exists",
+                "The notebook is already running; open it instead.",
+            )
+
+        resp = client.get("/_test/value-add")
+        assert resp.status_code == HTTPStatus.CONFLICT
+        data = resp.get_json()
+        assert data["type"] == "urn:mddash:notebook-already-exists"
+        assert data["solution"] == "The notebook is already running; open it instead."
 
 
 class TestUnhandledExceptions:
@@ -138,7 +178,9 @@ class TestUnhandledExceptions:
         assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
         data = resp.get_json()
         assert data["title"] == "Internal Server Error"
-        assert data["type"] == "about:blank"
+        assert data["type"] == "urn:mddash:internal-error"
+        assert data["solution"]  # retry/support guidance present
+        assert "instance" not in data  # no correlation-ID field
         assert "internal secret detail" not in data["detail"]
         assert "/path/to/file" not in data["detail"]
 
@@ -152,7 +194,16 @@ class TestUnhandledExceptions:
         resp = client.get("/_test/crash")
         assert resp.mimetype == "application/problem+json"
 
-    @pytest.mark.xfail(reason="rollback verification requires DB mutation tracking")
     def test_unhandled_rolls_back_session(self, app: Flask, client: FlaskClient) -> None:
         """Uncaught exceptions call db.session.rollback()."""
-        pass
+        from unittest.mock import patch
+
+        @app.route("/_test/crash-rollback")
+        def _crash() -> ResponseReturnValue:
+            raise ValueError("boom")
+
+        with patch("errors.db.session.rollback") as mock_rollback:
+            resp = client.get("/_test/crash-rollback")
+
+        assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        mock_rollback.assert_called_once()

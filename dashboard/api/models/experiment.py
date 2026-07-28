@@ -24,6 +24,7 @@ from config import (
     MDREPO_URL,
 )
 from enums import Engine, JobStatus, PodStatus
+from errors import ApiError
 from extensions import db
 from flask import session
 from notebook_modules import NotebookModule
@@ -231,7 +232,6 @@ class Experiment(db.Model):  # type: ignore
 
         Raises:
             NotFound: If the PDB ID or URL is not found.
-            InternalServerError: If the PDB file download fails.
         """
         experiment_id: str = cls.prepare_env(notebooks_repo, access_token, notebook_module)
         source = pdb_source.strip()
@@ -252,7 +252,12 @@ class Experiment(db.Model):  # type: ignore
             if response.status_code == HTTPStatus.NOT_FOUND:
                 raise NotFound(description=f"PDB source '{source}' not found.")
             if response.status_code != HTTPStatus.OK:
-                raise InternalServerError(description="Failed to download PDB file.")
+                raise ApiError(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to download PDB file.",
+                    "urn:mddash:upstream-download-failed",
+                    "The structure source couldn't be fetched; try again, or use a different PDB ID / file.",
+                )
 
             validate_pdb_content(response.content)
 
@@ -563,7 +568,12 @@ class Experiment(db.Model):  # type: ignore
             mdrepo_id = self.mdrepo_id or ""
 
         if not mdrepo_id:
-            raise InternalServerError(description="Failed to create experiment in MDRepo.")
+            raise ApiError(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "Failed to create experiment in MDRepo.",
+                "urn:mddash:upstream-unavailable",
+                "MDRepo didn't respond as expected; try again in a moment.",
+            )
 
         # Submit the upload Job: writes queued status, creates Secret+Job, waits for admission.
         attempt_id = submit_upload_job(
@@ -604,7 +614,12 @@ class Experiment(db.Model):  # type: ignore
         mdrepo_experiment = mdrepo.create_experiment(access_token, community, {"simulations": simulations})
         mdrepo_id = mdrepo_experiment.get("id")
         if mdrepo_id is None:
-            raise InternalServerError(description="Failed to create experiment in MDRepo.")
+            raise ApiError(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "Failed to create experiment in MDRepo.",
+                "urn:mddash:upstream-unavailable",
+                "MDRepo didn't respond as expected; try again in a moment.",
+            )
 
         self.mdrepo_id = mdrepo_id
         self.mdrepo_published = False
@@ -674,7 +689,12 @@ class Experiment(db.Model):  # type: ignore
             InternalServerError: If metadata generation fails.
         """
         if not MDPOSIT_URL:
-            raise BadRequest(description="MDPosit is not configured. Set MDPOSIT_URL to enable MDPosit publishing.")
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "MDPosit is not configured. Set MDPOSIT_URL to enable MDPosit publishing.",
+                "urn:mddash:mdposit-not-configured",
+                "MDPosit publishing isn't enabled on this deployment; contact the administrator.",
+            )
 
         from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
 

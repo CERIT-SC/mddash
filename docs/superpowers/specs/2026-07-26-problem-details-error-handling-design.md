@@ -1,7 +1,9 @@
 # Design: Problem-Details Error Handling
 
-**Date:** 2026-07-26
+**Date:** 2026-07-26 (revised 2026-07-27)
 **Scope:** `dashboard/api`, `mdrun-api`, `dashboard/auth`, `dashboard/ui`, demo harness, tests, AGENTS docs
+
+> **Revision 2026-07-27:** `type` now carries a stable `urn:mddash:<token>` (the support-reportable code) instead of `"about:blank"`. The body is a strict superset of v1, so clients reading only `detail` keep working. There is deliberately **no `instance`** field — the `type` token is the single support code, correlated in logs by `type` + time.
 
 ## Problem
 
@@ -24,31 +26,97 @@ Error handling across the three Flask services is inconsistent, leaky, and more 
 5. Extend the existing marshmallow `schema.load()` pattern (already used in MDRun API) to **both** APIs and to all request locations — form, query, JSON — eliminating hand-written parsing/typing/validation boilerplate. Move numeric and enum validation/conversion into marshmallow schemas. No new dependency.
 6. Keep the UI change minimal: the ~20 `toast.error(error.message)` hooks keep working unchanged.
 7. Add a React Error Boundary for render crashes.
+8. Replace the `"about:blank"` sentinel with stable **`type` tokens** (`urn:mddash:<token>`) so the UI can branch on known conditions and the token doubles as the single support-reportable error code (correlated in logs by `type` + time).
+9. Add an **optional `solution`** member (the user-facing action) only where the cause alone is unhelpful (state / conflict / auth / upstream / 5xx); omit it on validation errors, where `detail` already implies the fix.
 
 ## Non-Goals
 
 - No `errors[]` array for validation (flattened to a single `detail` string; can be added later as a non-breaking extension).
-- No `instance` / correlation-ID field.
-- No custom `type` tokens in v1 — always `"about:blank"`. (The MDRepo OAuth string-match path stays as-is; a `not-authenticated` token is deferred.)
+- No `instance` / correlation-ID field — the `type` token is the support code; correlation in logs is by `type` + time.
+- No custom `type` *scheme* — v1 uses opaque URN tokens (`urn:mddash:<token>`), not a resolvable documentation URL. A later non-breaking upgrade can point `type` at `https://docs.../errors/<token>` once a docs host exists. (RFC 9457 treats `type` as opaque to clients; only `about:blank` has defined semantics, so the URN form is fully conformant.)
 - No change to HTTP status codes per route, success-body shapes, or external service contracts (MDRepo/Invenio, MetaDump).
 - `validators.py` / `sanitization.py` **stay as functions** — they perform SSRF guards, reserved-IP checks, and regex work that marshmallow fields cannot express. They are not targets for schema migration.
 
 ## Error Response Shape
 
-Every error response, from all three services:
+Every error response, from all three services. A value-add error (Problem / Cause / Solution):
 
 ```json
-{ "type": "about:blank", "title": "Not Found", "detail": "Experiment 5 not found." }
+{
+  "type": "urn:mddash:notebook-quota-exceeded",
+  "title": "Resource quota exceeded",
+  "detail": "You already have the maximum number of notebooks running.",
+  "solution": "Stop another notebook first, then start this one."
+}
 ```
 
-| Field | Source | Notes |
-|-------|--------|-------|
-| `type` | constant `"about:blank"` | RFC 9457 sentinel for "no extra info beyond status". Reserved for future custom tokens. |
-| `title` | `exc.name` (the HTTP status phrase) | e.g. "Bad Request", "Not Found", "Internal Server Error". Free — werkzeug already carries it. For marshmallow `ValidationError`, title = "Bad Request". |
-| `detail` | `exc.description` for HTTPException; flattened marshmallow messages for `ValidationError`; `"Internal server error. Please try again later."` for unexpected exceptions | The human-readable message. Authored for 4xx; generic for unexpected 5xx. |
-| `Content-Type` | `application/problem+json` | RFC 9457 media type. |
+An opaque 5xx (unhandled exception) carries a generic `detail` plus a retry/support `solution`, but no per-occurrence code — the `type` token is the support handle:
 
-The HTTP status code lives **only** on the response status line. Marshmallow `ValidationError.messages` (typically a dict like `{"np": ["Missing data for required field."]}`) is flattened to a readable `detail` string (e.g. `"np: Missing data for required field."`), status 400, title "Bad Request". This converges the two APIs onto one validation-error contract (previously Dashboard used `BadRequest`, MDRun used `ValidationError`).
+```json
+{
+  "type": "urn:mddash:internal-error",
+  "title": "Internal Server Error",
+  "detail": "Internal server error. Please try again later.",
+  "solution": "Try again in a moment; if the problem persists, contact support."
+}
+```
+
+A validation error carries **no** `solution` (the `detail` already implies the fix and the UI highlights the field):
+
+```json
+{
+  "type": "urn:mddash:validation-error",
+  "title": "Bad Request",
+  "detail": "np: Missing data for required field."
+}
+```
+
+| Field | Role | When present |
+|-------|------|--------------|
+| `type` | machine + support handle; RFC 9457 URI reference (URN token). This is the code users report to support. | always — `urn:mddash:<token>`; `about:blank` only as a last-resort default for ad-hoc HTTPExceptions with no mapped token |
+| `title` | the **Problem** (stable per type; the HTTP phrase for defaults) | always |
+| `detail` | the **Cause** (specific to this occurrence; authored for 4xx, generic for unexpected 5xx) | always |
+| `solution` | the **action** the user can take | optional — present where cause alone is unhelpful (state / conflict / auth / upstream / 5xx); omitted on validation errors where `detail` already implies the fix |
+| `Content-Type` | `application/problem+json` | always |
+
+**Toast rule (one short line, always):** the UI shows `solution` if present, else `detail`, else `title`. The full structure is available for an expandable error view — never dumped into the toast wholesale.
+
+**Do / Don't:**
+- Do emit a real `urn:mddash:<token>` per error category (see catalog below).
+- Do map **default** tokens in the global handler (no raise-site churn): `ValidationError` → `validation-error`, routing/`NotFound`/`get_or_404` → `not-found`, `MethodNotAllowed` → `method-not-allowed`, bare `HTTPException` → status-based default, unhandled `Exception` → `internal-error`.
+- Do opt in a small set of **value-add** tokens at raise sites the refactor already touches (catalog below). Value-add tokens carry a curated `solution`.
+- Do author `solution` only on value-add tokens + `internal-error`.
+- Don't add a `solution` field on validation errors (redundant with `detail` + field UI).
+- Don't fold `solution` into `detail` (loses structure; defeats separate rendering).
+- Don't fold `solution` into `detail` (loses structure; defeats separate rendering).
+
+**Type token catalog (v1):**
+
+Value-add tokens (carrying a `solution`) are raised directly as `ApiError(code, description, type_, solution)`. The remaining defaults are derived from the HTTP phrase (e.g. routing 404 → `not-found`).
+
+| Token | title | When |
+|-------|-------|------|
+| `urn:mddash:validation-error` | Bad Request | marshmallow `ValidationError` |
+| `urn:mddash:not-found` | Not Found | `NotFound` / `get_or_404` / routing 404 (derived) |
+| `urn:mddash:method-not-allowed` | Method Not Allowed | routing 405 (derived) |
+| `urn:mddash:bad-request` | Bad Request | ad-hoc `BadRequest` (derived) |
+| `urn:mddash:conflict` | Conflict | ad-hoc `Conflict` (derived) |
+| `urn:mddash:unauthorized` | Unauthorized | ad-hoc `Unauthorized` (derived) |
+| `urn:mddash:forbidden` | Forbidden | ad-hoc `Forbidden` (derived) |
+| `urn:mddash:internal-server-error` | Internal Server Error | authored `InternalServerError` (derived) |
+| `urn:mddash:notebook-quota-exceeded` | Resource quota exceeded | notebook max reached |
+| `urn:mddash:notebook-already-exists` | Conflict | notebook pod already exists |
+| `urn:mddash:gpu-unavailable` | GPU not available | GPU requested but unconfigured |
+| `urn:mddash:auth-required` | Unauthorized | session missing/expired (auth service) |
+| `urn:mddash:auth-forbidden` | Forbidden | user mismatch (auth service) |
+| `urn:mddash:upstream-download-failed` | Bad Gateway | PDB / repo / MDPosit download failure |
+| `urn:mddash:upstream-unavailable` | Bad Gateway | MDRepo / Invenio / MetaDump upstream 5xx |
+| `urn:mddash:simulation-locked` | Conflict | manifest is read-only / locked |
+| `urn:mddash:mdrepo-not-configured` | Internal Server Error | MDRepo env incomplete |
+| `urn:mddash:mdposit-not-configured` | Internal Server Error | `MDPOSIT_URL` unset |
+| `urn:mddash:internal-error` | Internal Server Error | unhandled `Exception` |
+
+The HTTP status code lives **only** on the response status line. The `type` URN uses an **informal** namespace (`mddash` is not IANA-registered) — acceptable for an internal app and widely done; it upgrades to a resolvable `https://docs.../errors/<token>` later as a non-breaking change.
 
 ## Architecture
 
@@ -56,42 +124,73 @@ The HTTP status code lives **only** on the response status line. Marshmallow `Va
 
 Delete `@handle_exceptions` entirely. The only behavior it provided beyond shaping was `db.session.rollback()` — that moves into the global `Exception` handler, making rollback **automatic for every uncaught exception**.
 
-Each service gets a small `errors.py` with one builder + `register_error_handlers(app)`. Both APIs now handle marshmallow `ValidationError` identically (previously only MDRun did), which is what unifies the validation conventions:
+Each service gets a small `errors.py` with one `ApiError` exception + `register_error_handlers(app)`. `ApiError` carries `code`/`description`/`problem_type`/`problem_solution` and renders itself via `to_response()` — there is no separate `problem()` builder. Both APIs handle marshmallow `ValidationError` identically (previously only MDRun did), which unifies the validation conventions:
 
 ```python
-# dashboard/api/errors.py  (mdrun-api/errors.py is identical except no db.rollback in auth)
-def problem(title: str, detail: str, type_: str = "about:blank") -> Response:
-    resp = jsonify({"type": type_, "title": title, "detail": detail})
-    resp.mimetype = "application/problem+json"
-    return resp
+# dashboard/api/errors.py  (mdrun-api/errors.py is identical; auth/errors.py drops db.rollback + ValidationError handler)
+class ApiError(HTTPException):
+    problem_type: str
+    problem_solution: str | None
 
-def _flatten(messages) -> str:
+    def __init__(self, code: int, description: str, type_: str, solution: str | None = None) -> None:
+        super().__init__(description=description)
+        self.code = code
+        self.problem_type = type_
+        self.problem_solution = solution
+
+    def to_response(self) -> Response:
+        body = {"type": self.problem_type,
+                "title": HTTPStatus(self.code).phrase,
+                "detail": self.description or "An error occurred."}
+        if self.problem_solution is not None:
+            body["solution"] = self.problem_solution
+        resp = jsonify(body)
+        resp.mimetype = "application/problem+json"
+        resp.status_code = self.code
+        return resp
+
+def flatten_messages(messages) -> str:
     # marshmallow ValidationError.messages (str|dict|list) -> one readable line
     ...
 
 def register_error_handlers(app: Flask) -> None:
     @app.errorhandler(ValidationError)
     def _validation(exc: ValidationError) -> Response:
-        logger.warning("Validation error: %s", exc.messages)
-        return problem("Bad Request", _flatten(exc.messages)), 400
+        detail = flatten_messages(exc.messages)          # no `solution` — detail already implies the fix
+        return ApiError(400, detail, "urn:mddash:validation-error").to_response()
 
     @app.errorhandler(HTTPException)
     def _http(exc: HTTPException) -> Response:
+        if not isinstance(exc, ApiError):
+            # ad-hoc HTTPExceptions derive their type from the HTTP phrase: "Not Found" -> urn:mddash:not-found
+            name = exc.name or "Internal Server Error"
+            exc = ApiError(exc.code or 500, exc.description or "An error occurred.",
+                           f"urn:mddash:{name.lower().replace(' ', '-')}")
         code = exc.code or 500
         logger.log(logging.WARNING if code < 500 else logging.ERROR,
-                   "%s %s -> %s: %s", request.method, request.path, code, exc.description,
-                   exc_info=code >= 500)               # traceback for 5xx only
-        return problem(exc.name, exc.description), code
+                   "%s %s -> %s [%s]: %s", request.method, request.path, code, exc.problem_type, exc.description,
+                   exc_info=code >= 500)
+        return exc.to_response()
 
     @app.errorhandler(Exception)
-    def _unhandled(exc: Exception) -> Response:
-        db.session.rollback()                          # automatic, was opt-in
-        logger.exception("Unhandled exception")        # full traceback, server-side only
-        return problem("Internal Server Error",
-                       "Internal server error. Please try again later."), 500
+    def _unhandled(_exc: Exception) -> Response:
+        db.session.rollback()
+        logger.error("Unhandled exception on %s %s", request.method, request.path, exc_info=True)
+        return ApiError(500, "Internal server error. Please try again later.",
+                        "urn:mddash:internal-error",
+                        "Try again in a moment; if the problem persists, contact support.").to_response()
 ```
 
-Flask routes `HTTPException` (and subclasses: `NotFound`, `BadRequest`, `ServiceUnavailable`, `get_or_404`, `abort`) to `_http`, marshmallow `ValidationError` to `_validation`, and everything else to `_unhandled`. Routing 404/405 and undecorated-route raises are now caught — no more HTML leaks. The auth service registers the same handlers but without the `db.session.rollback()` line (it has no database).
+Value-add errors are raised directly as `ApiError`; the exception carries its token + solution and renders itself:
+
+```python
+raise ApiError(HTTPStatus.CONFLICT, "Notebook pod already exists.",
+               "urn:mddash:notebook-already-exists",
+               "The notebook is already running; open it instead.")
+```
+
+
+Flask routes `HTTPException` (and subclasses: `NotFound`, `BadRequest`, `ServiceUnavailable`, `get_or_404`, `abort`) to `_http`, marshmallow `ValidationError` to `_validation`, and everything else to `_unhandled`. Routing 404/405 and undecorated-route raises are now caught — no more HTML leaks. The auth service registers the same handlers but without the `db.session.rollback()` line and without the `ValidationError` handler (no marshmallow / no DB).
 
 ### 2. Plain marshmallow `schema.load()` for request parsing
 
@@ -163,10 +262,15 @@ With the global handler now logging all 5xx tracebacks, **log-then-raise** sites
 
 ### 5. Frontend: `ApiError` class + Error Boundary
 
-`dashboard/ui/src/lib/http.ts` interceptor builds an `ApiError` exposing `{type, title, detail, status}`. `error.message` is set to `detail`, so all existing `toast.error(error.message)` call sites and the `QueryCache.onError` (`query-client.ts:9`) keep working unchanged:
+`dashboard/ui/src/lib/http.ts` interceptor builds an `ApiError` exposing `{type, title, detail, solution, status}`. `error.message` is set to the **toast line** (`solution ?? detail ?? title`), so all existing `toast.error(error.message)` call sites and the `QueryCache.onError` (`query-client.ts:9`) keep working unchanged while now showing the actionable line when a `solution` is present:
 
 ```ts
-export interface ProblemDetails { type: string; title: string; detail: string }
+export interface ProblemDetails {
+  type: string
+  title: string
+  detail: string
+  solution?: string
+}
 
 export class ApiError extends Error {
   constructor(
@@ -174,22 +278,31 @@ export class ApiError extends Error {
     public title: string,
     public status: number,
     detail: string,
+    public solution?: string,
   ) {
-    super(detail ?? "Request failed.")
+    super(solution ?? detail ?? "Request failed.")   // toast line: solution → detail → title fallback
     this.name = "ApiError"
   }
 }
 
-api.interceptors.response.use(
-  (res) => res,
-  (error) => {
+function problemInterceptor(error: unknown) {
+  if (axios.isAxiosError(error)) {
     const status = error.response?.status ?? 0
     const data = error.response?.data
-    const p = (data && typeof data === "object" ? data : {}) as Partial<ProblemDetails>
-    return Promise.reject(new ApiError(p.type ?? "about:blank", p.title ?? "", status, p.detail))
-  },
-)
+    const p = data && typeof data === "object" ? (data as Partial<ProblemDetails>) : {}
+    return Promise.reject(new ApiError(
+      p.type ?? "urn:mddash:internal-error", p.title ?? "", status,
+      p.detail ?? "Request failed.", p.solution,
+    ))
+  }
+  return Promise.reject(error instanceof Error ? error : new Error("Request failed."))
+}
+
+api.interceptors.response.use((res) => res, problemInterceptor)
+apiRaw.interceptors.response.use((res) => res, problemInterceptor)
 ```
+
+A small `errorSolutions` map (token → copy) may be added later for fully client-owned solutions, but v1 sources `solution` from the backend response field directly — keeping authoring next to the domain logic that knows the cause.
 
 `apiRaw` (byte downloads) gains the same interceptor so `send_file` error responses also surface as `ApiError` instead of raw axios errors.
 
@@ -210,16 +323,17 @@ What the new mechanism eliminates:
 | Dashboard `NotebookTier(tier_str)` try/except + `isinstance(gpu, bool)` check | schema `@validates` + `fields.Bool` |
 | Log-then-raise `logger.exception` in models (~3-5 sites) | removed; global handler logs 5xx traceback |
 | Routing 404/405 + undecorated raises → HTML | JSON problem details |
-| Three error contracts (`{detail}` str, `{detail}` dict, bare strings) | one `{type,title,detail}` everywhere |
-| `str(e)` leak on unexpected 5xx | generic detail; traceback server-side only |
+| Three error contracts (`{detail}` str, `{detail}` dict, bare strings) | one `{type,title,detail[,solution]}` everywhere |
+| `about:blank` for every error (no machine handle, no support code) | `urn:mddash:<token>` per category — the support-reportable code |
+| `str(e)` leak on unexpected 5xx | generic detail + retry/support `solution`; traceback server-side only |
 | Dashboard validation = `BadRequest`, MDRun validation = `ValidationError` (divergent) | both = `ValidationError` → same handler → same shape |
 
 ## Files Changed
 
 ### Backend — new files
-- `dashboard/api/errors.py` — `problem()`, `_flatten()`, `register_error_handlers(app)` (with `ValidationError` + `HTTPException` + `Exception` handlers). No webargs wiring.
-- `mdrun-api/errors.py` — identical (minus nothing; both APIs now handle `ValidationError`).
-- `dashboard/auth/errors.py` — same handlers minus `db.session.rollback()`.
+- `dashboard/api/errors.py` — `ApiError` exception (carries token + optional solution, renders itself via `to_response()`), `flatten_messages()`, `register_error_handlers(app)` (with `ValidationError` + `HTTPException` + `Exception` handlers). Default `type` is derived from the HTTP phrase (no lookup table); the `type` token is the support-reportable code (no `instance`).
+- `mdrun-api/errors.py` — identical.
+- `dashboard/auth/errors.py` — same handlers minus `db.session.rollback()` and minus the `ValidationError` handler (no marshmallow / no DB).
 
 ### Backend — deleted
 - `dashboard/api/decorators.py`
@@ -242,14 +356,15 @@ What the new mechanism eliminates:
 - `mdrun-api/schemas.py` — `np`/`ntomp` → `fields.Int(required=True, validate=Range(gt=0))`; `pme`/`nb`/`binary`/`ewald` → `@validates` (case-insensitive via `from_string`) + `@post_load` enum conversion.
 - `dashboard/api/schemas/` — add input schemas for JSON/form/query routes that currently hand-parse (e.g. `StartNotebookSchema`, `PublishSchema`, `SubmitAnalysisSchema`, list-results query schema). Existing output schemas unchanged.
 
-### Backend — redaction (clean authored messages, no internal interpolation)
+### Backend — redaction + value-add tokens (clean authored messages, no internal interpolation)
 - `dashboard/api/routes/gmx.py:77`, `amber.py:77` — `BadRequest(f"Invalid compute parameters: {exc}")` → clean message; log `exc` server-side.
 - `dashboard/api/routes/analysis.py:263` — `UnprocessableEntity(f"Failed to read analysis result: {e}")` → clean message + `from e`.
 - `dashboard/api/models/gromacs_job.py:293`, `notebook.py:153-154`, `experiment.py:255,726`, `experiment_sources.py:143,184`, `clients/metadump.py:39` — strip `f"...{internal}"`; keep clean `description`; rely on `from e` for server-side traceback. Remove the redundant `logger.exception` at `notebook.py:153` (log-then-raise; handler now logs).
 - `dashboard/api/utils.py:356` — keep redaction; extract `_redact()` into a reusable helper if other sites need it.
+- Value-add tokens + `solution`: attach `exc.problem_type` / `exc.problem_solution` at the raise sites listed in the token catalog (notebook quota, notebook-already-exists, GPU, simulation-locked, mdrepo/mdposit-not-configured, upstream-download-failed, upstream-unavailable, auth-required, auth-forbidden). Default tokens are derived from status in the handler, so sites without a value-add token need no change.
 
 ### Backend — tests
-- `dashboard/api/tests/unit/test_errors.py` — **new**: no-route 404 returns JSON problem (not HTML); wrong-method 405 returns JSON; `BadRequest` returns `{type,title,detail}`; `ValidationError` returns flattened `detail` + 400; unhandled exception returns generic detail (assert `!= str(e)`) + status 500; rollback occurs on unhandled exception; 5xx HTTPException logs traceback; `schema.load()` parse failure → problem details.
+- `dashboard/api/tests/unit/test_errors.py` — **new**: no-route 404 returns JSON problem (not HTML); wrong-method 405 returns JSON; `BadRequest` returns `{type,title,detail}`; `ValidationError` returns flattened `detail` + 400 + `type=urn:mddash:validation-error`; unhandled exception returns generic detail (assert `!= str(e)`) + status 500 + `type=urn:mddash:internal-error` + a retry/support `solution` (no `instance`); a value-add-token HTTPException returns its `type` + `solution`; 5xx HTTPException logs traceback; `schema.load()` parse failure → problem details.
 - `mdrun-api/tests/test_errors.py` — **new**: same + `ValidationError` flattening (`{"np": ["Missing data..."]}` → `detail` string) + `schema.load()` validation path.
 - `dashboard/api/tests/unit/test_mdposit_publish.py:124` — `"MDRepo" in resp.get_json()["detail"]` still passes (detail preserved); verify.
 - `mdrun-api/tests/test_routes.py:127` — `"detail" in data` still passes; verify. Update body assertions that assumed dict-`detail` to the flattened string.
@@ -258,13 +373,13 @@ What the new mechanism eliminates:
 - Route tests using the Flask test client continue to pass (request parsing moves into `schema.load()` but HTTP behavior is preserved).
 
 ### Frontend
-- `dashboard/ui/src/lib/http.ts` — replace interceptor with `ApiError` builder; add same interceptor to `apiRaw`. Update header comment.
+- `dashboard/ui/src/lib/http.ts` — replace interceptor with `ApiError` builder exposing `{type,title,detail,solution,status}`; `error.message = solution ?? detail ?? title` (toast line); add same interceptor to `apiRaw`. Update header comment.
 - `dashboard/ui/src/components/ErrorBoundary.tsx` — **new**: class component `componentDidCatch` + fallback UI with reload.
 - `dashboard/ui/src/router.tsx` (or `App.tsx`) — wrap root with `<ErrorBoundary>`.
-- No changes to `hooks/use-*.ts` or `lib/query-client.ts` — they consume `error.message` (= `detail`) unchanged.
+- A small "Report issue" affordance (optional, v1.1) can surface `type` for support (e.g. a copy button on the `type` token); the toast itself shows only the one-line `solution ?? detail`. No changes required to `hooks/use-*.ts` or `lib/query-client.ts` — they consume `error.message` unchanged.
 
 ### Demo harness
-- `dashboard/api/_demo/mocks/http.py` — update internal-service (MDRun API) mock error bodies from `{"detail": "..."}` to `{"type":"about:blank","title":"...","detail":"..."}` (~7 sites: `:167,173,189,195,823,831,859`). External-service mocks (MDRepo/Invenio `{"message":...}`) unchanged.
+- `dashboard/api/_demo/mocks/http.py` — update internal-service (MDRun API) mock error bodies from `{"detail": "..."}` to `{"type":"urn:mddash:<token>","title":"...","detail":"..."}` (~7 sites: `:167,173,189,195,823,831,859`); use the matching token (`not-found` for the job/project-not-found mocks). External-service mocks (MDRepo/Invenio `{"message":...}`) unchanged.
 
 ### Docs
 - `AGENTS.md` (root) — update "Error Handling" section: replace `@handle_exceptions`/`{detail}` with problem-details shape + native handlers + automatic rollback + marshmallow `schema.load()` for parsing.
@@ -285,4 +400,4 @@ make type-check     # ty (Python) + tsc (TypeScript)
 make test           # Python unit/integration tests
 ```
 
-Plus manual: hit a no-match URL (`/dash/api/does-not-exist`) and confirm a JSON problem-details response (not HTML); trigger an unhandled exception and confirm the client sees only the generic detail while the server log shows the full traceback; POST a malformed body to a `schema.load()` route and confirm a 400 problem-details response with a flattened validation `detail`.
+Plus manual: hit a no-match URL (`/dash/api/does-not-exist`) and confirm a JSON problem-details response with `type=urn:mddash:not-found` (not HTML); trigger an unhandled exception and confirm the client sees only the generic `detail` plus a retry/support `solution` (no per-occurrence code), while the server log shows the full traceback; POST a malformed body to a `schema.load()` route and confirm a 400 problem-details response with `type=urn:mddash:validation-error` and a flattened validation `detail` (no `solution`); trigger a value-add error (e.g. notebook quota) and confirm `type` + `solution` are present and the toast shows the `solution`.

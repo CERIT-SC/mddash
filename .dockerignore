@@ -16,5 +16,9 @@ config*.yaml
 **/.coverage
 **/htmlcov/
 **/*.tar.bz2
-/tuner/tests/
 /tuner/demo/
+**/tests/
+**/pytest.ini
+**/Dockerfile
+**/AGENTS.md
+**/CLAUDE.md

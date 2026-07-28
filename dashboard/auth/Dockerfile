@@ -16,7 +16,7 @@ COPY tuner/pyproject.toml tuner/
 
 RUN uv sync --frozen --no-dev --package dashboard-auth --no-install-project
 
-COPY --chown=app:app dashboard/auth/auth.py .
+COPY --chown=app:app dashboard/auth/ ./
 
 USER app
 

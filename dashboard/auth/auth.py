@@ -8,9 +8,9 @@ import time
 from http import HTTPStatus
 
 import requests
-from errors import register_error_handlers
+from errors import ApiError, register_error_handlers
 from flask import Flask, Response, make_response, redirect, request
-from werkzeug.exceptions import BadRequest, Forbidden, Unauthorized
+from werkzeug.exceptions import BadRequest, Unauthorized
 
 app = Flask(__name__)
 register_error_handlers(app)
@@ -208,7 +208,12 @@ def oauth_callback() -> Response:
     headers = {"Authorization": f"token {access_token}"}
     r = requests.get(f"{API_URL}/user", headers=headers, timeout=5)
     if r.status_code != HTTPStatus.OK or r.json().get("name") != USER:
-        raise Forbidden("User mismatch")
+        raise ApiError(
+            HTTPStatus.FORBIDDEN,
+            "User mismatch",
+            "urn:mddash:auth-forbidden",
+            "This account is not permitted; contact the administrator.",
+        )
 
     # Create session and set cookie
     token = create_session(USER)
@@ -232,7 +237,12 @@ def create_login_token() -> tuple[dict, int]:
     # Check that caller has a valid session (already authenticated)
     auth_token = request.cookies.get(COOKIE_NAME)
     if not auth_token or not is_valid_session(auth_token, USER):
-        raise Unauthorized("Authentication required")
+        raise ApiError(
+            HTTPStatus.UNAUTHORIZED,
+            "Authentication required",
+            "urn:mddash:auth-required",
+            "Your session has expired; log in again.",
+        )
 
     # Create a new session token for passwordless access
     login_token_val = create_login_token_value(USER)

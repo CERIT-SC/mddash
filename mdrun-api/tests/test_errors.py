@@ -10,27 +10,38 @@ from marshmallow import ValidationError
 
 
 class TestProblemResponse:
-    """Tests for problem() and flatten_messages()."""
+    """Tests for ApiError.to_response() and flatten_messages()."""
 
-    def test_problem_sets_content_type_and_status(self, app: Flask) -> None:
-        """problem() returns correct status, mimetype, and body fields."""
+    def test_api_error_renders_problem_response(self, app: Flask) -> None:
+        """ApiError.to_response() returns correct status, mimetype, and body fields."""
         with app.test_request_context():
-            from errors import problem
+            from errors import ApiError
 
-            resp = problem("Not Found", "Resource missing", 404)
+            resp = ApiError(HTTPStatus.NOT_FOUND, "Resource missing", "urn:mddash:not-found").to_response()
             assert resp.status_code == 404
             assert resp.mimetype == "application/problem+json"
             data = resp.get_json()
-            assert data["type"] == "about:blank"
+            assert data["type"] == "urn:mddash:not-found"
             assert data["title"] == "Not Found"
             assert data["detail"] == "Resource missing"
 
-    def test_problem_no_status_in_body(self, app: Flask) -> None:
+    def test_api_error_includes_solution(self, app: Flask) -> None:
+        """ApiError.to_response() emits a `solution` member when provided."""
+        with app.test_request_context():
+            from errors import ApiError
+
+            resp = ApiError(
+                HTTPStatus.INTERNAL_SERVER_ERROR, "boom", "urn:mddash:internal-error", "Try again."
+            ).to_response()
+            data = resp.get_json()
+            assert data["solution"] == "Try again."
+
+    def test_api_error_no_status_in_body(self, app: Flask) -> None:
         """Status code must not appear in the JSON body."""
         with app.test_request_context():
-            from errors import problem
+            from errors import ApiError
 
-            resp = problem("Error", "msg", 500)
+            resp = ApiError(HTTPStatus.INTERNAL_SERVER_ERROR, "msg", "urn:mddash:internal-error").to_response()
             assert "status" not in resp.get_json()
 
     def test_flatten_string(self) -> None:
@@ -55,7 +66,7 @@ class TestRoutingErrors:
         assert resp.status_code == HTTPStatus.NOT_FOUND
         assert resp.mimetype == "application/problem+json"
         data = resp.get_json()
-        assert data["type"] == "about:blank"
+        assert data["type"] == "urn:mddash:not-found"
         assert data["title"] == "Not Found"
         assert "detail" in data
 
@@ -64,7 +75,9 @@ class TestRoutingErrors:
         resp = client.delete("/api/health")
         assert resp.status_code == HTTPStatus.METHOD_NOT_ALLOWED
         assert resp.mimetype == "application/problem+json"
-        assert resp.get_json()["title"] == "Method Not Allowed"
+        data = resp.get_json()
+        assert data["title"] == "Method Not Allowed"
+        assert data["type"] == "urn:mddash:method-not-allowed"
 
 
 class TestAuthoredErrors:
@@ -75,7 +88,7 @@ class TestAuthoredErrors:
         resp = client.get("/api/jobs/gmx/nonexistent-job-id")
         assert resp.status_code == HTTPStatus.NOT_FOUND
         data = resp.get_json()
-        assert data["type"] == "about:blank"
+        assert data["type"] == "urn:mddash:not-found"
         assert data["title"] == "Not Found"
         assert "nonexistent-job-id" in data["detail"]
 
@@ -85,6 +98,8 @@ class TestAuthoredErrors:
         assert resp.status_code == HTTPStatus.BAD_REQUEST
         data = json.loads(resp.data)
         assert data["title"] == "Bad Request"
+        assert data["type"] == "urn:mddash:validation-error"
+        assert "solution" not in data  # validation has no solution
         assert "detail" in data
         assert "tpr_name" in data["detail"] or "bucket_name" in data["detail"]
 
@@ -99,6 +114,7 @@ class TestAuthoredErrors:
         assert resp.status_code == HTTPStatus.BAD_REQUEST
         data = resp.get_json()
         assert data["title"] == "Bad Request"
+        assert data["type"] == "urn:mddash:validation-error"
         assert "np" in data["detail"]
         assert "Missing data" in data["detail"]
 
@@ -117,7 +133,9 @@ class TestUnhandledExceptions:
         assert resp.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
         data = resp.get_json()
         assert data["title"] == "Internal Server Error"
-        assert data["type"] == "about:blank"
+        assert data["type"] == "urn:mddash:internal-error"
+        assert data["solution"]  # retry/support guidance present
+        assert "instance" not in data  # no correlation-ID field
         assert "internal secret detail" not in data["detail"]
         assert "/path/to/file" not in data["detail"]
 

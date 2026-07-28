@@ -13,17 +13,23 @@ export interface ProblemDetails {
   type: string
   title: string
   detail: string
+  solution?: string
 }
 
-/** Error wrapping a problem-details response; `message` is set to `detail`. */
+/**
+ * Error wrapping a problem-details response. `message` is the toast line
+ * (`solution ?? detail ?? title`) so `toast.error(error.message)` shows the
+ * actionable line when a solution is present.
+ */
 export class ApiError extends Error {
   constructor(
     public type: string,
     public title: string,
     public status: number,
-    detail: string
+    detail: string,
+    public solution?: string
   ) {
-    super(detail)
+    super(solution ?? detail ?? "Request failed.")
     this.name = "ApiError"
   }
 }
@@ -33,7 +39,15 @@ function problemInterceptor(error: unknown) {
     const status = error.response?.status ?? 0
     const data = error.response?.data
     const p = data && typeof data === "object" ? (data as Partial<ProblemDetails>) : {}
-    return Promise.reject(new ApiError(p.type ?? "about:blank", p.title ?? "", status, p.detail ?? "Request failed."))
+    return Promise.reject(
+      new ApiError(
+        p.type ?? "urn:mddash:internal-error",
+        p.title ?? "",
+        status,
+        p.detail ?? "Request failed.",
+        p.solution
+      )
+    )
   }
   return Promise.reject(error instanceof Error ? error : new Error("Request failed."))
 }

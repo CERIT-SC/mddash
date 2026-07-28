@@ -167,7 +167,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             return (
                 HTTPStatus.NOT_FOUND,
                 {},
-                json.dumps({"type": "about:blank", "title": "Not Found", "detail": "Job not found"}),
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": "Job not found"}),
             )
 
         job_id = match.group("job_id")
@@ -177,7 +177,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             return (
                 HTTPStatus.NOT_FOUND,
                 {},
-                json.dumps({"type": "about:blank", "title": "Not Found", "detail": f"Job {job_id} not found"}),
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": f"Job {job_id} not found"}),
             )
 
         _advance_mdrun_job(job_id, job_data)
@@ -197,7 +197,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             return (
                 HTTPStatus.NOT_FOUND,
                 {},
-                json.dumps({"type": "about:blank", "title": "Not Found", "detail": "Job not found"}),
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": "Job not found"}),
             )
 
         job_id = match.group("job_id")
@@ -207,7 +207,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             return (
                 HTTPStatus.NOT_FOUND,
                 {},
-                json.dumps({"type": "about:blank", "title": "Not Found", "detail": f"Job {job_id} not found"}),
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": f"Job {job_id} not found"}),
             )
 
         _advance_mdrun_job(job_id, job_data)
@@ -839,7 +839,7 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
             return (
                 HTTPStatus.NOT_FOUND,
                 {},
-                json.dumps({"type": "about:blank", "title": "Not Found", "detail": "Project not found"}),
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": "Project not found"}),
             )
         response_body = {key: value for key, value in project.items() if key != "files"}
         return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(response_body))
@@ -851,7 +851,7 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
             return (
                 HTTPStatus.NOT_FOUND,
                 {},
-                json.dumps({"type": "about:blank", "title": "Not Found", "detail": "Project not found"}),
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": "Project not found"}),
             )
         response_body = [{"name": filename} for filename in project.get("files", [])]
         return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(response_body))
@@ -881,7 +881,7 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
                 HTTPStatus.NOT_FOUND,
                 {},
                 json.dumps({
-                    "type": "about:blank",
+                    "type": "urn:mddash:not-found",
                     "title": "Not Found",
                     "detail": f"Analysis '{analysis_name}' not found",
                 }),
