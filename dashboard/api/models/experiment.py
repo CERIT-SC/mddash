@@ -696,7 +696,7 @@ class Experiment(db.Model):  # type: ignore
                 "MDPosit publishing isn't enabled on this deployment; contact the administrator.",
             )
 
-        from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
+        from .simulation import Simulation, property_label  # ruff:ignore[import-outside-top-level]
 
         simulation = Simulation.get(self.id, simulation_path)
         simulation.require_files(["reference_structure", "run_input", "trajectory"])
@@ -717,16 +717,20 @@ class Experiment(db.Model):  # type: ignore
 
         for manifest_role, (publish_role, exts) in publish_roles.items():
             if manifest_role not in simulation.files:
-                raise BadRequest(description=f"Simulation is missing file role '{manifest_role}' for MDPosit.")
+                raise BadRequest(
+                    description=f"The simulation does not define a '{property_label(manifest_role)}' file, which MDPosit publishing requires."
+                )
 
             file_path = simulation.resolve_role(manifest_role)
             if not file_path.is_file():
-                raise BadRequest(description=f"Selected file for role '{manifest_role}' does not exist.")
+                raise BadRequest(description=f"The '{property_label(manifest_role)}' file does not exist.")
 
             extension = file_path.suffix.lstrip(".").lower()
             if extension not in exts:
                 allowed = ", ".join(sorted(exts))
-                raise BadRequest(description=f"Invalid file extension for role '{manifest_role}'. Allowed: {allowed}")
+                raise BadRequest(
+                    description=f"The '{property_label(manifest_role)}' file has an unsupported extension '.{extension}'. Allowed: {allowed}."
+                )
 
             relative_path = str(file_path.relative_to(exp_dir_resolved))
             selected_paths[publish_role] = file_path

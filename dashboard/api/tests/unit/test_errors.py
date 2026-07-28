@@ -2,7 +2,6 @@
 
 from http import HTTPStatus
 
-import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 from flask.typing import ResponseReturnValue

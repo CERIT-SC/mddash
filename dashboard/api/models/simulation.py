@@ -33,12 +33,71 @@ ROLE_LABELS: dict[str, str] = {
 }
 
 
-def _humanize_validation_message(message: str) -> str:
-    """Translate jsonschema property names in error messages to user-friendly labels."""
-    result = message
-    for role, label in ROLE_LABELS.items():
-        result = result.replace(f"'{role}'", f"'{label}'")
-    return result
+def property_label(prop: str) -> str:
+    """Human-readable label for a manifest property or file role."""
+    return ROLE_LABELS.get(prop, prop.replace("_", " ").capitalize())
+
+
+_HUMAN_TYPES: dict[str, str] = {
+    "string": "a text value",
+    "object": "a set of key/value entries",
+    "array": "a list",
+    "integer": "a whole number",
+    "number": "a number",
+    "boolean": "true or false",
+}
+
+_NAME_CHARS = "letters, numbers, '.', '_' and '-'"
+_PATH_CHARS = "letters, numbers, '/', '.', '_' and '-'"
+
+
+def _describe_validation_error(exc: jsonschema.ValidationError) -> str:
+    """
+    Describe a jsonschema failure in plain English.
+
+    Builds the message from the exception's structured fields (validator,
+    validator_value, absolute_path, instance, schema) — never by parsing
+    ``exc.message``, whose wording is not a stable API and leaks regexes
+    and jsonschema jargon to end users.
+    """
+    path = [str(p) for p in exc.absolute_path]
+    leaf = path[-1] if path else ""
+    label = property_label(leaf)
+    properties = exc.schema.get("properties", {}) if isinstance(exc.schema, dict) else {}
+
+    match exc.validator:
+        case "required":
+            missing = sorted(property_label(p) for p in set(exc.validator_value) - set(exc.instance))
+            what = "file role" if leaf == "files" else "property"
+            return f"Missing required {what}: {', '.join(repr(m) for m in missing)}."
+        case "pattern":
+            if leaf == "name":
+                return f"The simulation name {exc.instance!r} contains unsupported characters — use only {_NAME_CHARS}."
+            return (
+                f"The path for '{label}' ({exc.instance!r}) contains unsupported characters — use only {_PATH_CHARS}."
+            )
+        case "not":
+            return (
+                f"The path for '{label}' must stay inside the experiment folder — "
+                "it must not start with '/' or contain '..' or '//'."
+            )
+        case "const":
+            return f"'{label}' must be '{exc.validator_value}'."
+        case "type":
+            if leaf == "files":
+                return "'files' must map file roles to file paths."
+            human = _HUMAN_TYPES.get(str(exc.validator_value), str(exc.validator_value))
+            return f"'{label}' must be {human}."
+        case "additionalProperties":
+            extras = sorted(set(exc.instance) - set(properties))
+            allowed = sorted(repr(property_label(p)) for p in properties)
+            what = "file role" if leaf == "files" else "property"
+            return f"Unknown {what} {', '.join(repr(e) for e in extras)} — allowed values: {', '.join(allowed)}."
+        case _:
+            message = exc.message
+            for role, friendly in ROLE_LABELS.items():
+                message = message.replace(f"'{role}'", f"'{friendly}'")
+            return message
 
 
 def _safe_default_path(name: str) -> str:
@@ -49,7 +108,7 @@ def _safe_default_path(name: str) -> str:
 def _build_content(engine: Engine, payload: dict) -> dict:
     files = payload.get("files")
     if not isinstance(files, dict):
-        raise BadRequest(description="'files' must be an object.")
+        raise BadRequest(description="'files' must map file roles to file paths.")
 
     return {
         "$schema": schema_url(engine),
@@ -63,16 +122,18 @@ def _build_content(engine: Engine, payload: dict) -> dict:
 def _validate_content_or_raise(content: dict, engine: Engine) -> None:
     schema = resolve_schema_url(content.get("$schema"))
     if schema is None:
-        raise BadRequest(description="Missing or invalid '$schema' reference; expected a mddash schema URL.")
+        raise BadRequest(
+            description="The simulation file does not declare its format ('$schema' is missing or invalid), so it cannot be validated."
+        )
     try:
         jsonschema.validate(content, schema)
     except jsonschema.ValidationError as exc:
-        raise BadRequest(
-            description=f"Simulation content is invalid: {_humanize_validation_message(exc.message)}"
-        ) from exc
+        raise BadRequest(description=f"Simulation content is invalid: {_describe_validation_error(exc)}") from exc
 
     if content.get("engine") != engine.value:
-        raise BadRequest(description="Simulation engine does not match the experiment engine.")
+        raise BadRequest(
+            description=f"The simulation engine '{content.get('engine')}' does not match the experiment's '{engine.value}' engine."
+        )
 
 
 class Simulation:  # ruff:ignore[too-many-public-methods]
@@ -179,17 +240,19 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             Absolute Path to the role file.
 
         Raises:
-            BadRequest: If the role is absent or escapes the experiment directory.
+            BadRequest: If the role is absent or points outside the experiment folder.
         """
         rel = self.files.get(role)
         if not isinstance(rel, str) or not rel:
-            raise BadRequest(description=f"Simulation is missing file role '{role}'.")
+            raise BadRequest(description=f"The simulation does not define a '{property_label(role)}' file.")
         exp_dir = (DATA_DIR / self.experiment_id).resolve()
         resolved = (exp_dir / rel).resolve()
         try:
             resolved.relative_to(exp_dir)
         except ValueError as exc:
-            raise BadRequest(description=f"File role '{role}' escapes the experiment directory.") from exc
+            raise BadRequest(
+                description=f"The '{property_label(role)}' path points outside the experiment folder."
+            ) from exc
         return resolved
 
     def require_files(self, roles: list[str] | None = None) -> None:
@@ -206,7 +269,9 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if roles is not None:
             missing_files = [role for role in roles if role in self.missing_files or not self.files.get(role)]
         if missing_files:
-            raise BadRequest(description=f"Missing files for roles: {', '.join(missing_files)}")
+            raise BadRequest(
+                description=f"Missing files for: {', '.join(repr(property_label(r)) for r in missing_files)}."
+            )
 
     def mark_readonly(self) -> None:
         """Best-effort chmod the manifest read-only (0444)."""
@@ -246,7 +311,13 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             return self._validation
 
         if self._read_error:
-            self._validation = False, [f"Failed to read simulation manifest: {self._read_error}"], []
+            self._validation = (
+                False,
+                [
+                    f"This simulation file could not be read — it may have been deleted or corrupted. ({self._read_error})"
+                ],
+                [],
+            )
             return self._validation
 
         errors: list[str] = []
@@ -255,23 +326,28 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         schema = resolve_schema_url(self._raw.get("$schema"))
         if schema is None:
-            errors.append("Missing or invalid '$schema' reference; expected a mddash schema URL.")
+            errors.append(
+                "The simulation file does not declare its format ('$schema' is missing or invalid), so it cannot be validated."
+            )
         else:
             try:
                 jsonschema.validate(self._raw, schema)
             except jsonschema.ValidationError as exc:
-                errors.append(f"Schema validation failed: {_humanize_validation_message(exc.message)}")
+                errors.append(_describe_validation_error(exc))
 
         experiment = db.session.get(Experiment, self.experiment_id)
         if experiment is not None:
             sim_engine = self._raw.get("engine")
             if sim_engine != experiment.engine.value:
-                errors.append(f"Engine '{sim_engine}' does not match experiment engine '{experiment.engine.value}'.")
+                errors.append(
+                    f"The simulation engine '{sim_engine}' does not match the experiment's '{experiment.engine.value}' engine."
+                )
 
         for role, rel in resolved.items():
             if rel and rel.startswith("/"):
-                label = ROLE_LABELS.get(role, role)
-                errors.append(f"File path for '{label}' must be relative, not absolute.")
+                errors.append(
+                    f"The path for '{property_label(role)}' must be relative to the experiment folder (it must not start with '/')."
+                )
 
         missing = [role for role, rel in resolved.items() if not (exp_dir / rel).is_file()]
 

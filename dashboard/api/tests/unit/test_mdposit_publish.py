@@ -1,6 +1,7 @@
 """Unit tests for MDPosit-aware publish routing and from_repo logic."""
 
 import json
+import re
 from collections.abc import Generator
 from http import HTTPStatus
 from pathlib import Path
@@ -630,7 +631,12 @@ class TestMdpositPublishFileValidation:
             app.app_context(),
         ):
             exp = Experiment.query.get("pubsh")
-            with pytest.raises(BadRequest, match="Invalid file extension for role 'reference_structure'"):
+            with pytest.raises(
+                BadRequest,
+                match=re.escape(
+                    "The 'Reference structure' file has an unsupported extension '.txt'. Allowed: gro, pdb."
+                ),
+            ):
                 exp.publish(target="mdposit", simulation_path=sim_path)
 
     def test_route_returns_400_for_missing_simulation_path(self, app: Flask, tmp_path: Path) -> None:
