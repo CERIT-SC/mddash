@@ -3,6 +3,27 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Resolve the theme before first paint to avoid a flash of the wrong
+      // color scheme. An explicit saved choice wins; otherwise the OS
+      // color-scheme preference is followed (system theme on first load).
+      (function () {
+        try {
+          var stored = localStorage.getItem("theme");
+          var dark = stored
+            ? stored === "dark"
+            : window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var el = document.documentElement;
+          el.classList.toggle("dark", dark);
+          el.style.colorScheme = dark ? "dark" : "light";
+        } catch (e) {
+          // Privacy-restricted contexts throw on storage access. Match the
+          // React-side default (light) instead of forcing dark. No .dark class
+          // is added, so the document resolves light; only color-scheme is set.
+          document.documentElement.style.colorScheme = "light";
+        }
+      })();
+    </script>
     <title>MDDash | Virtual Research Environment for Molecular Dynamics</title>
     <meta
       name="description"

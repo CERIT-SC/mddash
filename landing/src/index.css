@@ -5,6 +5,11 @@
 :root {
   --font-body: "Inter", system-ui, sans-serif;
   --font-display: "Inter Tight", "Inter", system-ui, sans-serif;
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
 }
 
 html {
@@ -70,14 +75,10 @@ body {
     0 8px 24px color-mix(in srgb, var(--color-primary-950) 50%, transparent);
 }
 
-/* Gradient text — kept in CSS for -webkit-text-fill-color */
+/* Tertiary gradient accent text — semantic tokens only, no ramp suffixes.
+   Both tokens are theme-aware, so a single rule serves light and dark. */
 .text-gradient {
-  background: linear-gradient(
-    135deg,
-    var(--color-primary-400) 0%,
-    var(--color-primary-600) 45%,
-    var(--color-tertiary-300) 100%
-  );
+  background: linear-gradient(135deg, var(--tertiary) 0%, var(--tertiary-foreground) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
