@@ -41,7 +41,6 @@ DEFAULT_GMX_DURATION_SEC = 30.0
 DEFAULT_TUNER_MAX_TRIALS = 3
 TUNER_TRIAL_DURATION_SEC = 10.0
 # Full production simulation length (ns) and hourly rates used by demo cost estimates.
-# Resource math in _gmx_public_trial/_amber_public_trial mirrors tuner/api/pricing.py.
 DEMO_TUNER_SIM_LENGTH_NS = 250.0
 DEMO_RATE_CPU_CORE_HOUR = 0.04
 DEMO_RATE_GPU_HOUR = 3.0
@@ -945,7 +944,7 @@ def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
     job_data["log_line_index"] = int(log_total_lines * progress_ratio)
 
     if elapsed >= duration_sec:
-        job_data["status"] = "TERMINATED"
+        job_data["status"] = "FINISHED"
         job_data["performance"] = 62.5
 
         try:

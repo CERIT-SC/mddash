@@ -79,7 +79,7 @@ def test_parse_progress_returns_none_on_no_match() -> None:
 def test_mpi_run_sets_omp_num_threads(tmp_path, monkeypatch) -> None:
     """pmemd.MPI subprocess receives OMP_NUM_THREADS equal to config.ntomp."""
     monkeypatch.setattr("api.engines.amber.runner.JOBS_DIR", tmp_path / "jobs")
-    monkeypatch.setattr("api.engines.amber.runner.TPR_DIR", tmp_path)
+    monkeypatch.setattr("api.engines.amber.runner.INPUTS_DIR", tmp_path)
 
     (tmp_path / "job1_md.prmtop").write_text("")
     (tmp_path / "job1_md.inpcrd").write_text("")

@@ -93,7 +93,7 @@ export interface TunerJob {
   experiment_id: string
   engine: Engine
   simulation_path: string
-  tuner_status: TunerJobStatus | null
+  tuner_status: JobStatus | null
   error_message: string | null
   created_at: string
   is_stopped: boolean
@@ -103,7 +103,7 @@ export interface TunerJob {
 
 export interface GmxTunerTrial {
   id: string
-  status: TunerJobStatus
+  status: JobStatus
   np: number
   ntomp: number
   pme: DeviceType
@@ -115,7 +115,7 @@ export interface GmxTunerTrial {
 
 export interface AmberTunerTrial {
   id: string
-  status: TunerJobStatus
+  status: JobStatus
   np: number
   ntomp: number
   binary: AmberBinary
@@ -220,53 +220,18 @@ export function getPodStatusVariant(status: PodStatus): StatusVariant {
   }
 }
 
-export type JobStatus = "UNKNOWN" | "PENDING" | "RUNNING" | "TERMINATED" | "ERROR"
+export type JobStatus = "UNKNOWN" | "PENDING" | "RUNNING" | "FINISHED" | "ERROR"
 
 export function getJobStatusVariant(status: JobStatus): StatusVariant {
   switch (status) {
     case "UNKNOWN":
       return "secondary"
     case "RUNNING":
-      return "success"
     case "PENDING":
       return "warning"
-    case "TERMINATED":
-      return "info"
-    case "ERROR":
-      return "destructive"
-  }
-}
-
-// Tuner job/trial statuses: the tuner reports FINISHED when a trial or job
-// completes successfully. Unknown/legacy values degrade to "secondary".
-export type TunerJobStatus = "UNKNOWN" | "PENDING" | "RUNNING" | "FINISHED" | "ERROR"
-
-export function getTunerJobStatusVariant(status: string): StatusVariant {
-  switch (status) {
     case "FINISHED":
       return "success"
-    case "RUNNING":
-    case "PENDING":
-      return "warning"
     case "ERROR":
       return "destructive"
-    default:
-      return "secondary"
-  }
-}
-
-// Sort rank for tuner trial statuses: finished first, unknown/legacy last.
-export function tunerTrialRank(status: string): number {
-  switch (status) {
-    case "FINISHED":
-      return 0
-    case "RUNNING":
-      return 1
-    case "ERROR":
-      return 2
-    case "PENDING":
-      return 3
-    default:
-      return 4
   }
 }

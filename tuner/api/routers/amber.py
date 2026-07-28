@@ -11,7 +11,7 @@ from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 
 from api.auth import verify_credentials
-from api.config import MAX_UPLOAD_SIZE, TPR_DIR
+from api.config import INPUTS_DIR, MAX_UPLOAD_SIZE
 from api.db.operations import get_job, get_trials_by_job_id
 from api.engines.amber.config import AmberTrialConfig
 from api.engines.amber.engine import AmberEngine
@@ -63,9 +63,9 @@ async def create_amber_tuning_job(
 
     job_id = str(uuid.uuid4())
     try:
-        await run_in_threadpool(save_upload, prmtop, TPR_DIR / f"{job_id}_md.prmtop")
-        await run_in_threadpool(save_upload, inpcrd, TPR_DIR / f"{job_id}_md.inpcrd")
-        await run_in_threadpool(save_upload, mdin, TPR_DIR / f"{job_id}_md.mdin")
+        await run_in_threadpool(save_upload, prmtop, INPUTS_DIR / f"{job_id}_md.prmtop")
+        await run_in_threadpool(save_upload, inpcrd, INPUTS_DIR / f"{job_id}_md.inpcrd")
+        await run_in_threadpool(save_upload, mdin, INPUTS_DIR / f"{job_id}_md.mdin")
         submit_tuning_job(job_id, AmberEngine(), MDEngine.AMBER, extra_args=sanitized_args, nsteps=nsteps)
     except Exception as e:
         logger.exception("Failed to create AMBER tuning job %s", job_id)

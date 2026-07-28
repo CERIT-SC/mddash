@@ -436,7 +436,7 @@ def get_job_status(ns: str, name: str) -> JobStatus:
         name: Name of the job to check.
 
     Returns:
-        Current status of the job (PENDING, RUNNING, TERMINATED, ERROR, or UNKNOWN).
+        Current status of the job (PENDING, RUNNING, FINISHED, ERROR, or UNKNOWN).
     """
     try:
         job = cast("V1Job", batch_v1.read_namespaced_job(name=name, namespace=ns))
@@ -444,12 +444,12 @@ def get_job_status(ns: str, name: str) -> JobStatus:
         if job.status and job.status.conditions:
             for condition in job.status.conditions:
                 if condition.type == "Complete" and condition.status == "True":
-                    return JobStatus.TERMINATED
+                    return JobStatus.FINISHED
                 if condition.type == "Failed" and condition.status == "True":
                     return JobStatus.ERROR
 
         if job.status and job.status.succeeded and job.status.succeeded > 0:
-            return JobStatus.TERMINATED
+            return JobStatus.FINISHED
         if job.status and job.status.failed and job.status.failed > 0:
             return JobStatus.ERROR
         if job.status and job.status.active and job.status.active > 0:

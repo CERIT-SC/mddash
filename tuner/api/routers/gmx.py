@@ -11,7 +11,7 @@ from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 
 from api.auth import verify_credentials
-from api.config import MAX_UPLOAD_SIZE, TPR_DIR
+from api.config import INPUTS_DIR, MAX_UPLOAD_SIZE
 from api.db.operations import get_job, get_trials_by_job_id
 from api.engines.gmx.config import GmxTrialConfig
 from api.engines.gmx.engine import GmxEngine
@@ -50,7 +50,7 @@ async def create_gmx_tuning_job(
 
     job_id = str(uuid.uuid4())
     try:
-        await run_in_threadpool(save_upload, file, TPR_DIR / f"{job_id}_md.tpr")
+        await run_in_threadpool(save_upload, file, INPUTS_DIR / f"{job_id}_md.tpr")
         submit_tuning_job(job_id, GmxEngine(), MDEngine.GMX, extra_args=sanitized_args, nsteps=nsteps)
     except Exception as e:
         logger.exception("Failed to create GMX tuning job %s", job_id)

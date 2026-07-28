@@ -16,7 +16,7 @@ EXPECTED_LOOP_POLLS = 2
 def test_poll_once_updates_active_jobs_only(app, db_session: Session, mocker) -> None:
     """One-shot polling should touch only active jobs."""
     active_job = MdrunJob(id="active", job_name="mdrun-active", experiment_id="exp1", last_status=JobStatus.RUNNING)
-    done_job = MdrunJob(id="done", job_name="mdrun-done", experiment_id="exp2", last_status=JobStatus.TERMINATED)
+    done_job = MdrunJob(id="done", job_name="mdrun-done", experiment_id="exp2", last_status=JobStatus.FINISHED)
     db_session.add_all([active_job, done_job])
     db_session.commit()
     status = mocker.patch.object(MdrunJob, "status", new_callable=PropertyMock, return_value=JobStatus.RUNNING)

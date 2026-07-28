@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from api.config import TPR_DIR
+from api.config import INPUTS_DIR
 from api.engines.gmx.config import GmxTrialConfig, NBMode, PMEMode
 from api.engines.gmx.runner import run_mdrun
 from api.engines.gmx.tprinfo import simulation_length_ns as tpr_simulation_length_ns
@@ -47,4 +47,4 @@ class GmxEngine:
 
     def simulation_length_ns(self, job_id: str) -> float | None:
         """Extract nsteps * delta_t from the job's .tpr via `gmx dump` on a Ray worker."""
-        return tpr_simulation_length_ns(str(TPR_DIR / f"{job_id}_md.tpr"))
+        return tpr_simulation_length_ns(str(INPUTS_DIR / f"{job_id}_md.tpr"))

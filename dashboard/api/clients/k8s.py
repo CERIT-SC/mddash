@@ -683,7 +683,7 @@ def get_job_status(name: str) -> JobStatus:
         name: The name of the job.
 
     Returns:
-        JobStatus: The current status (RUNNING, PENDING, TERMINATED, ERROR, or UNKNOWN).
+        JobStatus: The current status (RUNNING, PENDING, FINISHED, ERROR, or UNKNOWN).
     """
     try:
         batch_v1 = get_batch_v1()
@@ -695,12 +695,12 @@ def get_job_status(name: str) -> JobStatus:
         if job.status.conditions:
             for condition in job.status.conditions:
                 if condition.type == "Complete" and condition.status == "True":
-                    return JobStatus.TERMINATED
+                    return JobStatus.FINISHED
                 if condition.type == "Failed" and condition.status == "True":
                     return JobStatus.ERROR
 
         if job.status.succeeded and job.status.succeeded > 0:
-            return JobStatus.TERMINATED
+            return JobStatus.FINISHED
         if job.status.failed and job.status.failed > 0:
             return JobStatus.ERROR
         if job.status.active and job.status.active > 0:
@@ -758,7 +758,7 @@ def wait_for_job(
             start_time = time.time()
             while time.time() - start_time < timeout:
                 status = get_job_status(name)
-                if status == JobStatus.TERMINATED:
+                if status == JobStatus.FINISHED:
                     on_success()
                     return
                 if status == JobStatus.ERROR:

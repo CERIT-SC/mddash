@@ -23,7 +23,6 @@ class Job(Base):
     engine: Mapped[MDEngine] = mapped_column(Enum(MDEngine, native_enum=False), nullable=False, index=True)
     status: Mapped[JobStatus] = mapped_column(Enum(JobStatus, native_enum=False), nullable=False, index=True)
     error: Mapped[str | None] = mapped_column(String, nullable=True)
-    # full production simulation length (ns) from the original input files
     sim_length_ns: Mapped[float | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(

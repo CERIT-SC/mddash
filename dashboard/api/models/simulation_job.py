@@ -71,7 +71,7 @@ class SimulationJob(db.Model):  # type: ignore
         """
         # Terminal states never change — skip fetch
         if self._last_known_status is not None and self._last_known_status in {
-            JobStatus.TERMINATED,
+            JobStatus.FINISHED,
             JobStatus.ERROR,
         }:
             return self._last_known_status

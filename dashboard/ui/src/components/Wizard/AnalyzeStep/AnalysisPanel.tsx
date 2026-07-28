@@ -186,7 +186,7 @@ const AnalysisPanel = ({
     return filtered.reduce((latest, job) => (new Date(job.created_at) > new Date(latest.created_at) ? job : latest))
   }, [jobs, selectedAnalysis])
 
-  const completedWithNoResult = lastJobForAnalysis?.status === "TERMINATED" && !hasResult
+  const completedWithNoResult = lastJobForAnalysis?.status === "FINISHED" && !hasResult
   const failedJobForAnalysis = !activeJob && lastJobForAnalysis?.status === "ERROR"
 
   const [showLogs, setShowLogs] = useState(false)

@@ -7,9 +7,6 @@ class JobStatus(str, Enum):
     UNKNOWN = "UNKNOWN"
     PENDING = "PENDING"
     RUNNING = "RUNNING"
-    # MDRun/analysis jobs report TERMINATED on success.
-    TERMINATED = "TERMINATED"
-    # Tuner jobs and trials report FINISHED on success (successor of TERMINATED).
     FINISHED = "FINISHED"
     ERROR = "ERROR"
 

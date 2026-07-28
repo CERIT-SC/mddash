@@ -13,7 +13,7 @@ Manage GROMACS and AMBER molecular dynamics simulation jobs on Kubernetes with a
 
 - **SQLite WAL needs a block-device-backed filesystem**: the `/data` PVC MUST use a block storage class (currently `csi-ceph-rbd-du`, set in `config.yaml`), never NFS — or commits fail with `sqlite3.OperationalError: disk I/O error`. `storageClassName` is immutable on an existing PVC, so switching classes requires deleting and recreating it.
 - **On-demand status**: `MdrunJob.status` queries Kubernetes on every access — cache results if polling frequently.
-- **Delete ordering**: delete K8s resources before committing the DB deletion. If K8s cleanup fails, the DB record stays so the job can be retried/cleaned later. TERMINATED/ERROR jobs are auto-deleted from K8s but preserved in DB.
+- **Delete ordering**: delete K8s resources before committing the DB deletion. If K8s cleanup fails, the DB record stays so the job can be retried/cleaned later. FINISHED/ERROR jobs are auto-deleted from K8s but preserved in DB.
 - **Input sanitization**: all user inputs MUST pass through `sanitization.py` to prevent shell injection in K8s job manifests.
 - **Case-insensitive enums**: `from_string` on all enums (`DeviceType`, `AmberBinary`, `EwaldPreset`, `JobStatus`) is case-insensitive — `PMEMD.CUDA` and `pmemd.cuda` are equivalent.
 - **S3 + GPU**: `S3_ENDPOINT`/`S3_ACCESS_KEY`/`S3_SECRET_KEY` must be set or the API logs errors on startup. GPU resource type comes from `GPU_TYPE` (set via `gpuType` in config.yaml); defaults to empty if unset.

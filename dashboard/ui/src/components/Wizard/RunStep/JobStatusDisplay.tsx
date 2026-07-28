@@ -51,7 +51,7 @@ const JobStatusDisplay = ({ jobStatus, actions }: JobStatusDisplayProps) => {
       </div>
 
       {/* Job summary (after completion) */}
-      {jobStatus.status === "TERMINATED" && (
+      {jobStatus.status === "FINISHED" && (
         <>
           <h3 className="text-sm font-semibold">Job Summary</h3>
           <div className="grid grid-cols-2 gap-2">

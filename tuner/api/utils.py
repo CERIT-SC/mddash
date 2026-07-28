@@ -15,7 +15,7 @@ from typing import Any, Literal
 import ray
 from fastapi import UploadFile
 
-from api.config import JOBS_DIR, TPR_DIR
+from api.config import INPUTS_DIR, JOBS_DIR
 from api.schemas.common import ResourcesResponse
 
 logger = logging.getLogger(__name__)
@@ -37,10 +37,10 @@ def save_upload(file: UploadFile, dest: Path) -> None:
 def cleanup_job_files(job_id: str) -> None:
     """Remove all temporary files associated with a job ID."""
     files_to_remove = [
-        TPR_DIR / f"{job_id}_md.tpr",
-        TPR_DIR / f"{job_id}_md.prmtop",
-        TPR_DIR / f"{job_id}_md.inpcrd",
-        TPR_DIR / f"{job_id}_md.mdin",
+        INPUTS_DIR / f"{job_id}_md.tpr",
+        INPUTS_DIR / f"{job_id}_md.prmtop",
+        INPUTS_DIR / f"{job_id}_md.inpcrd",
+        INPUTS_DIR / f"{job_id}_md.mdin",
     ]
     for f in files_to_remove:
         if f.exists():

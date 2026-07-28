@@ -3,7 +3,7 @@
 import logging
 from dataclasses import dataclass
 
-from api.config import TPR_DIR
+from api.config import INPUTS_DIR
 from api.engines.amber.config import AmberTrialConfig
 from api.engines.amber.mdin import simulation_length_ns as mdin_simulation_length_ns
 from api.engines.amber.runner import run_pmemd
@@ -46,7 +46,7 @@ class AmberEngine:
     def simulation_length_ns(self, job_id: str) -> float | None:
         """Parse nstlim * dt from the job's original uploaded mdin file."""
         try:
-            content = (TPR_DIR / f"{job_id}_md.mdin").read_text(encoding="utf-8", errors="replace")
+            content = (INPUTS_DIR / f"{job_id}_md.mdin").read_text(encoding="utf-8", errors="replace")
         except OSError:
             logger.warning("Could not read mdin for job %s", job_id)
             return None

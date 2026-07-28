@@ -17,8 +17,8 @@ from api.config import (
     EARLY_STOP_THRESHOLD,
     EARLY_STOP_WARMUP_SECONDS,
     EARLY_STOP_WARMUP_STEPS,
+    INPUTS_DIR,
     JOBS_DIR,
-    TPR_DIR,
 )
 from api.engines.gmx.config import GmxTrialConfig, PMEMode
 from api.utils import tail
@@ -49,7 +49,7 @@ def run_mdrun(
         Tuple of (performance_ns_day, steps_per_sec, early_stopped).
         Returns (0.0, 0.0, False) on failure.
     """
-    tpr_path = str(TPR_DIR / f"{job_id}_md.tpr")
+    tpr_path = str(INPUTS_DIR / f"{job_id}_md.tpr")
     trial_dir = JOBS_DIR / job_id / trial_id
     trial_dir.mkdir(parents=True, exist_ok=True)
 
