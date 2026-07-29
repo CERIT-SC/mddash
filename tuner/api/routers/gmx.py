@@ -19,7 +19,7 @@ from api.rayworker import submit_tuning_job, sync_job_status
 from api.routers._shared import register_job_management_routes
 from api.schemas.common import JobCreatedResponse, JobStatus, MDEngine
 from api.schemas.gmx import GmxJobStatusResponse, GmxTrialResponse
-from api.utils import GMX_FORBIDDEN_FLAGS, cleanup_job_files, sanitize_extra_args, save_upload
+from api.utils import GMX_FORBIDDEN_FLAGS, cleanup_job_files, extract_nsteps_override, sanitize_extra_args, save_upload
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -39,7 +39,8 @@ async def create_gmx_tuning_job(
         HTTPException: 400/413 on invalid input, 500 on submission failure.
     """
     try:
-        sanitized_args = sanitize_extra_args(extra_args, GMX_FORBIDDEN_FLAGS)
+        benchmark_args, nsteps_override = extract_nsteps_override(extra_args)
+        sanitized_args = sanitize_extra_args(benchmark_args, GMX_FORBIDDEN_FLAGS)
     except (ValidationError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -51,7 +52,9 @@ async def create_gmx_tuning_job(
     job_id = str(uuid.uuid4())
     try:
         await run_in_threadpool(save_upload, file, INPUTS_DIR / f"{job_id}_md.tpr")
-        submit_tuning_job(job_id, GmxEngine(), MDEngine.GMX, extra_args=sanitized_args, nsteps=nsteps)
+        submit_tuning_job(
+            job_id, GmxEngine(), MDEngine.GMX, extra_args=sanitized_args, nsteps=nsteps, nsteps_override=nsteps_override
+        )
     except Exception as e:
         logger.exception("Failed to create GMX tuning job %s", job_id)
         await run_in_threadpool(cleanup_job_files, job_id)

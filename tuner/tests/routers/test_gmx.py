@@ -41,6 +41,30 @@ class TestCreateGmxTuningJob:
         )
         assert response.status_code == 401
 
+    @patch("api.routers.gmx.submit_tuning_job")
+    def test_nsteps_override_forwarded(self, mock_submit) -> None:
+        mock_submit.return_value = "test-job-id"
+        response = client.post(
+            "/api/tuning-jobs/gmx",
+            auth=AUTH,
+            files={"file": ("md.tpr", _fake_tpr(), "application/octet-stream")},
+            data={"extra_args": "-pin on -nsteps 500000"},
+        )
+        assert response.status_code == 201
+        assert mock_submit.call_args.kwargs["extra_args"] == "-pin on"
+        assert mock_submit.call_args.kwargs["nsteps_override"] == 500000
+
+    @patch("api.routers.gmx.submit_tuning_job")
+    def test_invalid_nsteps_override_rejected(self, mock_submit) -> None:
+        response = client.post(
+            "/api/tuning-jobs/gmx",
+            auth=AUTH,
+            files={"file": ("md.tpr", _fake_tpr(), "application/octet-stream")},
+            data={"extra_args": "-nsteps 0"},
+        )
+        assert response.status_code == 400
+        mock_submit.assert_not_called()
+
 
 class TestGetGmxStatus:
     @patch("api.routers.gmx.get_job")

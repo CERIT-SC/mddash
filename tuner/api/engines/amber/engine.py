@@ -43,8 +43,8 @@ class AmberEngine:
         )
         return TrialResult(performance=perf, steps_per_sec=sps, early_stopped=early)
 
-    def simulation_length_ns(self, job_id: str) -> float | None:
-        """Parse nstlim * dt from the job's original uploaded mdin file."""
+    def simulation_length_ns(self, job_id: str, nsteps_override: int | None = None) -> float | None:  # ruff: ignore[unused-method-argument]
+        """Parse nstlim * dt from the job's original uploaded mdin file (pmemd has no step-count CLI override)."""
         try:
             content = (INPUTS_DIR / f"{job_id}_md.mdin").read_text(encoding="utf-8", errors="replace")
         except OSError:

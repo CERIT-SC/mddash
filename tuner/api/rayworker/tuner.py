@@ -205,7 +205,9 @@ def _process_trial_results(
     return new_best
 
 
-def _run_tuning_async(job_id: str, engine: Engine, extra_args: str = "", nsteps: int = 25_000) -> None:
+def _run_tuning_async(
+    job_id: str, engine: Engine, extra_args: str = "", nsteps: int = 25_000, nsteps_override: int | None = None
+) -> None:
     pending_trial_ids: list[int] = []
     try:
         # Create trial records before connecting to Ray so GET returns them immediately.
@@ -220,7 +222,7 @@ def _run_tuning_async(job_id: str, engine: Engine, extra_args: str = "", nsteps:
 
         # Full production simulation length for time/cost estimates; failure only degrades estimates.
         try:
-            update_job_sim_length(job_id, engine.simulation_length_ns(job_id))
+            update_job_sim_length(job_id, engine.simulation_length_ns(job_id, nsteps_override))
         except Exception:
             logger.warning("Failed to extract simulation length for job %s", job_id, exc_info=True)
 
@@ -264,10 +266,13 @@ def submit_tuning_job(
     md_engine: MDEngine,
     extra_args: str = "",
     nsteps: int = 25_000,
+    nsteps_override: int | None = None,
 ) -> str:
     """Submit a tuning job for any engine."""
     create_job(job_id, md_engine)
-    thread = threading.Thread(target=_run_tuning_async, args=(job_id, engine, extra_args, nsteps), daemon=True)
+    thread = threading.Thread(
+        target=_run_tuning_async, args=(job_id, engine, extra_args, nsteps, nsteps_override), daemon=True
+    )
     _job_context.add_job(job_id, thread)
     thread.start()
     logger.info("Submitted tuning job %s (engine=%s)", job_id, md_engine.value)

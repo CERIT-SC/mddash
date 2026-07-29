@@ -42,6 +42,11 @@ class Engine(Protocol):
         """Execute a single trial and return its performance result."""
         ...
 
-    def simulation_length_ns(self, job_id: str) -> float | None:
-        """Production simulation length (ns) from the original input files; None if unknown."""
+    def simulation_length_ns(self, job_id: str, nsteps_override: int | None = None) -> float | None:
+        """
+        Production simulation length (ns) from the original input files; None if unknown.
+
+        Engines with a step-count CLI override (GMX mdrun -nsteps) apply it over the
+        input file's step count; engines without one (AMBER pmemd) ignore the value.
+        """
         ...

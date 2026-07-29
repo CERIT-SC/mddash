@@ -27,6 +27,6 @@ class GmxJobStatusResponse(BaseModel):
     id: str
     status: JobStatus
     error: str | None
-    # full production simulation length (ns) extracted from the original tpr
+    # full production simulation length (ns): from the original tpr, or the extra_args -nsteps override
     sim_length_ns: float | None
     trials: list[GmxTrialResponse]
