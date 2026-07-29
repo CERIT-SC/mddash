@@ -2,18 +2,17 @@ import { useCallback, useMemo, useState } from "react"
 
 import { Loader2, Star, Terminal } from "lucide-react"
 
-import { statusBadgeClass } from "@/lib/status"
 import { cn } from "@/lib/utils"
 import { formatCost, formatDuration } from "@/util/helpers"
-import { getJobStatusVariant, type JobStatus, type GmxTunerTrial as TunerTrial } from "@/util/types"
+import { type JobStatus, type GmxTunerTrial as TunerTrial } from "@/util/types"
 import { useTunerTrialLogs } from "@/hooks/use-tuner"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import { JobStatusChip } from "@/components/JobStatusChip"
 import LogsView from "@/components/LogsView"
 
 interface TunerTableProps {
@@ -149,7 +148,6 @@ const TunerTable = (props: TunerTableProps) => {
           <TableBody>
             {sortedRows.map((row, idx) => {
               const isOptimal = idx === 0 && row.performance !== null
-              const variant = getJobStatusVariant(row.status as JobStatus)
               return (
                 <TableRow key={row.id} className={cn(isOptimal && "bg-primary/5 dark:bg-primary/10")}>
                   <TableCell className="relative">
@@ -178,9 +176,7 @@ const TunerTable = (props: TunerTableProps) => {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
-                      <Badge variant="outline" className={cn("text-xs", statusBadgeClass(variant))}>
-                        {row.status}
-                      </Badge>
+                      <JobStatusChip status={row.status as JobStatus} />
                       {row.status === "ERROR" && !tunerStopped && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -199,7 +195,7 @@ const TunerTable = (props: TunerTableProps) => {
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
-                    {row.performance !== null ? row.performance.toFixed(2) : "N/A"}
+                    {row.performance !== null ? row.performance.toFixed(2) : "—"}
                   </TableCell>
                   <TableCell className="text-right">
                     {row.estimated_time === null ? "—" : formatDuration(row.estimated_time * 3600)}

@@ -1,4 +1,4 @@
-import type { StatusVariant } from "@/util/types"
+import { getJobStatusVariant, type JobStatus, type StatusVariant } from "@/util/types"
 
 export function statusBadgeClass(variant: StatusVariant): string {
   switch (variant) {
@@ -15,4 +15,15 @@ export function statusBadgeClass(variant: StatusVariant): string {
     default:
       return ""
   }
+}
+
+export function isActiveJobStatus(status: JobStatus): boolean {
+  return status === "PENDING" || status === "RUNNING"
+}
+
+export function jobStatusBadgeClass(status: JobStatus): string {
+  if (status === "PENDING") {
+    return "border-yellow-400 bg-transparent text-yellow-700 dark:border-yellow-600 dark:text-yellow-300"
+  }
+  return statusBadgeClass(getJobStatusVariant(status))
 }
