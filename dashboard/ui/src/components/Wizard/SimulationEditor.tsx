@@ -96,22 +96,24 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
     }
   }, [selected, engine])
 
-  // Simple autofill: derive name, trajectory, and run_structure from run input path.
+  // AMBER writes outputs next to its control file; GROMACS writes them next to its run input.
   useEffect(() => {
-    if (isEditing || !runInput) return
+    const outputInput = engine === Engine.GMX ? runInput : control
+    if (isEditing || !outputInput) return
 
-    const base = stem(runInput)
-    const dir = dirname(runInput)
+    const base = stem(outputInput)
+    const dir = dirname(outputInput)
     if (!name) setName(base)
-    if (!trajectory) setTrajectory(joinPath(dir, `${base}.xtc`))
-    if (!runStructure) setRunStructure(joinPath(dir, `${base}.gro`))
+    if (!trajectory) setTrajectory(joinPath(dir, `${base}.${engine === Engine.GMX ? "xtc" : "nc"}`))
+    if (engine === Engine.GMX && !runStructure) setRunStructure(joinPath(dir, `${base}.gro`))
     if (!referenceStructure) setReferenceStructure(`analysis/${base}-reference.gro`)
-  }, [runInput, isEditing]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [runInput, control, isEditing, engine]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const buildFiles = useMemo(() => {
     const files: Record<string, string> = {}
     if (engine === Engine.GMX) {
       files.run_input = runInput
+      if (runStructure) files.run_structure = runStructure
     } else {
       files.topology = runInput
       files.coordinates = coordinates
@@ -119,7 +121,6 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
     }
     if (referenceStructure) files.reference_structure = referenceStructure
     if (trajectory) files.trajectory = trajectory
-    if (runStructure) files.run_structure = runStructure
     return files
   }, [runInput, coordinates, control, referenceStructure, trajectory, runStructure, engine])
 
