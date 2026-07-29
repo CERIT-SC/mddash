@@ -234,45 +234,47 @@ export function TokenPage() {
             {tokens.length === 0 ? (
               <P className="text-text-muted">You have no API tokens.</P>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Note</TableHead>
-                    <TableHead>Last used</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead>Expires</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {tokens.map((t) => (
-                    <TableRow key={t.id}>
-                      <TableCell>
-                        <div className="font-medium">{t.note || "(no note)"}</div>
-                        {t.scopes?.length ? (
-                          <details>
-                            <summary className="text-text-muted cursor-pointer text-xs">scopes</summary>
-                            {t.scopes.map((s) => (
-                              <code key={s} className="bg-surface mr-1 rounded px-1 py-0.5 font-mono text-xs">
-                                {s}
-                              </code>
-                            ))}
-                          </details>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>{formatTime(t.last_activity)}</TableCell>
-                      <TableCell>{t.created ? formatTime(t.created) : "N/A"}</TableCell>
-                      <TableCell>{formatTime(t.expires_at)}</TableCell>
-                      <TableCell>
-                        <Button size="sm" variant="error" onClick={() => revokeToken(t.id)}>
-                          <Trash2 size={14} />
-                          Revoke
-                        </Button>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Note</TableHead>
+                      <TableHead>Last used</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead>Expires</TableHead>
+                      <TableHead />
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {tokens.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell>
+                          <div className="font-medium">{t.note || "(no note)"}</div>
+                          {t.scopes?.length ? (
+                            <details>
+                              <summary className="text-text-muted cursor-pointer text-xs">scopes</summary>
+                              {t.scopes.map((s) => (
+                                <code key={s} className="bg-surface mr-1 rounded px-1 py-0.5 font-mono text-xs">
+                                  {s}
+                                </code>
+                              ))}
+                            </details>
+                          ) : null}
+                        </TableCell>
+                        <TableCell>{formatTime(t.last_activity)}</TableCell>
+                        <TableCell>{t.created ? formatTime(t.created) : "N/A"}</TableCell>
+                        <TableCell>{formatTime(t.expires_at)}</TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="error" onClick={() => revokeToken(t.id)}>
+                            <Trash2 size={14} />
+                            Revoke
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -286,42 +288,44 @@ export function TokenPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Application</TableHead>
-                    <TableHead>Permissions</TableHead>
-                    <TableHead>Last used</TableHead>
-                    <TableHead>First authorized</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {cfg.oauthClients.map((c) => (
-                    <TableRow key={c.tokenId}>
-                      <TableCell>{c.description}</TableCell>
-                      <TableCell>
-                        <details>
-                          <summary className="text-text-muted cursor-pointer text-xs">scopes</summary>
-                          {c.scopes.map((s) => (
-                            <code key={s} className="bg-surface mr-1 rounded px-1 py-0.5 font-mono text-xs">
-                              {s}
-                            </code>
-                          ))}
-                        </details>
-                      </TableCell>
-                      <TableCell>{formatTime(c.lastActivity)}</TableCell>
-                      <TableCell>{formatTime(c.created)}</TableCell>
-                      <TableCell>
-                        <Button size="sm" variant="error" onClick={() => revokeToken(c.tokenId)}>
-                          <Trash2 size={14} />
-                          Revoke
-                        </Button>
-                      </TableCell>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Application</TableHead>
+                      <TableHead>Permissions</TableHead>
+                      <TableHead>Last used</TableHead>
+                      <TableHead>First authorized</TableHead>
+                      <TableHead />
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {cfg.oauthClients.map((c) => (
+                      <TableRow key={c.tokenId}>
+                        <TableCell>{c.description}</TableCell>
+                        <TableCell>
+                          <details>
+                            <summary className="text-text-muted cursor-pointer text-xs">scopes</summary>
+                            {c.scopes.map((s) => (
+                              <code key={s} className="bg-surface mr-1 rounded px-1 py-0.5 font-mono text-xs">
+                                {s}
+                              </code>
+                            ))}
+                          </details>
+                        </TableCell>
+                        <TableCell>{formatTime(c.lastActivity)}</TableCell>
+                        <TableCell>{formatTime(c.created)}</TableCell>
+                        <TableCell>
+                          <Button size="sm" variant="error" onClick={() => revokeToken(c.tokenId)}>
+                            <Trash2 size={14} />
+                            Revoke
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         ) : null}

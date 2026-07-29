@@ -137,112 +137,118 @@ export function AdminPage() {
             ) : users.length === 0 ? (
               <p className="text-text-muted text-sm">No users found.</p>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Admin</TableHead>
-                    <TableHead>Server</TableHead>
-                    <TableHead>Last activity</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users.map((user) => {
-                    const status = serverStatus(user)
-                    const serverUrl = `${cfg.baseUrl}user/${encodeURIComponent(user.name)}/`
-                    const busy = busyRow === user.name
-                    return (
-                      <TableRow key={user.name}>
-                        <TableCell className="font-medium">{user.name}</TableCell>
-                        <TableCell>
-                          <Switch
-                            checked={user.admin}
-                            disabled={busy}
-                            aria-label={`Admin rights for ${user.name}`}
-                            onCheckedChange={(checked) =>
-                              run(user.name, () => api.editUser(user.name, { admin: checked }), `Updated ${user.name}.`)
-                            }
-                          />
-                        </TableCell>
-                        <TableCell>
-                          {status === "running" ? (
-                            <span className="flex items-center gap-2">
-                              <span className="bg-success inline-block size-2 rounded-full" />
-                              Running
-                              <a className="text-primary text-xs underline" href={serverUrl}>
-                                open
-                              </a>
-                            </span>
-                          ) : status === "starting" ? (
-                            "Starting…"
-                          ) : status === "stopping" ? (
-                            "Stopping…"
-                          ) : (
-                            <span className="text-text-muted">Stopped</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-text-muted text-sm">{formatTime(user.last_activity)}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap items-center gap-1">
-                            {status === "running" || status === "starting" ? (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={busy}
-                                onClick={() =>
-                                  run(user.name, () => api.stopServer(user.name), `Stopping ${user.name}…`)
-                                }
-                              >
-                                <Square size={12} />
-                                Stop
-                              </Button>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Admin</TableHead>
+                      <TableHead>Server</TableHead>
+                      <TableHead>Last activity</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {users.map((user) => {
+                      const status = serverStatus(user)
+                      const serverUrl = `${cfg.baseUrl}user/${encodeURIComponent(user.name)}/`
+                      const busy = busyRow === user.name
+                      return (
+                        <TableRow key={user.name}>
+                          <TableCell className="font-medium">{user.name}</TableCell>
+                          <TableCell>
+                            <Switch
+                              checked={user.admin}
+                              disabled={busy}
+                              aria-label={`Admin rights for ${user.name}`}
+                              onCheckedChange={(checked) =>
+                                run(
+                                  user.name,
+                                  () => api.editUser(user.name, { admin: checked }),
+                                  `Updated ${user.name}.`
+                                )
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {status === "running" ? (
+                              <span className="flex items-center gap-2">
+                                <span className="bg-success inline-block size-2 rounded-full" />
+                                Running
+                                <a className="text-primary text-xs underline" href={serverUrl}>
+                                  open
+                                </a>
+                              </span>
+                            ) : status === "starting" ? (
+                              "Starting…"
+                            ) : status === "stopping" ? (
+                              "Stopping…"
                             ) : (
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                disabled={busy || status === "stopping"}
-                                onClick={() =>
-                                  run(user.name, () => api.startServer(user.name), `Starting ${user.name}…`)
-                                }
-                              >
-                                <Play size={12} />
-                                Start
-                              </Button>
+                              <span className="text-text-muted">Stopped</span>
                             )}
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button size="sm" variant="error" disabled={busy}>
-                                  <Trash2 size={12} />
-                                  Delete
+                          </TableCell>
+                          <TableCell className="text-text-muted text-sm">{formatTime(user.last_activity)}</TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap items-center gap-1">
+                              {status === "running" || status === "starting" ? (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={busy}
+                                  onClick={() =>
+                                    run(user.name, () => api.stopServer(user.name), `Stopping ${user.name}…`)
+                                  }
+                                >
+                                  <Square size={12} />
+                                  Stop
                                 </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Delete user {user.name}?</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    The account and any stopped servers will be removed. User data on the PVC is kept.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() =>
-                                      run(user.name, () => api.deleteUser(user.name), `User ${user.name} deleted.`)
-                                    }
-                                  >
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={busy || status === "stopping"}
+                                  onClick={() =>
+                                    run(user.name, () => api.startServer(user.name), `Starting ${user.name}…`)
+                                  }
+                                >
+                                  <Play size={12} />
+                                  Start
+                                </Button>
+                              )}
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button size="sm" variant="error" disabled={busy}>
+                                    <Trash2 size={12} />
                                     Delete
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete user {user.name}?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      The account and any stopped servers will be removed. User data on the PVC is kept.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() =>
+                                        run(user.name, () => api.deleteUser(user.name), `User ${user.name} deleted.`)
+                                      }
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
