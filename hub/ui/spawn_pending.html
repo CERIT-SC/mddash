@@ -11,12 +11,12 @@
     <title>Starting your server · MDDash</title>
     <script>
       window.appConfig = {
-        baseUrl: {{ base_url | tojson }},
+        baseUrl: {{ base_url | default("") | tojson }},
         userName: {{ user.name | tojson }},
-        logoutUrl: {{ logout_url | tojson }},
-        adminAccess: {{ admin_access | tojson }},
+        logoutUrl: {{ logout_url | default("") | tojson }},
+        adminAccess: {{ admin_access | default(false) | tojson }},
         announcement: {{ announcement | default(none) | tojson }},
-        progressUrl: {{ progress_url | tojson }}
+        progressUrl: {{ progress_url | default("") | tojson }}
       };
     </script>
   </head>

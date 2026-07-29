@@ -11,10 +11,10 @@
     <title>Logged out · MDDash</title>
     <script>
       window.appConfig = {
-        baseUrl: {{ base_url | tojson }},
-        loginUrl: {{ login_url | tojson }},
+        baseUrl: {{ base_url | default("") | tojson }},
+        loginUrl: {{ login_url | default("") | tojson }},
         {% if announcement_logout is string %}
-        announcement: {{ announcement_logout | tojson }}
+        announcement: {{ announcement_logout | default(none) | tojson }}
         {% else %}
         announcement: {{ announcement | default(none) | tojson }}
         {% endif %}

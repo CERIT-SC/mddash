@@ -11,12 +11,12 @@
     <title>Authorize access · MDDash</title>
     <script>
       window.appConfig = {
-        baseUrl: {{ base_url | tojson }},
-        xsrf: {{ xsrf | tojson }},
+        baseUrl: {{ base_url | default("") | tojson }},
+        xsrf: {{ xsrf | default("") | tojson }},
         clientDescription: {{ oauth_client.description | default("") | tojson }},
         redirectUri: {{ oauth_client.redirect_uri | default("") | tojson }},
-        allowedScopes: {{ allowed_scopes | tojson }},
-        scopeDescriptions: {{ scope_descriptions | tojson }}
+        allowedScopes: {{ allowed_scopes | default([]) | tojson }},
+        scopeDescriptions: {{ scope_descriptions | default([]) | tojson }}
       };
     </script>
   </head>

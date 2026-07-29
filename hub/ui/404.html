@@ -11,7 +11,7 @@
     <title>404 · MDDash</title>
     <script>
       window.appConfig = {
-        baseUrl: {{ base_url | tojson }},
+        baseUrl: {{ base_url | default("") | tojson }},
         statusCode: 404,
         statusMessage: {{ status_message | default("Not Found") | tojson }},
         message: {{ message | default(none) | tojson }},

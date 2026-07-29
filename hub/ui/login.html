@@ -11,13 +11,13 @@
     <title>Sign in · MDDash</title>
     <script>
       window.appConfig = {
-        baseUrl: {{ base_url | tojson }},
+        baseUrl: {{ base_url | default("") | tojson }},
         loginService: {{ login_service | default("") | tojson }},
-        loginUrl: {{ authenticator_login_url | tojson }},
+        loginUrl: {{ authenticator_login_url | default("") | tojson }},
         loginError: {{ login_error | default(none) | tojson }},
         customHtml: {{ custom_html | default("") | tojson }},
         {% if announcement_login is string %}
-        announcement: {{ announcement_login | tojson }}
+        announcement: {{ announcement_login | default(none) | tojson }}
         {% else %}
         announcement: {{ announcement | default(none) | tojson }}
         {% endif %}

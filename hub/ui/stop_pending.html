@@ -11,11 +11,11 @@
     <title>Server stopping · MDDash</title>
     <script>
       window.appConfig = {
-        baseUrl: {{ base_url | tojson }},
+        baseUrl: {{ base_url | default("") | tojson }},
         userName: {{ user.name | tojson }},
-        xsrf: {{ xsrf_token | tojson }},
-        logoutUrl: {{ logout_url | tojson }},
-        adminAccess: {{ admin_access | tojson }},
+        xsrf: {{ xsrf_token | default("") | tojson }},
+        logoutUrl: {{ logout_url | default("") | tojson }},
+        adminAccess: {{ admin_access | default(false) | tojson }},
         announcement: {{ announcement | default(none) | tojson }}
       };
     </script>

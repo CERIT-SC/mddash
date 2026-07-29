@@ -11,17 +11,17 @@
     <title>Server options · MDDash</title>
     <script>
       window.appConfig = {
-        baseUrl: {{ base_url | tojson }},
+        baseUrl: {{ base_url | default("") | tojson }},
         userName: {{ user.name | tojson }},
-        xsrf: {{ xsrf_token | tojson }},
-        logoutUrl: {{ logout_url | tojson }},
-        adminAccess: {{ admin_access | tojson }},
+        xsrf: {{ xsrf_token | default("") | tojson }},
+        logoutUrl: {{ logout_url | default("") | tojson }},
+        adminAccess: {{ admin_access | default(false) | tojson }},
         {% if announcement_spawn is string %}
-        announcement: {{ announcement_spawn | tojson }},
+        announcement: {{ announcement_spawn | default(none) | tojson }},
         {% else %}
         announcement: {{ announcement | default(none) | tojson }},
         {% endif %}
-        url: {{ url | tojson }},
+        url: {{ url | default("") | tojson }},
         errorMessage: {{ error_message | default(none) | tojson }},
         errorHtmlMessage: {{ error_html_message | default(none) | tojson }},
         optionsForm: {{ spawner_options_form | default("") | tojson }}

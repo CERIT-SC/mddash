@@ -11,18 +11,18 @@
     <title>Home · MDDash</title>
     <script>
       window.appConfig = {
-        baseUrl: {{ base_url | tojson }},
+        baseUrl: {{ base_url | default("") | tojson }},
         userName: {{ user.name | tojson }},
-        xsrf: {{ xsrf_token | tojson }},
-        logoutUrl: {{ logout_url | tojson }},
-        adminAccess: {{ admin_access | tojson }},
+        xsrf: {{ xsrf_token | default("") | tojson }},
+        logoutUrl: {{ logout_url | default("") | tojson }},
+        adminAccess: {{ admin_access | default(false) | tojson }},
         {% if announcement_home is string %}
-        announcement: {{ announcement_home | tojson }},
+        announcement: {{ announcement_home | default(none) | tojson }},
         {% else %}
         announcement: {{ announcement | default(none) | tojson }},
         {% endif %}
-        defaultServerActive: {{ default_server.active | tojson }},
-        serverUrl: {{ url | tojson }}
+        defaultServerActive: {{ default_server.active | default(false) | tojson }},
+        serverUrl: {{ url | default("") | tojson }}
       };
     </script>
   </head>

@@ -11,7 +11,7 @@
     <title>Server not running · MDDash</title>
     <script>
       window.appConfig = {
-        baseUrl: {{ base_url | tojson }},
+        baseUrl: {{ base_url | default("") | tojson }},
         failed: {{ failed | default(false) | tojson }},
         serverName: {{ server_name | default("") | tojson }},
         spawnUrl: {{ spawn_url | default("") | tojson }},

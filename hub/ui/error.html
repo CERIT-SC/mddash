@@ -11,9 +11,9 @@
     <title>Error · MDDash</title>
     <script>
       window.appConfig = {
-        baseUrl: {{ base_url | tojson }},
-        statusCode: {{ status_code | tojson }},
-        statusMessage: {{ status_message | tojson }},
+        baseUrl: {{ base_url | default("") | tojson }},
+        statusCode: {{ status_code | default(500) | tojson }},
+        statusMessage: {{ status_message | default("Error") | tojson }},
         message: {{ message | default(none) | tojson }},
         messageHtml: {{ message_html | default(none) | tojson }},
         extraErrorHtml: {{ extra_error_html | default(none) | tojson }},
