@@ -89,3 +89,17 @@ def test_simulation_length_ns_from_mdin() -> None:
 def test_simulation_length_ns_missing_params() -> None:
     assert simulation_length_ns(" &cntrl\n  nstlim = 1000,\n /\n") is None
     assert simulation_length_ns("nothing here") is None
+
+
+DENSE_MDIN = """\
+Explicit solvent molecular dynamics constant pressure 50 ns MD
+ &cntrl
+   imin=0, irest=1, ntx=5,
+   ntpr=500000, ntwx=500000, ntwr=500000, nstlim=25000000,
+   dt=0.002, ntt=3, tempi=300,
+/
+"""
+
+
+def test_simulation_length_ns_reads_midline_params() -> None:
+    assert simulation_length_ns(DENSE_MDIN) == 50.0
