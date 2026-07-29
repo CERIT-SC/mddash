@@ -148,7 +148,7 @@ export function TokenPage() {
       current="token"
       announcement={cfg.announcement}
     >
-      <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
