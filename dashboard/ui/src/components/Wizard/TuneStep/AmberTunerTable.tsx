@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from "react"
 
-import { Loader2, Star, Terminal } from "lucide-react"
+import { Loader2, Terminal } from "lucide-react"
 
+import { computeTrialClasses } from "@/lib/trial-classes"
 import { cn } from "@/lib/utils"
 import { formatCost, formatDuration } from "@/util/helpers"
 import { type AmberTunerTrial, type JobStatus } from "@/util/types"
@@ -14,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import ConfirmDialog from "@/components/ConfirmDialog"
 import { JobStatusChip } from "@/components/JobStatusChip"
 import LogsView from "@/components/LogsView"
+import { TrialClassBadges } from "@/components/TrialClassBadges"
 
 interface AmberTunerTableProps {
   rows: AmberTunerTrial[]
@@ -49,6 +51,8 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
       return statusRank[a.status] - statusRank[b.status]
     })
   }, [rows])
+
+  const trialClasses = useMemo(() => computeTrialClasses(rows), [rows])
 
   const handleRadioClick = useCallback(
     (row: AmberTunerTrial, isOptimal: boolean) => {
@@ -87,6 +91,14 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
             <TableRow className="bg-primary hover:bg-primary">
               <TableHead className="text-primary-foreground text-center">Select</TableHead>
               <TableHead className="text-primary-foreground">Status</TableHead>
+              <TableHead className="text-primary-foreground">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="cursor-help">Class</span>
+                  </TooltipTrigger>
+                  <TooltipContent>Awards for a trial, based on finished-trial results</TooltipContent>
+                </Tooltip>
+              </TableHead>
               <TableHead className="text-primary-foreground text-right">
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -150,7 +162,7 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
               const isOptimal = idx === 0 && row.performance !== null
               return (
                 <TableRow key={row.id} className={cn(isOptimal && "bg-primary/5 dark:bg-primary/10")}>
-                  <TableCell className="relative">
+                  <TableCell>
                     <div className="flex items-center justify-center">
                       <input
                         type="radio"
@@ -165,14 +177,6 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
                         className={"accent-primary cursor-pointer"}
                       />
                     </div>
-                    {isOptimal && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Star className="absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 cursor-default fill-yellow-400 text-yellow-400" />
-                        </TooltipTrigger>
-                        <TooltipContent>Best performing trial</TooltipContent>
-                      </Tooltip>
-                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
@@ -193,6 +197,9 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
                         </Tooltip>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <TrialClassBadges classes={trialClasses.get(row.id)} />
                   </TableCell>
                   <TableCell className="text-right">
                     {row.performance !== null ? row.performance.toFixed(2) : "—"}
