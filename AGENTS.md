@@ -14,7 +14,7 @@ User namespace:   Proxy (Caddy) -> Auth (Flask), API (Flask), S3-Sync (rclone), 
 External:         MDRepo, S3-compatible storage
 ```
 
-The Proxy container serves the complete static UI (compiled React/TypeScript dashboard) embedded as static assets in its image, and routes to the JupyterHub Singleuser service configured in `values.yaml.tmpl`.
+The Proxy container serves the complete static UI (compiled React/TypeScript dashboard) embedded as static assets in its image, and routes to the JupyterHub Singleuser service configured in `values.yaml.tmpl`. The hub itself runs the in-repo `mddash-hub` image (`hub/`): stock k8s-hub + the EGI authenticator (`/hub/jwt_login`) + the custom e-INFRA hub UI (`hub/ui/`) baked into the image — no runtime ConfigMaps.
 
 ## Core Patterns
 

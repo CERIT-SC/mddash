@@ -32,7 +32,7 @@ render: ## Render Helm values template
 	@echo "Rendered $(chart_path)/values.yaml"
 
 .PHONY: install
-install: render update hub-templates ## Install Helm chart
+install: render update ## Install Helm chart
 ifeq ($(ENV),prod)
 	helm install $(package) oci://$(chart_registry)/$(chart_name) --version $(IMAGE_TAG) \
 		--namespace $(namespace) $(values_file) $(timeout) --wait \
@@ -44,7 +44,7 @@ else
 endif
 
 .PHONY: upgrade
-upgrade: render hub-templates ## Upgrade Helm release
+upgrade: render ## Upgrade Helm release
 ifeq ($(ENV),prod)
 		helm upgrade --install $(package) oci://$(chart_registry)/$(chart_name) --version $(IMAGE_TAG) \
 		--namespace $(namespace) $(values_file) $(timeout) --rollback-on-failure --wait \
@@ -78,12 +78,6 @@ update-deps: ## Update local Helm chart dependencies only
 .PHONY: uninstall
 uninstall: ## Uninstall Helm release
 	helm uninstall $(package) --namespace $(namespace)
-
-.PHONY: hub-templates
-hub-templates: ## Create hub templates ConfigMap
-	kubectl create configmap $(package)-custom-templates \
-		--from-file=$(chart_path)/files/hub-templates \
-		-n $(namespace) --dry-run=client -o yaml | kubectl apply -f -
 
 .PHONY: port-forward
 port-forward: ## Forward port 8000 to proxy-public service

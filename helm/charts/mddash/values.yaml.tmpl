@@ -12,10 +12,11 @@ jupyterhub:
       limits:
         cpu: {{ $cfg.hub.resources.limits.cpu }}
         memory: {{ $cfg.hub.resources.limits.memory }}
-    # custom image that supports access through JWT tokens
+    # in-repo hub image: stock k8s-hub + EGI Check-in JWT login + custom hub-ui
     image:
-      name: eginotebooks/hub
-      tag: "sha-4ffff9e"
+      name: "{{ $registry }}/{{ $cfg.hub.image }}"
+      tag: "{{ $imageTag }}"
+      pullPolicy: {{ $cfg.sidecars.pullPolicy | default "IfNotPresent" }}
     config:
       JupyterHub:
         authenticator_class: "{{ $cfg.oidc.authenticator_class }}"
@@ -156,14 +157,6 @@ jupyterhub:
           secretKeyRef:
             name: tuner-auth
             key: password
-
-    extraVolumes:
-      - name: custom-templates
-        configMap:
-          name: {{ $helmPackage }}-custom-templates  # created in Makefile
-    extraVolumeMounts:
-      - name: custom-templates
-        mountPath: /opt/jupyterhub/custom-templates
 
     extraConfig:
       oauth-client-secret: |

@@ -1,0 +1,20 @@
+@import "tailwindcss";
+@import "@e-infra/design-system/setup.css";
+@source "../node_modules/@e-infra/design-system/dist";
+
+:root {
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-display: "Inter Tight", "Inter", system-ui, sans-serif;
+}
+
+.dark {
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-body);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}

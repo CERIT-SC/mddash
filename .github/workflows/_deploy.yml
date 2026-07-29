@@ -183,6 +183,10 @@ jobs:
             context: landing
             dockerfile: landing/Dockerfile
             image-suffix: mddash-landing
+          - name: hub
+            context: hub
+            dockerfile: hub/Dockerfile
+            image-suffix: mddash-hub
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
