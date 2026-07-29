@@ -91,14 +91,7 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
             <TableRow className="bg-primary hover:bg-primary">
               <TableHead className="text-primary-foreground text-center">Select</TableHead>
               <TableHead className="text-primary-foreground">Status</TableHead>
-              <TableHead className="text-primary-foreground">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">Class</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Awards for a trial, based on finished-trial results</TooltipContent>
-                </Tooltip>
-              </TableHead>
+              <TableHead className="text-primary-foreground" />
               <TableHead className="text-primary-foreground text-right">
                 <Tooltip>
                   <TooltipTrigger asChild>
