@@ -9,7 +9,7 @@ import ray
 logger = logging.getLogger(__name__)
 
 _NSTEPS_RE = re.compile(r"^\s*nsteps\s*=\s*(\d+)", re.MULTILINE)
-_DELTA_T_RE = re.compile(r"^\s*delta[-_]t\s*=\s*([\d.eE+-]+)", re.MULTILINE)
+_DELTA_T_RE = re.compile(r"^\s*(?:delta[-_]t|dt)\s*=\s*([\d.eE+-]+)", re.MULTILINE)
 
 
 def parse_dump_output(output: str) -> tuple[int, float] | None:
