@@ -1,5 +1,5 @@
 import pytest
-from api.utils import AMBER_FORBIDDEN_FLAGS, GMX_FORBIDDEN_FLAGS, sanitize_extra_args
+from api.utils import AMBER_FORBIDDEN_FLAGS, GMX_FORBIDDEN_FLAGS, extract_nsteps_override, sanitize_extra_args
 
 
 class TestSanitizeExtraArgs:
@@ -54,3 +54,35 @@ class TestSanitizeAmberExtraArgs:
     def test_equals_syntax_forbidden_flag_raises(self) -> None:
         with pytest.raises(ValueError, match="critical"):
             sanitize_extra_args("-i=custom.mdin", AMBER_FORBIDDEN_FLAGS)
+
+
+class TestExtractNstepsOverride:
+    def test_empty_string_returns_no_override(self) -> None:
+        assert extract_nsteps_override("") == ("", None)
+
+    def test_no_nsteps_passes_through(self) -> None:
+        assert extract_nsteps_override("-ntmpi 2") == ("-ntmpi 2", None)
+
+    def test_strips_space_separated_nsteps(self) -> None:
+        assert extract_nsteps_override("-ntomp 4 -nsteps 500000") == ("-ntomp 4", 500000)
+
+    def test_strips_equals_nsteps(self) -> None:
+        assert extract_nsteps_override("-nsteps=500000") == ("", 500000)
+
+    def test_last_occurrence_wins(self) -> None:
+        assert extract_nsteps_override("-nsteps 100 -resetstep -nsteps 200") == ("-resetstep", 200)
+
+    def test_flag_prefixes_unaffected(self) -> None:
+        assert extract_nsteps_override("-nstepsx 5") == ("-nstepsx 5", None)
+
+    def test_missing_value_raises(self) -> None:
+        with pytest.raises(ValueError, match="nsteps"):
+            extract_nsteps_override("-nsteps")
+
+    def test_non_integer_value_raises(self) -> None:
+        with pytest.raises(ValueError, match="nsteps"):
+            extract_nsteps_override("-nsteps abc")
+
+    def test_non_positive_value_raises(self) -> None:
+        with pytest.raises(ValueError, match="nsteps"):
+            extract_nsteps_override("-nsteps 0")

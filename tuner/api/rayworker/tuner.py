@@ -17,6 +17,7 @@ from api.db.operations import (
     create_job,
     create_trial_result,
     get_job,
+    update_job_sim_length,
     update_job_status,
     update_trial_result,
 )
@@ -125,7 +126,7 @@ def _run_single_trial(
     """Execute a single trial on a Ray worker."""
     logger.info("Running trial %s: params=%s, nsteps=%d", trial_id, config.params, nsteps)
     result = engine.run_trial(config, trial_id, job_id, nsteps, extra_args, best_steps_per_sec)
-    status = JobStatus.TERMINATED if result.performance > 0 or result.early_stopped else JobStatus.ERROR
+    status = JobStatus.FINISHED if result.performance > 0 or result.early_stopped else JobStatus.ERROR
     logger.info(
         "Trial %s completed: status=%s, performance=%.2f ns/day, steps/sec=%.1f",
         trial_id,
@@ -204,7 +205,9 @@ def _process_trial_results(
     return new_best
 
 
-def _run_tuning_async(job_id: str, engine: Engine, extra_args: str = "", nsteps: int = 25_000) -> None:
+def _run_tuning_async(
+    job_id: str, engine: Engine, extra_args: str = "", nsteps: int = 25_000, nsteps_override: int | None = None
+) -> None:
     pending_trial_ids: list[int] = []
     try:
         # Create trial records before connecting to Ray so GET returns them immediately.
@@ -216,6 +219,12 @@ def _run_tuning_async(job_id: str, engine: Engine, extra_args: str = "", nsteps:
         _ensure_ray_initialized()
         pending_trial_ids = []  # Ray is up; trials will be managed by the run loop from here
         update_job_status(job_id, JobStatus.RUNNING)
+
+        # Full production simulation length for time/cost estimates; failure only degrades estimates.
+        try:
+            update_job_sim_length(job_id, engine.simulation_length_ns(job_id, nsteps_override))
+        except Exception:
+            logger.warning("Failed to extract simulation length for job %s", job_id, exc_info=True)
 
         best_steps_per_sec = 0.0
 
@@ -241,7 +250,7 @@ def _run_tuning_async(job_id: str, engine: Engine, extra_args: str = "", nsteps:
         else:
             logger.info("All trials completed for job %s (best: %.1f steps/s)", job_id, best_steps_per_sec)
             if not _job_context.is_cancelled(job_id):
-                update_job_status(job_id, JobStatus.TERMINATED)
+                update_job_status(job_id, JobStatus.FINISHED)
     except Exception as e:
         logger.exception("Tuning job %s failed", job_id)
         for trial_id in pending_trial_ids:
@@ -257,10 +266,13 @@ def submit_tuning_job(
     md_engine: MDEngine,
     extra_args: str = "",
     nsteps: int = 25_000,
+    nsteps_override: int | None = None,
 ) -> str:
     """Submit a tuning job for any engine."""
     create_job(job_id, md_engine)
-    thread = threading.Thread(target=_run_tuning_async, args=(job_id, engine, extra_args, nsteps), daemon=True)
+    thread = threading.Thread(
+        target=_run_tuning_async, args=(job_id, engine, extra_args, nsteps, nsteps_override), daemon=True
+    )
     _job_context.add_job(job_id, thread)
     thread.start()
     logger.info("Submitted tuning job %s (engine=%s)", job_id, md_engine.value)
@@ -291,7 +303,7 @@ def sync_job_status(job_id: str) -> JobStatus | None:
     job = get_job(job_id)
     if not job:
         return None
-    if job.status in {JobStatus.TERMINATED, JobStatus.ERROR}:
+    if job.status in {JobStatus.FINISHED, JobStatus.ERROR}:
         return job.status
     if _job_context.is_cancelled(job_id):
         return JobStatus.ERROR

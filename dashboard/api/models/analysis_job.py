@@ -262,7 +262,7 @@ class AnalysisJob(db.Model):  # type: ignore
     @cached(cache=analysis_status_cache)
     def status(self) -> JobStatus:
         """Current status of the K8s job."""
-        if self._last_known_status is not None and self._last_known_status in {JobStatus.TERMINATED, JobStatus.ERROR}:
+        if self._last_known_status is not None and self._last_known_status in {JobStatus.FINISHED, JobStatus.ERROR}:
             return self._last_known_status
 
         try:
@@ -270,7 +270,7 @@ class AnalysisJob(db.Model):  # type: ignore
             if fetched not in {self._last_known_status, JobStatus.UNKNOWN}:
                 self._last_known_status = fetched
                 db.session.commit()
-                if fetched == JobStatus.TERMINATED:
+                if fetched == JobStatus.FINISHED:
                     self.cleanup_temp_files()
             return fetched
         except Exception:

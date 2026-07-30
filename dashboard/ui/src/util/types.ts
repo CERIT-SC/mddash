@@ -97,6 +97,7 @@ export interface TunerJob {
   error_message: string | null
   created_at: string
   is_stopped: boolean
+  sim_length_ns: number | null
   trials: GmxTunerTrial[] | AmberTunerTrial[]
 }
 
@@ -108,6 +109,8 @@ export interface GmxTunerTrial {
   pme: DeviceType
   nb: DeviceType
   performance: number | null
+  estimated_time: number | null
+  estimated_cost: number | null
 }
 
 export interface AmberTunerTrial {
@@ -118,6 +121,8 @@ export interface AmberTunerTrial {
   binary: AmberBinary
   ewald: EwaldPreset
   performance: number | null
+  estimated_time: number | null
+  estimated_cost: number | null
 }
 
 export type DeviceType = "auto" | "cpu" | "gpu"
@@ -215,18 +220,17 @@ export function getPodStatusVariant(status: PodStatus): StatusVariant {
   }
 }
 
-export type JobStatus = "UNKNOWN" | "PENDING" | "RUNNING" | "TERMINATED" | "ERROR"
+export type JobStatus = "UNKNOWN" | "PENDING" | "RUNNING" | "FINISHED" | "ERROR"
 
 export function getJobStatusVariant(status: JobStatus): StatusVariant {
   switch (status) {
     case "UNKNOWN":
       return "secondary"
     case "RUNNING":
-      return "success"
     case "PENDING":
       return "warning"
-    case "TERMINATED":
-      return "info"
+    case "FINISHED":
+      return "success"
     case "ERROR":
       return "destructive"
   }

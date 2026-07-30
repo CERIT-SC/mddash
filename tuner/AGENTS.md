@@ -7,7 +7,7 @@ Benchmark GROMACS and AMBER execution configurations through a FastAPI service b
 ## Runtime Invariants
 
 - SQLite uses WAL mode at `/data/tuner.db`. The `tuner-db` PVC must be RWO block storage, never NFS.
-- Uploaded inputs, trial outputs, and logs live under `/tmp/tpr` on the RWX `tuner-jobs` PVC shared with Ray head and worker pods.
+- Uploaded inputs, trial outputs, and logs live under `/tmp/tpr` (`INPUTS_DIR`) on the RWX `tuner-jobs` PVC shared with Ray head and worker pods.
 - The API deployment uses `Recreate` because its database PVC cannot be attached to two pods.
 - Alembic migrations run before API startup. Migration failure must stop startup.
 - KubeRay and its CRDs are cluster prerequisites; the MDDash chart does not manage the operator.

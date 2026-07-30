@@ -15,7 +15,7 @@ def test_trial_result_fields() -> None:
 
 
 def test_engine_protocol_is_structural() -> None:
-    """Any class with generate_configs + run_trial satisfies Engine without inheriting."""
+    """Any class with generate_configs + run_trial + simulation_length_ns satisfies Engine without inheriting."""
 
     class FakeEngine:
         def generate_configs(self):
@@ -24,5 +24,9 @@ def test_engine_protocol_is_structural() -> None:
         def run_trial(self, config, trial_id, job_id, nsteps, extra_args, best_steps_per_sec):
             return TrialResult(performance=0.0, steps_per_sec=0.0, early_stopped=False)
 
+        def simulation_length_ns(self, job_id):
+            return None
+
     engine: Engine = FakeEngine()  # type: ignore[assignment]
     assert engine.generate_configs() == []
+    assert engine.simulation_length_ns("job-1") is None

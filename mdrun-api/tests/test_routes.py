@@ -139,7 +139,7 @@ class TestDeleteGmxJob:
         job.id = "delete-me"
         job.job_name = "mdrun-delete-me"
         job.experiment_id = "exp123"
-        job.last_status = JobStatus.TERMINATED
+        job.last_status = JobStatus.FINISHED
         db_session.add(job)
         db_session.commit()
 

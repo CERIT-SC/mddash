@@ -51,6 +51,11 @@ class TunerJob(db.Model):  # type: ignore
         return self._status().get("status", JobStatus.UNKNOWN)
 
     @property
+    def sim_length_ns(self) -> float | None:
+        """Full production simulation length (ns) reported by the tuner."""
+        return self._status().get("sim_length_ns")
+
+    @property
     def trials(self) -> list[dict]:
         """Trial jobs with their statuses."""
         if self.is_stopped and self._preserved_trials:

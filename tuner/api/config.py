@@ -2,8 +2,8 @@ import os
 from pathlib import Path
 
 DB_PATH = Path(os.getenv("TUNER_DB", "/data/tuner.db"))
-TPR_DIR = Path("/tmp/tpr")
-JOBS_DIR = TPR_DIR / "jobs"
+INPUTS_DIR = Path("/tmp/tpr")
+JOBS_DIR = INPUTS_DIR / "jobs"
 
 TUNER_USER = os.getenv("TUNER_USER", "")
 TUNER_PASSWORD = os.getenv("TUNER_PASSWORD", "")

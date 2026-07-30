@@ -1,19 +1,21 @@
 import { useCallback, useMemo, useState } from "react"
 
-import { Loader2, Star, Terminal } from "lucide-react"
+import { Loader2, Terminal } from "lucide-react"
 
-import { statusBadgeClass } from "@/lib/status"
-import { cn } from "@/lib/utils"
-import { getJobStatusVariant, type AmberTunerTrial, type JobStatus } from "@/util/types"
+import { computeTrialClasses } from "@/lib/trial-classes"
+import { formatCost, formatDuration } from "@/util/helpers"
+import { type AmberTunerTrial, type JobStatus } from "@/util/types"
 import { useTunerTrialLogs } from "@/hooks/use-tuner"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import { JobStatusChip } from "@/components/JobStatusChip"
 import LogsView from "@/components/LogsView"
+import { TableHeadHelp } from "@/components/TableHeadHelp"
+import { TrialClassBadges } from "@/components/TrialClassBadges"
 
 interface AmberTunerTableProps {
   rows: AmberTunerTrial[]
@@ -34,7 +36,7 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
 
   const sortedRows = useMemo(() => {
     const statusRank: Record<JobStatus, number> = {
-      TERMINATED: 0,
+      FINISHED: 0,
       RUNNING: 1,
       ERROR: 2,
       PENDING: 3,
@@ -49,6 +51,8 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
       return statusRank[a.status] - statusRank[b.status]
     })
   }, [rows])
+
+  const trialClasses = useMemo(() => computeTrialClasses(rows), [rows])
 
   const handleRadioClick = useCallback(
     (row: AmberTunerTrial, isOptimal: boolean) => {
@@ -87,55 +91,42 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
             <TableRow className="bg-primary hover:bg-primary">
               <TableHead className="text-primary-foreground text-center">Select</TableHead>
               <TableHead className="text-primary-foreground">Status</TableHead>
+              <TableHead className="text-primary-foreground" />
               <TableHead className="text-primary-foreground text-right">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">Performance</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Measured performance (ns/day)</TooltipContent>
-                </Tooltip>
+                <TableHeadHelp label="Performance" description="Measured performance (ns/day)" />
               </TableHead>
               <TableHead className="text-primary-foreground text-right">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">Binary</span>
-                  </TooltipTrigger>
-                  <TooltipContent>AMBER binary used</TooltipContent>
-                </Tooltip>
+                <TableHeadHelp
+                  label="Est. Time"
+                  description="Estimated time to run the full simulation with this configuration"
+                />
               </TableHead>
               <TableHead className="text-primary-foreground text-right">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">Ewald</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Ewald preset configuration</TooltipContent>
-                </Tooltip>
+                <TableHeadHelp
+                  label="Est. Cost"
+                  description="Estimated cost of the full simulation, from hourly CPU/GPU/RAM rates"
+                />
               </TableHead>
               <TableHead className="text-primary-foreground text-right">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">NP</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Number of MPI processes</TooltipContent>
-                </Tooltip>
+                <TableHeadHelp label="Binary" description="AMBER binary used" />
               </TableHead>
               <TableHead className="text-primary-foreground text-right">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">NTOMP</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Number of OpenMP threads per MPI rank</TooltipContent>
-                </Tooltip>
+                <TableHeadHelp label="Ewald" description="Ewald preset configuration" />
+              </TableHead>
+              <TableHead className="text-primary-foreground text-right">
+                <TableHeadHelp label="NP" description="Number of MPI processes" />
+              </TableHead>
+              <TableHead className="text-primary-foreground text-right">
+                <TableHeadHelp label="NTOMP" description="Number of OpenMP threads per MPI rank" />
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sortedRows.map((row, idx) => {
               const isOptimal = idx === 0 && row.performance !== null
-              const variant = getJobStatusVariant(row.status as JobStatus)
               return (
-                <TableRow key={row.id} className={cn(isOptimal && "bg-primary/5 dark:bg-primary/10")}>
-                  <TableCell className="relative">
+                <TableRow key={row.id}>
+                  <TableCell>
                     <div className="flex items-center justify-center">
                       <input
                         type="radio"
@@ -150,20 +141,10 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
                         className={"accent-primary cursor-pointer"}
                       />
                     </div>
-                    {isOptimal && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Star className="absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 cursor-default fill-yellow-400 text-yellow-400" />
-                        </TooltipTrigger>
-                        <TooltipContent>Best performing trial</TooltipContent>
-                      </Tooltip>
-                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">
-                      <Badge variant="outline" className={cn("text-xs", statusBadgeClass(variant))}>
-                        {row.status}
-                      </Badge>
+                      <JobStatusChip status={row.status as JobStatus} />
                       {row.status === "ERROR" && !tunerStopped && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -181,9 +162,16 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
-                    {row.performance !== null ? row.performance.toFixed(2) : "N/A"}
+                  <TableCell>
+                    <TrialClassBadges classes={trialClasses.get(row.id)} />
                   </TableCell>
+                  <TableCell className="text-right">
+                    {row.performance !== null ? row.performance.toFixed(2) : "—"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {row.estimated_time === null ? "—" : formatDuration(row.estimated_time * 3600)}
+                  </TableCell>
+                  <TableCell className="text-right">{formatCost(row.estimated_cost)}</TableCell>
                   <TableCell className="text-right">{row.binary}</TableCell>
                   <TableCell className="text-right">{row.ewald}</TableCell>
                   <TableCell className="text-right">{row.np}</TableCell>

@@ -409,7 +409,7 @@ class Experiment(db.Model):  # type: ignore
             return 5, "publishing"
 
         # Step 4: Analyzing (experiment has terminated simulation job)
-        if any(j.status == JobStatus.TERMINATED for j in self.simulation_jobs):
+        if any(j.status == JobStatus.FINISHED for j in self.simulation_jobs):
             return 4, "analyzing"
 
         # Step 3: Allow user to analyze a running simulation

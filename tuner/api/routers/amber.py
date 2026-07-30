@@ -11,8 +11,9 @@ from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 
 from api.auth import verify_credentials
-from api.config import MAX_UPLOAD_SIZE, TPR_DIR
+from api.config import INPUTS_DIR, MAX_UPLOAD_SIZE
 from api.db.operations import get_job, get_trials_by_job_id
+from api.engines.amber.config import AmberTrialConfig
 from api.engines.amber.engine import AmberEngine
 from api.rayworker import submit_tuning_job, sync_job_status
 from api.routers._shared import register_job_management_routes
@@ -62,9 +63,9 @@ async def create_amber_tuning_job(
 
     job_id = str(uuid.uuid4())
     try:
-        await run_in_threadpool(save_upload, prmtop, TPR_DIR / f"{job_id}_md.prmtop")
-        await run_in_threadpool(save_upload, inpcrd, TPR_DIR / f"{job_id}_md.inpcrd")
-        await run_in_threadpool(save_upload, mdin, TPR_DIR / f"{job_id}_md.mdin")
+        await run_in_threadpool(save_upload, prmtop, INPUTS_DIR / f"{job_id}_md.prmtop")
+        await run_in_threadpool(save_upload, inpcrd, INPUTS_DIR / f"{job_id}_md.inpcrd")
+        await run_in_threadpool(save_upload, mdin, INPUTS_DIR / f"{job_id}_md.mdin")
         submit_tuning_job(job_id, AmberEngine(), MDEngine.AMBER, extra_args=sanitized_args, nsteps=nsteps)
     except Exception as e:
         logger.exception("Failed to create AMBER tuning job %s", job_id)
@@ -98,20 +99,27 @@ async def get_amber_status(
         logger.exception("Database timeout for job %s", job_id)
         raise HTTPException(status_code=503, detail="Database is busy. Please try again later.") from e
 
-    trials = [
-        AmberTrialResponse(
-            id=str(t.id),
-            status=t.status,
-            binary=t.config_json.get("binary", "pmemd.cuda"),
-            np=t.config_json.get("np", 1),
-            ntomp=t.config_json.get("ntomp", 1),
-            ewald=t.config_json.get("ewald", "default"),
-            performance=t.performance,
+    trials = []
+    for t in raw_trials:
+        cfg = AmberTrialConfig.from_dict(t.config_json)
+        estimated_time, estimated_cost = cfg.footprint.estimate(job.sim_length_ns, t.performance)
+        trials.append(
+            AmberTrialResponse(
+                id=str(t.id),
+                status=t.status,
+                binary=cfg.binary.value,
+                np=cfg.np,
+                ntomp=cfg.ntomp,
+                ewald=cfg.ewald.value,
+                performance=t.performance,
+                estimated_time=estimated_time,
+                estimated_cost=estimated_cost,
+            )
         )
-        for t in raw_trials
-    ]
 
-    return AmberJobStatusResponse(id=job_id, status=job.status, error=job.error, trials=trials)
+    return AmberJobStatusResponse(
+        id=job_id, status=job.status, error=job.error, sim_length_ns=job.sim_length_ns, trials=trials
+    )
 
 
 register_job_management_routes(router, MDEngine.AMBER)

@@ -24,8 +24,14 @@ POLL_INTERVAL_SECONDS = 10
 POLL_TIMEOUT_SECONDS = 1800
 N_STEPS = "1000"
 ROOT_DIR = Path(__file__).resolve().parents[2]
-TERMINAL_STATUSES = {"TERMINATED", "ERROR"}
+TERMINAL_STATUSES = {"FINISHED", "ERROR"}
 ACTIVE_STATUSES = {"PENDING", "RUNNING"}
+
+# Default rates mirror api/pricing.py; export matching overrides if the deployment sets them.
+COST_CPU_CORE_HOUR = float(os.getenv("COST_CPU_CORE_HOUR", "0.04"))
+COST_GPU_HOUR = float(os.getenv("COST_GPU_HOUR", "3.00"))
+COST_GB_RAM_HOUR = float(os.getenv("COST_GB_RAM_HOUR", "0.005"))
+RAM_GB_PER_RANK = 4.0
 
 pytestmark = pytest.mark.e2e
 
@@ -77,6 +83,61 @@ def _delete_job(client: httpx.Client, engine: str, job_id: str) -> None:
     assert response.status_code == 204
 
 
+def _trial_hourly_cost(engine: str, trial: dict[str, Any]) -> float:
+    """Hourly cost of a trial's production resource footprint on this deployment's rates."""
+    if engine == "gmx":
+        cores = trial["np"] * (trial["ntomp"] if trial["ntomp"] > 0 else 1)
+        gpus = int(trial["nb"] == "gpu" or trial["pme"] == "gpu")
+        ram_gb = RAM_GB_PER_RANK * trial["np"]
+    elif trial["binary"] == "pmemd.MPI":
+        cores, gpus, ram_gb = trial["np"] * trial["ntomp"], 0, RAM_GB_PER_RANK * trial["np"]
+    else:
+        cores, gpus, ram_gb = trial["ntomp"], 1, RAM_GB_PER_RANK
+    return cores * COST_CPU_CORE_HOUR + gpus * COST_GPU_HOUR + ram_gb * COST_GB_RAM_HOUR
+
+
+def _assert_estimates(
+    status: dict[str, Any],
+    engine: str,
+    expected_sim_length_ns: float | None = None,
+) -> None:
+    """Validate sim_length_ns and per-trial estimated_time/estimated_cost on a terminal job."""
+    sim_length = status.get("sim_length_ns")
+    assert isinstance(sim_length, (int, float)), f"{engine}: sim_length_ns missing: {sim_length!r}"
+    assert sim_length > 0, f"{engine}: expected positive sim_length_ns, got {sim_length!r}"
+    if expected_sim_length_ns is not None:
+        assert sim_length == pytest.approx(expected_sim_length_ns)
+
+    finished = [t for t in status["trials"] if t["status"] == "FINISHED"]
+    assert finished, f"{engine}: no FINISHED trials to validate estimates"
+
+    for trial in status["trials"]:
+        if trial["status"] != "FINISHED":
+            assert trial["estimated_time"] is None
+            assert trial["estimated_cost"] is None
+            continue
+        performance = trial["performance"]
+        assert isinstance(performance, (int, float))
+        assert performance > 0
+        expected_time = sim_length / performance * 24.0
+        assert trial["estimated_time"] == pytest.approx(expected_time, rel=1e-9)
+        assert trial["estimated_time"] > 0
+        assert trial["estimated_cost"] == pytest.approx(expected_time * _trial_hourly_cost(engine, trial), rel=1e-9)
+        assert trial["estimated_cost"] > 0
+
+
+def _mdin_sim_length_ns(mdin_path: Path) -> float:
+    """Compute the simulation length (ns) of the demo mdin: nstlim * dt / 1000."""
+    import re
+
+    text = mdin_path.read_text(encoding="utf-8")
+    nstlim = re.search(r"nstlim\s*=\s*(\d+)", text)
+    dt = re.search(r"\bdt\s*=\s*([\d.eE+-]+)", text)
+    assert nstlim, f"could not parse nstlim from {mdin_path}"
+    assert dt, f"could not parse dt from {mdin_path}"
+    return int(nstlim.group(1)) * float(dt.group(1)) / 1000.0
+
+
 def test_gromacs_api_flow(client: httpx.Client) -> None:
     job_id: str | None = None
     demo_file = ROOT_DIR / "demo" / "gmx" / "md.tpr"
@@ -97,13 +158,40 @@ def test_gromacs_api_flow(client: httpx.Client) -> None:
     try:
         status = _poll_until_finished(client, "gmx", job_id)
         assert status["trials"]
-        assert status["status"] == "TERMINATED", status.get("error")
+        assert status["status"] == "FINISHED", status.get("error")
+        _assert_estimates(status, "gmx")
     finally:
         if job_id:
             _delete_job(client, "gmx", job_id)
 
     deleted_status = client.get(f"tuning-jobs/gmx/{job_id}/status")
     assert deleted_status.status_code == 404
+
+
+def test_gromacs_nsteps_override_flow(client: httpx.Client) -> None:
+    job_id: str | None = None
+    demo_file = ROOT_DIR / "demo" / "gmx" / "md.tpr"
+
+    with demo_file.open("rb") as tpr_file:
+        response = client.post(
+            "tuning-jobs/gmx",
+            files={"file": (demo_file.name, tpr_file, "application/octet-stream")},
+            data={"nsteps": N_STEPS, "extra_args": "-nsteps 100000"},
+        )
+
+    if response.status_code == 400:
+        pytest.skip("deployment predates -nsteps override support")
+    response.raise_for_status()
+    assert response.status_code == 201
+    job_id = response.json()["id"]
+
+    try:
+        status = _poll_until_finished(client, "gmx", job_id)
+        assert status["status"] == "FINISHED", status.get("error")
+        _assert_estimates(status, "gmx")
+    finally:
+        if job_id:
+            _delete_job(client, "gmx", job_id)
 
 
 def test_amber_api_flow(client: httpx.Client) -> None:
@@ -137,7 +225,8 @@ def test_amber_api_flow(client: httpx.Client) -> None:
     try:
         status = _poll_until_finished(client, "amber", job_id)
         assert status["trials"]
-        assert status["status"] == "TERMINATED", status.get("error")
+        assert status["status"] == "FINISHED", status.get("error")
+        _assert_estimates(status, "amber", expected_sim_length_ns=_mdin_sim_length_ns(mdin_path))
     finally:
         if job_id:
             _delete_job(client, "amber", job_id)

@@ -20,7 +20,7 @@ export function useGromacsStatus(experimentId: string, simulationPath: string, e
     meta: { suppressError: true },
     refetchInterval: (query) => {
       const data = query.state.data
-      if (!data || data.status === "TERMINATED" || data.status === "ERROR") return false
+      if (!data || data.status === "FINISHED" || data.status === "ERROR") return false
       return 5000
     },
   })

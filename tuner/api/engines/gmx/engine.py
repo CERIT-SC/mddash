@@ -2,8 +2,10 @@
 
 from dataclasses import dataclass
 
+from api.config import INPUTS_DIR
 from api.engines.gmx.config import GmxTrialConfig, NBMode, PMEMode
 from api.engines.gmx.runner import run_mdrun
+from api.engines.gmx.tprinfo import simulation_length_ns as tpr_simulation_length_ns
 from api.engines.protocol import TrialConfig, TrialResult
 
 
@@ -42,3 +44,7 @@ class GmxEngine:
             best_steps_per_sec,
         )
         return TrialResult(performance=perf, steps_per_sec=sps, early_stopped=early)
+
+    def simulation_length_ns(self, job_id: str, nsteps_override: int | None = None) -> float | None:
+        """Extract nsteps * delta_t from the job's .tpr via `gmx dump` on a Ray worker; -nsteps override wins."""
+        return tpr_simulation_length_ns(str(INPUTS_DIR / f"{job_id}_md.tpr"), nsteps_override)

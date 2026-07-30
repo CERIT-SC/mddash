@@ -1,6 +1,7 @@
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
+import pytest
 from api.main import app
 from fastapi.testclient import TestClient
 
@@ -40,6 +41,30 @@ class TestCreateGmxTuningJob:
         )
         assert response.status_code == 401
 
+    @patch("api.routers.gmx.submit_tuning_job")
+    def test_nsteps_override_forwarded(self, mock_submit) -> None:
+        mock_submit.return_value = "test-job-id"
+        response = client.post(
+            "/api/tuning-jobs/gmx",
+            auth=AUTH,
+            files={"file": ("md.tpr", _fake_tpr(), "application/octet-stream")},
+            data={"extra_args": "-pin on -nsteps 500000"},
+        )
+        assert response.status_code == 201
+        assert mock_submit.call_args.kwargs["extra_args"] == "-pin on"
+        assert mock_submit.call_args.kwargs["nsteps_override"] == 500000
+
+    @patch("api.routers.gmx.submit_tuning_job")
+    def test_invalid_nsteps_override_rejected(self, mock_submit) -> None:
+        response = client.post(
+            "/api/tuning-jobs/gmx",
+            auth=AUTH,
+            files={"file": ("md.tpr", _fake_tpr(), "application/octet-stream")},
+            data={"extra_args": "-nsteps 0"},
+        )
+        assert response.status_code == 400
+        mock_submit.assert_not_called()
+
 
 class TestGetGmxStatus:
     @patch("api.routers.gmx.get_job")
@@ -50,12 +75,63 @@ class TestGetGmxStatus:
         job.status = "RUNNING"
         job.engine = "gmx"
         job.error = None
+        job.sim_length_ns = 100.0
         mock_get_job.return_value = job
         mock_trials.return_value = []
 
         response = client.get("/api/tuning-jobs/gmx/test-id/status", auth=AUTH)
         assert response.status_code == 200
         assert response.json()["status"] == "RUNNING"
+        assert response.json()["sim_length_ns"] == 100.0
+
+    @patch("api.routers.gmx.get_job")
+    @patch("api.routers.gmx.sync_job_status")
+    @patch("api.routers.gmx.get_trials_by_job_id")
+    def test_trial_estimates(self, mock_trials, mock_sync, mock_get_job) -> None:
+        job = MagicMock()
+        job.status = "FINISHED"
+        job.engine = "gmx"
+        job.error = None
+        job.sim_length_ns = 100.0
+        mock_get_job.return_value = job
+
+        trial = MagicMock()
+        trial.id = 5
+        trial.status = "FINISHED"
+        trial.config_json = {"ntomp": 2, "np": 4, "nb": "gpu", "pme": "cpu"}
+        trial.performance = 100.0
+        mock_trials.return_value = [trial]
+
+        response = client.get("/api/tuning-jobs/gmx/test-id/status", auth=AUTH)
+        assert response.status_code == 200
+        [t] = response.json()["trials"]
+        # 100 ns at 100 ns/day -> 24 hours; 8 cores * 0.04 + 1 GPU * 3.0 + 16 GB * 0.005 = 3.4/h
+        assert t["estimated_time"] == 24.0
+        assert t["estimated_cost"] == pytest.approx(81.6)
+
+    @patch("api.routers.gmx.get_job")
+    @patch("api.routers.gmx.sync_job_status")
+    @patch("api.routers.gmx.get_trials_by_job_id")
+    def test_trial_estimates_null_without_performance(self, mock_trials, mock_sync, mock_get_job) -> None:
+        job = MagicMock()
+        job.status = "RUNNING"
+        job.engine = "gmx"
+        job.error = None
+        job.sim_length_ns = None
+        mock_get_job.return_value = job
+
+        trial = MagicMock()
+        trial.id = 5
+        trial.status = "RUNNING"
+        trial.config_json = {"ntomp": 2, "np": 4, "nb": "cpu", "pme": "cpu"}
+        trial.performance = None
+        mock_trials.return_value = [trial]
+
+        response = client.get("/api/tuning-jobs/gmx/test-id/status", auth=AUTH)
+        assert response.status_code == 200
+        [t] = response.json()["trials"]
+        assert t["estimated_time"] is None
+        assert t["estimated_cost"] is None
 
     @patch("api.routers.gmx.get_job")
     def test_returns_404_for_missing_job(self, mock_get_job) -> None:

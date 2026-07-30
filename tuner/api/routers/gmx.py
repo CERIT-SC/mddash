@@ -11,14 +11,15 @@ from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 
 from api.auth import verify_credentials
-from api.config import MAX_UPLOAD_SIZE, TPR_DIR
+from api.config import INPUTS_DIR, MAX_UPLOAD_SIZE
 from api.db.operations import get_job, get_trials_by_job_id
+from api.engines.gmx.config import GmxTrialConfig
 from api.engines.gmx.engine import GmxEngine
 from api.rayworker import submit_tuning_job, sync_job_status
 from api.routers._shared import register_job_management_routes
 from api.schemas.common import JobCreatedResponse, JobStatus, MDEngine
 from api.schemas.gmx import GmxJobStatusResponse, GmxTrialResponse
-from api.utils import GMX_FORBIDDEN_FLAGS, cleanup_job_files, sanitize_extra_args, save_upload
+from api.utils import GMX_FORBIDDEN_FLAGS, cleanup_job_files, extract_nsteps_override, sanitize_extra_args, save_upload
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -38,7 +39,8 @@ async def create_gmx_tuning_job(
         HTTPException: 400/413 on invalid input, 500 on submission failure.
     """
     try:
-        sanitized_args = sanitize_extra_args(extra_args, GMX_FORBIDDEN_FLAGS)
+        benchmark_args, nsteps_override = extract_nsteps_override(extra_args)
+        sanitized_args = sanitize_extra_args(benchmark_args, GMX_FORBIDDEN_FLAGS)
     except (ValidationError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
@@ -49,8 +51,10 @@ async def create_gmx_tuning_job(
 
     job_id = str(uuid.uuid4())
     try:
-        await run_in_threadpool(save_upload, file, TPR_DIR / f"{job_id}_md.tpr")
-        submit_tuning_job(job_id, GmxEngine(), MDEngine.GMX, extra_args=sanitized_args, nsteps=nsteps)
+        await run_in_threadpool(save_upload, file, INPUTS_DIR / f"{job_id}_md.tpr")
+        submit_tuning_job(
+            job_id, GmxEngine(), MDEngine.GMX, extra_args=sanitized_args, nsteps=nsteps, nsteps_override=nsteps_override
+        )
     except Exception as e:
         logger.exception("Failed to create GMX tuning job %s", job_id)
         await run_in_threadpool(cleanup_job_files, job_id)
@@ -83,20 +87,27 @@ async def get_gmx_status(
         logger.exception("Database timeout for job %s", job_id)
         raise HTTPException(status_code=503, detail="Database is busy. Please try again later.") from e
 
-    trials = [
-        GmxTrialResponse(
-            id=str(t.id),
-            status=t.status,
-            ntomp=t.config_json.get("ntomp", 0),
-            np=t.config_json.get("np", 1),
-            nb=t.config_json.get("nb", "auto"),
-            pme=t.config_json.get("pme", "auto"),
-            performance=t.performance,
+    trials = []
+    for t in raw_trials:
+        cfg = GmxTrialConfig.from_dict(t.config_json)
+        estimated_time, estimated_cost = cfg.footprint.estimate(job.sim_length_ns, t.performance)
+        trials.append(
+            GmxTrialResponse(
+                id=str(t.id),
+                status=t.status,
+                ntomp=cfg.ntomp,
+                np=cfg.np,
+                nb=cfg.nb.value,
+                pme=cfg.pme.value,
+                performance=t.performance,
+                estimated_time=estimated_time,
+                estimated_cost=estimated_cost,
+            )
         )
-        for t in raw_trials
-    ]
 
-    return GmxJobStatusResponse(id=job_id, status=job.status, error=job.error, trials=trials)
+    return GmxJobStatusResponse(
+        id=job_id, status=job.status, error=job.error, sim_length_ns=job.sim_length_ns, trials=trials
+    )
 
 
 register_job_management_routes(router, MDEngine.GMX)

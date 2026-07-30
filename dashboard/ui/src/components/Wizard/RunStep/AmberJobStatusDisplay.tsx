@@ -1,11 +1,9 @@
 import type { ReactNode } from "react"
 
-import { statusBadgeClass } from "@/lib/status"
-import { cn } from "@/lib/utils"
 import { formatDuration } from "@/util/helpers"
-import { getJobStatusVariant, type AmberJob } from "@/util/types"
-import { Badge } from "@/components/ui/badge"
+import { type AmberJob } from "@/util/types"
 import { Progress } from "@/components/ui/progress"
+import { JobStatusChip } from "@/components/JobStatusChip"
 
 interface AmberJobStatusDisplayProps {
   jobStatus: AmberJob
@@ -17,7 +15,6 @@ const AmberJobStatusDisplay = ({ jobStatus, actions }: AmberJobStatusDisplayProp
     jobStatus.status === "RUNNING" && jobStatus.nsteps !== null && jobStatus.nsteps_done !== null
 
   const progressPercentage = isRunningWithProgress ? (jobStatus.nsteps_done! / jobStatus.nsteps!) * 100 : 0
-  const variant = getJobStatusVariant(jobStatus.status)
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -26,9 +23,7 @@ const AmberJobStatusDisplay = ({ jobStatus, actions }: AmberJobStatusDisplayProp
         <div className="flex min-h-9 items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">Status</span>
-            <Badge variant="outline" className={cn("text-xs", statusBadgeClass(variant))}>
-              {jobStatus.status}
-            </Badge>
+            <JobStatusChip status={jobStatus.status} />
           </div>
           {actions}
         </div>
@@ -51,7 +46,7 @@ const AmberJobStatusDisplay = ({ jobStatus, actions }: AmberJobStatusDisplayProp
       </div>
 
       {/* Job summary (after completion) */}
-      {jobStatus.status === "TERMINATED" && (
+      {jobStatus.status === "FINISHED" && (
         <>
           <h3 className="text-sm font-semibold">Job Summary</h3>
           <div className="grid grid-cols-2 gap-2">

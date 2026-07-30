@@ -5,6 +5,7 @@ from enum import Enum
 from typing import Any
 
 from api.config import AMBER_NP_OPTIONS, AMBER_NTOMP_OPTIONS, MAX_CPU, MAX_GPU
+from api.pricing import RAM_GB_PER_RANK, ResourceFootprint
 
 
 class AmberBinary(str, Enum):
@@ -39,6 +40,13 @@ class AmberTrialConfig:
     def num_gpus(self) -> int:
         """Number of GPU slots required (1 for CUDA, 0 for MPI)."""
         return 1 if self.binary == AmberBinary.PMEMD_CUDA else 0
+
+    @property
+    def footprint(self) -> ResourceFootprint:
+        """Production resource allocation for cost estimates, mirroring mdrun-api _amber_resources."""
+        if self.binary == AmberBinary.PMEMD_MPI:
+            return ResourceFootprint(self.num_cpus, 0, RAM_GB_PER_RANK * self.np)
+        return ResourceFootprint(self.ntomp, 1, RAM_GB_PER_RANK)
 
     @classmethod
     def generate_all_configs(cls) -> list["AmberTrialConfig"]:

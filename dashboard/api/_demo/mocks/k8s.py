@@ -183,7 +183,7 @@ def _get_job_logs(name: str, tail_lines: int = 200) -> str:  # ruff:ignore[unuse
         return ""
 
     status = job_data.get("status", "")
-    if status == JobStatus.TERMINATED.value:
+    if status == JobStatus.FINISHED.value:
         return (
             "Running MDDB workflow\n"
             "Fetching analysis data...\n"
@@ -248,7 +248,7 @@ def _fetch_and_store_analysis(job_name: str, experiment_id: str, simulation_path
                     )
                     (mwf_dir / variant_filename).write_text(json.dumps(variant_response.json()), encoding="utf-8")
 
-        demo_state.analysis_jobs[job_name]["status"] = JobStatus.TERMINATED.value
+        demo_state.analysis_jobs[job_name]["status"] = JobStatus.FINISHED.value
         logger.debug("Analysis job %s completed with MDposit data", job_name)
 
     except Exception:

@@ -14,15 +14,16 @@ import {
   Square,
 } from "lucide-react"
 
-import { statusBadgeClass } from "@/lib/status"
+import { isActivePodStatus } from "@/lib/status"
 import { cn } from "@/lib/utils"
 import { buildNotebookUrl, pickNotebookFile, type NotebookRole } from "@/util/notebook"
-import { getPodStatusVariant, type Notebook, type NotebookTier } from "@/util/types"
+import { type Notebook, type NotebookTier } from "@/util/types"
 import { useFiles } from "@/hooks/use-files"
 import { useNotebook, useNotebookConfig, useSpawnNotebook, useStopNotebook } from "@/hooks/use-notebook"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { PodStatusChip } from "@/components/PodStatusChip"
 
 const UNKNOWN_NOTEBOOK: Notebook = {
   id: -1,
@@ -98,12 +99,8 @@ const NotebookController = ({
   inline = false,
   role,
 }: NotebookControllerProps) => {
-  const isTransitioning_status = (s: Notebook["status"]) =>
-    s === "PENDING" || s === "INITIALIZING" || s === "TERMINATING"
-
-  // Poll when transitioning
   const [displayStatus, setDisplayStatus] = useState<Notebook["status"]>("UNKNOWN")
-  const shouldPoll = isTransitioning_status(displayStatus)
+  const shouldPoll = isActivePodStatus(displayStatus)
 
   const { data: notebook = UNKNOWN_NOTEBOOK, isLoading } = useNotebook(experimentId, shouldPoll ? 1000 : false)
   const { data: config } = useNotebookConfig()
@@ -156,8 +153,6 @@ const NotebookController = ({
 
   const statusConfig = useMemo(() => STATUS_CONFIG[displayStatus] || STATUS_CONFIG.UNKNOWN, [displayStatus])
   const { Icon: StatusIcon, message } = statusConfig
-  const isTransitioning = isTransitioning_status(displayStatus)
-  const variant = getPodStatusVariant(displayStatus)
 
   const runningTierInfo = notebook.tier ? config?.tiers.find((t) => t.value === notebook.tier) : null
 
@@ -183,15 +178,9 @@ const NotebookController = ({
           )}
         >
           <div className={cn("flex items-center gap-2", compact && "justify-center", inline && "justify-start")}>
-            {isTransitioning ? (
-              <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
-            ) : StatusIcon ? (
-              <StatusIcon className="text-muted-foreground h-5 w-5" />
-            ) : null}
+            {StatusIcon && <StatusIcon className="text-muted-foreground h-5 w-5" />}
             <span className="text-sm font-medium">Notebook Status:</span>
-            <Badge variant="outline" className={cn("text-xs", statusBadgeClass(variant))}>
-              {displayStatus}
-            </Badge>
+            <PodStatusChip status={displayStatus} />
           </div>
 
           <p

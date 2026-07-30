@@ -27,6 +27,18 @@ export function formatDuration(seconds: number): string {
 }
 
 /**
+ * Formats an estimated cost as a currency string.
+ *
+ * @param cost cost amount (may be null/undefined when not estimable)
+ * @returns formatted cost string (e.g., "$1.84", "<$0.01", or "—" when missing)
+ */
+export const formatCost = (cost: number | null | undefined): string => {
+  if (cost === null || cost === undefined) return "—"
+  if (cost < 0.01) return "<$0.01"
+  return `$${cost.toFixed(2)}`
+}
+
+/**
  * Formats bytes as human-readable text with units.
  *
  * @param bytes number of bytes

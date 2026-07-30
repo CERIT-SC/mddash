@@ -117,7 +117,7 @@ class AmberJob(SimulationJob):
         if self._finish_timestamp:
             return self._finish_timestamp
 
-        if self.status != JobStatus.TERMINATED:
+        if self.status != JobStatus.FINISHED:
             return None
 
         if val := self._parse_finish_timestamp():

@@ -6,6 +6,7 @@ from itertools import product
 from typing import Any
 
 from api.config import MAX_CPU, MAX_GPU, NB_OPTIONS, NP_OPTIONS, NTOMP_OPTIONS, PME_OPTIONS
+from api.pricing import RAM_GB_PER_RANK, ResourceFootprint
 
 
 class NBMode(str, Enum):
@@ -51,6 +52,11 @@ class GmxTrialConfig:
     def num_gpus(self) -> int:
         """Number of GPU slots required (1 if nb or pme uses GPU, else 0)."""
         return int(self.nb == NBMode.GPU or self.pme == PMEMode.GPU)
+
+    @property
+    def footprint(self) -> ResourceFootprint:
+        """Production resource allocation for cost estimates, mirroring mdrun-api _gmx_resources."""
+        return ResourceFootprint(self.num_cpus, self.num_gpus, RAM_GB_PER_RANK * self.np)
 
     @classmethod
     def generate_all_configs(cls) -> list["GmxTrialConfig"]:

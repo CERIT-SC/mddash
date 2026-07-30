@@ -17,8 +17,8 @@ from api.config import (
     EARLY_STOP_THRESHOLD,
     EARLY_STOP_WARMUP_SECONDS,
     EARLY_STOP_WARMUP_STEPS,
+    INPUTS_DIR,
     JOBS_DIR,
-    TPR_DIR,
 )
 from api.engines.amber.config import AmberBinary, AmberTrialConfig
 from api.engines.amber.mdin import patch_mdin_for_benchmark
@@ -43,9 +43,9 @@ def run_pmemd(
     trial_dir = JOBS_DIR / job_id / trial_id
     trial_dir.mkdir(parents=True, exist_ok=True)
 
-    prmtop = str(TPR_DIR / f"{job_id}_md.prmtop")
-    inpcrd = str(TPR_DIR / f"{job_id}_md.inpcrd")
-    mdin_source = TPR_DIR / f"{job_id}_md.mdin"
+    prmtop = str(INPUTS_DIR / f"{job_id}_md.prmtop")
+    inpcrd = str(INPUTS_DIR / f"{job_id}_md.inpcrd")
+    mdin_source = INPUTS_DIR / f"{job_id}_md.mdin"
 
     patched_mdin = trial_dir / "mdin"
     try:

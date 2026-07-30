@@ -79,7 +79,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
             "trials": [
                 {
                     "id": "prod_00000",
-                    "status": JobStatus.TERMINATED.value,
+                    "status": JobStatus.FINISHED.value,
                     "np": 8,
                     "ntomp": 1,
                     "nb": "gpu",
@@ -119,7 +119,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         _preserved_trials=[
             {
                 "id": "npt_00000",
-                "status": JobStatus.TERMINATED.value,
+                "status": JobStatus.FINISHED.value,
                 "np": 8,
                 "ntomp": 1,
                 "nb": "gpu",
@@ -128,7 +128,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
             },
             {
                 "id": "npt_00001",
-                "status": JobStatus.TERMINATED.value,
+                "status": JobStatus.FINISHED.value,
                 "np": 4,
                 "ntomp": 2,
                 "nb": "gpu",
@@ -192,7 +192,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         created_at=now - timedelta(days=1),
     )
     demo_state.mdrun_jobs[finished_gmx.id] = {
-        "status": JobStatus.TERMINATED.value,
+        "status": JobStatus.FINISHED.value,
         "experiment_id": enzyme.id,
         "tpr_name": "npt_equilibration.tpr",
         "nsteps": 100000,
@@ -231,7 +231,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         created_at=now - timedelta(days=9),
     )
     demo_state.mdrun_jobs[published_gmx.id] = {
-        "status": JobStatus.TERMINATED.value,
+        "status": JobStatus.FINISHED.value,
         "experiment_id": published.id,
         "tpr_name": "lysozyme_hewl.tpr",
         "nsteps": 1000000,
@@ -332,7 +332,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         engine=Engine.AMBER,
     )
     demo_state.mdrun_jobs[finished_amber.id] = {
-        "status": JobStatus.TERMINATED.value,
+        "status": JobStatus.FINISHED.value,
         "experiment_id": amber_folding.id,
         "prmtop_name": "villin.prmtop",
         "inpcrd_name": "villin.inpcrd",
@@ -385,7 +385,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         engine=Engine.AMBER,
     )
     demo_state.mdrun_jobs[finished_amber_dna.id] = {
-        "status": JobStatus.TERMINATED.value,
+        "status": JobStatus.FINISHED.value,
         "experiment_id": amber_dna.id,
         "prmtop_name": "dna.prmtop",
         "inpcrd_name": "dna.inpcrd",
@@ -688,14 +688,14 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
     for job in AnalysisJob.query.all():
         job_name = f"analysis-{job.id}"
         demo_state.analysis_jobs[job_name] = {
-            "status": JobStatus.TERMINATED.value,
+            "status": JobStatus.FINISHED.value,
             "experiment_id": job.experiment_id,
             "analysis_name": job.analysis_name.value,
         }
 
     # Rehydrate GROMACS jobs from database
     for gmx_job in GromacsJob.query.all():
-        status = JobStatus.TERMINATED.value if gmx_job._finish_timestamp else JobStatus.RUNNING.value  # ruff:ignore[private-member-access]
+        status = JobStatus.FINISHED.value if gmx_job._finish_timestamp else JobStatus.RUNNING.value  # ruff:ignore[private-member-access]
         from models.simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
         files = Simulation.get(gmx_job.experiment_id, gmx_job.simulation_path).resolved_files
@@ -712,7 +712,7 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
 
     # Rehydrate AMBER jobs from database
     for amber_job in AmberJob.query.all():
-        status = JobStatus.TERMINATED.value if amber_job._finish_timestamp else JobStatus.RUNNING.value  # ruff:ignore[private-member-access]
+        status = JobStatus.FINISHED.value if amber_job._finish_timestamp else JobStatus.RUNNING.value  # ruff:ignore[private-member-access]
         from models.simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
         files = Simulation.get(amber_job.experiment_id, amber_job.simulation_path).resolved_files
@@ -734,13 +734,13 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
         if tuner_job.is_stopped:
             # Stopped jobs use preserved trials
             demo_state.tuner_jobs[tuner_job.id] = {
-                "status": JobStatus.TERMINATED.value,
+                "status": "FINISHED",
                 "created_at": time.time() - 3600,
                 "max_trials": len(tuner_job._preserved_trials or []),  # ruff:ignore[private-member-access]
                 "trials": [
                     {
                         "id": t.get("id", f"{tuner_job.id[:10]}-{i:05d}"),
-                        "status": t.get("status", JobStatus.TERMINATED.value),
+                        "status": t.get("status", "FINISHED"),
                         "np": t.get("np", 2),
                         "ntomp": t.get("ntomp", 4),
                         "nb": t.get("nb", "cpu"),
@@ -759,7 +759,7 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
                 "trials": [],
             }
         else:
-            # Running jobs get simulated trials with TERMINATED, ERROR, RUNNING pattern
+            # Running jobs get simulated trials with FINISHED, ERROR, RUNNING pattern
             started_at = time.time() - 4
             demo_state.tuner_jobs[tuner_job.id] = {
                 "status": JobStatus.RUNNING.value,
@@ -768,7 +768,7 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
                 "trials": [
                     {
                         "id": f"{tuner_job.id[:10]}-00000",
-                        "status": JobStatus.TERMINATED.value,
+                        "status": "FINISHED",
                         "np": 8,
                         "ntomp": 1,
                         "nb": "gpu",

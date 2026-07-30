@@ -1,5 +1,5 @@
 from api.engines.amber.config import EwaldPreset
-from api.engines.amber.mdin import patch_mdin_for_benchmark
+from api.engines.amber.mdin import patch_mdin_for_benchmark, simulation_length_ns
 
 MINIMAL_MDIN = """\
 Benchmark run
@@ -79,3 +79,27 @@ def test_ewald_optimized_existing_ewald_block_overridden() -> None:
     result = patch_mdin_for_benchmark(mdin_with_ewald, nsteps=10000, ewald=EwaldPreset.OPTIMIZED)
     assert result.count("netfrc = 0") == 1
     assert "netfrc = 1" not in result
+
+
+def test_simulation_length_ns_from_mdin() -> None:
+    # 500000 steps * 0.002 ps = 1.0 ns
+    assert simulation_length_ns(MINIMAL_MDIN) == 1.0
+
+
+def test_simulation_length_ns_missing_params() -> None:
+    assert simulation_length_ns(" &cntrl\n  nstlim = 1000,\n /\n") is None
+    assert simulation_length_ns("nothing here") is None
+
+
+DENSE_MDIN = """\
+Explicit solvent molecular dynamics constant pressure 50 ns MD
+ &cntrl
+   imin=0, irest=1, ntx=5,
+   ntpr=500000, ntwx=500000, ntwr=500000, nstlim=25000000,
+   dt=0.002, ntt=3, tempi=300,
+/
+"""
+
+
+def test_simulation_length_ns_reads_midline_params() -> None:
+    assert simulation_length_ns(DENSE_MDIN) == 50.0

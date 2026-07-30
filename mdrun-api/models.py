@@ -64,5 +64,5 @@ class MdrunJob(db.Model):  # type: ignore
         """Handle job status transitions and cleanup finalized jobs."""
         logger.info(f"MDRun job {self.job_name} status changed from {old} to {new}")
 
-        if new in {JobStatus.TERMINATED, JobStatus.ERROR}:
+        if new in {JobStatus.FINISHED, JobStatus.ERROR}:
             self.delete()

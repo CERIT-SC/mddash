@@ -1,4 +1,14 @@
-import type { StatusVariant } from "@/util/types"
+import {
+  getJobStatusVariant,
+  getPodStatusVariant,
+  type JobStatus,
+  type PodStatus,
+  type StatusVariant,
+  type UploadState,
+} from "@/util/types"
+
+const PENDING_BADGE_CLASS =
+  "border-yellow-400 bg-transparent text-yellow-700 dark:border-yellow-600 dark:text-yellow-300"
 
 export function statusBadgeClass(variant: StatusVariant): string {
   switch (variant) {
@@ -15,4 +25,33 @@ export function statusBadgeClass(variant: StatusVariant): string {
     default:
       return ""
   }
+}
+
+export function isActiveJobStatus(status: JobStatus): boolean {
+  return status === "PENDING" || status === "RUNNING"
+}
+
+export function jobStatusBadgeClass(status: JobStatus): string {
+  if (status === "PENDING") return PENDING_BADGE_CLASS
+  return statusBadgeClass(getJobStatusVariant(status))
+}
+
+export function isActivePodStatus(status: PodStatus): boolean {
+  return status === "PENDING" || status === "INITIALIZING" || status === "TERMINATING"
+}
+
+export function podStatusBadgeClass(status: PodStatus): string {
+  if (status === "PENDING") return PENDING_BADGE_CLASS
+  return statusBadgeClass(getPodStatusVariant(status))
+}
+
+export function isActiveUploadState(status: UploadState): boolean {
+  return status === "queued" || status === "running"
+}
+
+export function uploadStatusBadgeClass(status: UploadState): string {
+  if (status === "queued") return PENDING_BADGE_CLASS
+  if (status === "running") return statusBadgeClass("warning")
+  if (status === "completed") return statusBadgeClass("success")
+  return statusBadgeClass("destructive")
 }

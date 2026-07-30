@@ -15,7 +15,7 @@ from typing import Any, Literal
 import ray
 from fastapi import UploadFile
 
-from api.config import JOBS_DIR, TPR_DIR
+from api.config import INPUTS_DIR, JOBS_DIR
 from api.schemas.common import ResourcesResponse
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Forbidden shell metacharacters for extra_args validation
 _EXTRA_ARGS_FORBIDDEN_RE = re.compile(r"[;&|`$()<>]")
 
-GMX_FORBIDDEN_FLAGS: frozenset[str] = frozenset({"-deffnm", "-s", "-nsteps", "-ntomp", "-np", "-nb", "-pme"})
+GMX_FORBIDDEN_FLAGS: frozenset[str] = frozenset({"-deffnm", "-s", "-ntomp", "-np", "-nb", "-pme"})
 AMBER_FORBIDDEN_FLAGS: frozenset[str] = frozenset({"-i", "-p", "-c", "-o", "-inf", "-r", "-x", "-O"})
 
 
@@ -37,10 +37,10 @@ def save_upload(file: UploadFile, dest: Path) -> None:
 def cleanup_job_files(job_id: str) -> None:
     """Remove all temporary files associated with a job ID."""
     files_to_remove = [
-        TPR_DIR / f"{job_id}_md.tpr",
-        TPR_DIR / f"{job_id}_md.prmtop",
-        TPR_DIR / f"{job_id}_md.inpcrd",
-        TPR_DIR / f"{job_id}_md.mdin",
+        INPUTS_DIR / f"{job_id}_md.tpr",
+        INPUTS_DIR / f"{job_id}_md.prmtop",
+        INPUTS_DIR / f"{job_id}_md.inpcrd",
+        INPUTS_DIR / f"{job_id}_md.mdin",
     ]
     for f in files_to_remove:
         if f.exists():
@@ -150,6 +150,45 @@ def read_trial_log(job_id: str, trial_id: str, stream: Literal["stdout", "stderr
         return candidate.read_text(encoding="utf-8", errors="replace")
     except FileNotFoundError:
         return ""
+
+
+def _parse_nsteps_value(raw: str) -> int:
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValueError(f"-nsteps expects a positive integer, got '{raw}'") from None
+    if value < 1:
+        raise ValueError(f"-nsteps must be a positive integer, got {value}")
+    return value
+
+
+def extract_nsteps_override(extra_args: str) -> tuple[str, int | None]:
+    """Return benchmark-safe args and the last production -nsteps override."""
+    extra_args = (extra_args or "").strip()
+    if not extra_args:
+        return "", None
+
+    try:
+        tokens = shlex.split(extra_args, posix=True)
+    except ValueError as e:
+        raise ValueError(f"Invalid extra_args: {e}") from e
+
+    remaining: list[str] = []
+    override: int | None = None
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token == "-nsteps":
+            i += 1
+            if i >= len(tokens):
+                raise ValueError("-nsteps requires a value")
+            override = _parse_nsteps_value(tokens[i])
+        elif token.startswith("-nsteps="):
+            override = _parse_nsteps_value(token.split("=", 1)[1])
+        else:
+            remaining.append(token)
+        i += 1
+    return shlex.join(remaining), override
 
 
 def sanitize_extra_args(extra_args: str, forbidden_flags: frozenset[str]) -> str:
