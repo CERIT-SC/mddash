@@ -3,7 +3,7 @@ import { useEffect } from "react"
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, P } from "@e-infra/design-system"
 import { RefreshCw, Rocket } from "lucide-react"
 
-import { CenteredLayout } from "../components/Layouts"
+import { AuthedLayout } from "../components/Layouts"
 import { DEV_FALLBACK_BASE_URL, getAppConfig } from "../lib/config"
 import { mount } from "../lib/mount"
 
@@ -38,8 +38,14 @@ export function NotRunningPage() {
   }, [cfg.implicitSpawnSeconds, cfg.spawnUrl])
 
   return (
-    <CenteredLayout>
-      <Card>
+    <AuthedLayout
+      baseUrl={cfg.baseUrl}
+      userName={cfg.userName}
+      adminAccess={cfg.adminAccess}
+      logoutUrl={cfg.logoutUrl}
+      announcement={cfg.announcement}
+    >
+      <Card className="mx-auto w-full max-w-lg">
         <CardHeader>
           <CardTitle>{cfg.failed ? "Spawn failed" : "Server not running"}</CardTitle>
           <CardDescription>
@@ -75,7 +81,7 @@ export function NotRunningPage() {
           </Button>
         </CardContent>
       </Card>
-    </CenteredLayout>
+    </AuthedLayout>
   )
 }
 

@@ -53,7 +53,7 @@ export function HomePage() {
     if (status === "starting") {
       window.location.href = `${cfg.baseUrl}spawn-pending/${encodeURIComponent(cfg.userName)}`
     } else {
-      window.location.href = `${cfg.baseUrl}stop-pending`
+      window.location.href = `${cfg.baseUrl}spawn-pending/${encodeURIComponent(cfg.userName)}`
     }
   }, [isTransitioning, status, cfg.baseUrl, cfg.userName])
 

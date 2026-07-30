@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import {
   Alert,
@@ -10,7 +10,7 @@ import {
   CardTitle,
   Progress,
 } from "@e-infra/design-system"
-import { ArrowLeft, LoaderCircle, TriangleAlert } from "lucide-react"
+import { LoaderCircle, RotateCw, Square, TriangleAlert } from "lucide-react"
 
 import { AuthedLayout } from "../components/Layouts"
 import { HubApi } from "../lib/api"
@@ -28,8 +28,11 @@ export function SpawnPendingPage() {
   })
   const { progress, currentMessage, log, status, streamEnded } = useSpawnProgress(cfg.progressUrl)
   const api = useMemo(() => new HubApi(cfg.baseUrl, cfg.xsrf), [cfg.baseUrl, cfg.xsrf])
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelError, setCancelError] = useState<string | null>(null)
+  const [retrying, setRetrying] = useState(false)
+  const [retryError, setRetryError] = useState<string | null>(null)
 
-  // Poll /api/user as fallback when SSE dies (e.g. refresh during the check phase).
   useEffect(() => {
     if (status === "ready" || status === "failed") return
     if (!streamEnded) return
@@ -56,6 +59,30 @@ export function SpawnPendingPage() {
     }
   }, [api, cfg.userName, cfg.baseUrl, status, streamEnded])
 
+  const retry = async () => {
+    setRetrying(true)
+    setRetryError(null)
+    try {
+      await api.startServer(cfg.userName)
+      window.location.reload()
+    } catch (error) {
+      setRetryError(error instanceof Error ? error.message : "Could not retry starting the server.")
+      setRetrying(false)
+    }
+  }
+
+  const cancelStartup = async () => {
+    setCancelling(true)
+    setCancelError(null)
+    try {
+      await api.stopServer(cfg.userName)
+      window.location.reload()
+    } catch (error) {
+      setCancelError(error instanceof Error ? error.message : "Could not cancel server startup.")
+      setCancelling(false)
+    }
+  }
+
   return (
     <AuthedLayout
       baseUrl={cfg.baseUrl}
@@ -76,7 +103,7 @@ export function SpawnPendingPage() {
           </CardTitle>
           <CardDescription>
             {status === "failed"
-              ? "The server could not be started. You can try again from the home page."
+              ? "The server could not be started. Try starting it again."
               : "You will be redirected automatically when it is ready"}
           </CardDescription>
         </CardHeader>
@@ -87,12 +114,20 @@ export function SpawnPendingPage() {
               <p className="text-text-muted text-sm" aria-live="polite">
                 {streamEnded ? "Waiting for server to become ready…" : (currentMessage ?? "Contacting the spawner…")}
               </p>
+              {cancelError ? <Alert variant="error">{cancelError}</Alert> : null}
+              <Button variant="error" disabled={cancelling} onClick={() => void cancelStartup()}>
+                <Square size={16} />
+                {cancelling ? "Cancelling startup…" : "Cancel startup"}
+              </Button>
             </>
           ) : null}
           {status === "failed" ? (
             <Alert variant="error" className="flex items-start gap-2">
               <TriangleAlert size={16} />
-              <span>The server failed to start.{currentMessage ? ` ${currentMessage}` : ""}</span>
+              <span>
+                The server failed to start.{currentMessage ? ` ${currentMessage}` : ""}
+                {retryError ? ` ${retryError}` : ""}
+              </span>
             </Alert>
           ) : null}
           <details open={status === "failed"} className="bg-surface rounded-md p-3">
@@ -118,11 +153,9 @@ export function SpawnPendingPage() {
             </div>
           </details>
           {status === "failed" ? (
-            <Button variant="secondary" asChild>
-              <a href={`${cfg.baseUrl}home`}>
-                <ArrowLeft size={16} />
-                Back to home
-              </a>
+            <Button variant="secondary" disabled={retrying} onClick={() => void retry()}>
+              <RotateCw className={retrying ? "animate-spin" : undefined} size={16} />
+              {retrying ? "Retrying…" : "Retry starting server"}
             </Button>
           ) : null}
         </CardContent>
