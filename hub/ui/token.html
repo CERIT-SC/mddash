@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; base-uri 'self'; form-action 'self'"
+    />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <title>API tokens · MDDash</title>
+    <script>
+      window.appConfig = {
+        baseUrl: {{ base_url | default("") | tojson }},
+        userName: {{ user.name | tojson }},
+        xsrf: {{ xsrf_token | default("") | tojson }},
+        logoutUrl: {{ logout_url | default("") | tojson }},
+        adminAccess: {{ admin_access | default(false) | tojson }},
+        announcement: {{ announcement | default(none) | tojson }},
+        tokenExpiresInOptionsHtml: {{ token_expires_in_options_html | default("") | tojson }},
+        {% if oauth_clients %}
+        oauthClients: [
+          {% for client in oauth_clients %}
+          {
+            tokenId: {{ client["token_id"] | tojson }},
+            description: {{ (client["description"] or "") | tojson }},
+            scopes: [{% for scope in client["tokens"] | sum(attribute="scopes", start=[]) | unique | sort %}{{ scope | tojson }}{% if not loop.last %}, {% endif %}{% endfor %}],
+            lastActivity: {% if client["last_activity"] %}{{ (client["last_activity"].isoformat() + "Z") | tojson }}{% else %}null{% endif %},
+            created: {% if client["created"] %}{{ (client["created"].isoformat() + "Z") | tojson }}{% else %}null{% endif %}
+          }{% if not loop.last %}, {% endif %}
+          {% endfor %}
+        ]
+        {% else %}
+        oauthClients: []
+        {% endif %}
+      };
+    </script>
+  </head>
+  <body>
+    <noscript>
+      <p>JupyterHub requires JavaScript. Please enable it to proceed.</p>
+    </noscript>
+    <div id="root"></div>
+    <script type="module" src="/src/pages/token.tsx"></script>
+  </body>
+</html>

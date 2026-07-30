@@ -124,7 +124,9 @@ resources:
     limitsMemory: "25Gi"
   pvcStorageSize: 10Gi
 
+# JupyterHub image (hub + custom UI, includes EGI Check-in JWT login)
 hub:
+  image: mddash-hub
   resources:
     requests:
       cpu: "200m"

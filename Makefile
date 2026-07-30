@@ -33,6 +33,7 @@ fix: ## Auto-fix formatting and lint issues (Python via ruff, frontend via prett
 	ruff check . --fix
 	cd dashboard/ui && pnpm run format && pnpm exec eslint . --fix
 	cd landing && pnpm run format
+	cd hub/ui && pnpm run format
 
 .PHONY: lint
 lint: lint-py lint-ui ## Check linting without auto-fix
@@ -58,9 +59,10 @@ format-check-py: ## Check Python formatting
 	ruff format . --diff
 
 .PHONY: format-check-ui
-format-check-ui: ## Check frontend formatting (dashboard/ui and landing via prettier)
+format-check-ui: ## Check frontend formatting (dashboard/ui, landing and hub/ui via prettier)
 	cd dashboard/ui && pnpm run format:check
 	cd landing && pnpm run format:check
+	cd hub/ui && pnpm run format:check
 
 .PHONY: lint-helm
 lint-helm: validate-charts ## Validate all Helm charts including umbrella dependency build. Requires helm + gomplate + yq.
@@ -85,7 +87,7 @@ validate-charts: ## Lint and template all charts for every environment. Requires
 # ==================== TYPE CHECK ====================
 
 .PHONY: type-check
-type-check: type-check-dashboard-api type-check-dashboard-auth type-check-mdrun-api type-check-tuner type-check-ui type-check-landing ## Run type checks on all components
+type-check: type-check-dashboard-api type-check-dashboard-auth type-check-mdrun-api type-check-tuner type-check-ui type-check-landing type-check-hub-ui ## Run type checks on all components
 
 .PHONY: type-check-dashboard-api
 type-check-dashboard-api: ## Type-check dashboard API
@@ -110,6 +112,10 @@ type-check-ui: ## Type-check dashboard UI (TypeScript)
 .PHONY: type-check-landing
 type-check-landing: ## Type-check landing page (TypeScript)
 	cd landing && pnpm run type-check
+
+.PHONY: type-check-hub-ui
+type-check-hub-ui: ## Type-check hub UI (TypeScript)
+	cd hub/ui && pnpm run type-check
 
 # ==================== TEST ====================
 
@@ -139,7 +145,7 @@ test-pre-spawn-hook: ## Run pre-spawn hook unit tests
 # ==================== BUILD ====================
 
 .PHONY: build
-build: build-dashboard build-notebook build-mdrun-api build-tuner-api build-landing ## Build all automated images
+build: build-dashboard build-notebook build-mdrun-api build-tuner-api build-landing build-hub ## Build all automated images
 
 .PHONY: build-dashboard
 build-dashboard: ## Build dashboard sidecar images (ui, proxy, auth, api, s3sync)
@@ -161,8 +167,12 @@ build-tuner-api: ## Build Tuner API image (worker image remains manual)
 build-landing: ## Build landing page image
 	@$(MAKE) -C landing build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
+.PHONY: build-hub
+build-hub: ## Build JupyterHub image (hub + custom UI)
+	@$(MAKE) -C hub build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
+
 .PHONY: push
-push: push-dashboard push-notebook push-mdrun-api push-tuner-api push-landing ## Build and push all automated images
+push: push-dashboard push-notebook push-mdrun-api push-tuner-api push-landing push-hub ## Build and push all automated images
 
 .PHONY: push-dashboard
 push-dashboard: ## Build and push dashboard sidecar images
@@ -183,6 +193,10 @@ push-tuner-api: ## Build and push Tuner API image (worker image remains manual)
 .PHONY: push-landing
 push-landing: ## Build and push landing page image
 	@$(MAKE) -C landing push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
+
+.PHONY: push-hub
+push-hub: ## Build and push JupyterHub image (hub + custom UI)
+	@$(MAKE) -C hub push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 # ==================== HELM CHART PACKAGING ====================
 
