@@ -1,18 +1,7 @@
 import { useEffect, useState } from "react"
 
 import { useQueryClient } from "@tanstack/react-query"
-import {
-  CheckCircle,
-  CloudUpload,
-  Download,
-  ExternalLink,
-  Folder,
-  HardDrive,
-  Info,
-  Loader2,
-  LogIn,
-  Pencil,
-} from "lucide-react"
+import { CloudUpload, Download, ExternalLink, Folder, HardDrive, Info, Loader2, LogIn, Pencil } from "lucide-react"
 import { toast } from "sonner"
 
 import { DEBUG, Engine, MDPOSIT_URL } from "@/util/const"
@@ -21,11 +10,11 @@ import { simulationMdpositUnavailableReason } from "@/util/simulation"
 import { type Experiment, type Simulation, type UploadState } from "@/util/types"
 import { useMdPositPublishData, type MdPositHandoffFile } from "@/hooks/use-mdposit"
 import { getMDRepoAuthUrl, useMDRepoStatus, usePublishExperiment, usePublishStatus } from "@/hooks/use-mdrepo"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { UploadStatusChip } from "@/components/UploadStatusChip"
 import SimulationPreview from "@/components/Wizard/SimulationPreview"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
@@ -194,19 +183,10 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
             <span className="text-muted-foreground font-medium">Total Size:</span>
             <span>{totalSize !== undefined ? formatFileSize(totalSize) : "n/a"}</span>
           </div>
-          {isUploadComplete && (
+          {uploadState && (
             <div className="flex items-center gap-2 text-sm">
               <span className="text-muted-foreground font-medium">Status:</span>
-              <Badge className="gap-1 bg-green-500 text-xs text-white">
-                <CheckCircle className="h-3 w-3" />
-                Uploaded
-              </Badge>
-            </div>
-          )}
-          {isUploadFailed && (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground font-medium">Status:</span>
-              <Badge className="gap-1 bg-red-500 text-xs text-white">Upload Failed</Badge>
+              <UploadStatusChip status={uploadState} />
             </div>
           )}
         </div>
@@ -223,7 +203,6 @@ const InvenioPublishContent = ({ experiment }: { experiment: Experiment }) => {
       {isUploadActive && publishStatus && (
         <div className="w-full space-y-2 rounded-md border p-3">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <Loader2 className="h-4 w-4 animate-spin" />
             {uploadState === "queued"
               ? "Upload queued, waiting for pod..."
               : `Uploading files... (${statusCompleted}/${statusFiles})`}

@@ -3,8 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { BarChart3, CircleAlert, Info, Loader2, Play, RefreshCw, Terminal, X } from "lucide-react"
 
-import { statusBadgeClass } from "@/lib/status"
-import { cn } from "@/lib/utils"
 import {
   AnalysisPreprocessingMode,
   AVAILABLE_ANALYSES,
@@ -16,7 +14,6 @@ import { getAnalysisLabel } from "@/util/analysis-utils"
 import { Engine, SELECT_NONE } from "@/util/const"
 import { simulationAnalysisUnavailableReason } from "@/util/simulation"
 import type { Simulation } from "@/util/types"
-import { getJobStatusVariant } from "@/util/types"
 import {
   useAnalysisData,
   useAnalysisJobs,
@@ -31,6 +28,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import AnalysisRenderer from "@/components/analysis/renderers"
 import ConfirmDialog from "@/components/ConfirmDialog"
+import { JobStatusChip } from "@/components/JobStatusChip"
 import LogsView from "@/components/LogsView"
 
 interface AnalysisPanelProps {
@@ -294,31 +292,22 @@ const AnalysisPanel = ({
 
         {activeJob && (
           <>
-            <span
-              className={cn(
-                "ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                statusBadgeClass(getJobStatusVariant(activeJob.status))
-              )}
+            <JobStatusChip status={activeJob.status} className="ml-auto" />
+            {activeJob.analysis_name !== resolvedAnalysis && (
+              <span className="text-muted-foreground text-xs">
+                {AVAILABLE_ANALYSES.find((a) => a.value === activeJob.analysis_name)?.label ?? activeJob.analysis_name}
+              </span>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Cancel running analysis"
+              className="h-6 w-6 rounded-full"
+              onClick={() => setConfirmCancelDialog(true)}
             >
-              <Loader2 className="h-3 w-3 animate-spin" />
-              {activeJob.status}
-              {activeJob.analysis_name !== resolvedAnalysis && (
-                <span className="opacity-75">
-                  (
-                  {AVAILABLE_ANALYSES.find((a) => a.value === activeJob.analysis_name)?.label ??
-                    activeJob.analysis_name}
-                  )
-                </span>
-              )}
-              <button
-                type="button"
-                aria-label="Cancel running analysis"
-                className="hover:bg-background/20 focus-visible:ring-ring rounded-full p-0.5 transition-colors focus-visible:ring-2 focus-visible:outline-hidden"
-                onClick={() => setConfirmCancelDialog(true)}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
+              <X className="h-3 w-3" />
+            </Button>
             {activeJob.status !== "PENDING" && (
               <Button
                 size="sm"
@@ -335,15 +324,7 @@ const AnalysisPanel = ({
 
         {!activeJob && lastJob?.status === "ERROR" && (
           <>
-            <span
-              className={cn(
-                "ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                statusBadgeClass("destructive")
-              )}
-            >
-              <CircleAlert className="h-3 w-3" />
-              Failed
-            </span>
+            <JobStatusChip status="ERROR" className="ml-auto" />
             <Button
               size="sm"
               variant="ghost"

@@ -3,13 +3,11 @@ import { useState } from "react"
 import { Link } from "@tanstack/react-router"
 import { Loader2, PlusCircle, Trash2, Wand2 } from "lucide-react"
 
-import { statusBadgeClass } from "@/lib/status"
-import { cn } from "@/lib/utils"
-import { getPodStatusVariant, type Experiment } from "@/util/types"
+import type { Experiment } from "@/util/types"
 import { useDeleteExperiment, useExperiments } from "@/hooks/use-experiments"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
+import { PodStatusChip } from "@/components/PodStatusChip"
 
 import ConfirmDialog from "./ConfirmDialog"
 
@@ -45,7 +43,6 @@ const Experiments = () => {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {experiments.map((experiment) => {
           const notebookStatus = experiment.notebook?.status || "UNKNOWN"
-          const podVariant = getPodStatusVariant(notebookStatus)
           return (
             <Card key={experiment.id} className="flex flex-col justify-between">
               <CardContent className="flex flex-col gap-1 pt-4">
@@ -60,9 +57,7 @@ const Experiments = () => {
                 </div>
                 <div className="flex items-center gap-1 text-sm">
                   <span className="text-muted-foreground font-medium">Notebook:</span>
-                  <Badge variant="outline" className={cn("text-xs", statusBadgeClass(podVariant))}>
-                    {notebookStatus}
-                  </Badge>
+                  <PodStatusChip status={notebookStatus} />
                 </div>
                 <div className="flex items-center gap-1 text-sm">
                   <span className="text-muted-foreground font-medium">Tuner jobs:</span>
