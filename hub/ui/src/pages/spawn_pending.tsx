@@ -65,44 +65,35 @@ export function SpawnPendingPage() {
       <Card className="mx-auto w-full max-w-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            {status === "failed" || status === "lost" ? (
+            {status === "failed" ? (
               <TriangleAlert className="text-error" size={20} />
             ) : (
               <LoaderCircle className="text-primary animate-spin" size={20} />
             )}
-            {status === "failed" || status === "lost" ? "Server failed to start" : "Your server is starting up"}
+            {status === "failed" ? "Server failed to start" : "Your server is starting up"}
           </CardTitle>
           <CardDescription>
-            {status === "failed" || status === "lost"
+            {status === "failed"
               ? "The server could not be started. You can try again from the home page."
               : "You will be redirected automatically when it is ready"}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {status !== "failed" && status !== "lost" ? (
+          {status !== "failed" ? (
             <>
               <Progress value={progress} />
               <p className="text-text-muted text-sm" aria-live="polite">
                 {currentMessage ?? "Contacting the spawner…"}
               </p>
-              {status === "reconnecting" ? (
-                <p className="text-text-muted text-xs">Connection lost — retrying…</p>
-              ) : null}
             </>
           ) : null}
           {status === "failed" ? (
             <Alert variant="error" className="flex items-start gap-2">
               <TriangleAlert size={16} />
-              <span>
-                The server failed to start.
-                {currentMessage ? ` ${currentMessage}` : ""}
-              </span>
+              <span>The server failed to start.{currentMessage ? ` ${currentMessage}` : ""}</span>
             </Alert>
           ) : null}
-          {status === "lost" ? (
-            <Alert variant="warning">Lost contact with the hub. Your server may still be starting.</Alert>
-          ) : null}
-          <details open={status === "failed" || status === "lost"} className="bg-surface rounded-md p-3">
+          <details open={status === "failed"} className="bg-surface rounded-md p-3">
             <summary className="text-text-muted cursor-pointer text-sm">Event log</summary>
             <div className="mt-2 flex flex-col gap-1">
               {log.length === 0 ? (
@@ -124,7 +115,7 @@ export function SpawnPendingPage() {
               )}
             </div>
           </details>
-          {status === "failed" || status === "lost" ? (
+          {status === "failed" ? (
             <Button variant="secondary" asChild>
               <a href={`${cfg.baseUrl}home`}>
                 <ArrowLeft size={16} />

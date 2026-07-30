@@ -50,39 +50,32 @@ export function HomePage() {
   const isTransitioning = status === "starting" || status === "stopping"
   useEffect(() => {
     if (!isTransitioning) return
-    const id = setInterval(() => void refresh(), 5000)
-    return () => clearInterval(id)
-  }, [isTransitioning, refresh])
+    if (status === "starting") {
+      window.location.href = `${cfg.baseUrl}spawn-pending/${encodeURIComponent(cfg.userName)}`
+    } else {
+      window.location.href = `${cfg.baseUrl}stop-pending`
+    }
+  }, [isTransitioning, status, cfg.baseUrl, cfg.userName])
 
   const start = useCallback(() => {
     setBusy(true)
     setOptimistic("starting")
-    api
-      .startServer(cfg.userName)
-      .then(() => {
-        window.location.href = `${cfg.baseUrl}spawn-pending/${encodeURIComponent(cfg.userName)}`
-      })
-      .catch((e: Error) => {
-        toast.error(e.message)
-        setOptimistic(null)
-        setBusy(false)
-      })
-  }, [api, cfg.baseUrl, cfg.userName])
+    api.startServer(cfg.userName).catch((e: Error) => {
+      toast.error(e.message)
+      setOptimistic(null)
+      setBusy(false)
+    })
+  }, [api, cfg.userName])
 
   const stop = useCallback(() => {
     setBusy(true)
     setOptimistic("stopping")
-    api
-      .stopServer(cfg.userName)
-      .then(() => {
-        window.location.href = `${cfg.baseUrl}stop-pending`
-      })
-      .catch((e: Error) => {
-        toast.error(e.message)
-        setOptimistic(null)
-        setBusy(false)
-      })
-  }, [api, cfg.baseUrl])
+    api.stopServer(cfg.userName).catch((e: Error) => {
+      toast.error(e.message)
+      setOptimistic(null)
+      setBusy(false)
+    })
+  }, [api])
 
   return (
     <AuthedLayout
@@ -120,22 +113,6 @@ export function HomePage() {
                 Stop my server
               </Button>
             </>
-          ) : null}
-
-          {status === "starting" ? (
-            <Button size="lg" variant="secondary" asChild>
-              <a href={`${cfg.baseUrl}spawn-pending/${encodeURIComponent(cfg.userName)}`} className="no-underline">
-                Watch startup progress
-              </a>
-            </Button>
-          ) : null}
-
-          {status === "stopping" ? (
-            <Button size="lg" variant="secondary" asChild>
-              <a href={`${cfg.baseUrl}stop-pending`} className="no-underline">
-                Watch shutdown progress
-              </a>
-            </Button>
           ) : null}
 
           {status === "stopped" ? (
