@@ -163,15 +163,7 @@ def _parse_nsteps_value(raw: str) -> int:
 
 
 def extract_nsteps_override(extra_args: str) -> tuple[str, int | None]:
-    """
-    Extract an mdrun -nsteps override from raw extra args.
-
-    The remaining args (safe for benchmark runs) are returned first; the override
-    step count (production simulation length) second. Last occurrence wins.
-
-    Raises:
-        ValueError: On unparseable args or a missing/invalid -nsteps value.
-    """
+    """Return benchmark-safe args and the last production -nsteps override."""
     extra_args = (extra_args or "").strip()
     if not extra_args:
         return "", None
