@@ -8,14 +8,13 @@ import { AuthedLayout } from "../components/Layouts"
 import { HubApi, type HubUserModel } from "../lib/api"
 import { getAppConfig } from "../lib/config"
 import { mount } from "../lib/mount"
+import { serverStatus, type ServerStatus } from "../lib/status"
 
 interface HomeConfig {
   /** Template-time snapshot used until the live /api/user response lands. */
   defaultServerActive: boolean
   serverUrl: string
 }
-
-type ServerStatus = "stopped" | "starting" | "running" | "stopping"
 
 export function HomePage() {
   const cfg = getAppConfig<HomeConfig>({
@@ -35,14 +34,8 @@ export function HomePage() {
   }, [api, cfg.userName])
 
   const server = user?.servers?.[""]
-  const status: ServerStatus =
-    server?.pending === "spawn"
-      ? "starting"
-      : server?.pending === "stop"
-        ? "stopping"
-        : (server?.ready ?? cfg.defaultServerActive)
-          ? "running"
-          : "stopped"
+  // Until the live /api/user response lands, fall back to the template-time snapshot.
+  const status: ServerStatus = user ? serverStatus(server) : cfg.defaultServerActive ? "running" : "stopped"
   const serverUrl = cfg.serverUrl || `${cfg.baseUrl}user/${encodeURIComponent(cfg.userName)}/`
 
   const start = useCallback(() => {

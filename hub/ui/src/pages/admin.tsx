@@ -35,16 +35,10 @@ import { HubApi, type HubUserModel } from "../lib/api"
 import { getAppConfig } from "../lib/config"
 import { formatTime } from "../lib/format"
 import { mount } from "../lib/mount"
+import { serverStatus } from "../lib/status"
 
 interface AdminConfig {
   apiPageLimit: number
-}
-
-function serverStatus(user: HubUserModel): "running" | "starting" | "stopping" | "stopped" {
-  const server = user.servers?.[""]
-  if (server?.pending === "spawn") return "starting"
-  if (server?.pending === "stop" || user.pending === "stop") return "stopping"
-  return server?.ready || server?.active ? "running" : "stopped"
 }
 
 export function AdminPage() {
@@ -150,7 +144,7 @@ export function AdminPage() {
                   </TableHeader>
                   <TableBody>
                     {users.map((user) => {
-                      const status = serverStatus(user)
+                      const status = serverStatus(user.servers?.[""])
                       const serverUrl = `${cfg.baseUrl}user/${encodeURIComponent(user.name)}/`
                       const busy = busyRow === user.name
                       return (

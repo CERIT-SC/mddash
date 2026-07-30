@@ -5,6 +5,10 @@
 
 import { readFileSync, readdirSync } from "node:fs"
 
+// All entries must carry the same CSP; enforcing it here catches copy drift.
+const CSP =
+  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; base-uri 'self'; form-action 'self'"
+
 const ENTRIES = [
   "login.html",
   "home.html",
@@ -30,6 +34,10 @@ for (const entry of ENTRIES) {
     console.error(`FAIL ${entry}: missing from dist/`)
     failed = true
     continue
+  }
+  if (!html.includes(CSP)) {
+    console.error(`FAIL ${entry}: CSP meta is missing or diverges from the shared policy`)
+    failed = true
   }
   if (!html.includes("window.appConfig = {")) {
     console.error(`FAIL ${entry}: missing the window.appConfig injection`)

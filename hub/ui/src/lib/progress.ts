@@ -12,7 +12,6 @@ export interface ProgressEvent {
   html_message?: string
   ready?: boolean
   failed?: boolean
-  url?: string
 }
 
 export interface LogEntry {

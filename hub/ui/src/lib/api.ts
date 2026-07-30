@@ -20,7 +20,9 @@ export class HubApiError extends Error {
 export interface HubServerModel {
   name: string
   ready: boolean
+  /** True while the server process exists (including during startup). */
   active: boolean
+  /** Current transition — "spawn" or "stop" — or null when stable. */
   pending: string | null
   url: string
   started: string | null
