@@ -26,12 +26,13 @@ export function SpawnPendingPage() {
   const cfg = getAppConfig<SpawnPendingConfig>({
     progressUrl: `${DEV_FALLBACK_BASE_URL}api/users/user/progress`,
   })
-  const { progress, currentMessage, log, status } = useSpawnProgress(cfg.progressUrl)
+  const { progress, currentMessage, log, status, streamEnded } = useSpawnProgress(cfg.progressUrl)
   const api = useMemo(() => new HubApi(cfg.baseUrl, cfg.xsrf), [cfg.baseUrl, cfg.xsrf])
 
-  // Safety net: poll /api/user in case SSE dies or the proxy kills the stream.
+  // Poll /api/user as fallback when SSE dies (e.g. refresh during the check phase).
   useEffect(() => {
     if (status === "ready" || status === "failed") return
+    if (!streamEnded) return
     let cancelled = false
     const poll = async () => {
       try {
@@ -40,19 +41,20 @@ export function SpawnPendingPage() {
         const srv = u.servers?.[""]
         if (srv?.ready) {
           window.location.reload()
-        } else if (!srv && status !== "connecting") {
+        } else if (!srv) {
           window.location.href = `${cfg.baseUrl}home`
         }
       } catch {
         // transient
       }
     }
-    const id = setInterval(poll, 10000)
+    void poll()
+    const id = setInterval(poll, 5000)
     return () => {
       cancelled = true
       clearInterval(id)
     }
-  }, [api, cfg.userName, cfg.baseUrl, status])
+  }, [api, cfg.userName, cfg.baseUrl, status, streamEnded])
 
   return (
     <AuthedLayout
@@ -81,9 +83,9 @@ export function SpawnPendingPage() {
         <CardContent className="flex flex-col gap-4">
           {status !== "failed" ? (
             <>
-              <Progress value={progress} />
+              {streamEnded ? null : <Progress value={progress} />}
               <p className="text-text-muted text-sm" aria-live="polite">
-                {currentMessage ?? "Contacting the spawner…"}
+                {streamEnded ? "Waiting for server to become ready…" : (currentMessage ?? "Contacting the spawner…")}
               </p>
             </>
           ) : null}

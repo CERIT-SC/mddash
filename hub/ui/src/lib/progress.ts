@@ -20,6 +20,7 @@ export function useSpawnProgress(progressUrl: string) {
   const [currentMessage, setCurrentMessage] = useState<string | null>(null)
   const [log, setLog] = useState<LogEntry[]>([])
   const [status, setStatus] = useState<ProgressStatus>("connecting")
+  const [streamEnded, setStreamEnded] = useState(false)
 
   const logRef = useRef<LogEntry[]>([])
   const pushLog = (entry: LogEntry) => {
@@ -53,7 +54,7 @@ export function useSpawnProgress(progressUrl: string) {
 
     source.onerror = () => {
       source.close()
-      // The fallback /api/user poll in spawn_pending.tsx catches ready/failed.
+      setStreamEnded(true)
     }
 
     return () => {
@@ -61,5 +62,5 @@ export function useSpawnProgress(progressUrl: string) {
     }
   }, [progressUrl])
 
-  return { progress, currentMessage, log, status }
+  return { progress, currentMessage, log, status, streamEnded }
 }
