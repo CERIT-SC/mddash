@@ -32,7 +32,7 @@ const CLASS_META: Record<TrialClass, { icon: LucideIcon; label: string; tooltip:
 }
 
 export function TrialClassBadges({ classes, className }: Props) {
-  if (!classes?.length) return <span className="text-muted-foreground text-xs">—</span>
+  if (!classes?.length) return null
   return (
     <div className={cn("flex flex-wrap items-center gap-1", className)}>
       {classes.map((cls) => {

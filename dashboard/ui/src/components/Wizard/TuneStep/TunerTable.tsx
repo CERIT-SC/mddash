@@ -3,7 +3,6 @@ import { useCallback, useMemo, useState } from "react"
 import { Loader2, Terminal } from "lucide-react"
 
 import { computeTrialClasses } from "@/lib/trial-classes"
-import { cn } from "@/lib/utils"
 import { formatCost, formatDuration } from "@/util/helpers"
 import { type JobStatus, type GmxTunerTrial as TunerTrial } from "@/util/types"
 import { useTunerTrialLogs } from "@/hooks/use-tuner"
@@ -15,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import ConfirmDialog from "@/components/ConfirmDialog"
 import { JobStatusChip } from "@/components/JobStatusChip"
 import LogsView from "@/components/LogsView"
+import { TableHeadHelp } from "@/components/TableHeadHelp"
 import { TrialClassBadges } from "@/components/TrialClassBadges"
 
 interface TunerTableProps {
@@ -93,60 +93,31 @@ const TunerTable = (props: TunerTableProps) => {
               <TableHead className="text-primary-foreground">Status</TableHead>
               <TableHead className="text-primary-foreground" />
               <TableHead className="text-primary-foreground text-right">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">Performance</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Measured performance (ns/day)</TooltipContent>
-                </Tooltip>
+                <TableHeadHelp label="Performance" description="Measured performance (ns/day)" />
               </TableHead>
               <TableHead className="text-primary-foreground text-right">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">Est. Time</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Estimated time to run the full simulation with this configuration</TooltipContent>
-                </Tooltip>
+                <TableHeadHelp
+                  label="Est. Time"
+                  description="Estimated time to run the full simulation with this configuration"
+                />
               </TableHead>
               <TableHead className="text-primary-foreground text-right">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">Est. Cost</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Estimated cost of the full simulation, from hourly CPU/GPU/RAM rates</TooltipContent>
-                </Tooltip>
+                <TableHeadHelp
+                  label="Est. Cost"
+                  description="Estimated cost of the full simulation, from hourly CPU/GPU/RAM rates"
+                />
               </TableHead>
               <TableHead className="text-primary-foreground text-right">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">PME</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Device type for PME calculations</TooltipContent>
-                </Tooltip>
+                <TableHeadHelp label="PME" description="Device type for PME calculations" />
               </TableHead>
               <TableHead className="text-primary-foreground text-right">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">NB</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Device type for non-bonded interactions</TooltipContent>
-                </Tooltip>
+                <TableHeadHelp label="NB" description="Device type for non-bonded interactions" />
               </TableHead>
               <TableHead className="text-primary-foreground text-right">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">NP</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Number of MPI processes</TooltipContent>
-                </Tooltip>
+                <TableHeadHelp label="NP" description="Number of MPI processes" />
               </TableHead>
               <TableHead className="text-primary-foreground text-right">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="cursor-help">NTOMP</span>
-                  </TooltipTrigger>
-                  <TooltipContent>Number of OpenMP threads per MPI rank</TooltipContent>
-                </Tooltip>
+                <TableHeadHelp label="NTOMP" description="Number of OpenMP threads per MPI rank" />
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -154,7 +125,7 @@ const TunerTable = (props: TunerTableProps) => {
             {sortedRows.map((row, idx) => {
               const isOptimal = idx === 0 && row.performance !== null
               return (
-                <TableRow key={row.id} className={cn(isOptimal && "bg-primary/5 dark:bg-primary/10")}>
+                <TableRow key={row.id}>
                   <TableCell>
                     <div className="flex items-center justify-center">
                       <input
