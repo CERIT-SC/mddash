@@ -57,10 +57,8 @@ export interface TokenRequestBody {
 }
 
 function xsrfCookie(): string | undefined {
-  return document.cookie
-    .split("; ")
-    .find((c) => c.startsWith("_xsrf="))
-    ?.split("=")[1]
+  const match = document.cookie.match(/_xsrf=([^;]+)/)
+  return match ? match[1] : undefined
 }
 
 function joinUrl(...parts: string[]): string {
@@ -98,8 +96,14 @@ export class HubApi {
       throw new HubApiError(0, "Cannot reach JupyterHub. Check your network connection.")
     }
     if (response.ok) {
-      if (response.status === 204) return undefined as T
-      return (await response.json()) as T
+      if (response.status === 204 || response.status === 202) return undefined as T
+      const text = await response.text()
+      if (!text) return undefined as T
+      try {
+        return JSON.parse(text) as T
+      } catch {
+        return undefined as T
+      }
     }
     let message = `JupyterHub request failed (${response.status})`
     try {

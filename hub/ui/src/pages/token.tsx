@@ -94,6 +94,10 @@ export function TokenPage() {
 
   useEffect(refresh, [refresh])
 
+  // JH auto-generates server-spawn tokens ("Server at /user/<name>/"); keep them separate.
+  const userTokens = useMemo(() => tokens.filter((t) => !t.note?.startsWith("Server at /user/")), [tokens])
+  const serverTokens = useMemo(() => tokens.filter((t) => t.note?.startsWith("Server at /user/")), [tokens])
+
   const requestToken = () => {
     setBusy(true)
     setNewToken(null)
@@ -231,7 +235,7 @@ export function TokenPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {tokens.length === 0 ? (
+            {userTokens.length === 0 ? (
               <P className="text-text-muted">You have no API tokens.</P>
             ) : (
               <div className="overflow-x-auto">
@@ -246,7 +250,7 @@ export function TokenPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {tokens.map((t) => (
+                    {userTokens.map((t) => (
                       <TableRow key={t.id}>
                         <TableCell>
                           <div className="font-medium">{t.note || "(no note)"}</div>
@@ -276,6 +280,40 @@ export function TokenPage() {
                 </Table>
               </div>
             )}
+            {serverTokens.length > 0 ? (
+              <details className="mt-4">
+                <summary className="text-text-muted cursor-pointer text-sm">
+                  {serverTokens.length} server token{serverTokens.length !== 1 ? "s" : ""} (auto-generated)
+                </summary>
+                <div className="mt-2 overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Note</TableHead>
+                        <TableHead>Last used</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {serverTokens.map((t) => (
+                        <TableRow key={t.id}>
+                          <TableCell className="text-text-muted text-sm">{t.note}</TableCell>
+                          <TableCell className="text-text-muted text-sm">{formatTime(t.last_activity)}</TableCell>
+                          <TableCell className="text-text-muted text-sm">{formatTime(t.created)}</TableCell>
+                          <TableCell>
+                            <Button size="sm" variant="error" onClick={() => revokeToken(t.id)}>
+                              <Trash2 size={14} />
+                              Revoke
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </details>
+            ) : null}
           </CardContent>
         </Card>
 

@@ -24,8 +24,7 @@ export function ErrorPage({ notFound = false }: { notFound?: boolean }) {
     extraErrorHtml: null,
   })
 
-  // Stock behavior: strip the hub's redirect-loop counter from the URL so
-  // refresh doesn't accumulate `redirects` parameters.
+  // Strip the hub's redirect-loop counter from the URL.
   useEffect(() => {
     if (window.location.search.length <= 1) return
     const params = window.location.search.slice(1).split("&")
@@ -40,19 +39,37 @@ export function ErrorPage({ notFound = false }: { notFound?: boolean }) {
     )
   }, [])
 
+  const friendlyTitle = (() => {
+    switch (cfg.statusCode) {
+      case 403:
+        return "Access denied"
+      case 404:
+        return "Page not found"
+      case 500:
+        return "Server error"
+      case 502:
+        return "Server error"
+      case 503:
+        return "Service unavailable"
+      default:
+        return cfg.statusMessage || "Something went wrong"
+    }
+  })()
+
   return (
     <CenteredLayout announcement={cfg.announcement}>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <TriangleAlert className="text-warning" size={20} />
-            {cfg.statusCode} : {cfg.statusMessage}
+            {friendlyTitle}
           </CardTitle>
-          <CardDescription>Something went wrong</CardDescription>
+          <CardDescription>
+            {cfg.statusCode} {cfg.statusMessage}
+          </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {cfg.messageHtml ? (
-            // Hub-rendered error HTML (same rendering contract as the stock error.html template).
             <P dangerouslySetInnerHTML={{ __html: cfg.messageHtml }} />
           ) : cfg.message ? (
             <P>{cfg.message}</P>

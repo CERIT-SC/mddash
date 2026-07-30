@@ -25,21 +25,38 @@ export function HomePage() {
 
   const [user, setUser] = useState<HubUserModel | null>(null)
   const [busy, setBusy] = useState(false)
+  const [optimistic, setOptimistic] = useState<ServerStatus | null>(null)
 
-  useEffect(() => {
-    api
+  const refresh = useCallback(() => {
+    return api
       .getUser(cfg.userName)
-      .then(setUser)
+      .then((u) => {
+        setUser(u)
+        setOptimistic(null)
+      })
       .catch(() => toast.error("Could not load server status."))
   }, [api, cfg.userName])
 
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  // Poll while the server is in a transitional state.
   const server = user?.servers?.[""]
-  // Until the live /api/user response lands, fall back to the template-time snapshot.
-  const status: ServerStatus = user ? serverStatus(server) : cfg.defaultServerActive ? "running" : "stopped"
+  const liveStatus: ServerStatus = user ? serverStatus(server) : cfg.defaultServerActive ? "running" : "stopped"
+  const status = optimistic ?? liveStatus
   const serverUrl = cfg.serverUrl || `${cfg.baseUrl}user/${encodeURIComponent(cfg.userName)}/`
+
+  const isTransitioning = status === "starting" || status === "stopping"
+  useEffect(() => {
+    if (!isTransitioning) return
+    const id = setInterval(() => void refresh(), 5000)
+    return () => clearInterval(id)
+  }, [isTransitioning, refresh])
 
   const start = useCallback(() => {
     setBusy(true)
+    setOptimistic("starting")
     api
       .startServer(cfg.userName)
       .then(() => {
@@ -47,12 +64,14 @@ export function HomePage() {
       })
       .catch((e: Error) => {
         toast.error(e.message)
+        setOptimistic(null)
         setBusy(false)
       })
   }, [api, cfg.baseUrl, cfg.userName])
 
   const stop = useCallback(() => {
     setBusy(true)
+    setOptimistic("stopping")
     api
       .stopServer(cfg.userName)
       .then(() => {
@@ -60,6 +79,7 @@ export function HomePage() {
       })
       .catch((e: Error) => {
         toast.error(e.message)
+        setOptimistic(null)
         setBusy(false)
       })
   }, [api, cfg.baseUrl])
