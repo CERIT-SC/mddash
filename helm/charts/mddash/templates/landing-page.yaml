@@ -104,3 +104,32 @@ spec:
                 name: proxy-public
                 port:
                   number: 80
+{{- range .Values.landing.redirectFrom }}
+---
+# Permanent redirect from a legacy hostname to the canonical one (path preserved via $request_uri).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $.Release.Name }}-redirect-{{ . | replace "." "-" }}
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/permanent-redirect: "https://{{ $.Values.landing.hostname }}"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - {{ . }}
+      secretName: {{ . | replace "." "-" }}-tls
+  rules:
+    - host: {{ . }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: proxy-public
+                port:
+                  number: 80
+{{- end }}

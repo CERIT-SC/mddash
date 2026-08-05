@@ -239,6 +239,10 @@ jupyterhub:
 
 landing:
   hostname: "{{ $cfg.dashboard.hostname }}"
+  {{- if index $cfg.dashboard "redirectFrom" }}
+  redirectFrom:
+{{ $cfg.dashboard.redirectFrom | toYAML | indent 4 }}
+  {{- end }}
   tlsSecretName: "{{ $cfg.dashboard.hostname | strings.ReplaceAll "." "-" }}-tls"
   image:
     repository: "{{ $registry }}/{{ $cfg.landing.image }}"

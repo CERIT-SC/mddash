@@ -15,7 +15,9 @@ imageTag: latest  # Overridden by CI/CD or make deploy, see README.md
 
 # Dashboard hostname
 dashboard:
-  hostname: mddash.dyn.cloud.e-infra.cz
+  hostname: mddash.cloud.e-infra.cz
+  redirectFrom:
+    - mddash.dyn.cloud.e-infra.cz
 
 # OIDC provider for JupyterHub authentication
 oidc:
