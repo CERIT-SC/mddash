@@ -9,6 +9,7 @@ from utils import (
     get_files_with_extensions,
     get_unique_id,
     is_excluded_path,
+    nsteps_override,
 )
 
 DEFAULT_ID_LENGTH = 5
@@ -135,6 +136,50 @@ class TestIsExcludedPath:
         nested_file.touch()
 
         assert is_excluded_path(nested_file, tmp_path) is True
+
+
+class TestNstepsOverride:
+    """Tests for the nsteps_override function."""
+
+    def test_returns_none_for_empty_args(self) -> None:
+        """Empty or missing extra_args should yield no override."""
+        assert nsteps_override("") is None
+        assert nsteps_override("   ") is None
+
+    def test_returns_none_when_nsteps_absent(self) -> None:
+        """extra_args without -nsteps should yield no override."""
+        assert nsteps_override("-maxh 1.0 -v") is None
+
+    def test_parses_space_separated_value(self) -> None:
+        """Should parse the '-nsteps N' form."""
+        assert nsteps_override("-nsteps 1000 -maxh 1.0") == 1000
+
+    def test_parses_equals_form(self) -> None:
+        """Should parse the '-nsteps=N' form."""
+        assert nsteps_override("-maxh 1.0 -nsteps=500") == 500
+
+    def test_last_occurrence_wins(self) -> None:
+        """Repeated -nsteps should resolve to the last value, like gmx mdrun."""
+        assert nsteps_override("-nsteps 1000 -nsteps 2000") == 2000
+
+    def test_parses_quoted_value(self) -> None:
+        """Quoted values should be handled after shlex splitting."""
+        assert nsteps_override("-nsteps '1000'") == 1000
+
+    def test_ignores_invalid_value(self) -> None:
+        """Non-integer or non-positive values should yield no override."""
+        assert nsteps_override("-nsteps foo") is None
+        assert nsteps_override("-nsteps -1") is None
+        assert nsteps_override("-nsteps 0") is None
+
+    def test_ignores_trailing_missing_value(self) -> None:
+        """A trailing -nsteps without a value should yield no override."""
+        assert nsteps_override("-v -nsteps") is None
+
+    def test_tolerates_unparseable_args(self) -> None:
+        """Unbalanced quotes must never raise; parsing is best-effort."""
+        assert nsteps_override("-nsteps 1000 'unterminated") == 1000
+        assert nsteps_override("'unterminated -maxh 1.0") is None
 
 
 class TestDuMonitor:

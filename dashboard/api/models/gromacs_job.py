@@ -17,7 +17,7 @@ from enums import DeviceType, Engine, JobStatus
 from extensions import db
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
-from utils import tail
+from utils import nsteps_override, tail
 from werkzeug.exceptions import (
     BadRequest,
     Forbidden,
@@ -88,9 +88,17 @@ class GromacsJob(SimulationJob):
         """Path to the stderr log file."""
         return DATA_DIR / self.experiment_id / self._sim_dir / f"mdrun-{self.id}.err"
 
+    @cached_property
+    def _nsteps_override(self) -> int | None:
+        """Production ``-nsteps`` override from the simulation's extra_args, if any."""
+        return nsteps_override(Simulation.get(self.experiment_id, self.simulation_path).extra_args)
+
     @property
     def nsteps(self) -> int | None:
-        """Total number of steps for the job."""
+        """Total number of steps for the job (``-nsteps`` from extra_args overrides the TPR value)."""
+        if override := self._nsteps_override:
+            return override
+
         if self._nsteps:
             return self._nsteps
 

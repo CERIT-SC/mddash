@@ -147,6 +147,15 @@ def get_files_with_extensions(
     return files
 
 
+_NSTEPS_RE = re.compile(r"-nsteps(?:=|\s+)['\"]?(\d+)")
+
+
+def nsteps_override(extra_args: str) -> int | None:
+    """Extract the effective GROMACS ``-nsteps`` override from extra_args (last occurrence wins), or None."""
+    value = int(matches[-1]) if (matches := _NSTEPS_RE.findall(extra_args or "")) else 0
+    return value if value > 0 else None
+
+
 def is_excluded_path(path: Path, base_dir: Path) -> bool:
     """
     Determine whether a path should be excluded from uploads.
