@@ -35,7 +35,7 @@ export function HubHeader({ baseUrl, userName, adminAccess, logoutUrl, current }
     <Header>
       <HeaderContent>
         <HeaderLeft>
-          <a href={baseUrl} className="flex items-center gap-3 no-underline">
+          <a href={`${baseUrl}home`} className="flex items-center gap-3 no-underline">
             <Logo />
             <span className="text-text-muted text-sm">MDDash</span>
           </a>
