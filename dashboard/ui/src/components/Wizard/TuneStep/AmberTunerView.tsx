@@ -8,15 +8,12 @@ import { useSimulation } from "@/hooks/use-simulations"
 import { useDeleteTuner, useRunTuner, useTunerStatus } from "@/hooks/use-tuner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import ConfirmDialog from "@/components/ConfirmDialog"
 import AmberStartForm from "@/components/Wizard/RunStep/AmberStartForm"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import AmberTunerTable from "./AmberTunerTable"
-
-const DEFAULT_NSTEPS = 25000
+import NstepsPicker, { DEFAULT_NSTEPS } from "./NstepsPicker"
 
 interface AmberTunerViewProps extends WizardStepProps {
   simulationPath: string
@@ -134,22 +131,11 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
           {(!tuner || tunerErrorMessage) && (
             <Card className="w-fit">
               <CardContent className="flex flex-col items-center gap-4 pt-4">
-                <div className="flex w-72 flex-col gap-1">
-                  <Label htmlFor="nsteps-input">Number of steps (nsteps)</Label>
-                  <Input
-                    id="nsteps-input"
-                    type="number"
-                    value={nsteps}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      setNsteps(val === "" ? "" : parseInt(val) || "")
-                    }}
-                  />
-                </div>
+                <NstepsPicker value={nsteps} onChange={setNsteps} />
                 <Button
                   variant="default"
                   onClick={handleRunTuner}
-                  disabled={runTuner.isPending || !!unavailableReason}
+                  disabled={runTuner.isPending || !!unavailableReason || nsteps === "" || nsteps <= 0}
                   className="w-48"
                 >
                   {runTuner.isPending ? (
