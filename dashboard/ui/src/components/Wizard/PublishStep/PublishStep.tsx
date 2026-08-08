@@ -11,7 +11,6 @@ import { type Experiment, type Simulation, type UploadState } from "@/util/types
 import { useMdPositPublishData, type MdPositHandoffFile } from "@/hooks/use-mdposit"
 import { getMDRepoAuthUrl, useMDRepoStatus, usePublishExperiment, usePublishStatus } from "@/hooks/use-mdrepo"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { UploadStatusChip } from "@/components/UploadStatusChip"
@@ -31,8 +30,8 @@ const PublishStep = (props: WizardStepProps) => {
 
   return (
     <div className="flex justify-center">
-      <Card className={target === "invenio" ? "w-full max-w-lg" : "w-full max-w-2xl"}>
-        <CardContent className="flex flex-col items-center gap-4 pt-4">
+      <div className={target === "invenio" ? "w-full max-w-lg" : "w-full max-w-2xl"}>
+        <div className="flex flex-col items-center gap-4 pt-2">
           <div className="flex items-center gap-2">
             <Info className="text-muted-foreground h-5 w-5" />
             <h2 className="text-lg font-semibold">Publish Experiment</h2>
@@ -58,8 +57,8 @@ const PublishStep = (props: WizardStepProps) => {
           ) : (
             <MdPositPublishContent experiment={experiment} selected={props.selectedSimulation} />
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }
