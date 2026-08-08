@@ -358,7 +358,7 @@ const New = () => {
               )}
             </div>
 
-            <Button type="submit" disabled={createExperiment.isPending} className="self-start">
+            <Button type="submit" disabled={createExperiment.isPending} className="self-end">
               {createExperiment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {createExperiment.isPending ? "Creating..." : "Create Experiment"}
             </Button>
