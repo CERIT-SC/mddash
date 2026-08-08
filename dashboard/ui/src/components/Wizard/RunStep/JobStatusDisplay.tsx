@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 
+import { cn } from "@/lib/utils"
 import { formatDuration } from "@/util/helpers"
 import { type GromacsJob } from "@/util/types"
 import { Progress } from "@/components/ui/progress"
@@ -11,10 +12,15 @@ interface JobStatusDisplayProps {
 }
 
 const JobStatusDisplay = ({ jobStatus, actions }: JobStatusDisplayProps) => {
-  const isRunningWithProgress =
-    jobStatus.status === "RUNNING" && jobStatus.nsteps !== null && jobStatus.nsteps_done !== null
+  const isFinished = jobStatus.status === "FINISHED"
+  const isRunning = jobStatus.status === "RUNNING"
+  const isRunningWithProgress = isRunning && jobStatus.nsteps !== null && jobStatus.nsteps_done !== null
 
-  const progressPercentage = isRunningWithProgress ? (jobStatus.nsteps_done! / jobStatus.nsteps!) * 100 : 0
+  const progressPercentage = isFinished
+    ? 100
+    : isRunningWithProgress
+      ? (jobStatus.nsteps_done! / jobStatus.nsteps!) * 100
+      : 0
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -28,21 +34,28 @@ const JobStatusDisplay = ({ jobStatus, actions }: JobStatusDisplayProps) => {
           {actions}
         </div>
 
-        {isRunningWithProgress && (
-          <div className="flex flex-col items-center gap-1">
-            <span className="text-muted-foreground text-sm">Progress</span>
-            <span className="text-2xl font-bold">{progressPercentage.toFixed(1)}%</span>
-            <Progress value={progressPercentage} className="h-3 w-full rounded" />
-            <span className="text-muted-foreground text-xs">
-              {jobStatus.nsteps_done!.toLocaleString()} / {jobStatus.nsteps!.toLocaleString()} steps
-            </span>
-            {jobStatus.estimated_time !== null && (
-              <span className="text-muted-foreground text-xs">
-                Estimated time remaining: {formatDuration(jobStatus.estimated_time)}
-              </span>
+        <div className="flex flex-col items-center gap-1">
+          <span className="text-muted-foreground text-sm">Progress</span>
+          <span className="text-2xl font-bold">{progressPercentage.toFixed(1)}%</span>
+          <Progress
+            value={progressPercentage}
+            className={cn(
+              "h-3 w-full rounded",
+              isFinished &&
+                "[&>[data-slot=progress-indicator]]:bg-green-500 dark:[&>[data-slot=progress-indicator]]:bg-green-400"
             )}
-          </div>
-        )}
+          />
+          {jobStatus.nsteps !== null && jobStatus.nsteps_done !== null && (
+            <span className="text-muted-foreground text-xs">
+              {jobStatus.nsteps_done.toLocaleString()} / {jobStatus.nsteps.toLocaleString()} steps
+            </span>
+          )}
+          {isRunning && jobStatus.estimated_time !== null && (
+            <span className="text-muted-foreground text-xs">
+              Estimated time remaining: {formatDuration(jobStatus.estimated_time)}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Job summary (after completion) */}
