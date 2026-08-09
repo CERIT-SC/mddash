@@ -427,68 +427,6 @@ class TestUniqueName:
             Simulation.update(exp_id, "protein.simulation.json", {"name": "_new", "files": GMX_FILES})
 
 
-def _read_name(exp_dir: Path, simulation_path: str) -> str:
-    """Read the manifest name field back from disk."""
-    return json.loads((exp_dir / simulation_path).read_text())["name"]
-
-
-class TestReconcileNames:
-    """Startup reconciliation renames duplicate/reserved names so tabs stay addressable."""
-
-    def test_duplicate_names_renamed(self, app: Flask, tmp_path: Path) -> None:
-        """The later duplicate gets a unique suffix; the first keeps its name."""
-        exp_id = _seed_experiment(app)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "a.simulation.json", GMX_FILES, name="villin")
-        _write_sim_file(exp_dir, "production/b.simulation.json", GMX_FILES, name="villin")
-
-        Simulation.reconcile_duplicate_names()
-
-        assert _read_name(exp_dir, "a.simulation.json") == "villin"
-        assert _read_name(exp_dir, "production/b.simulation.json") == "villin-2"
-
-    def test_reserved_name_renamed(self, app: Flask, tmp_path: Path) -> None:
-        """A pre-existing `_new` manifest (the create-tab sentinel) is renamed to be selectable."""
-        exp_id = _seed_experiment(app)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "_new.simulation.json", GMX_FILES, name="_new")
-
-        Simulation.reconcile_duplicate_names()
-
-        assert _read_name(exp_dir, "_new.simulation.json") == "new"
-
-    def test_readonly_manifest_renamed(self, app: Flask, tmp_path: Path) -> None:
-        """Job-locked (read-only) manifests are renamed too — jobs key on path, not name."""
-        exp_id = _seed_experiment(app)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "a.simulation.json", GMX_FILES, name="villin")
-        locked = _write_sim_file(exp_dir, "b.simulation.json", GMX_FILES, name="villin")
-        os.chmod(exp_dir / locked, 0o444)
-
-        Simulation.reconcile_duplicate_names()
-
-        assert _read_name(exp_dir, "b.simulation.json") == "villin-2"
-
-    def test_idempotent(self, app: Flask, tmp_path: Path) -> None:
-        """A second reconciliation pass changes nothing."""
-        exp_id = _seed_experiment(app)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "a.simulation.json", GMX_FILES, name="villin")
-        _write_sim_file(exp_dir, "b.simulation.json", GMX_FILES, name="villin")
-
-        Simulation.reconcile_duplicate_names()
-        first = (_read_name(exp_dir, "a.simulation.json"), _read_name(exp_dir, "b.simulation.json"))
-        Simulation.reconcile_duplicate_names()
-        second = (_read_name(exp_dir, "a.simulation.json"), _read_name(exp_dir, "b.simulation.json"))
-
-        assert first == ("villin", "villin-2")
-        assert second == first
-
-
 def _write_two_sims(exp_dir: Path) -> None:
     """Write 'protein' and 'ligand' manifests with protein's mtime older."""
     exp_dir.mkdir(parents=True, exist_ok=True)

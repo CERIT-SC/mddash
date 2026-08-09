@@ -110,7 +110,7 @@ def _safe_default_path(name: str) -> str:
 
 
 class _JobRows(NamedTuple):
-    """All job rows referencing one ``simulation_path`` — the complete set of per-setup job models."""
+    """Job rows referencing one ``simulation_path`` — the single source of the job-model set."""
 
     tuner: list[Any]
     simulation: list[Any]
@@ -118,12 +118,7 @@ class _JobRows(NamedTuple):
 
 
 def _query_jobs(experiment_id: str, simulation_path: str) -> _JobRows:
-    """
-    Single scan of every job table for a setup.
-
-    Centralizes the job-model set so the ladder, ``last_activity``, locking,
-    and deletion can't diverge when a new job type appears.
-    """
+    """Scan every job table for a setup in one call."""
     # avoid circular dependency
     from .analysis_job import AnalysisJob  # ruff:ignore[import-outside-top-level]
     from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
@@ -186,7 +181,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         self._memo_jobs: _JobRows | None = None
 
     def _cached_jobs(self) -> _JobRows:
-        """Job rows for this setup, queried once per instance (list payloads hit the ladder, activity, and lock)."""
+        """Job rows for this setup, queried once per instance."""
         if self._memo_jobs is None:
             self._memo_jobs = _query_jobs(self.experiment_id, self.simulation_path)
         return self._memo_jobs
@@ -241,7 +236,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     @property
     def locked(self) -> bool:
-        """Whether the simulation is locked (read-only file or tuner/simulation job references)."""
+        """Whether the simulation is locked (read-only file or active job references)."""
         if not os.access(self._file, os.W_OK):
             return True
         jobs = self._cached_jobs()
@@ -255,10 +250,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         Latest of manifest mtime, simulation-job creation/start/finish, and
         tuner/analysis-job creation. Job start/finish are only set once the
         MDRun API reports them, hence creation time for fresh jobs. Analysis
-        counts as interaction (it moves the 'latest' pointer) but not as a
-        ladder step — the ladder only advances on a finished MD job. Used to
-        pick the 'latest' setup (experiment step delegation, wizard tab
-        fallback).
+        counts here (moves the 'latest' pointer) but not in the step ladder —
+        that only advances on a finished MD job.
         """
         events: list[float] = []
         with suppress(OSError):
@@ -517,66 +510,6 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return simulations
 
     @classmethod
-    def reconcile_duplicate_names(cls) -> None:
-        """
-        Rename duplicate/reserved simulation names in place (deploy reconciliation).
-
-        Names are the wizard tab identity, but pre-uniqueness data can contain
-        same-named manifests in one experiment — both unreachable by tab.
-        Same for names now reserved (leading underscore). Jobs key on
-        ``simulation_path``, so rewriting only the JSON ``name`` field is
-        safe even for running jobs. Best-effort: per-experiment failures are
-        logged and skipped.
-        """
-        if not DATA_DIR.is_dir():
-            return
-        for exp_dir in sorted(DATA_DIR.iterdir()):
-            if not exp_dir.is_dir():
-                continue
-            try:
-                cls._reconcile_experiment_names(exp_dir.name)
-            except Exception:
-                logger.exception("Failed to reconcile simulation names for experiment '%s'", exp_dir.name)
-
-    @classmethod
-    def _reconcile_experiment_names(cls, experiment_id: str) -> None:
-        """Rename duplicate or reserved simulation names within one experiment."""
-        manifests = [cls._from_file(experiment_id, f.path) for f in cls.list_files(experiment_id)]
-        manifests = [s for s in manifests if s.name]
-        taken = {s.name for s in manifests}
-        seen: set[str] = set()
-        for sim in manifests:
-            if not sim.name.startswith("_") and sim.name not in seen:
-                seen.add(sim.name)
-                continue
-            base = sim.name.lstrip("_") or "simulation"
-            candidate = base
-            suffix = 2
-            while candidate in taken or candidate in seen:
-                candidate = f"{base}-{suffix}"
-                suffix += 1
-            cls._rename_manifest(experiment_id, sim.simulation_path, sim.name, candidate)
-            taken.add(candidate)
-            seen.add(candidate)
-
-    @classmethod
-    def _rename_manifest(cls, experiment_id: str, simulation_path: str, old_name: str, new_name: str) -> None:
-        """Rewrite only the ``name`` field of a manifest, making it writable first if needed."""
-        simulation_file = DATA_DIR / experiment_id / simulation_path
-        content = json.loads(simulation_file.read_text(encoding="utf-8"))
-        content["name"] = new_name
-        if not os.access(simulation_file, os.W_OK):
-            simulation_file.chmod(WRITABLE_MODE)
-        simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        logger.info(
-            "Reconciled simulation name '%s' -> '%s' (experiment %s, %s)",
-            old_name,
-            new_name,
-            experiment_id,
-            simulation_path,
-        )
-
-    @classmethod
     def get(cls, experiment_id: str, simulation_path: str) -> "Simulation":
         """
         Get a single simulation by path.
@@ -608,8 +541,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         Reject a name already used by another manifest in this experiment.
 
         Names are the wizard tab identity (``?tab=<name>``), hence unique.
-        Underscore-prefixed names are reserved for UI sentinels (``_new`` is
-        the wizard's create-mode tab) and rejected the same way.
+        Underscore prefixes are reserved for UI sentinels (``_new`` = create tab).
 
         Raises:
             ApiError: 409 when the name is reserved or already taken.

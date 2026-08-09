@@ -46,11 +46,7 @@ interface ResolvedWizard {
   maxStep: number
 }
 
-/**
- * Furthest step reachable for a tab: its own ladder, plus the experiment-wide
- * Publish gate — open once the experiment is published/publishing or ANY
- * setup finished MD (a fresher setup must not hide a completed one's Publish).
- */
+/** Furthest step reachable for a tab: its own ladder, plus Publish — open once published or any setup finished MD. */
 function maxAllowedStep(
   simulation: Simulation | null,
   createMode: boolean,
