@@ -33,7 +33,7 @@ const SimulationTabs = ({ simulations, selectedName, loading, onSelect, onCreate
       <TabsList
         variant="line"
         aria-label="Simulations"
-        className="simulation-tabs-scroll relative z-10 -mb-px h-auto w-full flex-nowrap items-end justify-start gap-1 overflow-x-auto rounded-none p-0 px-3"
+        className="simulation-tabs-scroll relative z-10 -mb-px h-auto w-full flex-nowrap items-end justify-start gap-1 overflow-x-auto rounded-none p-0"
       >
         {loading ? (
           <div className="text-muted-foreground flex h-9 items-center gap-2 text-sm">
