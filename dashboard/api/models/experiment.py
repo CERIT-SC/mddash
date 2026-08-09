@@ -1,5 +1,6 @@
 import logging
 import threading
+from contextlib import suppress
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
@@ -23,7 +24,7 @@ from config import (
     MDREPO_TOKEN_URL,
     MDREPO_URL,
 )
-from enums import Engine, JobStatus, PodStatus
+from enums import Engine, PodStatus
 from errors import ApiError
 from extensions import db
 from flask import session
@@ -58,6 +59,7 @@ from .notebook import Notebook
 
 if TYPE_CHECKING:
     from .analysis_job import AnalysisJob
+    from .simulation import Simulation
     from .simulation_job import SimulationJob
     from .tuner_job import TunerJob
 
@@ -376,25 +378,51 @@ class Experiment(db.Model):  # type: ignore
             db.session.rollback()
             raise
 
-    def _has_setup_files(self) -> bool:
+    def _latest_simulation(self) -> "Simulation | None":
         """
-        Return whether at least one valid simulation manifest exists for the engine.
+        Return the simulation with the most recent activity.
+
+        Activity is the latest of the manifest file mtime, its simulation jobs'
+        start/finish timestamps, or its tuner jobs' creation time — so a fresh
+        jobless setup also counts via mtime.
 
         Returns:
-            True if a valid simulation exists, False otherwise.
+            The most recently touched Simulation, or None if the experiment
+            has no manifests.
         """
         from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
-        for f in Simulation.list_files(self.id):
-            sim = Simulation._from_file(self.id, f.path)  # ruff:ignore[private-member-access]
-            if sim.valid and sim.engine == self.engine.value:
-                return True
-        return False
+        simulations = Simulation.list(self.id)
+        if not simulations:
+            return None
+
+        def activity(sim: "Simulation") -> float:
+            events: list[float] = []
+            # use Simulation's path accessor (single source for the DATA_DIR base)
+            with suppress(OSError):
+                events.append(sim._file.stat().st_mtime)  # ruff:ignore[private-member-access]
+            for job in self.simulation_jobs:
+                if job.simulation_path == sim.simulation_path:
+                    events.extend(
+                        float(t)
+                        for t in (job._start_timestamp, job._finish_timestamp)  # ruff:ignore[private-member-access]
+                        if t is not None
+                    )
+            for job in self.tuner_jobs:
+                if job.simulation_path == sim.simulation_path and job.created_at is not None:
+                    events.append(job.created_at.timestamp())
+            return max(events, default=0.0)
+
+        return max(simulations, key=activity)
 
     @cached(cache=step_status_cache)
     def _step_status(self) -> tuple[int, str]:
         """
         Determine (step, status) based on current state.
+
+        Publish state is experiment-level and overrides; otherwise the
+        experiment inherits the step and status of its latest simulation
+        (per-setup inference lives on ``Simulation``).
 
         Returns:
             A tuple of (step, status) where step is an integer (0-5) and status
@@ -408,29 +436,8 @@ class Experiment(db.Model):  # type: ignore
         if self.mdrepo_published is False:
             return 5, "publishing"
 
-        # Step 4: Analyzing (experiment has terminated simulation job)
-        if any(j.status == JobStatus.FINISHED for j in self.simulation_jobs):
-            return 4, "analyzing"
-
-        # Step 3: Allow user to analyze a running simulation
-        if any(j.status == JobStatus.RUNNING for j in self.simulation_jobs):
-            return 3, "simulating"
-
-        # Step 2: Running simulation (experiment has a simulation job)
-        if self.simulation_jobs:
-            return 2, "simulating"
-
-        # Step 2: Tuning (experiment has terminated tuner trial)
-        if any(any(t.get("performance") is not None for t in j.trials) for j in self.tuner_jobs):
-            return 2, "tuning"
-
-        # Step 1: Tuning (experiment has a tuner job)
-        if self.tuner_jobs:
-            return 1, "tuning"
-
-        # Step 1: Setup complete (directory contains required files for the engine)
-        if self._has_setup_files():
-            return 1, "setup complete"
+        if latest := self._latest_simulation():
+            return latest.step_status
 
         return 0, "setup"
 

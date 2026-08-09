@@ -5,8 +5,10 @@ from http import HTTPStatus
 from pathlib import Path
 
 import jsonschema
+from cache import step_status_cache
+from cachetools import cached
 from config import DATA_DIR
-from enums import Engine
+from enums import Engine, JobStatus
 from errors import ApiError
 from extensions import db
 from manifest_schema import resolve_schema_url, schema_url
@@ -207,13 +209,69 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """Whether the simulation is locked (read-only file or active job references)."""
         return self.is_locked(self.experiment_id, self.simulation_path)
 
+    @property
+    def step(self) -> int:
+        """Wizard step of this setup based on its own jobs and manifest validity."""
+        return self._step_status()[0]
+
+    @property
+    def status(self) -> str:
+        """Status of this setup based on its own jobs and manifest validity."""
+        return self._step_status()[1]
+
+    @property
+    def step_status(self) -> tuple[int, str]:
+        """Public accessor for the cached per-setup (step, status) ladder."""
+        return self._step_status()
+
+    @cached(cache=step_status_cache)
+    def _step_status(self) -> tuple[int, str]:
+        """
+        Determine (step, status) from this setup's own state.
+
+        Mirrors the experiment ladder but scoped to jobs referencing this
+        ``simulation_path``: finished job (4), running job (3), any job or
+        tuner trial with performance (2), any tuner job (1), valid manifest (1).
+
+        Returns:
+            A tuple of (step, status) where step is an integer (0-4) and status
+            is a string describing the current phase.
+        """
+        # avoid circular dependency
+        from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
+        from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
+
+        simulation_jobs = SimulationJob.query.filter_by(
+            experiment_id=self.experiment_id, simulation_path=self.simulation_path
+        ).all()
+
+        if any(j.status == JobStatus.FINISHED for j in simulation_jobs):
+            return 4, "analyzing"
+        if any(j.status == JobStatus.RUNNING for j in simulation_jobs):
+            return 3, "simulating"
+        if simulation_jobs:
+            return 2, "simulating"
+
+        tuner_jobs = TunerJob.query.filter_by(
+            experiment_id=self.experiment_id, simulation_path=self.simulation_path
+        ).all()
+
+        if any(any(t.get("performance") is not None for t in j.trials) for j in tuner_jobs):
+            return 2, "tuning"
+        if tuner_jobs:
+            return 1, "tuning"
+
+        if self.valid:
+            return 1, "setup complete"
+        return 0, "setup"
+
     def to_dict(self) -> dict:
         """
         Serialize to the API response dict.
 
         Returns:
             Dict with simulation_path, name, engine, files, resolved_files,
-            extra_args, locked, valid, errors, missing_files.
+            extra_args, locked, valid, errors, missing_files, step, status.
         """
         valid, errors, missing = self._run_validation()
         return {
@@ -227,6 +285,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             "valid": valid,
             "errors": errors,
             "missing_files": missing,
+            "step": self.step,
+            "status": self.status,
         }
 
     def resolve_role(self, role: str) -> Path:
@@ -433,6 +493,31 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return cls(experiment_id, simulation_path, raw=raw)
 
     @classmethod
+    def _require_unique_name(cls, experiment_id: str, name: str, exclude_path: str | None = None) -> None:
+        """
+        Reject a name already used by another manifest in this experiment.
+
+        The name is the tab identity in the wizard URL (``?tab=<name>``), so
+        names must be unique per experiment.
+
+        Raises:
+            ApiError: 409 when another manifest already carries this name.
+        """
+        if not name:
+            return
+        for file_info in cls.list_files(experiment_id):
+            if exclude_path is not None and Path(file_info.path).as_posix() == exclude_path:
+                continue
+            other = cls._from_file(experiment_id, file_info.path)
+            if other.name == name:
+                raise ApiError(
+                    HTTPStatus.CONFLICT,
+                    f"A simulation named '{name}' already exists.",
+                    "urn:mddash:duplicate-simulation-name",
+                    "Choose a different name.",
+                )
+
+    @classmethod
     def write(cls, experiment_id: str, payload: dict) -> "Simulation":
         """
         Create a simulation manifest at `{name}.simulation.json` unless a path is provided.
@@ -457,6 +542,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         content = _build_content(experiment.engine, payload)
         _validate_content_or_raise(content, experiment.engine)
+        cls._require_unique_name(experiment_id, str(content.get("name", "")))
 
         simulation_file.parent.mkdir(parents=True, exist_ok=True)
         simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -532,6 +618,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         content = _build_content(experiment.engine, payload)
         _validate_content_or_raise(content, experiment.engine)
+        cls._require_unique_name(experiment_id, str(content.get("name", "")), exclude_path=simulation_path)
 
         if simulation_file.exists() and not os.access(simulation_file, os.W_OK):
             try:
