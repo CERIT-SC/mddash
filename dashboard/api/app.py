@@ -13,6 +13,7 @@ from extensions import db, ma, migrate
 from flask import Flask
 from flask_migrate import stamp, upgrade
 from logging_utils import configure_logging, enable_loggers
+from models.simulation import Simulation
 from notebook_modules import load_catalog_or_exit
 from routes import (
     amber_bp,
@@ -129,6 +130,12 @@ def create_app() -> Flask:
 
     with app.app_context():
         _run_migrations()
+
+    # Names predate per-experiment uniqueness; the wizard can't address
+    # duplicate tabs, so reconcile them once per pod start.
+    reconcile_start = time.perf_counter()
+    Simulation.reconcile_duplicate_names()
+    _log_duration("simulation-name-reconciliation", reconcile_start)
 
     start_du_monitor(DATA_DIR, initial_delay=DU_MONITOR_START_DELAY_SECONDS)
     _log_duration("app-factory", startup_start)

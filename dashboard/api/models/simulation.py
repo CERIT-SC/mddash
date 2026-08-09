@@ -4,6 +4,7 @@ import os
 from contextlib import suppress
 from http import HTTPStatus
 from pathlib import Path
+from typing import Any, NamedTuple
 
 import jsonschema
 from cache import step_status_cache
@@ -108,6 +109,32 @@ def _safe_default_path(name: str) -> str:
     return f"{safe_name}{SIMULATION_SUFFIX}"
 
 
+class _JobRows(NamedTuple):
+    """All job rows referencing one ``simulation_path`` — the complete set of per-setup job models."""
+
+    tuner: list[Any]
+    simulation: list[Any]
+    analysis: list[Any]
+
+
+def _query_jobs(experiment_id: str, simulation_path: str) -> _JobRows:
+    """
+    Single scan of every job table for a setup.
+
+    Centralizes the job-model set so the ladder, ``last_activity``, locking,
+    and deletion can't diverge when a new job type appears.
+    """
+    # avoid circular dependency
+    from .analysis_job import AnalysisJob  # ruff:ignore[import-outside-top-level]
+    from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
+    from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
+
+    def rows(model: Any) -> list[Any]:  # ruff:ignore[any-type]
+        return model.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).all()
+
+    return _JobRows(tuner=rows(TunerJob), simulation=rows(SimulationJob), analysis=rows(AnalysisJob))
+
+
 def _build_content(engine: Engine, payload: dict) -> dict:
     files = payload.get("files")
     if not isinstance(files, dict):
@@ -156,6 +183,13 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         self._read_error = read_error
         self._resolved: dict[str, str] | None = None
         self._validation: tuple[bool, list[str], list[str]] | None = None
+        self._memo_jobs: _JobRows | None = None
+
+    def _cached_jobs(self) -> _JobRows:
+        """Job rows for this setup, queried once per instance (list payloads hit the ladder, activity, and lock)."""
+        if self._memo_jobs is None:
+            self._memo_jobs = _query_jobs(self.experiment_id, self.simulation_path)
+        return self._memo_jobs
 
     @property
     def _file(self) -> Path:
@@ -207,8 +241,11 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     @property
     def locked(self) -> bool:
-        """Whether the simulation is locked (read-only file or active job references)."""
-        return self.is_locked(self.experiment_id, self.simulation_path)
+        """Whether the simulation is locked (read-only file or tuner/simulation job references)."""
+        if not os.access(self._file, os.W_OK):
+            return True
+        jobs = self._cached_jobs()
+        return bool(jobs.tuner or jobs.simulation)
 
     @property
     def last_activity(self) -> float:
@@ -217,31 +254,24 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         Latest of manifest mtime, simulation-job creation/start/finish, and
         tuner/analysis-job creation. Job start/finish are only set once the
-        MDRun API reports them, hence creation time for fresh jobs. Used to
+        MDRun API reports them, hence creation time for fresh jobs. Analysis
+        counts as interaction (it moves the 'latest' pointer) but not as a
+        ladder step — the ladder only advances on a finished MD job. Used to
         pick the 'latest' setup (experiment step delegation, wizard tab
         fallback).
         """
-        # avoid circular dependency
-        from .analysis_job import AnalysisJob  # ruff:ignore[import-outside-top-level]
-        from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
-        from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
-
         events: list[float] = []
         with suppress(OSError):
             events.append(self._file.stat().st_mtime)
-        for job in SimulationJob.query.filter_by(
-            experiment_id=self.experiment_id, simulation_path=self.simulation_path
-        ):
+        jobs = self._cached_jobs()
+        for job in jobs.simulation:
             timestamps = (job._start_timestamp, job._finish_timestamp)  # ruff:ignore[private-member-access]
             events.extend(float(t) for t in timestamps if t is not None)
             if job.created_at is not None:
                 events.append(job.created_at.timestamp())
-        for model in (TunerJob, AnalysisJob):
-            for job in model.query.filter_by(  # type: ignore[attr-defined]
-                experiment_id=self.experiment_id, simulation_path=self.simulation_path
-            ):
-                if job.created_at is not None:
-                    events.append(job.created_at.timestamp())
+        for job in (*jobs.tuner, *jobs.analysis):
+            if job.created_at is not None:
+                events.append(job.created_at.timestamp())
         return max(events, default=0.0)
 
     @property
@@ -272,28 +302,18 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             A tuple of (step, status) where step is an integer (0-4) and status
             is a string describing the current phase.
         """
-        # avoid circular dependency
-        from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
-        from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
+        jobs = self._cached_jobs()
 
-        simulation_jobs = SimulationJob.query.filter_by(
-            experiment_id=self.experiment_id, simulation_path=self.simulation_path
-        ).all()
-
-        if any(j.status == JobStatus.FINISHED for j in simulation_jobs):
+        if any(j.status == JobStatus.FINISHED for j in jobs.simulation):
             return 4, "analyzing"
-        if any(j.status == JobStatus.RUNNING for j in simulation_jobs):
+        if any(j.status == JobStatus.RUNNING for j in jobs.simulation):
             return 3, "simulating"
-        if simulation_jobs:
+        if jobs.simulation:
             return 2, "simulating"
 
-        tuner_jobs = TunerJob.query.filter_by(
-            experiment_id=self.experiment_id, simulation_path=self.simulation_path
-        ).all()
-
-        if any(any(t.get("performance") is not None for t in j.trials) for j in tuner_jobs):
+        if any(any(t.get("performance") is not None for t in j.trials) for j in jobs.tuner):
             return 2, "tuning"
-        if tuner_jobs:
+        if jobs.tuner:
             return 1, "tuning"
 
         if self.valid:
@@ -461,18 +481,12 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         Returns:
             True if the simulation is locked.
         """
-        # avoid circular dependency
-        from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
-        from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
-
         simulation_file = DATA_DIR / experiment_id / simulation_path
         if not os.access(simulation_file, os.W_OK):
             return True
 
-        return bool(
-            TunerJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first()
-            or SimulationJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first()
-        )
+        jobs = _query_jobs(experiment_id, simulation_path)
+        return bool(jobs.tuner or jobs.simulation)
 
     @staticmethod
     def list_files(experiment_id: str) -> list[FileInfo]:
@@ -501,6 +515,66 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             sim = cls._from_file(experiment_id, file_info.path)
             simulations.append(sim)
         return simulations
+
+    @classmethod
+    def reconcile_duplicate_names(cls) -> None:
+        """
+        Rename duplicate/reserved simulation names in place (deploy reconciliation).
+
+        Names are the wizard tab identity, but pre-uniqueness data can contain
+        same-named manifests in one experiment — both unreachable by tab.
+        Same for names now reserved (leading underscore). Jobs key on
+        ``simulation_path``, so rewriting only the JSON ``name`` field is
+        safe even for running jobs. Best-effort: per-experiment failures are
+        logged and skipped.
+        """
+        if not DATA_DIR.is_dir():
+            return
+        for exp_dir in sorted(DATA_DIR.iterdir()):
+            if not exp_dir.is_dir():
+                continue
+            try:
+                cls._reconcile_experiment_names(exp_dir.name)
+            except Exception:
+                logger.exception("Failed to reconcile simulation names for experiment '%s'", exp_dir.name)
+
+    @classmethod
+    def _reconcile_experiment_names(cls, experiment_id: str) -> None:
+        """Rename duplicate or reserved simulation names within one experiment."""
+        manifests = [cls._from_file(experiment_id, f.path) for f in cls.list_files(experiment_id)]
+        manifests = [s for s in manifests if s.name]
+        taken = {s.name for s in manifests}
+        seen: set[str] = set()
+        for sim in manifests:
+            if not sim.name.startswith("_") and sim.name not in seen:
+                seen.add(sim.name)
+                continue
+            base = sim.name.lstrip("_") or "simulation"
+            candidate = base
+            suffix = 2
+            while candidate in taken or candidate in seen:
+                candidate = f"{base}-{suffix}"
+                suffix += 1
+            cls._rename_manifest(experiment_id, sim.simulation_path, sim.name, candidate)
+            taken.add(candidate)
+            seen.add(candidate)
+
+    @classmethod
+    def _rename_manifest(cls, experiment_id: str, simulation_path: str, old_name: str, new_name: str) -> None:
+        """Rewrite only the ``name`` field of a manifest, making it writable first if needed."""
+        simulation_file = DATA_DIR / experiment_id / simulation_path
+        content = json.loads(simulation_file.read_text(encoding="utf-8"))
+        content["name"] = new_name
+        if not os.access(simulation_file, os.W_OK):
+            simulation_file.chmod(WRITABLE_MODE)
+        simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        logger.info(
+            "Reconciled simulation name '%s' -> '%s' (experiment %s, %s)",
+            old_name,
+            new_name,
+            experiment_id,
+            simulation_path,
+        )
 
     @classmethod
     def get(cls, experiment_id: str, simulation_path: str) -> "Simulation":
@@ -534,12 +608,21 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         Reject a name already used by another manifest in this experiment.
 
         Names are the wizard tab identity (``?tab=<name>``), hence unique.
+        Underscore-prefixed names are reserved for UI sentinels (``_new`` is
+        the wizard's create-mode tab) and rejected the same way.
 
         Raises:
-            ApiError: 409 when another manifest already carries this name.
+            ApiError: 409 when the name is reserved or already taken.
         """
         if not name:
             return
+        if name.startswith("_"):
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                f"The simulation name '{name}' is reserved.",
+                "urn:mddash:duplicate-simulation-name",
+                "Choose a different name.",
+            )
         for file_info in cls.list_files(experiment_id):
             if exclude_path is not None and Path(file_info.path).as_posix() == exclude_path:
                 continue
@@ -594,11 +677,6 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             BadRequest: If the path is unsafe or does not end with '.simulation.json'.
             NotFound: If the manifest file does not exist.
         """
-        # avoid circular dependency
-        from .analysis_job import AnalysisJob  # ruff:ignore[import-outside-top-level]
-        from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
-        from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
-
         simulation_path = Path(simulation_path).as_posix()
         check_path(simulation_path, DATA_DIR / experiment_id)
         if not simulation_path.endswith(SIMULATION_SUFFIX):
@@ -607,11 +685,10 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if not simulation_file.is_file():
             raise NotFound(description=f"Simulation '{simulation_path}' not found.")
 
-        for model in (TunerJob, SimulationJob, AnalysisJob):
-            jobs = model.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).all()
-            for job in jobs:
-                job.delete()
-                db.session.delete(job)
+        jobs = _query_jobs(experiment_id, simulation_path)
+        for job in (*jobs.tuner, *jobs.simulation, *jobs.analysis):
+            job.delete()
+            db.session.delete(job)
         db.session.commit()
 
         try:
