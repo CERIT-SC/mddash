@@ -215,3 +215,22 @@ def get_publish_status(experiment_id: str) -> Response:
     )
     status = experiment.get_publish_status()
     return jsonify(status)
+
+
+@experiments_bp.route("/<experiment_id>/step", methods=["GET"])
+def get_experiment_step(experiment_id: str) -> Response:
+    """
+    Return the experiment step (DEPRECATED shim for stale UI bundles).
+
+    Pre-PR#129 wizard bundles poll this endpoint every 5s; without the route
+    they would 404 on every tick until the tab reloads into the new bundle.
+    Returns the delegated ``experiment.step`` (latest simulation's step).
+    Remove once old bundles are retired (one release).
+
+    Returns:
+        Response: JSON response with the current workflow step value.
+    """
+    experiment: Experiment = Experiment.query.get_or_404(
+        experiment_id, description=f"Experiment {experiment_id} not found"
+    )
+    return jsonify(experiment.step)
