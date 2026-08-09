@@ -65,6 +65,7 @@ export interface Simulation {
   missing_files: string[]
   step: number
   status: string
+  last_activity: number
 }
 
 export type NotebookTier = "1x" | "2x" | "4x"

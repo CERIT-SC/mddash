@@ -34,7 +34,12 @@ export function useCreateSimulation(experimentId: string) {
 
   return useMutation<Simulation, Error, SimulationPayload>({
     mutationFn: (payload) => api.post(`/experiments/${experimentId}/simulations`, payload).then((r) => r.data),
-    onSuccess: () => {
+    onSuccess: (created) => {
+      // Seed the list synchronously so wizard URL canonicalization keeps ?tab=<new name>
+      // instead of falling back to another tab while the refetch is in flight.
+      queryClient.setQueryData<Simulation[]>(["experiment", experimentId, "simulations"], (old) =>
+        old ? [...old, created] : old
+      )
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "simulations"] })
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId] })
       toast.success("Simulation created")
@@ -49,7 +54,10 @@ export function useUpdateSimulation(experimentId: string) {
   return useMutation<Simulation, Error, { simulationPath: string; payload: SimulationPayload }>({
     mutationFn: ({ simulationPath, payload }) =>
       api.patch(`/experiments/${experimentId}/simulations/${simulationPath}`, payload).then((r) => r.data),
-    onSuccess: (_data, variables) => {
+    onSuccess: (updated, variables) => {
+      queryClient.setQueryData<Simulation[]>(["experiment", experimentId, "simulations"], (old) =>
+        old?.map((s) => (s.simulation_path === variables.simulationPath ? updated : s))
+      )
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "simulations"] })
       queryClient.invalidateQueries({
         queryKey: ["experiment", experimentId, "simulations", variables.simulationPath],
@@ -67,7 +75,10 @@ export function useDeleteSimulation(experimentId: string) {
   return useMutation<void, Error, string>({
     mutationFn: (simulationPath) =>
       api.delete(`/experiments/${experimentId}/simulations/${simulationPath}`).then((r) => r.data),
-    onSuccess: () => {
+    onSuccess: (_data, simulationPath) => {
+      queryClient.setQueryData<Simulation[]>(["experiment", experimentId, "simulations"], (old) =>
+        old?.filter((s) => s.simulation_path !== simulationPath)
+      )
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId, "simulations"] })
       queryClient.invalidateQueries({ queryKey: ["experiment", experimentId] })
       toast.success("Simulation deleted")

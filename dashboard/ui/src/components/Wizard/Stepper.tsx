@@ -9,12 +9,13 @@ import { DEBUG } from "@/util/const"
 import { type Experiment, type Simulation } from "@/util/types"
 import { useSimulations } from "@/hooks/use-simulations"
 import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
 
 import AnalyzeStep from "./AnalyzeStep"
 import PublishStep from "./PublishStep"
 import RunStep from "./RunStep"
 import WizardSetup from "./SetupStep"
-import SimulationTabs from "./SimulationTabs"
+import SimulationTabs, { CREATE_TAB } from "./SimulationTabs"
 import TuneStep from "./TuneStep"
 
 const STEP_ICONS = [Atom, SlidersHorizontal, Play, BarChart2, Upload]
@@ -23,7 +24,7 @@ const STEP_COMPONENTS = [WizardSetup, TuneStep, RunStep, AnalyzeStep, PublishSte
 const SETUP_STEP = 0
 const ANALYZE_STEP = STEP_LABELS.indexOf("Analyze")
 const PUBLISH_STEP = STEP_LABELS.indexOf("Publish")
-const NEW_TAB = "_new"
+const NEW_TAB = CREATE_TAB
 const SIMULATIONS_POLL_MS = 5000
 
 export interface WizardStepperProps {
@@ -52,6 +53,14 @@ function maxAllowedStep(simulation: Simulation | null, createMode: boolean, expe
   return experiment.step >= PUBLISH_STEP ? Math.max(setupStep, PUBLISH_STEP) : setupStep
 }
 
+/** Setup with the most recent interaction — where the wizard lands with no tab pinned. */
+function latestSimulation(simulations: Simulation[]): Simulation | null {
+  return simulations.reduce<Simulation | null>(
+    (latest, sim) => (latest === null || sim.last_activity > latest.last_activity ? sim : latest),
+    null
+  )
+}
+
 /** Resolve raw URL state to the canonical tab/step the wizard should show. */
 function resolveWizard(
   search: { tab?: string; step?: number },
@@ -64,7 +73,7 @@ function resolveWizard(
   if (search.tab === NEW_TAB) {
     tab = NEW_TAB
   } else {
-    simulation = simulations.find((s) => s.name === search.tab) ?? simulations[0] ?? null
+    simulation = simulations.find((s) => s.name === search.tab) ?? latestSimulation(simulations)
     tab = simulation?.name ?? NEW_TAB
   }
 
@@ -123,72 +132,72 @@ const WizardStepper = ({ experiment }: WizardStepperProps) => {
 
   return (
     <div className="flex w-full flex-col">
-      <div className="border-border border-b px-4 pt-4 pb-2">
-        <SimulationTabs
-          simulations={simulations}
-          selectedName={resolved && !resolved.createMode ? resolved.tab : null}
-          loading={simulationsLoading}
-          onSelect={selectSimulation}
-          onCreate={createSimulation}
-        />
-      </div>
+      <SimulationTabs
+        simulations={simulations}
+        selectedName={resolved && !resolved.createMode ? resolved.tab : null}
+        loading={simulationsLoading}
+        onSelect={selectSimulation}
+        onCreate={createSimulation}
+      />
 
-      <div className="flex flex-col gap-5 px-6 pt-6 pb-5">
-        {DEBUG && resolved && (
-          <Button variant="default" onClick={() => goToStep(Math.min(resolved.step + 1, PUBLISH_STEP))}>
-            DEBUG: next step
-          </Button>
-        )}
+      <Card className="gap-0 rounded-t-none py-0 shadow-none">
+        <div className="flex flex-col gap-5 px-6 pt-6 pb-5">
+          {DEBUG && resolved && (
+            <Button variant="default" onClick={() => goToStep(Math.min(resolved.step + 1, PUBLISH_STEP))}>
+              DEBUG: next step
+            </Button>
+          )}
 
-        <div className="flex items-center justify-center">
-          {STEP_LABELS.map((label, idx) => {
-            const Icon = STEP_ICONS[idx]
-            const isCompleted = resolved ? idx < progress : false
-            const isActive = resolved ? idx === resolved.step : false
-            const isClickable = DEBUG ? true : resolved ? idx <= resolved.maxStep : false
+          <div className="flex items-center justify-center">
+            {STEP_LABELS.map((label, idx) => {
+              const Icon = STEP_ICONS[idx]
+              const isCompleted = resolved ? idx < progress : false
+              const isActive = resolved ? idx === resolved.step : false
+              const isClickable = DEBUG ? true : resolved ? idx <= resolved.maxStep : false
 
-            return (
-              <React.Fragment key={label}>
-                <div className="flex flex-col items-center gap-1">
-                  <button
-                    type="button"
-                    disabled={!isClickable}
-                    onClick={() => goToStep(idx)}
-                    className={cn(
-                      "flex h-12 w-12 items-center justify-center rounded-full border-2 text-white transition-all",
-                      isActive && "bg-primary border-primary scale-110 shadow-md",
-                      isCompleted && !isActive && "border-green-500 bg-green-500",
-                      !isActive && !isCompleted && "bg-muted border-border text-muted-foreground",
-                      isClickable && !isActive && !isCompleted && "cursor-pointer hover:scale-105 hover:shadow",
-                      isClickable && isCompleted && "cursor-pointer hover:scale-105"
-                    )}
-                  >
-                    <Icon className="h-5 w-5" />
-                  </button>
-                  <span className={cn("text-xs font-medium", isActive ? "text-primary" : "text-muted-foreground")}>
-                    {label}
-                  </span>
-                </div>
+              return (
+                <React.Fragment key={label}>
+                  <div className="flex flex-col items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={!isClickable}
+                      onClick={() => goToStep(idx)}
+                      className={cn(
+                        "flex h-12 w-12 items-center justify-center rounded-full border-2 text-white transition-all",
+                        isActive && "bg-primary border-primary scale-110 shadow-md",
+                        isCompleted && !isActive && "border-green-500 bg-green-500",
+                        !isActive && !isCompleted && "bg-muted border-border text-muted-foreground",
+                        isClickable && !isActive && !isCompleted && "cursor-pointer hover:scale-105 hover:shadow",
+                        isClickable && isCompleted && "cursor-pointer hover:scale-105"
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                    </button>
+                    <span className={cn("text-xs font-medium", isActive ? "text-primary" : "text-muted-foreground")}>
+                      {label}
+                    </span>
+                  </div>
 
-                {idx < STEP_LABELS.length - 1 && (
-                  <div
-                    className={cn(
-                      "mx-1 mb-5 h-0.5 flex-1 transition-colors",
-                      idx < progress ? "bg-green-500" : isActive ? "bg-primary" : "bg-border"
-                    )}
-                  />
-                )}
-              </React.Fragment>
-            )
-          })}
+                  {idx < STEP_LABELS.length - 1 && (
+                    <div
+                      className={cn(
+                        "mx-1 mb-5 h-0.5 flex-1 transition-colors",
+                        idx < progress ? "bg-green-500" : isActive ? "bg-primary" : "bg-border"
+                      )}
+                    />
+                  )}
+                </React.Fragment>
+              )
+            })}
+          </div>
         </div>
-      </div>
 
-      <div className="border-border border-t px-6 pt-5 pb-6">
-        {resolved && ActiveComponent ? (
-          <ActiveComponent experiment={experiment} simulation={resolved.simulation} goToStep={goToStep} />
-        ) : null}
-      </div>
+        <div className="border-border border-t px-6 pt-5 pb-6">
+          {resolved && ActiveComponent ? (
+            <ActiveComponent experiment={experiment} simulation={resolved.simulation} goToStep={goToStep} />
+          ) : null}
+        </div>
+      </Card>
     </div>
   )
 }
