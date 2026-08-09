@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from contextlib import suppress
 from http import HTTPStatus
 from pathlib import Path
 
@@ -210,6 +211,33 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return self.is_locked(self.experiment_id, self.simulation_path)
 
     @property
+    def last_activity(self) -> float:
+        """
+        Epoch seconds of the most recent interaction with this setup.
+
+        Latest of the manifest file mtime, its simulation jobs' start/finish
+        timestamps, or its tuner jobs' creation time — a fresh jobless manifest
+        counts via mtime. Used to pick the 'latest' setup (experiment step
+        delegation, wizard tab fallback).
+        """
+        # avoid circular dependency
+        from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
+        from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
+
+        events: list[float] = []
+        with suppress(OSError):
+            events.append(self._file.stat().st_mtime)
+        for job in SimulationJob.query.filter_by(
+            experiment_id=self.experiment_id, simulation_path=self.simulation_path
+        ):
+            timestamps = (job._start_timestamp, job._finish_timestamp)  # ruff:ignore[private-member-access]
+            events.extend(float(t) for t in timestamps if t is not None)
+        for job in TunerJob.query.filter_by(experiment_id=self.experiment_id, simulation_path=self.simulation_path):
+            if job.created_at is not None:
+                events.append(job.created_at.timestamp())
+        return max(events, default=0.0)
+
+    @property
     def step(self) -> int:
         """Wizard step of this setup based on its own jobs and manifest validity."""
         return self._step_status()[0]
@@ -287,6 +315,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             "missing_files": missing,
             "step": self.step,
             "status": self.status,
+            "last_activity": self.last_activity,
         }
 
     def resolve_role(self, role: str) -> Path:

@@ -1,6 +1,5 @@
 import logging
 import threading
-from contextlib import suppress
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
@@ -380,11 +379,10 @@ class Experiment(db.Model):  # type: ignore
 
     def _latest_simulation(self) -> "Simulation | None":
         """
-        Return the simulation with the most recent activity.
+        Return the most recently interacted-with simulation.
 
-        Activity is the latest of the manifest file mtime, its simulation jobs'
-        start/finish timestamps, or its tuner jobs' creation time — so a fresh
-        jobless setup also counts via mtime.
+        Delegates to ``Simulation.last_activity`` (manifest mtime / job
+        timestamps), so a fresh jobless setup counts via mtime.
 
         Returns:
             The most recently touched Simulation, or None if the experiment
@@ -393,27 +391,7 @@ class Experiment(db.Model):  # type: ignore
         from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
         simulations = Simulation.list(self.id)
-        if not simulations:
-            return None
-
-        def activity(sim: "Simulation") -> float:
-            events: list[float] = []
-            # use Simulation's path accessor (single source for the DATA_DIR base)
-            with suppress(OSError):
-                events.append(sim._file.stat().st_mtime)  # ruff:ignore[private-member-access]
-            for job in self.simulation_jobs:
-                if job.simulation_path == sim.simulation_path:
-                    events.extend(
-                        float(t)
-                        for t in (job._start_timestamp, job._finish_timestamp)  # ruff:ignore[private-member-access]
-                        if t is not None
-                    )
-            for job in self.tuner_jobs:
-                if job.simulation_path == sim.simulation_path and job.created_at is not None:
-                    events.append(job.created_at.timestamp())
-            return max(events, default=0.0)
-
-        return max(simulations, key=activity)
+        return max(simulations, key=lambda sim: sim.last_activity) if simulations else None
 
     @cached(cache=step_status_cache)
     def _step_status(self) -> tuple[int, str]:
