@@ -13,11 +13,11 @@ Each simulation setup (`.simulation.json` manifest) owns its own wizard progress
 | Decision | Outcome |
 |---|---|
 | Publish scope | Experiment-level: a shared final step, gated on experiment state; `mdrepo_published` unchanged |
-| Step inference location | Server-side on `Simulation`, reusing the existing ladder; UI never computes steps |
+| Step inference location | Server-side on `Simulation` — it owns the ladder, mirroring how `Experiment` does it today; UI never computes steps |
 | `?tab=` identity | Simulation **name** (human-friendly URLs); names become unique per experiment |
 | `?step=` | Integer 0–4 |
 | Tabs placement | Above the whole wizard container; switching tabs re-renders stepper header + step content |
-| Aggregate experiment step | Unchanged (kept for Home badges and Publish gating) |
+| Experiment step | Inherits the latest simulation's `step`/`status` (publish override first); no independent experiment ladder |
 
 ## Current state (as-is)
 
@@ -29,32 +29,42 @@ Each simulation setup (`.simulation.json` manifest) owns its own wizard progress
 
 ## Backend design
 
-### Shared ladder helper
+### `Simulation` owns the ladder
 
-New module `dashboard/api/models/step_status.py`:
-
-```python
-def infer_step(*, simulation_jobs, tuner_jobs, manifest_valid, mdrepo_published) -> tuple[int, str]
-```
-
-The decision tree is the existing ladder, verbatim: published (5) → publishing (5) → any FINISHED simulation job (4) → any RUNNING job (3) → any job / any tuner trial with performance (2) → any tuner job (1) → valid manifest (1) → 0.
-
-`Experiment._step_status` becomes a thin call into `infer_step` with all its jobs, `self._has_setup_files()` as `manifest_valid`, and `self.mdrepo_published`. Behavior for Home badges and Publish gating is byte-for-byte unchanged.
-
-### Per-setup progress on `Simulation`
-
-`dashboard/api/models/simulation.py` gains a cached computed property (same `@cached(cache=step_status_cache)` pattern):
+`dashboard/api/models/simulation.py` gains a cached computed property, mirroring the shape of `Experiment._step_status` today (the ladder *code lives on the model*, not in an extracted module):
 
 ```python
 @property
+@cached(cache=step_status_cache)
 def step_status(self) -> tuple[int, str]:
-    ...  # infer_step(jobs filtered by (experiment_id, simulation_path), manifest_valid=self.valid, mdrepo_published=None)
+    ...  # ladder over jobs filtered by (experiment_id, simulation_path), self.valid as setup check
 ```
 
+The decision tree is the existing ladder, scoped down: any FINISHED simulation job (4) → any RUNNING job (3) → any job / any tuner trial with performance (2) → any tuner job (1) → `self.valid` (1) → 0.
+
 - Jobs are queried as `SimulationJob` / `TunerJob` rows filtered by `experiment_id=self.experiment_id, simulation_path=self.simulation_path`.
-- `manifest_valid` is `self.valid` — the manifest's own schema/role check. `missing_files` does not gate (unchanged policy).
-- **`mdrepo_published` is deliberately *not* folded in** — Publish is experiment-level, so the per-setup ladder spans 0–4. Edge: an experiment already in draft/published (experiment step 5) still reports per-setup steps 0–4; the UI renders the experiment-wide Publish state separately.
+- The setup check is `self.valid` — the manifest's own schema/role check. `missing_files` does not gate (unchanged policy).
+- **`mdrepo_published` is deliberately *not* folded in** — Publish is experiment-level only (see below), so the per-setup ladder spans 0–4.
 - `Simulation.to_dict()` gains `step` and `status`. `GET /experiments/{id}/simulations` (list and single) already serialize via `to_dict` — **no new endpoints, no migrations**.
+
+### `Experiment` inherits the latest simulation
+
+`Experiment._step_status` is reduced to a delegation — no independent ladder remains on `Experiment` (and `_has_setup_files()` dies with it):
+
+```python
+@cached(cache=step_status_cache)
+def _step_status(self) -> tuple[int, str]:
+    if self.mdrepo_published is True:
+        return 5, "published"
+    if self.mdrepo_published is False:
+        return 5, "publishing"
+    if latest := self._latest_simulation():
+        return latest.step_status  # steps 0–4
+    return 0, "setup"
+```
+
+- `_latest_simulation()`: the `Simulation` of this experiment with the most recent activity, where **activity = max(manifest file mtime, latest job `start_timestamp`/`finish_timestamp`)** — valid jobless setups count via mtime; deterministic, no new DB columns. Returns `None` when the experiment has no manifests.
+- **Intentional behavior change:** the Home-badge/publish-gating aggregate now follows the *most recently touched* setup instead of any-setup progress. Creating a fresh setup drops experiment step to that setup's 0/1 until it progresses; publish-gating (`experiment.step >= 4`) follows suit. This is the desired semantics per the lock-in table.
 
 ### Name uniqueness
 
@@ -96,7 +106,7 @@ The tab *is* the wizard — the stepper header is per-tab content:
 - `Stepper.tsx` becomes the **shell**: tabs + extracted presentational `StepperHeader` (the existing hand-rolled 5-icon header, with `STEP_ICONS/STEP_LABELS` constants) + step dispatch (`STEP_COMPONENTS`). No `activeStep` / `selectedSimulationPath` local state; no experiment cache mutation.
 - **Canonicalization:** `tab` undefined & simulations exist → `navigate(replace)` to `?tab=<first name>&step=<that sim's step>`; `tab` undefined & no simulations → `?tab=_new&step=0`. The URL is canonical after first render.
 - **Tab switch:** changing `?tab=` resets `step` to the newly selected setup's own `step` (unless `step` was explicitly pinned in the URL on entry — the pinned value is then clamped by gating).
-- **Gating:** steps 0–3 clickable when `idx <= selectedSimulation.step`; step 4 (Publish) clickable per the unchanged experiment-level rule (experiment has reached step ≥ 4). `tab=_new` shows the box with Setup at step 0 and nothing else reachable.
+- **Gating:** steps 0–3 clickable when `idx <= selectedSimulation.step`; step 4 (Publish) clickable when `experiment.step >= 4` (i.e. the latest setup reached analyzing, per the delegation rule). `tab=_new` shows the box with Setup at step 0 and nothing else reachable.
 - **Navigation:** `changeStep` / `nextStep` both collapse into `goToStep(n) := navigate({ search: { tab, step: n } })`. The `DEBUG: next step` button stays (navigates to `selected.step + 1`, clamped); in `DEBUG` builds the step-clamp from the Error handling section is skipped so the button still cheats past inference — production clamping is strict.
 - **Polling:** the shell calls `useSimulations(id, { refetchInterval: 5000 })` — the wizard's single heartbeat, replacing the deleted `useExperimentStep` one-for-one. Tab badges, stepper gating, and step guards all derive from that one query. The analyze-entry invalidation effect survives as invalidation when `step === 3`.
 
@@ -141,7 +151,7 @@ All repair is shell-level; toasts only where the user just acted (via existing p
 
 ## Testing & verification
 
-- **API (`make test`):** per-setup ladder — two jobs on different `simulation_path`s; assert each simulation's `step`/`status` in the list payload; assert `experiment.step` aggregate unchanged; duplicate-name rejection; remove tests of deleted `/step` endpoint.
+- **API (`make test`):** per-setup ladder — two jobs on different `simulation_path`s; assert each simulation's `step`/`status` in the list payload; assert `experiment.step` tracks the *latest* simulation (activity ordering, setup-only experiment, publish override at 5); duplicate-name rejection; remove tests of deleted `/step` endpoint and `_has_setup_files`.
 - **Types & format:** `make fix`, `make type-check`.
 - **Manual (`make demo`, seeded with setups at differing steps):** refresh restores `?tab=&step=`; back/forward walks tabs; direct link to `?tab=ligand&step=2` gates correctly; `+` create flow lands on `?tab=<name>&step=1`; publish state renders regardless of active tab.
 - **Docs:** update `dashboard/ui/AGENTS.md` lines describing the wizard ("Wizard step lives in the backend", Stepper optimistic updates) to the URL-driven model.
