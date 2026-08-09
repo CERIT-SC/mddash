@@ -63,7 +63,7 @@ def _step_status(self) -> tuple[int, str]:
     return 0, "setup"
 ```
 
-- `_latest_simulation()`: the `Simulation` with the highest `last_activity`, where **activity = max(manifest mtime, its simulation jobs' creation/start/finish times, its tuner jobs' creation time)** — valid jobless setups count via mtime, and freshly submitted jobs count via `created_at` (start/finish are only set once the MDRun API reports them). Deterministic, no new DB columns. Returns `None` when the experiment has no manifests.
+- `_latest_simulation()`: the `Simulation` with the highest `last_activity`, where **activity = max(manifest mtime, its simulation jobs' creation/start/finish times, its tuner and analysis jobs' creation times)** — valid jobless setups count via mtime, and freshly submitted jobs count via `created_at` (start/finish are only set once the MDRun API reports them). Deterministic, no new DB columns. Returns `None` when the experiment has no manifests.
 - **Intentional behavior change:** the Home-badge/publish-gating aggregate now follows the *most recently touched* setup instead of any-setup progress. Creating a fresh setup drops experiment step to that setup's 0/1 until it progresses; publish-gating (`experiment.step >= 4`) follows suit. This is the desired semantics per the lock-in table.
 
 ### Name uniqueness

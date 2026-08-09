@@ -216,13 +216,14 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         Epoch seconds of the most recent interaction with this setup.
 
         Latest of the manifest file mtime, its simulation jobs' creation,
-        start or finish time, or its tuner jobs' creation time. A fresh
-        jobless manifest counts via mtime; a just-launched job counts via its
-        creation time (start/finish are only set once the MDRun API reports
-        them). Used to pick the 'latest' setup (experiment step delegation,
-        wizard tab fallback).
+        start or finish time, or its tuner/analysis jobs' creation time. A
+        fresh jobless manifest counts via mtime; a just-launched job counts
+        via its creation time (start/finish are only set once the MDRun API
+        reports them). Used to pick the 'latest' setup (experiment step
+        delegation, wizard tab fallback).
         """
         # avoid circular dependency
+        from .analysis_job import AnalysisJob  # ruff:ignore[import-outside-top-level]
         from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
         from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
 
@@ -236,9 +237,12 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             events.extend(float(t) for t in timestamps if t is not None)
             if job.created_at is not None:
                 events.append(job.created_at.timestamp())
-        for job in TunerJob.query.filter_by(experiment_id=self.experiment_id, simulation_path=self.simulation_path):
-            if job.created_at is not None:
-                events.append(job.created_at.timestamp())
+        for model in (TunerJob, AnalysisJob):
+            for job in model.query.filter_by(  # type: ignore[attr-defined]
+                experiment_id=self.experiment_id, simulation_path=self.simulation_path
+            ):
+                if job.created_at is not None:
+                    events.append(job.created_at.timestamp())
         return max(events, default=0.0)
 
     @property

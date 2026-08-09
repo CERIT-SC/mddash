@@ -563,6 +563,34 @@ class TestExperimentDelegation:
             assert experiment.step == 2
             assert experiment.status == "simulating"
 
+    def test_analysis_job_makes_its_setup_latest(self, app: Flask, tmp_path: Path) -> None:
+        """An analysis job's creation time lifts its own setup's last_activity."""
+        exp_id = _seed_experiment(app)
+        _write_two_sims(tmp_path / exp_id)  # ligand manifest is newer than protein's
+        from datetime import datetime
+
+        from enums import AnalysisType
+        from models import AnalysisJob
+
+        with app.app_context():
+            job = AnalysisJob(
+                id=str(uuid.uuid4()),
+                experiment_id=exp_id,
+                simulation_path="protein.simulation.json",
+                analysis_name=AnalysisType.RMSDS,
+                structure_file="structure.pdb",
+                trajectory_file="production/protein.xtc",
+                created_at=datetime.fromtimestamp(1_700_200_000),
+            )
+            db.session.add(job)
+            db.session.commit()
+
+            experiment = db.session.get(Experiment, exp_id)
+            assert experiment is not None
+            latest = experiment._latest_simulation()  # ruff:ignore[private-member-access]
+            assert latest is not None
+            assert latest.name == "protein"
+
     def test_publish_state_overrides(self, app: Flask, tmp_path: Path) -> None:
         """Published/publishing (step 5) beats the latest simulation's step."""
         exp_id = _seed_experiment(app)
