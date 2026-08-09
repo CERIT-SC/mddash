@@ -46,11 +46,21 @@ interface ResolvedWizard {
   maxStep: number
 }
 
-/** Furthest step reachable for a tab: its own ladder, plus the experiment-wide Publish gate. */
-function maxAllowedStep(simulation: Simulation | null, createMode: boolean, experiment: Experiment): number {
+/**
+ * Furthest step reachable for a tab: its own ladder, plus the experiment-wide
+ * Publish gate — open once the experiment is published/publishing or ANY
+ * setup finished MD (a fresher setup must not hide a completed one's Publish).
+ */
+function maxAllowedStep(
+  simulation: Simulation | null,
+  createMode: boolean,
+  experiment: Experiment,
+  simulations: Simulation[]
+): number {
   if (createMode) return SETUP_STEP
   const setupStep = simulation?.step ?? SETUP_STEP
-  return experiment.step >= PUBLISH_STEP ? Math.max(setupStep, PUBLISH_STEP) : setupStep
+  const publishReady = experiment.step >= PUBLISH_STEP || simulations.some((s) => s.step >= PUBLISH_STEP)
+  return publishReady ? Math.max(setupStep, PUBLISH_STEP) : setupStep
 }
 
 /** Setup with the most recent interaction — where the wizard lands with no tab pinned. */
@@ -78,7 +88,7 @@ function resolveWizard(
   }
 
   const createMode = tab === NEW_TAB
-  const maxStep = maxAllowedStep(simulation, createMode, experiment)
+  const maxStep = maxAllowedStep(simulation, createMode, experiment, simulations)
   // Pinned steps are honored in bounds (button gating guards maxStep; forward
   // bumps must stick while the poll catches up).
   const step = Math.min(Math.max(search.step ?? simulation?.step ?? SETUP_STEP, SETUP_STEP), PUBLISH_STEP)
