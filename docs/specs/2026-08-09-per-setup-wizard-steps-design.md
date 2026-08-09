@@ -96,18 +96,18 @@ The tab *is* the wizard — the stepper header is per-tab content:
 │  Experiment name card  (experiment-level, stays on top)    │
 │  [ protein ] [ ligand ] [ + ]        ← SimulationTabs      │
 │ ┌────────────────────────────────────────────────────────┐ │
-│ │ ◯ Setup — ◯ Tune — ◯ Run — ● Analyze — ◯ Publish       │ │
+│ │ ◯ Setup — ◯ Tune — ◯ Run — ● Analyze — ◯ Publish   │ │
 │ │ (StepperHeader for THIS tab, gated on this setup)      │ │
 │ │ <ActiveStep/>                                          │ │
 │ └────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+└────────────────────────────────────────────────────────────┘
 ```
 
 - `Stepper.tsx` becomes the **shell**: tabs + extracted presentational `StepperHeader` (the existing hand-rolled 5-icon header, with `STEP_ICONS/STEP_LABELS` constants) + step dispatch (`STEP_COMPONENTS`). No `activeStep` / `selectedSimulationPath` local state; no experiment cache mutation.
-- **Canonicalization:** `tab` undefined & simulations exist → `navigate(replace)` to `?tab=<first name>&step=<that sim's step>`; `tab` undefined & no simulations → `?tab=_new&step=0`. The URL is canonical after first render.
-- **Tab switch:** changing `?tab=` resets `step` to the newly selected setup's own `step` (unless `step` was explicitly pinned in the URL on entry — the pinned value is then clamped by gating).
-- **Gating:** steps 0–3 clickable when `idx <= selectedSimulation.step`; step 4 (Publish) clickable when `experiment.step >= 4` (i.e. the latest setup reached analyzing, per the delegation rule). `tab=_new` shows the box with Setup at step 0 and nothing else reachable.
-- **Navigation:** `changeStep` / `nextStep` both collapse into `goToStep(n) := navigate({ search: { tab, step: n } })`. The `DEBUG: next step` button stays (navigates to `selected.step + 1`, clamped); in `DEBUG` builds the step-clamp from the Error handling section is skipped so the button still cheats past inference — production clamping is strict.
+- **Canonicalization:** `tab` undefined & simulations exist → `navigate(replace)` to `?tab=<first name>&step=<that sim's step>`; `tab` undefined & no simulations → `?tab=_new&step=0`; unknown tab names fall back the same way; missing or out-of-bounds `step` defaults to the setup's own step. The URL is canonical after first render.
+- **Tab switch:** clicking a tab navigates to `?tab=<name>&step=<that sim's step>` — each setup keeps its own position in the ladder. A `?step=` explicitly pinned in a hand-crafted URL stays pinned (within bounds) until the next navigation.
+- **Gating:** button clicks for steps 0–3 are enabled when `idx <= selectedSimulation.step`; step 4 (Publish) is enabled when `experiment.step >= 4` (i.e. the latest setup reached analyzing, per the delegation rule). `tab=_new` shows the box with Setup at step 0 and nothing else clickable. Gating lives in the buttons only: a pinned `?step=` within 0–4 is always rendered (forward jumps must stick while the poll catches up), and step-level guards (`simulationUnavailableReason`, publish state) handle content the setup has not reached yet.
+- **Navigation:** `changeStep` / `nextStep` both collapse into `goToStep(n) := navigate({ search: { tab, step: n } })`. The `DEBUG: next step` button stays (navigates to `resolved.step + 1`, clamped to `0..4`).
 - **Polling:** the shell calls `useSimulations(id, { refetchInterval: 5000 })` — the wizard's single heartbeat, replacing the deleted `useExperimentStep` one-for-one. Tab badges, stepper gating, and step guards all derive from that one query. The analyze-entry invalidation effect survives as invalidation when `step === 3`.
 
 ### Narrowed step contract
@@ -145,8 +145,8 @@ All repair is shell-level; toasts only where the user just acted (via existing p
 
 - `?tab=` names a simulation that no longer exists → navigate-replace to first tab + its step. No error UI.
 - Duplicate name on create/rename → `ValidationError` → toast (`ApiError.message` = solution first).
-- `?step=` beyond the selected setup's allowed step → clamped via navigate-replace; stale deep links still land sensibly.
-- Successful create on `tab=_new` → navigate to `?tab=<new name>&step=1`.
+- `?step=` outside the 0–4 bounds → clamped via navigate-replace; pinned steps inside the bounds are rendered as-is (button gating + step guards handle the rest), so forward navigation right after job launch is not reverted by stale poll data.
+- Successful create on `tab=_new` → navigate to `?tab=<new name>&step=<created sim's step>` (usually 1, "setup complete").
 - Unknown-experiment / routing 404 and the root error boundary: unchanged.
 
 ## Testing & verification
