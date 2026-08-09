@@ -526,15 +526,18 @@ class TestExperimentDelegation:
             assert experiment.status == "setup"
 
     def test_experiment_inherits_latest_simulation(self, app: Flask, tmp_path: Path) -> None:
-        """The finished job on the older setup does not lift the experiment — the newer setup leads."""
+        """Activity on the older setup does not lift the experiment — the newer setup leads."""
         exp_id = _seed_experiment(app)
         _write_two_sims(tmp_path / exp_id)
+        from datetime import datetime
+
         _add_gmx_job(
             app,
             exp_id,
             "protein.simulation.json",
             _last_known_status=JobStatus.FINISHED,
             _start_timestamp=1_700_000_100,
+            created_at=datetime.fromtimestamp(1_700_000_000),
         )
 
         with app.app_context():
@@ -542,6 +545,23 @@ class TestExperimentDelegation:
             assert experiment is not None
             assert experiment.step == 1
             assert experiment.status == "setup complete"
+
+    def test_just_started_job_makes_its_setup_latest(self, app: Flask, tmp_path: Path) -> None:
+        """A freshly submitted job has no start/finish timestamps yet — its creation time must count."""
+        exp_id = _seed_experiment(app)
+        _write_two_sims(tmp_path / exp_id)  # ligand manifest is newer than protein's
+        from datetime import datetime
+
+        _add_gmx_job(app, exp_id, "protein.simulation.json", created_at=datetime.fromtimestamp(1_700_200_000))
+
+        with app.app_context():
+            experiment = db.session.get(Experiment, exp_id)
+            assert experiment is not None
+            protein = Simulation.get(exp_id, "protein.simulation.json")
+            assert protein.last_activity >= 1_700_200_000
+            # job row without timestamps still lifts its setup (created_at) to latest — step 2
+            assert experiment.step == 2
+            assert experiment.status == "simulating"
 
     def test_publish_state_overrides(self, app: Flask, tmp_path: Path) -> None:
         """Published/publishing (step 5) beats the latest simulation's step."""

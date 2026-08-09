@@ -215,10 +215,12 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         Epoch seconds of the most recent interaction with this setup.
 
-        Latest of the manifest file mtime, its simulation jobs' start/finish
-        timestamps, or its tuner jobs' creation time — a fresh jobless manifest
-        counts via mtime. Used to pick the 'latest' setup (experiment step
-        delegation, wizard tab fallback).
+        Latest of the manifest file mtime, its simulation jobs' creation,
+        start or finish time, or its tuner jobs' creation time. A fresh
+        jobless manifest counts via mtime; a just-launched job counts via its
+        creation time (start/finish are only set once the MDRun API reports
+        them). Used to pick the 'latest' setup (experiment step delegation,
+        wizard tab fallback).
         """
         # avoid circular dependency
         from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
@@ -232,6 +234,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         ):
             timestamps = (job._start_timestamp, job._finish_timestamp)  # ruff:ignore[private-member-access]
             events.extend(float(t) for t in timestamps if t is not None)
+            if job.created_at is not None:
+                events.append(job.created_at.timestamp())
         for job in TunerJob.query.filter_by(experiment_id=self.experiment_id, simulation_path=self.simulation_path):
             if job.created_at is not None:
                 events.append(job.created_at.timestamp())
