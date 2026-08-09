@@ -13,8 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 interface AmberStartFormProps {
   experiment: Experiment
-  nextStep: () => void
-  changeStep: (step: number) => void
+  goToStep: (step: number) => void
   simulationPath: string
   onStartJob: () => void
   binary?: AmberBinary

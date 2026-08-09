@@ -11,12 +11,10 @@ const GmxRunPanel = (props: WizardStepProps) => {
   return (
     <div className="flex w-full flex-col items-center gap-4">
       <div className="flex w-full flex-col gap-4">
-        {props.selectedSimulation && (
+        {props.simulation && (
           <RunView
-            simulationPath={props.selectedSimulation.simulation_path}
-            hasSimulationJob={gromacsJobs.some(
-              (job) => job.simulation_path === props.selectedSimulation?.simulation_path
-            )}
+            simulationPath={props.simulation.simulation_path}
+            hasSimulationJob={gromacsJobs.some((job) => job.simulation_path === props.simulation?.simulation_path)}
             onStartJob={refetchJobs}
             {...props}
           />

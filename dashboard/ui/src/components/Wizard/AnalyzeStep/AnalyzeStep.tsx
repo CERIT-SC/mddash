@@ -31,7 +31,7 @@ const AnalyzeStep = (props: WizardStepProps) => {
   const [reloadKey, setReloadKey] = useState(0)
   const [activeTab, setActiveTab] = useState("viewer")
 
-  const sim = props.selectedSimulation
+  const sim = props.simulation
   const resolved = sim?.resolved_files ?? {}
   const viewerUnavailableReason = simulationAnalysisUnavailableReason(sim, experiment.engine)
 

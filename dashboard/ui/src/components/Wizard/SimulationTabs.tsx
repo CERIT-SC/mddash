@@ -5,15 +5,16 @@ import type { Simulation } from "@/util/types"
 
 interface SimulationTabsProps {
   simulations: Simulation[]
-  selectedPath: string | null
+  /** Name of the selected simulation; null selects the create tab. */
+  selectedName: string | null
   loading?: boolean
-  onSelect: (simulationPath: string) => void
+  onSelect: (simulationName: string) => void
   onCreate: () => void
   className?: string
 }
 
-const SimulationTabs = ({ simulations, selectedPath, loading, onSelect, onCreate, className }: SimulationTabsProps) => {
-  const createSelected = selectedPath === null
+const SimulationTabs = ({ simulations, selectedName, loading, onSelect, onCreate, className }: SimulationTabsProps) => {
+  const createSelected = selectedName === null
 
   return (
     <div className={cn("w-full min-w-0", className)}>
@@ -29,14 +30,14 @@ const SimulationTabs = ({ simulations, selectedPath, loading, onSelect, onCreate
           </div>
         ) : (
           simulations.map((simulation) => {
-            const isSelected = simulation.simulation_path === selectedPath
+            const isSelected = simulation.name === selectedName
             return (
               <button
                 key={simulation.simulation_path}
                 type="button"
                 role="tab"
                 aria-selected={isSelected}
-                onClick={() => onSelect(simulation.simulation_path)}
+                onClick={() => onSelect(simulation.name)}
                 title={simulation.simulation_path}
                 className={cn(
                   "bg-secondary text-secondary-foreground hover:bg-secondary/80 focus-visible:ring-ring flex h-8 max-w-64 min-w-28 items-center gap-2 rounded-md px-2.5 text-left text-sm transition-colors focus-visible:ring-2 focus-visible:outline-hidden",

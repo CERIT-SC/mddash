@@ -24,10 +24,21 @@ const newRoute = createRoute({
   component: New,
 })
 
+export interface WizardSearch {
+  tab?: string
+  step?: number
+}
+
 const wizardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/$id/wizard",
   component: Wizard,
+  validateSearch: (search: Record<string, unknown>): WizardSearch => {
+    const tab = typeof search.tab === "string" && search.tab !== "" ? search.tab : undefined
+    const rawStep = typeof search.step === "string" ? Number(search.step) : search.step
+    const step = typeof rawStep === "number" && Number.isInteger(rawStep) ? rawStep : undefined
+    return { tab, step }
+  },
 })
 
 const routeTree = rootRoute.addChildren([homeRoute, newRoute, wizardRoute])

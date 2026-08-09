@@ -55,7 +55,7 @@ const PublishStep = (props: WizardStepProps) => {
           {target === "invenio" || !mdpositEnabled ? (
             <InvenioPublishContent experiment={experiment} />
           ) : (
-            <MdPositPublishContent experiment={experiment} selected={props.selectedSimulation} />
+            <MdPositPublishContent experiment={experiment} selected={props.simulation} />
           )}
         </div>
       </div>

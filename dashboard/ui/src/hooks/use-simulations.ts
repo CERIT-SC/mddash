@@ -4,11 +4,12 @@ import { toast } from "sonner"
 import { api } from "@/lib/http"
 import type { Simulation } from "@/util/types"
 
-export function useSimulations(experimentId: string) {
+export function useSimulations(experimentId: string, options?: { refetchInterval?: number }) {
   return useQuery<Simulation[]>({
     queryKey: ["experiment", experimentId, "simulations"],
     queryFn: () => api.get(`/experiments/${experimentId}/simulations`).then((r) => r.data),
     enabled: !!experimentId,
+    refetchInterval: options?.refetchInterval ?? false,
   })
 }
 

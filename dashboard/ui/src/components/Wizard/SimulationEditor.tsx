@@ -36,7 +36,10 @@ interface SimulationEditorProps {
   experimentId: string
   engine: Engine
   selected: Simulation | null
-  onSelect: (sim: Simulation | null) => void
+  /** Called after a successful create/update; wasEditing distinguishes edit from create. */
+  onSaved: (sim: Simulation, wasEditing: boolean) => void
+  /** Called after the selected simulation is deleted. */
+  onDeleted: () => void
   className?: string
 }
 
@@ -55,7 +58,7 @@ function joinPath(dir: string, name: string): string {
   return dir ? `${dir}/${name}` : name
 }
 
-const SimulationEditor = ({ experimentId, engine, selected, onSelect, className }: SimulationEditorProps) => {
+const SimulationEditor = ({ experimentId, engine, selected, onSaved, onDeleted, className }: SimulationEditorProps) => {
   const isEditing = !!selected
   const isLocked = selected?.locked ?? false
 
@@ -137,17 +140,17 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
     if (isEditing && selected) {
       updateMutation.mutate(
         { simulationPath: selected.simulation_path, payload },
-        { onSuccess: (sim) => onSelect(sim) }
+        { onSuccess: (sim) => onSaved(sim, true) }
       )
     } else {
-      createMutation.mutate(payload, { onSuccess: (sim) => onSelect(sim) })
+      createMutation.mutate(payload, { onSuccess: (sim) => onSaved(sim, false) })
     }
   }
 
   const handleDelete = () => {
     if (!selected) return
     deleteMutation.mutate(selected.simulation_path, {
-      onSuccess: () => onSelect(null),
+      onSuccess: () => onDeleted(),
     })
   }
 

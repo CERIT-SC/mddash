@@ -25,10 +25,10 @@ const AmberTunePanel = (props: WizardStepProps) => {
   return (
     <div className="flex w-full flex-col items-center gap-4">
       <div className="flex w-full flex-col gap-4">
-        {props.selectedSimulation ? (
+        {props.simulation ? (
           <AmberTunerView
-            simulationPath={props.selectedSimulation.simulation_path}
-            hasTunerJob={tunerJobs.some((job) => job.simulation_path === props.selectedSimulation?.simulation_path)}
+            simulationPath={props.simulation.simulation_path}
+            hasTunerJob={tunerJobs.some((job) => job.simulation_path === props.simulation?.simulation_path)}
             stopJob={handleStop}
             onStartTuner={refetchJobs}
             {...props}
@@ -52,7 +52,7 @@ const AmberTunePanel = (props: WizardStepProps) => {
         setOpen={setSkipDialog}
         title="Skip Tuning?"
         message="Are you sure you want to skip tuning? Your simulation may run slowly without tuning."
-        onConfirm={props.nextStep}
+        onConfirm={() => props.goToStep(2)}
       />
     </div>
   )

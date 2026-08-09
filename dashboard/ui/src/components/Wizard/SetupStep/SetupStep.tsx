@@ -1,13 +1,18 @@
+import { useNavigate } from "@tanstack/react-router"
+
 import { formatDateTime } from "@/util/helpers"
+import { useSimulations } from "@/hooks/use-simulations"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import NotebookController from "@/components/NotebookController"
 import SimulationEditor from "@/components/Wizard/SimulationEditor"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 const SetupStep = (props: WizardStepProps) => {
-  const { experiment } = props
+  const { experiment, simulation } = props
 
-  const hasValidSimulation = props.simulations.some((s) => s.valid)
+  const navigate = useNavigate({ from: "/$id/wizard" })
+  const { data: simulations = [] } = useSimulations(experiment.id)
+  const hasValidSimulation = simulations.some((s) => s.valid)
 
   return (
     <div className="flex w-full flex-col gap-5">
@@ -39,8 +44,9 @@ const SetupStep = (props: WizardStepProps) => {
         <SimulationEditor
           experimentId={experiment.id}
           engine={experiment.engine}
-          selected={props.selectedSimulation}
-          onSelect={(simulation) => props.setSelectedSimulationPath(simulation?.simulation_path ?? null)}
+          selected={simulation}
+          onSaved={(sim, wasEditing) => navigate({ search: { tab: sim.name, step: sim.step }, replace: wasEditing })}
+          onDeleted={() => navigate({ search: { tab: undefined, step: undefined } })}
           className="border-0 py-2 shadow-none"
         />
       </div>
