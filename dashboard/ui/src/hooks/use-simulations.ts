@@ -35,8 +35,7 @@ export function useCreateSimulation(experimentId: string) {
   return useMutation<Simulation, Error, SimulationPayload>({
     mutationFn: (payload) => api.post(`/experiments/${experimentId}/simulations`, payload).then((r) => r.data),
     onSuccess: (created) => {
-      // Seed the list synchronously so wizard URL canonicalization keeps ?tab=<new name>
-      // instead of falling back to another tab while the refetch is in flight.
+      // Seed synchronously so the wizard keeps ?tab=<new name> while the refetch is in flight.
       queryClient.setQueryData<Simulation[]>(["experiment", experimentId, "simulations"], (old) =>
         old ? [...old, created] : old
       )

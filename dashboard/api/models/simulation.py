@@ -215,12 +215,11 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         Epoch seconds of the most recent interaction with this setup.
 
-        Latest of the manifest file mtime, its simulation jobs' creation,
-        start or finish time, or its tuner/analysis jobs' creation time. A
-        fresh jobless manifest counts via mtime; a just-launched job counts
-        via its creation time (start/finish are only set once the MDRun API
-        reports them). Used to pick the 'latest' setup (experiment step
-        delegation, wizard tab fallback).
+        Latest of manifest mtime, simulation-job creation/start/finish, and
+        tuner/analysis-job creation. Job start/finish are only set once the
+        MDRun API reports them, hence creation time for fresh jobs. Used to
+        pick the 'latest' setup (experiment step delegation, wizard tab
+        fallback).
         """
         # avoid circular dependency
         from .analysis_job import AnalysisJob  # ruff:ignore[import-outside-top-level]
@@ -257,17 +256,17 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     @property
     def step_status(self) -> tuple[int, str]:
-        """Public accessor for the cached per-setup (step, status) ladder."""
+        """Per-setup (step, status) ladder; public accessor for the cached method."""
         return self._step_status()
 
     @cached(cache=step_status_cache)
     def _step_status(self) -> tuple[int, str]:
         """
-        Determine (step, status) from this setup's own state.
+        (step, status) from jobs referencing this ``simulation_path``.
 
-        Mirrors the experiment ladder but scoped to jobs referencing this
-        ``simulation_path``: finished job (4), running job (3), any job or
-        tuner trial with performance (2), any tuner job (1), valid manifest (1).
+        Finished job (4), running job (3), any job or tuned trial (2), any
+        tuner job (1), valid manifest (1), otherwise 0. Publish is
+        experiment-level and not part of this ladder.
 
         Returns:
             A tuple of (step, status) where step is an integer (0-4) and status
@@ -534,8 +533,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         Reject a name already used by another manifest in this experiment.
 
-        The name is the tab identity in the wizard URL (``?tab=<name>``), so
-        names must be unique per experiment.
+        Names are the wizard tab identity (``?tab=<name>``), hence unique.
 
         Raises:
             ApiError: 409 when another manifest already carries this name.

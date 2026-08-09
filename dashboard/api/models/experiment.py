@@ -379,10 +379,7 @@ class Experiment(db.Model):  # type: ignore
 
     def _latest_simulation(self) -> "Simulation | None":
         """
-        Return the most recently interacted-with simulation.
-
-        Delegates to ``Simulation.last_activity`` (manifest mtime / job
-        timestamps), so a fresh jobless setup counts via mtime.
+        Most recently interacted-with simulation (by ``Simulation.last_activity``).
 
         Returns:
             The most recently touched Simulation, or None if the experiment
@@ -396,21 +393,15 @@ class Experiment(db.Model):  # type: ignore
     @cached(cache=step_status_cache)
     def _step_status(self) -> tuple[int, str]:
         """
-        Determine (step, status) based on current state.
-
-        Publish state is experiment-level and overrides; otherwise the
-        experiment inherits the step and status of its latest simulation
-        (per-setup inference lives on ``Simulation``).
+        Publish state overrides; otherwise inherit the latest simulation's (step, status).
 
         Returns:
             A tuple of (step, status) where step is an integer (0-5) and status
             is a string describing the current phase.
         """
-        # Step 5: Published (experiment is published in MDRepo)
         if self.mdrepo_published is True:
             return 5, "published"
 
-        # Step 5: Publishing (experiment is in MDRepo draft)
         if self.mdrepo_published is False:
             return 5, "publishing"
 

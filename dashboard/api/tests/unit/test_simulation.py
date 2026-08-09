@@ -587,7 +587,7 @@ class TestExperimentDelegation:
 
             experiment = db.session.get(Experiment, exp_id)
             assert experiment is not None
-            latest = experiment._latest_simulation()  # ruff:ignore[private-member-access]
+            latest = experiment._latest_simulation()
             assert latest is not None
             assert latest.name == "protein"
 
