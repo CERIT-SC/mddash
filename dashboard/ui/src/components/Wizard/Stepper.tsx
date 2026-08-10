@@ -128,6 +128,9 @@ const WizardStepper = ({ experiment }: WizardStepperProps) => {
   const createSimulation = () => navigate({ search: { tab: NEW_TAB, step: SETUP_STEP } })
 
   const ActiveComponent = resolved ? STEP_COMPONENTS[resolved.step] : null
+  // -1 while simulations load: nothing current, nothing enabled
+  const currentStep = resolved?.step ?? -1
+  const maxStep = DEBUG ? PUBLISH_STEP : (resolved?.maxStep ?? -1)
 
   return (
     <div className="flex w-full flex-col">
@@ -150,29 +153,20 @@ const WizardStepper = ({ experiment }: WizardStepperProps) => {
           <div className="flex items-center justify-center">
             {STEP_LABELS.map((label, idx) => {
               const Icon = STEP_ICONS[idx]
-              const state = !resolved
-                ? "locked"
-                : idx === resolved.step
-                  ? "active"
-                  : idx < resolved.step
-                    ? "done"
-                    : DEBUG || idx <= resolved.maxStep
-                      ? "open"
-                      : "locked"
 
               return (
                 <React.Fragment key={label}>
                   <div className="flex flex-col items-center gap-1">
                     <button
                       type="button"
-                      disabled={state === "locked"}
+                      disabled={idx > maxStep}
                       onClick={() => goToStep(idx)}
                       className={cn(
                         "flex h-12 w-12 items-center justify-center rounded-full border-2 text-white transition-all",
-                        state === "active" && "bg-primary border-primary scale-110 shadow-md",
-                        state === "done" && "border-green-500 bg-green-500",
-                        (state === "open" || state === "locked") && "bg-muted border-border text-muted-foreground",
-                        state !== "locked" && state !== "active" && "cursor-pointer hover:scale-105 hover:shadow"
+                        idx < currentStep && "border-green-500 bg-green-500",
+                        idx === currentStep && "bg-primary border-primary scale-110 shadow-md",
+                        idx > currentStep && "bg-muted border-border text-muted-foreground",
+                        idx <= maxStep && idx !== currentStep && "cursor-pointer hover:scale-105 hover:shadow"
                       )}
                     >
                       <Icon className="h-5 w-5" />
@@ -180,7 +174,7 @@ const WizardStepper = ({ experiment }: WizardStepperProps) => {
                     <span
                       className={cn(
                         "text-xs font-medium",
-                        state === "active" ? "text-primary" : "text-muted-foreground"
+                        idx === currentStep ? "text-primary" : "text-muted-foreground"
                       )}
                     >
                       {label}
@@ -191,7 +185,7 @@ const WizardStepper = ({ experiment }: WizardStepperProps) => {
                     <div
                       className={cn(
                         "mx-1 mb-5 h-0.5 flex-1 transition-colors",
-                        state === "done" ? "bg-green-500" : state === "active" ? "bg-primary" : "bg-border"
+                        idx < currentStep ? "bg-green-500" : idx === currentStep ? "bg-primary" : "bg-border"
                       )}
                     />
                   )}
