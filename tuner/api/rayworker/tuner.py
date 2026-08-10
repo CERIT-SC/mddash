@@ -1,17 +1,20 @@
 """MD engine tuning orchestration using Ray workers."""
 
+import contextlib
 import logging
 import threading
 from typing import Any
 
 import ray
 from ray.exceptions import RayError
+from ray.util.state import get_task
 
 from api.config import (
     EARLY_STOP_BASELINE_TRIALS,
     EARLY_STOP_BATCH_SIZE,
     RAY_ADDRESS,
     RUNTIME_WORKDIR,
+    TRIAL_START_TIMEOUT_SECONDS,
 )
 from api.db.operations import (
     create_job,
@@ -25,6 +28,8 @@ from api.engines.protocol import Engine, TrialConfig
 from api.schemas.common import JobStatus, MDEngine
 
 RAY_RUNTIME_ENV = {"working_dir": RUNTIME_WORKDIR}
+# Ray State API is served by the head pod's dashboard agent (port 8265).
+RAY_DASHBOARD_ADDRESS = f"http://{RAY_ADDRESS.removeprefix('ray://').split(':')[0]}:8265"
 logger = logging.getLogger(__name__)
 
 logger.info("Tuner module initialized")
@@ -37,7 +42,8 @@ class JobState:
         """Store the job thread and initialise cancellation/futures tracking."""
         self.thread = thread
         self.cancelled = threading.Event()
-        self.futures: set[ray.ObjectRef] = set()
+        # Active Ray future -> DB trial ID, so any code path can map task state to trial.
+        self.futures: dict[ray.ObjectRef, int] = {}
 
 
 class JobContext:
@@ -75,8 +81,8 @@ class JobContext:
             event.set()
             return event
 
-    def add_futures(self, job_id: str, futures: set[ray.ObjectRef]) -> None:
-        """Register Ray futures belonging to a job for later cancellation."""
+    def add_futures(self, job_id: str, futures: dict[ray.ObjectRef, int]) -> None:
+        """Register Ray futures belonging to a job for later cancellation and state lookup."""
         with self._lock:
             state = self._jobs.get(job_id)
             if state:
@@ -87,13 +93,13 @@ class JobContext:
         with self._lock:
             state = self._jobs.get(job_id)
             if state:
-                state.futures.discard(future)
+                state.futures.pop(future, None)
 
-    def get_futures(self, job_id: str) -> set[ray.ObjectRef]:
-        """Return a snapshot of all active futures for a job."""
+    def get_futures(self, job_id: str) -> dict[ray.ObjectRef, int]:
+        """Return a snapshot of all active futures for a job as future -> trial ID."""
         with self._lock:
             state = self._jobs.get(job_id)
-            return state.futures.copy() if state else set()
+            return dict(state.futures) if state else {}
 
     def is_thread_alive(self, job_id: str) -> bool:
         """Return True if the job's background thread is still running."""
@@ -111,6 +117,41 @@ def _ensure_ray_initialized() -> None:
     if not ray.is_initialized():
         ray.init(address=RAY_ADDRESS, runtime_env=RAY_RUNTIME_ENV, ignore_reinit_error=True)
         logger.info("Connected to Ray cluster at %s", RAY_ADDRESS)
+
+
+def _ray_task_state(future: ray.ObjectRef) -> str | None:
+    """Return the Ray task state for a future, or None if unavailable (never raises)."""
+    try:
+        task = get_task(str(future.task_id()), address=RAY_DASHBOARD_ADDRESS)
+    except Exception:
+        logger.warning("Failed to query Ray task state for %s", future.task_id(), exc_info=True)
+        return None
+    return task.state if task else None
+
+
+def _task_states(job_id: str) -> dict[int, str]:
+    """Return trial ID -> Ray task state for all of the job's active futures."""
+    states: dict[int, str] = {}
+    for future, trial_id in _job_context.get_futures(job_id).items():
+        if state := _ray_task_state(future):
+            states[trial_id] = state
+    return states
+
+
+def trial_status_overrides(job_id: str) -> dict[int, JobStatus]:
+    """Return submitted trials Ray reports as executing (RUNNING)."""
+    return {
+        trial_id: JobStatus.RUNNING for trial_id, state in _task_states(job_id).items() if state.startswith("RUNNING")
+    }
+
+
+def derive_job_status(db_status: JobStatus, trial_statuses: list[JobStatus]) -> JobStatus:
+    """Derive the effective job status; terminal DB statuses always win."""
+    if db_status in {JobStatus.FINISHED, JobStatus.ERROR}:
+        return JobStatus(db_status)
+    if any(s in {JobStatus.RUNNING, JobStatus.FINISHED, JobStatus.ERROR} for s in trial_statuses):
+        return JobStatus.RUNNING
+    return JobStatus.PENDING
 
 
 @ray.remote(max_retries=3)
@@ -167,9 +208,37 @@ def _submit_trials(
             best_steps_per_sec,
         )
         future_to_trial[future] = trial_id
-        update_trial_result(trial_id, JobStatus.RUNNING, None)
-    _job_context.add_futures(job_id, set(future_to_trial.keys()))
+    # Trials stay PENDING until Ray reports RUNNING or the wait loop writes a terminal state.
+    _job_context.add_futures(job_id, future_to_trial)
     return future_to_trial
+
+
+def _fail_if_stalled(job_id: str, future_to_trial: dict[ray.ObjectRef, int], pending_futures: list) -> None:
+    """
+    Fail the batch if nothing began within the wait window.
+
+    Executing trials mean progress (keep waiting); nothing executing means
+    unschedulable — cancel the futures, ERROR the trials, and raise.
+    """
+    if any(state.startswith("RUNNING") for state in _task_states(job_id).values()):
+        logger.info(
+            "Job %s: no trial completed in %ds but trials are executing; continuing",
+            job_id,
+            TRIAL_START_TIMEOUT_SECONDS,
+        )
+        return
+    remaining = [future_to_trial[f] for f in pending_futures]
+    logger.warning(
+        "Job %s: no trial began or completed in %ds; failing trials %s", job_id, TRIAL_START_TIMEOUT_SECONDS, remaining
+    )
+    for future in pending_futures:
+        with contextlib.suppress(Exception):
+            ray.cancel(future, force=False)
+        update_trial_result(future_to_trial[future], JobStatus.ERROR, None)
+        _job_context.remove_future(job_id, future)
+    raise RuntimeError(
+        f"No trial began or completed within {TRIAL_START_TIMEOUT_SECONDS}s; cluster busy or unavailable - retry later"
+    )
 
 
 def _process_trial_results(
@@ -181,7 +250,10 @@ def _process_trial_results(
     new_best = best_steps_per_sec
 
     while pending_futures:
-        done, pending_futures = ray.wait(pending_futures, num_returns=1)
+        done, pending_futures = ray.wait(pending_futures, num_returns=1, timeout=TRIAL_START_TIMEOUT_SECONDS)
+        if not done:
+            _fail_if_stalled(job_id, future_to_trial, pending_futures)
+            continue
         trial_id = future_to_trial[done[0]]
         try:
             res: dict[str, Any] = ray.get(done[0])

@@ -10,12 +10,19 @@ from sqlalchemy.exc import OperationalError
 from starlette.concurrency import run_in_threadpool
 
 from api.auth import verify_credentials
+from api.db.models import Trial
 from api.db.operations import delete_job, get_job, get_trial
-from api.rayworker import cancel_job
-from api.schemas.common import MDEngine
+from api.rayworker import cancel_job, trial_status_overrides
+from api.schemas.common import JobStatus, MDEngine
 from api.utils import cleanup_job_files, read_trial_log
 
 logger = logging.getLogger(__name__)
+
+
+async def effective_trial_statuses(job_id: str, trials: list[Trial]) -> list[JobStatus]:
+    """Apply Ray-ground-truth RUNNING to PENDING trials on top of their DB statuses."""
+    overrides = await run_in_threadpool(trial_status_overrides, job_id)
+    return [overrides.get(t.id, t.status) if t.status == JobStatus.PENDING else t.status for t in trials]
 
 
 async def _get_trial_log(

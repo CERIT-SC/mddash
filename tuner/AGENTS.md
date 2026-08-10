@@ -22,6 +22,12 @@ Benchmark GROMACS and AMBER execution configurations through a FastAPI service b
 - Never add the worker to root aggregate build/push targets or GitHub Actions.
 - The chart must consume the complete worker image reference from `config*.yaml` without applying the MDDash release tag.
 
+## Status Semantics
+
+- Trials stay PENDING at submission; RUNNING comes from Ray ground truth at read time (`trial_status_overrides` via `ray.util.state.get_task`) — a trial shows RUNNING only while Ray reports the task executing. Only PENDING trials may be overridden; terminal states are owned by the job thread.
+- Job status is derived at read time: PENDING until the first trial executes, RUNNING monotonically after, FINISHED/ERROR from the DB always win.
+- Start watchdog: no completion for `TRIAL_START_TIMEOUT_SECONDS` (2h, hardcoded in `config.py`) with nothing RUNNING in Ray means the batch never became schedulable — trials are cancelled, marked ERROR, the job fails with "cluster busy or unavailable". Executing trials extend the window.
+
 ## Restart Semantics
 
 Active threads, cancellation events, and Ray object references are process-local. API restarts can leave remote work orphaned and mark persisted active jobs as failed. Do not claim restart-safe active jobs without a separate durable reconciliation design.

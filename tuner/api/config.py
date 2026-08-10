@@ -33,6 +33,9 @@ EARLY_STOP_CHECK_INTERVAL = 10.0  # Seconds between checks
 EARLY_STOP_BASELINE_TRIALS = 3  # Initial trials to establish baseline
 EARLY_STOP_BATCH_SIZE = 6  # Parallel batch size for remaining trials
 
+# Fail the job if no trial begins or completes within this window (cluster busy/unavailable).
+TRIAL_START_TIMEOUT_SECONDS = 7200
+
 RUNTIME_WORKDIR = os.getenv(
     "RUNTIME_WORKDIR",
     str(Path(__file__).resolve().parent.parent),
