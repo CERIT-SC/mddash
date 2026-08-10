@@ -22,17 +22,32 @@ interface TunerTableProps {
   selectedTrial: TunerTrial | null
   setSelectedTrial: (trial: TunerTrial | null) => void
   tunerStopped?: boolean
+  jobFinished?: boolean
   experimentId: string
   simulationPath: string
 }
 
 const TunerTable = (props: TunerTableProps) => {
-  const { rows, selectedTrial, setSelectedTrial, tunerStopped = false, experimentId, simulationPath } = props
+  const {
+    rows,
+    selectedTrial,
+    setSelectedTrial,
+    tunerStopped = false,
+    jobFinished = false,
+    experimentId,
+    simulationPath,
+  } = props
 
   const [confirmChoiceDialog, setConfirmChoiceDialog] = useState(false)
   const [logsTrialId, setLogsTrialId] = useState<string | null>(null)
 
   const { stdout, stderr } = useTunerTrialLogs(experimentId, simulationPath, logsTrialId)
+
+  // Pruned/unmeasured trials are noise for config selection once tuning is done.
+  const visibleRows = useMemo(
+    () => (jobFinished ? rows.filter((r) => r.performance !== null) : rows),
+    [rows, jobFinished]
+  )
 
   const sortedRows = useMemo(() => {
     const statusRank: Record<JobStatus, number> = {
@@ -43,16 +58,16 @@ const TunerTable = (props: TunerTableProps) => {
       UNKNOWN: 4,
     }
 
-    return [...rows].sort((a: TunerTrial, b: TunerTrial) => {
+    return [...visibleRows].sort((a: TunerTrial, b: TunerTrial) => {
       if (a.performance === null && b.performance === null) return statusRank[a.status] - statusRank[b.status]
       if (a.performance === null) return 1
       if (b.performance === null) return -1
       if (a.performance !== b.performance) return b.performance - a.performance
       return statusRank[a.status] - statusRank[b.status]
     })
-  }, [rows])
+  }, [visibleRows])
 
-  const trialClasses = useMemo(() => computeTrialClasses(rows), [rows])
+  const trialClasses = useMemo(() => computeTrialClasses(visibleRows), [visibleRows])
 
   const handleRadioClick = useCallback(
     (row: TunerTrial, isOptimal: boolean) => {
@@ -66,11 +81,13 @@ const TunerTable = (props: TunerTableProps) => {
     [selectedTrial, setSelectedTrial]
   )
 
-  if (rows.length === 0) {
+  if (visibleRows.length === 0) {
     return (
       <div className="flex items-center justify-center rounded-md border p-6">
         <div className="text-muted-foreground flex items-center gap-2 text-sm">
-          {tunerStopped ? (
+          {jobFinished ? (
+            <span>No trial produced a performance measurement.</span>
+          ) : tunerStopped ? (
             <span>No trials completed. The tuning job was stopped before any trials finished.</span>
           ) : (
             <>

@@ -59,6 +59,8 @@ const TunerView = (props: TunerViewProps) => {
 
   const displayStarted = tunerStarted_condition(tuner)
   const displayStopped = tuner?.is_stopped || false
+  // FINISHED is a terminal tuner-side status: nothing left to stop, only delete.
+  const displayFinished = !displayStopped && tuner?.tuner_status === "FINISHED"
   const trials = (tuner?.trials || []) as GmxTunerTrial[]
   const unavailableReason = simulationLaunchUnavailableReason(simulation ?? null, experiment.engine)
 
@@ -71,11 +73,12 @@ const TunerView = (props: TunerViewProps) => {
             selectedTrial={selectedTrial}
             setSelectedTrial={setSelectedTrial}
             tunerStopped={displayStopped}
+            jobFinished={displayFinished}
             experimentId={experiment.id}
             simulationPath={simulationPath}
           />
 
-          {!displayStopped && (
+          {!displayStopped && !displayFinished && (
             <div className="flex justify-end gap-2">
               <Button
                 variant="default"
@@ -88,7 +91,7 @@ const TunerView = (props: TunerViewProps) => {
             </div>
           )}
 
-          {displayStopped && (
+          {(displayStopped || displayFinished) && (
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
