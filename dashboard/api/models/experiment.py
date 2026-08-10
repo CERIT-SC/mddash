@@ -23,7 +23,7 @@ from config import (
     MDREPO_TOKEN_URL,
     MDREPO_URL,
 )
-from enums import Engine, JobStatus, PodStatus
+from enums import Engine, PodStatus
 from errors import ApiError
 from extensions import db
 from flask import session
@@ -58,6 +58,7 @@ from .notebook import Notebook
 
 if TYPE_CHECKING:
     from .analysis_job import AnalysisJob
+    from .simulation import Simulation
     from .simulation_job import SimulationJob
     from .tuner_job import TunerJob
 
@@ -376,61 +377,36 @@ class Experiment(db.Model):  # type: ignore
             db.session.rollback()
             raise
 
-    def _has_setup_files(self) -> bool:
+    def _latest_simulation(self) -> "Simulation | None":
         """
-        Return whether at least one valid simulation manifest exists for the engine.
+        Most recently interacted-with simulation (by ``Simulation.last_activity``).
 
         Returns:
-            True if a valid simulation exists, False otherwise.
+            The most recently touched Simulation, or None if the experiment
+            has no manifests.
         """
         from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
-        for f in Simulation.list_files(self.id):
-            sim = Simulation._from_file(self.id, f.path)  # ruff:ignore[private-member-access]
-            if sim.valid and sim.engine == self.engine.value:
-                return True
-        return False
+        simulations = Simulation.list(self.id)
+        return max(simulations, key=lambda sim: sim.last_activity) if simulations else None
 
     @cached(cache=step_status_cache)
     def _step_status(self) -> tuple[int, str]:
         """
-        Determine (step, status) based on current state.
+        Publish state overrides; otherwise inherit the latest simulation's (step, status).
 
         Returns:
             A tuple of (step, status) where step is an integer (0-5) and status
             is a string describing the current phase.
         """
-        # Step 5: Published (experiment is published in MDRepo)
         if self.mdrepo_published is True:
             return 5, "published"
 
-        # Step 5: Publishing (experiment is in MDRepo draft)
         if self.mdrepo_published is False:
             return 5, "publishing"
 
-        # Step 4: Analyzing (experiment has terminated simulation job)
-        if any(j.status == JobStatus.FINISHED for j in self.simulation_jobs):
-            return 4, "analyzing"
-
-        # Step 3: Allow user to analyze a running simulation
-        if any(j.status == JobStatus.RUNNING for j in self.simulation_jobs):
-            return 3, "simulating"
-
-        # Step 2: Running simulation (experiment has a simulation job)
-        if self.simulation_jobs:
-            return 2, "simulating"
-
-        # Step 2: Tuning (experiment has terminated tuner trial)
-        if any(any(t.get("performance") is not None for t in j.trials) for j in self.tuner_jobs):
-            return 2, "tuning"
-
-        # Step 1: Tuning (experiment has a tuner job)
-        if self.tuner_jobs:
-            return 1, "tuning"
-
-        # Step 1: Setup complete (directory contains required files for the engine)
-        if self._has_setup_files():
-            return 1, "setup complete"
+        if latest := self._latest_simulation():
+            return latest.step_status
 
         return 0, "setup"
 

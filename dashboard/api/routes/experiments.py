@@ -215,17 +215,3 @@ def get_publish_status(experiment_id: str) -> Response:
     )
     status = experiment.get_publish_status()
     return jsonify(status)
-
-
-@experiments_bp.route("/<experiment_id>/step", methods=["GET"])
-def get_experiment_step(experiment_id: str) -> Response:
-    """
-    Get the current workflow step for an experiment.
-
-    Returns:
-        Response: JSON response with the current workflow step value.
-    """
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
-    return jsonify(experiment.step)

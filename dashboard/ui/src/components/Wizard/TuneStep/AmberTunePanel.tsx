@@ -9,9 +9,7 @@ import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 import AmberTunerView from "./AmberTunerView"
 
-const AmberTunePanel = (props: WizardStepProps) => {
-  const { experiment } = props
-
+const AmberTunePanel = ({ experiment, simulation, goToStep }: WizardStepProps) => {
   const { data: tunerJobs = [], refetch: refetchJobs } = useTunerStatuses(experiment.id)
   const stopTuner = useStopTuner(experiment.id)
 
@@ -25,13 +23,15 @@ const AmberTunePanel = (props: WizardStepProps) => {
   return (
     <div className="flex w-full flex-col items-center gap-4">
       <div className="flex w-full flex-col gap-4">
-        {props.selectedSimulation ? (
+        {simulation ? (
           <AmberTunerView
-            simulationPath={props.selectedSimulation.simulation_path}
-            hasTunerJob={tunerJobs.some((job) => job.simulation_path === props.selectedSimulation?.simulation_path)}
+            experiment={experiment}
+            simulation={simulation}
+            goToStep={goToStep}
+            simulationPath={simulation.simulation_path}
+            hasTunerJob={tunerJobs.some((job) => job.simulation_path === simulation.simulation_path)}
             stopJob={handleStop}
             onStartTuner={refetchJobs}
-            {...props}
           />
         ) : (
           <div className="flex items-start justify-end">
@@ -52,7 +52,7 @@ const AmberTunePanel = (props: WizardStepProps) => {
         setOpen={setSkipDialog}
         title="Skip Tuning?"
         message="Are you sure you want to skip tuning? Your simulation may run slowly without tuning."
-        onConfirm={props.nextStep}
+        onConfirm={() => goToStep(2)}
       />
     </div>
   )

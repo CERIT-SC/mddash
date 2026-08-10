@@ -492,7 +492,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     )
     write_amber_simulation(
         amber_folding.id,
-        "villin",
+        "villin_equilibration",
         simulation_path="equilibration.simulation.json",
         topology="villin.prmtop",
         coordinates="villin.inpcrd",
@@ -667,7 +667,7 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
         )
         write_amber_simulation(
             amber_folding.id,
-            "villin",
+            "villin_equilibration",
             simulation_path="equilibration.simulation.json",
             topology="villin.prmtop",
             coordinates="villin.inpcrd",

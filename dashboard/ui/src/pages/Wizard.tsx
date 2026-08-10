@@ -88,9 +88,9 @@ const Wizard = () => {
         </div>
       ) : experiment ? (
         <div className="mt-2 px-2 sm:px-4">
-          <Card className="mx-auto max-w-7xl p-0">
+          <div className="mx-auto max-w-7xl">
             <WizardStepper experiment={experiment} />
-          </Card>
+          </div>
         </div>
       ) : null}
     </div>

@@ -23,7 +23,7 @@ interface AmberTunerViewProps extends WizardStepProps {
 }
 
 const AmberTunerView = (props: AmberTunerViewProps) => {
-  const { experiment, simulationPath, hasTunerJob, stopJob, nextStep, changeStep, onStartTuner } = props
+  const { experiment, simulationPath, hasTunerJob, stopJob, goToStep, onStartTuner } = props
 
   const [selectedTrial, setSelectedTrial] = useState<AmberTunerTrial | null>(null)
   const [nsteps, setNsteps] = useState<number | "">(DEFAULT_NSTEPS)
@@ -47,10 +47,7 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
     runTuner.mutate({ simulationPath, nsteps: actualNsteps }, { onSuccess: () => onStartTuner?.() })
   }
 
-  const goToRunStep = () => {
-    if (experiment.step < 2) nextStep()
-    else changeStep(2)
-  }
+  const goToRunStep = () => goToStep(2)
 
   if (isLoading) {
     return (
@@ -107,8 +104,7 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
           {selectedTrial && (
             <AmberStartForm
               experiment={experiment}
-              nextStep={nextStep}
-              changeStep={changeStep}
+              goToStep={goToStep}
               simulationPath={simulationPath}
               onStartJob={goToRunStep}
               binary={selectedTrial.binary}

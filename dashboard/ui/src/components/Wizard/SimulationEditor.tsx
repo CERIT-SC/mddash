@@ -28,7 +28,7 @@ const ROLE_HELP: Record<string, string> = {
   reference_structure: "Structure matching the trajectory atom set and order. Created by the setup notebook.",
   trajectory: "Trajectory file. Auto-filled from run input name.",
   run_structure: "Final coordinate snapshot from the run. Auto-filled from run input name.",
-  name: "Identifier for this simulation setup.",
+  name: "Identifier for this simulation.",
   extra_args: "Additional GROMACS/AMBER CLI flags passed to mdrun.",
 }
 
@@ -36,7 +36,8 @@ interface SimulationEditorProps {
   experimentId: string
   engine: Engine
   selected: Simulation | null
-  onSelect: (sim: Simulation | null) => void
+  onSaved: (sim: Simulation, wasEditing: boolean) => void
+  onDeleted: () => void
   className?: string
 }
 
@@ -55,7 +56,7 @@ function joinPath(dir: string, name: string): string {
   return dir ? `${dir}/${name}` : name
 }
 
-const SimulationEditor = ({ experimentId, engine, selected, onSelect, className }: SimulationEditorProps) => {
+const SimulationEditor = ({ experimentId, engine, selected, onSaved, onDeleted, className }: SimulationEditorProps) => {
   const isEditing = !!selected
   const isLocked = selected?.locked ?? false
 
@@ -137,17 +138,17 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
     if (isEditing && selected) {
       updateMutation.mutate(
         { simulationPath: selected.simulation_path, payload },
-        { onSuccess: (sim) => onSelect(sim) }
+        { onSuccess: (sim) => onSaved(sim, true) }
       )
     } else {
-      createMutation.mutate(payload, { onSuccess: (sim) => onSelect(sim) })
+      createMutation.mutate(payload, { onSuccess: (sim) => onSaved(sim, false) })
     }
   }
 
   const handleDelete = () => {
     if (!selected) return
     deleteMutation.mutate(selected.simulation_path, {
-      onSuccess: () => onSelect(null),
+      onSuccess: () => onDeleted(),
     })
   }
 
@@ -200,14 +201,13 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {/* Name */}
           <div className="flex flex-col gap-1">
             <Label htmlFor="sim-name">Name</Label>
             <Input id="sim-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="protein" />
             <p className="text-muted-foreground text-xs">{ROLE_HELP.name}</p>
           </div>
 
-          {/* Existing files — files that already exist and are selected from disk */}
+          {/* Existing files */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <p className="text-muted-foreground/80 col-span-full text-[11px] tracking-wide uppercase">Existing files</p>
 
@@ -251,7 +251,7 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
             )}
           </div>
 
-          {/* Output paths — paths the simulation will create */}
+          {/* Output paths */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <p className="text-muted-foreground/80 col-span-full text-[11px] tracking-wide uppercase">Output paths</p>
 
@@ -280,7 +280,6 @@ const SimulationEditor = ({ experimentId, engine, selected, onSelect, className 
             )}
           </div>
 
-          {/* Extra arguments */}
           <div className="flex flex-col gap-1">
             <p className="text-muted-foreground/80 mb-1 text-[11px] tracking-wide uppercase">Runtime options</p>
             <Label htmlFor="extra-args" className="sr-only">

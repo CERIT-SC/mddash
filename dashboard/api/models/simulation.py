@@ -1,12 +1,16 @@
 import json
 import logging
 import os
+from contextlib import suppress
 from http import HTTPStatus
 from pathlib import Path
+from typing import Any, NamedTuple
 
 import jsonschema
+from cache import step_status_cache
+from cachetools import cached
 from config import DATA_DIR
-from enums import Engine
+from enums import Engine, JobStatus
 from errors import ApiError
 from extensions import db
 from manifest_schema import resolve_schema_url, schema_url
@@ -105,6 +109,27 @@ def _safe_default_path(name: str) -> str:
     return f"{safe_name}{SIMULATION_SUFFIX}"
 
 
+class _JobRows(NamedTuple):
+    """Job rows referencing one ``simulation_path`` — the single source of the job-model set."""
+
+    tuner: list[Any]
+    simulation: list[Any]
+    analysis: list[Any]
+
+
+def _query_jobs(experiment_id: str, simulation_path: str) -> _JobRows:
+    """Scan every job table for a simulation in one call."""
+    # avoid circular dependency
+    from .analysis_job import AnalysisJob  # ruff:ignore[import-outside-top-level]
+    from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
+    from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
+
+    def rows(model: Any) -> list[Any]:  # ruff:ignore[any-type]
+        return model.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).all()
+
+    return _JobRows(tuner=rows(TunerJob), simulation=rows(SimulationJob), analysis=rows(AnalysisJob))
+
+
 def _build_content(engine: Engine, payload: dict) -> dict:
     files = payload.get("files")
     if not isinstance(files, dict):
@@ -153,6 +178,13 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         self._read_error = read_error
         self._resolved: dict[str, str] | None = None
         self._validation: tuple[bool, list[str], list[str]] | None = None
+        self._memo_jobs: _JobRows | None = None
+
+    def _cached_jobs(self) -> _JobRows:
+        """Job rows for this simulation, queried once per instance."""
+        if self._memo_jobs is None:
+            self._memo_jobs = _query_jobs(self.experiment_id, self.simulation_path)
+        return self._memo_jobs
 
     @property
     def _file(self) -> Path:
@@ -205,7 +237,77 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
     @property
     def locked(self) -> bool:
         """Whether the simulation is locked (read-only file or active job references)."""
-        return self.is_locked(self.experiment_id, self.simulation_path)
+        if not os.access(self._file, os.W_OK):
+            return True
+        jobs = self._cached_jobs()
+        return bool(jobs.tuner or jobs.simulation)
+
+    @property
+    def last_activity(self) -> float:
+        """
+        Epoch seconds of the most recent interaction with this simulation.
+
+        Latest of manifest mtime, simulation-job creation/start/finish, and
+        tuner/analysis-job creation. Job start/finish are only set once the
+        MDRun API reports them, hence creation time for fresh jobs. Analysis
+        counts here (moves the 'latest' pointer) but not in the step ladder —
+        that only advances on a finished MD job.
+        """
+        events: list[float] = []
+        with suppress(OSError):
+            events.append(self._file.stat().st_mtime)
+        jobs = self._cached_jobs()
+        for job in jobs.simulation:
+            timestamps = (job._start_timestamp, job._finish_timestamp)  # ruff:ignore[private-member-access]
+            events.extend(float(t) for t in timestamps if t is not None)
+            if job.created_at is not None:
+                events.append(job.created_at.timestamp())
+        for job in (*jobs.tuner, *jobs.analysis):
+            if job.created_at is not None:
+                events.append(job.created_at.timestamp())
+        return max(events, default=0.0)
+
+    @property
+    def step(self) -> int:
+        """Wizard step of this simulation based on its own jobs and manifest validity."""
+        return self.step_status[0]
+
+    @property
+    def status(self) -> str:
+        """Status of this simulation based on its own jobs and manifest validity."""
+        return self.step_status[1]
+
+    @property
+    @cached(cache=step_status_cache)
+    def step_status(self) -> tuple[int, str]:
+        """
+        (step, status) from jobs referencing this ``simulation_path``.
+
+        Finished job (4), running job (3), any job or tuned trial (2), any
+        tuner job (1), valid manifest (1), otherwise 0. Publish is
+        experiment-level and not part of this ladder.
+
+        Returns:
+            A tuple of (step, status) where step is an integer (0-4) and status
+            is a string describing the current phase.
+        """
+        jobs = self._cached_jobs()
+
+        if any(j.status == JobStatus.FINISHED for j in jobs.simulation):
+            return 4, "analyzing"
+        if any(j.status == JobStatus.RUNNING for j in jobs.simulation):
+            return 3, "simulating"
+        if jobs.simulation:
+            return 2, "simulating"
+
+        if any(any(t.get("performance") is not None for t in j.trials) for j in jobs.tuner):
+            return 2, "tuning"
+        if jobs.tuner:
+            return 1, "tuning"
+
+        if self.valid:
+            return 1, "setup complete"
+        return 0, "setup"
 
     def to_dict(self) -> dict:
         """
@@ -213,7 +315,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         Returns:
             Dict with simulation_path, name, engine, files, resolved_files,
-            extra_args, locked, valid, errors, missing_files.
+            extra_args, locked, valid, errors, missing_files, step, status.
         """
         valid, errors, missing = self._run_validation()
         return {
@@ -227,6 +329,9 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             "valid": valid,
             "errors": errors,
             "missing_files": missing,
+            "step": self.step,
+            "status": self.status,
+            "last_activity": self.last_activity,
         }
 
     def resolve_role(self, role: str) -> Path:
@@ -355,30 +460,6 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return self._validation
 
     @staticmethod
-    def is_locked(experiment_id: str, simulation_path: str) -> bool:
-        """
-        Return whether the simulation is locked.
-
-        A simulation is locked when its manifest file is read-only or when any
-        current tuner/production job references its ``simulation_path``.
-
-        Returns:
-            True if the simulation is locked.
-        """
-        # avoid circular dependency
-        from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
-        from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
-
-        simulation_file = DATA_DIR / experiment_id / simulation_path
-        if not os.access(simulation_file, os.W_OK):
-            return True
-
-        return bool(
-            TunerJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first()
-            or SimulationJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first()
-        )
-
-    @staticmethod
     def list_files(experiment_id: str) -> list[FileInfo]:
         """
         Discover `.simulation.json` files under the experiment directory.
@@ -433,6 +514,37 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return cls(experiment_id, simulation_path, raw=raw)
 
     @classmethod
+    def _require_unique_name(cls, experiment_id: str, name: str, *, current_name: str | None = None) -> None:
+        """
+        Reject a reserved name or one used by another manifest.
+
+        Names are the wizard tab identity (``?tab=<name>``), hence unique;
+        ``_new`` is reserved for the wizard's create tab. ``current_name``
+        is the manifest's own name before an edit — keeping it is allowed.
+
+        Raises:
+            ApiError: 409 when the name is reserved or already taken.
+        """
+        if not name:
+            return
+        if name == "_new":
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                f"The simulation name '{name}' is reserved.",
+                "urn:mddash:duplicate-simulation-name",
+                "Choose a different name.",
+            )
+        taken = {cls._from_file(experiment_id, f.path).name for f in cls.list_files(experiment_id)}
+        taken.discard(current_name)
+        if name in taken:
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                f"A simulation named '{name}' already exists.",
+                "urn:mddash:duplicate-simulation-name",
+                "Choose a different name.",
+            )
+
+    @classmethod
     def write(cls, experiment_id: str, payload: dict) -> "Simulation":
         """
         Create a simulation manifest at `{name}.simulation.json` unless a path is provided.
@@ -457,6 +569,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         content = _build_content(experiment.engine, payload)
         _validate_content_or_raise(content, experiment.engine)
+        cls._require_unique_name(experiment_id, str(content.get("name", "")))
 
         simulation_file.parent.mkdir(parents=True, exist_ok=True)
         simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -473,11 +586,6 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             BadRequest: If the path is unsafe or does not end with '.simulation.json'.
             NotFound: If the manifest file does not exist.
         """
-        # avoid circular dependency
-        from .analysis_job import AnalysisJob  # ruff:ignore[import-outside-top-level]
-        from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
-        from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
-
         simulation_path = Path(simulation_path).as_posix()
         check_path(simulation_path, DATA_DIR / experiment_id)
         if not simulation_path.endswith(SIMULATION_SUFFIX):
@@ -486,11 +594,10 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if not simulation_file.is_file():
             raise NotFound(description=f"Simulation '{simulation_path}' not found.")
 
-        for model in (TunerJob, SimulationJob, AnalysisJob):
-            jobs = model.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).all()
-            for job in jobs:
-                job.delete()
-                db.session.delete(job)
+        jobs = _query_jobs(experiment_id, simulation_path)
+        for job in (*jobs.tuner, *jobs.simulation, *jobs.analysis):
+            job.delete()
+            db.session.delete(job)
         db.session.commit()
 
         try:
@@ -522,7 +629,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if not simulation_file.is_file():
             raise NotFound(description=f"Simulation '{simulation_path}' not found.")
 
-        if cls.is_locked(experiment_id, simulation_path):
+        current = cls._from_file(experiment_id, simulation_path)
+        if current.locked:
             raise ApiError(
                 HTTPStatus.BAD_REQUEST,
                 f"Simulation '{simulation_path}' is locked.",
@@ -532,6 +640,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         content = _build_content(experiment.engine, payload)
         _validate_content_or_raise(content, experiment.engine)
+        cls._require_unique_name(experiment_id, str(content.get("name", "")), current_name=current.name)
 
         if simulation_file.exists() and not os.access(simulation_file, os.W_OK):
             try:
