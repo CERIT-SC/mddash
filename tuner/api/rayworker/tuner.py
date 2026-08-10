@@ -7,7 +7,7 @@ from typing import Any
 
 import ray
 from ray.exceptions import RayError
-from ray.util.state import get_task
+from ray.util.state import list_tasks
 
 from api.config import (
     EARLY_STOP_BASELINE_TRIALS,
@@ -20,6 +20,7 @@ from api.db.operations import (
     create_job,
     create_trial_result,
     get_job,
+    get_trials_by_job_id,
     update_job_sim_length,
     update_job_status,
     update_trial_result,
@@ -119,30 +120,39 @@ def _ensure_ray_initialized() -> None:
         logger.info("Connected to Ray cluster at %s", RAY_ADDRESS)
 
 
-def _ray_task_state(future: ray.ObjectRef) -> str | None:
-    """Return the Ray task state for a future, or None if unavailable (never raises)."""
+def _running_trial_ids(job_id: str) -> set[int] | None:
+    """
+    Return the job's trials Ray reports as RUNNING, or None if the State API query failed.
+
+    One filtered query serves all callers: both only care about RUNNING tasks.
+    Query failure is returned distinctly so callers never mistake an outage for
+    "nothing running".
+    """
     try:
-        task = get_task(str(future.task_id()), address=RAY_DASHBOARD_ADDRESS)
-    except Exception:
-        logger.warning("Failed to query Ray task state for %s", future.task_id(), exc_info=True)
+        running_task_ids = {
+            task.task_id for task in list_tasks(filters=[("state", "=", "RUNNING")], address=RAY_DASHBOARD_ADDRESS)
+        }
+    except Exception as e:
+        logger.warning("Ray State API query failed for job %s: %s", job_id, e)
         return None
-    return task.state if task else None
-
-
-def _task_states(job_id: str) -> dict[int, str]:
-    """Return trial ID -> Ray task state for all of the job's active futures."""
-    states: dict[int, str] = {}
-    for future, trial_id in _job_context.get_futures(job_id).items():
-        if state := _ray_task_state(future):
-            states[trial_id] = state
-    return states
+    return {
+        trial_id
+        for future, trial_id in _job_context.get_futures(job_id).items()
+        if str(future.task_id()) in running_task_ids
+    }
 
 
 def trial_status_overrides(job_id: str) -> dict[int, JobStatus]:
-    """Return submitted trials Ray reports as executing (RUNNING)."""
-    return {
-        trial_id: JobStatus.RUNNING for trial_id, state in _task_states(job_id).items() if state.startswith("RUNNING")
-    }
+    """Return submitted trials Ray reports as executing (RUNNING); empty on query failure."""
+    running = _running_trial_ids(job_id)
+    return dict.fromkeys(running, JobStatus.RUNNING) if running is not None else {}
+
+
+def _error_pending_trials(job_id: str) -> None:
+    """Mark non-terminal trials ERROR so a terminal job never leaves dangling PENDING trials."""
+    for trial in get_trials_by_job_id(job_id):
+        if trial.status == JobStatus.PENDING:
+            update_trial_result(trial.id, JobStatus.ERROR, None)
 
 
 def derive_job_status(db_status: JobStatus, trial_statuses: list[JobStatus]) -> JobStatus:
@@ -213,29 +223,32 @@ def _submit_trials(
     return future_to_trial
 
 
-def _fail_if_stalled(job_id: str, future_to_trial: dict[ray.ObjectRef, int], pending_futures: list) -> None:
+def _fail_if_stalled(job_id: str, pending_futures: list) -> None:
     """
     Fail the batch if nothing began within the wait window.
 
-    Executing trials mean progress (keep waiting); nothing executing means
-    unschedulable — cancel the futures, ERROR the trials, and raise.
+    Executing trials mean progress and a State API outage means we cannot tell —
+    both extend the wait. A successful query with nothing RUNNING means the batch
+    never became schedulable: cancel the futures and raise. The trials are swept
+    to ERROR by the caller's failure handler.
     """
-    if any(state.startswith("RUNNING") for state in _task_states(job_id).values()):
+    running = _running_trial_ids(job_id)
+    if running is None:
+        logger.warning("Job %s: cannot verify trial states (State API outage); extending wait", job_id)
+        return
+    if running:
         logger.info(
             "Job %s: no trial completed in %ds but trials are executing; continuing",
             job_id,
             TRIAL_START_TIMEOUT_SECONDS,
         )
         return
-    remaining = [future_to_trial[f] for f in pending_futures]
     logger.warning(
-        "Job %s: no trial began or completed in %ds; failing trials %s", job_id, TRIAL_START_TIMEOUT_SECONDS, remaining
+        "Job %s: no trial began or completed in %ds; failing remaining trials", job_id, TRIAL_START_TIMEOUT_SECONDS
     )
     for future in pending_futures:
         with contextlib.suppress(Exception):
             ray.cancel(future, force=False)
-        update_trial_result(future_to_trial[future], JobStatus.ERROR, None)
-        _job_context.remove_future(job_id, future)
     raise RuntimeError(
         f"No trial began or completed within {TRIAL_START_TIMEOUT_SECONDS}s; cluster busy or unavailable - retry later"
     )
@@ -252,7 +265,7 @@ def _process_trial_results(
     while pending_futures:
         done, pending_futures = ray.wait(pending_futures, num_returns=1, timeout=TRIAL_START_TIMEOUT_SECONDS)
         if not done:
-            _fail_if_stalled(job_id, future_to_trial, pending_futures)
+            _fail_if_stalled(job_id, pending_futures)
             continue
         trial_id = future_to_trial[done[0]]
         try:
@@ -280,16 +293,13 @@ def _process_trial_results(
 def _run_tuning_async(
     job_id: str, engine: Engine, extra_args: str = "", nsteps: int = 25_000, nsteps_override: int | None = None
 ) -> None:
-    pending_trial_ids: list[int] = []
     try:
         # Create trial records before connecting to Ray so GET returns them immediately.
         all_configs = engine.generate_configs()
         trial_configs = [(create_trial_result(job_id, cfg.params, JobStatus.PENDING, None), cfg) for cfg in all_configs]
-        pending_trial_ids = [tid for tid, _ in trial_configs]
         trial_configs = _order_trial_configs(trial_configs)
 
         _ensure_ray_initialized()
-        pending_trial_ids = []  # Ray is up; trials will be managed by the run loop from here
         update_job_status(job_id, JobStatus.RUNNING)
 
         # Full production simulation length for time/cost estimates; failure only degrades estimates.
@@ -325,8 +335,7 @@ def _run_tuning_async(
                 update_job_status(job_id, JobStatus.FINISHED)
     except Exception:
         logger.exception("Tuning job %s failed", job_id)
-        for trial_id in pending_trial_ids:
-            update_trial_result(trial_id, JobStatus.ERROR, None)
+        _error_pending_trials(job_id)
         update_job_status(
             job_id, JobStatus.ERROR, "Tuning job failed. Please try again, or contact support if it persists."
         )
@@ -385,8 +394,10 @@ def sync_job_status(job_id: str) -> JobStatus | None:
         return JobStatus.RUNNING
     if job.status == JobStatus.RUNNING:
         update_job_status(job_id, JobStatus.ERROR, "Job thread terminated unexpectedly")
+        _error_pending_trials(job_id)
         return JobStatus.ERROR
     if job.status == JobStatus.PENDING:
         update_job_status(job_id, JobStatus.ERROR, "Job failed to start - no active thread")
+        _error_pending_trials(job_id)
         return JobStatus.ERROR
     return job.status

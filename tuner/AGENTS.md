@@ -26,7 +26,7 @@ Benchmark GROMACS and AMBER execution configurations through a FastAPI service b
 
 - Trials stay PENDING at submission; RUNNING comes from Ray ground truth at read time (`trial_status_overrides` via `ray.util.state.get_task`) — a trial shows RUNNING only while Ray reports the task executing. Only PENDING trials may be overridden; terminal states are owned by the job thread.
 - Job status is derived at read time: PENDING until the first trial executes, RUNNING monotonically after, FINISHED/ERROR from the DB always win.
-- Start watchdog: no completion for `TRIAL_START_TIMEOUT_SECONDS` (2h, hardcoded in `config.py`) with nothing RUNNING in Ray means the batch never became schedulable — trials are cancelled, marked ERROR, the job fails with "cluster busy or unavailable". Executing trials extend the window.
+- Start watchdog: no completion for `TRIAL_START_TIMEOUT_SECONDS` (2h, hardcoded in `config.py`) with nothing RUNNING in Ray means the batch never became schedulable — futures are cancelled and the job fails with "cluster busy or unavailable". Executing trials extend the window; a State API outage also extends (never a false kill). Terminal jobs never leave PENDING trials behind: `_error_pending_trials` sweeps them to ERROR on any failure path.
 
 ## Restart Semantics
 

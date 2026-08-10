@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { Loader2, Terminal } from "lucide-react"
 
@@ -68,6 +68,11 @@ const TunerTable = (props: TunerTableProps) => {
   }, [visibleRows])
 
   const trialClasses = useMemo(() => computeTrialClasses(visibleRows), [visibleRows])
+
+  // A selected trial that becomes hidden (pruned on completion) must not stay active.
+  useEffect(() => {
+    if (selectedTrial && !visibleRows.some((r) => r.id === selectedTrial.id)) setSelectedTrial(null)
+  }, [selectedTrial, visibleRows, setSelectedTrial])
 
   const handleRadioClick = useCallback(
     (row: TunerTrial, isOptimal: boolean) => {
