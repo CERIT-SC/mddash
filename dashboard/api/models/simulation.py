@@ -460,24 +460,6 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return self._validation
 
     @staticmethod
-    def is_locked(experiment_id: str, simulation_path: str) -> bool:
-        """
-        Return whether the simulation is locked.
-
-        A simulation is locked when its manifest file is read-only or when any
-        current tuner/production job references its ``simulation_path``.
-
-        Returns:
-            True if the simulation is locked.
-        """
-        simulation_file = DATA_DIR / experiment_id / simulation_path
-        if not os.access(simulation_file, os.W_OK):
-            return True
-
-        jobs = _query_jobs(experiment_id, simulation_path)
-        return bool(jobs.tuner or jobs.simulation)
-
-    @staticmethod
     def list_files(experiment_id: str) -> list[FileInfo]:
         """
         Discover `.simulation.json` files under the experiment directory.
@@ -647,7 +629,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if not simulation_file.is_file():
             raise NotFound(description=f"Simulation '{simulation_path}' not found.")
 
-        if cls.is_locked(experiment_id, simulation_path):
+        current = cls._from_file(experiment_id, simulation_path)
+        if current.locked:
             raise ApiError(
                 HTTPStatus.BAD_REQUEST,
                 f"Simulation '{simulation_path}' is locked.",
@@ -657,8 +640,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         content = _build_content(experiment.engine, payload)
         _validate_content_or_raise(content, experiment.engine)
-        current_name = cls._from_file(experiment_id, simulation_path).name
-        cls._require_unique_name(experiment_id, str(content.get("name", "")), current_name=current_name)
+        cls._require_unique_name(experiment_id, str(content.get("name", "")), current_name=current.name)
 
         if simulation_file.exists() and not os.access(simulation_file, os.W_OK):
             try:
