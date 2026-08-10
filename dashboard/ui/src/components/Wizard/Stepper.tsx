@@ -127,7 +127,6 @@ const WizardStepper = ({ experiment }: WizardStepperProps) => {
 
   const createSimulation = () => navigate({ search: { tab: NEW_TAB, step: SETUP_STEP } })
 
-  const progress = resolved && !resolved.createMode ? Math.max(resolved.step, resolved.maxStep) : (resolved?.step ?? 0)
   const ActiveComponent = resolved ? STEP_COMPONENTS[resolved.step] : null
 
   return (
@@ -151,7 +150,7 @@ const WizardStepper = ({ experiment }: WizardStepperProps) => {
           <div className="flex items-center justify-center">
             {STEP_LABELS.map((label, idx) => {
               const Icon = STEP_ICONS[idx]
-              const isCompleted = resolved ? idx < progress : false
+              const isCompleted = resolved ? idx < resolved.step : false
               const isActive = resolved ? idx === resolved.step : false
               const isClickable = DEBUG ? true : resolved ? idx <= resolved.maxStep : false
 
@@ -182,7 +181,7 @@ const WizardStepper = ({ experiment }: WizardStepperProps) => {
                     <div
                       className={cn(
                         "mx-1 mb-5 h-0.5 flex-1 transition-colors",
-                        idx < progress ? "bg-green-500" : isActive ? "bg-primary" : "bg-border"
+                        idx < (resolved?.step ?? 0) ? "bg-green-500" : isActive ? "bg-primary" : "bg-border"
                       )}
                     />
                   )}

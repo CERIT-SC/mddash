@@ -408,16 +408,15 @@ class TestUniqueName:
             sim = Simulation.update(exp_id, "protein.simulation.json", {"name": "protein", "files": GMX_FILES})
             assert sim.name == "protein"
 
-    @pytest.mark.parametrize("reserved", ["_new", "_anything"])
-    def test_reserved_underscore_names_rejected(self, app: Flask, tmp_path: Path, reserved: str) -> None:
-        """Underscore-prefixed names are reserved for UI sentinels (`_new` = wizard create tab)."""
+    def test_reserved_new_name_rejected(self, app: Flask, tmp_path: Path) -> None:
+        """`_new` is reserved for the wizard's create tab."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
 
         with app.app_context():
             with pytest.raises(ApiError, match="reserved") as exc_info:
-                Simulation.write(exp_id, {"name": reserved, "files": GMX_FILES, "extra_args": ""})
+                Simulation.write(exp_id, {"name": "_new", "files": GMX_FILES, "extra_args": ""})
 
             assert exc_info.value.code == 409
             assert exc_info.value.problem_type == "urn:mddash:duplicate-simulation-name"

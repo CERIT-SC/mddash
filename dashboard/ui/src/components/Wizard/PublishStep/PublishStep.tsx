@@ -19,8 +19,7 @@ import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
 type PublishTarget = "invenio" | "mdposit"
 
-const PublishStep = (props: WizardStepProps) => {
-  const { experiment } = props
+const PublishStep = ({ experiment, simulation }: WizardStepProps) => {
   const mdpositEnabled = (DEBUG || MDPOSIT_URL !== "") && experiment.engine === Engine.GMX
   const [target, setTarget] = useState<PublishTarget>("invenio")
 
@@ -55,7 +54,7 @@ const PublishStep = (props: WizardStepProps) => {
           {target === "invenio" || !mdpositEnabled ? (
             <InvenioPublishContent experiment={experiment} />
           ) : (
-            <MdPositPublishContent experiment={experiment} selected={props.simulation} />
+            <MdPositPublishContent experiment={experiment} selected={simulation} />
           )}
         </div>
       </div>

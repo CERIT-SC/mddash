@@ -7,9 +7,7 @@ import NotebookController from "@/components/NotebookController"
 import SimulationEditor from "@/components/Wizard/SimulationEditor"
 import { type WizardStepProps } from "@/components/Wizard/Stepper"
 
-const SetupStep = (props: WizardStepProps) => {
-  const { experiment, simulation } = props
-
+const SetupStep = ({ experiment, simulation }: WizardStepProps) => {
   const navigate = useNavigate({ from: "/$id/wizard" })
   const { data: simulations = [] } = useSimulations(experiment.id)
   const hasValidSimulation = simulations.some((s) => s.valid)

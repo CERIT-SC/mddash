@@ -16,13 +16,6 @@ interface SimulationTabsProps {
   className?: string
 }
 
-const TRIGGER = cn(
-  "border-border bg-muted text-muted-foreground relative h-9 max-w-64 min-w-28 flex-none rounded-t-md rounded-b-none border px-3 py-0 text-sm transition-colors",
-  "hover:bg-secondary hover:text-secondary-foreground after:hidden",
-  // `!` beats the repo TabsTrigger base group-variant rules (bg-transparent on active)
-  "data-[state=active]:bg-card! data-[state=active]:text-foreground! data-[state=active]:border-b-transparent!"
-)
-
 const SimulationTabs = ({ simulations, selectedName, loading, onSelect, onCreate, className }: SimulationTabsProps) => {
   return (
     <Tabs
@@ -46,7 +39,12 @@ const SimulationTabs = ({ simulations, selectedName, loading, onSelect, onCreate
               key={simulation.simulation_path}
               value={simulation.name}
               title={simulation.simulation_path}
-              className={TRIGGER}
+              className={cn(
+                "border-border bg-muted text-muted-foreground relative h-9 max-w-64 min-w-28 flex-none rounded-t-md rounded-b-none border px-3 py-0 text-sm transition-colors",
+                "hover:bg-secondary hover:text-secondary-foreground after:hidden",
+                // `!` beats the repo TabsTrigger base group-variant rules (bg-transparent on active)
+                "data-[state=active]:bg-card! data-[state=active]:text-foreground! data-[state=active]:border-b-transparent!"
+              )}
             >
               <span className="truncate font-medium">{simulation.name}</span>
               {simulation.locked && <Lock className="text-muted-foreground size-3.5 shrink-0" />}

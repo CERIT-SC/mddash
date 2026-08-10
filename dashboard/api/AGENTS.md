@@ -17,7 +17,7 @@ Flask REST API that orchestrates molecular dynamics experiments across Kubernete
 - `list_simulation_files()` finds `*.simulation.json` anywhere under the experiment directory (not just `production/`).
 - `get_simulation()` validates against the JSON Schema referenced by `$schema` (which must be a mddash schema URL — see `manifest_schema.py`); invalid simulations are returned with errors and can't be used by downstream steps.
 - A simulation is locked when its file is read-only or when a tuner/production job references its `simulation_path`. `mark_simulation_readonly()` chmods the file `0444`.
-- Manifest `name` must be unique per experiment (wizard tab identity); `_`-prefixed names are reserved for UI sentinels (`_new`).
+- Manifest `name` must be unique per experiment (wizard tab identity); `_new` is reserved (create-tab sentinel).
 
 ### Migrations
 - `create_app()` runs `flask_migrate.upgrade()` on startup (skipped at head), falling back to `db.create_all()`. Add a migration file in `migrations/versions/` when adding columns. Do NOT manually run `flask db upgrade`.

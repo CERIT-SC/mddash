@@ -11,9 +11,9 @@ const ENGINE_PANELS: Record<Engine, ComponentType<WizardStepProps>> = {
   [Engine.AMBER]: AmberTunePanel,
 }
 
-const TuneStep = (props: WizardStepProps) => {
-  const Panel = ENGINE_PANELS[props.experiment.engine]
-  return <Panel {...props} />
+const TuneStep = ({ experiment, simulation, goToStep }: WizardStepProps) => {
+  const Panel = ENGINE_PANELS[experiment.engine]
+  return <Panel experiment={experiment} simulation={simulation} goToStep={goToStep} />
 }
 
 export default TuneStep

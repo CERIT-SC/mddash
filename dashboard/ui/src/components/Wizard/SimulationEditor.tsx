@@ -36,9 +36,7 @@ interface SimulationEditorProps {
   experimentId: string
   engine: Engine
   selected: Simulation | null
-  /** Called after a successful create/update; wasEditing distinguishes edit from create. */
   onSaved: (sim: Simulation, wasEditing: boolean) => void
-  /** Called after the selected simulation is deleted. */
   onDeleted: () => void
   className?: string
 }
@@ -203,14 +201,13 @@ const SimulationEditor = ({ experimentId, engine, selected, onSaved, onDeleted, 
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {/* Name */}
           <div className="flex flex-col gap-1">
             <Label htmlFor="sim-name">Name</Label>
             <Input id="sim-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="protein" />
             <p className="text-muted-foreground text-xs">{ROLE_HELP.name}</p>
           </div>
 
-          {/* Existing files — files that already exist and are selected from disk */}
+          {/* Existing files */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <p className="text-muted-foreground/80 col-span-full text-[11px] tracking-wide uppercase">Existing files</p>
 
@@ -254,7 +251,7 @@ const SimulationEditor = ({ experimentId, engine, selected, onSaved, onDeleted, 
             )}
           </div>
 
-          {/* Output paths — paths the simulation will create */}
+          {/* Output paths */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             <p className="text-muted-foreground/80 col-span-full text-[11px] tracking-wide uppercase">Output paths</p>
 
@@ -283,7 +280,6 @@ const SimulationEditor = ({ experimentId, engine, selected, onSaved, onDeleted, 
             )}
           </div>
 
-          {/* Extra arguments */}
           <div className="flex flex-col gap-1">
             <p className="text-muted-foreground/80 mb-1 text-[11px] tracking-wide uppercase">Runtime options</p>
             <Label htmlFor="extra-args" className="sr-only">

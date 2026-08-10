@@ -270,20 +270,16 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
     @property
     def step(self) -> int:
         """Wizard step of this simulation based on its own jobs and manifest validity."""
-        return self._step_status()[0]
+        return self.step_status[0]
 
     @property
     def status(self) -> str:
         """Status of this simulation based on its own jobs and manifest validity."""
-        return self._step_status()[1]
+        return self.step_status[1]
 
     @property
-    def step_status(self) -> tuple[int, str]:
-        """Per-simulation (step, status) ladder; public accessor for the cached method."""
-        return self._step_status()
-
     @cached(cache=step_status_cache)
-    def _step_status(self) -> tuple[int, str]:
+    def step_status(self) -> tuple[int, str]:
         """
         (step, status) from jobs referencing this ``simulation_path``.
 
@@ -541,14 +537,14 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         Reject a name already used by another manifest in this experiment.
 
         Names are the wizard tab identity (``?tab=<name>``), hence unique.
-        Underscore prefixes are reserved for UI sentinels (``_new`` = create tab).
+        ``_new`` is reserved for the wizard's create tab.
 
         Raises:
             ApiError: 409 when the name is reserved or already taken.
         """
         if not name:
             return
-        if name.startswith("_"):
+        if name == "_new":
             raise ApiError(
                 HTTPStatus.CONFLICT,
                 f"The simulation name '{name}' is reserved.",

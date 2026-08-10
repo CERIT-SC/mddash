@@ -21,9 +21,7 @@ import AnalysisPanel from "./AnalysisPanel"
 const fileUrl = (experimentId: string, path: string) => `${API_BASE}/experiments/${experimentId}/files/${path}`
 const fileName = (path: string) => path.split("/").pop() ?? path
 
-const AnalyzeStep = (props: WizardStepProps) => {
-  const { experiment } = props
-
+const AnalyzeStep = ({ experiment, simulation }: WizardStepProps) => {
   const [selectedAnalysis, setSelectedAnalysis] = useState<AnalysisType | null>(null)
   const [preprocessingMode, setPreprocessingMode] = useState<AnalysisPreprocessingModeValue>(
     AnalysisPreprocessingMode.AS_IS
@@ -31,7 +29,7 @@ const AnalyzeStep = (props: WizardStepProps) => {
   const [reloadKey, setReloadKey] = useState(0)
   const [activeTab, setActiveTab] = useState("viewer")
 
-  const sim = props.simulation
+  const sim = simulation
   const resolved = sim?.resolved_files ?? {}
   const viewerUnavailableReason = simulationAnalysisUnavailableReason(sim, experiment.engine)
 
