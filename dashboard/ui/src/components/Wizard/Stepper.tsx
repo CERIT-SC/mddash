@@ -33,7 +33,7 @@ export interface WizardStepperProps {
 
 export interface WizardStepProps {
   experiment: Experiment
-  /** The selected setup; null ⇔ create mode (`?tab=_new`). */
+  /** The selected simulation; null ⇔ create mode (`?tab=_new`). */
   simulation: Simulation | null
   goToStep: (step: number) => void
 }
@@ -46,7 +46,7 @@ interface ResolvedWizard {
   maxStep: number
 }
 
-/** Furthest step reachable for a tab: its own ladder, plus Publish — open once published or any setup finished MD. */
+/** Furthest step reachable for a tab: its own ladder, plus Publish — open once published or any simulation finished MD. */
 function maxAllowedStep(
   simulation: Simulation | null,
   createMode: boolean,
@@ -59,7 +59,7 @@ function maxAllowedStep(
   return publishReady ? Math.max(setupStep, PUBLISH_STEP) : setupStep
 }
 
-/** Setup with the most recent interaction — where the wizard lands with no tab pinned. */
+/** Simulation with the most recent interaction — where the wizard lands with no tab pinned. */
 function latestSimulation(simulations: Simulation[]): Simulation | null {
   return simulations.reduce<Simulation | null>(
     (latest, sim) => (latest === null || sim.last_activity > latest.last_activity ? sim : latest),

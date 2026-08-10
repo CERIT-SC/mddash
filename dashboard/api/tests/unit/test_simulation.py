@@ -437,7 +437,7 @@ def _write_two_sims(exp_dir: Path) -> None:
 
 
 class TestStepStatus:
-    """Per-setup ladder: each manifest infers its own step from its own jobs."""
+    """Per-simulation ladder: each manifest infers its own step from its own jobs."""
 
     def setup_method(self) -> None:
         """Clear the step status cache before each test."""
@@ -477,7 +477,7 @@ class TestStepStatus:
             assert sim.status == "setup"
 
     def test_ladder_is_scoped_per_manifest(self, app: Flask, tmp_path: Path) -> None:
-        """A finished job only moves its own setup to the analyze step."""
+        """A finished job only moves its own simulation to the analyze step."""
         exp_id = _seed_experiment(app)
         _write_two_sims(tmp_path / exp_id)
         _add_gmx_job(
@@ -497,7 +497,7 @@ class TestStepStatus:
             assert ligand.status == "setup complete"
 
     def test_tuner_trials_give_step_two(self, app: Flask, tmp_path: Path) -> None:
-        """A tuner trial with performance lifts only its own setup to step 2 (no live API call)."""
+        """A tuner trial with performance lifts only its own simulation to step 2 (no live API call)."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
@@ -544,7 +544,7 @@ class TestExperimentDelegation:
             assert experiment.status == "setup"
 
     def test_experiment_inherits_latest_simulation(self, app: Flask, tmp_path: Path) -> None:
-        """Activity on the older setup does not lift the experiment — the newer setup leads."""
+        """Activity on the older simulation does not lift the experiment — the newer simulation leads."""
         exp_id = _seed_experiment(app)
         _write_two_sims(tmp_path / exp_id)
         from datetime import datetime
@@ -564,7 +564,7 @@ class TestExperimentDelegation:
             assert experiment.step == 1
             assert experiment.status == "setup complete"
 
-    def test_just_started_job_makes_its_setup_latest(self, app: Flask, tmp_path: Path) -> None:
+    def test_just_started_job_makes_its_sim_latest(self, app: Flask, tmp_path: Path) -> None:
         """A freshly submitted job has no start/finish timestamps yet — its creation time must count."""
         exp_id = _seed_experiment(app)
         _write_two_sims(tmp_path / exp_id)  # ligand manifest is newer than protein's
@@ -577,12 +577,12 @@ class TestExperimentDelegation:
             assert experiment is not None
             protein = Simulation.get(exp_id, "protein.simulation.json")
             assert protein.last_activity >= 1_700_200_000
-            # job row without timestamps still lifts its setup (created_at) to latest — step 2
+            # job row without timestamps still lifts its simulation (created_at) to latest — step 2
             assert experiment.step == 2
             assert experiment.status == "simulating"
 
-    def test_analysis_job_makes_its_setup_latest(self, app: Flask, tmp_path: Path) -> None:
-        """An analysis job's creation time lifts its own setup's last_activity."""
+    def test_analysis_job_makes_its_sim_latest(self, app: Flask, tmp_path: Path) -> None:
+        """An analysis job's creation time lifts its own simulation's last_activity."""
         exp_id = _seed_experiment(app)
         _write_two_sims(tmp_path / exp_id)  # ligand manifest is newer than protein's
         from datetime import datetime

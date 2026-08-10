@@ -118,7 +118,7 @@ class _JobRows(NamedTuple):
 
 
 def _query_jobs(experiment_id: str, simulation_path: str) -> _JobRows:
-    """Scan every job table for a setup in one call."""
+    """Scan every job table for a simulation in one call."""
     # avoid circular dependency
     from .analysis_job import AnalysisJob  # ruff:ignore[import-outside-top-level]
     from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
@@ -181,7 +181,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         self._memo_jobs: _JobRows | None = None
 
     def _cached_jobs(self) -> _JobRows:
-        """Job rows for this setup, queried once per instance."""
+        """Job rows for this simulation, queried once per instance."""
         if self._memo_jobs is None:
             self._memo_jobs = _query_jobs(self.experiment_id, self.simulation_path)
         return self._memo_jobs
@@ -245,7 +245,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
     @property
     def last_activity(self) -> float:
         """
-        Epoch seconds of the most recent interaction with this setup.
+        Epoch seconds of the most recent interaction with this simulation.
 
         Latest of manifest mtime, simulation-job creation/start/finish, and
         tuner/analysis-job creation. Job start/finish are only set once the
@@ -269,17 +269,17 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     @property
     def step(self) -> int:
-        """Wizard step of this setup based on its own jobs and manifest validity."""
+        """Wizard step of this simulation based on its own jobs and manifest validity."""
         return self._step_status()[0]
 
     @property
     def status(self) -> str:
-        """Status of this setup based on its own jobs and manifest validity."""
+        """Status of this simulation based on its own jobs and manifest validity."""
         return self._step_status()[1]
 
     @property
     def step_status(self) -> tuple[int, str]:
-        """Per-setup (step, status) ladder; public accessor for the cached method."""
+        """Per-simulation (step, status) ladder; public accessor for the cached method."""
         return self._step_status()
 
     @cached(cache=step_status_cache)

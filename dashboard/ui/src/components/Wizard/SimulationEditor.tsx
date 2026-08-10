@@ -28,7 +28,7 @@ const ROLE_HELP: Record<string, string> = {
   reference_structure: "Structure matching the trajectory atom set and order. Created by the setup notebook.",
   trajectory: "Trajectory file. Auto-filled from run input name.",
   run_structure: "Final coordinate snapshot from the run. Auto-filled from run input name.",
-  name: "Identifier for this simulation setup.",
+  name: "Identifier for this simulation.",
   extra_args: "Additional GROMACS/AMBER CLI flags passed to mdrun.",
 }
 

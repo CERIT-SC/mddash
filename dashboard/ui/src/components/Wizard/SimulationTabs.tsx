@@ -57,11 +57,11 @@ const SimulationTabs = ({ simulations, selectedName, loading, onSelect, onCreate
 
         <TabsTrigger
           value={CREATE_TAB}
-          title="Create new simulation setup"
+          title="Create new simulation"
           className="text-muted-foreground hover:text-foreground data-[state=active]:text-foreground! h-9 min-w-0 flex-none gap-1.5 border-transparent! bg-transparent px-2.5 shadow-none after:hidden data-[state=active]:bg-transparent!"
         >
           <Plus className="size-4" />
-          <span className="hidden sm:inline">New setup</span>
+          <span className="hidden sm:inline">New simulation</span>
         </TabsTrigger>
       </TabsList>
     </Tabs>

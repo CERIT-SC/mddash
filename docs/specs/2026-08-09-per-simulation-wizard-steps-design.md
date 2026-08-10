@@ -1,4 +1,4 @@
-# Per-Setup Wizard Steps — Design
+# Per-Simulation Wizard Steps — Design
 
 **Date:** 2026-08-09
 **Status:** Approved (brainstorming)
@@ -6,7 +6,7 @@
 
 ## Goal
 
-Each simulation setup (`.simulation.json` manifest) owns its own wizard progress. The setup tabs move above the wizard stepper and wrap the entire per-tab wizard (stepper header + active step). Wizard state (active tab, active step) lives in URL search params (`/$id/wizard?tab=protein&step=2`) instead of component-local state. Step inference remains server-side but is re-scoped from the experiment to the individual manifest. Publishing stays experiment-level. No DB migrations.
+Each simulation (`.simulation.json` manifest) owns its own wizard progress. The simulation tabs move above the wizard stepper and wrap the entire per-tab wizard (stepper header + active step). Wizard state (active tab, active step) lives in URL search params (`/$id/wizard?tab=protein&step=2`) instead of component-local state. Step inference remains server-side but is re-scoped from the experiment to the individual manifest. Publishing stays experiment-level. No DB migrations.
 
 ## Decisions (locked during brainstorming)
 
@@ -21,7 +21,7 @@ Each simulation setup (`.simulation.json` manifest) owns its own wizard progress
 
 ## Current state (as-is)
 
-- **Step inference:** `Experiment._step_status` (`dashboard/api/models/experiment.py:394-435`) walks a ladder over *all* the experiment's `simulation_jobs`/`tuner_jobs`, `mdrepo_published`, and `_has_setup_files()` (any valid manifest). It is per-experiment: one finished job on any setup pushes the whole experiment to step 4. Served by `GET /experiments/{id}/step`, polled every 5 s by `useExperimentStep` (`dashboard/ui/src/hooks/use-experiment.ts`).
+- **Step inference:** `Experiment._step_status` (`dashboard/api/models/experiment.py:394-435`) walks a ladder over *all* the experiment's `simulation_jobs`/`tuner_jobs`, `mdrepo_published`, and `_has_setup_files()` (any valid manifest). It is per-experiment: one finished job on any simulation pushes the whole experiment to step 4. Served by `GET /experiments/{id}/step`, polled every 5 s by `useExperimentStep` (`dashboard/ui/src/hooks/use-experiment.ts`).
 - **Tab/step state:** both live in `useState` in `WizardStepper` (`dashboard/ui/src/components/Wizard/Stepper.tsx`): `activeStep` initialized from `experiment.step`; `selectedSimulationPath` keyed by path. `nextStep()` is an optimistic `queryClient.setQueryData` poke — no API write.
 - **Tabs:** `SimulationTabs` renders *below* the stepper header; switching tabs does not change the step. `null` selection = create mode.
 - **Jobs already key by `simulation_path`** (`SimulationJob.simulation_path`, `TunerJob.simulation_path`, `AnalysisJob.simulation_path`) — re-scoping the ladder per manifest requires no schema change.
@@ -44,7 +44,7 @@ The decision tree is the existing ladder, scoped down: any FINISHED simulation j
 
 - Jobs are queried as `SimulationJob` / `TunerJob` rows filtered by `experiment_id=self.experiment_id, simulation_path=self.simulation_path`.
 - The setup check is `self.valid` — the manifest's own schema/role check. `missing_files` does not gate (unchanged policy).
-- **`mdrepo_published` is deliberately *not* folded in** — Publish is experiment-level only (see below), so the per-setup ladder spans 0–4.
+- **`mdrepo_published` is deliberately *not* folded in** — Publish is experiment-level only (see below), so the per-simulation ladder spans 0–4.
 - `Simulation.to_dict()` gains `step` and `status`. `GET /experiments/{id}/simulations` (list and single) already serialize via `to_dict` — **no new endpoints, no migrations**.
 
 ### `Experiment` inherits the latest simulation
@@ -63,8 +63,8 @@ def _step_status(self) -> tuple[int, str]:
     return 0, "setup"
 ```
 
-- `_latest_simulation()`: the `Simulation` with the highest `last_activity`, where **activity = max(manifest mtime, its simulation jobs' creation/start/finish times, its tuner and analysis jobs' creation times)** — valid jobless setups count via mtime, and freshly submitted jobs count via `created_at` (start/finish are only set once the MDRun API reports them). Deterministic, no new DB columns. Returns `None` when the experiment has no manifests.
-- **Intentional behavior change:** the Home-badge/publish-gating aggregate now follows the *most recently touched* setup instead of any-setup progress. Creating a fresh setup drops experiment step to that setup's 0/1 until it progresses; publish-gating (`experiment.step >= 4`) follows suit. This is the desired semantics per the lock-in table.
+- `_latest_simulation()`: the `Simulation` with the highest `last_activity`, where **activity = max(manifest mtime, its simulation jobs' creation/start/finish times, its tuner and analysis jobs' creation times)** — valid jobless simulations count via mtime, and freshly submitted jobs count via `created_at` (start/finish are only set once the MDRun API reports them). Deterministic, no new DB columns. Returns `None` when the experiment has no manifests.
+- **Intentional behavior change:** the Home-badge/publish-gating aggregate now follows the *most recently touched* simulation instead of any-setup progress. Creating a fresh simulation drops experiment step to that simulation's 0/1 until it progresses; publish-gating (`experiment.step >= 4`) follows suit. This is the desired semantics per the lock-in table.
 
 ### Name uniqueness
 
@@ -73,7 +73,7 @@ Tab identity is the manifest `name`, so POST/PATCH `/experiments/{id}/simulation
 ### Cleanup
 
 - `GET /experiments/{id}/step` (`dashboard/api/routes/experiments.py:220`) is wizard-only today — **deleted**, along with its tests.
-- Demo seed `dashboard/api/_demo/app.py` gains setups at differing steps so `make demo` shows two mid-flight tabs.
+- Demo seed `dashboard/api/_demo/app.py` gains simulations at differing steps so `make demo` shows two mid-flight tabs.
 
 ## Frontend design
 
@@ -97,16 +97,16 @@ The tab *is* the wizard — the stepper header is per-tab content:
 │  [ protein ] [ ligand ] [ + ]        ← SimulationTabs      │
 │ ┌────────────────────────────────────────────────────────┐ │
 │ │ ◯ Setup — ◯ Tune — ◯ Run — ● Analyze — ◯ Publish   │ │
-│ │ (StepperHeader for THIS tab, gated on this setup)      │ │
+│ │ (StepperHeader for THIS tab, gated on this simulation)      │ │
 │ │ <ActiveStep/>                                          │ │
 │ └────────────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────┘
 ```
 
 - `Stepper.tsx` becomes the **shell**: tabs + extracted presentational `StepperHeader` (the existing hand-rolled 5-icon header, with `STEP_ICONS/STEP_LABELS` constants) + step dispatch (`STEP_COMPONENTS`). No `activeStep` / `selectedSimulationPath` local state; no experiment cache mutation. The tab bar is rendered **outside/above** the wizard card as browser-style attached tabs (shadcn `Tabs`/`TabsList`/`TabsTrigger` `line` variant — the active tab overlaps the card's top border and flows into it; the ·— create-affordance is a plain icon+text trigger). No `activeStep` / `selectedSimulationPath` local state; no experiment cache mutation.
-- **Canonicalization:** `tab` undefined → `navigate(replace)` to the **most recently interacted-with setup** — same rule as the experiment's `_latest_simulation` (max of manifest mtime, simulation-job creation/start/finish times, tuner job creation), exposed as `last_activity` on the simulation payload; unknown tab names fall back the same way; no simulations → `?tab=_new&step=0`. Missing or out-of-bounds `step` defaults to the setup's own step. Create/update/delete mutations synchronously seed the simulations list cache (append/replace/remove), so canonicalization never falls back to a stale tab while the invalidation refetch is in flight — this is what keeps `?tab=<new name>` after creating a setup. The URL is canonical after first render.
-- **Tab switch:** clicking a tab navigates to `?tab=<name>&step=<that sim's step>` — each setup keeps its own position in the ladder. A `?step=` explicitly pinned in a hand-crafted URL stays pinned (within bounds) until the next navigation.
-- **Gating:** button clicks for steps 0–3 are enabled when `idx <= selectedSimulation.step`; step 4 (Publish) is enabled when `experiment.step >= 4` (i.e. the latest setup reached analyzing, per the delegation rule). `tab=_new` shows the box with Setup at step 0 and nothing else clickable. Gating lives in the buttons only: a pinned `?step=` within 0–4 is always rendered (forward jumps must stick while the poll catches up), and step-level guards (`simulationUnavailableReason`, publish state) handle content the setup has not reached yet.
+- **Canonicalization:** `tab` undefined → `navigate(replace)` to the **most recently interacted-with simulation** — same rule as the experiment's `_latest_simulation` (max of manifest mtime, simulation-job creation/start/finish times, tuner job creation), exposed as `last_activity` on the simulation payload; unknown tab names fall back the same way; no simulations → `?tab=_new&step=0`. Missing or out-of-bounds `step` defaults to the simulation's own step. Create/update/delete mutations synchronously seed the simulations list cache (append/replace/remove), so canonicalization never falls back to a stale tab while the invalidation refetch is in flight — this is what keeps `?tab=<new name>` after creating a simulation. The URL is canonical after first render.
+- **Tab switch:** clicking a tab navigates to `?tab=<name>&step=<that sim's step>` — each simulation keeps its own position in the ladder. A `?step=` explicitly pinned in a hand-crafted URL stays pinned (within bounds) until the next navigation.
+- **Gating:** button clicks for steps 0–3 are enabled when `idx <= selectedSimulation.step`; step 4 (Publish) is enabled when `experiment.step >= 4` (i.e. the latest simulation reached analyzing, per the delegation rule). `tab=_new` shows the box with Setup at step 0 and nothing else clickable. Gating lives in the buttons only: a pinned `?step=` within 0–4 is always rendered (forward jumps must stick while the poll catches up), and step-level guards (`simulationUnavailableReason`, publish state) handle content the simulation has not reached yet.
 - **Navigation:** `changeStep` / `nextStep` both collapse into `goToStep(n) := navigate({ search: { tab, step: n } })`. The `DEBUG: next step` button stays (navigates to `resolved.step + 1`, clamped to `0..4`).
 - **Polling:** the shell calls `useSimulations(id, { refetchInterval: 5000 })` — the wizard's single heartbeat, replacing the deleted `useExperimentStep` one-for-one. Tab badges, stepper gating, and step guards all derive from that one query. The analyze-entry invalidation effect survives as invalidation when `step === 3`.
 
@@ -128,14 +128,14 @@ interface WizardStepProps {
 - No step manages the simulation list; the shell resolves `?tab=` → `simulation` in one place.
 - **Per-step impact:**
   - `SetupStep`: `simulation === null` → empty `SimulationEditor` (create); else edit mode. Keeps details card + `NotebookController`.
-  - `TuneStep` / `RunStep` / `AnalyzeStep`: drop the find-by-path plumbing; guard `!simulation` → "create a setup first" prompt linking to `?tab=_new`. Role-gating in `util/simulation.ts` (`simulationUnavailableReason`) is untouched — already per-manifest.
+  - `TuneStep` / `RunStep` / `AnalyzeStep`: drop the find-by-path plumbing; guard `!simulation` → "create a simulation first" prompt linking to `?tab=_new`. Role-gating in `util/simulation.ts` (`simulationUnavailableReason`) is untouched — already per-manifest.
   - `TunerView.goToRunStep` becomes `goToStep(2)`; allowed because the launch already created the job row and the sims poll will report step ≥ 2 (launch hooks already invalidate the simulations query).
   - `PublishStep`: unchanged (experiment-level); may ignore `simulation`.
 - **Unchanged:** per-panel job filtering by `simulation_path`, `SimulationTabs` lock/invalid badge icons, Analyze's inner viewer/analysis tab (stays local state, not URL-synced — out of scope).
 
 ## Data flow
 
-1. `useSimulations` (5 s poll) is the only wizard heartbeat; list payload carries `step`/`status` per setup.
+1. `useSimulations` (5 s poll) is the only wizard heartbeat; list payload carries `step`/`status` per simulation.
 2. Job/tuner/analysis mutations keep their existing TanStack Query invalidations (including `["experiment", id, "simulations"]`), so the ladder refreshes within one tick.
 3. Publishing still mutates `experiment.mdrepo_published` via the existing publish routes; the experiment payload keeps its server-side `step`/`status` for Home and Publish gating.
 
@@ -151,13 +151,13 @@ All repair is shell-level; toasts only where the user just acted (via existing p
 
 ## Testing & verification
 
-- **API (`make test`):** per-setup ladder — two jobs on different `simulation_path`s; assert each simulation's `step`/`status` in the list payload; assert `experiment.step` tracks the *latest* simulation (activity ordering, setup-only experiment, publish override at 5); duplicate-name rejection; remove tests of deleted `/step` endpoint and `_has_setup_files`.
+- **API (`make test`):** per-simulation ladder — two jobs on different `simulation_path`s; assert each simulation's `step`/`status` in the list payload; assert `experiment.step` tracks the *latest* simulation (activity ordering, setup-only experiment, publish override at 5); duplicate-name rejection; remove tests of deleted `/step` endpoint and `_has_setup_files`.
 - **Types & format:** `make fix`, `make type-check`.
-- **Manual (`make demo`, seeded with setups at differing steps):** refresh restores `?tab=&step=`; back/forward walks tabs; direct link to `?tab=ligand&step=2` gates correctly; `+` create flow lands on `?tab=<name>&step=1`; publish state renders regardless of active tab.
+- **Manual (`make demo`, seeded with simulations at differing steps):** refresh restores `?tab=&step=`; back/forward walks tabs; direct link to `?tab=ligand&step=2` gates correctly; `+` create flow lands on `?tab=<name>&step=1`; publish state renders regardless of active tab.
 - **Docs:** update `dashboard/ui/AGENTS.md` lines describing the wizard ("Wizard step lives in the backend", Stepper optimistic updates) to the URL-driven model.
 
 ## Out of scope
 
-- Per-setup publishing / per-simulation MDRepo deposition state.
+- Per-simulation publishing / per-simulation MDRepo deposition state.
 - URL-syncing Analyze's inner viewer/analysis tab.
 - GMX/AMBER panel duplication (`TunerView`/`RunView` twins) — separate cleanup, not entangled with this rework.
