@@ -532,12 +532,13 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return cls(experiment_id, simulation_path, raw=raw)
 
     @classmethod
-    def _require_unique_name(cls, experiment_id: str, name: str, exclude_path: str | None = None) -> None:
+    def _require_unique_name(cls, experiment_id: str, name: str, *, current_name: str | None = None) -> None:
         """
-        Reject a name already used by another manifest in this experiment.
+        Reject a reserved name or one used by another manifest.
 
-        Names are the wizard tab identity (``?tab=<name>``), hence unique.
-        ``_new`` is reserved for the wizard's create tab.
+        Names are the wizard tab identity (``?tab=<name>``), hence unique;
+        ``_new`` is reserved for the wizard's create tab. ``current_name``
+        is the manifest's own name before an edit — keeping it is allowed.
 
         Raises:
             ApiError: 409 when the name is reserved or already taken.
@@ -551,17 +552,15 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
                 "urn:mddash:duplicate-simulation-name",
                 "Choose a different name.",
             )
-        for file_info in cls.list_files(experiment_id):
-            if exclude_path is not None and Path(file_info.path).as_posix() == exclude_path:
-                continue
-            other = cls._from_file(experiment_id, file_info.path)
-            if other.name == name:
-                raise ApiError(
-                    HTTPStatus.CONFLICT,
-                    f"A simulation named '{name}' already exists.",
-                    "urn:mddash:duplicate-simulation-name",
-                    "Choose a different name.",
-                )
+        taken = {cls._from_file(experiment_id, f.path).name for f in cls.list_files(experiment_id)}
+        taken.discard(current_name)
+        if name in taken:
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                f"A simulation named '{name}' already exists.",
+                "urn:mddash:duplicate-simulation-name",
+                "Choose a different name.",
+            )
 
     @classmethod
     def write(cls, experiment_id: str, payload: dict) -> "Simulation":
@@ -658,7 +657,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         content = _build_content(experiment.engine, payload)
         _validate_content_or_raise(content, experiment.engine)
-        cls._require_unique_name(experiment_id, str(content.get("name", "")), exclude_path=simulation_path)
+        current_name = cls._from_file(experiment_id, simulation_path).name
+        cls._require_unique_name(experiment_id, str(content.get("name", "")), current_name=current_name)
 
         if simulation_file.exists() and not os.access(simulation_file, os.W_OK):
             try:

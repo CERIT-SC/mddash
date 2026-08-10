@@ -150,29 +150,39 @@ const WizardStepper = ({ experiment }: WizardStepperProps) => {
           <div className="flex items-center justify-center">
             {STEP_LABELS.map((label, idx) => {
               const Icon = STEP_ICONS[idx]
-              const isCompleted = resolved ? idx < resolved.step : false
-              const isActive = resolved ? idx === resolved.step : false
-              const isClickable = DEBUG ? true : resolved ? idx <= resolved.maxStep : false
+              const state = !resolved
+                ? "locked"
+                : idx === resolved.step
+                  ? "active"
+                  : idx < resolved.step
+                    ? "done"
+                    : DEBUG || idx <= resolved.maxStep
+                      ? "open"
+                      : "locked"
 
               return (
                 <React.Fragment key={label}>
                   <div className="flex flex-col items-center gap-1">
                     <button
                       type="button"
-                      disabled={!isClickable}
+                      disabled={state === "locked"}
                       onClick={() => goToStep(idx)}
                       className={cn(
                         "flex h-12 w-12 items-center justify-center rounded-full border-2 text-white transition-all",
-                        isActive && "bg-primary border-primary scale-110 shadow-md",
-                        isCompleted && !isActive && "border-green-500 bg-green-500",
-                        !isActive && !isCompleted && "bg-muted border-border text-muted-foreground",
-                        isClickable && !isActive && !isCompleted && "cursor-pointer hover:scale-105 hover:shadow",
-                        isClickable && isCompleted && "cursor-pointer hover:scale-105"
+                        state === "active" && "bg-primary border-primary scale-110 shadow-md",
+                        state === "done" && "border-green-500 bg-green-500",
+                        (state === "open" || state === "locked") && "bg-muted border-border text-muted-foreground",
+                        state !== "locked" && state !== "active" && "cursor-pointer hover:scale-105 hover:shadow"
                       )}
                     >
                       <Icon className="h-5 w-5" />
                     </button>
-                    <span className={cn("text-xs font-medium", isActive ? "text-primary" : "text-muted-foreground")}>
+                    <span
+                      className={cn(
+                        "text-xs font-medium",
+                        state === "active" ? "text-primary" : "text-muted-foreground"
+                      )}
+                    >
                       {label}
                     </span>
                   </div>
@@ -181,7 +191,7 @@ const WizardStepper = ({ experiment }: WizardStepperProps) => {
                     <div
                       className={cn(
                         "mx-1 mb-5 h-0.5 flex-1 transition-colors",
-                        idx < (resolved?.step ?? 0) ? "bg-green-500" : isActive ? "bg-primary" : "bg-border"
+                        state === "done" ? "bg-green-500" : state === "active" ? "bg-primary" : "bg-border"
                       )}
                     />
                   )}
