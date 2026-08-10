@@ -21,10 +21,6 @@ Ray does **not** offer a per-task verdict for "cannot be scheduled": the State A
 
 `_submit_trials` writes `RUNNING` the moment a task is *submitted* to Ray, so a trial shows RUNNING while it is actually queued (`PENDING_NODE_ASSIGNMENT`). This spec derives trial and job status from Ray task ground truth instead — the states "as Ray intended": `PENDING_*` → PENDING, `RUNNING*` → RUNNING, terminal states owned by the job thread.
 
-### Early pruning: kept as-is
-
-Batching is load-bearing for the pruner: trials receive `best_steps_per_sec` at submission time, so waves are how later trials learn the settled best. Submitting everything at once would disable pruning; a streaming refill would make pruning decisions race on completion order (non-deterministic). Batches (baseline 3, then 6) are kept, as are the existing `EARLY_STOP_*` constants and threshold semantics. Out of scope for this spec.
-
 ## Goals
 
 - Report honest statuses: a trial shows PENDING wherever it is not executing in Ray (unsubmitted *or* queued); RUNNING only while Ray reports the task executing.
@@ -34,7 +30,7 @@ Batching is load-bearing for the pruner: trials receive `best_steps_per_sec` at 
 ## Non-Goals
 
 - No new statuses: no QUEUED enum anywhere (tuner, dashboard, UI untouched).
-- No changes to grid generation, ordering, batch sizes, or early-stop thresholds.
+- No changes to grid generation, ordering, batch sizes, or early-stop thresholds. Batches (baseline 3, then 6) are load-bearing for the pruner — trials receive `best_steps_per_sec` at submission time — and must not be flattened into a submit-all or streaming-refill loop.
 - No per-trial wedge timer: a wedged RUNNING process that is a batch's last remaining trial is a known, accepted gap (it shows as RUNNING forever). Documented here only.
 - No per-user authorization, no restart-safe active jobs (documented invariants in `tuner/AGENTS.md` remain).
 
