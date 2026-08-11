@@ -13,6 +13,7 @@ Benchmark GROMACS and AMBER execution configurations through a FastAPI service b
 - KubeRay and its CRDs are cluster prerequisites; the MDDash chart does not manage the operator.
 - Ray head and workers are ingress-isolated by NetworkPolicy; only Tuner pods may connect directly to them.
 - Tuner credentials are required at startup. Never restore development credential defaults.
+- **Problem-details errors**: routes raise `HTTPException` or `ApiError` (`api/errors.py`); handlers registered via `register_exception_handlers(app)` in `main.py` render RFC 9457 `{"type", "title", "detail"[, "solution"]}` with `Content-Type: application/problem+json`. `type` is the support-reportable code (derived from the HTTP phrase for plain `HTTPException`). Unexpected exceptions return a generic 500 detail, traceback logged server-side only — `str(e)` never reaches the client, including the persisted job error set by the rayworker on failure.
 
 ## Worker Image
 

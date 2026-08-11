@@ -251,11 +251,13 @@ def _run_tuning_async(
             logger.info("All trials completed for job %s (best: %.1f steps/s)", job_id, best_steps_per_sec)
             if not _job_context.is_cancelled(job_id):
                 update_job_status(job_id, JobStatus.FINISHED)
-    except Exception as e:
+    except Exception:
         logger.exception("Tuning job %s failed", job_id)
         for trial_id in pending_trial_ids:
             update_trial_result(trial_id, JobStatus.ERROR, None)
-        update_job_status(job_id, JobStatus.ERROR, str(e))
+        update_job_status(
+            job_id, JobStatus.ERROR, "Tuning job failed. Please try again, or contact support if it persists."
+        )
     finally:
         _job_context.remove_job(job_id)
 

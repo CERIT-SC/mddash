@@ -52,13 +52,12 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - **MDRun API**: `db.create_all()` only — no Alembic migrations. SQLite WAL mode for concurrent reads/writes.
 
 ### Error Handling
-- Dashboard API and MDRun API routes raise `HTTPException` subclasses (`BadRequest`, `NotFound`, etc.) or marshmallow `ValidationError`. Flask native `@app.errorhandler` handlers (registered in each service's `errors.py` via `register_error_handlers(app)`) convert them to RFC 9457 problem-details responses: `{"type": "urn:mddash:<token>", "title": "<Problem>", "detail": "<Cause>"[, "solution": "<action>"]}` with `Content-Type: application/problem+json`. No `status` field in the body — the HTTP status line carries it. The `type` token is the support-reportable code (correlated in logs by `type` + time).
-- Routing 404/405, `get_or_404`, `abort()`, and HTTPExceptions raised in any route (decorated or not) are all caught by the global handlers — no more Werkzeug HTML error pages.
-- Unexpected (non-HTTP) exceptions trigger automatic `db.session.rollback()` and return a generic `"Internal server error. Please try again later."` detail plus a retry/support `solution`. Full tracebacks are logged server-side only; `str(e)` and internal details never reach the client.
-- Validation uses marshmallow `schema.load()` for JSON/form/query parsing. Both APIs converge on `ValidationError` → problem details (flattened to a single `detail` string). Validation errors carry no `solution` (the `detail` already implies the fix).
-- Value-add error tokens (`urn:mddash:notebook-quota-exceeded`, `auth-required`, `upstream-unavailable`, etc.) are raised directly as `ApiError(code, description, type_, solution=...)` (defined in each service's `errors.py`); ad-hoc HTTPExceptions without a value-add token derive their `type` from the HTTP status phrase (`Not Found` → `urn:mddash:not-found`).
-- `ApiError` + `flatten_messages` + `register_error_handlers` are intentionally duplicated across `dashboard/api/errors.py`, `mdrun-api/errors.py`, and `dashboard/auth/errors.py` (separate containers, no shared package). Keep the three in lockstep — a contract change must be applied to all three.
-- The UI reads errors via an `ApiError` class (`dashboard/ui/src/lib/http.ts`) with `error.message = solution ?? detail ?? title` (the toast line), so `toast.error(error.message)` works unchanged and now shows the actionable line when a `solution` is present.
+- All services return RFC 9457 problem-details (`errors.py` per service): `{"type", "title", "detail"[, "solution"]}` with `Content-Type: application/problem+json`. The body carries no `status` — the HTTP status line does. `type` is the support-reportable code (`urn:mddash:<token>`, correlated in logs by `type` + time).
+- `ApiError` + handler registration is intentionally duplicated across `dashboard/api/errors.py`, `mdrun-api/errors.py`, `dashboard/auth/errors.py`, and `tuner/api/errors.py` (separate containers, no shared package). Keep all in lockstep — a contract change must be applied to all four.
+- `str(e)` and internal details never reach the client: unexpected exceptions return a generic 500 detail with a retry/support `solution`, traceback logged server-side only. This includes the Tuner rayworker's persisted job error, which is a user-friendly message, never the raw exception text.
+- The dashboard API wraps Tuner and MDRepo submit failures as `urn:mddash:upstream-unavailable` (with a `solution`) rather than letting them surface as generic 500s.
+- Validation errors carry no `solution` (the `detail` already implies the fix).
+- The UI's `ApiError.message` is `solution ?? detail ?? title` (`dashboard/ui/src/lib/http.ts`), so `toast.error(error.message)` shows the actionable line when a `solution` is present.
 
 ## Development & Feedback Loop
 

@@ -8,6 +8,7 @@ from cache import tuner_last_known_status, tuner_status_cache
 from enums import Engine, JobStatus
 from flask import Flask
 from models import Experiment, TunerJob
+from requests import ConnectionError as RequestsConnectionError
 from requests import HTTPError
 from sqlalchemy.orm import Session
 
@@ -202,3 +203,34 @@ class TestTunerJobErrorStatus:
 
         assert status == error_status
         assert job.error_message == "Tuning job failed on the tuner."
+
+
+class TestTunerJobStartFailure:
+    """A tuner submit failure must surface as a friendly upstream-unavailable error."""
+
+    @pytest.mark.parametrize(
+        "exc",
+        [
+            HTTPError("tuner returned 500"),
+            RequestsConnectionError("tuner unreachable"),
+        ],
+        ids=["http-error", "connection-error"],
+    )
+    def test_submit_failure_raises_upstream_unavailable(self, app: Flask, db_session: Session, exc) -> None:
+        """Any requests exception from the tuner client must become an upstream-unavailable ApiError."""
+        from errors import ApiError
+
+        experiment = _make_experiment(db_session)
+        simulation = Mock()
+        simulation.extra_args = ""
+
+        with (
+            patch("models.tuner_job.Simulation.get", return_value=simulation),
+            patch("models.tuner_job.tuner.amber_submit", side_effect=exc),
+            pytest.raises(ApiError) as exc_info,
+        ):
+            TunerJob.start(experiment, "production/test.simulation.json", nsteps=1000)
+
+        assert exc_info.value.problem_type == "urn:mddash:upstream-unavailable"
+        assert exc_info.value.code == HTTPStatus.INTERNAL_SERVER_ERROR
+        assert exc_info.value.problem_solution is not None

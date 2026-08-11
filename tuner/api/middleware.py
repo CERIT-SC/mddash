@@ -1,7 +1,8 @@
 """ASGI middleware for rejecting oversized requests before multipart parsing."""
 
-from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from api.errors import ApiError
 
 
 class _RequestTooLargeError(Exception):
@@ -58,5 +59,5 @@ class RequestSizeLimitMiddleware:
             await self._reject(scope, receive, send)
 
     async def _reject(self, scope: Scope, receive: Receive, send: Send) -> None:
-        response = JSONResponse({"detail": "Request body is too large"}, status_code=413)
+        response = ApiError(413, "Request body is too large.", "urn:mddash:payload-too-large").to_response()
         await response(scope, receive, send)

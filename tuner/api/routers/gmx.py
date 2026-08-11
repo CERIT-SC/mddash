@@ -55,10 +55,10 @@ async def create_gmx_tuning_job(
         submit_tuning_job(
             job_id, GmxEngine(), MDEngine.GMX, extra_args=sanitized_args, nsteps=nsteps, nsteps_override=nsteps_override
         )
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to create GMX tuning job %s", job_id)
         await run_in_threadpool(cleanup_job_files, job_id)
-        raise HTTPException(status_code=500, detail=f"Failed to submit job: {e}") from e
+        raise HTTPException(status_code=500, detail="Failed to submit tuning job.") from None
 
     logger.info("Started GMX tuning job %s", job_id)
     return JobCreatedResponse(id=job_id, status=JobStatus.PENDING)

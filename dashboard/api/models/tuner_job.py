@@ -5,8 +5,9 @@ from http import HTTPStatus
 from cache import tuner_last_known_status, tuner_status_cache
 from clients import tuner
 from enums import Engine, JobStatus
+from errors import ApiError
 from extensions import db
-from requests import HTTPError
+from requests import HTTPError, RequestException
 from sqlalchemy import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -145,6 +146,7 @@ class TunerJob(db.Model):  # type: ignore
             The created TunerJob instance.
 
         Raises:
+            ApiError: If the tuner is unavailable (upstream-unavailable).
             ValueError: If the engine is unknown.
         """
         simulation = Simulation.get(experiment.id, simulation_path)
@@ -153,17 +155,28 @@ class TunerJob(db.Model):  # type: ignore
         )
         extra_args = simulation.extra_args
 
-        match experiment.engine:
-            case Engine.GMX:
-                tpr_path = simulation.resolve_role("run_input")
-                response = tuner.gmx_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
-            case Engine.AMBER:
-                prmtop_path = simulation.resolve_role("topology")
-                inpcrd_path = simulation.resolve_role("coordinates")
-                mdin_path = simulation.resolve_role("control")
-                response = tuner.amber_submit(prmtop_path, inpcrd_path, mdin_path, nsteps=nsteps, extra_args=extra_args)
-            case _:
-                raise ValueError(f"Unknown engine: {experiment.engine}")
+        try:
+            match experiment.engine:
+                case Engine.GMX:
+                    tpr_path = simulation.resolve_role("run_input")
+                    response = tuner.gmx_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
+                case Engine.AMBER:
+                    prmtop_path = simulation.resolve_role("topology")
+                    inpcrd_path = simulation.resolve_role("coordinates")
+                    mdin_path = simulation.resolve_role("control")
+                    response = tuner.amber_submit(
+                        prmtop_path, inpcrd_path, mdin_path, nsteps=nsteps, extra_args=extra_args
+                    )
+                case _:
+                    raise ValueError(f"Unknown engine: {experiment.engine}")
+        except RequestException as exc:
+            logger.error("Tuner submit failed for experiment %s: %s", experiment.id, exc)
+            raise ApiError(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "Failed to submit tuning job.",
+                "urn:mddash:upstream-unavailable",
+                "The tuning service is unavailable; try again in a moment.",
+            ) from exc
 
         job: TunerJob = cls(
             id=response["id"],
