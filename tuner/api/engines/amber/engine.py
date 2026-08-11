@@ -31,17 +31,15 @@ class AmberEngine:
         nsteps: int,
         extra_args: str,
         best_steps_per_sec: float,
+        best_cost_per_step: float,
     ) -> TrialResult:
         """Execute one pmemd trial and return the result."""
+        amber_config = AmberTrialConfig.from_dict(config.params)
         perf, sps, early = run_pmemd(
-            AmberTrialConfig.from_dict(config.params),
-            trial_id,
-            job_id,
-            extra_args,
-            nsteps,
-            best_steps_per_sec,
+            amber_config, trial_id, job_id, extra_args, nsteps, best_steps_per_sec, best_cost_per_step
         )
-        return TrialResult(performance=perf, steps_per_sec=sps, early_stopped=early)
+        cost = amber_config.footprint.hourly_cost() / sps if sps > 0 else 0.0
+        return TrialResult(performance=perf, steps_per_sec=sps, early_stopped=early, cost_per_step=cost)
 
     def simulation_length_ns(self, job_id: str, nsteps_override: int | None = None) -> float | None:  # ruff: ignore[unused-method-argument]
         """Parse nstlim * dt from the job's original uploaded mdin file (pmemd has no step-count CLI override)."""

@@ -21,7 +21,7 @@ def test_engine_protocol_is_structural() -> None:
         def generate_configs(self):
             return []
 
-        def run_trial(self, config, trial_id, job_id, nsteps, extra_args, best_steps_per_sec):
+        def run_trial(self, config, trial_id, job_id, nsteps, extra_args, best_steps_per_sec, best_cost_per_step):
             return TrialResult(performance=0.0, steps_per_sec=0.0, early_stopped=False)
 
         def simulation_length_ns(self, job_id):

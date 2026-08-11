@@ -21,6 +21,7 @@ class TrialResult:
     performance: float  # ns/day; 0.0 on failure
     steps_per_sec: float  # used for early stopping comparison
     early_stopped: bool
+    cost_per_step: float = 0.0  # footprint hourly rate / steps_per_sec; 0.0 if steps unknown
 
 
 class Engine(Protocol):
@@ -38,6 +39,7 @@ class Engine(Protocol):
         nsteps: int,
         extra_args: str,
         best_steps_per_sec: float,
+        best_cost_per_step: float,
     ) -> TrialResult:
         """Execute a single trial and return its performance result."""
         ...

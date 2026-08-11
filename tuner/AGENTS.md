@@ -22,6 +22,22 @@ Benchmark GROMACS and AMBER execution configurations through a FastAPI service b
 - Never add the worker to root aggregate build/push targets or GitHub Actions.
 - The chart must consume the complete worker image reference from `config*.yaml` without applying the MDDash release tag.
 
+## Status Semantics
+
+- Trials stay PENDING at submission; RUNNING comes from Ray ground truth at read time (`trial_status_overrides` via one filtered `ray.util.state.list_tasks` query) — a trial shows RUNNING only while Ray reports the task executing. Only PENDING trials may be overridden; terminal states are owned by the job thread.
+- Job status is derived at read time: PENDING until the first trial executes, RUNNING monotonically after, FINISHED/ERROR from the DB always win.
+- Pruning is dual-axis: a trial is early-stopped only when it is both slower than `EARLY_STOP_THRESHOLD` of the fastest champion AND costlier per step than `EARLY_STOP_COST_RATIO` × the cheapest champion (`cost_per_step = footprint.hourly_cost() / steps_per_sec`). Champions are tracked independently, so the fastest and the most efficient config are both always kept.
+- Start watchdog: no completion for `TRIAL_START_TIMEOUT_SECONDS` (2h, hardcoded in `config.py`) with nothing RUNNING in Ray means the batch never became schedulable — futures are cancelled and the job fails with "cluster busy or unavailable". Executing trials extend the window; a State API outage also extends (never a false kill). Terminal jobs never leave PENDING trials behind: `_error_pending_trials` sweeps them to ERROR on any failure path.
+
+## Ray Client Mode Gotchas
+
+- The job thread connects via `ray.init("ray://...")`. Ray's `ClientContext.connect` is not thread-safe: concurrent first inits corrupt the client (`'NoneType' object has no attribute 'connection_info'`). All init goes through `_ensure_ray_initialized` under a lock; never call `ray.init` directly.
+- Ray SDK address resolution (`get_address_for_submission_client`) overrides any explicit address with the `RAY_ADDRESS` env var, and a `ray://` address triggers a full client connect/disconnect cycle just to discover the dashboard URL — that raced job inits in production. `config.py` pins `RAY_API_SERVER_ADDRESS` to the dashboard HTTP URL so State API calls (`list_tasks`, `SubmissionClient`) stay pure-HTTP. Never `ray.init` with a dashboard (`http://`) address.
+
+## Verification
+
+- Unit tests (`make test`) mock Ray entirely, so they cannot catch client-mode races, SDK address resolution, or dashboard reachability. For any change touching Ray interaction, push the image (`make push-tuner-api ENV=dev`) and run the live suite: `make -C tuner e2e ENV=dev` (port-forwards into the dev namespace and runs a real short tuning job end to end).
+
 ## Restart Semantics
 
 Active threads, cancellation events, and Ray object references are process-local. API restarts can leave remote work orphaned and mark persisted active jobs as failed. Do not claim restart-safe active jobs without a separate durable reconciliation design.

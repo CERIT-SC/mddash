@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 
 import { Loader2, Terminal } from "lucide-react"
 
@@ -34,6 +34,8 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
 
   const { stdout, stderr } = useTunerTrialLogs(experimentId, simulationPath, logsTrialId)
 
+  const visibleRows = rows
+
   const sortedRows = useMemo(() => {
     const statusRank: Record<JobStatus, number> = {
       FINISHED: 0,
@@ -43,16 +45,21 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
       UNKNOWN: 4,
     }
 
-    return [...rows].sort((a, b) => {
+    return [...visibleRows].sort((a, b) => {
       if (a.performance === null && b.performance === null) return statusRank[a.status] - statusRank[b.status]
       if (a.performance === null) return 1
       if (b.performance === null) return -1
       if (a.performance !== b.performance) return b.performance - a.performance
       return statusRank[a.status] - statusRank[b.status]
     })
-  }, [rows])
+  }, [visibleRows])
 
-  const trialClasses = useMemo(() => computeTrialClasses(rows), [rows])
+  const trialClasses = useMemo(() => computeTrialClasses(visibleRows), [visibleRows])
+
+  // A selected trial that becomes hidden (pruned on completion) must not stay active.
+  useEffect(() => {
+    if (selectedTrial && !visibleRows.some((r) => r.id === selectedTrial.id)) setSelectedTrial(null)
+  }, [selectedTrial, visibleRows, setSelectedTrial])
 
   const handleRadioClick = useCallback(
     (row: AmberTunerTrial, isOptimal: boolean) => {
@@ -66,12 +73,12 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
     [selectedTrial, setSelectedTrial]
   )
 
-  if (rows.length === 0) {
+  if (visibleRows.length === 0) {
     return (
       <div className="flex items-center justify-center rounded-md border p-6">
         <div className="text-muted-foreground flex items-center gap-2 text-sm">
           {tunerStopped ? (
-            <span>No trials completed. The tuning job was stopped before any trials finished.</span>
+            <span>No trials have produced a performance measurement.</span>
           ) : (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />

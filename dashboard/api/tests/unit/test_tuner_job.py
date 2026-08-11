@@ -163,6 +163,50 @@ class TestTunerJobNotFound:
         assert job.is_stopped is False
 
 
+class TestTunerJobFinished:
+    """A FINISHED job must be persisted dashboard-side and stop polling the tuner."""
+
+    def setup_method(self) -> None:
+        """Clear tuner caches before each test."""
+        tuner_status_cache.clear()
+        tuner_last_known_status.clear()
+
+    def teardown_method(self) -> None:
+        """Clear tuner caches after each test."""
+        tuner_status_cache.clear()
+        tuner_last_known_status.clear()
+
+    def test_finished_poll_stops_job_and_preserves_trials(self, app: Flask, db_session: Session) -> None:
+        """A FINISHED status flips the job stopped and keeps performance-bearing trials."""
+        experiment = _make_experiment(db_session)
+        job = _make_tuner_job(experiment)
+        db_session.add(job)
+        db_session.commit()
+
+        finished_status = {
+            "status": JobStatus.FINISHED,
+            "trials": [
+                {"id": "t1", "performance": EXPECTED_PERFORMANCE},
+                {"id": "t2", "performance": None},
+            ],
+        }
+        with (
+            patch(
+                "models.tuner_job.tuner.amber_poll_status", side_effect=[finished_status, AssertionError("re-polled")]
+            ),
+            patch("models.tuner_job.tuner.amber_delete_job") as mock_delete,
+        ):
+            status = job._status()
+            job._status()
+
+        assert status == finished_status
+        assert job.is_stopped is True
+        assert mock_delete.call_count == 1
+        preserved = job.trials
+        assert len(preserved) == 1
+        assert preserved[0]["performance"] == pytest.approx(EXPECTED_PERFORMANCE)
+
+
 class TestTunerJobErrorStatus:
     """An ERROR status from the tuner must always populate error_message."""
 

@@ -15,8 +15,8 @@ from api.config import INPUTS_DIR, MAX_UPLOAD_SIZE
 from api.db.operations import get_job, get_trials_by_job_id
 from api.engines.amber.config import AmberTrialConfig
 from api.engines.amber.engine import AmberEngine
-from api.rayworker import submit_tuning_job, sync_job_status
-from api.routers._shared import register_job_management_routes
+from api.rayworker import derive_job_status, submit_tuning_job, sync_job_status
+from api.routers._shared import effective_trial_statuses, register_job_management_routes
 from api.schemas.amber import AmberJobStatusResponse, AmberTrialResponse
 from api.schemas.common import JobCreatedResponse, JobStatus, MDEngine
 from api.utils import AMBER_FORBIDDEN_FLAGS, cleanup_job_files, sanitize_extra_args, save_upload
@@ -99,14 +99,15 @@ async def get_amber_status(
         logger.exception("Database timeout for job %s", job_id)
         raise HTTPException(status_code=503, detail="Database is busy. Please try again later.") from e
 
+    effective_statuses = await effective_trial_statuses(job_id, raw_trials)
     trials = []
-    for t in raw_trials:
+    for t, status in zip(raw_trials, effective_statuses, strict=True):
         cfg = AmberTrialConfig.from_dict(t.config_json)
         estimated_time, estimated_cost = cfg.footprint.estimate(job.sim_length_ns, t.performance)
         trials.append(
             AmberTrialResponse(
                 id=str(t.id),
-                status=t.status,
+                status=status,
                 binary=cfg.binary.value,
                 np=cfg.np,
                 ntomp=cfg.ntomp,
@@ -118,7 +119,11 @@ async def get_amber_status(
         )
 
     return AmberJobStatusResponse(
-        id=job_id, status=job.status, error=job.error, sim_length_ns=job.sim_length_ns, trials=trials
+        id=job_id,
+        status=derive_job_status(job.status, effective_statuses),
+        error=job.error,
+        sim_length_ns=job.sim_length_ns,
+        trials=trials,
     )
 
 

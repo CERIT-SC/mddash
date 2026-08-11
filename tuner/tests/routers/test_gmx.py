@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from api.main import app
+from api.schemas.common import JobStatus
 from fastapi.testclient import TestClient
 
 client = TestClient(app, raise_server_exceptions=True)
@@ -67,10 +68,11 @@ class TestCreateGmxTuningJob:
 
 
 class TestGetGmxStatus:
+    @patch("api.routers._shared.trial_status_overrides")
     @patch("api.routers.gmx.get_job")
     @patch("api.routers.gmx.sync_job_status")
     @patch("api.routers.gmx.get_trials_by_job_id")
-    def test_returns_status(self, mock_trials, mock_sync, mock_get_job) -> None:
+    def test_no_executed_trials_reports_pending(self, mock_trials, mock_sync, mock_get_job, mock_overrides) -> None:
         job = MagicMock()
         job.status = "RUNNING"
         job.engine = "gmx"
@@ -78,11 +80,64 @@ class TestGetGmxStatus:
         job.sim_length_ns = 100.0
         mock_get_job.return_value = job
         mock_trials.return_value = []
+        mock_overrides.return_value = {}
+
+        response = client.get("/api/tuning-jobs/gmx/test-id/status", auth=AUTH)
+        assert response.status_code == 200
+        assert response.json()["status"] == "PENDING"
+        assert response.json()["sim_length_ns"] == 100.0
+
+    @patch("api.routers._shared.trial_status_overrides")
+    @patch("api.routers.gmx.get_job")
+    @patch("api.routers.gmx.sync_job_status")
+    @patch("api.routers.gmx.get_trials_by_job_id")
+    def test_queued_trial_shown_pending(self, mock_trials, mock_sync, mock_get_job, mock_overrides) -> None:
+        job = MagicMock()
+        job.status = "RUNNING"
+        job.engine = "gmx"
+        job.error = None
+        job.sim_length_ns = None
+        mock_get_job.return_value = job
+
+        trial = MagicMock()
+        trial.id = 5
+        trial.status = "PENDING"
+        trial.config_json = {"ntomp": 2, "np": 4, "nb": "gpu", "pme": "cpu"}
+        trial.performance = None
+        mock_trials.return_value = [trial]
+        mock_overrides.return_value = {}
+
+        response = client.get("/api/tuning-jobs/gmx/test-id/status", auth=AUTH)
+        assert response.status_code == 200
+        assert response.json()["status"] == "PENDING"
+        [t] = response.json()["trials"]
+        assert t["status"] == "PENDING"
+
+    @patch("api.routers._shared.trial_status_overrides")
+    @patch("api.routers.gmx.get_job")
+    @patch("api.routers.gmx.sync_job_status")
+    @patch("api.routers.gmx.get_trials_by_job_id")
+    def test_ray_running_trial_shown_running(self, mock_trials, mock_sync, mock_get_job, mock_overrides) -> None:
+        job = MagicMock()
+        job.status = "RUNNING"
+        job.engine = "gmx"
+        job.error = None
+        job.sim_length_ns = None
+        mock_get_job.return_value = job
+
+        trial = MagicMock()
+        trial.id = 5
+        trial.status = "PENDING"
+        trial.config_json = {"ntomp": 2, "np": 4, "nb": "gpu", "pme": "cpu"}
+        trial.performance = None
+        mock_trials.return_value = [trial]
+        mock_overrides.return_value = {5: JobStatus.RUNNING}
 
         response = client.get("/api/tuning-jobs/gmx/test-id/status", auth=AUTH)
         assert response.status_code == 200
         assert response.json()["status"] == "RUNNING"
-        assert response.json()["sim_length_ns"] == 100.0
+        [t] = response.json()["trials"]
+        assert t["status"] == "RUNNING"
 
     @patch("api.routers.gmx.get_job")
     @patch("api.routers.gmx.sync_job_status")

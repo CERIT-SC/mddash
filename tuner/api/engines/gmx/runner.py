@@ -11,15 +11,8 @@ import subprocess
 import time
 from pathlib import Path
 
-from api.config import (
-    EARLY_STOP_CHECK_INTERVAL,
-    EARLY_STOP_ENABLED,
-    EARLY_STOP_THRESHOLD,
-    EARLY_STOP_WARMUP_SECONDS,
-    EARLY_STOP_WARMUP_STEPS,
-    INPUTS_DIR,
-    JOBS_DIR,
-)
+from api.config import EARLY_STOP_CHECK_INTERVAL, EARLY_STOP_COST_RATIO, INPUTS_DIR, JOBS_DIR
+from api.engines.early_stop import _should_early_stop
 from api.engines.gmx.config import GmxTrialConfig, PMEMode
 from api.utils import tail
 
@@ -33,6 +26,7 @@ def run_mdrun(
     extra_args: str = "",
     nsteps: int = 25_000,
     best_steps_per_sec: float = 0.0,
+    best_cost_per_step: float = 0.0,
 ) -> tuple[float, float, bool]:
     """
     Execute GROMACS mdrun with the given config and return performance.
@@ -44,6 +38,7 @@ def run_mdrun(
         extra_args: Additional mdrun arguments
         nsteps: Number of steps to run
         best_steps_per_sec: Best steps/sec observed so far (for early stopping)
+        best_cost_per_step: Cheapest cost per step observed so far (for early stopping)
 
     Returns:
         Tuple of (performance_ns_day, steps_per_sec, early_stopped).
@@ -64,7 +59,15 @@ def run_mdrun(
     stderr_log = trial_dir / "stderr.log"
 
     result = _run_command_with_monitoring(
-        cmd, stdout_log, stderr_log, env, trial_dir, f"Trial {trial_id}", best_steps_per_sec
+        cmd,
+        stdout_log,
+        stderr_log,
+        env,
+        trial_dir,
+        f"Trial {trial_id}",
+        best_steps_per_sec,
+        config.footprint.hourly_cost(),
+        best_cost_per_step,
     )
     if result is None:
         return 0.0, 0.0, False
@@ -143,6 +146,8 @@ def _run_command_with_monitoring(
     cwd: Path,
     context: str,
     best_steps_per_sec: float,
+    hourly_cost: float,
+    best_cost_per_step: float,
 ) -> tuple[bool, float] | None:
     """
     Run a subprocess with progress monitoring and early stopping.
@@ -155,6 +160,8 @@ def _run_command_with_monitoring(
         cwd: Working directory
         context: Description for logging
         best_steps_per_sec: Best steps/sec observed (for early stopping comparison)
+        hourly_cost: This trial's footprint cost per hour (for cost-per-step pruning)
+        best_cost_per_step: Cheapest cost per step observed so far (for early stopping)
 
     Returns:
         Tuple of (early_stopped, final_steps_per_sec) on success, None on failure.
@@ -171,7 +178,9 @@ def _run_command_with_monitoring(
                 start_new_session=True,  # Create new session for clean termination
             )
             try:
-                return _monitor_process(process, stderr_log, context, best_steps_per_sec)
+                return _monitor_process(
+                    process, stderr_log, context, best_steps_per_sec, hourly_cost, best_cost_per_step
+                )
             finally:
                 _stop_process_group(process)
 
@@ -204,22 +213,13 @@ def _stop_process_group(process: subprocess.Popen) -> None:
         process.wait()
 
 
-def _should_early_stop(current_step: int, elapsed_time: float, steps_per_sec: float, best_steps_per_sec: float) -> bool:
-    """Determine if early stopping criteria are met."""
-    if best_steps_per_sec <= 0:
-        return False
-
-    # Kick in if we've reached step threshold OR if we've been running long enough to have a stable reading
-    warmup_reached = (current_step >= EARLY_STOP_WARMUP_STEPS) or (elapsed_time >= EARLY_STOP_WARMUP_SECONDS)
-
-    return EARLY_STOP_ENABLED and warmup_reached and steps_per_sec < best_steps_per_sec * EARLY_STOP_THRESHOLD
-
-
 def _monitor_process(
     process: subprocess.Popen,
     stderr_log: Path,
     context: str,
     best_steps_per_sec: float,
+    hourly_cost: float,
+    best_cost_per_step: float,
 ) -> tuple[bool, float] | None:
     """Monitor process execution and apply early stopping if needed."""
     start_time = time.time()
@@ -238,13 +238,17 @@ def _monitor_process(
         if elapsed > 0:
             steps_per_sec = current_step / elapsed
 
-        if _should_early_stop(current_step, elapsed, steps_per_sec, best_steps_per_sec):
+        cost_per_step = hourly_cost / steps_per_sec if steps_per_sec > 0 else float("inf")
+        if _should_early_stop(
+            current_step, elapsed, steps_per_sec, best_steps_per_sec, cost_per_step, best_cost_per_step
+        ):
             logger.info(
-                "%s: early stopping at step %d (%.1f steps/s < %.1f threshold)",
+                "%s: early stopping at step %d (%.1f steps/s too slow, cost/step %.4f > %.4f)",
                 context,
                 current_step,
                 steps_per_sec,
-                best_steps_per_sec * EARLY_STOP_THRESHOLD,
+                cost_per_step,
+                best_cost_per_step * EARLY_STOP_COST_RATIO,
             )
             _terminate_process_group(process, signal.SIGTERM)
             early_stopped = True

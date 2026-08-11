@@ -15,8 +15,8 @@ from api.config import INPUTS_DIR, MAX_UPLOAD_SIZE
 from api.db.operations import get_job, get_trials_by_job_id
 from api.engines.gmx.config import GmxTrialConfig
 from api.engines.gmx.engine import GmxEngine
-from api.rayworker import submit_tuning_job, sync_job_status
-from api.routers._shared import register_job_management_routes
+from api.rayworker import derive_job_status, submit_tuning_job, sync_job_status
+from api.routers._shared import effective_trial_statuses, register_job_management_routes
 from api.schemas.common import JobCreatedResponse, JobStatus, MDEngine
 from api.schemas.gmx import GmxJobStatusResponse, GmxTrialResponse
 from api.utils import GMX_FORBIDDEN_FLAGS, cleanup_job_files, extract_nsteps_override, sanitize_extra_args, save_upload
@@ -87,14 +87,15 @@ async def get_gmx_status(
         logger.exception("Database timeout for job %s", job_id)
         raise HTTPException(status_code=503, detail="Database is busy. Please try again later.") from e
 
+    effective_statuses = await effective_trial_statuses(job_id, raw_trials)
     trials = []
-    for t in raw_trials:
+    for t, status in zip(raw_trials, effective_statuses, strict=True):
         cfg = GmxTrialConfig.from_dict(t.config_json)
         estimated_time, estimated_cost = cfg.footprint.estimate(job.sim_length_ns, t.performance)
         trials.append(
             GmxTrialResponse(
                 id=str(t.id),
-                status=t.status,
+                status=status,
                 ntomp=cfg.ntomp,
                 np=cfg.np,
                 nb=cfg.nb.value,
@@ -106,7 +107,11 @@ async def get_gmx_status(
         )
 
     return GmxJobStatusResponse(
-        id=job_id, status=job.status, error=job.error, sim_length_ns=job.sim_length_ns, trials=trials
+        id=job_id,
+        status=derive_job_status(job.status, effective_statuses),
+        error=job.error,
+        sim_length_ns=job.sim_length_ns,
+        trials=trials,
     )
 
 
