@@ -46,6 +46,7 @@ def run_mdrun(
         extra_args: Additional mdrun arguments
         nsteps: Number of steps to run
         best_steps_per_sec: Best steps/sec observed so far (for early stopping)
+        best_cost_per_step: Cheapest cost per step observed so far (for early stopping)
 
     Returns:
         Tuple of (performance_ns_day, steps_per_sec, early_stopped).
@@ -168,6 +169,7 @@ def _run_command_with_monitoring(
         context: Description for logging
         best_steps_per_sec: Best steps/sec observed (for early stopping comparison)
         hourly_cost: This trial's footprint cost per hour (for cost-per-step pruning)
+        best_cost_per_step: Cheapest cost per step observed so far (for early stopping)
 
     Returns:
         Tuple of (early_stopped, final_steps_per_sec) on success, None on failure.
