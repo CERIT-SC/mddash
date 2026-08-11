@@ -59,8 +59,6 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
 
   const displayStarted = tunerStarted_condition(tuner)
   const displayStopped = tuner?.is_stopped || false
-  // FINISHED is a terminal tuner-side status: nothing left to stop, only delete.
-  const displayFinished = !displayStopped && tuner?.tuner_status === "FINISHED"
   const trials = (tuner?.trials || []) as AmberTunerTrial[]
   const unavailableReason = simulationLaunchUnavailableReason(simulation ?? null, experiment.engine)
 
@@ -73,12 +71,11 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
             selectedTrial={selectedTrial}
             setSelectedTrial={setSelectedTrial}
             tunerStopped={displayStopped}
-            jobFinished={displayFinished}
             experimentId={experiment.id}
             simulationPath={simulationPath}
           />
 
-          {!displayStopped && !displayFinished && (
+          {!displayStopped && (
             <div className="flex justify-end gap-2">
               <Button
                 variant="default"
@@ -91,7 +88,7 @@ const AmberTunerView = (props: AmberTunerViewProps) => {
             </div>
           )}
 
-          {(displayStopped || displayFinished) && (
+          {displayStopped && (
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"

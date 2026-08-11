@@ -11,16 +11,8 @@ import subprocess
 import time
 from pathlib import Path
 
-from api.config import (
-    EARLY_STOP_CHECK_INTERVAL,
-    EARLY_STOP_COST_RATIO,
-    EARLY_STOP_ENABLED,
-    EARLY_STOP_THRESHOLD,
-    EARLY_STOP_WARMUP_SECONDS,
-    EARLY_STOP_WARMUP_STEPS,
-    INPUTS_DIR,
-    JOBS_DIR,
-)
+from api.config import EARLY_STOP_CHECK_INTERVAL, EARLY_STOP_COST_RATIO, INPUTS_DIR, JOBS_DIR
+from api.engines.early_stop import _should_early_stop
 from api.engines.gmx.config import GmxTrialConfig, PMEMode
 from api.utils import tail
 
@@ -219,27 +211,6 @@ def _stop_process_group(process: subprocess.Popen) -> None:
     except subprocess.TimeoutExpired:
         _terminate_process_group(process, signal.SIGKILL)
         process.wait()
-
-
-def _should_early_stop(
-    current_step: int,
-    elapsed_time: float,
-    steps_per_sec: float,
-    best_steps_per_sec: float,
-    cost_per_step: float,
-    best_cost_per_step: float,
-) -> bool:
-    """Prune only trials both slower and more expensive per step than the champions."""
-    if best_steps_per_sec <= 0 or best_cost_per_step <= 0:
-        return False
-
-    # Kick in if we've reached step threshold OR if we've been running long enough to have a stable reading
-    warmup_reached = (current_step >= EARLY_STOP_WARMUP_STEPS) or (elapsed_time >= EARLY_STOP_WARMUP_SECONDS)
-
-    too_slow = steps_per_sec < best_steps_per_sec * EARLY_STOP_THRESHOLD
-    # cost_per_step=inf (zero measured progress) stays eligible to stop: it's also too slow.
-    too_expensive = cost_per_step > best_cost_per_step * EARLY_STOP_COST_RATIO
-    return EARLY_STOP_ENABLED and warmup_reached and too_slow and too_expensive
 
 
 def _monitor_process(

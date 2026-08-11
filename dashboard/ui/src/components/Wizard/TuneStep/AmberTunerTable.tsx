@@ -22,32 +22,19 @@ interface AmberTunerTableProps {
   selectedTrial: AmberTunerTrial | null
   setSelectedTrial: (trial: AmberTunerTrial | null) => void
   tunerStopped?: boolean
-  jobFinished?: boolean
   experimentId: string
   simulationPath: string
 }
 
 const AmberTunerTable = (props: AmberTunerTableProps) => {
-  const {
-    rows,
-    selectedTrial,
-    setSelectedTrial,
-    tunerStopped = false,
-    jobFinished = false,
-    experimentId,
-    simulationPath,
-  } = props
+  const { rows, selectedTrial, setSelectedTrial, tunerStopped = false, experimentId, simulationPath } = props
 
   const [confirmChoiceDialog, setConfirmChoiceDialog] = useState(false)
   const [logsTrialId, setLogsTrialId] = useState<string | null>(null)
 
   const { stdout, stderr } = useTunerTrialLogs(experimentId, simulationPath, logsTrialId)
 
-  // Pruned/unmeasured trials are noise for config selection once tuning is done.
-  const visibleRows = useMemo(
-    () => (jobFinished ? rows.filter((r) => r.performance !== null) : rows),
-    [rows, jobFinished]
-  )
+  const visibleRows = rows
 
   const sortedRows = useMemo(() => {
     const statusRank: Record<JobStatus, number> = {
@@ -90,9 +77,7 @@ const AmberTunerTable = (props: AmberTunerTableProps) => {
     return (
       <div className="flex items-center justify-center rounded-md border p-6">
         <div className="text-muted-foreground flex items-center gap-2 text-sm">
-          {jobFinished ? (
-            <span>No trial produced a performance measurement.</span>
-          ) : tunerStopped ? (
+          {tunerStopped ? (
             <span>No trials completed. The tuning job was stopped before any trials finished.</span>
           ) : (
             <>
