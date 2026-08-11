@@ -78,7 +78,7 @@ const TunerTable = (props: TunerTableProps) => {
       <div className="flex items-center justify-center rounded-md border p-6">
         <div className="text-muted-foreground flex items-center gap-2 text-sm">
           {tunerStopped ? (
-            <span>No trials completed. The tuning job was stopped before any trials finished.</span>
+            <span>No trials have produced a performance measurement.</span>
           ) : (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
