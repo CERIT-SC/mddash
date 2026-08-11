@@ -30,7 +30,8 @@ MAX_REQUEST_SIZE = int(os.getenv("MAX_REQUEST_SIZE", str(MAX_UPLOAD_SIZE * 3))) 
 
 # Early stopping config
 EARLY_STOP_ENABLED = True
-EARLY_STOP_THRESHOLD = 0.65  # Stop if <65% of best trial
+EARLY_STOP_THRESHOLD = 0.75  # Stop if <75% of fastest trial
+EARLY_STOP_COST_RATIO = 1.5  # ...AND cost-per-step >150% of cheapest trial (both required to prune)
 EARLY_STOP_WARMUP_STEPS = 5000  # Steps before evaluating
 EARLY_STOP_WARMUP_SECONDS = 60.0  # Seconds before evaluating (fallback)
 EARLY_STOP_CHECK_INTERVAL = 10.0  # Seconds between checks

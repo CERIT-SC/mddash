@@ -170,10 +170,11 @@ def _run_single_trial(
     extra_args: str,
     nsteps: int = 25_000,
     best_steps_per_sec: float = 0.0,
+    best_cost_per_step: float = 0.0,
 ) -> dict[str, Any]:
     """Execute a single trial on a Ray worker."""
     logger.info("Running trial %s: params=%s, nsteps=%d", trial_id, config.params, nsteps)
-    result = engine.run_trial(config, trial_id, job_id, nsteps, extra_args, best_steps_per_sec)
+    result = engine.run_trial(config, trial_id, job_id, nsteps, extra_args, best_steps_per_sec, best_cost_per_step)
     status = JobStatus.FINISHED if result.performance > 0 or result.early_stopped else JobStatus.ERROR
     logger.info(
         "Trial %s completed: status=%s, performance=%.2f ns/day, steps/sec=%.1f",
@@ -188,6 +189,7 @@ def _run_single_trial(
         "performance": result.performance,
         "steps_per_sec": result.steps_per_sec,
         "early_stopped": result.early_stopped,
+        "cost_per_step": result.cost_per_step,
     }
 
 
@@ -202,6 +204,7 @@ def _submit_trials(
     engine: Engine,
     nsteps: int,
     best_steps_per_sec: float,
+    best_cost_per_step: float,
 ) -> dict[ray.ObjectRef, int]:
     future_to_trial: dict[ray.ObjectRef, int] = {}
     for trial_id, cfg in trials:
@@ -213,6 +216,7 @@ def _submit_trials(
             extra_args,
             nsteps,  # ty: ignore[too-many-positional-arguments]  # Ray stub omits optional params.
             best_steps_per_sec,
+            best_cost_per_step,
         )
         future_to_trial[future] = trial_id
     # Trials stay PENDING until Ray reports RUNNING or the wait loop writes a terminal state.
@@ -248,9 +252,10 @@ def _process_trial_results(
     job_id: str,
     future_to_trial: dict[ray.ObjectRef, int],
     best_steps_per_sec: float,
-) -> float:
+    best_cost_per_step: float,
+) -> tuple[float, float]:
     pending_futures = list(future_to_trial.keys())
-    new_best = best_steps_per_sec
+    best = (best_steps_per_sec, best_cost_per_step)
 
     while pending_futures:
         done, pending_futures = ray.wait(pending_futures, num_returns=1, timeout=TRIAL_START_TIMEOUT_SECONDS)
@@ -265,9 +270,13 @@ def _process_trial_results(
                 perf_value = None if early_stopped else res.get("performance")
                 update_trial_result(trial_id, res.get("status", JobStatus.ERROR), perf_value)
                 steps_per_sec = res.get("steps_per_sec", 0.0)
-                if steps_per_sec > new_best and not early_stopped:
-                    new_best = steps_per_sec
-                    logger.info("Job %s: New best steps/sec: %.1f", job_id, new_best)
+                cost_per_step = res.get("cost_per_step", 0.0)
+                if steps_per_sec > best[0] and not early_stopped:
+                    best = (steps_per_sec, best[1])
+                    logger.info("Job %s: New best steps/sec: %.1f", job_id, steps_per_sec)
+                if 0 < cost_per_step < (best[1] or float("inf")) and not early_stopped:
+                    best = (best[0], cost_per_step)
+                    logger.info("Job %s: New best cost/step: %.4f", job_id, cost_per_step)
             else:
                 logger.warning("Trial %d returned no result", trial_id)
                 update_trial_result(trial_id, JobStatus.ERROR, None)
@@ -277,7 +286,7 @@ def _process_trial_results(
         finally:
             _job_context.remove_future(job_id, done[0])
 
-    return new_best
+    return best
 
 
 def _run_tuning_async(
@@ -298,15 +307,15 @@ def _run_tuning_async(
         except Exception:
             logger.warning("Failed to extract simulation length for job %s", job_id, exc_info=True)
 
-        best_steps_per_sec = 0.0
+        best_steps, best_cost = 0.0, 0.0
 
         baseline_count = min(EARLY_STOP_BASELINE_TRIALS, len(trial_configs))
         baseline_trials = trial_configs[:baseline_count]
         remaining_trials = trial_configs[baseline_count:]
 
         if baseline_trials:
-            future_to_trial = _submit_trials(job_id, extra_args, baseline_trials, engine, nsteps, best_steps_per_sec)
-            best_steps_per_sec = _process_trial_results(job_id, future_to_trial, best_steps_per_sec)
+            future_to_trial = _submit_trials(job_id, extra_args, baseline_trials, engine, nsteps, best_steps, best_cost)
+            best_steps, best_cost = _process_trial_results(job_id, future_to_trial, best_steps, best_cost)
 
         batch_size = max(1, EARLY_STOP_BATCH_SIZE)
         for idx in range(0, len(remaining_trials), batch_size):
@@ -314,13 +323,13 @@ def _run_tuning_async(
                 logger.info("Job %s cancelled, skipping remaining trials", job_id)
                 break
             batch = remaining_trials[idx : idx + batch_size]
-            future_to_trial = _submit_trials(job_id, extra_args, batch, engine, nsteps, best_steps_per_sec)
-            best_steps_per_sec = _process_trial_results(job_id, future_to_trial, best_steps_per_sec)
+            future_to_trial = _submit_trials(job_id, extra_args, batch, engine, nsteps, best_steps, best_cost)
+            best_steps, best_cost = _process_trial_results(job_id, future_to_trial, best_steps, best_cost)
 
         if _job_context.is_cancelled(job_id):
             logger.info("Job %s finished after cancellation; status already set", job_id)
         else:
-            logger.info("All trials completed for job %s (best: %.1f steps/s)", job_id, best_steps_per_sec)
+            logger.info("All trials completed for job %s (best: %.1f steps/s)", job_id, best_steps)
             if not _job_context.is_cancelled(job_id):
                 update_job_status(job_id, JobStatus.FINISHED)
     except Exception:

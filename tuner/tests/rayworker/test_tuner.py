@@ -96,7 +96,7 @@ class TestSubmitTrials:
         cfg = Mock(num_cpus=2, num_gpus=1, params={})
         job_context.add_job("j1", Mock())
 
-        mapping = tuner._submit_trials("j1", "", [(7, cfg)], Mock(), 1000, 0.0)
+        mapping = tuner._submit_trials("j1", "", [(7, cfg)], Mock(), 1000, 0.0, 0.0)
 
         assert mapping == {future: 7}
         tuner.update_trial_result.assert_not_called()
@@ -113,7 +113,7 @@ class TestProcessTrialResultsWatchdog:
         monkeypatch.setattr(tuner, "_running_trial_ids", lambda job_id: set())
 
         with pytest.raises(RuntimeError, match="cluster busy or unavailable"):
-            tuner._process_trial_results("j1", {future: 7}, 0.0)
+            tuner._process_trial_results("j1", {future: 7}, 0.0, 0.0)
 
         _, kwargs = ray_mock.wait.call_args
         assert kwargs["timeout"] == tuner.TRIAL_START_TIMEOUT_SECONDS
@@ -135,10 +135,44 @@ class TestProcessTrialResultsWatchdog:
         monkeypatch.setattr(tuner, "_running_trial_ids", lambda job_id: {7})
         monkeypatch.setattr(tuner, "update_trial_result", Mock())
 
-        best = tuner._process_trial_results("j1", {future: 7}, 0.0)
+        best = tuner._process_trial_results("j1", {future: 7}, 0.0, 0.0)
 
-        assert best == 10.0
+        assert best == (10.0, 0.0)
         tuner.update_trial_result.assert_called_once_with(7, JobStatus.FINISHED, 42.0)
+
+    def test_updates_both_champions_from_results(self, job_context, monkeypatch) -> None:
+        future = Mock()
+        ray_mock = Mock()
+        ray_mock.wait.side_effect = [([future], [])]
+        ray_mock.get.return_value = {
+            "trial_id": "7",
+            "status": JobStatus.FINISHED,
+            "performance": 42.0,
+            "steps_per_sec": 10.0,
+            "early_stopped": False,
+            "cost_per_step": 0.5,
+        }
+        monkeypatch.setattr(tuner, "ray", ray_mock)
+        monkeypatch.setattr(tuner, "update_trial_result", Mock())
+
+        assert tuner._process_trial_results("j1", {future: 7}, 0.0, 0.0) == (10.0, 0.5)
+
+    def test_cheaper_champion_is_not_replaced(self, job_context, monkeypatch) -> None:
+        future = Mock()
+        ray_mock = Mock()
+        ray_mock.wait.side_effect = [([future], [])]
+        ray_mock.get.return_value = {
+            "trial_id": "7",
+            "status": JobStatus.FINISHED,
+            "performance": 42.0,
+            "steps_per_sec": 10.0,
+            "early_stopped": False,
+            "cost_per_step": 0.5,
+        }
+        monkeypatch.setattr(tuner, "ray", ray_mock)
+        monkeypatch.setattr(tuner, "update_trial_result", Mock())
+
+        assert tuner._process_trial_results("j1", {future: 7}, 20.0, 0.3) == (20.0, 0.3)
 
     def test_state_api_outage_extends_the_window(self, job_context, monkeypatch) -> None:
         """A failed query must never false-kill a progressing job."""
@@ -156,9 +190,9 @@ class TestProcessTrialResultsWatchdog:
         monkeypatch.setattr(tuner, "_running_trial_ids", lambda job_id: None)
         monkeypatch.setattr(tuner, "update_trial_result", Mock())
 
-        best = tuner._process_trial_results("j1", {future: 7}, 0.0)
+        best = tuner._process_trial_results("j1", {future: 7}, 0.0, 0.0)
 
-        assert best == 10.0
+        assert best == (10.0, 0.0)
         ray_mock.cancel.assert_not_called()
 
 

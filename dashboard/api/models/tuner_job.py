@@ -111,6 +111,12 @@ class TunerJob(db.Model):  # type: ignore
             # Update both caches on success
             tuner_status_cache[cache_key] = status
             tuner_last_known_status[cache_key] = status
+
+            # A finished job never changes again: persist trials and free the tuner.
+            if status["status"] == JobStatus.FINISHED:
+                self.stop()
+                db.session.commit()
+
             return status
 
         except TimeoutError:

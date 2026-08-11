@@ -33,17 +33,15 @@ class GmxEngine:
         nsteps: int,
         extra_args: str,
         best_steps_per_sec: float,
+        best_cost_per_step: float,
     ) -> TrialResult:
         """Execute one mdrun trial and return the result."""
+        gmx_config = GmxTrialConfig.from_dict(config.params)
         perf, sps, early = run_mdrun(
-            GmxTrialConfig.from_dict(config.params),
-            trial_id,
-            job_id,
-            extra_args,
-            nsteps,
-            best_steps_per_sec,
+            gmx_config, trial_id, job_id, extra_args, nsteps, best_steps_per_sec, best_cost_per_step
         )
-        return TrialResult(performance=perf, steps_per_sec=sps, early_stopped=early)
+        cost = gmx_config.footprint.hourly_cost() / sps if sps > 0 else 0.0
+        return TrialResult(performance=perf, steps_per_sec=sps, early_stopped=early, cost_per_step=cost)
 
     def simulation_length_ns(self, job_id: str, nsteps_override: int | None = None) -> float | None:
         """Extract nsteps * delta_t from the job's .tpr via `gmx dump` on a Ray worker; -nsteps override wins."""

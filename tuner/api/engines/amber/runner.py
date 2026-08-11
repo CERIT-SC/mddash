@@ -13,6 +13,7 @@ from pathlib import Path
 
 from api.config import (
     EARLY_STOP_CHECK_INTERVAL,
+    EARLY_STOP_COST_RATIO,
     EARLY_STOP_ENABLED,
     EARLY_STOP_THRESHOLD,
     EARLY_STOP_WARMUP_SECONDS,
@@ -34,6 +35,7 @@ def run_pmemd(
     extra_args: str = "",
     nsteps: int = 25_000,
     best_steps_per_sec: float = 0.0,
+    best_cost_per_step: float = 0.0,
 ) -> tuple[float, float, bool]:
     """
     Execute pmemd with the given config and return (performance_ns_day, steps_per_sec, early_stopped).
@@ -66,7 +68,17 @@ def run_pmemd(
     if extra_args:
         cmd += shlex.split(extra_args)
 
-    result = _run_command_with_monitoring(cmd, mdout, mdinfo, trial_dir, f"Trial {trial_id}", best_steps_per_sec, env)
+    result = _run_command_with_monitoring(
+        cmd,
+        mdout,
+        mdinfo,
+        trial_dir,
+        f"Trial {trial_id}",
+        best_steps_per_sec,
+        env,
+        config.footprint.hourly_cost(),
+        best_cost_per_step,
+    )
     if result is None:
         return 0.0, 0.0, False
 
@@ -139,6 +151,8 @@ def _run_command_with_monitoring(
     context: str,
     best_steps_per_sec: float,
     env: dict[str, str],
+    hourly_cost: float,
+    best_cost_per_step: float,
 ) -> tuple[bool, float] | None:
     stdout_path = cwd / "stdout.log"
     stderr_path = cwd / "stderr.log"
@@ -157,7 +171,7 @@ def _run_command_with_monitoring(
             ) as process,
         ):
             try:
-                result = _monitor_process(process, mdinfo, context, best_steps_per_sec)
+                result = _monitor_process(process, mdinfo, context, best_steps_per_sec, hourly_cost, best_cost_per_step)
             finally:
                 _stop_process_group(process)
         if result is None:
@@ -198,6 +212,8 @@ def _monitor_process(
     mdinfo: Path,
     context: str,
     best_steps_per_sec: float,
+    hourly_cost: float,
+    best_cost_per_step: float,
 ) -> tuple[bool, float] | None:
     start_time = time.time()
     last_step = 0
@@ -216,13 +232,17 @@ def _monitor_process(
         if elapsed > 0:
             steps_per_sec = current_step / elapsed
 
-        if _should_early_stop(current_step, elapsed, steps_per_sec, best_steps_per_sec):
+        cost_per_step = hourly_cost / steps_per_sec if steps_per_sec > 0 else float("inf")
+        if _should_early_stop(
+            current_step, elapsed, steps_per_sec, best_steps_per_sec, cost_per_step, best_cost_per_step
+        ):
             logger.info(
-                "%s: early stopping at step %d (%.1f steps/s < %.1f threshold)",
+                "%s: early stopping at step %d (%.1f steps/s too slow, cost/step %.4f > %.4f)",
                 context,
                 current_step,
                 steps_per_sec,
-                best_steps_per_sec * EARLY_STOP_THRESHOLD,
+                cost_per_step,
+                best_cost_per_step * EARLY_STOP_COST_RATIO,
             )
             _terminate_process_group(process, signal.SIGTERM)
             early_stopped = True
@@ -252,8 +272,18 @@ def _monitor_process(
     return early_stopped, steps_per_sec
 
 
-def _should_early_stop(current_step: int, elapsed_time: float, steps_per_sec: float, best_steps_per_sec: float) -> bool:
-    if best_steps_per_sec <= 0:
+def _should_early_stop(
+    current_step: int,
+    elapsed_time: float,
+    steps_per_sec: float,
+    best_steps_per_sec: float,
+    cost_per_step: float,
+    best_cost_per_step: float,
+) -> bool:
+    """Prune only trials both slower and more expensive per step than the champions."""
+    if best_steps_per_sec <= 0 or best_cost_per_step <= 0:
         return False
     warmup_reached = (current_step >= EARLY_STOP_WARMUP_STEPS) or (elapsed_time >= EARLY_STOP_WARMUP_SECONDS)
-    return EARLY_STOP_ENABLED and warmup_reached and steps_per_sec < best_steps_per_sec * EARLY_STOP_THRESHOLD
+    too_slow = steps_per_sec < best_steps_per_sec * EARLY_STOP_THRESHOLD
+    too_expensive = cost_per_step > best_cost_per_step * EARLY_STOP_COST_RATIO
+    return EARLY_STOP_ENABLED and warmup_reached and too_slow and too_expensive
