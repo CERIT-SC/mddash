@@ -117,27 +117,14 @@ _init_lock = threading.Lock()
 
 
 def _ensure_ray_initialized() -> None:
-    """
-    Connect this worker to the Ray cluster, once per process.
-
-    ray.is_initialized() is unreliable in Ray Client mode, and ClientContext.connect
-    is not thread-safe: concurrent first inits corrupt the client state
-    ("'NoneType' object has no attribute 'connection_info'"). Serialized by a lock;
-    ignore_reinit_error makes re-init on an existing connection a no-op.
-    """
+    """Connect once per process; client-mode ray.init is not thread-safe, so serialize it."""
     with _init_lock:
         ray.init(address=RAY_ADDRESS, runtime_env=RAY_RUNTIME_ENV, ignore_reinit_error=True)
         logger.info("Connected to Ray cluster at %s", RAY_ADDRESS)
 
 
 def _running_trial_ids(job_id: str) -> set[int] | None:
-    """
-    Return the job's trials Ray reports as RUNNING, or None if the State API query failed.
-
-    One filtered query serves all callers: both only care about RUNNING tasks.
-    Query failure is returned distinctly so callers never mistake an outage for
-    "nothing running".
-    """
+    """Trials Ray reports as RUNNING, or None on query failure (distinct from "nothing running")."""
     try:
         running_task_ids = {
             task.task_id for task in list_tasks(filters=[("state", "=", "RUNNING")], address=RAY_DASHBOARD_ADDRESS)
@@ -234,14 +221,7 @@ def _submit_trials(
 
 
 def _fail_if_stalled(job_id: str, pending_futures: list) -> None:
-    """
-    Fail the batch if nothing began within the wait window.
-
-    Executing trials mean progress and a State API outage means we cannot tell —
-    both extend the wait. A successful query with nothing RUNNING means the batch
-    never became schedulable: cancel the futures and raise. The trials are swept
-    to ERROR by the caller's failure handler.
-    """
+    # Outage or executing trials extends the wait; empty RUNNING = batch never schedulable.
     running = _running_trial_ids(job_id)
     if running is None:
         logger.warning("Job %s: cannot verify trial states (State API outage); extending wait", job_id)

@@ -12,11 +12,8 @@ MAX_CPU = int(os.getenv("MAX_CPU", "32"))
 MAX_GPU = int(os.getenv("MAX_GPU", "1"))
 
 RAY_ADDRESS = os.getenv("RAY_ADDRESS", "ray://tuner-raycluster-head-svc:10001")
-# State API SDK address resolution overrides any explicit address with the RAY_ADDRESS env
-# var, and a ray:// address triggers a full Ray Client ray.init()/disconnect() cycle just to
-# discover the dashboard URL (ray_client_address_to_api_server_url). Those cycles race job
-# threads' ray.init and crash them. RAY_API_SERVER_ADDRESS has the highest priority, so
-# pinning it keeps State API queries pure-HTTP.
+# Pin RAY_API_SERVER_ADDRESS so State API queries stay pure-HTTP; otherwise the SDK resolves
+# ray:// addresses by opening a full Ray Client connection, which races job-thread ray.init.
 RAY_DASHBOARD_ADDRESS = f"http://{RAY_ADDRESS.removeprefix('ray://').split(':')[0]}:8265"
 os.environ.setdefault("RAY_API_SERVER_ADDRESS", RAY_DASHBOARD_ADDRESS)
 
