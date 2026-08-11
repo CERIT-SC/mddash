@@ -20,16 +20,17 @@ def job_context(monkeypatch) -> tuner.JobContext:
     return ctx
 
 
-def test_ensure_ray_initialized_uses_single_client_connection(monkeypatch) -> None:
+def test_ensure_ray_initialized_always_inits_and_is_reinit_safe(monkeypatch) -> None:
     ray_mock = Mock()
-    ray_mock.is_initialized.return_value = False
     monkeypatch.setattr(tuner, "ray", ray_mock)
 
     tuner._ensure_ray_initialized()
+    tuner._ensure_ray_initialized()
 
-    ray_mock.init.assert_called_once()
-    _, kwargs = ray_mock.init.call_args
-    assert "allow_multiple" not in kwargs
+    assert ray_mock.init.call_count == 2
+    for call in ray_mock.init.call_args_list:
+        assert call.kwargs["ignore_reinit_error"] is True
+        assert "allow_multiple" not in call.kwargs
 
 
 class TestRunningTrialIds:

@@ -13,6 +13,7 @@ from api.config import (
     EARLY_STOP_BASELINE_TRIALS,
     EARLY_STOP_BATCH_SIZE,
     RAY_ADDRESS,
+    RAY_DASHBOARD_ADDRESS,
     RUNTIME_WORKDIR,
     TRIAL_START_TIMEOUT_SECONDS,
 )
@@ -29,8 +30,6 @@ from api.engines.protocol import Engine, TrialConfig
 from api.schemas.common import JobStatus, MDEngine
 
 RAY_RUNTIME_ENV = {"working_dir": RUNTIME_WORKDIR}
-# Ray State API is served by the head pod's dashboard agent (port 8265).
-RAY_DASHBOARD_ADDRESS = f"http://{RAY_ADDRESS.removeprefix('ray://').split(':')[0]}:8265"
 logger = logging.getLogger(__name__)
 
 logger.info("Tuner module initialized")
@@ -114,8 +113,19 @@ _job_context = JobContext()
 TrialConfigEntry = tuple[int, TrialConfig]
 
 
+_init_lock = threading.Lock()
+
+
 def _ensure_ray_initialized() -> None:
-    if not ray.is_initialized():
+    """
+    Connect this worker to the Ray cluster, once per process.
+
+    ray.is_initialized() is unreliable in Ray Client mode, and ClientContext.connect
+    is not thread-safe: concurrent first inits corrupt the client state
+    ("'NoneType' object has no attribute 'connection_info'"). Serialized by a lock;
+    ignore_reinit_error makes re-init on an existing connection a no-op.
+    """
+    with _init_lock:
         ray.init(address=RAY_ADDRESS, runtime_env=RAY_RUNTIME_ENV, ignore_reinit_error=True)
         logger.info("Connected to Ray cluster at %s", RAY_ADDRESS)
 
