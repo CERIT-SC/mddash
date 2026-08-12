@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, P } from "@e-infra/design-system"
-import { ExternalLink, Play, Square } from "lucide-react"
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  H1,
+  Muted,
+  P,
+} from "@e-infra/design-system"
+import { Atom, ExternalLink, Play, Square } from "lucide-react"
 import { toast } from "sonner"
 
 import { AuthedLayout } from "../components/Layouts"
@@ -41,21 +52,17 @@ export function HomePage() {
     void refresh()
   }, [refresh])
 
-  // Poll while the server is in a transitional state.
   const server = user?.servers?.[""]
   const liveStatus: ServerStatus = user ? serverStatus(server) : cfg.defaultServerActive ? "running" : "stopped"
   const status = optimistic ?? liveStatus
   const serverUrl = cfg.serverUrl || `${cfg.baseUrl}user/${encodeURIComponent(cfg.userName)}/`
 
-  const isTransitioning = status === "starting" || status === "stopping"
+  // While stopping, the hub itself serves stop_pending on the server route — no redirect needed here.
   useEffect(() => {
-    if (!isTransitioning) return
     if (status === "starting") {
       window.location.href = `${cfg.baseUrl}spawn-pending/${encodeURIComponent(cfg.userName)}`
-    } else {
-      window.location.href = `${cfg.baseUrl}spawn-pending/${encodeURIComponent(cfg.userName)}`
     }
-  }, [isTransitioning, status, cfg.baseUrl, cfg.userName])
+  }, [status, cfg.baseUrl, cfg.userName])
 
   const start = useCallback(() => {
     setBusy(true)
@@ -86,43 +93,58 @@ export function HomePage() {
       current="home"
       announcement={cfg.announcement}
     >
-      <Card className="mx-auto w-full max-w-xl">
-        <CardHeader>
-          <CardTitle>My server</CardTitle>
-          <CardDescription>Launch or stop your personal computing pod</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <P className="mb-0">Status:</P>
-            {status === "running" ? <Badge className="bg-success text-success-foreground">Running</Badge> : null}
-            {status === "starting" ? <Badge variant="secondary">Starting…</Badge> : null}
-            {status === "stopping" ? <Badge variant="secondary">Stopping…</Badge> : null}
-            {status === "stopped" ? <Badge variant="secondary">Stopped</Badge> : null}
+      {status === "stopped" ? (
+        <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 text-center">
+          <div
+            aria-hidden="true"
+            className="bg-primary text-primary-foreground flex h-16 w-16 items-center justify-center rounded-full"
+          >
+            <Atom size={28} />
           </div>
 
-          {status === "running" ? (
-            <>
-              <Button size="lg" asChild>
-                <a href={serverUrl} className="no-underline">
-                  <ExternalLink size={16} />
-                  Open my server
-                </a>
-              </Button>
-              <Button size="lg" variant="error" onClick={stop} disabled={busy}>
-                <Square size={16} />
-                Stop my server
-              </Button>
-            </>
-          ) : null}
+          <div className="flex flex-col gap-2">
+            <H1>Your server is offline</H1>
+            <Muted className="text-base">Your personal notebook server is not running.</Muted>
+          </div>
 
-          {status === "stopped" ? (
-            <Button size="lg" onClick={start} disabled={busy}>
-              <Play size={16} />
-              Start my server
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
+          <Button size="lg" onClick={start} disabled={busy}>
+            <Play size={16} />
+            Start my server
+          </Button>
+
+          <Muted>This starts your personal notebook server. It usually takes up to a minute.</Muted>
+        </div>
+      ) : (
+        <Card className="mx-auto w-full max-w-xl">
+          <CardHeader>
+            <CardTitle>My server</CardTitle>
+            <CardDescription>Launch or stop your personal computing pod</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex items-center gap-2">
+              <P className="mb-0">Status:</P>
+              {status === "running" ? <Badge className="bg-success text-success-foreground">Running</Badge> : null}
+              {status === "starting" ? <Badge variant="secondary">Starting…</Badge> : null}
+              {status === "stopping" ? <Badge variant="secondary">Stopping…</Badge> : null}
+            </div>
+
+            {status === "running" ? (
+              <>
+                <Button size="lg" asChild>
+                  <a href={serverUrl} className="no-underline">
+                    <ExternalLink size={16} />
+                    Open my server
+                  </a>
+                </Button>
+                <Button size="lg" variant="error" onClick={stop} disabled={busy}>
+                  <Square size={16} />
+                  Stop my server
+                </Button>
+              </>
+            ) : null}
+          </CardContent>
+        </Card>
+      )}
     </AuthedLayout>
   )
 }
