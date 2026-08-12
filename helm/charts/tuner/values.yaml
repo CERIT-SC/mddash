@@ -17,6 +17,11 @@ api:
   readinessProbe:
     initialDelaySeconds: 5
     periodSeconds: 10
+  pricing:
+    # Hourly resource rates (currency units) for trial cost estimation & early-stop pruning.
+    cpuCoreHour: "0.04"
+    gpuHour: "0.30"
+    gbRamHour: "0.005"
 
 databaseStorage:
   size: "1Gi"

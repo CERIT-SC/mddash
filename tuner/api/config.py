@@ -17,16 +17,21 @@ RAY_ADDRESS = os.getenv("RAY_ADDRESS", "ray://tuner-raycluster-head-svc:10001")
 RAY_DASHBOARD_ADDRESS = f"http://{RAY_ADDRESS.removeprefix('ray://').split(':')[0]}:8265"
 os.environ.setdefault("RAY_API_SERVER_ADDRESS", RAY_DASHBOARD_ADDRESS)
 
-NTOMP_OPTIONS = [1, 2, 4]
-NP_OPTIONS = [1, 2, 4]
+NTOMP_OPTIONS = [1, 2, 4, 8]
+NP_OPTIONS = [1, 2, 4, 8]
 NB_OPTIONS = ["cpu", "gpu"]
 PME_OPTIONS = ["cpu", "gpu"]
 # pmemd.MPI requires >= 2 ranks; np=1 would abort immediately
 AMBER_NP_OPTIONS = [2, 4, 8]
-AMBER_NTOMP_OPTIONS = [1, 2, 4]
+AMBER_NTOMP_OPTIONS = [1, 2, 4, 8]
 
 MAX_UPLOAD_SIZE = 10 * 1024**3  # 10 GB per file
-MAX_REQUEST_SIZE = int(os.getenv("MAX_REQUEST_SIZE", str(MAX_UPLOAD_SIZE * 3)))  # AMBER submits up to 3 files
+# AMBER submits up to 3 files per request.
+MAX_REQUEST_SIZE = MAX_UPLOAD_SIZE * 3
+
+COST_CPU_CORE_HOUR = float(os.environ["COST_CPU_CORE_HOUR"])
+COST_GPU_HOUR = float(os.environ["COST_GPU_HOUR"])
+COST_GB_RAM_HOUR = float(os.environ["COST_GB_RAM_HOUR"])
 
 # Early stopping config
 EARLY_STOP_ENABLED = True

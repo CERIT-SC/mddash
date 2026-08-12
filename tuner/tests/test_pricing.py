@@ -32,11 +32,11 @@ class TestAmberFootprint:
 
 class TestEstimate:
     def test_time_and_cost(self) -> None:
-        # 100 ns at 100 ns/day -> 24 h; 8 cores * 0.04 + 1 GPU * 3.0 + 16 GB * 0.005 = 3.40/h
+        # 100 ns at 100 ns/day -> 24 h; 8 cores * 0.04 + 1 GPU * 0.30 + 16 GB * 0.005 = 0.70/h
         footprint = ResourceFootprint(8, 1, 16.0)
         estimated_time, estimated_cost = footprint.estimate(100.0, 100.0)
         assert estimated_time == 24.0
-        assert estimated_cost == pytest.approx(24.0 * 3.40)
+        assert estimated_cost == pytest.approx(24.0 * 0.70)
 
     def test_scales_linearly_with_sim_length(self) -> None:
         footprint = ResourceFootprint(1, 0, 4.0)
@@ -50,5 +50,5 @@ class TestEstimate:
 
 
 def test_hourly_cost_uses_default_rates() -> None:
-    # defaults: 0.04/core-h, 3.00/GPU-h, 0.005/GB-h
-    assert ResourceFootprint(8, 1, 16.0).hourly_cost() == pytest.approx(8 * 0.04 + 3.0 + 16 * 0.005)
+    # defaults: 0.04/core-h, 0.30/GPU-h, 0.005/GB-h
+    assert ResourceFootprint(8, 1, 16.0).hourly_cost() == pytest.approx(8 * 0.04 + 0.30 + 16 * 0.005)

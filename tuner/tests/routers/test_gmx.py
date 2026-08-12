@@ -160,9 +160,9 @@ class TestGetGmxStatus:
         response = client.get("/api/tuning-jobs/gmx/test-id/status", auth=AUTH)
         assert response.status_code == 200
         [t] = response.json()["trials"]
-        # 100 ns at 100 ns/day -> 24 hours; 8 cores * 0.04 + 1 GPU * 3.0 + 16 GB * 0.005 = 3.4/h
+        # 100 ns at 100 ns/day -> 24 hours; 8 cores * 0.04 + 1 GPU * 0.30 + 16 GB * 0.005 = 0.70/h
         assert t["estimated_time"] == 24.0
-        assert t["estimated_cost"] == pytest.approx(81.6)
+        assert t["estimated_cost"] == pytest.approx(16.8)
 
     @patch("api.routers.gmx.get_job")
     @patch("api.routers.gmx.sync_job_status")

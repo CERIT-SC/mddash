@@ -183,6 +183,11 @@ tuner:
       requests:
         cpu: "100m"
         memory: "256Mi"
+    pricing:
+      # Hourly resource rates (currency units) for trial cost estimation & early-stop pruning.
+      cpuCoreHour: "0.04"
+      gpuHour: "0.30"
+      gbRamHour: "0.005"
   databaseStorage:
     size: 1Gi
     storageClassName: csi-ceph-rbd-du

@@ -304,6 +304,10 @@ tuner:
   api:
     resources:
 {{ $cfg.tuner.api.resources | toYAML | indent 6 }}
+    pricing:
+      cpuCoreHour: "{{ $cfg.tuner.api.pricing.cpuCoreHour }}"
+      gpuHour: "{{ $cfg.tuner.api.pricing.gpuHour }}"
+      gbRamHour: "{{ $cfg.tuner.api.pricing.gbRamHour }}"
 
   databaseStorage:
 {{ $cfg.tuner.databaseStorage | toYAML | indent 4 }}

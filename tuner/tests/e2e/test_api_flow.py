@@ -27,10 +27,10 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 TERMINAL_STATUSES = {"FINISHED", "ERROR"}
 ACTIVE_STATUSES = {"PENDING", "RUNNING"}
 
-# Default rates mirror api/pricing.py; export matching overrides if the deployment sets them.
-COST_CPU_CORE_HOUR = float(os.getenv("COST_CPU_CORE_HOUR", "0.04"))
-COST_GPU_HOUR = float(os.getenv("COST_GPU_HOUR", "3.00"))
-COST_GB_RAM_HOUR = float(os.getenv("COST_GB_RAM_HOUR", "0.005"))
+# Rates must match the deployment's config.yaml values.
+COST_CPU_CORE_HOUR = float(os.environ["COST_CPU_CORE_HOUR"])
+COST_GPU_HOUR = float(os.environ["COST_GPU_HOUR"])
+COST_GB_RAM_HOUR = float(os.environ["COST_GB_RAM_HOUR"])
 RAM_GB_PER_RANK = 4.0
 
 pytestmark = pytest.mark.e2e

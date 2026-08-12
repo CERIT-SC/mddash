@@ -60,6 +60,12 @@ spec:
               value: {{ .Values.ray.worker.numCpu | quote }}
             - name: MAX_GPU
               value: {{ .Values.ray.worker.numGpu | quote }}
+            - name: COST_CPU_CORE_HOUR
+              value: {{ .Values.api.pricing.cpuCoreHour | quote }}
+            - name: COST_GPU_HOUR
+              value: {{ .Values.api.pricing.gpuHour | quote }}
+            - name: COST_GB_RAM_HOUR
+              value: {{ .Values.api.pricing.gbRamHour | quote }}
           ports:
             - name: http
               containerPort: 8000
