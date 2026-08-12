@@ -334,10 +334,7 @@ export function TokenPage() {
                           <TableCell className="text-text-muted text-sm">{formatTime(t.last_activity)}</TableCell>
                           <TableCell className="text-text-muted text-sm">{formatTime(t.created)}</TableCell>
                           <TableCell>
-                            <Button size="sm" variant="error" onClick={() => revokeToken(t.id)}>
-                              <Trash2 size={14} />
-                              Revoke
-                            </Button>
+                            <RevokeButton revoke={() => revokeToken(t.id)} />
                           </TableCell>
                         </TableRow>
                       ))}

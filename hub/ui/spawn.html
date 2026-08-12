@@ -23,7 +23,7 @@
         {% endif %}
         url: {{ url | default("") | tojson }},
         errorMessage: {{ error_message | default(none) | tojson }},
-        errorHtmlMessage: {{ error_html_message | default(none) | tojson }},
+        errorHtmlMessage: {{ html_error_message | default(none) | tojson }},
         optionsForm: {{ spawner_options_form | default("") | tojson }}
       };
     </script>
