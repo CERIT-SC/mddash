@@ -16,7 +16,6 @@ app = Flask(__name__)
 register_error_handlers(app)
 
 logger = logging.getLogger(__name__)
-_first_health_logged = False
 
 
 # Environment/config
@@ -145,10 +144,6 @@ def health() -> tuple[str, int]:
     Returns:
         tuple[str, int]: A plain-text OK body and a 200 status code.
     """
-    global _first_health_logged  # ruff:ignore[global-statement]
-    if not _first_health_logged:
-        logger.info("auth first health response served")
-        _first_health_logged = True
     return "OK", HTTPStatus.OK
 
 

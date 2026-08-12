@@ -288,17 +288,3 @@ class TestLoginTokenEndpoints:
         response = client.get("/login-token")
 
         assert response.status_code == HTTPStatus.BAD_REQUEST
-
-
-def test_health_logs_first_health_once(client: FlaskClient, caplog) -> None:
-    """The first auth health response should be visible in startup diagnostics once."""
-    import auth
-
-    auth._first_health_logged = False
-    caplog.set_level("INFO", logger="auth")
-
-    client.get("/health")
-    client.get("/health")
-
-    messages = [record.getMessage() for record in caplog.records]
-    assert messages.count("auth first health response served") == 1

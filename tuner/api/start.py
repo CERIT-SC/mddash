@@ -5,6 +5,7 @@ import sys
 import uvicorn
 from alembic import command
 from alembic.config import Config
+from uvicorn.config import LOGGING_CONFIG
 
 logging.basicConfig(
     level=logging.INFO,
@@ -12,6 +13,10 @@ logging.basicConfig(
     stream=sys.stdout,
 )
 logger = logging.getLogger(__name__)
+
+# Suppress successful health-probe access logs for parity with the gunicorn services.
+LOGGING_CONFIG.setdefault("filters", {})["healthcheck"] = {"()": "api.access_logging.HealthCheckFilter"}
+LOGGING_CONFIG["loggers"]["uvicorn.access"].setdefault("filters", []).append("healthcheck")
 
 _REQUIRED_ENV = ("TUNER_USER", "TUNER_PASSWORD", "COST_CPU_CORE_HOUR", "COST_GPU_HOUR", "COST_GB_RAM_HOUR")
 
@@ -35,7 +40,7 @@ def main() -> None:
     from api.main import app  # ruff: ignore[import-outside-top-level] — intentional: import after migrations complete
 
     try:
-        uvicorn.run(app, host="0.0.0.0", port=8000)
+        uvicorn.run(app, host="0.0.0.0", port=8000, log_config=LOGGING_CONFIG)
     except Exception:
         logger.exception("Unexpected error while starting.")
         sys.exit(1)
