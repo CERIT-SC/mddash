@@ -4,6 +4,7 @@ import { Button, H1, Muted } from "@e-infra/design-system"
 import { Atom, ExternalLink, Play, Square } from "lucide-react"
 import { toast } from "sonner"
 
+import { HeroHeading, PageHero, START_HINT, StatusIcon } from "../components/Hero"
 import { AuthedLayout } from "../components/Layouts"
 import { HubApi, type HubUserModel } from "../lib/api"
 import { getAppConfig } from "../lib/config"
@@ -84,17 +85,10 @@ export function HomePage() {
       current="home"
       announcement={cfg.announcement}
     >
-      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 text-center">
-        <div
-          aria-hidden="true"
-          className={`flex h-16 w-16 items-center justify-center rounded-full ${
-            status === "running" ? "bg-success text-success-foreground" : "bg-primary text-primary-foreground"
-          }`}
-        >
-          <Atom size={28} />
-        </div>
+      <PageHero>
+        <StatusIcon tone={status === "running" ? "success" : "primary"} icon={Atom} />
 
-        <div className="flex flex-col gap-2">
+        <HeroHeading>
           <H1>
             {status === "running" ? "Your server is running" : null}
             {status === "stopped" ? "Your server is offline" : null}
@@ -107,7 +101,7 @@ export function HomePage() {
             {status === "starting" ? "You will be redirected automatically when it's ready for you." : null}
             {status === "stopping" ? "You can start it again once it has finished stopping." : null}
           </Muted>
-        </div>
+        </HeroHeading>
 
         {status === "running" ? (
           <>
@@ -130,10 +124,10 @@ export function HomePage() {
               <Play size={16} />
               Start my server
             </Button>
-            <Muted>This starts your personal notebook server. It usually takes up to a minute.</Muted>
+            <Muted>{START_HINT}</Muted>
           </>
         ) : null}
-      </div>
+      </PageHero>
     </AuthedLayout>
   )
 }

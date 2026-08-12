@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
 
 import { Button, H1, Muted } from "@e-infra/design-system"
-import { Atom, Clock, RefreshCw } from "lucide-react"
+import { Atom, RefreshCw } from "lucide-react"
 
+import { HeroHeading, PageHero, StatusIcon, WaitHint } from "../components/Hero"
 import { AuthedLayout } from "../components/Layouts"
 import { HubApi } from "../lib/api"
 import { getAppConfig } from "../lib/config"
@@ -39,23 +40,15 @@ export function StopPendingPage() {
       logoutUrl={cfg.logoutUrl}
       announcement={cfg.announcement}
     >
-      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 text-center">
-        <div
-          aria-hidden="true"
-          className="bg-primary text-primary-foreground flex h-16 w-16 items-center justify-center rounded-full"
-        >
-          <Atom size={28} />
-        </div>
+      <PageHero>
+        <StatusIcon tone="primary" icon={Atom} />
 
-        <div className="flex flex-col gap-2">
+        <HeroHeading>
           <H1>Stopping your server…</H1>
           <Muted className="text-base">You can start it again once it has finished stopping.</Muted>
-        </div>
+        </HeroHeading>
 
-        <div className="flex items-center gap-1">
-          <Clock size={14} aria-hidden="true" className="text-text-muted" />
-          <Muted>This usually takes a few seconds</Muted>
-        </div>
+        <WaitHint>This usually takes a few seconds</WaitHint>
 
         {elapsed >= 30 ? (
           <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
@@ -63,7 +56,7 @@ export function StopPendingPage() {
             Refresh
           </Button>
         ) : null}
-      </div>
+      </PageHero>
     </AuthedLayout>
   )
 }

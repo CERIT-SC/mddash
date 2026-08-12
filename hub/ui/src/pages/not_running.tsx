@@ -1,8 +1,9 @@
 import { useEffect } from "react"
 
-import { Button, H1, Muted } from "@e-infra/design-system"
+import { Button, H1, Lead, Muted, Separator } from "@e-infra/design-system"
 import { Atom, Play, RefreshCw, TriangleAlert } from "lucide-react"
 
+import { DetailsLog, HeroHeading, LogEntry, PageHero, START_HINT, StatusIcon, SupportNote } from "../components/Hero"
 import { AuthedLayout } from "../components/Layouts"
 import { DEV_FALLBACK_BASE_URL, getAppConfig } from "../lib/config"
 import { mount } from "../lib/mount"
@@ -51,7 +52,6 @@ export function NotRunningPage() {
   }
 
   const serverLabel = cfg.serverName ? ` ${cfg.serverName}` : ""
-  const ServerIcon = cfg.failed ? TriangleAlert : Atom
 
   return (
     <AuthedLayout
@@ -61,46 +61,47 @@ export function NotRunningPage() {
       logoutUrl={cfg.logoutUrl}
       announcement={cfg.announcement}
     >
-      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 text-center">
-        <div
-          aria-hidden="true"
-          className={`flex h-16 w-16 items-center justify-center rounded-full ${
-            cfg.failed ? "bg-error text-error-foreground" : "bg-primary text-primary-foreground"
-          }`}
-        >
-          <ServerIcon size={28} />
-        </div>
+      <PageHero>
+        <StatusIcon tone={cfg.failed ? "error" : "primary"} icon={cfg.failed ? TriangleAlert : Atom} />
 
-        <div className="flex flex-col gap-2">
-          <H1>{cfg.failed ? "Spawn failed" : "Your server is offline"}</H1>
-          <Muted className="text-base">
-            {cfg.failed
-              ? `The latest attempt to start your server${serverLabel} did not succeed.`
-              : `Your personal notebook server${serverLabel} is not running.`}
-          </Muted>
-        </div>
+        <HeroHeading>
+          <H1>{cfg.failed ? "Failed to start your server" : "Your server is offline"}</H1>
+          {cfg.failed ? (
+            <Lead>This usually happens when the system is busy or restarting — it is not your fault.</Lead>
+          ) : (
+            <Muted className="text-base">{`Your personal notebook server${serverLabel} is not running.`}</Muted>
+          )}
+        </HeroHeading>
 
-        {cfg.failed ? (
-          cfg.failedHtmlMessage ? (
-            <Muted dangerouslySetInnerHTML={{ __html: cfg.failedHtmlMessage }} />
-          ) : cfg.failedMessage ? (
-            <Muted>{cfg.failedMessage}</Muted>
-          ) : null
-        ) : cfg.implicitSpawnSeconds > 0 ? (
+        {!cfg.failed && cfg.implicitSpawnSeconds > 0 ? (
           <Muted>It will be restarted automatically. If you are not redirected in a few seconds, click below.</Muted>
         ) : null}
 
         <Button size="lg" asChild>
           <a href={cfg.spawnUrl} className="no-underline">
             {cfg.failed ? <RefreshCw size={16} /> : <Play size={16} />}
-            {cfg.failed ? "Retry" : "Start my server"}
+            {cfg.failed ? "Try again" : "Start my server"}
           </a>
         </Button>
 
-        {!cfg.failed ? (
-          <Muted>This starts your personal notebook server. It usually takes up to a minute.</Muted>
+        {cfg.failed ? <SupportNote /> : null}
+
+        {cfg.failed ? <Separator className="w-full" /> : null}
+
+        {cfg.failed ? (
+          <DetailsLog open summary="Event log">
+            {cfg.failedHtmlMessage ? (
+              <LogEntry html={cfg.failedHtmlMessage} />
+            ) : cfg.failedMessage ? (
+              <LogEntry>{cfg.failedMessage}</LogEntry>
+            ) : (
+              <LogEntry>No failure details available.</LogEntry>
+            )}
+          </DetailsLog>
         ) : null}
-      </div>
+
+        {!cfg.failed ? <Muted>{START_HINT}</Muted> : null}
+      </PageHero>
     </AuthedLayout>
   )
 }
