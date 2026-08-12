@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@e-infra/design-system"
-import { LoaderCircle, RefreshCw } from "lucide-react"
+import { Button, H1, Muted } from "@e-infra/design-system"
+import { Atom, Clock, RefreshCw } from "lucide-react"
 
 import { AuthedLayout } from "../components/Layouts"
 import { HubApi } from "../lib/api"
@@ -39,24 +39,31 @@ export function StopPendingPage() {
       logoutUrl={cfg.logoutUrl}
       announcement={cfg.announcement}
     >
-      <Card className="mx-auto w-full max-w-xl">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <LoaderCircle className="text-primary animate-spin" size={20} />
-            Your server is stopping
-          </CardTitle>
-          <CardDescription>You can start it again once it has finished stopping</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col items-start gap-4">
-          <p className="text-text-muted text-sm">This usually takes a few seconds…</p>
-          {elapsed >= 30 ? (
-            <Button variant="secondary" onClick={() => window.location.reload()}>
-              <RefreshCw size={16} />
-              Refresh
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
+      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 text-center">
+        <div
+          aria-hidden="true"
+          className="bg-primary text-primary-foreground flex h-16 w-16 items-center justify-center rounded-full"
+        >
+          <Atom size={28} />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <H1>Stopping your server…</H1>
+          <Muted className="text-base">You can start it again once it has finished stopping.</Muted>
+        </div>
+
+        <div className="flex items-center gap-1">
+          <Clock size={14} aria-hidden="true" className="text-text-muted" />
+          <Muted>This usually takes a few seconds</Muted>
+        </div>
+
+        {elapsed >= 30 ? (
+          <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
+            <RefreshCw size={16} />
+            Refresh
+          </Button>
+        ) : null}
+      </div>
     </AuthedLayout>
   )
 }

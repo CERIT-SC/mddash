@@ -1,16 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 
-import {
-  Alert,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Progress,
-} from "@e-infra/design-system"
-import { LoaderCircle, RotateCw, Square, TriangleAlert } from "lucide-react"
+import { Alert, Button, H1, H2, Muted, Progress, Separator } from "@e-infra/design-system"
+import { Atom, Clock, RotateCw, Square, TriangleAlert } from "lucide-react"
 
 import { AuthedLayout } from "../components/Layouts"
 import { HubApi } from "../lib/api"
@@ -33,6 +24,7 @@ export function SpawnPendingPage() {
   const [retrying, setRetrying] = useState(false)
   const [retryError, setRetryError] = useState<string | null>(null)
 
+  // Stream gone but server not ready — fall back to polling for the outcome.
   useEffect(() => {
     if (status === "ready" || status === "failed") return
     if (!streamEnded) return
@@ -83,6 +75,9 @@ export function SpawnPendingPage() {
     }
   }
 
+  const failed = status === "failed"
+  const showProgress = !failed && !streamEnded
+
   return (
     <AuthedLayout
       baseUrl={cfg.baseUrl}
@@ -91,75 +86,87 @@ export function SpawnPendingPage() {
       logoutUrl={cfg.logoutUrl}
       announcement={cfg.announcement}
     >
-      <Card className="mx-auto w-full max-w-xl">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {status === "failed" ? (
-              <TriangleAlert className="text-error" size={20} />
-            ) : (
-              <LoaderCircle className="text-primary animate-spin" size={20} />
-            )}
-            {status === "failed" ? "Server failed to start" : "Your server is starting up"}
-          </CardTitle>
-          <CardDescription>
-            {status === "failed"
+      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 text-center">
+        <div
+          aria-hidden="true"
+          className={`flex h-16 w-16 items-center justify-center rounded-full ${
+            failed ? "bg-error text-error-foreground" : "bg-primary text-primary-foreground"
+          }`}
+        >
+          {failed ? <TriangleAlert size={28} /> : <Atom size={28} />}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <H1>{failed ? "Failed to start your server" : "Starting your server…"}</H1>
+          <Muted className="text-base">
+            {failed
               ? "The server could not be started. Try starting it again."
-              : "You will be redirected automatically when it is ready"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {status !== "failed" ? (
-            <>
-              {streamEnded ? null : <Progress value={progress} />}
-              <p className="text-text-muted text-sm" aria-live="polite">
-                {streamEnded ? "Waiting for server to become ready…" : (currentMessage ?? "Contacting the spawner…")}
-              </p>
-              {cancelError ? <Alert variant="error">{cancelError}</Alert> : null}
-              <Button variant="error" disabled={cancelling} onClick={() => void cancelStartup()}>
-                <Square size={16} />
-                {cancelling ? "Cancelling startup…" : "Cancel startup"}
-              </Button>
-            </>
-          ) : null}
-          {status === "failed" ? (
-            <Alert variant="error" className="flex items-start gap-2">
-              <TriangleAlert size={16} />
-              <span>
-                The server failed to start.{currentMessage ? ` ${currentMessage}` : ""}
-                {retryError ? ` ${retryError}` : ""}
-              </span>
-            </Alert>
-          ) : null}
-          <details open={status === "failed"} className="bg-surface rounded-md p-3">
-            <summary className="text-text-muted cursor-pointer text-sm">Event log</summary>
-            <div className="mt-2 flex flex-col gap-1">
-              {log.length === 0 ? (
-                <span className="text-text-muted text-xs">No events yet.</span>
-              ) : (
-                log.map((entry, i) =>
-                  entry.html ? (
-                    <span
-                      key={i}
-                      className="text-text-muted text-xs"
-                      dangerouslySetInnerHTML={{ __html: entry.html }}
-                    />
-                  ) : (
-                    <span key={i} className="text-text-muted text-xs">
-                      {entry.text}
-                    </span>
-                  )
+              : "You will be redirected automatically when it's ready for you."}
+          </Muted>
+        </div>
+
+        {failed ? (
+          <Alert variant="error" className="flex items-start gap-2 text-left">
+            <TriangleAlert size={16} />
+            <span>
+              The server failed to start.{currentMessage ? ` ${currentMessage}` : ""}
+              {retryError ? ` ${retryError}` : ""}
+            </span>
+          </Alert>
+        ) : null}
+
+        {showProgress ? (
+          <div className="flex w-72 flex-col gap-3">
+            <H2>{Math.round(progress)}%</H2>
+            <Progress value={progress} />
+            <Muted aria-live="polite">{currentMessage ?? "Contacting the spawner…"}</Muted>
+          </div>
+        ) : null}
+
+        {!failed && streamEnded ? <Muted aria-live="polite">Waiting for server to become ready…</Muted> : null}
+
+        {!failed ? (
+          <div className="flex items-center gap-1">
+            <Clock size={14} aria-hidden="true" className="text-text-muted" />
+            <Muted>This may take a few minutes</Muted>
+          </div>
+        ) : null}
+
+        {cancelError ? <Alert variant="error">{cancelError}</Alert> : null}
+
+        <Separator className="w-full" />
+
+        <details open={failed} className="bg-surface w-full rounded-md p-3 text-left">
+          <summary className="text-text-muted cursor-pointer text-sm">{failed ? "Event log" : "Show event log"}</summary>
+          <div className="mt-2 flex flex-col gap-1">
+            {log.length === 0 ? (
+              <span className="text-text-muted text-xs">No events yet.</span>
+            ) : (
+              log.map((entry, i) =>
+                entry.html ? (
+                  <span key={i} className="text-text-muted text-xs" dangerouslySetInnerHTML={{ __html: entry.html }} />
+                ) : (
+                  <span key={i} className="text-text-muted text-xs">
+                    {entry.text}
+                  </span>
                 )
-              )}
-            </div>
-          </details>
-          {status === "failed" ? (
-            <Button variant="secondary" disabled={retrying} onClick={() => void retry()}>
-              <RotateCw className={retrying ? "animate-spin" : undefined} size={16} />
-              {retrying ? "Retrying…" : "Retry starting server"}
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
+              )
+            )}
+          </div>
+        </details>
+
+        {failed ? (
+          <Button variant="secondary" size="sm" disabled={retrying} onClick={() => void retry()}>
+            <RotateCw className={retrying ? "animate-spin" : undefined} size={16} />
+            {retrying ? "Retrying…" : "Retry starting server"}
+          </Button>
+        ) : (
+          <Button variant="error" size="sm" disabled={cancelling} onClick={() => void cancelStartup()}>
+            <Square size={16} />
+            {cancelling ? "Cancelling startup…" : "Cancel startup"}
+          </Button>
+        )}
+      </div>
     </AuthedLayout>
   )
 }
