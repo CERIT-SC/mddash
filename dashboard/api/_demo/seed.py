@@ -2,6 +2,7 @@ import json
 import logging
 import time
 from datetime import datetime, timedelta
+from pathlib import PurePosixPath
 
 import requests
 from config import DATA_DIR
@@ -16,8 +17,11 @@ from .files import (
     ensure_demo_files,
     ensure_mdposit_demo_files,
     write_amber_simulation,
+    write_finished_amber_log,
     write_finished_gmx_log,
     write_gmx_simulation,
+    write_mdrun_stdio,
+    write_running_amber_log,
     write_running_gmx_log,
 )
 from .state import build_model, demo_state
@@ -75,7 +79,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         demo_state.tuner_jobs[running_tuner.id] = {
             "status": JobStatus.RUNNING.value,
             "created_at": started_at,
-            "max_trials": 4,
+            "max_trials": 12,
             "trials": [
                 {
                     "id": "prod_00000",
@@ -160,8 +164,9 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         nb=DeviceType.GPU,
         np=4,
         ntomp=2,
-        _nsteps=500000,
-        _start_timestamp=int((now - timedelta(hours=3)).timestamp()),
+        _nsteps=50000,  # matches the step count in the demo md.log template
+        # Log appends are timestamped "now", so an old start would inflate the ETA.
+        _start_timestamp=int(now.timestamp()),
         _finish_timestamp=None,
         _performance=None,
         created_at=now - timedelta(hours=3),
@@ -170,9 +175,11 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "status": JobStatus.RUNNING.value,
         "experiment_id": enzyme.id,
         "tpr_name": "production/md.tpr",
-        "nsteps": 500000,
+        "nsteps": 50000,
         "created_at": time.time(),
-        "duration_sec": 3600,
+        "duration_sec": 600,
+        "log_line_index": 0,
+        "log_total_lines": 500,
     }
 
     # Finished MD simulation (NPT equilibration complete)
@@ -297,7 +304,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         np=1,
         ntomp=8,
         _nsteps=500000,
-        _start_timestamp=int((now - timedelta(hours=2)).timestamp()),
+        # mdinfo rewrites are timestamped "now", so an old start would inflate the ETA.
+        _start_timestamp=int(now.timestamp()),
         _finish_timestamp=None,
         _performance=None,
         created_at=now - timedelta(hours=2),
@@ -311,7 +319,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "mdin_name": "production.mdin",
         "nsteps": 500000,
         "created_at": time.time(),
-        "duration_sec": 7200,
+        "duration_sec": 1800,
     }
 
     # Finished AMBER job (equilibration complete)
@@ -439,6 +447,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     )
     write_running_gmx_log(enzyme.id, "production/md")
     write_finished_gmx_log(enzyme.id, "npt_equilibration", nsteps=100000, performance=68.5)
+    write_mdrun_stdio(enzyme.id, "production", running_gmx.id)
 
     # Published study: simple structure
     ensure_demo_files(published.id, ["lysozyme_hewl.tpr", "structure.pdb", "trajectory.xtc"])
@@ -451,6 +460,9 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         inpcrd_name="villin.inpcrd",
         mdin_names=["production.mdin", "equilibration.mdin"],
     )
+    write_running_amber_log(amber_folding.id, "production")
+    write_finished_amber_log(amber_folding.id, "equilibration")
+    write_mdrun_stdio(amber_folding.id, ".", running_amber.id)
 
     # AMBER DNA study: uses AMBER file format
     ensure_amber_demo_files(
@@ -459,6 +471,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         inpcrd_name="dna.inpcrd",
         mdin_names=["simulation.mdin"],
     )
+    write_finished_amber_log(amber_dna.id, "simulation")
 
     # MDPosit import study: mirrors the project file layout exposed by HTTP mocks.
     ensure_mdposit_demo_files(mdposit_demo.id)
@@ -467,7 +480,12 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     write_gmx_simulation(membrane.id, "gpcr_membrane", topology="gpcr_membrane.tpr")
 
     write_gmx_simulation(enzyme.id, "md", simulation_path="md.simulation.json", topology="production/md.tpr")
-    write_gmx_simulation(enzyme.id, "npt_equilibration", simulation_path="npt_equilibration.simulation.json")
+    write_gmx_simulation(
+        enzyme.id,
+        "npt_equilibration",
+        simulation_path="npt_equilibration.simulation.json",
+        topology="npt_equilibration.tpr",
+    )
     write_gmx_simulation(
         enzyme.id,
         "hiv_protease",
@@ -620,6 +638,8 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
             inpcrd_name="villin.inpcrd",
             mdin_names=["production.mdin", "equilibration.mdin"],
         )
+        write_running_amber_log(amber_folding.id, "production")
+        write_finished_amber_log(amber_folding.id, "equilibration")
 
     if amber_dna is not None:
         demo_state.notebook_status[amber_dna.id] = PodStatus.DOWN
@@ -629,6 +649,7 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
             inpcrd_name="dna.inpcrd",
             mdin_names=["simulation.mdin"],
         )
+        write_finished_amber_log(amber_dna.id, "simulation")
 
     if mdposit_demo is not None:
         demo_state.notebook_status[mdposit_demo.id] = PodStatus.DOWN
@@ -640,7 +661,12 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
 
     if enzyme is not None:
         write_gmx_simulation(enzyme.id, "md", simulation_path="md.simulation.json", topology="production/md.tpr")
-        write_gmx_simulation(enzyme.id, "npt_equilibration", simulation_path="npt_equilibration.simulation.json")
+        write_gmx_simulation(
+            enzyme.id,
+            "npt_equilibration",
+            simulation_path="npt_equilibration.simulation.json",
+            topology="npt_equilibration.tpr",
+        )
         write_gmx_simulation(
             enzyme.id,
             "hiv_protease",
@@ -698,23 +724,33 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
         status = JobStatus.FINISHED.value if gmx_job._finish_timestamp else JobStatus.RUNNING.value  # ruff:ignore[private-member-access]
         from models.simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
+        # Running jobs must stay running: a start-timestamp-based created_at with a
+        # short duration would flip them to FINISHED on the first status poll.
+        running = status == JobStatus.RUNNING.value
         files = Simulation.get(gmx_job.experiment_id, gmx_job.simulation_path).resolved_files
         demo_state.mdrun_jobs[gmx_job.id] = {
             "status": status,
             "experiment_id": gmx_job.experiment_id,
             "tpr_name": files.get("run_input", "md.tpr"),
             "nsteps": gmx_job._nsteps or 100000,  # ruff:ignore[private-member-access]
-            "created_at": float(gmx_job._start_timestamp or time.time()),  # ruff:ignore[private-member-access]
-            "duration_sec": 30.0,
+            "created_at": time.time() if running else float(gmx_job._start_timestamp or time.time()),  # ruff:ignore[private-member-access]
+            "duration_sec": 600.0 if running else 30.0,
             "log_line_index": 0,
             "log_total_lines": 500,
         }
+        if running:
+            # Fresh start timestamp: the stale one would inflate estimated_time.
+            gmx_job._start_timestamp = int(time.time())  # ruff:ignore[private-member-access]
+            db.session.commit()
+            sim_dir = str(PurePosixPath(files.get("run_input", "md.tpr")).parent)
+            write_mdrun_stdio(gmx_job.experiment_id, sim_dir, gmx_job.id)
 
     # Rehydrate AMBER jobs from database
     for amber_job in AmberJob.query.all():
         status = JobStatus.FINISHED.value if amber_job._finish_timestamp else JobStatus.RUNNING.value  # ruff:ignore[private-member-access]
         from models.simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
+        running = status == JobStatus.RUNNING.value
         files = Simulation.get(amber_job.experiment_id, amber_job.simulation_path).resolved_files
         demo_state.mdrun_jobs[amber_job.id] = {
             "status": status,
@@ -723,11 +759,17 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
             "inpcrd_name": files.get("coordinates", "md.inpcrd"),
             "mdin_name": files.get("control", "md.mdin"),
             "nsteps": amber_job._nsteps or 100000,  # ruff:ignore[private-member-access]
-            "created_at": float(amber_job._start_timestamp or time.time()),  # ruff:ignore[private-member-access]
-            "duration_sec": 30.0,
+            "created_at": time.time() if running else float(amber_job._start_timestamp or time.time()),  # ruff:ignore[private-member-access]
+            "duration_sec": 600.0 if running else 30.0,
             "log_line_index": 0,
             "log_total_lines": 500,
         }
+        if running:
+            # Fresh start timestamp: the stale one would inflate estimated_time.
+            amber_job._start_timestamp = int(time.time())  # ruff:ignore[private-member-access]
+            db.session.commit()
+            sim_dir = str(PurePosixPath(files.get("control", "md.mdin")).parent)
+            write_mdrun_stdio(amber_job.experiment_id, sim_dir, amber_job.id)
 
     # Rehydrate tuner jobs from database
     for tuner_job in TunerJob.query.all():
@@ -764,7 +806,7 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
             demo_state.tuner_jobs[tuner_job.id] = {
                 "status": JobStatus.RUNNING.value,
                 "created_at": started_at,
-                "max_trials": 4,
+                "max_trials": 12,
                 "trials": [
                     {
                         "id": f"{tuner_job.id[:10]}-00000",

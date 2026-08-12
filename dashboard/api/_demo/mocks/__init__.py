@@ -51,13 +51,4 @@ def install_all_mocks() -> None:  # ruff:ignore[non-empty-init-module]
     logger.info("All demo mocks installed")
 
 
-def stop_mocks() -> None:  # ruff:ignore[non-empty-init-module]
-    """Stop HTTP mocking (call on shutdown)."""
-    global _mocks_installed  # ruff:ignore[global-statement]
-    if _mocks_installed:
-        responses.stop()
-        responses.reset()
-        _mocks_installed = False
-
-
 __all__ = ["install_all_mocks"]

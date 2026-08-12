@@ -1,0 +1,5 @@
+
+ NSTEP =    25000   TIME(PS) =      50.000  TEMP(K) =   300.01  PRESS =     0.0
+ Etot   =     -5430.9876  EKtot   =      1233.7654  EPtot      =     -6665.4321
+ BOND   =        11.9876  ANGLE   =        33.8765  DIHED      =        55.6789
+ EKCMT  =       654.3210  VIRIAL  =       654.3210  VOLUME     =     67890.1234

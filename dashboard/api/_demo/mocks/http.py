@@ -10,6 +10,7 @@ import logging
 import re
 import time
 from http import HTTPStatus
+from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import unquote
 from uuid import uuid4
@@ -17,6 +18,7 @@ from uuid import uuid4
 import responses
 from clients.caddy import CADDY_ADMIN_API_URL
 from config import (
+    DATA_DIR,
     MDPOSIT_REST_URL,
     MDREPO_API_URL,
     MDREPO_RECORD_NAME,
@@ -27,7 +29,13 @@ from config import (
     TUNER_URL,
 )
 
-from ..files import DEFAULT_PDB_FILE, build_demo_archive_bytes, get_mdposit_fixture_bytes
+from ..files import (
+    DEFAULT_PDB_FILE,
+    build_demo_archive_bytes,
+    get_mdposit_fixture_bytes,
+    write_mdrun_stdio,
+    write_running_amber_log,
+)
 from ..state import demo_state
 
 if TYPE_CHECKING:
@@ -38,7 +46,7 @@ logger = logging.getLogger(__name__)
 # Default simulation parameters
 DEFAULT_GMX_NSTEPS = 100_000
 DEFAULT_GMX_DURATION_SEC = 30.0
-DEFAULT_TUNER_MAX_TRIALS = 3
+DEFAULT_TUNER_MAX_TRIALS = 12
 TUNER_TRIAL_DURATION_SEC = 10.0
 # Full production simulation length (ns) and hourly rates used by demo cost estimates.
 DEMO_TUNER_SIM_LENGTH_NS = 250.0
@@ -243,15 +251,6 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         if match:
             demo_state.mdrun_jobs.pop(match.group("job_id"), None)
         return (HTTPStatus.NO_CONTENT, {}, "")
-
-    # Legacy endpoints (for backward compatibility)
-    rsps.add_callback(responses.POST, f"{MDRUN_API_URL}/jobs", callback=create_gmx_job)
-    rsps.add_callback(
-        responses.GET, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/(?!gmx|amber)[^/]+"), callback=get_gmx_job
-    )
-    rsps.add_callback(
-        responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/(?!gmx|amber)[^/]+"), callback=delete_gmx_job
-    )
 
     # GROMACS-specific endpoints
     rsps.add_callback(responses.POST, f"{MDRUN_API_URL}/jobs/gmx", callback=create_gmx_job)
@@ -505,7 +504,7 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
         Returns:
             Tuple of (status_code, headers, body) for the response.
         """
-        record_id = "8gahj-dh519"
+        record_id = f"demo-{demo_state.mdrepo_counter:05d}"
         demo_state.mdrepo_counter += 1
         demo_state.mdrepo_records[record_id] = False
 
@@ -858,7 +857,7 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(response_body))
 
     def download_project_file(request: "ResponsesProxy") -> tuple[int, dict[str, str], bytes]:
-        match = re.search(r"/api/projects/[^/]+/files/(?P<filename>.+)$", request.url)
+        match = re.search(r"/projects/[^/]+/files/(?P<filename>.+)$", request.url)
         if not match:
             return (HTTPStatus.NOT_FOUND, {}, b"")
 
@@ -943,6 +942,20 @@ def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
     progress_ratio = min(1.0, elapsed / duration_sec) if duration_sec > 0 else 1.0
     job_data["log_line_index"] = int(log_total_lines * progress_ratio)
 
+    # Write log files lazily here: AmberJob/GromacsJob.start() cleans previous
+    # result files after job creation, so seeding them at submit time loses them.
+    if job_data.get("tpr_name"):
+        deffnm = str(job_data.get("tpr_name", "md.tpr")).removesuffix(".tpr")
+        write_mdrun_stdio(str(job_data.get("experiment_id", "")), str(Path(deffnm).parent), job_id)
+        _sync_gmx_log_progress(job_data, progress_ratio)
+    elif job_data.get("prmtop_name"):
+        deffnm = str(job_data.get("mdin_name", "md.mdin")).removesuffix(".mdin")
+        experiment_id = str(job_data.get("experiment_id", ""))
+        if not (DATA_DIR / experiment_id / f"{deffnm}.out").exists():
+            write_running_amber_log(experiment_id, deffnm)
+        write_mdrun_stdio(experiment_id, str(Path(deffnm).parent), job_id)
+        _sync_amber_mdinfo_progress(job_data, progress_ratio)
+
     if elapsed >= duration_sec:
         job_data["status"] = "FINISHED"
         job_data["performance"] = 62.5
@@ -968,6 +981,34 @@ def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
                     db.session.commit()
         except Exception:
             pass
+
+
+def _sync_gmx_log_progress(job_data: dict, progress_ratio: float) -> None:
+    """Append template lines to the job's log file so progress is observable."""
+    from ..files import (  # ruff:ignore[import-outside-top-level]
+        append_gmx_log_template_until,
+        gmx_log_start_index,
+        gmx_log_steps_end_index,
+        gmx_log_template_line_count,
+    )
+
+    total = gmx_log_template_line_count()
+    steps_end = gmx_log_steps_end_index()
+    start = gmx_log_start_index()
+    # Advance the step-table region over the whole run; the perf summary and the
+    # "Finished mdrun" line are appended only on completion.
+    index = total if progress_ratio >= 1.0 else start + int((steps_end - start) * progress_ratio)
+    deffnm = str(job_data.get("tpr_name", "md.tpr")).removesuffix(".tpr")
+    append_gmx_log_template_until(str(job_data.get("experiment_id", "")), deffnm, index)
+
+
+def _sync_amber_mdinfo_progress(job_data: dict, progress_ratio: float) -> None:
+    """Rewrite the job's mdinfo with the current step so progress is observable."""
+    from ..files import write_amber_mdinfo  # ruff:ignore[import-outside-top-level]
+
+    nsteps = int(job_data.get("nsteps", 0) or 0)
+    deffnm = str(job_data.get("mdin_name", "md.mdin")).removesuffix(".mdin")
+    write_amber_mdinfo(str(job_data.get("experiment_id", "")), deffnm, int(nsteps * progress_ratio))
 
 
 def _tuner_trial_estimates(
@@ -1045,7 +1086,10 @@ def _advance_gmx_tuner_status(status: dict) -> None:
     if running_trial is not None:
         started_at = float(running_trial.get("started_at", now))
         if now - started_at >= TUNER_TRIAL_DURATION_SEC:
-            trial_idx = trials.index(running_trial)
+            # Parity from creation seq, not list index: the rolling window keeps
+            # every new trial at index max_trials-1 (odd), which would make all
+            # post-fill trials ERROR.
+            trial_idx = int(running_trial.get("seq", trials.index(running_trial)))
             if trial_idx % 2 == 0:
                 running_trial["status"] = "FINISHED"
                 base_perf = 55.0
@@ -1060,9 +1104,10 @@ def _advance_gmx_tuner_status(status: dict) -> None:
         return
 
     max_trials = int(status.get("max_trials", DEFAULT_TUNER_MAX_TRIALS))
+    # Rolling window instead of FINISHED so a demo session never burns the job out;
+    # the seeded stopped tuner covers the finished-state UI.
     if len(trials) >= max_trials:
-        status["status"] = "FINISHED"
-        return
+        del trials[0]
 
     trial_configs = [
         {"np": 8, "ntomp": 1, "nb": "cpu", "pme": "cpu"},
@@ -1072,12 +1117,15 @@ def _advance_gmx_tuner_status(status: dict) -> None:
         {"np": 4, "ntomp": 2, "nb": "gpu", "pme": "gpu"},
         {"np": 2, "ntomp": 4, "nb": "gpu", "pme": "gpu"},
     ]
-    config = trial_configs[len(trials) % len(trial_configs)]
+    seq = int(status.get("trial_seq", len(status.get("trials", []))))
+    status["trial_seq"] = seq + 1
+    config = trial_configs[seq % len(trial_configs)]
     trials.append({
-        "id": f"trial-{len(trials):05d}",
+        "id": f"trial-{seq:05d}",
         "status": "RUNNING",
         **config,
         "performance": None,
+        "seq": seq,
         "started_at": now,
     })
 
@@ -1102,7 +1150,7 @@ def _advance_amber_tuner_status(status: dict) -> None:
     if running_trial is not None:
         started_at = float(running_trial.get("started_at", now))
         if now - started_at >= TUNER_TRIAL_DURATION_SEC:
-            trial_idx = trials.index(running_trial)
+            trial_idx = int(running_trial.get("seq", trials.index(running_trial)))
             if trial_idx % 2 == 0:
                 running_trial["status"] = "FINISHED"
                 base_perf = 60.0
@@ -1117,9 +1165,10 @@ def _advance_amber_tuner_status(status: dict) -> None:
         return
 
     max_trials = int(status.get("max_trials", DEFAULT_TUNER_MAX_TRIALS))
+    # Rolling window instead of FINISHED so a demo session never burns the job out;
+    # the seeded stopped tuner covers the finished-state UI.
     if len(trials) >= max_trials:
-        status["status"] = "FINISHED"
-        return
+        del trials[0]
 
     trial_configs = [
         {"np": 4, "ntomp": 1, "binary": "pmemd.cuda", "ewald": "default"},
@@ -1127,11 +1176,14 @@ def _advance_amber_tuner_status(status: dict) -> None:
         {"np": 4, "ntomp": 1, "binary": "pmemd.cuda", "ewald": "optimized"},
         {"np": 2, "ntomp": 2, "binary": "pmemd.MPI", "ewald": "optimized"},
     ]
-    config = trial_configs[len(trials) % len(trial_configs)]
+    seq = int(status.get("trial_seq", len(trials)))
+    status["trial_seq"] = seq + 1
+    config = trial_configs[seq % len(trial_configs)]
     trials.append({
-        "id": f"trial-{len(trials):05d}",
+        "id": f"trial-{seq:05d}",
         "status": "RUNNING",
         **config,
         "performance": None,
+        "seq": seq,
         "started_at": now,
     })

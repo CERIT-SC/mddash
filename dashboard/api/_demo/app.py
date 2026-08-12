@@ -19,7 +19,6 @@ import os
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
-from unittest.mock import patch
 
 if TYPE_CHECKING:
     from flask import Flask
@@ -61,6 +60,7 @@ def _configure_demo_env() -> None:
     os.environ.setdefault("MDREPO_SCOPES", "openid profile")
     os.environ.setdefault("MDREPO_CLIENT_ID", "demo-client")
     os.environ.setdefault("MDREPO_CLIENT_SECRET", "demo-secret")
+    os.environ.setdefault("MDREPO_UPLOADER_IMAGE", "demo-mdrepo-uploader")
     os.environ.setdefault("DEFAULT_NOTEBOOKS_REPO", "https://github.com/sb-ncbr/mddash-notebooks.git")
     os.environ.setdefault("MDPOSIT_URL", "https://mdposit.mddbr.eu")
 
@@ -81,24 +81,20 @@ def create_demo_app() -> "Flask":
     """
     _configure_demo_env()
 
-    # k8s loads kubernetes lazily; patches must precede demo seeding.
-    with (
-        patch("kubernetes.config.load_incluster_config"),
-        patch("kubernetes.client.CoreV1Api"),
-        patch("kubernetes.client.BatchV1Api"),
-    ):
-        from _demo.mocks import install_all_mocks  # ruff:ignore[import-outside-top-level]
-        from _demo.profile import setup_demo_profile  # ruff:ignore[import-outside-top-level]
+    # K8s is neutralized by clients.k8s module mutation, not by patching the
+    # kubernetes library — mocks must be installed before the app is imported.
+    from _demo.mocks import install_all_mocks  # ruff:ignore[import-outside-top-level]
+    from _demo.profile import setup_demo_profile  # ruff:ignore[import-outside-top-level]
 
-        install_all_mocks()
+    install_all_mocks()
 
-        from app import create_app  # ruff:ignore[import-outside-top-level]
+    from app import create_app  # ruff:ignore[import-outside-top-level]
 
-        app = create_app()
+    app = create_app()
 
-        setup_demo_profile(app)
+    setup_demo_profile(app)
 
-        return app
+    return app
 
 
 # Create the demo app instance

@@ -28,60 +28,6 @@ def _default_mdposit_projects() -> dict[str, dict[str, Any]]:
 
 
 @dataclass
-class MdrunJobState:
-    """State container for a mock MDRun job."""
-
-    status: str
-    experiment_id: str
-    nsteps: int
-    created_at: float
-    duration_sec: float
-    log_line_index: int
-    log_total_lines: int
-    performance: float | None = None
-    # GROMACS-specific
-    tpr_name: str | None = None
-    # AMBER-specific
-    prmtop_name: str | None = None
-    inpcrd_name: str | None = None
-    mdin_name: str | None = None
-
-
-@dataclass
-class TunerTrialState:
-    """State container for a mock tuner trial."""
-
-    id: str
-    status: str
-    np: int
-    ntomp: int
-    nb: str
-    pme: str
-    performance: float | None = None
-    started_at: float | None = None
-
-
-@dataclass
-class TunerJobState:
-    """State container for a mock tuner job."""
-
-    status: str
-    created_at: float
-    max_trials: int
-    trials: list[dict[str, Any]] = field(default_factory=list)
-
-
-@dataclass
-class AnalysisJobState:
-    """State container for a mock analysis job."""
-
-    status: str
-    experiment_id: str
-    analysis_name: str
-    created_at: float
-
-
-@dataclass
 class DemoState:
     """
     Central container for all demo runtime state.
@@ -98,6 +44,7 @@ class DemoState:
     analysis_jobs: dict[str, dict[str, Any]] = field(default_factory=dict)
     mdrepo_records: dict[str, bool] = field(default_factory=dict)
     mdrepo_counter: int = 1
+    upload_jobs: dict[str, str] = field(default_factory=dict)  # job_name -> experiment_id
     mdposit_projects: dict[str, dict[str, Any]] = field(default_factory=_default_mdposit_projects)
 
     def reset(self) -> None:
@@ -108,6 +55,7 @@ class DemoState:
         self.analysis_jobs.clear()
         self.mdrepo_records.clear()
         self.mdrepo_counter = 1
+        self.upload_jobs.clear()
         self.mdposit_projects = _default_mdposit_projects()
         self.initialized = False
 

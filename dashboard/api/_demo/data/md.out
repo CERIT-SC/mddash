@@ -1,0 +1,58 @@
+-------------------------------------------------------
+Amber 22  PMEMD  2024
+-------------------------------------------------------
+
+
+| Run on 08/10/2026 at 10:00:00
+
+[-O]verwriting output
+
+File Assignments:
+|  MDIN: production.mdin
+|  MDOUT: production.out
+|  INPCRD: villin.inpcrd
+|  PARM: villin.prmtop
+
+Here is the input file:
+
+Demo MD simulation
+ &cntrl
+  imin=0, irest=0, ntx=1,
+  ntpr=100, ntwr=100, ntwx=100,
+  nstlim=500000, dt=0.002,
+ /
+
+--------------------------------------------------------------------------------
+   1.  RESOURCE   USE:
+--------------------------------------------------------------------------------
+
+
+ NSTEP =      5000   TIME(PS) =      10.000  TEMP(K) =   299.87  PRESS =     0.0
+ Etot   =     -5432.1234  EKtot   =      1234.5678  EPtot      =     -6666.6912
+ BOND   =        12.3456  ANGLE   =        34.5678  DIHED      =        56.7890
+ 1-4 NB =        23.4567  1-4 EEL =       456.7890  VDWAALS    =       789.0123
+ EELEC  =     -7756.3456  EHBOND  =         0.0000  RESTRAINT  =         0.0000
+ EKCMT  =       654.3210  VIRIAL  =       654.3210  VOLUME     =     67890.1234
+ ------------------------------------------------------------------------------
+
+ NSTEP =     10000   TIME(PS) =      20.000  TEMP(K) =   300.12  PRESS =     0.0
+ Etot   =     -5430.9876  EKtot   =      1235.1234  EPtot      =     -6666.1110
+ BOND   =        12.4567  ANGLE   =        34.6789  DIHED      =        56.8901
+ 1-4 NB =        23.5678  1-4 EEL =       456.8901  VDWAALS    =       789.1234
+ EELEC  =     -7756.4567  EHBOND  =         0.0000  RESTRAINT  =         0.0000
+ EKCMT  =       654.4321  VIRIAL  =       654.4321  VOLUME     =     67890.2345
+ ------------------------------------------------------------------------------
+
+ NSTEP =     15000   TIME(PS) =      30.000  TEMP(K) =   300.05  PRESS =     0.0
+ Etot   =     -5431.2345  EKtot   =      1234.8901  EPtot      =     -6666.1246
+ BOND   =        12.5678  ANGLE   =        34.7890  DIHED      =        56.9012
+ 1-4 NB =        23.6789  1-4 EEL =       456.9012  VDWAALS    =       789.2345
+ EELEC  =     -7756.5678  EHBOND  =         0.0000  RESTRAINT  =         0.0000
+ EKCMT  =       654.5432  VIRIAL  =       654.5432  VOLUME     =     67890.3456
+ ------------------------------------------------------------------------------
+
+|  Final Performance Info:
+|     ns/day =     156.20   seconds/ns =     553.13
+
+|  Job timings:
+|     Master Total wall time:     86400    seconds     24.00 hours

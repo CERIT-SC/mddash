@@ -4,13 +4,11 @@ Demo profile setup for local development.
 Installs all mocks and seeds deterministic test data for UI development.
 """
 
-import contextlib
 import logging
 import time
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-import responses
 from flask import redirect, request, session
 from token_manager import MDREPO_TOKEN_EXPIRES_AT, MDREPO_TOKEN_KEY
 
@@ -24,33 +22,21 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Global responses mock instance (activated per-request)
-_responses_mock: responses.RequestsMock | None = None
-
 
 def setup_demo_profile(app: "Flask") -> None:
     """
     Install demo mocks and seed deterministic local data.
 
-    This sets up the demo environment with:
-    - HTTP response mocking via responses library
-    - Kubernetes client mocking via module mutation
-    - Tuner trial log mocking via module mutation
-    - Deterministic seeded database records
-    - Demo MDRepo authentication bypass
+    Mocks stay installed process-wide; per-request state is not needed since
+    the demo serves a single user.
 
     Args:
         app: The Flask application instance.
     """
-    global _responses_mock  # ruff:ignore[global-statement]
-
     if demo_state.initialized:
         return
 
-    # Install all mocks (HTTP via responses, K8s via module mutation)
-    _responses_mock = install_all_mocks()
-
-    # Install demo MDRepo auth bypass
+    install_all_mocks()
     _install_demo_mdrepo_auth(app)
 
     # Configure session for local development
@@ -58,27 +44,11 @@ def setup_demo_profile(app: "Flask") -> None:
     if not app.config.get("SECRET_KEY"):
         app.config["SECRET_KEY"] = "demo-secret"
 
-    # Seed database with test data
     with app.app_context():
         seed_data()
 
     demo_state.initialized = True
     logger.info("Demo profile initialized with real API routes and mocked integrations.")
-
-
-def activate_responses() -> None:
-    """Activate the responses mock for the current request context."""
-    global _responses_mock  # ruff:ignore[global-variable-not-assigned]
-    if _responses_mock is not None:
-        _responses_mock.__enter__()  # ruff:ignore[unnecessary-dunder-call]
-
-
-def deactivate_responses() -> None:
-    """Deactivate the responses mock after request completion."""
-    global _responses_mock  # ruff:ignore[global-variable-not-assigned]
-    if _responses_mock is not None:
-        with contextlib.suppress(Exception):
-            _responses_mock.__exit__(None, None, None)
 
 
 def _install_demo_mdrepo_auth(app: "Flask") -> None:

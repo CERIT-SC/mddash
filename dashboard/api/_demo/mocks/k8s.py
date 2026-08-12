@@ -12,6 +12,7 @@ import logging
 import re
 import threading
 import time
+from types import SimpleNamespace
 
 import requests
 from clients import k8s
@@ -25,6 +26,9 @@ logger = logging.getLogger(__name__)
 
 # Analysis job duration in seconds
 ANALYSIS_JOB_DURATION_SEC = 3.0
+
+# MDRepo upload job duration in seconds
+UPLOAD_JOB_DURATION_SEC = 4.0
 
 # MDposit API endpoint for analysis data
 MDPOSIT_ANALYSES_URL = "https://mdposit.mddbr.eu/api/rest/v1/projects/MD-A003ZT.2/analyses"
@@ -55,6 +59,60 @@ def install_k8s_mocks() -> None:
     k8s.get_job_status = _get_job_status  # type: ignore
     k8s.delete_job = _delete_job  # type: ignore
     k8s.get_job_logs = _get_job_logs  # type: ignore
+    k8s.check_quota_headroom = lambda *_a, **_k: None  # type: ignore
+    k8s.count_notebook_pods = lambda: sum(1 for s in demo_state.notebook_status.values() if s == PodStatus.RUNNING)  # type: ignore
+    k8s.ping_resource = lambda *_a, **_k: True  # type: ignore
+    k8s.create_job_raw = _create_job_raw  # type: ignore
+    k8s.wait_for_pod_admission = lambda *_a, **_k: True  # type: ignore
+    k8s.read_job = _read_upload_job  # type: ignore
+    k8s.delete_job_foreground = lambda name: demo_state.upload_jobs.pop(name, None)  # type: ignore
+    k8s.wait_for_resource_absence = lambda *_a, **_k: True  # type: ignore
+
+
+def _create_job_raw(manifest: dict) -> None:
+    """Simulate the MDRepo upload worker: mark done after a short delay."""
+    try:
+        from upload.submission import EXPERIMENT_LABEL  # ruff:ignore[import-outside-top-level]
+
+        experiment_id = manifest["metadata"]["labels"][EXPERIMENT_LABEL]
+        job_name = manifest["metadata"]["name"]
+    except (KeyError, ImportError):
+        return
+
+    demo_state.upload_jobs[job_name] = experiment_id
+    threading.Thread(target=_finish_upload_job, args=(job_name, experiment_id), daemon=True).start()
+
+
+def _finish_upload_job(job_name: str, experiment_id: str) -> None:
+    from upload.status import UploadStatus, write_status  # ruff:ignore[import-outside-top-level]
+
+    time.sleep(UPLOAD_JOB_DURATION_SEC)
+    demo_state.upload_jobs.pop(job_name, None)
+
+    from upload.status import read_status  # ruff:ignore[import-outside-top-level]
+
+    queued = read_status(experiment_id, DATA_DIR)
+    exp_dir = DATA_DIR / experiment_id
+    files = [p for p in exp_dir.rglob("*") if p.is_file()]
+    total_bytes = sum(p.stat().st_size for p in files)
+    write_status(
+        UploadStatus(
+            attempt_id=queued.attempt_id if queued else "demo-attempt",
+            state="completed",
+            total_files=len(files),
+            completed_files=len(files),
+            total_bytes=total_bytes,
+            completed_bytes=total_bytes,
+        ),
+        experiment_id,
+        DATA_DIR,
+    )
+
+
+def _read_upload_job(name: str) -> SimpleNamespace | None:
+    if name not in demo_state.upload_jobs:
+        return None
+    return SimpleNamespace(status=SimpleNamespace(active=1))
 
 
 def _get_pod_status(name: str) -> PodStatus:
