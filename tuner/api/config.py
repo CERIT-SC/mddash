@@ -29,10 +29,6 @@ MAX_UPLOAD_SIZE = 10 * 1024**3  # 10 GB per file
 # AMBER submits up to 3 files per request.
 MAX_REQUEST_SIZE = MAX_UPLOAD_SIZE * 3
 
-COST_CPU_CORE_HOUR = float(os.environ["COST_CPU_CORE_HOUR"])
-COST_GPU_HOUR = float(os.environ["COST_GPU_HOUR"])
-COST_GB_RAM_HOUR = float(os.environ["COST_GB_RAM_HOUR"])
-
 # Early stopping config
 EARLY_STOP_ENABLED = True
 EARLY_STOP_THRESHOLD = 0.75  # Stop if <75% of fastest trial

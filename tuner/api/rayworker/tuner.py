@@ -10,9 +10,6 @@ from ray.exceptions import RayError
 from ray.util.state import list_tasks
 
 from api.config import (
-    COST_CPU_CORE_HOUR,
-    COST_GB_RAM_HOUR,
-    COST_GPU_HOUR,
     EARLY_STOP_BASELINE_TRIALS,
     EARLY_STOP_BATCH_SIZE,
     RAY_ADDRESS,
@@ -32,15 +29,7 @@ from api.db.operations import (
 from api.engines.protocol import Engine, TrialConfig
 from api.schemas.common import JobStatus, MDEngine
 
-# Forward COST_* to Ray workers: they import api.config transitively but don't use the values.
-RAY_RUNTIME_ENV = {
-    "working_dir": RUNTIME_WORKDIR,
-    "env_vars": {
-        "COST_CPU_CORE_HOUR": str(COST_CPU_CORE_HOUR),
-        "COST_GPU_HOUR": str(COST_GPU_HOUR),
-        "COST_GB_RAM_HOUR": str(COST_GB_RAM_HOUR),
-    },
-}
+RAY_RUNTIME_ENV = {"working_dir": RUNTIME_WORKDIR}
 logger = logging.getLogger(__name__)
 
 logger.info("Tuner module initialized")

@@ -48,6 +48,13 @@ spec:
                 name: dashboard
               - containerPort: 10001
                 name: client
+            env:
+              - name: COST_CPU_CORE_HOUR
+                value: {{ .Values.api.pricing.cpuCoreHour | quote }}
+              - name: COST_GPU_HOUR
+                value: {{ .Values.api.pricing.gpuHour | quote }}
+              - name: COST_GB_RAM_HOUR
+                value: {{ .Values.api.pricing.gbRamHour | quote }}
             lifecycle:
               preStop:
                 exec:
@@ -99,6 +106,13 @@ spec:
             - name: ray-worker
               image: {{ .Values.ray.image | quote }}
               imagePullPolicy: {{ .Values.ray.imagePullPolicy }}
+              env:
+                - name: COST_CPU_CORE_HOUR
+                  value: {{ .Values.api.pricing.cpuCoreHour | quote }}
+                - name: COST_GPU_HOUR
+                  value: {{ .Values.api.pricing.gpuHour | quote }}
+                - name: COST_GB_RAM_HOUR
+                  value: {{ .Values.api.pricing.gbRamHour | quote }}
               lifecycle:
                 preStop:
                   exec:

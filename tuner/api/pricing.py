@@ -1,10 +1,12 @@
 """Cost estimation for tuning trials based on hourly resource rates."""
 
+import os
 from dataclasses import dataclass
 
-from api.config import COST_CPU_CORE_HOUR, COST_GB_RAM_HOUR, COST_GPU_HOUR
+COST_CPU_CORE_HOUR = float(os.environ["COST_CPU_CORE_HOUR"])
+COST_GPU_HOUR = float(os.environ["COST_GPU_HOUR"])
+COST_GB_RAM_HOUR = float(os.environ["COST_GB_RAM_HOUR"])
 
-# RAM allocated per MPI rank, mirroring mdrun-api k8s resource requests.
 RAM_GB_PER_RANK = 4.0
 
 

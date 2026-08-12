@@ -27,7 +27,6 @@ ROOT_DIR = Path(__file__).resolve().parents[2]
 TERMINAL_STATUSES = {"FINISHED", "ERROR"}
 ACTIVE_STATUSES = {"PENDING", "RUNNING"}
 
-# Rates must match the deployment's config.yaml values.
 COST_CPU_CORE_HOUR = float(os.environ["COST_CPU_CORE_HOUR"])
 COST_GPU_HOUR = float(os.environ["COST_GPU_HOUR"])
 COST_GB_RAM_HOUR = float(os.environ["COST_GB_RAM_HOUR"])

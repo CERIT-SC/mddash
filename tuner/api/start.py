@@ -1,11 +1,10 @@
 import logging
+import os
 import sys
 
 import uvicorn
 from alembic import command
 from alembic.config import Config
-
-from api.config import TUNER_PASSWORD, TUNER_USER
 
 logging.basicConfig(
     level=logging.INFO,
@@ -14,11 +13,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+_REQUIRED_ENV = ("TUNER_USER", "TUNER_PASSWORD", "COST_CPU_CORE_HOUR", "COST_GPU_HOUR", "COST_GB_RAM_HOUR")
+
 
 def validate_config() -> None:
-    """Reject startup when required credentials are missing."""
-    if not TUNER_USER or not TUNER_PASSWORD:
-        raise RuntimeError("TUNER_USER and TUNER_PASSWORD must be configured")
+    """Reject startup when required configuration is missing."""
+    missing = [v for v in _REQUIRED_ENV if not os.environ.get(v)]
+    if missing:
+        raise RuntimeError(f"Required environment variables not set: {', '.join(missing)}")
 
 
 def main() -> None:
