@@ -2,18 +2,19 @@ import { useEffect, useRef, useState } from "react"
 
 import {
   Alert,
-  AlertDescription,
-  AlertTitle,
   Button,
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
-  P,
+  H1,
+  Lead,
+  Muted,
+  Separator,
 } from "@e-infra/design-system"
-import { LoaderCircle, Play, TriangleAlert } from "lucide-react"
+import { Atom, LoaderCircle, Play, RefreshCw, TriangleAlert } from "lucide-react"
 
+import { DetailsLog, FAILED_LEAD, HeroHeading, LogEntry, PageHero, StatusIcon, SupportNote } from "../components/Hero"
 import { AuthedLayout } from "../components/Layouts"
 import { HubApi } from "../lib/api"
 import { DEV_FALLBACK_BASE_URL, getAppConfig } from "../lib/config"
@@ -36,12 +37,15 @@ export function SpawnPage() {
     optionsForm: "",
   })
 
-  const [status, setStatus] = useState<"starting" | "failed">("starting")
+  // A hub-rendered spawn error means the spawn already failed — show the failed
+  // state instead of auto-retrying (which would silently loop).
+  const hasHubError = Boolean(cfg.errorHtmlMessage || cfg.errorMessage)
+  const [status, setStatus] = useState<"starting" | "failed">(hasHubError ? "failed" : "starting")
   const [error, setError] = useState<string | null>(null)
   const started = useRef(false)
 
   useEffect(() => {
-    if (cfg.optionsForm) return
+    if (cfg.optionsForm || hasHubError) return
     // React StrictMode double-invokes effects — guard against spawning twice.
     if (started.current) return
     started.current = true
@@ -55,7 +59,7 @@ export function SpawnPage() {
         setStatus("failed")
         setError(e.message)
       })
-  }, [cfg])
+  }, [cfg, hasHubError])
 
   const errorHtml = cfg.errorHtmlMessage
   const errorText = cfg.errorMessage
@@ -105,6 +109,8 @@ export function SpawnPage() {
     )
   }
 
+  const failed = status === "failed"
+
   return (
     <AuthedLayout
       baseUrl={cfg.baseUrl}
@@ -113,33 +119,40 @@ export function SpawnPage() {
       logoutUrl={cfg.logoutUrl}
       announcement={cfg.announcement}
     >
-      <Card className="mx-auto w-full max-w-xl">
-        <CardHeader>
-          <CardTitle>Starting your server</CardTitle>
-          <CardDescription>You'll be redirected to the progress page in a moment</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center gap-4 py-6">
-          {status === "starting" ? (
-            <>
-              <LoaderCircle className="text-primary animate-spin" size={32} />
-              <P>Requesting your server…</P>
-            </>
+      <PageHero>
+        <StatusIcon tone={failed ? "error" : "primary"} icon={failed ? TriangleAlert : Atom} />
+
+        <HeroHeading ariaLive>
+          <H1>{failed ? "Failed to start your server" : "Starting your server"}</H1>
+          {failed ? (
+            <Lead>{FAILED_LEAD}</Lead>
           ) : (
-            <>
-              <Alert variant="error" className="w-full">
-                <AlertTitle className="flex items-center gap-2">
-                  <TriangleAlert size={16} />
-                  Spawn failed
-                </AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-              <Button variant="secondary" onClick={() => window.location.reload()}>
-                Try again
-              </Button>
-            </>
+            <Muted className="text-base">You will be redirected to the progress page in a moment.</Muted>
           )}
-        </CardContent>
-      </Card>
+        </HeroHeading>
+
+        {failed ? (
+          <>
+            <Button size="lg" onClick={() => window.location.reload()}>
+              <RefreshCw size={16} />
+              Try again
+            </Button>
+            <SupportNote />
+            <Separator className="w-full" />
+            <DetailsLog open summary="Event log">
+              {errorHtml ? (
+                <LogEntry html={errorHtml} />
+              ) : (errorText ?? error) ? (
+                <LogEntry>{errorText ?? error}</LogEntry>
+              ) : (
+                <LogEntry>No failure details available.</LogEntry>
+              )}
+            </DetailsLog>
+          </>
+        ) : (
+          <LoaderCircle className="text-primary animate-spin" size={32} aria-hidden="true" />
+        )}
+      </PageHero>
     </AuthedLayout>
   )
 }

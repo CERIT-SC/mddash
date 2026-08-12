@@ -3,10 +3,7 @@ import type { ReactNode } from "react"
 import { Link, Muted, Small } from "@e-infra/design-system"
 import { Clock, type LucideIcon } from "lucide-react"
 
-/**
- * Shared chrome for the hub status pages (home, spawn_pending, stop_pending,
- * not_running). Every hub hero uses these — duplication across them is not allowed.
- */
+/** Shared hero chrome for the hub status pages (home, spawn, spawn_pending, stop_pending, not_running). */
 
 /** Centered hero shell. */
 export function PageHero({ children }: { children: ReactNode }) {
@@ -46,7 +43,7 @@ export function HeroHeading({ children, ariaLive = false }: { children: ReactNod
   )
 }
 
-/** Small clock hint under the hero ("This may take a few minutes"). */
+/** Small clock hint under the hero. */
 export function WaitHint({ children }: { children: ReactNode }) {
   return (
     <div className="flex items-center gap-1">
@@ -56,7 +53,7 @@ export function WaitHint({ children }: { children: ReactNode }) {
   )
 }
 
-/** Collapsible raw event/failure log. `open` when the state is a failure. */
+/** Collapsible raw event/failure log; pass `open` for failed states. */
 export function DetailsLog({
   open = false,
   summary,
@@ -83,7 +80,7 @@ export function LogEntry({ html, children }: { html?: string; children?: ReactNo
   return <span className={className}>{children}</span>
 }
 
-/** Support escalation link; single source for the URL. */
+/** Support escalation link. */
 export const SUPPORT_ISSUES_URL = "https://github.com/CERIT-SC/mddash/issues"
 
 export function SupportNote() {
@@ -97,5 +94,8 @@ export function SupportNote() {
   )
 }
 
-/** Caption below the Start my server action. Single source for the copy. */
+/** Caption below the Start my server action. */
 export const START_HINT = "This starts your personal notebook server. It usually takes up to a minute."
+
+/** Body copy for every spawn-failure state. */
+export const FAILED_LEAD = "This usually happens when the system is busy or restarting — it is not your fault."

@@ -7,6 +7,11 @@ import { HubHeader } from "./HubHeader"
 import { Logo } from "./Logo"
 import { ThemeToggle } from "./ThemeToggle"
 
+/** Wide content column for data pages (token, admin). */
+export function PageBody({ children }: { children: ReactNode }) {
+  return <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">{children}</div>
+}
+
 /** Standard authenticated page: header with nav, optional announcement, centered content column. */
 export function AuthedLayout({
   baseUrl,

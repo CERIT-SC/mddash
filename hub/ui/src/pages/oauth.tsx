@@ -74,8 +74,13 @@ export function OAuthPage() {
               <CardContent className="flex flex-col gap-2">
                 {cfg.scopeDescriptions.map((scope, i) => (
                   <label key={i} className="flex items-start gap-2 text-sm">
-                    {/* Disabled because the authorization is required (STOCK behavior). */}
-                    <Checkbox checked disabled title="This authorization is required" />
+                    {/* Disabled because the authorization is required. */}
+                    <Checkbox
+                      checked
+                      disabled
+                      aria-label="Required authorization (always granted)"
+                      title="This authorization is required"
+                    />
                     <span>
                       {scope.description}
                       {scope.filter ? <Small className="text-text-muted"> Applies to {scope.filter}.</Small> : null}

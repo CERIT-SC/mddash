@@ -19,6 +19,9 @@ import {
   CardTitle,
   Input,
   Label,
+  Link,
+  Skeleton,
+  Small,
   Switch,
   Table,
   TableBody,
@@ -30,7 +33,7 @@ import {
 import { Play, Square, Trash2, UserPlus, Users } from "lucide-react"
 import { toast } from "sonner"
 
-import { AuthedLayout } from "../components/Layouts"
+import { AuthedLayout, PageBody } from "../components/Layouts"
 import { HubApi, type HubUserModel } from "../lib/api"
 import { getAppConfig } from "../lib/config"
 import { formatTime } from "../lib/format"
@@ -95,7 +98,7 @@ export function AdminPage() {
       current="admin"
       announcement={cfg.announcement}
     >
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+      <PageBody>
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -127,9 +130,13 @@ export function AdminPage() {
             {forbidden ? (
               <Alert variant="error">You do not have permission to administer this hub.</Alert>
             ) : users === null ? (
-              <p className="text-text-muted text-sm">Loading users…</p>
+              <div className="flex flex-col gap-2">
+                {[0, 1, 2].map((i) => (
+                  <Skeleton key={i} className="h-10 w-full" />
+                ))}
+              </div>
             ) : users.length === 0 ? (
-              <p className="text-text-muted text-sm">No users found.</p>
+              <Small className="text-text-muted">No users found.</Small>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -169,9 +176,7 @@ export function AdminPage() {
                               <span className="flex items-center gap-2">
                                 <span className="bg-success inline-block size-2 rounded-full" />
                                 Running
-                                <a className="text-primary text-xs underline" href={serverUrl}>
-                                  open
-                                </a>
+                                <Link href={serverUrl}>open</Link>
                               </span>
                             ) : status === "starting" ? (
                               "Starting…"
@@ -187,7 +192,7 @@ export function AdminPage() {
                               {status === "running" || status === "starting" ? (
                                 <Button
                                   size="sm"
-                                  variant="secondary"
+                                  variant="error"
                                   disabled={busy}
                                   onClick={() =>
                                     run(user.name, () => api.stopServer(user.name), `Stopping ${user.name}…`)
@@ -246,7 +251,7 @@ export function AdminPage() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </PageBody>
     </AuthedLayout>
   )
 }

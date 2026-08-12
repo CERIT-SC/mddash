@@ -56,8 +56,6 @@ export function LoginPage() {
           ) : null}
           {cfg.loginError ? <Alert variant="error">{cfg.loginError}</Alert> : null}
           {cfg.customHtml ? (
-            // Raw HTML is provided by the configured authenticator (same
-            // rendering contract as the stock login.html template).
             <div dangerouslySetInnerHTML={{ __html: cfg.customHtml }} />
           ) : (
             <Button size="lg" className="w-full" asChild>

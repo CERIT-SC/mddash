@@ -3,7 +3,16 @@ import { useEffect } from "react"
 import { Button, H1, Lead, Muted, Separator } from "@e-infra/design-system"
 import { Atom, Play, RefreshCw, TriangleAlert } from "lucide-react"
 
-import { DetailsLog, HeroHeading, LogEntry, PageHero, START_HINT, StatusIcon, SupportNote } from "../components/Hero"
+import {
+  DetailsLog,
+  FAILED_LEAD,
+  HeroHeading,
+  LogEntry,
+  PageHero,
+  START_HINT,
+  StatusIcon,
+  SupportNote,
+} from "../components/Hero"
 import { AuthedLayout } from "../components/Layouts"
 import { DEV_FALLBACK_BASE_URL, getAppConfig } from "../lib/config"
 import { mount } from "../lib/mount"
@@ -67,7 +76,7 @@ export function NotRunningPage() {
         <HeroHeading>
           <H1>{cfg.failed ? "Failed to start your server" : "Your server is offline"}</H1>
           {cfg.failed ? (
-            <Lead>This usually happens when the system is busy or restarting — it is not your fault.</Lead>
+            <Lead>{FAILED_LEAD}</Lead>
           ) : (
             <Muted className="text-base">{`Your personal notebook server${serverLabel} is not running.`}</Muted>
           )}

@@ -3,7 +3,16 @@ import { useEffect, useMemo, useState } from "react"
 import { Alert, Button, H1, H2, Lead, Muted, Progress, Separator } from "@e-infra/design-system"
 import { Atom, RefreshCw, Square, TriangleAlert } from "lucide-react"
 
-import { DetailsLog, HeroHeading, LogEntry, PageHero, StatusIcon, SupportNote, WaitHint } from "../components/Hero"
+import {
+  DetailsLog,
+  FAILED_LEAD,
+  HeroHeading,
+  LogEntry,
+  PageHero,
+  StatusIcon,
+  SupportNote,
+  WaitHint,
+} from "../components/Hero"
 import { AuthedLayout } from "../components/Layouts"
 import { HubApi } from "../lib/api"
 import { DEV_FALLBACK_BASE_URL, getAppConfig } from "../lib/config"
@@ -41,7 +50,7 @@ export function SpawnPendingPage() {
           window.location.href = `${cfg.baseUrl}home`
         }
       } catch {
-        // transient
+        /* transient API errors — keep polling */
       }
     }
     void poll()
@@ -93,7 +102,7 @@ export function SpawnPendingPage() {
         <HeroHeading ariaLive>
           <H1>{failed ? "Failed to start your server" : "Starting your server…"}</H1>
           {failed ? (
-            <Lead>This usually happens when the system is busy or restarting — it is not your fault.</Lead>
+            <Lead>{FAILED_LEAD}</Lead>
           ) : (
             <Muted className="text-base">You will be redirected automatically when it's ready for you.</Muted>
           )}
