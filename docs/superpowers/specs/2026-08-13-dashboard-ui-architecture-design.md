@@ -1,7 +1,7 @@
 # Dashboard UI Architecture Design
 
 **Date:** 2026-08-13
-**Status:** Approved in design discussion; awaiting written-spec review
+**Status:** Approved
 **Scope:** Frontend workspace and greenfield Dashboard UI architecture
 
 ## Goal
