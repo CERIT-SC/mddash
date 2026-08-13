@@ -38,6 +38,7 @@ import {
 import { Check, Copy, KeyRound, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { IconCardHeader } from "../components/IconCard"
 import { AuthedLayout, PageBody } from "../components/Layouts"
 import { HubApi, type HubTokenModel } from "../lib/api"
 import { getAppConfig } from "../lib/config"
@@ -190,13 +191,11 @@ export function TokenPage() {
     >
       <PageBody>
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <KeyRound className="text-primary" size={20} />
-              New API token
-            </CardTitle>
-            <CardDescription>Create a token for scripts and command-line access</CardDescription>
-          </CardHeader>
+          <IconCardHeader
+            icon={KeyRound}
+            title="New API token"
+            description="Create a token for scripts and command-line access"
+          />
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="token-note">Note</Label>

@@ -2,7 +2,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -12,6 +11,7 @@ import {
 } from "@e-infra/design-system"
 import { ShieldCheck } from "lucide-react"
 
+import { IconCardHeader } from "../components/IconCard"
 import { CenteredLayout } from "../components/Layouts"
 import { getAppConfig } from "../lib/config"
 import { mount } from "../lib/mount"
@@ -44,15 +44,11 @@ export function OAuthPage() {
   return (
     <CenteredLayout maxWidth="max-w-xl">
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-center gap-2">
-            <ShieldCheck className="text-primary" size={20} />
-            Authorize access
-          </CardTitle>
-          <CardDescription>
-            An application is requesting authorization to access data associated with your JupyterHub account.
-          </CardDescription>
-        </CardHeader>
+        <IconCardHeader
+          icon={ShieldCheck}
+          title="Authorize access"
+          description="An application is requesting authorization to access data associated with your JupyterHub account."
+        />
         <form method="post" action="">
           <CardContent className="flex flex-col gap-4">
             <P className="text-sm">

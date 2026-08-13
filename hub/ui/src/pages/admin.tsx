@@ -14,9 +14,6 @@ import {
   Button,
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Input,
   Label,
   Link,
@@ -33,6 +30,7 @@ import {
 import { Play, Square, Trash2, UserPlus, Users } from "lucide-react"
 import { toast } from "sonner"
 
+import { IconCardHeader } from "../components/IconCard"
 import { AuthedLayout, PageBody } from "../components/Layouts"
 import { HubApi, type HubUserModel } from "../lib/api"
 import { getAppConfig } from "../lib/config"
@@ -100,13 +98,11 @@ export function AdminPage() {
     >
       <PageBody>
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="text-primary" size={20} />
-              Users
-            </CardTitle>
-            <CardDescription>Start or stop user servers, grant admin rights, add or remove users.</CardDescription>
-          </CardHeader>
+          <IconCardHeader
+            icon={Users}
+            title="Users"
+            description="Start or stop user servers, grant admin rights, add or remove users."
+          />
           <CardContent className="flex flex-col gap-6">
             <div className="flex items-end gap-2">
               <div className="flex flex-1 flex-col gap-2">

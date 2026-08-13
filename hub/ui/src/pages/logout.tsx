@@ -1,6 +1,7 @@
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, P } from "@e-infra/design-system"
+import { Button, Card, CardContent, P } from "@e-infra/design-system"
 import { CircleCheck } from "lucide-react"
 
+import { IconCardHeader } from "../components/IconCard"
 import { CenteredLayout } from "../components/Layouts"
 import { DEV_FALLBACK_BASE_URL, getAppConfig } from "../lib/config"
 import { mount } from "../lib/mount"
@@ -17,13 +18,7 @@ export function LogoutPage() {
   return (
     <CenteredLayout announcement={cfg.announcement}>
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CircleCheck className="text-success" size={20} />
-            Signed out
-          </CardTitle>
-          <CardDescription>Your session has ended</CardDescription>
-        </CardHeader>
+        <IconCardHeader icon={CircleCheck} tone="success" title="Signed out" description="Your session has ended" />
         <CardContent className="flex flex-col gap-4">
           <P>Successfully logged out of JupyterHub.</P>
           <Button size="lg" className="w-full" asChild>

@@ -1,17 +1,7 @@
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  Small,
-} from "@e-infra/design-system"
+import { Alert, AlertDescription, AlertTitle, Button, Card, CardContent, Small } from "@e-infra/design-system"
 import { KeyRound, TriangleAlert } from "lucide-react"
 
+import { IconCardHeader } from "../components/IconCard"
 import { CenteredLayout } from "../components/Layouts"
 import { DEV_FALLBACK_BASE_URL, getAppConfig } from "../lib/config"
 import { mount } from "../lib/mount"
@@ -35,13 +25,7 @@ export function LoginPage() {
   return (
     <CenteredLayout announcement={cfg.announcement}>
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <KeyRound className="text-primary" size={20} />
-            Sign in
-          </CardTitle>
-          <CardDescription>Access your MDDash workspace</CardDescription>
-        </CardHeader>
+        <IconCardHeader icon={KeyRound} title="Sign in" description="Access your MDDash workspace" />
         <CardContent className="flex flex-col gap-4">
           {!window.isSecureContext ? (
             <Alert variant="warning">
