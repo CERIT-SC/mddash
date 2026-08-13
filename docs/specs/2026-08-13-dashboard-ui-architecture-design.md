@@ -33,9 +33,9 @@ The Flask Dashboard API has no OpenAPI document or automatic schema generation. 
 | API contract ownership | `dashboard/api` owns the canonical OpenAPI document. It is handwritten initially and may be generated there later. |
 | Contract coverage | The OpenAPI document covers the full current Dashboard API before feature implementation depends on it. |
 | Contract authority | The contract defines the intended stable target. Implementation discrepancies are backend defects to resolve. |
-| API generation | Orval generates everything reasonably inferable from OpenAPI: operations, DTOs, TanStack Query artifacts, Zod schemas, and MSW artifacts. |
+| API generation | Orval generates contract-derived operations, DTOs, TanStack Query artifacts, Zod schemas, and MSW artifacts. Handwritten code supplies application policy only. |
 | Generated output | Generated artifacts are committed, read-only, and checked for regeneration drift in CI. |
-| Runtime validation | Successful API responses are validated with generated Zod schemas before entering the Query cache. |
+| Runtime validation | Structured JSON success responses are validated with generated Zod schemas before entering the Query cache. Other response classes receive transport contract tests. |
 | Server state | TanStack Query. |
 | Routing | TanStack Router with thin file-based route modules and a generated route tree. |
 | Forms | React Hook Form with the e-INFRA design system's RHF-aware form primitives. Zod supplies form schemas where appropriate. |
@@ -79,7 +79,7 @@ Dependencies flow in one direction:
 app/routes -> features -> api/shared
 ```
 
-Lower layers never import upper layers. Feature-to-feature imports use an explicit public entry point and are allowed only when one capability intentionally depends on another. Cycles are forbidden.
+Lower layers never import upper layers. `app` initializes lower-level modules by passing validated values into their public initialization functions; `api` and `shared` never import from `app`. Feature-to-feature imports use an explicit public entry point and are allowed only when one capability intentionally depends on another. Cycles are forbidden.
 
 No cross-application React component package is introduced. Dashboard, Landing, and Hub have different runtime and build contracts. The e-INFRA package is their common visual foundation; the root workspace shares dependency policy and tooling, not application code. Shared application packages may be considered later only after stable, identical duplication is demonstrated.
 
@@ -105,8 +105,9 @@ dashboard/
     │   │   │   ├── query/            # generated Query keys/options/hooks
     │   │   │   ├── schemas/          # generated Zod schemas
     │   │   │   └── mocks/            # generated MSW handlers/factories
-    │   │   ├── client.ts             # runtime transport and error policy
-    │   │   └── index.ts              # stable handwritten API-facing exports
+    │   │   ├── runtime.ts            # initialized runtime URL and request policy
+    │   │   ├── errors.ts             # RFC 9457 normalization and ApiError
+    │   │   └── index.ts              # stable handwritten API policy exports
     │   ├── shared/
     │   │   ├── ui/                   # reusable compositions of e-INFRA primitives
     │   │   ├── lib/                  # cohesive framework-neutral helpers
@@ -135,6 +136,8 @@ This tree specifies architecture, not product features. `features/` is intention
 - `shared/hooks` is not the default destination for hooks. A hook moves there only when it is feature-independent.
 - Generated files are never manually edited.
 
+Application code imports generated artifacts only through the generated public barrel for each artifact class: `@/api/generated/client`, `@/api/generated/query`, `@/api/generated/schemas`, or `@/api/generated/mocks`. Deep imports into generated files are forbidden. Handwritten API policy is imported through `@/api`. This keeps generation discoverable without manually recreating a second operation-by-operation facade.
+
 ## OpenAPI And Generated Client
 
 ### Contract ownership
@@ -160,11 +163,13 @@ The contract is the target authority rather than a transcription of accidental b
 
 The contract is enforced as code:
 
-- API tests validate every operation's implemented statuses, media types, and response bodies against OpenAPI.
+- CI compares Flask's registered Dashboard API method/path inventory with OpenAPI and fails for a route missing from either side.
+- Each documented status/media-type pair has a named API contract test that validates the response body when one exists.
+- Runtime response validation in API tests prevents an exercised response from bypassing its documented schema.
 - Contract validation runs before generation.
 - CI regenerates committed artifacts and rejects a dirty diff.
 - Strict TypeScript compiles all generated output.
-- Generated Zod schemas validate successful runtime responses before Query caches them.
+- Generated Zod schemas validate structured JSON success responses before Query caches them. Empty, scalar, redirect, and binary responses are verified by status/media-type contract tests and transport integration tests instead.
 - API changes update the contract first, then backend behavior and generated consumers in the same change.
 
 ### Orval
@@ -174,23 +179,25 @@ Orval is the selected development-time generator because it provides the broades
 - Request and response TypeScript types.
 - Named operation functions.
 - TanStack Query keys, option factories, and hooks.
-- Zod schemas and response parsers.
+- Zod request and response schemas.
 - MSW handlers and data factories.
 
 Orval is not a runtime architecture dependency outside its output. Its exact version is pinned. Generated files are committed, carry generated headers, and are replaceable as a unit. Feature and route architecture must not depend on Orval-specific internals beyond documented generated entry points.
 
+The generated React Query client uses Orval's built-in Fetch transport, not a custom transport mutator. This preserves Orval's generated response parsing and `override.fetch.runtimeValidation` path. Generation uses Zod-backed schemas, enables Fetch runtime validation, and makes non-success HTTP responses reject so TanStack Query receives an error. Before this configuration is applied to the full contract, a compatibility test must prove the pinned Orval version against representative JSON, discriminated union, empty `204`, scalar JSON, multipart, and binary operations. A generator defect blocks the affected contract shape; generated files are not post-processed or patched.
+
 Alternative generators were considered. The `openapi-typescript` stack produces less generated code but leaves operation calls and multipart behavior handwritten. Hey API remains pre-1.0 and has a higher breaking-change risk. Kubb's stable and next-generation lines are in transition. Orval is a project-specific selection, not an industry standard.
 
-### Handwritten transport policy
+### Handwritten API policy
 
-`src/api/client.ts` is the sole handwritten transport-policy module. It owns only behavior that cannot be reliably inferred from OpenAPI:
+Handwritten API modules own only behavior that cannot be reliably inferred from OpenAPI:
 
-- Runtime API base URL.
-- Same-origin cookie credentials.
-- Conversion of `application/problem+json` into the application `ApiError`.
-- Browser navigation for OAuth redirects.
-- Explicitly tested multipart and binary transport behavior where generator customization is required.
-- Legacy catch-all path serialization.
+- `app` passes the validated API base URL to `api/runtime.ts` before any generated operation runs. Orval's runtime base-URL expression imports from this lower-level module, so generated code never imports `app/config`.
+- Generated Fetch request options set same-origin cookie credentials centrally.
+- Built-in Fetch rejects non-success responses. `api/errors.ts` converts its documented `{ info, status }` error envelope and network failures into the application `ApiError` whenever an error is presented or interpreted. Global Query callbacks use the same converter; application code never parses generator-specific errors itself.
+- Generated URL helpers provide OAuth destinations; a feature controller owns the browser navigation action.
+- Multipart, scalar, empty, and binary operations use generated behavior proven by transport integration tests.
+- Legacy catch-all path serialization is isolated in an Orval operation override or generated URL customization, never in a feature.
 
 Features do not construct endpoint URLs or call `fetch` directly.
 
@@ -238,7 +245,7 @@ Zod is used at two boundaries:
 - Generated Zod schemas validate successful API responses before cache insertion.
 - Feature-local Zod schemas describe form rules that are stricter, conditional, or differently shaped from wire requests.
 
-Generated request schemas are reused when a form and request genuinely have the same shape. UI schemas are not forced to mirror multipart payloads or transport details. Multipart conversion and request mapping occur at the submit boundary, not inside visual controls.
+Generated request schemas are reused when a form and request have the same shape and user-facing validation semantics. UI schemas are not forced to mirror multipart payloads or transport details. Multipart conversion and request mapping occur at the submit boundary, not inside visual controls.
 
 Backend validation remains authoritative. Recognized field errors are mapped into RHF. Non-field RFC 9457 errors use the application error presentation. Generated DTOs and schemas are never manually copied into feature type files.
 
@@ -255,21 +262,21 @@ Application code imports e-INFRA primitives directly. A component enters `shared
 - Do not copy or fork e-INFRA primitives.
 - Do not establish parallel color, typography, spacing, or component systems.
 - Limit custom CSS to global integration, third-party library requirements, and behavior the design system cannot express.
-- Initialize theme synchronously before React renders to prevent FOUC. The application owns theme persistence.
+- Initialize theme synchronously before React renders to prevent FOUC. The e-INFRA documented theme keys and behavior are the single persistence contract; the application must not create a competing theme store or key set.
 
 ### Design mock workflow
 
-For each supplied design mock, implementation follows this priority:
+Security, correctness, accessibility, and explicitly approved supported behavior are invariants; no visual priority can override them. Within those invariants, each supplied design mock follows this priority for visual and interaction decisions:
 
 1. e-INFRA design system.
 2. Explicit user direction.
-3. Correct runtime behavior and bug fixes.
+3. Runtime bug fixes discovered during the UI pass.
 4. The mock's layout, hierarchy, and visual language.
-5. Preservation of existing supported behavior.
+5. Existing visual treatment for behavior not addressed by the mock.
 
-A screenshot is design input, not a complete specification. Loading, failure, empty, retry, cancellation, polling, and other reachable states must be designed in the same visual language. Each mock receives an analyze-and-approve pass before implementation. UI work loads both the `e-infra-design-system` and `ui-ux` workflows.
+A screenshot is design input, not a complete specification. Existing supported behavior cannot be silently dropped even though it is visually lower priority. Loading, failure, empty, retry, cancellation, polling, and other reachable states must be designed in the same visual language. Each mock receives an analyze-and-approve pass before implementation. UI work loads both the `e-infra-design-system` and `ui-ux` workflows.
 
-If a design requires a missing component, variant, token, accessibility fix, or responsive behavior, first verify the gap against the current package and documentation. A generally useful gap should produce a minimal upstream issue or PR to `CERIT-SC/design-system` following the repository's design-mock implementation workflow. A local workaround is allowed only when project-specific or when upstream delivery would block work; it must be narrow, explicitly temporary, and removed after the upstream release. Known upstream issues must not receive conflicting local overrides.
+If a design requires a missing component, variant, token, accessibility fix, or responsive behavior, first verify the gap against the pinned package and documentation. A generally useful gap is handled through a minimal upstream issue or PR to `CERIT-SC/design-system` following the repository's design-mock implementation workflow. If upstream contribution is not appropriate, the mock's design approval records why. A local workaround is allowed only when project-specific or when upstream delivery would block work; it must be narrow, reference the upstream issue/PR when one exists, state the package-version removal trigger, and be removed after that release. Known upstream issues must not receive conflicting local overrides.
 
 ### Component responsibilities
 
@@ -310,20 +317,20 @@ The placement test is:
 
 The Dashboard remains a static Vite SPA served by the proxy under an arbitrary JupyterHub user base path. Deployment-specific URLs and user identity are not build-time variables.
 
-A runtime configuration schema validates `window.MDDASH_CONFIG` before application providers are created and exposes one immutable configuration object. Missing production fields fail visibly. Local development uses an explicit development configuration rather than interpreting absent configuration as a general-purpose debug flag.
+A runtime configuration schema validates `window.MDDASH_CONFIG` before application providers are created and exposes one immutable configuration object. Missing production fields fail visibly. Local development uses an explicit development configuration rather than interpreting absent configuration as a general-purpose debug flag. The composition root initializes `api/runtime.ts` with the validated API URL; the API layer never reads application configuration directly.
 
-Development mode, test mode, and product capability availability are separate concepts. Feature visibility and development shortcuts use explicit capabilities, not inferred `DEBUG` behavior.
+Development mode and test mode must not implicitly enable product behavior. Any future product capability flag requires its own feature specification and an explicit runtime-config field.
 
 The composition root establishes these concerns in order:
 
-1. Synchronous e-INFRA theme initialization before React render.
+1. Synchronous application of the e-INFRA documented theme preference before React render.
 2. Validated runtime configuration.
 3. OpenAPI transport client.
 4. TanStack Query client and global Query policy.
 5. TanStack Router with runtime base path and Query context.
 6. Global render-error, route-error, notification, and accessibility infrastructure.
 
-The application defines durable global states for invalid runtime configuration, route not found, route load failure, unexpected render failure, and offline/network failure. RFC 9457 support identifiers remain visible where available.
+The application defines durable global states for invalid runtime configuration, route not found, route load failure, unexpected render failure, and offline/network failure. When an RFC 9457 body supplies a `type`, that support identifier is displayed in the durable error details.
 
 Route-level lazy loading provides natural bundle boundaries. Large visualization dependencies load only where used. Manual chunk maps are introduced only after measurement demonstrates a problem.
 
@@ -449,7 +456,7 @@ Implementation follows dependency direction:
 
 1. Establish the root pnpm workspace, one lockfile, pinned Node/pnpm/TypeScript 7 versions, root commands, Oxlint, and retained Prettier policy.
 2. Add the API-owned full OpenAPI contract and API-side contract validation.
-3. Configure pinned Orval generation, runtime response validation, committed output, and CI drift checks.
+3. Prove the pinned Orval Fetch/React Query/Zod configuration against representative contract shapes, then configure full generation, runtime response validation, committed output, and CI drift checks.
 4. Establish the generic SPA skeleton: runtime config, e-INFRA setup, providers, file-based router, Query integration, global boundaries, tests, and import rules.
 5. Introduce feature modules only through separately approved feature or design-mock specifications.
 
@@ -464,15 +471,16 @@ The architecture is operational when:
 - Stable TypeScript 7 strict checks pass across the active workspace.
 - Type-aware Oxlint passes across the active workspace without an ESLint dependency.
 - Prettier remains deterministic under the centralized workspace commands.
-- The full Dashboard API contract validates.
-- Every documented operation has API-side contract tests for its implemented response statuses and media types.
+- The full Dashboard API contract validates, and its method/path inventory exactly matches Flask's registered Dashboard API routes.
+- Every documented status/media-type pair has a named API-side contract test.
 - Orval output regenerates deterministically, has no manual edits, and compiles.
-- A generated operation demonstrably passes through runtime base URL configuration, cookies, Zod validation, TanStack Query, MSW, and RFC 9457 conversion.
-- Runtime configuration and routing work under an arbitrary base path.
+- Generated contract-shape tests cover JSON, a discriminated union, empty `204`, scalar JSON, multipart, and binary operations. Structured JSON is Zod-validated before entering Query; malformed JSON reaches Query as an error.
+- A generated operation demonstrably uses the initialized runtime base URL and same-origin cookies, passes through TanStack Query and generated MSW, and presents an RFC 9457 response as `ApiError`.
+- Runtime configuration and routing pass at both `/` and the representative nested base path `/user/test-user/dash/`, including direct load and refresh.
 - TanStack file-based routing and route-tree drift checks are operational.
-- Unit, integration, and a minimal Playwright smoke path run in CI.
-- e-INFRA setup and theme initialization work without a parallel visual system.
-- Import restrictions prevent upward dependencies, feature cycles, and unmanaged generated imports.
+- Unit and integration suites run in CI. The Playwright architecture smoke suite loads the root route at the nested base path, renders the invalid-config state, and renders route-not-found.
+- e-INFRA setup and pre-render theme restoration pass visual and accessibility assertions. Import and source checks reject copied primitive modules, raw color literals, and generic Tailwind palette colors outside approved third-party adapter styles.
+- Import restrictions prevent upward dependencies and feature cycles; generated imports are limited to the four approved generated barrels.
 
 ## Out Of Scope
 
