@@ -147,6 +147,28 @@ def test_notebook_config_response_matches_contract(client: FlaskClient, contract
     )
 
 
+def test_empty_experiment_list_response_matches_contract(client: FlaskClient, contract: dict[str, Any]) -> None:
+    response = client.get("/dash/api/experiments")
+    assert response.status_code == 200
+    assert response.get_json() == []
+    _validate_payload(contract, _response_schema(contract, "/dash/api/experiments", "get", 200), response.get_json())
+
+
+def test_populated_experiment_list_response_matches_contract(
+    client: FlaskClient, contract: dict[str, Any], db_session: Any
+) -> None:
+    from models import Experiment
+
+    experiment = Experiment(id="slice", name="Vertical slice", source_message="Contract test")
+    db_session.add(experiment)
+    db_session.commit()
+
+    response = client.get("/dash/api/experiments")
+    assert response.status_code == 200
+    assert [item["id"] for item in response.get_json()] == ["slice"]
+    _validate_payload(contract, _response_schema(contract, "/dash/api/experiments", "get", 200), response.get_json())
+
+
 def test_problem_response_matches_contract(client: FlaskClient, contract: dict[str, Any]) -> None:
     response = client.get("/dash/api/experiments/missing")
     assert response.status_code == 404

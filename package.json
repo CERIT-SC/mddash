@@ -5,8 +5,11 @@
   "packageManager": "pnpm@11.13.0",
   "scripts": {
     "api:generate": "pnpm --filter dash api:generate",
+    "api:check": "pnpm --filter dash api:check",
+    "build:ui": "pnpm --filter dash build",
     "build:landing": "pnpm --filter landing build",
     "build:hub-ui": "pnpm --filter hub-ui build",
+    "test:ui": "pnpm --filter dash test",
     "type-check": "pnpm --parallel --filter dash --filter landing --filter hub-ui type-check",
     "lint": "oxlint --type-aware --deny-warnings dashboard/ui landing hub/ui",
     "lint:fix": "oxlint --type-aware --fix dashboard/ui landing hub/ui",

@@ -9,14 +9,18 @@ import { defineConfig } from "vite"
 export default defineConfig({
   base: "./",
   plugins: [
-    tanstackRouter({
-      target: "react",
-      routesDirectory: "./src/routes",
-      generatedRouteTree: "./src/routeTree.gen.ts",
-      routeFileIgnorePattern: "\\.test\\.",
-      quoteStyle: "double",
-      semicolons: false,
-    }),
+    ...(process.env.VITEST
+      ? []
+      : [
+          tanstackRouter({
+            target: "react",
+            routesDirectory: "./src/routes",
+            generatedRouteTree: "./src/routeTree.gen.ts",
+            routeFileIgnorePattern: "\\.test\\.",
+            quoteStyle: "double",
+            semicolons: false,
+          }),
+        ]),
     react(),
     tailwindcss(),
   ],
@@ -24,6 +28,10 @@ export default defineConfig({
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),
     },
+  },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/shared/testing/setup.ts"],
   },
 
   // Dev server configuration

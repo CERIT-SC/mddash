@@ -117,7 +117,11 @@ type-check-hub-ui: ## Type-check hub UI (TypeScript)
 # ==================== TEST ====================
 
 .PHONY: test
-test: test-dashboard-api test-dashboard-auth test-mdrun-api test-tuner test-pre-spawn-hook ## Run all tests
+test: test-dashboard-api test-dashboard-auth test-dashboard-ui test-mdrun-api test-tuner test-pre-spawn-hook ## Run all tests
+
+.PHONY: test-dashboard-ui
+test-dashboard-ui: ## Run Dashboard UI tests
+	pnpm --filter dash test
 
 .PHONY: test-dashboard-api
 test-dashboard-api: ## Run dashboard API tests
@@ -147,6 +151,10 @@ build: build-dashboard build-notebook build-mdrun-api build-tuner-api build-land
 .PHONY: build-dashboard
 build-dashboard: ## Build dashboard sidecar images (ui, proxy, auth, api, s3sync)
 	@$(MAKE) -C dashboard build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
+
+.PHONY: build-ui
+build-ui: ## Build Dashboard UI static bundle
+	pnpm --filter dash build
 
 .PHONY: build-notebook
 build-notebook: ## Build notebook image

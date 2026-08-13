@@ -33,7 +33,11 @@ help: ## Show this help
 # ==================== TEST ====================
 
 .PHONY: test
-test: test-api test-auth ## Run all dashboard tests
+test: test-api test-auth test-ui ## Run all dashboard tests
+
+.PHONY: test-ui
+test-ui: ## Run Dashboard UI tests
+	cd .. && pnpm --filter dash test
 
 .PHONY: test-api
 test-api: ## Run API tests
@@ -50,9 +54,8 @@ test-auth: ## Run auth tests
 build: build-proxy build-auth build-api build-s3sync build-mdrepo-uploader ## Build all sidecar images
 
 .PHONY: build-ui
-build-ui: ## Build UI image (unavailable while the greenfield UI is a skeleton)
-	@echo "Dashboard UI implementation has not started; dashboard/ui currently contains architecture scaffolding only." >&2
-	@exit 1
+build-ui: ## Build Dashboard UI image
+	docker build $(platform) -f ui/Dockerfile -t $(ui_image):$(tag) ..
 
 .PHONY: build-proxy
 build-proxy: build-ui ## Build proxy image (Caddy + UI static files)

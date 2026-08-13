@@ -15,7 +15,9 @@
     "moduleDetection": "force",
     "rootDir": ".",
     "types": [
-      "vite/client"
+      "vite/client",
+      "vitest/globals",
+      "@testing-library/jest-dom"
     ],
     "noEmit": true,
     "jsx": "react-jsx",

@@ -901,7 +901,7 @@ components:
       additionalProperties: false
     Experiment:
       type: object
-      required: [id, created_at, updated_at, name, source_message, engine, notebook, tuner_jobs, simulation_jobs]
+      required: [id, created_at, updated_at, name, source_message, engine, notebook, tuner_jobs, simulation_jobs, analysis_jobs]
       properties:
         id: {type: string}
         created_at: {type: string, format: date-time}
@@ -912,9 +912,13 @@ components:
         mdrepo_id: {$ref: '#/components/schemas/NullableString'}
         mdrepo_published: {type: [boolean, 'null']}
         engine: {$ref: '#/components/schemas/Engine'}
-        notebook: {$ref: '#/components/schemas/Notebook'}
+        notebook:
+          oneOf:
+            - {$ref: '#/components/schemas/Notebook'}
+            - {type: 'null'}
         tuner_jobs: {type: array, items: {$ref: '#/components/schemas/TunerJob'}}
         simulation_jobs: {type: array, items: {$ref: '#/components/schemas/SimulationJob'}}
+        analysis_jobs: {type: array, items: {$ref: '#/components/schemas/AnalysisJob'}}
         step: {type: integer}
         status: {type: string}
         mdrepo_record_url: {$ref: '#/components/schemas/NullableString'}
