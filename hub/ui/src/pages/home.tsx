@@ -47,9 +47,8 @@ export function HomePage() {
   const status = optimistic ?? liveStatus
   const serverUrl = cfg.serverUrl || `${cfg.baseUrl}user/${encodeURIComponent(cfg.userName)}/`
 
-  // Both transitions go to spawn-pending: the hub renders spawn_pending or
-  // stop_pending there depending on the pending type. Never navigate to the
-  // user server URL — the dying proxy would serve errors.
+  // Route both transitions to spawn-pending (the hub picks the pending template);
+  // never the user server URL — the dying proxy serves errors.
   useEffect(() => {
     if (status === "starting" || status === "stopping") {
       window.location.href = `${cfg.baseUrl}spawn-pending/${encodeURIComponent(cfg.userName)}`
