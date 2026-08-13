@@ -9,5 +9,5 @@ uv tool install ruff
 uv tool install ty
 uv tool install zizmor
 
-# Install UI dependencies
-cd dashboard/ui && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile
+# Install frontend workspace dependencies
+COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile

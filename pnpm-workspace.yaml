@@ -1,0 +1,10 @@
+packages:
+  - dashboard/ui
+  - landing
+  - hub/ui
+
+allowBuilds:
+  "@parcel/watcher": false
+  "@scarf/scarf": false
+  esbuild: false
+  sharp: false

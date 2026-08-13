@@ -2,7 +2,6 @@
   "name": "landing",
   "private": true,
   "version": "0.0.0",
-  "packageManager": "pnpm@11.13.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,16 +19,12 @@
     "tailwindcss": "^4.3.0"
   },
   "devDependencies": {
-    "@ianvs/prettier-plugin-sort-imports": "^4.7.1",
     "@tailwindcss/vite": "^4.3.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
-    "prettier": "^3.8.3",
-    "prettier-plugin-tailwindcss": "^0.8.0",
     "sharp": "^0.34.5",
     "svgo": "^4.0.1",
-    "typescript": "~5.9.3",
     "vite": "^6.4.2",
     "vite-plugin-singlefile": "^2.0.4"
   }

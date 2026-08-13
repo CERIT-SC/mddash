@@ -47,12 +47,14 @@ with (
     from extensions import db, ma
     from routes import (
         amber_bp,
+        analysis_bp,
         experiments_bp,
         files_bp,
         gmx_bp,
         mdrepo_bp,
         misc_bp,
         notebook_bp,
+        notebook_config_bp,
         simulations_bp,
         tuner_bp,
     )
@@ -105,11 +107,14 @@ def app(mock_k8s: MagicMock, tmp_path: Path) -> Generator[Flask, None, None]:
     # Patch DATA_DIR and import routes with the patch active
     with (
         patch.dict("config.__dict__", {"DATA_DIR": tmp_path}),
+        patch("models.analysis_job.DATA_DIR", tmp_path),
         patch("models.simulation.DATA_DIR", tmp_path),
     ):
         # Register blueprints
         test_app.register_blueprint(experiments_bp)
         test_app.register_blueprint(notebook_bp)
+        test_app.register_blueprint(notebook_config_bp)
+        test_app.register_blueprint(analysis_bp)
         test_app.register_blueprint(tuner_bp)
         test_app.register_blueprint(gmx_bp)
         test_app.register_blueprint(amber_bp)

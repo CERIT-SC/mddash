@@ -50,8 +50,9 @@ test-auth: ## Run auth tests
 build: build-proxy build-auth build-api build-s3sync build-mdrepo-uploader ## Build all sidecar images
 
 .PHONY: build-ui
-build-ui: ## Build UI image (React static files)
-	docker build $(platform) -f ui/Dockerfile -t $(ui_image):$(tag) ui/
+build-ui: ## Build UI image (unavailable while the greenfield UI is a skeleton)
+	@echo "Dashboard UI implementation has not started; dashboard/ui currently contains architecture scaffolding only." >&2
+	@exit 1
 
 .PHONY: build-proxy
 build-proxy: build-ui ## Build proxy image (Caddy + UI static files)
@@ -115,8 +116,9 @@ clean: ## Remove all Docker images
 
 # Development helpers
 .PHONY: dev-ui
-dev-ui: ## Run UI dev server (hot reload)
-	cd ui && pnpm run dev
+dev-ui: ## Run UI dev server (unavailable while the greenfield UI is a skeleton)
+	@echo "Dashboard UI implementation has not started; dashboard/ui currently contains architecture scaffolding only." >&2
+	@exit 1
 
 .PHONY: dev-api
 dev-api: ## Run API dev server (hot reload)

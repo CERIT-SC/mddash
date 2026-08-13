@@ -73,7 +73,7 @@ export function HomePage() {
       setOptimistic(null)
       setBusy(false)
     })
-  }, [api])
+  }, [api, cfg.userName])
 
   return (
     <AuthedLayout

@@ -5,13 +5,16 @@ FROM node:26-slim AS build
 
 WORKDIR /app
 
-RUN npm install -g pnpm@11.9.0 --quiet
+RUN npm install -g pnpm@11.13.0 --quiet
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY dashboard/ui/package.json dashboard/ui/package.json
+COPY landing/package.json landing/package.json
+COPY hub/ui/package.json hub/ui/package.json
+RUN pnpm install --frozen-lockfile --filter dash...
 
-COPY . .
-RUN pnpm run build
+COPY dashboard/ui/ dashboard/ui/
+RUN pnpm --filter dash build
 
 # Final stage - just the static files for copying
 FROM scratch AS export
-COPY --from=build /app/dist /dist
+COPY --from=build /app/dashboard/ui/dist /dist

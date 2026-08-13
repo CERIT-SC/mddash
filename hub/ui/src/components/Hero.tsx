@@ -74,7 +74,7 @@ export function DetailsLog({
 /** One log line inside DetailsLog; pass pre-rendered safe `html` or plain children. */
 export function LogEntry({ html, children }: { html?: string; children?: ReactNode }) {
   const className = "text-text-muted text-xs"
-  if (html != null) {
+  if (html !== undefined) {
     return <span className={className} dangerouslySetInnerHTML={{ __html: html }} />
   }
   return <span className={className}>{children}</span>

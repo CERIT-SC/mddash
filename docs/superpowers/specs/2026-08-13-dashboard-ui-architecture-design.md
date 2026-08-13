@@ -35,7 +35,7 @@ The Flask Dashboard API has no OpenAPI document or automatic schema generation. 
 | Contract authority | The contract defines the intended stable target. Implementation discrepancies are backend defects to resolve. |
 | API generation | Orval generates contract-derived operations, DTOs, TanStack Query artifacts, Zod schemas, and MSW artifacts. Handwritten code supplies application policy only. |
 | Generated output | Generated artifacts are committed, read-only, and checked for regeneration drift in CI. |
-| Runtime validation | Structured JSON success responses are validated with generated Zod schemas before entering the Query cache. Other response classes receive transport contract tests. |
+| Runtime validation | Orval generates Zod schemas as a separate documented output. Features invoke them explicitly at boundaries that require runtime parsing; automatic React Query response parsing is deferred until Orval officially supports that integration. |
 | Server state | TanStack Query. |
 | Routing | TanStack Router with thin file-based route modules and a generated route tree. |
 | Forms | React Hook Form with the e-INFRA design system's RHF-aware form primitives. Zod supplies form schemas where appropriate. |
@@ -169,7 +169,7 @@ The contract is enforced as code:
 - Contract validation runs before generation.
 - CI regenerates committed artifacts and rejects a dirty diff.
 - Strict TypeScript compiles all generated output.
-- Generated Zod schemas validate structured JSON success responses before Query caches them. Empty, scalar, redirect, and binary responses are verified by status/media-type contract tests and transport integration tests instead.
+- API-side contract tests validate structured JSON responses against OpenAPI. Empty, scalar, redirect, and binary responses are verified by status/media-type contract tests and transport integration tests.
 - API changes update the contract first, then backend behavior and generated consumers in the same change.
 
 ### Orval
@@ -179,12 +179,17 @@ Orval is the selected development-time generator because it provides the broades
 - Request and response TypeScript types.
 - Named operation functions.
 - TanStack Query keys, option factories, and hooks.
-- Zod request and response schemas.
+- A separate Zod output containing request and response schemas.
 - MSW handlers and data factories.
 
 Orval is not a runtime architecture dependency outside its output. Its exact version is pinned. Generated files are committed, carry generated headers, and are replaceable as a unit. Feature and route architecture must not depend on Orval-specific internals beyond documented generated entry points.
 
-The generated React Query client uses Orval's built-in Fetch transport, not a custom transport mutator. This preserves Orval's generated response parsing and `override.fetch.runtimeValidation` path. Generation uses Zod-backed schemas, enables Fetch runtime validation, and makes non-success HTTP responses reject so TanStack Query receives an error. Before this configuration is applied to the full contract, a compatibility test must prove the pinned Orval version against representative JSON, discriminated union, empty `204`, scalar JSON, multipart, and binary operations. A generator defect blocks the affected contract shape; generated files are not post-processed or patched.
+Generation follows Orval's documented `Client with Zod` pattern with two outputs:
+
+- A React Query client using Orval's built-in Fetch transport, ordinary generated TypeScript models, operations, query keys/options/hooks, and MSW artifacts.
+- A separate `client: "zod"` output for generated request and response schemas.
+
+The React Query output does not enable `override.fetch.runtimeValidation`. Orval 8.24 does not officially integrate automatic Fetch response validation with the React Query client and emits invalid imports for that combination. Generated Zod schemas are used explicitly by feature code only when untrusted data needs runtime parsing, such as form values, persisted browser data, imported files, or variable third-party payloads. Normal Dashboard API responses rely on API-side OpenAPI contract tests plus generated static types until Orval provides an officially supported automatic integration. Generated files are never post-processed or patched.
 
 Alternative generators were considered. The `openapi-typescript` stack produces less generated code but leaves operation calls and multipart behavior handwritten. Hey API remains pre-1.0 and has a higher breaking-change risk. Kubb's stable and next-generation lines are in transition. Orval is a project-specific selection, not an industry standard.
 
@@ -240,9 +245,9 @@ TanStack Query owns synchronization. Pure state functions own interpretation. Pr
 
 Forms use React Hook Form directly. The e-INFRA design system's `Form` components provide RHF-aware field composition but do not replace RHF state management.
 
-Zod is used at two boundaries:
+Zod is used at explicit runtime boundaries:
 
-- Generated Zod schemas validate successful API responses before cache insertion.
+- Generated Zod schemas validate untrusted values when a feature requires runtime parsing. They are not automatically applied to every Query response.
 - Feature-local Zod schemas describe form rules that are stricter, conditional, or differently shaped from wire requests.
 
 Generated request schemas are reused when a form and request have the same shape and user-facing validation semantics. UI schemas are not forced to mirror multipart payloads or transport details. Multipart conversion and request mapping occur at the submit boundary, not inside visual controls.
@@ -456,7 +461,7 @@ Implementation follows dependency direction:
 
 1. Establish the root pnpm workspace, one lockfile, pinned Node/pnpm/TypeScript 7 versions, root commands, Oxlint, and retained Prettier policy.
 2. Add the API-owned full OpenAPI contract and API-side contract validation.
-3. Prove the pinned Orval Fetch/React Query/Zod configuration against representative contract shapes, then configure full generation, runtime response validation, committed output, and CI drift checks.
+3. Configure the documented separate Orval React Query/Fetch and Zod outputs, committed generation, representative transport tests, and CI drift checks.
 4. Establish the generic SPA skeleton: runtime config, e-INFRA setup, providers, file-based router, Query integration, global boundaries, tests, and import rules.
 5. Introduce feature modules only through separately approved feature or design-mock specifications.
 
@@ -474,7 +479,7 @@ The architecture is operational when:
 - The full Dashboard API contract validates, and its method/path inventory exactly matches Flask's registered Dashboard API routes.
 - Every documented status/media-type pair has a named API-side contract test.
 - Orval output regenerates deterministically, has no manual edits, and compiles.
-- Generated contract-shape tests cover JSON, a discriminated union, empty `204`, scalar JSON, multipart, and binary operations. Structured JSON is Zod-validated before entering Query; malformed JSON reaches Query as an error.
+- Generated contract-shape tests cover JSON, a discriminated union, empty `204`, scalar JSON, multipart, and binary operations. Explicit Zod boundary tests prove generated schemas accept valid values and reject malformed values where runtime parsing is required.
 - A generated operation demonstrably uses the initialized runtime base URL and same-origin cookies, passes through TanStack Query and generated MSW, and presents an RFC 9457 response as `ApiError`.
 - Runtime configuration and routing pass at both `/` and the representative nested base path `/user/test-user/dash/`, including direct load and refresh.
 - TanStack file-based routing and route-tree drift checks are operational.

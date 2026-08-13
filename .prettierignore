@@ -1,0 +1,7 @@
+**/node_modules/
+**/dist/
+**/*.tsbuildinfo
+pnpm-lock.yaml
+dashboard/ui/src/api/generated/
+dashboard/ui/src/routeTree.gen.ts
+notebook/jupyterlab-pipeline-tracker/jupyterlab_pipeline_tracker/labextension/
