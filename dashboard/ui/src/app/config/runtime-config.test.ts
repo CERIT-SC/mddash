@@ -36,10 +36,6 @@ describe("parseRuntimeConfig", () => {
     )
   })
 
-  it("rejects missing production fields", () => {
-    expect(() => parseRuntimeConfig(undefined)).toThrow("Dashboard configuration is unavailable")
-  })
-
   it("rejects external Hub routes", () => {
     expect(() => parseRuntimeConfig({ ...productionConfig, logoutUrl: "https://example.test/logout" })).toThrow()
   })

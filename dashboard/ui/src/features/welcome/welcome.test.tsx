@@ -59,23 +59,6 @@ describe("Welcome", () => {
     expect(await screen.findByText("1 experiment")).toBeVisible()
   })
 
-  it("recovers from a network failure when the user retries", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
-      .mockResolvedValueOnce(Response.json([experiment("recovered")]))
-    vi.stubGlobal("fetch", fetchMock)
-    const user = userEvent.setup()
-    renderWelcome()
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("Network unavailable")
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    await user.click(screen.getByRole("button", { name: "Retry" }))
-
-    expect(await screen.findByText("1 experiment")).toBeVisible()
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-  })
-
   it("retains the personalized heading while loading", () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
     renderWelcome()

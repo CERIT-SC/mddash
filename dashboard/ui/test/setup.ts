@@ -1,10 +1,10 @@
 import "@testing-library/jest-dom/vitest"
 
 import { cleanup } from "@testing-library/react"
+import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, vi } from "vitest"
 
-import { server } from "./server"
-
+const server = setupServer()
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const storage = new Map<string, string>()
@@ -30,12 +30,14 @@ beforeAll(() => {
   }
   window.scrollTo = () => undefined
 })
+
 afterEach(() => {
   cleanup()
   server.resetHandlers()
-  window.localStorage.clear()
+  localStorage.clear()
   document.documentElement.classList.remove("dark")
   document.documentElement.style.colorScheme = ""
   vi.unstubAllGlobals()
 })
+
 afterAll(() => server.close())

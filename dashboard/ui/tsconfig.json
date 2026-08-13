@@ -34,6 +34,7 @@
   },
   "include": [
     "src",
+    "test",
     "vite.config.ts",
     "orval.config.ts"
   ]

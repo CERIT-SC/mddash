@@ -28,7 +28,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
-    setupFiles: ["./src/shared/testing/setup.ts"],
+    setupFiles: ["./test/setup.ts"],
   },
   server: {
     host: "0.0.0.0",
