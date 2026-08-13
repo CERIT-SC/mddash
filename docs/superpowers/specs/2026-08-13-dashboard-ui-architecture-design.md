@@ -45,7 +45,7 @@ The Flask Dashboard API has no OpenAPI document or automatic schema generation. 
 | TypeScript | Stable TypeScript 7.0 across the active workspace. |
 | Linting | Type-aware Oxlint with the matching `oxlint-tsgolint`; independent TypeScript checking remains required. |
 | Formatting | Keep Prettier initially. Evaluate Oxfmt later in an isolated tooling change. |
-| Testing | Vitest unit tests, Testing Library/MSW integration tests, and a small Playwright E2E suite. |
+| Testing | Vitest unit tests and Testing Library component integration tests. |
 
 ## Considered Architecture Approaches
 
@@ -124,7 +124,7 @@ This tree specifies architecture, not product features. `features/` is intention
 - Start product code in the feature that owns the user capability.
 - Keep feature-specific components, forms, Query policies, derived state, and tests together.
 - Keep routes limited to URL concerns, route lifecycle, and feature entry-point selection.
-- Keep tests beside the code they verify. Introduce top-level `e2e/` only when cross-route browser workflows are implemented.
+- Keep tests beside the code they verify; global test-runner setup belongs in `test/`.
 - Put code in `shared` only when reuse is demonstrated or the responsibility is inherently application-wide.
 - `shared/ui` composes e-INFRA primitives; it does not mirror or replace the design system.
 - Generated files are never manually edited.
@@ -382,7 +382,7 @@ Generator-owned files compile but are excluded from manual lint fixes or other t
 
 ## Testing Strategy
 
-The test suite follows a pyramid: many unit tests, more focused integration tests, and few E2E tests.
+The UI test suite uses focused unit and component integration tests.
 
 ### Unit tests
 
@@ -400,36 +400,6 @@ Vitest verifies pure logic without rendering React, including:
 Vitest, Testing Library, and MSW carry most UI behavior coverage. Tests render routes or feature entry points with realistic application providers. Generated MSW handlers provide contract-shaped defaults; scenario behavior and assertions remain handwritten.
 
 Integration tests cover forms, Query behavior, invalidation, polling termination, routing interactions, and loading, stale, empty, failure, and retry states. Tests query by semantic role and accessible name rather than implementation details or CSS classes.
-
-### End-to-end tests
-
-Playwright covers only critical user journeys and browser/deployment behavior that lower levels cannot prove, including:
-
-- Representative multi-step workflows.
-- Runtime base paths.
-- Refresh and back/forward URL restoration.
-- File upload and download behavior.
-- OAuth browser navigation.
-- Responsive behavior.
-- Representative accessibility and focus flows.
-
-Playwright tests follow these rules:
-
-- Every test creates or resets its own data and can run independently and in parallel.
-- Prefer `getByRole` and `getByLabel`; use `data-testid` only when no stable user-facing locator exists.
-- Never select by CSS class or DOM position.
-- Assert user-visible outcomes, not React, Query, or API internals.
-- Never use fixed sleeps; wait for observable UI, URL, response, or state transitions.
-- Use fixtures for repeated environment and data setup.
-- Introduce small page/component objects only when they remove meaningful interaction duplication.
-- Mock external and expensive nondeterministic services.
-- Keep a small real Dashboard API suite against the demo/test environment.
-- Do not duplicate the complete OpenAPI contract suite in browser tests.
-- Collect traces, screenshots, and videos on CI failure or retry.
-- Treat retries as diagnostic evidence, not a solution to flaky tests.
-- Run critical flows at desktop and mobile widths; add cross-browser coverage where platform behavior matters.
-
-API contract compliance is tested API-side against OpenAPI, not through E2E tests.
 
 ## Agentic-First Maintainability
 
@@ -476,7 +446,7 @@ The architecture is operational when:
 - A generated operation demonstrably uses the initialized runtime base URL and same-origin cookies, passes through TanStack Query and generated MSW, and presents an RFC 9457 response as `ApiError`.
 - Runtime configuration and routing pass at both `/` and the representative nested base path `/user/test-user/dash/`, including direct load and refresh.
 - TanStack file-based routing and route-tree drift checks are operational.
-- Unit and integration suites run in CI. The Playwright architecture smoke suite loads the root route at the nested base path, renders the invalid-config state, and renders route-not-found.
+- Unit and component integration suites run in CI.
 - e-INFRA setup and pre-render theme restoration pass visual and accessibility assertions. Import and source checks reject copied primitive modules, raw color literals, and generic Tailwind palette colors outside approved third-party adapter styles.
 - Import restrictions prevent upward dependencies and feature cycles; generated imports use the Orval entry points documented above.
 
