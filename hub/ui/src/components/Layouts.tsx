@@ -1,11 +1,16 @@
 import type { ReactNode } from "react"
 
-import { Toaster } from "@e-infra/design-system"
+import { Content, Toaster } from "@e-infra/design-system"
 
 import { Announcement } from "./Announcement"
 import { HubHeader } from "./HubHeader"
 import { Logo } from "./Logo"
 import { ThemeToggle } from "./ThemeToggle"
+
+/** Wide content column for data pages (token, admin). */
+export function PageBody({ children }: { children: ReactNode }) {
+  return <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">{children}</div>
+}
 
 /** Standard authenticated page: header with nav, optional announcement, centered content column. */
 export function AuthedLayout({
@@ -35,7 +40,9 @@ export function AuthedLayout({
         current={current}
       />
       <Announcement html={announcement} />
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-4 py-6 md:px-6 md:py-8">{children}</main>
+      <main className="bg-background flex flex-1 flex-col">
+        <Content className="flex flex-1 flex-col">{children}</Content>
+      </main>
       <Toaster />
     </div>
   )

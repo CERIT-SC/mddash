@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 
-import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, P } from "@e-infra/design-system"
-import { ExternalLink, Play, Square } from "lucide-react"
+import { Button, H1, Muted } from "@e-infra/design-system"
+import { Atom, ExternalLink, Play, Square } from "lucide-react"
 import { toast } from "sonner"
 
+import { HeroHeading, PageHero, START_HINT, StatusIcon } from "../components/Hero"
 import { AuthedLayout } from "../components/Layouts"
 import { HubApi, type HubUserModel } from "../lib/api"
 import { getAppConfig } from "../lib/config"
@@ -41,21 +42,18 @@ export function HomePage() {
     void refresh()
   }, [refresh])
 
-  // Poll while the server is in a transitional state.
   const server = user?.servers?.[""]
   const liveStatus: ServerStatus = user ? serverStatus(server) : cfg.defaultServerActive ? "running" : "stopped"
   const status = optimistic ?? liveStatus
   const serverUrl = cfg.serverUrl || `${cfg.baseUrl}user/${encodeURIComponent(cfg.userName)}/`
 
-  const isTransitioning = status === "starting" || status === "stopping"
+  // Route both transitions to spawn-pending (the hub picks the pending template);
+  // never the user server URL — the dying proxy serves errors.
   useEffect(() => {
-    if (!isTransitioning) return
-    if (status === "starting") {
-      window.location.href = `${cfg.baseUrl}spawn-pending/${encodeURIComponent(cfg.userName)}`
-    } else {
+    if (status === "starting" || status === "stopping") {
       window.location.href = `${cfg.baseUrl}spawn-pending/${encodeURIComponent(cfg.userName)}`
     }
-  }, [isTransitioning, status, cfg.baseUrl, cfg.userName])
+  }, [status, cfg.baseUrl, cfg.userName])
 
   const start = useCallback(() => {
     setBusy(true)
@@ -86,43 +84,49 @@ export function HomePage() {
       current="home"
       announcement={cfg.announcement}
     >
-      <Card className="mx-auto w-full max-w-xl">
-        <CardHeader>
-          <CardTitle>My server</CardTitle>
-          <CardDescription>Launch or stop your personal computing pod</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <P className="mb-0">Status:</P>
-            {status === "running" ? <Badge className="bg-success text-success-foreground">Running</Badge> : null}
-            {status === "starting" ? <Badge variant="secondary">Starting…</Badge> : null}
-            {status === "stopping" ? <Badge variant="secondary">Stopping…</Badge> : null}
-            {status === "stopped" ? <Badge variant="secondary">Stopped</Badge> : null}
-          </div>
+      <PageHero>
+        <StatusIcon tone={status === "running" ? "success" : "primary"} icon={Atom} />
 
-          {status === "running" ? (
-            <>
-              <Button size="lg" asChild>
-                <a href={serverUrl} className="no-underline">
-                  <ExternalLink size={16} />
-                  Open my server
-                </a>
-              </Button>
-              <Button size="lg" variant="error" onClick={stop} disabled={busy}>
-                <Square size={16} />
-                Stop my server
-              </Button>
-            </>
-          ) : null}
+        <HeroHeading>
+          <H1>
+            {status === "running" ? "Your server is running" : null}
+            {status === "stopped" ? "Your server is offline" : null}
+            {status === "starting" ? "Starting your server…" : null}
+            {status === "stopping" ? "Stopping your server…" : null}
+          </H1>
+          <Muted className="text-base">
+            {status === "running" ? "Your personal notebook environment is up." : null}
+            {status === "stopped" ? "Your personal notebook server is not running." : null}
+            {status === "starting" ? "You will be redirected automatically when it's ready for you." : null}
+            {status === "stopping" ? "You can start it again once it has finished stopping." : null}
+          </Muted>
+        </HeroHeading>
 
-          {status === "stopped" ? (
+        {status === "running" ? (
+          <>
+            <Button size="lg" asChild>
+              <a href={serverUrl} className="no-underline">
+                <ExternalLink size={16} />
+                Open my server
+              </a>
+            </Button>
+            <Button variant="error" size="sm" onClick={stop} disabled={busy}>
+              <Square size={16} />
+              Stop my server
+            </Button>
+          </>
+        ) : null}
+
+        {status === "stopped" ? (
+          <>
             <Button size="lg" onClick={start} disabled={busy}>
               <Play size={16} />
               Start my server
             </Button>
-          ) : null}
-        </CardContent>
-      </Card>
+            <Muted>{START_HINT}</Muted>
+          </>
+        ) : null}
+      </PageHero>
     </AuthedLayout>
   )
 }

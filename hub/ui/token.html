@@ -15,7 +15,7 @@
         userName: {{ user.name | tojson }},
         xsrf: {{ xsrf_token | default("") | tojson }},
         logoutUrl: {{ logout_url | default("") | tojson }},
-        adminAccess: {{ admin_access | default(false) | tojson }},
+        adminAccess: {{ admin_access | default(user.admin) | default(false) | tojson }},
         announcement: {{ announcement | default(none) | tojson }},
         tokenExpiresInOptionsHtml: {{ token_expires_in_options_html | default("") | tojson }},
         {% if oauth_clients %}

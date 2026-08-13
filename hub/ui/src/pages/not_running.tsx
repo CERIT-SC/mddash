@@ -1,8 +1,18 @@
 import { useEffect } from "react"
 
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, P } from "@e-infra/design-system"
-import { RefreshCw, Rocket } from "lucide-react"
+import { Button, H1, Lead, Muted, Separator } from "@e-infra/design-system"
+import { Atom, Play, RefreshCw, TriangleAlert } from "lucide-react"
 
+import {
+  DetailsLog,
+  FAILED_LEAD,
+  HeroHeading,
+  LogEntry,
+  PageHero,
+  START_HINT,
+  StatusIcon,
+  SupportNote,
+} from "../components/Hero"
 import { AuthedLayout } from "../components/Layouts"
 import { DEV_FALLBACK_BASE_URL, getAppConfig } from "../lib/config"
 import { mount } from "../lib/mount"
@@ -17,6 +27,7 @@ interface NotRunningConfig {
   implicitSpawnSeconds: number
 }
 
+/** Plain "stopped" is handled by /hub/home; this renders only failed spawns and implicit-spawn countdowns. */
 export function NotRunningPage() {
   const cfg = getAppConfig<NotRunningConfig>({
     failed: false,
@@ -26,6 +37,14 @@ export function NotRunningPage() {
     failedHtmlMessage: null,
     implicitSpawnSeconds: 0,
   })
+
+  const redirect = !cfg.failed && cfg.implicitSpawnSeconds === 0
+
+  useEffect(() => {
+    if (redirect) {
+      window.location.replace(`${cfg.baseUrl}home`)
+    }
+  }, [redirect, cfg.baseUrl])
 
   // Mirror the stock not_running.html: auto-relaunch on implicit spawn.
   useEffect(() => {
@@ -37,6 +56,12 @@ export function NotRunningPage() {
     }
   }, [cfg.implicitSpawnSeconds, cfg.spawnUrl])
 
+  if (redirect) {
+    return null
+  }
+
+  const serverLabel = cfg.serverName ? ` ${cfg.serverName}` : ""
+
   return (
     <AuthedLayout
       baseUrl={cfg.baseUrl}
@@ -45,42 +70,47 @@ export function NotRunningPage() {
       logoutUrl={cfg.logoutUrl}
       announcement={cfg.announcement}
     >
-      <Card className="mx-auto w-full max-w-lg">
-        <CardHeader>
-          <CardTitle>{cfg.failed ? "Spawn failed" : "Server not running"}</CardTitle>
-          <CardDescription>
-            {cfg.failed ? "The latest launch attempt did not succeed" : "Your workspace is offline"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+      <PageHero>
+        <StatusIcon tone={cfg.failed ? "error" : "primary"} icon={cfg.failed ? TriangleAlert : Atom} />
+
+        <HeroHeading>
+          <H1>{cfg.failed ? "Failed to start your server" : "Your server is offline"}</H1>
           {cfg.failed ? (
-            <>
-              <P>
-                The latest attempt to start your server{cfg.serverName ? ` ${cfg.serverName}` : ""} has failed. Would
-                you like to retry starting it?
-              </P>
-              {cfg.failedHtmlMessage ? (
-                <P className="text-text-muted" dangerouslySetInnerHTML={{ __html: cfg.failedHtmlMessage }} />
-              ) : cfg.failedMessage ? (
-                <P className="text-text-muted">{cfg.failedMessage}</P>
-              ) : null}
-            </>
+            <Lead>{FAILED_LEAD}</Lead>
           ) : (
-            <P>
-              Your server{cfg.serverName ? ` ${cfg.serverName}` : ""} is not running.
-              {cfg.implicitSpawnSeconds > 0
-                ? " It will be restarted automatically. If you are not redirected in a few seconds, click below to launch it."
-                : " Would you like to start it?"}
-            </P>
+            <Muted className="text-base">{`Your personal notebook server${serverLabel} is not running.`}</Muted>
           )}
-          <Button size="lg" className="w-full" asChild>
-            <a href={cfg.spawnUrl} className="no-underline">
-              {cfg.failed ? <RefreshCw size={16} /> : <Rocket size={16} />}
-              {cfg.failed ? "Relaunch" : "Launch"} server{cfg.serverName ? ` ${cfg.serverName}` : ""}
-            </a>
-          </Button>
-        </CardContent>
-      </Card>
+        </HeroHeading>
+
+        {!cfg.failed && cfg.implicitSpawnSeconds > 0 ? (
+          <Muted>It will be restarted automatically. If you are not redirected in a few seconds, click below.</Muted>
+        ) : null}
+
+        <Button size="lg" asChild>
+          <a href={cfg.spawnUrl} className="no-underline">
+            {cfg.failed ? <RefreshCw size={16} /> : <Play size={16} />}
+            {cfg.failed ? "Try again" : "Start my server"}
+          </a>
+        </Button>
+
+        {cfg.failed ? <SupportNote /> : null}
+
+        {cfg.failed ? <Separator className="w-full" /> : null}
+
+        {cfg.failed ? (
+          <DetailsLog open summary="Event log">
+            {cfg.failedHtmlMessage ? (
+              <LogEntry html={cfg.failedHtmlMessage} />
+            ) : cfg.failedMessage ? (
+              <LogEntry>{cfg.failedMessage}</LogEntry>
+            ) : (
+              <LogEntry>No failure details available.</LogEntry>
+            )}
+          </DetailsLog>
+        ) : null}
+
+        {!cfg.failed ? <Muted>{START_HINT}</Muted> : null}
+      </PageHero>
     </AuthedLayout>
   )
 }

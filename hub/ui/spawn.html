@@ -15,7 +15,7 @@
         userName: {{ user.name | tojson }},
         xsrf: {{ xsrf_token | default("") | tojson }},
         logoutUrl: {{ logout_url | default("") | tojson }},
-        adminAccess: {{ admin_access | default(false) | tojson }},
+        adminAccess: {{ admin_access | default(user.admin) | default(false) | tojson }},
         {% if announcement_spawn is string %}
         announcement: {{ announcement_spawn | default(none) | tojson }},
         {% else %}
@@ -23,7 +23,7 @@
         {% endif %}
         url: {{ url | default("") | tojson }},
         errorMessage: {{ error_message | default(none) | tojson }},
-        errorHtmlMessage: {{ error_html_message | default(none) | tojson }},
+        errorHtmlMessage: {{ html_error_message | default(none) | tojson }},
         optionsForm: {{ spawner_options_form | default("") | tojson }}
       };
     </script>

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
 
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@e-infra/design-system"
-import { LoaderCircle, RefreshCw } from "lucide-react"
+import { Button, H1, Muted } from "@e-infra/design-system"
+import { Atom, RefreshCw } from "lucide-react"
 
+import { HeroHeading, PageHero, StatusIcon, WaitHint } from "../components/Hero"
 import { AuthedLayout } from "../components/Layouts"
 import { HubApi } from "../lib/api"
 import { getAppConfig } from "../lib/config"
@@ -39,24 +40,23 @@ export function StopPendingPage() {
       logoutUrl={cfg.logoutUrl}
       announcement={cfg.announcement}
     >
-      <Card className="mx-auto w-full max-w-xl">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <LoaderCircle className="text-primary animate-spin" size={20} />
-            Your server is stopping
-          </CardTitle>
-          <CardDescription>You can start it again once it has finished stopping</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col items-start gap-4">
-          <p className="text-text-muted text-sm">This usually takes a few seconds…</p>
-          {elapsed >= 30 ? (
-            <Button variant="secondary" onClick={() => window.location.reload()}>
-              <RefreshCw size={16} />
-              Refresh
-            </Button>
-          ) : null}
-        </CardContent>
-      </Card>
+      <PageHero>
+        <StatusIcon tone="primary" icon={Atom} />
+
+        <HeroHeading>
+          <H1>Stopping your server…</H1>
+          <Muted className="text-base">You can start it again once it has finished stopping.</Muted>
+        </HeroHeading>
+
+        <WaitHint>This usually takes a few seconds</WaitHint>
+
+        {elapsed >= 30 ? (
+          <Button variant="secondary" size="sm" onClick={() => window.location.reload()}>
+            <RefreshCw size={16} />
+            Refresh
+          </Button>
+        ) : null}
+      </PageHero>
     </AuthedLayout>
   )
 }

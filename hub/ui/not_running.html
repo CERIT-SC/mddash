@@ -14,7 +14,7 @@
         baseUrl: {{ base_url | default("") | tojson }},
         userName: {{ user.name | tojson }},
         logoutUrl: {{ logout_url | default("") | tojson }},
-        adminAccess: {{ admin_access | default(false) | tojson }},
+        adminAccess: {{ admin_access | default(user.admin) | default(false) | tojson }},
         announcement: {{ announcement | default(none) | tojson }},
         failed: {{ failed | default(false) | tojson }},
         serverName: {{ server_name | default("") | tojson }},

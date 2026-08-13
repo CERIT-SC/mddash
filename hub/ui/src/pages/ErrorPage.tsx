@@ -1,8 +1,9 @@
 import { useEffect } from "react"
 
-import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, P } from "@e-infra/design-system"
+import { Button, Card, CardContent, P } from "@e-infra/design-system"
 import { Home, TriangleAlert } from "lucide-react"
 
+import { IconCardHeader } from "../components/IconCard"
 import { CenteredLayout } from "../components/Layouts"
 import { getAppConfig } from "../lib/config"
 
@@ -59,15 +60,12 @@ export function ErrorPage({ notFound = false }: { notFound?: boolean }) {
   return (
     <CenteredLayout announcement={cfg.announcement}>
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TriangleAlert className="text-warning" size={20} />
-            {friendlyTitle}
-          </CardTitle>
-          <CardDescription>
-            {cfg.statusCode} {cfg.statusMessage}
-          </CardDescription>
-        </CardHeader>
+        <IconCardHeader
+          icon={TriangleAlert}
+          tone="warning"
+          title={friendlyTitle}
+          description={`${cfg.statusCode} ${cfg.statusMessage}`}
+        />
         <CardContent className="flex flex-col gap-4">
           {cfg.messageHtml ? (
             <P dangerouslySetInnerHTML={{ __html: cfg.messageHtml }} />

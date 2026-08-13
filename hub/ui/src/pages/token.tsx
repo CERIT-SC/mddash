@@ -3,6 +3,15 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Alert,
   AlertDescription,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
   AlertTitle,
   Button,
   Card,
@@ -29,7 +38,8 @@ import {
 import { Check, Copy, KeyRound, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { AuthedLayout } from "../components/Layouts"
+import { IconCardHeader } from "../components/IconCard"
+import { AuthedLayout, PageBody } from "../components/Layouts"
 import { HubApi, type HubTokenModel } from "../lib/api"
 import { getAppConfig } from "../lib/config"
 import { formatTime } from "../lib/format"
@@ -62,6 +72,38 @@ function parseExpiryOptions(html: string): ExpiryOption[] {
     value: o.getAttribute("value") ?? "",
     label: o.textContent?.trim() ?? "",
   }))
+}
+
+/** Revoke is irreversible (scripts using the token lose access) — always confirm first. */
+function RevokeButton({ revoke }: { revoke: () => void }) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="sm" variant="error">
+          <Trash2 size={14} />
+          Revoke
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Revoke this token?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Applications and scripts using this token will lose access immediately and cannot be restored. Revoking a
+            token for a running server requires restarting that server.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={revoke}
+            className="bg-error hover:bg-error/90 focus-visible:ring-error/20 text-error-foreground border-error"
+          >
+            Revoke
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
 }
 
 export function TokenPage() {
@@ -152,15 +194,13 @@ export function TokenPage() {
       current="token"
       announcement={cfg.announcement}
     >
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+      <PageBody>
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <KeyRound className="text-primary" size={20} />
-              New API token
-            </CardTitle>
-            <CardDescription>Create a token for scripts and command-line access</CardDescription>
-          </CardHeader>
+          <IconCardHeader
+            icon={KeyRound}
+            title="New API token"
+            description="Create a token for scripts and command-line access"
+          />
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="token-note">Note</Label>
@@ -228,7 +268,6 @@ export function TokenPage() {
         <Card>
           <CardHeader>
             <CardTitle>API tokens</CardTitle>
-            {/* mirroring the stock token.html copy */}
             <CardDescription>
               Tokens with access to the JupyterHub API. Revoking a token for a running server requires restarting that
               server.
@@ -269,10 +308,7 @@ export function TokenPage() {
                         <TableCell>{t.created ? formatTime(t.created) : "N/A"}</TableCell>
                         <TableCell>{formatTime(t.expires_at)}</TableCell>
                         <TableCell>
-                          <Button size="sm" variant="error" onClick={() => revokeToken(t.id)}>
-                            <Trash2 size={14} />
-                            Revoke
-                          </Button>
+                          <RevokeButton revoke={() => revokeToken(t.id)} />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -302,10 +338,7 @@ export function TokenPage() {
                           <TableCell className="text-text-muted text-sm">{formatTime(t.last_activity)}</TableCell>
                           <TableCell className="text-text-muted text-sm">{formatTime(t.created)}</TableCell>
                           <TableCell>
-                            <Button size="sm" variant="error" onClick={() => revokeToken(t.id)}>
-                              <Trash2 size={14} />
-                              Revoke
-                            </Button>
+                            <RevokeButton revoke={() => revokeToken(t.id)} />
                           </TableCell>
                         </TableRow>
                       ))}
@@ -354,10 +387,7 @@ export function TokenPage() {
                         <TableCell>{formatTime(c.lastActivity)}</TableCell>
                         <TableCell>{formatTime(c.created)}</TableCell>
                         <TableCell>
-                          <Button size="sm" variant="error" onClick={() => revokeToken(c.tokenId)}>
-                            <Trash2 size={14} />
-                            Revoke
-                          </Button>
+                          <RevokeButton revoke={() => revokeToken(c.tokenId)} />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -367,7 +397,7 @@ export function TokenPage() {
             </CardContent>
           </Card>
         ) : null}
-      </div>
+      </PageBody>
     </AuthedLayout>
   )
 }
