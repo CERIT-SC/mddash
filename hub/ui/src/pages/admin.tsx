@@ -227,6 +227,7 @@ export function AdminPage() {
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction
+                                      className="bg-error hover:bg-error/90 focus-visible:ring-error/20 text-error-foreground border-error"
                                       onClick={() =>
                                         run(user.name, () => api.deleteUser(user.name), `User ${user.name} deleted.`)
                                       }

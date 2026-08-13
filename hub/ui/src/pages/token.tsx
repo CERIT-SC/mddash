@@ -94,7 +94,12 @@ function RevokeButton({ revoke }: { revoke: () => void }) {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={revoke}>Revoke</AlertDialogAction>
+          <AlertDialogAction
+            onClick={revoke}
+            className="bg-error hover:bg-error/90 focus-visible:ring-error/20 text-error-foreground border-error"
+          >
+            Revoke
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
