@@ -5,7 +5,7 @@
   "packageManager": "pnpm@11.13.0",
   "scripts": {
     "api:generate": "pnpm --filter dash api:generate",
-    "api:check": "pnpm --filter dash api:check",
+    "generated:check": "pnpm --filter dash generated:check",
     "build:ui": "pnpm --filter dash build",
     "build:landing": "pnpm --filter landing build",
     "build:hub-ui": "pnpm --filter hub-ui build",

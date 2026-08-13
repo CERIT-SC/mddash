@@ -24,6 +24,9 @@ export default defineConfig({
         generators: [{ type: "msw", operationResponses: false }],
       },
       override: {
+        fetch: {
+          forceSuccessResponse: true,
+        },
         requestOptions: {
           credentials: "same-origin",
         },

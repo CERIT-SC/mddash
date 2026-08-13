@@ -1,6 +1,7 @@
+import { useState } from "react"
+
 import purpleLogo from "@/assets/einfra-purple.svg"
 import whiteLogo from "@/assets/einfra-white.svg"
-import { useTheme } from "@/shared/hooks/use-theme"
 import {
   Button,
   Header,
@@ -23,7 +24,17 @@ type SiteHeaderProps = {
 }
 
 export function SiteHeader({ user, hubHomeUrl, hubTokenUrl, logoutUrl }: SiteHeaderProps) {
-  const { isDark, toggleTheme } = useTheme()
+  const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"))
+
+  function toggleTheme() {
+    const next = !isDark
+    document.documentElement.classList.toggle("dark", next)
+    document.documentElement.style.colorScheme = next ? "dark" : "light"
+    try {
+      localStorage.setItem("theme", next ? "dark" : "light")
+    } catch {}
+    setIsDark(next)
+  }
   return (
     <Header>
       <HeaderContent>
@@ -33,7 +44,7 @@ export function SiteHeader({ user, hubHomeUrl, hubTokenUrl, logoutUrl }: SiteHea
             <img src={whiteLogo} alt="" className="hidden h-7 w-auto dark:block" />
             <span className="text-text-muted text-sm">MDDash</span>
           </Link>
-          <NavigationMenu className="ml-4">
+          <NavigationMenu className="ml-4 hidden md:flex">
             <NavigationMenuList>
               <NavigationMenuItem>
                 <NavigationMenuLink href={hubHomeUrl}>Home</NavigationMenuLink>
@@ -55,9 +66,9 @@ export function SiteHeader({ user, hubHomeUrl, hubTokenUrl, logoutUrl }: SiteHea
           </Button>
           <span className="text-text-muted hidden text-sm sm:inline">{user}</span>
           <Button variant="outline" size="sm" asChild>
-            <a href={logoutUrl} className="no-underline">
+            <a href={logoutUrl} aria-label="Log out" className="no-underline">
               <LogOut size={14} />
-              Log out
+              <span className="hidden sm:inline">Log out</span>
             </a>
           </Button>
         </HeaderRight>

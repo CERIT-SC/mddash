@@ -1,10 +1,10 @@
 export let API_RUNTIME_BASE_URL = ""
 
-export function deploymentPrefix(basePath: string): string {
-  if (!basePath.endsWith("/dash")) throw new Error("basePath must end with /dash")
-  return basePath.slice(0, -"/dash".length)
+export function deploymentPrefix(apiPath: string): string {
+  if (!apiPath.endsWith("/dash/api")) throw new Error("apiPath must end with /dash/api")
+  return apiPath.slice(0, -"/dash/api".length)
 }
 
-export function initializeApiRuntime(basePath: string): void {
-  API_RUNTIME_BASE_URL = deploymentPrefix(basePath)
+export function initializeApiRuntime(apiPath: string): void {
+  API_RUNTIME_BASE_URL = deploymentPrefix(apiPath)
 }

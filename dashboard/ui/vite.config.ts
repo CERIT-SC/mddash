@@ -5,7 +5,6 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
-// https://vite.dev/config/
 export default defineConfig({
   base: "./",
   plugins: [
@@ -17,8 +16,6 @@ export default defineConfig({
             routesDirectory: "./src/routes",
             generatedRouteTree: "./src/routeTree.gen.ts",
             routeFileIgnorePattern: "\\.test\\.",
-            quoteStyle: "double",
-            semicolons: false,
           }),
         ]),
     react(),
@@ -33,8 +30,6 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/shared/testing/setup.ts"],
   },
-
-  // Dev server configuration
   server: {
     host: "0.0.0.0",
     port: 5173,

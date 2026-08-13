@@ -5,6 +5,8 @@ import { afterAll, afterEach, beforeAll, vi } from "vitest"
 
 import { server } from "./server"
 
+;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+
 const storage = new Map<string, string>()
 Object.defineProperty(window, "localStorage", {
   value: {
@@ -33,6 +35,7 @@ afterEach(() => {
   server.resetHandlers()
   window.localStorage.clear()
   document.documentElement.classList.remove("dark")
+  document.documentElement.style.colorScheme = ""
   vi.unstubAllGlobals()
 })
 afterAll(() => server.close())

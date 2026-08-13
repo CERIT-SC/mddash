@@ -1,11 +1,5 @@
 import { z } from "zod"
 
-declare global {
-  interface Window {
-    MDDASH_CONFIG?: unknown
-  }
-}
-
 const pathSchema = z
   .string()
   .min(1)
@@ -19,8 +13,8 @@ const runtimeConfigSchema = z
     basePath: pathSchema,
     apiPath: pathSchema,
     user: z.string().min(1),
-    defaultNotebooksRepo: z.string().min(1),
-    mdpositUrl: z.string().min(1),
+    defaultNotebooksRepo: z.url(),
+    mdpositUrl: z.url(),
     hubHomeUrl: hubRouteSchema,
     hubTokenUrl: hubRouteSchema,
     logoutUrl: hubRouteSchema,
@@ -31,14 +25,14 @@ const runtimeConfigSchema = z
     }
   })
 
-export type RuntimeConfig = z.infer<typeof runtimeConfigSchema>
+export type RuntimeConfig = Readonly<z.infer<typeof runtimeConfigSchema>>
 
 export function parseRuntimeConfig(value: unknown): RuntimeConfig {
   if (value === undefined) {
     throw new Error("Dashboard configuration is unavailable")
   }
 
-  return runtimeConfigSchema.parse(value)
+  return Object.freeze(runtimeConfigSchema.parse(value))
 }
 
 export const DEV_RUNTIME_CONFIG: RuntimeConfig = {

@@ -4,18 +4,18 @@ import { API_RUNTIME_BASE_URL, deploymentPrefix, initializeApiRuntime } from "./
 
 describe("deploymentPrefix", () => {
   it.each([
-    ["/dash", ""],
-    ["/user/test/dash", "/user/test"],
-  ])("derives the generated API prefix from %s", (basePath, expected) => {
-    expect(deploymentPrefix(basePath)).toBe(expected)
+    ["/dash/api", ""],
+    ["/user/test/dash/api", "/user/test"],
+  ])("derives the generated API prefix from %s", (apiPath, expected) => {
+    expect(deploymentPrefix(apiPath)).toBe(expected)
   })
 
-  it("rejects a base path without terminal /dash", () => {
-    expect(() => deploymentPrefix("/user/test")).toThrow("basePath must end with /dash")
+  it("rejects an unexpected API path", () => {
+    expect(() => deploymentPrefix("/user/test/api")).toThrow("apiPath must end with /dash/api")
   })
 
-  it("is initialized explicitly by the application composition root", () => {
-    initializeApiRuntime("/user/alice/dash")
+  it("initializes the generated client base URL", () => {
+    initializeApiRuntime("/user/alice/dash/api")
     expect(API_RUNTIME_BASE_URL).toBe("/user/alice")
   })
 })

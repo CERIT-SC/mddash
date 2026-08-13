@@ -48,7 +48,7 @@ jobs:
       - name: Type-check frontend workspace
         run: pnpm run type-check
       - name: Check Dashboard API client drift
-        run: pnpm run api:check
+        run: pnpm run generated:check
       - name: Test Dashboard UI
         run: pnpm run test:ui
       - name: Build Dashboard UI

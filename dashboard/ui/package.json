@@ -5,12 +5,12 @@
   "type": "module",
   "scripts": {
     "api:generate": "orval --config orval.config.ts",
-    "api:check": "pnpm api:generate && git diff --exit-code -- src/api/generated",
+    "generated:check": "pnpm api:generate && pnpm routes:generate && git diff --exit-code -- src/api/generated src/routeTree.gen.ts",
     "build": "vite build",
     "dev": "vite",
     "routes:generate": "tsr generate",
-    "test": "pnpm routes:generate && vitest run",
-    "type-check": "pnpm routes:generate && tsc --noEmit",
+    "test": "vitest run",
+    "type-check": "tsc --noEmit",
     "format": "prettier --ignore-path ../../.prettierignore --write --log-level warn \"src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --ignore-path ../../.prettierignore --check \"src/**/*.{ts,tsx,css}\""
   },

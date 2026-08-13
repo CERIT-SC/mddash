@@ -9,3 +9,5 @@
 - Keep feature UI, forms, Query policy, derived state, and tests together. Add shared abstractions only after real reuse is demonstrated.
 - Use React Hook Form and Zod for forms, URL state for shareable UI state, local state for transient interactions, and TanStack Query for server state.
 - Use only e-INFRA components and semantic tokens for application UI. Follow the design-mock workflow for missing design-system capabilities.
+- The inline `index.html` bootstrap sets the runtime `<base>` and theme before assets and CSS paint; later theme behavior belongs in React.
+- Runtime configuration is authenticated JSON generated with `jq`; never interpolate environment values into JavaScript.
