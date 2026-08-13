@@ -6,11 +6,13 @@ const pathSchema = z
   .startsWith("/")
   .transform((path) => (path === "/" ? path : path.replace(/\/+$/, "")))
 
+const dashboardPathSchema = pathSchema.refine((path) => path.endsWith("/dash"), "basePath must end with /dash")
+
 const hubRouteSchema = z.string().regex(/^\/hub\/[a-z-]+$/, "Hub routes must be root-relative /hub paths")
 
 const runtimeConfigSchema = z
   .object({
-    basePath: pathSchema,
+    basePath: dashboardPathSchema,
     apiPath: pathSchema,
     user: z.string().min(1),
     defaultNotebooksRepo: z.url(),

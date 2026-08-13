@@ -1,24 +1,12 @@
-import { toApiError } from "@/api/errors"
 import { useListExperiments } from "@/api/generated/client"
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  H1,
-  P,
-} from "@e-infra/design-system"
+import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
+import { Card, CardContent, CardHeader, CardTitle, H1, P } from "@e-infra/design-system"
 
 type WelcomeProps = { user: string }
 
 export function Welcome({ user }: WelcomeProps) {
   const query = useListExperiments({ query: { retry: false } })
   const response = query.data
-  const error = query.isError ? toApiError(query.error) : undefined
 
   let countLabel = "Loading experiment count"
   if (response?.status === 200) {
@@ -37,17 +25,8 @@ export function Welcome({ user }: WelcomeProps) {
           <CardTitle>Experiments</CardTitle>
         </CardHeader>
         <CardContent>
-          {error ? (
-            <Alert role="alert" variant="error">
-              <AlertTitle>{error.title}</AlertTitle>
-              <AlertDescription>
-                <p>{error.message}</p>
-                {error.type ? <p className="text-text-muted text-xs">Support ID: {error.type}</p> : null}
-                <Button className="mt-4" size="sm" onClick={() => void query.refetch()}>
-                  Retry
-                </Button>
-              </AlertDescription>
-            </Alert>
+          {query.isError ? (
+            <ApiErrorAlert error={query.error} onRetry={() => void query.refetch()} />
           ) : (
             <P aria-live="polite">{countLabel}</P>
           )}

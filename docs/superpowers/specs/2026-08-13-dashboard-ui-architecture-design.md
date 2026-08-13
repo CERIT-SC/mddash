@@ -101,25 +101,20 @@ dashboard/
     │   ├── features/                  # capability modules created as needed
     │   ├── api/
     │   │   ├── generated/
-    │   │   │   ├── client/           # generated operations and API types
-    │   │   │   ├── query/            # generated Query keys/options/hooks
+    │   │   │   ├── client/           # generated operations and Query hooks/options
+    │   │   │   ├── models/           # generated TypeScript contract models
     │   │   │   ├── schemas/          # generated Zod schemas
-    │   │   │   └── mocks/            # generated MSW handlers/factories
+    │   │   │   └── mocks/            # generated MSW handlers
     │   │   ├── runtime.ts            # initialized runtime URL and request policy
-    │   │   ├── errors.ts             # RFC 9457 normalization and ApiError
-    │   │   └── index.ts              # stable handwritten API policy exports
+    │   │   └── errors.ts             # stable handwritten API error policy
     │   ├── shared/
-    │   │   ├── ui/                   # reusable compositions of e-INFRA primitives
-    │   │   ├── lib/                  # cohesive framework-neutral helpers
-    │   │   ├── hooks/                # genuinely cross-feature React behavior
-    │   │   └── testing/              # render harnesses, fixtures, and MSW setup
+    │   │   └── ui/                   # proven reusable application compositions
     │   ├── assets/                    # source-controlled static assets
     │   └── routeTree.gen.ts           # generated TanStack route tree
-    ├── e2e/                           # cross-route Playwright workflows
+    ├── test/                          # global test-runner setup only
     ├── orval.config.ts                # OpenAPI generation configuration
-    ├── playwright.config.ts
     ├── vite.config.ts
-    └── vitest.config.ts
+    └── tsconfig.json
 ```
 
 This tree specifies architecture, not product features. `features/` is intentionally unexpanded. A feature starts flat and adds internal directories only when it contains independently understandable units. Empty ceremonial directories are not created.
@@ -129,14 +124,12 @@ This tree specifies architecture, not product features. `features/` is intention
 - Start product code in the feature that owns the user capability.
 - Keep feature-specific components, forms, Query policies, derived state, and tests together.
 - Keep routes limited to URL concerns, route lifecycle, and feature entry-point selection.
-- Keep tests beside the code they verify; reserve `e2e/` for workflows crossing route, browser, or deployment boundaries.
+- Keep tests beside the code they verify. Introduce top-level `e2e/` only when cross-route browser workflows are implemented.
 - Put code in `shared` only when reuse is demonstrated or the responsibility is inherently application-wide.
 - `shared/ui` composes e-INFRA primitives; it does not mirror or replace the design system.
-- `shared/lib` stays product-domain-neutral. Product rules stay in their owning feature.
-- `shared/hooks` is not the default destination for hooks. A hook moves there only when it is feature-independent.
 - Generated files are never manually edited.
 
-Application code imports generated artifacts only through the generated public barrel for each artifact class: `@/api/generated/client`, `@/api/generated/query`, `@/api/generated/schemas`, or `@/api/generated/mocks`. Deep imports into generated files are forbidden. Handwritten API policy is imported through `@/api`. This keeps generation discoverable without manually recreating a second operation-by-operation facade.
+Application code imports generated artifacts through Orval's generated entry points: `@/api/generated/client`, `@/api/generated/models`, `@/api/generated/schemas`, or `@/api/generated/mocks`. Handwritten transport and error policy remains under `@/api`. Generated implementation files are not edited or imported through undocumented deep paths.
 
 ## OpenAPI And Generated Client
 
@@ -322,7 +315,7 @@ The placement test is:
 
 The Dashboard remains a static Vite SPA served by the proxy under an arbitrary JupyterHub user base path. Deployment-specific URLs and user identity are not build-time variables.
 
-A runtime configuration schema validates `window.MDDASH_CONFIG` before application providers are created and exposes one immutable configuration object. Missing production fields fail visibly. Local development uses an explicit development configuration rather than interpreting absent configuration as a general-purpose debug flag. The composition root initializes `api/runtime.ts` with the validated API URL; the API layer never reads application configuration directly.
+The proxy generates JSON-safe runtime configuration at container startup and serves it through the authenticated `runtime-config.json` route with `Cache-Control: no-store`. The UI validates it before application providers are created and exposes one immutable configuration object. Missing or invalid production configuration fails visibly. Local development uses an explicit fallback only when the configuration route returns 404. The composition root initializes `api/runtime.ts` with the validated API URL; the API layer never reads application configuration directly.
 
 Development mode and test mode must not implicitly enable product behavior. Any future product capability flag requires its own feature specification and an explicit runtime-config field.
 
@@ -485,7 +478,7 @@ The architecture is operational when:
 - TanStack file-based routing and route-tree drift checks are operational.
 - Unit and integration suites run in CI. The Playwright architecture smoke suite loads the root route at the nested base path, renders the invalid-config state, and renders route-not-found.
 - e-INFRA setup and pre-render theme restoration pass visual and accessibility assertions. Import and source checks reject copied primitive modules, raw color literals, and generic Tailwind palette colors outside approved third-party adapter styles.
-- Import restrictions prevent upward dependencies and feature cycles; generated imports are limited to the four approved generated barrels.
+- Import restrictions prevent upward dependencies and feature cycles; generated imports use the Orval entry points documented above.
 
 ## Out Of Scope
 

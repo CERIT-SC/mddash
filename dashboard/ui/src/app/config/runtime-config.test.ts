@@ -36,6 +36,10 @@ describe("parseRuntimeConfig", () => {
     )
   })
 
+  it("rejects a base path outside the Dashboard route", () => {
+    expect(() => parseRuntimeConfig({ ...productionConfig, basePath: "/", apiPath: "/api" })).toThrow()
+  })
+
   it("rejects external Hub routes", () => {
     expect(() => parseRuntimeConfig({ ...productionConfig, logoutUrl: "https://example.test/logout" })).toThrow()
   })

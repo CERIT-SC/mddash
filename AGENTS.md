@@ -26,7 +26,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 
 ### Configuration
 - **Environment = explicit `ENV`**: `ENV=dev` or `ENV=prod`, defaulting to `dev`. Dev images use a static `dev` tag; prod uses immutable SemVer tags (e.g. `0.1.0`) provided by the release workflow. No branch-based inference.
-- **Runtime config injection**: UI receives config via `window.MDDASH_CONFIG` injected by Caddy at `{$CADDY_ROUTE_PREFIX}/dash/config.js`. Dev mode is detected when this is undefined.
+- **Runtime configuration**: the proxy generates JSON at startup and serves it through the authenticated `{$CADDY_ROUTE_PREFIX}/dash/runtime-config.json` route. The UI validates it before creating application providers; local development falls back only when that route returns 404.
 
 ### Authentication
 - All auth flows through JupyterHub OAuth2.

@@ -31,5 +31,8 @@ export function toApiError(error: unknown): ApiError {
       })
     }
   }
-  return new ApiError("Network unavailable", "Check your connection and retry.")
+  if (error instanceof TypeError) {
+    return new ApiError("Network unavailable", "Check your connection and retry.")
+  }
+  return new ApiError("Unexpected error", "Retry the action or contact support.")
 }

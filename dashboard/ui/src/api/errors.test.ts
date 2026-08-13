@@ -20,4 +20,11 @@ describe("toApiError", () => {
       message: "Check your connection and retry.",
     })
   })
+
+  it("does not mislabel unexpected errors as network failures", () => {
+    expect(toApiError(new Error("secret implementation detail"))).toMatchObject({
+      title: "Unexpected error",
+      message: "Retry the action or contact support.",
+    })
+  })
 })
