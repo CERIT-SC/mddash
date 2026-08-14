@@ -18,12 +18,14 @@ import { LogOut, Moon, Sun } from "lucide-react"
 
 type SiteHeaderProps = {
   user: string
-  hubHomeUrl: string
-  hubTokenUrl: string
-  logoutUrl: string
 }
 
-export function SiteHeader({ user, hubHomeUrl, hubTokenUrl, logoutUrl }: SiteHeaderProps) {
+// Hub routes are the same on every deployment — no need for runtime configuration.
+const HUB_HOME_URL = "/hub/home"
+const HUB_TOKEN_URL = "/hub/token"
+const LOGOUT_URL = "/hub/logout"
+
+export function SiteHeader({ user }: SiteHeaderProps) {
   const [isDark, setIsDark] = useState(() => document.documentElement.classList.contains("dark"))
 
   function toggleTheme() {
@@ -47,10 +49,10 @@ export function SiteHeader({ user, hubHomeUrl, hubTokenUrl, logoutUrl }: SiteHea
           <NavigationMenu className="ml-4 hidden md:flex">
             <NavigationMenuList>
               <NavigationMenuItem>
-                <NavigationMenuLink href={hubHomeUrl}>Home</NavigationMenuLink>
+                <NavigationMenuLink href={HUB_HOME_URL}>Home</NavigationMenuLink>
               </NavigationMenuItem>
               <NavigationMenuItem>
-                <NavigationMenuLink href={hubTokenUrl}>Get Token</NavigationMenuLink>
+                <NavigationMenuLink href={HUB_TOKEN_URL}>Get Token</NavigationMenuLink>
               </NavigationMenuItem>
             </NavigationMenuList>
           </NavigationMenu>
@@ -66,7 +68,7 @@ export function SiteHeader({ user, hubHomeUrl, hubTokenUrl, logoutUrl }: SiteHea
           </Button>
           <span className="text-text-muted hidden text-sm sm:inline">{user}</span>
           <Button variant="outline" size="sm" asChild>
-            <a href={logoutUrl} aria-label="Log out" className="no-underline">
+            <a href={LOGOUT_URL} aria-label="Log out" className="no-underline">
               <LogOut size={14} />
               <span className="hidden sm:inline">Log out</span>
             </a>

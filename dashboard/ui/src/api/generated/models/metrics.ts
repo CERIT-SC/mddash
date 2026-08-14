@@ -5,9 +5,17 @@
  * API for experiment, simulation, compute, analysis, notebook, file, and publication workflows.
  * OpenAPI spec version: 1.0.0
  */
-import type { ResourceValues } from './resourceValues.ts';
 
 export interface Metrics {
-  requests: ResourceValues;
-  limits: ResourceValues;
+  /**
+     * Bytes used; null until the du monitor records a measurement
+     * @nullable
+     */
+  storage_used_bytes: number | null;
+  /**
+     * Configured storage quota in bytes
+     * @nullable
+     */
+  storage_limit_bytes: number | null;
+  uptime_seconds: number;
 }

@@ -8,7 +8,7 @@
 
 export interface TunerJobRequest {
   /** @minLength 1 */
-  simulation_path?: string;
+  simulation_path: string;
   /** @minimum 1 */
-  nsteps?: number;
+  nsteps: number;
 }

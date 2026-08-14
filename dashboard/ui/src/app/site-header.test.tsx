@@ -8,9 +8,7 @@ import { SiteHeader } from "./site-header"
 
 function renderHeader() {
   const rootRoute = createRootRoute({
-    component: () => (
-      <SiteHeader user="alice" hubHomeUrl="/hub/home" hubTokenUrl="/hub/token" logoutUrl="/hub/logout" />
-    ),
+    component: () => <SiteHeader user="alice" />,
   })
   const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: () => null })
   const router = createRouter({

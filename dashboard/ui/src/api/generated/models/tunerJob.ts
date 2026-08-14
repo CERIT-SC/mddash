@@ -14,6 +14,7 @@ export interface TunerJob {
   id: string;
   experiment_id: string;
   simulation_path: string;
+  nsteps: number;
   error_message?: NullableString | null;
   created_at: string;
   is_stopped: boolean;

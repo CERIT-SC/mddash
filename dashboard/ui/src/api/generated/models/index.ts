@@ -81,7 +81,6 @@ export * from './publishRequestTarget.ts';
 export * from './publishStatus.ts';
 export * from './redirectResponse.ts';
 export * from './requiredSimulationPathQueryParameter.ts';
-export * from './resourceValues.ts';
 export * from './serviceUnavailableResponse.ts';
 export * from './simulation.ts';
 export * from './simulationFiles.ts';

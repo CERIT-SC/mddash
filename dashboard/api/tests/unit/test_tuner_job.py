@@ -56,6 +56,7 @@ def _make_tuner_job(experiment: Experiment) -> TunerJob:
         id=JOB_ID,
         experiment_id=experiment.id,
         simulation_path="production/test.simulation.json",
+        nsteps=25000,
     )
 
 

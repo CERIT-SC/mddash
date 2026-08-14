@@ -239,6 +239,11 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """Whether the simulation is locked (read-only file or active job references)."""
         if not os.access(self._file, os.W_OK):
             return True
+        return self.has_jobs
+
+    @property
+    def has_jobs(self) -> bool:
+        """Whether any tuner or simulation job references this simulation."""
         jobs = self._cached_jobs()
         return bool(jobs.tuner or jobs.simulation)
 

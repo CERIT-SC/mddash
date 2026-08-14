@@ -8,8 +8,6 @@ const pathSchema = z
 
 const dashboardPathSchema = pathSchema.refine((path) => path.endsWith("/dash"), "basePath must end with /dash")
 
-const hubRouteSchema = z.string().regex(/^\/hub\/[a-z-]+$/, "Hub routes must be root-relative /hub paths")
-
 const runtimeConfigSchema = z
   .object({
     basePath: dashboardPathSchema,
@@ -17,9 +15,6 @@ const runtimeConfigSchema = z
     user: z.string().min(1),
     defaultNotebooksRepo: z.url(),
     mdpositUrl: z.url(),
-    hubHomeUrl: hubRouteSchema,
-    hubTokenUrl: hubRouteSchema,
-    logoutUrl: hubRouteSchema,
   })
   .superRefine((config, context) => {
     if (config.apiPath !== `${config.basePath}/api`) {
@@ -43,7 +38,4 @@ export const DEV_RUNTIME_CONFIG: RuntimeConfig = {
   user: "demo",
   defaultNotebooksRepo: "https://github.com/CERIT-SC/mddash-notebooks.git",
   mdpositUrl: "https://mdposit.mddash.eu",
-  hubHomeUrl: "/hub/home",
-  hubTokenUrl: "/hub/token",
-  logoutUrl: "/hub/logout",
 }

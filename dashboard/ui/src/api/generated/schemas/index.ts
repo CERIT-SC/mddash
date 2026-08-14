@@ -36,16 +36,9 @@ export const ListNotebookModulesResponse = zod.object({
  * @summary Get resource usage and limits
  */
 export const GetMetricsResponse = zod.object({
-  "requests": zod.object({
-  "cpu": zod.number().nullable(),
-  "memory": zod.int().nullable(),
-  "storage": zod.int().nullable()
-}),
-  "limits": zod.object({
-  "cpu": zod.number().nullable(),
-  "memory": zod.int().nullable(),
-  "storage": zod.int().nullable()
-})
+  "storage_used_bytes": zod.int().nullable().describe('Bytes used; null until the du monitor records a measurement'),
+  "storage_limit_bytes": zod.int().nullable().describe('Configured storage quota in bytes'),
+  "uptime_seconds": zod.int()
 })
 
 
@@ -77,6 +70,10 @@ export const ListExperimentsResponseItem = zod.object({
   "created_at": zod.iso.datetime({"offset":true}),
   "updated_at": zod.iso.datetime({"offset":true}),
   "name": zod.string(),
+  "module_name": zod.string().nullish(),
+  "latest_simulation_path": zod.string().nullable(),
+  "source_label": zod.string().nullish(),
+  "size_bytes": zod.int().nullish(),
   "source_message": zod.string().nullable(),
   "notebooks_repo": zod.string().nullish(),
   "mdrepo_id": zod.string().nullish(),
@@ -95,6 +92,7 @@ export const ListExperimentsResponseItem = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
+  "nsteps": zod.int(),
   "error_message": zod.string().nullish(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
@@ -119,7 +117,9 @@ export const ListExperimentsResponseItem = zod.object({
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
-  "performance": zod.number().nullish()
+  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.number().nullish(),
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
 })),
   "analysis_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -164,6 +164,10 @@ export const CreateExperimentResponse = zod.object({
   "created_at": zod.iso.datetime({"offset":true}),
   "updated_at": zod.iso.datetime({"offset":true}),
   "name": zod.string(),
+  "module_name": zod.string().nullish(),
+  "latest_simulation_path": zod.string().nullable(),
+  "source_label": zod.string().nullish(),
+  "size_bytes": zod.int().nullish(),
   "source_message": zod.string().nullable(),
   "notebooks_repo": zod.string().nullish(),
   "mdrepo_id": zod.string().nullish(),
@@ -182,6 +186,7 @@ export const CreateExperimentResponse = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
+  "nsteps": zod.int(),
   "error_message": zod.string().nullish(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
@@ -206,7 +211,9 @@ export const CreateExperimentResponse = zod.object({
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
-  "performance": zod.number().nullish()
+  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.number().nullish(),
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
 })),
   "analysis_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -242,6 +249,10 @@ export const GetExperimentResponse = zod.object({
   "created_at": zod.iso.datetime({"offset":true}),
   "updated_at": zod.iso.datetime({"offset":true}),
   "name": zod.string(),
+  "module_name": zod.string().nullish(),
+  "latest_simulation_path": zod.string().nullable(),
+  "source_label": zod.string().nullish(),
+  "size_bytes": zod.int().nullish(),
   "source_message": zod.string().nullable(),
   "notebooks_repo": zod.string().nullish(),
   "mdrepo_id": zod.string().nullish(),
@@ -260,6 +271,7 @@ export const GetExperimentResponse = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
+  "nsteps": zod.int(),
   "error_message": zod.string().nullish(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
@@ -284,7 +296,9 @@ export const GetExperimentResponse = zod.object({
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
-  "performance": zod.number().nullish()
+  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.number().nullish(),
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
 })),
   "analysis_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -324,6 +338,10 @@ export const UpdateExperimentResponse = zod.object({
   "created_at": zod.iso.datetime({"offset":true}),
   "updated_at": zod.iso.datetime({"offset":true}),
   "name": zod.string(),
+  "module_name": zod.string().nullish(),
+  "latest_simulation_path": zod.string().nullable(),
+  "source_label": zod.string().nullish(),
+  "size_bytes": zod.int().nullish(),
   "source_message": zod.string().nullable(),
   "notebooks_repo": zod.string().nullish(),
   "mdrepo_id": zod.string().nullish(),
@@ -342,6 +360,7 @@ export const UpdateExperimentResponse = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
+  "nsteps": zod.int(),
   "error_message": zod.string().nullish(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
@@ -366,7 +385,9 @@ export const UpdateExperimentResponse = zod.object({
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
-  "performance": zod.number().nullish()
+  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.number().nullish(),
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
 })),
   "analysis_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -753,7 +774,9 @@ export const ListGromacsJobsResponseItem = zod.object({
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
-  "performance": zod.number().nullish()
+  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.number().nullish(),
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
 }).and(zod.object({
   "pme": zod.enum(['cpu', 'gpu']).optional(),
   "nb": zod.enum(['cpu', 'gpu']).optional()
@@ -789,7 +812,9 @@ export const GetGromacsJobResponse = zod.object({
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
-  "performance": zod.number().nullish()
+  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.number().nullish(),
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
 }).and(zod.object({
   "pme": zod.enum(['cpu', 'gpu']).optional(),
   "nb": zod.enum(['cpu', 'gpu']).optional()
@@ -835,7 +860,9 @@ export const SubmitGromacsJobResponse = zod.object({
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
-  "performance": zod.number().nullish()
+  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.number().nullish(),
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
 }).and(zod.object({
   "pme": zod.enum(['cpu', 'gpu']).optional(),
   "nb": zod.enum(['cpu', 'gpu']).optional()
@@ -909,7 +936,9 @@ export const ListAmberJobsResponseItem = zod.object({
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
-  "performance": zod.number().nullish()
+  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.number().nullish(),
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
 }).and(zod.object({
   "binary": zod.string().optional(),
   "ewald": zod.string().optional()
@@ -945,7 +974,9 @@ export const GetAmberJobResponse = zod.object({
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
-  "performance": zod.number().nullish()
+  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.number().nullish(),
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
 }).and(zod.object({
   "binary": zod.string().optional(),
   "ewald": zod.string().optional()
@@ -991,7 +1022,9 @@ export const SubmitAmberJobResponse = zod.object({
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
-  "performance": zod.number().nullish()
+  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.number().nullish(),
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
 }).and(zod.object({
   "binary": zod.string().optional(),
   "ewald": zod.string().optional()
@@ -1053,6 +1086,7 @@ export const ListTunerJobsResponseItem = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
+  "nsteps": zod.int(),
   "error_message": zod.string().nullish(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
@@ -1078,29 +1112,28 @@ export const StartTunerJobParams = zod.object({
   "experiment_id": zod.string().min(1)
 })
 
-export const startTunerJobQueryNstepsDefault = 25000;
 
 
 
 export const StartTunerJobQueryParams = zod.object({
   "simulation_path": zod.string().optional(),
-  "nsteps": zod.int().min(1).default(startTunerJobQueryNstepsDefault)
+  "nsteps": zod.int().min(1).optional()
 })
 
 
-export const startTunerJobBodyNstepsDefault = 25000;
 
 
 
 export const StartTunerJobBody = zod.object({
-  "simulation_path": zod.string().min(1).optional(),
-  "nsteps": zod.int().min(1).default(startTunerJobBodyNstepsDefault)
+  "simulation_path": zod.string().min(1),
+  "nsteps": zod.int().min(1)
 })
 
 export const StartTunerJobResponse = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
+  "nsteps": zod.int(),
   "error_message": zod.string().nullish(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
@@ -1131,6 +1164,7 @@ export const GetTunerJobResponse = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
+  "nsteps": zod.int(),
   "error_message": zod.string().nullish(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
@@ -1328,6 +1362,21 @@ export const SubmitAnalysisJobResponse = zod.object({
   "created_at": zod.iso.datetime({"offset":true}),
   "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR'])
 })
+
+
+/**
+ * The hard set of mwf analysis task names derived from the MDDB workflow — the pool of analyses a simulation can produce.
+ * @summary List supported analysis types
+ */
+
+
+
+export const ListAnalysisTypesParams = zod.object({
+  "experiment_id": zod.string().min(1)
+})
+
+export const ListAnalysisTypesResponseItem = zod.string()
+export const ListAnalysisTypesResponse = zod.array(ListAnalysisTypesResponseItem)
 
 
 /**

@@ -566,6 +566,18 @@ export const getSubmitAnalysisJobMockHandler = (overrideResponse?: AnalysisJob |
   }, options)
 }
 
+export const getListAnalysisTypesMockHandler = (overrideResponse?: string[] | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<string[]> | string[]), options?: RequestHandlerOptions) => {
+  return http.get('*/dash/api/experiments/:experimentId/analysis/types', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
+
+
+    return HttpResponse.json(overrideResponse !== undefined
+    ? (typeof overrideResponse === "function" ? await overrideResponse(info) : overrideResponse)
+    : undefined,
+      { status: 200
+      })
+  }, options)
+}
+
 export const getListAnalysisResultsMockHandler = (overrideResponse?: string[] | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<string[]> | string[]), options?: RequestHandlerOptions) => {
   return http.get('*/dash/api/experiments/:experimentId/analysis/results', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
 
@@ -681,6 +693,7 @@ export const getMDDashDashboardAPIMock = () => [
   getStopNotebookMockHandler(),
   getListAnalysisJobsMockHandler(),
   getSubmitAnalysisJobMockHandler(),
+  getListAnalysisTypesMockHandler(),
   getListAnalysisResultsMockHandler(),
   getListAnalysisResultVariantsMockHandler(),
   getGetAnalysisResultMockHandler(),

@@ -45,6 +45,8 @@ EXCLUDED_FILES: list[str] = [
     ".nfs*",
     ".binder-env-installed",
     "inputs.yaml",
+    ".storage_size",
+    ".storage_size.tmp*",
 ]
 
 
@@ -245,21 +247,35 @@ def get_du_size(data_dir: Path) -> int | None:
 
 
 def _du_loop(data_dir: Path, initial_delay: float = 0.0) -> None:
-    """Background thread body: measure data_dir size every DU_INTERVAL seconds."""
+    """Background thread body: measure data_dir and per-experiment sizes every DU_INTERVAL seconds."""
     if initial_delay > 0:
         time.sleep(initial_delay)
-    size_file = data_dir / DU_SIZE_FILENAME
     while True:
         try:
+            # --max-depth=1 reports each entry inside data_dir plus the total in one pass
             result = subprocess.run(
-                ["du", "-sb", str(data_dir)],
+                ["du", "-b", "--max-depth=1", str(data_dir)],
                 capture_output=True,
                 text=True,
                 check=True,
             )
-            size = int(result.stdout.split()[0])
-            size_file.write_text(str(size))
-            logger.info("Storage size updated: %d bytes", size)
+            for line in result.stdout.splitlines():
+                size_s, _, path_s = line.rstrip("/").partition("\t")
+                path = Path(path_s)
+                # A marker can only live inside a directory: skip top-level files,
+                # and skip hidden dirs (.rclone-bisync, .ipynb_checkpoints) entirely.
+                if path != data_dir and (path.name.startswith(".") or not path.is_dir()):
+                    continue
+                try:
+                    # atomic: two monitor threads (Flask reloader parent + child) race on these files
+                    tmp = path / f"{DU_SIZE_FILENAME}.tmp{os.getpid()}"
+                    tmp.write_text(size_s)
+                    Path(tmp).replace(path / DU_SIZE_FILENAME)
+                except OSError:
+                    continue  # entry vanished mid-scan (e.g. experiment deleted)
+                if path != data_dir:
+                    logger.debug("du: %s = %s bytes", path.name, size_s)
+            logger.info("Storage size updated: %d bytes", int((data_dir / DU_SIZE_FILENAME).read_text()))
         except Exception as e:
             stderr = getattr(e, "stderr", "") or ""
             logger.warning("du failed: %s%s", e, f" | stderr: {stderr.strip()}" if stderr.strip() else "")

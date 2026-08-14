@@ -73,8 +73,10 @@ def _validate_payload(contract: dict[str, Any], schema: dict[str, Any], payload:
 def test_flask_inventory_exactly_matches_openapi(app: Flask, contract: dict[str, Any]) -> None:
     """Every canonical Flask method/path pair is documented, and no others exist."""
     flask_operations = _flask_operations(app)
-    assert len(flask_operations) == 51
-    assert _openapi_operations(contract) == flask_operations
+    undocumented = flask_operations - _openapi_operations(contract)
+    extra = _openapi_operations(contract) - flask_operations
+    assert not undocumented, f"routes missing from openapi.yaml: {sorted(undocumented)}"
+    assert not extra, f"openapi.yaml documents non-existent routes: {sorted(extra)}"
 
 
 def test_contract_is_valid_openapi_31_with_unique_operation_ids(contract: dict[str, Any]) -> None:
@@ -87,8 +89,7 @@ def test_contract_is_valid_openapi_31_with_unique_operation_ids(contract: dict[s
         for method, operation in path_item.items()
         if method in HTTP_METHODS
     ]
-    assert len(operation_ids) == 51
-    assert len(operation_ids) == len(set(operation_ids))
+    assert len(operation_ids) == len(set(operation_ids)), "duplicate operationIds in openapi.yaml"
 
     for schema in contract["components"]["schemas"].values():
         jsonschema.Draft202012Validator.check_schema(schema)

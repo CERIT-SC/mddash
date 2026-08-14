@@ -8,9 +8,6 @@ const productionConfig = {
   user: "alice",
   defaultNotebooksRepo: "https://example.test/notebooks.git",
   mdpositUrl: "https://mdposit.example.test",
-  hubHomeUrl: "/hub/home",
-  hubTokenUrl: "/hub/token",
-  logoutUrl: "/hub/logout",
 }
 
 describe("parseRuntimeConfig", () => {
@@ -38,9 +35,5 @@ describe("parseRuntimeConfig", () => {
 
   it("rejects a base path outside the Dashboard route", () => {
     expect(() => parseRuntimeConfig({ ...productionConfig, basePath: "/", apiPath: "/api" })).toThrow()
-  })
-
-  it("rejects external Hub routes", () => {
-    expect(() => parseRuntimeConfig({ ...productionConfig, logoutUrl: "https://example.test/logout" })).toThrow()
   })
 })

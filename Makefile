@@ -295,14 +295,9 @@ rollback: ## Rollback to previous revision (REVISION=N for specific)
 
 .PHONY: demo
 demo: ## Run local demo (real Flask API in demo profile + React dev server)
-	@echo "Starting Flask API..."; \
+	@fuser -k 8888/tcp 5173/tcp 2>/dev/null || true # clean up stale listeners from previous runs
+	@echo "Demo running at http://localhost:5173/dash/ (Ctrl+C to stop)"; \
+	trap "kill 0 2>/dev/null; exit" INT TERM EXIT; \
 	PORT=8888 uv run --directory dashboard/api python _demo/app.py & \
-	API_PID=$$!; \
-	echo "Flask API started (PID: $$API_PID)"; \
-	echo "Starting React dev server..."; \
 	pnpm --filter dash dev & \
-	VITE_PID=$$!; \
-	echo "React dev server started (PID: $$VITE_PID)"; \
-	echo "Demo running - Press Ctrl+C to stop"; \
-	trap "echo 'Stopping...'; kill $$API_PID $$VITE_PID 2>/dev/null; exit" INT TERM EXIT; \
 	wait || true

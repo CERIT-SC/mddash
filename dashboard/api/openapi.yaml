@@ -508,7 +508,7 @@ paths:
       operationId: startTunerJob
       parameters:
         - {name: simulation_path, in: query, schema: {type: string}}
-        - {name: nsteps, in: query, schema: {type: integer, minimum: 1, default: 25000}}
+        - {name: nsteps, in: query, schema: {type: integer, minimum: 1}}
       requestBody:
         content:
           application/json:
@@ -662,6 +662,23 @@ paths:
               schema: {$ref: '#/components/schemas/AnalysisJob'}
         '400': {$ref: '#/components/responses/BadRequest'}
         '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/Problem'}
+  /dash/api/experiments/{experiment_id}/analysis/types:
+    get:
+      tags: [Analysis]
+      summary: List supported analysis types
+      description: The hard set of mwf analysis task names derived from the MDDB workflow — the pool of analyses a simulation can produce.
+      operationId: listAnalysisTypes
+      parameters:
+        - {$ref: '#/components/parameters/ExperimentId'}
+      responses:
+        '200':
+          description: Analysis type ids
+          content:
+            application/json:
+              schema:
+                type: array
+                items: {type: string}
         default: {$ref: '#/components/responses/Problem'}
   /dash/api/experiments/{experiment_id}/analysis/results:
     parameters:
@@ -857,20 +874,13 @@ components:
         description: {type: string}
         engine: {$ref: '#/components/schemas/Engine'}
       additionalProperties: false
-    ResourceValues:
-      type: object
-      required: [cpu, memory, storage]
-      properties:
-        cpu: {type: [number, 'null']}
-        memory: {type: [integer, 'null']}
-        storage: {type: [integer, 'null']}
-      additionalProperties: false
     Metrics:
       type: object
-      required: [requests, limits]
+      required: [storage_used_bytes, storage_limit_bytes, uptime_seconds]
       properties:
-        requests: {$ref: '#/components/schemas/ResourceValues'}
-        limits: {$ref: '#/components/schemas/ResourceValues'}
+        storage_used_bytes: {type: [integer, 'null'], description: Bytes used; null until the du monitor records a measurement}
+        storage_limit_bytes: {type: [integer, 'null'], description: Configured storage quota in bytes}
+        uptime_seconds: {type: integer}
       additionalProperties: false
     NotebookTier:
       type: object
@@ -901,12 +911,18 @@ components:
       additionalProperties: false
     Experiment:
       type: object
-      required: [id, created_at, updated_at, name, source_message, engine, notebook, tuner_jobs, simulation_jobs, analysis_jobs]
+      required: [id, created_at, updated_at, name, source_message, engine, latest_simulation_path, notebook, tuner_jobs, simulation_jobs, analysis_jobs]
       properties:
         id: {type: string}
         created_at: {type: string, format: date-time}
         updated_at: {type: string, format: date-time}
         name: {type: string}
+        module_name: {$ref: '#/components/schemas/NullableString'}
+        # Manifest path of the most recently active simulation; the experiment's
+        # step/status and dashboard detail rows always inherit from it.
+        latest_simulation_path: {type: [string, 'null']}
+        source_label: {$ref: '#/components/schemas/NullableString'}
+        size_bytes: {type: [integer, 'null']}
         source_message: {$ref: '#/components/schemas/NullableString'}
         notebooks_repo: {$ref: '#/components/schemas/NullableString'}
         mdrepo_id: {$ref: '#/components/schemas/NullableString'}
@@ -997,7 +1013,9 @@ components:
         start_timestamp: {type: [integer, 'null']}
         finish_timestamp: {type: [integer, 'null']}
         nsteps: {type: [integer, 'null']}
+        nsteps_done: {type: [integer, 'null'], description: Steps completed so far (parsed from the engine log)}
         performance: {type: [number, 'null']}
+        estimated_time: {type: [integer, 'null'], description: Estimated seconds until completion}
       additionalProperties: true
     GromacsJob:
       allOf:
@@ -1040,11 +1058,12 @@ components:
       additionalProperties: true
     TunerJob:
       type: object
-      required: [id, experiment_id, simulation_path, created_at, is_stopped, engine, tuner_status, trials]
+      required: [id, experiment_id, simulation_path, created_at, nsteps, is_stopped, engine, tuner_status, trials]
       properties:
         id: {type: string}
         experiment_id: {type: string}
         simulation_path: {type: string}
+        nsteps: {type: integer}
         error_message: {$ref: '#/components/schemas/NullableString'}
         created_at: {type: string, format: date-time}
         is_stopped: {type: boolean}
@@ -1055,9 +1074,10 @@ components:
       additionalProperties: false
     TunerJobRequest:
       type: object
+      required: [simulation_path, nsteps]
       properties:
         simulation_path: {type: string, minLength: 1}
-        nsteps: {type: integer, minimum: 1, default: 25000}
+        nsteps: {type: integer, minimum: 1}
       additionalProperties: false
     AnalysisJob:
       type: object

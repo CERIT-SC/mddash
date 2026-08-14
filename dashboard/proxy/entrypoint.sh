@@ -10,8 +10,7 @@ jq -n \
   --arg defaultNotebooksRepo "${DEFAULT_NOTEBOOKS_REPO}" \
   --arg mdpositUrl "${MDPOSIT_URL}" \
   '{basePath: $basePath, apiPath: $apiPath, user: $user,
-    defaultNotebooksRepo: $defaultNotebooksRepo, mdpositUrl: $mdpositUrl,
-    hubHomeUrl: "/hub/home", hubTokenUrl: "/hub/token", logoutUrl: "/hub/logout"}' > "$config_path"
+    defaultNotebooksRepo: $defaultNotebooksRepo, mdpositUrl: $mdpositUrl}' > "$config_path"
 
 if [ "${CONFIG_ONLY:-0}" = "1" ]; then
   exit 0

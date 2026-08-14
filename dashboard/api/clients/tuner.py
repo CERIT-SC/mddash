@@ -28,13 +28,13 @@ def _handle_response(response: Response) -> dict:
     raise HTTPError(detail, response=response)
 
 
-def gmx_submit(tpr_path: Path, nsteps: int = 25_000, extra_args: str = "") -> dict:
+def gmx_submit(tpr_path: Path, nsteps: int, extra_args: str = "") -> dict:
     """
     Submit a GROMACS TPR file for parameter tuning.
 
     Args:
         tpr_path: The .tpr file for the simulation to be tuned.
-        nsteps: Number of steps to run in GROMACS mdrun (default: 25_000).
+        nsteps: Number of steps to run in GROMACS mdrun.
         extra_args: Additional GROMACS mdrun arguments (default: "").
 
     Returns:
@@ -83,9 +83,7 @@ def gmx_delete_job(job_id: str) -> dict:
     return _handle_response(response)
 
 
-def amber_submit(
-    prmtop_path: Path, inpcrd_path: Path, mdin_path: Path, nsteps: int = 25_000, extra_args: str = ""
-) -> dict:
+def amber_submit(prmtop_path: Path, inpcrd_path: Path, mdin_path: Path, nsteps: int, extra_args: str = "") -> dict:
     """
     Submit an AMBER simulation for parameter tuning.
 
@@ -93,7 +91,7 @@ def amber_submit(
         prmtop_path: AMBER parameter/topology file (.prmtop or .parm7).
         inpcrd_path: AMBER coordinate/restart file (.inpcrd, .rst7, or .nc).
         mdin_path: AMBER input file (.mdin).
-        nsteps: Number of steps to run in pmemd (default: 25_000).
+        nsteps: Number of steps to run in pmemd.
         extra_args: Additional pmemd arguments (default: "").
 
     Returns:

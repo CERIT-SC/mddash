@@ -1,0 +1,104 @@
+import { useEffect, useState } from "react"
+
+import { useGetMetrics } from "@/api/generated/client"
+import { formatBytes, formatTime } from "@/shared/format"
+import { Button, Progress, Separator } from "@e-infra/design-system"
+import { Square } from "lucide-react"
+import { toast } from "sonner"
+
+type ServerStatusBarProps = { user: string }
+
+// Hub-owned stop-confirmation page; it renders stop_pending.html and survives
+// the user pod dying mid-transition (unlike any /user/ URL).
+const HUB_STOP_PENDING_URL = "/hub/stop-pending"
+
+function xsrfToken(): string {
+  return (
+    document.cookie
+      .split("; ")
+      .find((cookie) => cookie.startsWith("_xsrf="))
+      ?.split("=")[1] ?? ""
+  )
+}
+
+async function stopServer(user: string): Promise<void> {
+  // Same call the hub home page makes: hub API with session cookie + _xsrf header.
+  const response = await fetch(`/hub/api/users/${encodeURIComponent(user)}/server`, {
+    method: "DELETE",
+    credentials: "same-origin",
+    headers: { "X-XSRFToken": xsrfToken() },
+  })
+  if (!response.ok) throw new Error(`Stop failed with status ${response.status}`)
+  location.assign(HUB_STOP_PENDING_URL)
+}
+
+export function ServerStatusBar({ user }: ServerStatusBarProps) {
+  const metrics = useGetMetrics({ query: { retry: false } })
+  const [stopping, setStopping] = useState(false)
+  // Forces a re-render every second so the uptime readout ticks between refetches.
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick((tick) => tick + 1), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const data = metrics.data?.status === 200 ? metrics.data.data : undefined
+  const used = data?.storage_used_bytes ?? undefined
+  const limit = data?.storage_limit_bytes ?? undefined
+  const hasStorage = used !== undefined && limit !== undefined && limit > 0
+  const percent = hasStorage ? Math.min(100, Math.round(((used ?? 0) / (limit ?? 1)) * 100)) : 0
+  const uptime =
+    data?.uptime_seconds !== undefined ? data.uptime_seconds + (Date.now() - metrics.dataUpdatedAt) / 1000 : undefined
+
+  function onStop() {
+    setStopping(true)
+    stopServer(user).catch(() => {
+      setStopping(false)
+      toast.error("The server could not be stopped. Retry or stop it from JupyterHub home.")
+    })
+  }
+
+  return (
+    <section
+      aria-label="Server status"
+      className="border-border bg-surface mx-auto flex w-fit max-w-full flex-wrap items-center gap-x-6 gap-y-2 rounded-b-lg border border-t-0 px-4 py-2 shadow-md md:px-6"
+    >
+      <div className="flex items-center gap-3 text-sm">
+        <span className="bg-success h-2 w-2 rounded-full" aria-hidden="true" />
+        <span className="font-medium">Server</span>
+        <span className="text-text-muted">{uptime === undefined ? "…" : formatTime(uptime)}</span>
+      </div>
+      <Separator orientation="vertical" className="hidden h-6 sm:block" />
+      <div className="flex flex-col gap-1 text-sm">
+        <span className="flex items-baseline gap-3">
+          <span className="text-text-muted">Storage</span>
+          {metrics.isLoading ? (
+            <span className="text-text-muted">…</span>
+          ) : hasStorage ? (
+            <span>
+              <span className="font-medium">{formatBytes(used ?? 0)}</span>
+              <span className="text-text-muted">{` / ${formatBytes(limit ?? 0)}`}</span>
+            </span>
+          ) : (
+            <span className="text-text-muted">Unavailable</span>
+          )}
+        </span>
+        {hasStorage && <Progress value={percent} className="w-full" aria-label="Storage usage" />}
+      </div>
+      <Separator orientation="vertical" className="hidden h-6 sm:block" />
+      <div>
+        {/* Red-bordered ghost of the mock via DS outline variant + error tokens. */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="border-error-400 text-error hover:bg-error-50"
+          onClick={onStop}
+          disabled={stopping}
+        >
+          <Square size={14} />
+          {stopping ? "Stopping…" : "Stop server"}
+        </Button>
+      </div>
+    </section>
+  )
+}

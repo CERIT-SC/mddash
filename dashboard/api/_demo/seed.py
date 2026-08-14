@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import time
 from datetime import datetime, timedelta
 from pathlib import PurePosixPath
@@ -12,6 +13,7 @@ from models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook, Tune
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
 
 from .files import (
+    MDPOSIT_DEMO_ACCESSION,
     MDPOSIT_DEMO_PROJECT_URL,
     ensure_amber_demo_files,
     ensure_demo_files,
@@ -21,12 +23,15 @@ from .files import (
     write_finished_gmx_log,
     write_gmx_simulation,
     write_mdrun_stdio,
-    write_running_amber_log,
     write_running_gmx_log,
 )
 from .state import build_model, demo_state
 
 logger = logging.getLogger(__name__)
+
+# Ids of seeded analyses that stay RUNNING (no result files are seeded for them);
+# shared by the fresh seed and rehydration so the two can't drift apart.
+RUNNING_SEEDED_ANALYSIS_IDS = {"analysis-dna-clusters", "analysis-villin-clusters"}
 
 
 def seed_data() -> None:  # ruff:ignore[too-many-locals]
@@ -43,6 +48,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         Experiment,
         id="aaaaa",
         name="GPCR membrane protein in lipid bilayer",
+        module_name="Membrane protein (BioBB)",
+        source_label="gpcr_membrane.tpr + 1",
         source_message="Created by uploading files: gpcr_membrane.tpr, structure.pdb.",
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
         created_at=now - timedelta(days=3),
@@ -51,11 +58,60 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     membrane_notebook = build_model(Notebook, experiment_id=membrane.id, token="demo-token-membrane")
     demo_state.notebook_status[membrane.id] = PodStatus.DOWN
 
+    # Running tuner keeps the membrane protein at the tune step; the mock rolls
+    # a window of max_trials trials forever (never FINISHED).
+    membrane_tuner = build_model(
+        TunerJob,
+        experiment=membrane,
+        simulation_path="gpcr_membrane.simulation.json",
+        id="demo-tuner-membrane",
+        nsteps=10000,
+        created_at=now - timedelta(hours=2),
+        is_stopped=False,
+        error_message=None,
+    )
+    demo_state.tuner_jobs[membrane_tuner.id] = {
+        "status": JobStatus.RUNNING.value,
+        "created_at": time.time() - 4,
+        "max_trials": 10,
+        "trials": [
+            {
+                "id": "membrane_00000",
+                "status": JobStatus.FINISHED.value,
+                "np": 8,
+                "ntomp": 1,
+                "nb": "gpu",
+                "pme": "cpu",
+                "performance": 58.2,
+            },
+            {
+                "id": "membrane_00001",
+                "status": JobStatus.ERROR.value,
+                "np": 4,
+                "ntomp": 2,
+                "nb": "cpu",
+                "pme": "cpu",
+                "performance": None,
+            },
+            {
+                "id": "membrane_00002",
+                "status": JobStatus.RUNNING.value,
+                "np": 4,
+                "ntomp": 2,
+                "nb": "gpu",
+                "pme": "gpu",
+                "performance": None,
+            },
+        ],
+    }
+
     # Experiment 2: Active enzyme simulation (currently running)
     enzyme = build_model(
         Experiment,
         id="bbbbb",
         name="HIV protease inhibitor binding study",
+        module_name="Protein",
+        source_label="10.5281/zenodo.7261108",
         source_message="Created by downloading repository from 'https://zenodo.org/records/7261108'.",
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
         created_at=now - timedelta(days=2),
@@ -70,6 +126,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         experiment=enzyme,
         simulation_path="md.simulation.json",
         id="demo-tuner-prod",
+        nsteps=25000,
         created_at=now - timedelta(hours=8),
         is_stopped=False,
         error_message=None,
@@ -118,6 +175,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         experiment=enzyme,
         simulation_path="npt_equilibration.simulation.json",
         id="demo-tuner-npt",
+        nsteps=25000,
         created_at=now - timedelta(hours=9),
         is_stopped=True,
         _preserved_trials=[
@@ -149,6 +207,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         experiment=enzyme,
         simulation_path="hiv_protease_apo_enzyme_wild_type_production_run_2024.simulation.json",
         id="demo-tuner-failed",
+        nsteps=25000,
         created_at=now - timedelta(hours=10),
         is_stopped=False,
         error_message="Failed to submit to tuner: Connection timeout after 30s",
@@ -210,6 +269,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         Experiment,
         id="ccccc",
         name="Hen egg-white lysozyme folding stability",
+        module_name="Protein",
+        source_label="PDB (1LYZ)",
         source_message="Created by uploading files: lysozyme_hewl.tpr.",
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
         mdrepo_id="8gahj-dh519",
@@ -284,6 +345,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         Experiment,
         id="ddddd",
         name="AMBER villin headpiece folding",
+        module_name="Protein (BioBB)",
+        source_label="villin.prmtop + 2",
         source_message="Created by uploading files: villin.prmtop, villin.inpcrd, production.mdin.",
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
         engine=Engine.AMBER,
@@ -293,10 +356,11 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     amber_folding_notebook = build_model(Notebook, experiment_id=amber_folding.id, token="demo-token-amber")
     demo_state.notebook_status[amber_folding.id] = PodStatus.RUNNING
 
-    # Running AMBER job
-    running_amber = build_model(
+    # Finished AMBER production job (villin), so the villin simulation genuinely
+    # owns the analyze phase; its analyses are seeded below.
+    production_amber = build_model(
         AmberJob,
-        id="demo-amber-running",
+        id="demo-amber-production",
         experiment=amber_folding,
         simulation_path="villin.simulation.json",
         binary=AmberBinary.PMEMD_CUDA,
@@ -304,22 +368,19 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         np=1,
         ntomp=8,
         _nsteps=500000,
-        # mdinfo rewrites are timestamped "now", so an old start would inflate the ETA.
-        _start_timestamp=int(now.timestamp()),
-        _finish_timestamp=None,
-        _performance=None,
+        _start_timestamp=int((now - timedelta(hours=3)).timestamp()),
+        _finish_timestamp=int((now - timedelta(minutes=10)).timestamp()),
+        _performance=41.2,
         created_at=now - timedelta(hours=2),
         engine=Engine.AMBER,
     )
-    demo_state.mdrun_jobs[running_amber.id] = {
-        "status": JobStatus.RUNNING.value,
+    demo_state.mdrun_jobs[production_amber.id] = {
+        "status": JobStatus.FINISHED.value,
         "experiment_id": amber_folding.id,
         "prmtop_name": "villin.prmtop",
         "inpcrd_name": "villin.inpcrd",
         "mdin_name": "production.mdin",
         "nsteps": 500000,
-        "created_at": time.time(),
-        "duration_sec": 1800,
     }
 
     # Finished AMBER job (equilibration complete)
@@ -353,6 +414,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         Experiment,
         id="eeeee",
         name="AMBER DNA duplex stability",
+        module_name="Nucleic Acid",
+        source_label="dna.prmtop + 2",
         source_message="Created by uploading files: dna.prmtop, dna.inpcrd, simulation.mdin.",
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
         engine=Engine.AMBER,
@@ -362,11 +425,56 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     amber_dna_notebook = build_model(Notebook, experiment_id=amber_dna.id, token="demo-token-dna")
     demo_state.notebook_status[amber_dna.id] = PodStatus.DOWN
 
+    # Analyses for the DNA study: one ready, one still calculating
+    dna_rmsd_analysis = build_model(
+        AnalysisJob,
+        id="analysis-dna-rmsd",
+        experiment=amber_dna,
+        simulation_path="dna.simulation.json",
+        analysis_name=AnalysisType.RMSDS,
+        structure_file="dna.inpcrd",
+        trajectory_file="trajectory.nc",
+        topology_file="dna.prmtop",
+    )
+    dna_clusters_analysis = build_model(
+        AnalysisJob,
+        id="analysis-dna-clusters",
+        experiment=amber_dna,
+        simulation_path="dna.simulation.json",
+        analysis_name=AnalysisType.CLUSTERS,
+        structure_file="dna.inpcrd",
+        trajectory_file="trajectory.nc",
+        topology_file="dna.prmtop",
+    )
+
+    # Analyses for the villin study: one ready, one still calculating
+    villin_rmsd_analysis = build_model(
+        AnalysisJob,
+        id="analysis-villin-rmsd",
+        experiment=amber_folding,
+        simulation_path="villin.simulation.json",
+        analysis_name=AnalysisType.RMSDS,
+        structure_file="villin.inpcrd",
+        trajectory_file="trajectory.nc",
+        topology_file="villin.prmtop",
+    )
+    villin_clusters_analysis = build_model(
+        AnalysisJob,
+        id="analysis-villin-clusters",
+        experiment=amber_folding,
+        simulation_path="villin.simulation.json",
+        analysis_name=AnalysisType.CLUSTERS,
+        structure_file="villin.inpcrd",
+        trajectory_file="trajectory.nc",
+        topology_file="villin.prmtop",
+    )
+
     # Experiment 6: MDPosit-imported trajectory bundle
     mdposit_demo = build_model(
         Experiment,
         id="fffff",
         name="MDPosit imported lysozyme trajectory",
+        source_label=MDPOSIT_DEMO_ACCESSION,
         source_message=f"Created by downloading repository from '{MDPOSIT_DEMO_PROJECT_URL}'.",
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
         created_at=now - timedelta(days=1, hours=6),
@@ -419,15 +527,42 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         hbonds_analysis,
         amber_folding,
         amber_folding_notebook,
-        running_amber,
+        production_amber,
         finished_amber,
         amber_dna,
         amber_dna_notebook,
+        dna_rmsd_analysis,
+        dna_clusters_analysis,
         finished_amber_dna,
         mdposit_demo,
         mdposit_demo_notebook,
     ])
     db.session.commit()
+
+    # Register seeded analysis jobs so the mock K8s layer reports real statuses
+    # (one finished, one still calculating for the DNA study).
+    seeded_analyses = (
+        rmsd_analysis,
+        sasa_analysis,
+        hbonds_analysis,
+        dna_rmsd_analysis,
+        dna_clusters_analysis,
+        villin_rmsd_analysis,
+        villin_clusters_analysis,
+    )
+    analysis_statuses = {
+        analysis: (JobStatus.RUNNING if analysis.id in RUNNING_SEEDED_ANALYSIS_IDS else JobStatus.FINISHED)
+        for analysis in seeded_analyses
+    }
+    for analysis, status in analysis_statuses.items():
+        # created_at keeps the job RUNNING on status polls (mirrors what the
+        # _create_job mock writes for freshly submitted analyses)
+        demo_state.analysis_jobs[f"analysis-{analysis.id}"] = {
+            "status": status.value,
+            "experiment_id": analysis.experiment_id,
+            "analysis_name": analysis.analysis_name.value,
+            "created_at": time.time(),
+        }
 
     # Seed files for each experiment
     # Membrane protein: standard files
@@ -460,9 +595,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         inpcrd_name="villin.inpcrd",
         mdin_names=["production.mdin", "equilibration.mdin"],
     )
-    write_running_amber_log(amber_folding.id, "production")
+    write_finished_amber_log(amber_folding.id, "production")
     write_finished_amber_log(amber_folding.id, "equilibration")
-    write_mdrun_stdio(amber_folding.id, ".", running_amber.id)
 
     # AMBER DNA study: uses AMBER file format
     ensure_amber_demo_files(
@@ -479,7 +613,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     # Seed simulation manifests for each experiment
     write_gmx_simulation(membrane.id, "gpcr_membrane", topology="gpcr_membrane.tpr")
 
-    write_gmx_simulation(enzyme.id, "md", simulation_path="md.simulation.json", topology="production/md.tpr")
+    # The tuner/running-job-linked "md" simulation must be the experiment's most recent
+    # activity; the placeholder manifests are back-dated so they never win the ladder.
     write_gmx_simulation(
         enzyme.id,
         "npt_equilibration",
@@ -491,6 +626,10 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "hiv_protease",
         simulation_path="hiv_protease_apo_enzyme_wild_type_production_run_2024.simulation.json",
         topology="hiv_protease_apo_enzyme_wild_type_production_run_2024.tpr",
+    )
+    write_gmx_simulation(enzyme.id, "md", simulation_path="md.simulation.json", topology="production/md.tpr")
+    _backdate_stale_simulations(
+        enzyme.id, ("npt_equilibration", "hiv_protease_apo_enzyme_wild_type_production_run_2024")
     )
 
     write_gmx_simulation(
@@ -516,6 +655,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         coordinates="villin.inpcrd",
         control="equilibration.mdin",
     )
+    _backdate_stale_simulations(amber_folding.id, ("equilibration",))
 
     write_amber_simulation(
         amber_dna.id,
@@ -529,6 +669,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     # Write analysis result files (fetched from MDposit)
     _fetch_and_write_analysis_results(published.id, "lysozyme_hewl.simulation.json", ["rmsds", "sasa"])
     _fetch_and_write_analysis_results(enzyme.id, "md.simulation.json", ["hbonds"])
+    _fetch_and_write_analysis_results(amber_dna.id, "dna.simulation.json", ["rmsds"])
+    _fetch_and_write_analysis_results(amber_folding.id, "villin.simulation.json", ["rmsds"])
 
 
 def _fetch_and_write_analysis_results(experiment_id: str, simulation_path: str, analysis_names: list[str]) -> None:
@@ -594,6 +736,13 @@ def _fetch_and_write_analysis_results(experiment_id: str, simulation_path: str, 
             logger.exception("Failed to fetch analysis %s for seeding", mdposit_name)
 
 
+def _backdate_stale_simulations(experiment_id: str, stems: tuple[str, ...]) -> None:
+    """Back-date placeholder manifests so the job-linked simulation stays most recent."""
+    stale = datetime.now() - timedelta(days=1)
+    for stem in stems:
+        os.utime(DATA_DIR / experiment_id / f"{stem}.simulation.json", (stale.timestamp(), stale.timestamp()))
+
+
 def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
     """Rehydrate runtime state from existing database records."""
     membrane = Experiment.query.filter_by(id="aaaaa").first()
@@ -638,7 +787,7 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
             inpcrd_name="villin.inpcrd",
             mdin_names=["production.mdin", "equilibration.mdin"],
         )
-        write_running_amber_log(amber_folding.id, "production")
+        write_finished_amber_log(amber_folding.id, "production")
         write_finished_amber_log(amber_folding.id, "equilibration")
 
     if amber_dna is not None:
@@ -673,6 +822,9 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
             simulation_path="hiv_protease_apo_enzyme_wild_type_production_run_2024.simulation.json",
             topology="hiv_protease_apo_enzyme_wild_type_production_run_2024.tpr",
         )
+    _backdate_stale_simulations(
+        enzyme.id, ("npt_equilibration", "hiv_protease_apo_enzyme_wild_type_production_run_2024")
+    )
 
     if published is not None:
         write_gmx_simulation(
@@ -699,6 +851,7 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
             coordinates="villin.inpcrd",
             control="equilibration.mdin",
         )
+        _backdate_stale_simulations(amber_folding.id, ("equilibration",))
 
     if amber_dna is not None:
         write_amber_simulation(
@@ -710,13 +863,15 @@ def _rehydrate_runtime_state() -> None:  # ruff:ignore[too-many-branches]
             control="simulation.mdin",
         )
 
-    # Rehydrate analysis jobs: any job with result files is treated as terminated.
+    # Rehydrate analysis jobs: jobs with result files are treated as terminated;
+    # the seeded clusters analysis stays running (mirrors the fresh-seed setup).
     for job in AnalysisJob.query.all():
-        job_name = f"analysis-{job.id}"
-        demo_state.analysis_jobs[job_name] = {
-            "status": JobStatus.FINISHED.value,
+        running = job.id in RUNNING_SEEDED_ANALYSIS_IDS
+        demo_state.analysis_jobs[f"analysis-{job.id}"] = {
+            "status": (JobStatus.RUNNING if running else JobStatus.FINISHED).value,
             "experiment_id": job.experiment_id,
             "analysis_name": job.analysis_name.value,
+            **({"created_at": time.time()} if running else {}),
         }
 
     # Rehydrate GROMACS jobs from database

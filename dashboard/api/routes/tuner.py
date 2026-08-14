@@ -8,7 +8,7 @@ from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import Experiment, TunerJob
 from schemas import TunerJobSchema
-from werkzeug.exceptions import InternalServerError, NotFound
+from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 
 tuner_bp = Blueprint("tuner", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/tuner")
 
@@ -61,7 +61,11 @@ def start_tuner_job(experiment_id: str) -> ResponseReturnValue:
         else:
             return jsonify(schema.dump(existing))
 
-    nsteps = int(data.get("nsteps", request.args.get("nsteps", 25000)))
+    # nsteps is always caller-supplied — reject the request instead of guessing a default.
+    raw_nsteps = data.get("nsteps", request.args.get("nsteps"))
+    if raw_nsteps is None:
+        raise BadRequest("nsteps is required.")
+    nsteps = int(raw_nsteps)
 
     tuner_job = TunerJob.start(experiment, simulation_path, nsteps=nsteps)
     return jsonify(schema.dump(tuner_job)), HTTPStatus.CREATED

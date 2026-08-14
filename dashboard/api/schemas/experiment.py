@@ -9,6 +9,8 @@ class ExperimentSchema(BaseAutoSchema):
     """Schema for serializing Experiment model instances."""
 
     engine = fields.Enum(Engine, by_value=True)
+    size_bytes = fields.Integer(allow_none=True, dump_only=True)
+    latest_simulation_path = fields.String(allow_none=True, dump_only=True)
     notebook = fields.Nested("NotebookSchema", allow_none=False)
     tuner_jobs = fields.Nested("TunerJobSchema", many=True)
     simulation_jobs = fields.Nested("SimulationJobSchema", many=True)

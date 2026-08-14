@@ -25,7 +25,17 @@ export interface SimulationJob {
   finish_timestamp?: number | null;
   /** @nullable */
   nsteps?: number | null;
+  /**
+     * Steps completed so far (parsed from the engine log)
+     * @nullable
+     */
+  nsteps_done?: number | null;
   /** @nullable */
   performance?: number | null;
+  /**
+     * Estimated seconds until completion
+     * @nullable
+     */
+  estimated_time?: number | null;
   [key: string]: unknown;
  }

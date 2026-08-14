@@ -6002,6 +6002,140 @@ export const useSubmitAnalysisJob = <TError = globalThis.Error & { info?: BadReq
       return useMutation(getSubmitAnalysisJobMutationOptions(options), queryClient);
     }
 
+export type listAnalysisTypesResponse200 = {
+  data: string[]
+  status: 200
+}
+
+export type listAnalysisTypesResponseDefault = {
+  data: ProblemResponse
+  status: Exclude<HTTPStatusCodes, 200>
+}
+
+export type listAnalysisTypesResponseSuccess = (listAnalysisTypesResponse200) & {
+  headers: Headers;
+};
+export type listAnalysisTypesResponseError = (listAnalysisTypesResponseDefault) & {
+  headers: Headers;
+};
+
+export const getListAnalysisTypesUrl = (experimentId: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/analysis/types`
+}
+
+/**
+ * The hard set of mwf analysis task names derived from the MDDB workflow — the pool of analyses a simulation can produce.
+ * @summary List supported analysis types
+ */
+export const listAnalysisTypes = async (experimentId: string, options?: RequestInit): Promise<listAnalysisTypesResponseSuccess> => {
+
+  const res = await fetch(getListAnalysisTypesUrl(experimentId),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: listAnalysisTypesResponseError['data'], status?: number} = new globalThis.Error();
+    const data : listAnalysisTypesResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: listAnalysisTypesResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as listAnalysisTypesResponseSuccess
+}
+
+
+
+
+
+export const getListAnalysisTypesQueryKey = (experimentId: string,) => {
+    return [
+    `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/analysis/types`
+    ] as const;
+    }
+
+
+export const getListAnalysisTypesQueryOptions = <TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisTypes>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAnalysisTypesQueryKey(experimentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAnalysisTypes>>> = ({ signal }) => listAnalysisTypes(experimentId, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: experimentId !== null && experimentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAnalysisTypes>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAnalysisTypesQueryResult = NonNullable<Awaited<ReturnType<typeof listAnalysisTypes>>>
+export type ListAnalysisTypesQueryError = globalThis.Error & { info?: ProblemResponse; status?: number }
+
+
+export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+ experimentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisTypes>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAnalysisTypes>>,
+          TError,
+          Awaited<ReturnType<typeof listAnalysisTypes>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+ experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisTypes>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAnalysisTypes>>,
+          TError,
+          Awaited<ReturnType<typeof listAnalysisTypes>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+ experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisTypes>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List supported analysis types
+ */
+
+export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+ experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisTypes>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAnalysisTypesQueryOptions(experimentId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export type listAnalysisResultsResponse200 = {
   data: string[]
   status: 200

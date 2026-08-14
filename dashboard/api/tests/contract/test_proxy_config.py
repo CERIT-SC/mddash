@@ -30,4 +30,3 @@ def test_runtime_config_is_json_encoded(tmp_path: Path) -> None:
     config = json.loads(output.read_text(encoding="utf-8"))
     assert config["user"] == env["JUPYTERHUB_USER"]
     assert config["basePath"] == f"{env['CADDY_ROUTE_PREFIX']}/dash"
-    assert config["hubHomeUrl"] == "/hub/home"

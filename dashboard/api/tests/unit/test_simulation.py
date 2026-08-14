@@ -509,6 +509,7 @@ class TestStepStatus:
                 simulation_path="protein.simulation.json",
                 is_stopped=True,
                 _preserved_trials=[{"performance": 12.3}],
+                nsteps=25000,
             )
             db.session.add(job)
             db.session.commit()

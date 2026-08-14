@@ -33,6 +33,8 @@ class TunerJob(db.Model):  # type: ignore
     error_message: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
     # creation time
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
+    # number of steps each tuning trial runs (always caller-supplied — no default, fail fast)
+    nsteps: Mapped[int] = mapped_column(db.Integer, nullable=False)
     # whether the job was stopped (preserves data but job is deleted from tuner)
     is_stopped: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
     # preserved trials when job is stopped
@@ -136,7 +138,7 @@ class TunerJob(db.Model):  # type: ignore
         return tuner_last_known_status.get(cache_key, {})
 
     @classmethod
-    def start(cls, experiment: Experiment, simulation_path: str, nsteps: int = 25000) -> "TunerJob":
+    def start(cls, experiment: Experiment, simulation_path: str, nsteps: int) -> "TunerJob":
         """
         Start a tuner job for the given experiment and simulation manifest.
 
@@ -146,7 +148,7 @@ class TunerJob(db.Model):  # type: ignore
         Args:
             experiment: The parent experiment.
             simulation_path: Experiment-relative path to the ``.simulation.json``.
-            nsteps: Number of steps for tuning runs (default: 25000, which is 50 ps).
+            nsteps: Number of steps for tuning runs (required — the caller decides, fail fast).
 
         Returns:
             The created TunerJob instance.
@@ -188,6 +190,7 @@ class TunerJob(db.Model):  # type: ignore
             id=response["id"],
             experiment=experiment,
             simulation_path=simulation_path,
+            nsteps=nsteps,
         )
         db.session.add(job)
         db.session.commit()

@@ -17,6 +17,12 @@ export interface Experiment {
   created_at: string;
   updated_at: string;
   name: string;
+  module_name?: NullableString | null;
+  /** @nullable */
+  latest_simulation_path: string | null;
+  source_label?: NullableString | null;
+  /** @nullable */
+  size_bytes?: number | null;
   source_message: NullableString | null;
   notebooks_repo?: NullableString | null;
   mdrepo_id?: NullableString | null;

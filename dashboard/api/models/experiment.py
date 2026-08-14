@@ -40,7 +40,7 @@ from upload.submission import (
     is_upload_active,
     submit_upload_job,
 )
-from utils import download_git_repo, download_git_repo_module, get_unique_id
+from utils import download_git_repo, download_git_repo_module, get_du_size, get_unique_id
 from validators import validate_http_url
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest, Conflict, InternalServerError, NotFound
@@ -103,6 +103,10 @@ class Experiment(db.Model):  # type: ignore
 
     # name of the experiment
     name: Mapped[str] = mapped_column(db.String(255), nullable=False)
+    # display name of the curated notebook module used at creation; None = custom workflow
+    module_name: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
+    # human-readable source label (PDB ID, uploaded filename, record DOI) for the dashboard footer
+    source_label: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
     # message for user to understand the source of the experiment
     source_message: Mapped[str | None] = mapped_column(db.Text, nullable=False)
     # git repository URL containing setup notebooks (nullable for legacy experiments) TODO: make non-nullable (breaks db migration)
@@ -147,6 +151,11 @@ class Experiment(db.Model):  # type: ignore
         if self.mdrepo_id:
             return f"{MDREPO_URL}/{MDREPO_RECORD_NAME}/uploads/{self.mdrepo_id}"
         return None
+
+    @property
+    def size_bytes(self) -> int | None:
+        """Last size of the experiment directory measured by the du monitor, in bytes."""
+        return get_du_size(DATA_DIR / self.id)
 
     @classmethod
     def prepare_env(
@@ -242,10 +251,12 @@ class Experiment(db.Model):  # type: ignore
             if is_url:
                 url: str = validate_http_url(source)
                 message: str = f"Created by downloading PDB file from '{source}'."
+                source_label: str | None = f"PDB ({url.rsplit('/', 1)[-1]})"
             else:
                 pdb_id = source.upper()
                 url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
                 message = f"Created by downloading '{pdb_id}' from RCSB PDB."
+                source_label = f"PDB ({pdb_id})"
 
             # Download PDB file
             response = fetch_pdb(url)
@@ -266,7 +277,13 @@ class Experiment(db.Model):  # type: ignore
                 f.write(response.content)
 
             experiment = cls(
-                id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo, engine=engine
+                id=experiment_id,
+                name=name,
+                source_message=message,
+                notebooks_repo=notebooks_repo,
+                engine=engine,
+                module_name=notebook_module.name if notebook_module else None,
+                source_label=source_label,
             )
 
             return cls._create_with_notebook(experiment)
@@ -312,7 +329,13 @@ class Experiment(db.Model):  # type: ignore
 
             message: str = f"Created by downloading repository from '{repo_link}'."
             experiment = cls(
-                id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo, engine=engine
+                id=experiment_id,
+                name=name,
+                source_message=message,
+                notebooks_repo=notebooks_repo,
+                engine=engine,
+                module_name=notebook_module.name if notebook_module else None,
+                source_label=urlparse(resolved_repo_link).path.rsplit("/", 1)[-1] or None,
             )
 
             return cls._create_with_notebook(experiment)
@@ -365,8 +388,15 @@ class Experiment(db.Model):  # type: ignore
                 filenames.append(filename)
 
             message: str = f"Created by uploading files: {', '.join(filenames)}."
+            source_label = filenames[0] + (f" + {len(filenames) - 1}" if len(filenames) > 1 else "")
             experiment = cls(
-                id=experiment_id, name=name, source_message=message, notebooks_repo=notebooks_repo, engine=engine
+                id=experiment_id,
+                name=name,
+                source_message=message,
+                notebooks_repo=notebooks_repo,
+                engine=engine,
+                module_name=notebook_module.name if notebook_module else None,
+                source_label=source_label,
             )
 
             return cls._create_with_notebook(experiment)
@@ -377,9 +407,19 @@ class Experiment(db.Model):  # type: ignore
             db.session.rollback()
             raise
 
+    @property
+    def latest_simulation_path(self) -> str | None:
+        """Path of the latest simulation manifest; step/status and card details inherit from it."""
+        latest = self._latest_simulation()
+        return latest.simulation_path if latest else None
+
+    @cached(cache=step_status_cache, key=lambda self: ("_latest_simulation", self))
     def _latest_simulation(self) -> "Simulation | None":
         """
         Most recently interacted-with simulation (by ``Simulation.last_activity``).
+
+        Cached on the same TTL as ``_step_status`` so list serialization performs
+        at most one filesystem scan per experiment per window.
 
         Returns:
             The most recently touched Simulation, or None if the experiment
@@ -390,7 +430,9 @@ class Experiment(db.Model):  # type: ignore
         simulations = Simulation.list(self.id)
         return max(simulations, key=lambda sim: sim.last_activity) if simulations else None
 
-    @cached(cache=step_status_cache)
+    # Explicit keys: cachetools' default key is args-only, so two methods sharing
+    # a cache would collide on (self,) and return each other's values.
+    @cached(cache=step_status_cache, key=lambda self: ("_step_status", self))
     def _step_status(self) -> tuple[int, str]:
         """
         Publish state overrides; otherwise inherit the latest simulation's (step, status).

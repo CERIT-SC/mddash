@@ -54,7 +54,7 @@ def install_k8s_mocks() -> None:
     k8s.delete_pod = _delete_pod  # type: ignore
     k8s.create_service = _create_service  # type: ignore
     k8s.delete_service = _delete_service  # type: ignore
-    k8s.get_pod_resource_requests = _get_pod_resource_requests  # type: ignore
+
     k8s.create_job = _create_job  # type: ignore
     k8s.get_job_status = _get_job_status  # type: ignore
     k8s.delete_job = _delete_job  # type: ignore
@@ -158,19 +158,6 @@ def _create_service(name: str, target_name: str) -> None:  # ruff:ignore[unused-
 def _delete_service(name: str) -> None:
     """Delete a mock service (no-op)."""
     logger.debug("Mock deleting service %s", name)
-
-
-def _get_pod_resource_requests() -> dict[str, int]:
-    """
-    Get mock pod resource requests.
-
-    Returns:
-        Dict with cpu and memory values.
-    """
-    return {
-        "cpu": 768,  # millicores
-        "memory": 7_500_000_000,  # bytes (~7.5 GiB)
-    }
 
 
 def _create_job(
