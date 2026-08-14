@@ -1,10 +1,11 @@
 import type { Experiment } from "@/api/generated/models"
+import { experiment, withNotebook } from "@/shared/fixtures/experiment"
+import { mockFetch, requestUrl } from "@/shared/fixtures/mock-fetch"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { experiment, mockFetch, requestUrl, withNotebook } from "../../../test/dashboard-testing"
 import { ExperimentCard } from "./experiment-card"
 
 // Suite baseline: the card under test is always experiment exp1 named "Analyze".

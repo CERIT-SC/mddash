@@ -108,6 +108,7 @@ dashboard/
     │   │   ├── runtime.ts            # initialized runtime URL and request policy
     │   │   └── errors.ts             # stable handwritten API error policy
     │   ├── shared/
+    │   │   ├── fixtures/             # application-wide test data builders and network stubs
     │   │   └── ui/                   # proven reusable application compositions
     │   ├── assets/                    # source-controlled static assets
     │   └── routeTree.gen.ts           # generated TanStack route tree
@@ -126,6 +127,7 @@ This tree specifies architecture, not product features. `features/` is intention
 - Keep routes limited to URL concerns, route lifecycle, and feature entry-point selection.
 - Keep tests beside the code they verify; global test-runner setup belongs in `test/`.
 - Put code in `shared` only when reuse is demonstrated or the responsibility is inherently application-wide.
+- Application-wide test data builders (fixtures for generated contract models) and shared network stubs live in `src/shared/fixtures/` as plain modules (`experiment.ts`, `mock-fetch.ts`), because their scope follows the contract type rather than any feature. Feature-local test data stays beside the feature tests that use it.
 - `shared/ui` composes e-INFRA primitives; it does not mirror or replace the design system.
 - Generated files are never manually edited.
 

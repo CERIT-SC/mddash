@@ -18,6 +18,10 @@ config*.yaml
 **/*.tar.bz2
 /tuner/demo/
 **/tests/
+**/test/
+**/fixtures/
+**/*.test.ts
+**/*.test.tsx
 **/pytest.ini
 **/Dockerfile
 **/AGENTS.md
