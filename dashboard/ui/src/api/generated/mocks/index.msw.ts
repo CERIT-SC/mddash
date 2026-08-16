@@ -30,7 +30,7 @@ import type {
   NoContentResponse,
   Notebook,
   NotebookConfig,
-  NotebookModuleCatalog,
+  NotebookModule,
   ProblemResponse,
   PublishStatus,
   Simulation,
@@ -64,7 +64,7 @@ export const getGetHealthMockHandler = (overrideResponse?: HealthResponse | ((in
   }, options)
 }
 
-export const getListNotebookModulesMockHandler = (overrideResponse?: NotebookModuleCatalog | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<NotebookModuleCatalog> | NotebookModuleCatalog), options?: RequestHandlerOptions) => {
+export const getListNotebookModulesMockHandler = (overrideResponse?: NotebookModule[] | ((info: Parameters<Parameters<typeof http.get>[1]>[0]) => Promise<NotebookModule[]> | NotebookModule[]), options?: RequestHandlerOptions) => {
   return http.get('*/dash/api/notebook-modules', async (info: Parameters<Parameters<typeof http.get>[1]>[0]) => {
 
 

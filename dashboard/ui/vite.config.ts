@@ -11,7 +11,7 @@ const DEV_RUNTIME_CONFIG = {
   basePath: "/dash",
   apiPath: "/dash/api",
   user: "demo",
-  defaultNotebooksRepo: "https://github.com/CERIT-SC/mddash-notebooks.git",
+  defaultNotebooksRepo: "https://github.com/sb-ncbr/mddash-notebooks.git",
   mdpositUrl: "https://mdposit.mddash.eu",
 }
 

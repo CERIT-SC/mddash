@@ -11,7 +11,11 @@ function renderDashboard(search = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <Dashboard search={search} onSearchChange={() => undefined} />
+      <Dashboard
+        search={search}
+        onSearchChange={() => undefined}
+        defaultNotebooksRepo="https://example.test/notebooks.git"
+      />
     </QueryClientProvider>
   )
 }
@@ -73,7 +77,7 @@ describe("Dashboard", () => {
   it("disables unimplemented features", async () => {
     mockFetch(Response.json([experiment("one")]))
     renderDashboard()
-    expect(await screen.findByRole("button", { name: /new/i })).toBeDisabled()
+    expect(await screen.findByRole("button", { name: /new/i })).toBeEnabled()
     expect(screen.getByRole("tab", { name: /archived/i })).toBeDisabled()
   })
 })

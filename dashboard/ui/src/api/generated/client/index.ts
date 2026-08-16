@@ -63,7 +63,7 @@ import type {
   NotFoundResponse,
   Notebook,
   NotebookConfig,
-  NotebookModuleCatalog,
+  NotebookModule,
   ProblemResponse,
   PublishRequest,
   PublishStatus,
@@ -364,7 +364,7 @@ export function useGetHealth<TData = Awaited<ReturnType<typeof getHealth>>, TErr
 
 
 export type listNotebookModulesResponse200 = {
-  data: NotebookModuleCatalog
+  data: NotebookModule[]
   status: 200
 }
 

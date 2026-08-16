@@ -22,14 +22,13 @@ export const GetHealthResponse = zod.literal("API is up!")
 /**
  * @summary List curated notebook modules
  */
-export const ListNotebookModulesResponse = zod.object({
-  "modules": zod.array(zod.object({
+export const ListNotebookModulesResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "description": zod.string().optional(),
   "engine": zod.enum(['GMX', 'AMBER'])
-}))
 })
+export const ListNotebookModulesResponse = zod.array(ListNotebookModulesResponseItem)
 
 
 /**

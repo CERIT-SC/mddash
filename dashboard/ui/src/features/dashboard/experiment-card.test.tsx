@@ -81,12 +81,80 @@ describe("ExperimentCard", () => {
     renderCard(analyze())
     await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
     await user.click(screen.getByRole("menuitem", { name: /^delete$/i }))
-    await user.click(screen.getByRole("button", { name: "Delete" }))
+    await user.click(screen.getByRole("button", { name: "Delete experiment" }))
     expect(calls).toContainEqual({
       url: expect.stringContaining("/experiments/exp1"),
       method: "DELETE",
       body: undefined,
     })
+  })
+
+  it("spells out delete consequences from experiment data", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const user = userEvent.setup()
+    renderCard(
+      analyze({
+        size_bytes: 12.8 * 1024 ** 3,
+        notebook: withNotebook("RUNNING"),
+        simulation_jobs: [
+          {
+            id: "s1",
+            experiment_id: "exp1",
+            simulation_path: "md.simulation.json",
+            created_at: "2026-08-13T00:00:00Z",
+            engine: "GMX",
+            np: 4,
+            ntomp: 2,
+            status: "RUNNING",
+          },
+          {
+            id: "s2",
+            experiment_id: "exp1",
+            simulation_path: "md.simulation.json",
+            created_at: "2026-08-13T00:00:00Z",
+            engine: "GMX",
+            np: 4,
+            ntomp: 2,
+            status: "FINISHED",
+          },
+        ],
+        tuner_jobs: [
+          {
+            id: "t1",
+            experiment_id: "exp1",
+            simulation_path: "md.simulation.json",
+            nsteps: 10000,
+            created_at: "2026-08-13T00:00:00Z",
+            is_stopped: false,
+            engine: "GMX",
+            tuner_status: "PENDING",
+            trials: [],
+          },
+        ],
+      })
+    )
+    await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
+    await user.click(screen.getByRole("menuitem", { name: /^delete$/i }))
+    expect(screen.getByText("Delete experiment “Analyze”?")).toBeVisible()
+    expect(screen.getByText(/all simulation files and results \(12.8 GB\)/i)).toBeVisible()
+    expect(screen.getByText(/the experiment’s notebook/i)).toBeVisible()
+    expect(screen.getByText(/2 running or queued jobs/i)).toBeVisible()
+    expect(screen.getByText(/this can’t be undone/i)).toBeVisible()
+    // Archive is offered as a reversible alternative but not implemented in the API yet
+    expect(screen.getByText(/want to keep the results/i)).toBeVisible()
+    expect(screen.getByRole("button", { name: /archive instead/i })).toBeDisabled()
+  })
+
+  it("omits absent consequences from the delete dialog", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const user = userEvent.setup()
+    renderCard(analyze())
+    await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
+    await user.click(screen.getByRole("menuitem", { name: /^delete$/i }))
+    expect(screen.getByText(/^all simulation files and results$/i)).toBeVisible()
+    expect(screen.queryByText(/the experiment’s notebook/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/running or queued/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/archiving frees disk space/i)).toBeVisible()
   })
 
   it("shows the module name, source label, and size when present", () => {

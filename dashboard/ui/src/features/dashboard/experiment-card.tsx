@@ -14,6 +14,8 @@ import {
 import type { Experiment } from "@/api/generated/models"
 import { formatBytes, formatTime, relativeTime } from "@/shared/format"
 import {
+  Alert,
+  AlertDescription,
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -22,7 +24,9 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertTitle,
   Button,
+  buttonVariants,
   Card,
   CardAction,
   CardContent,
@@ -42,6 +46,7 @@ import {
   DropdownMenuTrigger,
   Input,
   Label,
+  List,
 } from "@e-infra/design-system"
 import { useQueryClient } from "@tanstack/react-query"
 import {
@@ -68,7 +73,7 @@ import { isNotebookActive } from "./notebook-status"
 
 const STEP_LABELS = ["Setup", "Tune", "Run", "Analyze", "Publish"] as const
 
-const ENGINE_LABELS: Record<Experiment["engine"], string> = {
+export const ENGINE_LABELS: Record<Experiment["engine"], string> = {
   GMX: "GROMACS",
   AMBER: "AMBER",
 }
@@ -220,6 +225,17 @@ function StepDetails({ experiment, stepIndex }: { experiment: Experiment; stepIn
 
 type ExperimentCardProps = { experiment: Experiment }
 
+const DELETE_ACTIVE_STATUSES = new Set(["PENDING", "RUNNING"])
+
+/** Jobs that would be interrupted by a delete (PENDING covers queued; the API has no QUEUED status). */
+function activeJobCount(experiment: Experiment): number {
+  return (
+    experiment.simulation_jobs.filter((job) => DELETE_ACTIVE_STATUSES.has(job.status)).length +
+    experiment.tuner_jobs.filter((job) => DELETE_ACTIVE_STATUSES.has(job.tuner_status)).length +
+    experiment.analysis_jobs.filter((job) => DELETE_ACTIVE_STATUSES.has(job.status)).length
+  )
+}
+
 export function ExperimentCard({ experiment }: ExperimentCardProps) {
   const queryClient = useQueryClient()
   const [renameOpen, setRenameOpen] = useState(false)
@@ -290,6 +306,10 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
     if (!next || next === experiment.name) return
     rename.mutate({ experimentId: experiment.id, data: { name: next } })
   }
+
+  const deleteSize =
+    experiment.size_bytes !== null && experiment.size_bytes !== undefined ? formatBytes(experiment.size_bytes) : null
+  const deleteActiveJobs = activeJobCount(experiment)
 
   return (
     <Card className="bg-white pb-0">
@@ -440,19 +460,53 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
+          {/* asChild keeps the list markup out of the <p> Radix renders by default. */}
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete experiment</AlertDialogTitle>
-            <AlertDialogDescription>
-              Delete “{experiment.name}” and all its data? This cannot be undone.
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="text-error h-5 w-5" aria-hidden="true" />
+              Delete experiment “{experiment.name}”?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>This permanently removes:</p>
+                <List>
+                  <li>All simulation files and results{deleteSize ? ` (${deleteSize})` : ""}</li>
+                  {experiment.notebook && <li>The experiment’s notebook</li>}
+                  {deleteActiveJobs > 0 && (
+                    <li>
+                      {deleteActiveJobs} running or queued {deleteActiveJobs === 1 ? "job" : "jobs"}
+                    </li>
+                  )}
+                </List>
+                <p className="text-error font-medium">This can’t be undone.</p>
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {/* flex overrides the DS Alert's icon grid so the button shares the text row */}
+          <Alert className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0 space-y-1">
+              <AlertTitle>Want to keep the results?</AlertTitle>
+              <AlertDescription>
+                Archiving frees {deleteSize ? `the same ${deleteSize}` : "disk space"} but keeps the data. You can
+                restore it later.
+              </AlertDescription>
+            </div>
+            {/* TODO: archive support is not implemented in the API yet — enable when it lands */}
+            <Button variant="outline" className="self-end sm:shrink-0 sm:self-center" disabled>
+              <Archive /> Archive instead
+            </Button>
+          </Alert>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {/* TODO: switch to variant="error" prop once CERIT-SC/design-system#108 (variant/size
+                on AlertDialogAction) ships in a released @e-infra/design-system version */}
             <AlertDialogAction
+              className={buttonVariants({ variant: "error" })}
               onClick={() => remove.mutate({ experimentId: experiment.id })}
               disabled={remove.isPending}
             >
-              Delete
+              <Trash2 aria-hidden="true" />
+              Delete experiment
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

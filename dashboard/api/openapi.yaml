@@ -42,7 +42,7 @@ paths:
           description: Public notebook module catalog
           content:
             application/json:
-              schema: {$ref: '#/components/schemas/NotebookModuleCatalog'}
+              schema: {type: array, items: {$ref: '#/components/schemas/NotebookModule'}}
         default: {$ref: '#/components/responses/Problem'}
   /dash/api/metrics:
     get:
@@ -858,12 +858,6 @@ components:
       type: object
       required: [message]
       properties: {message: {type: string}}
-      additionalProperties: false
-    NotebookModuleCatalog:
-      type: object
-      required: [modules]
-      properties:
-        modules: {type: array, items: {$ref: '#/components/schemas/NotebookModule'}}
       additionalProperties: false
     NotebookModule:
       type: object
