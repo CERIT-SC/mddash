@@ -48,7 +48,7 @@ import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
 
-import { ENGINE_LABELS } from "./experiment-card"
+import { ENGINE_LABELS } from "./engine-labels"
 
 const ENGINE_ORDER: Engine[] = ["GMX", "AMBER"]
 

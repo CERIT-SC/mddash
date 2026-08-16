@@ -69,14 +69,10 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { ENGINE_LABELS } from "./engine-labels"
 import { isNotebookActive } from "./notebook-status"
 
 const STEP_LABELS = ["Setup", "Tune", "Run", "Analyze", "Publish"] as const
-
-export const ENGINE_LABELS: Record<Experiment["engine"], string> = {
-  GMX: "GROMACS",
-  AMBER: "AMBER",
-}
 
 const IDLE_STATUSES = new Set(["setup", "setup complete", "published"])
 
