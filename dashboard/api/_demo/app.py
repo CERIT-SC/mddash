@@ -16,6 +16,7 @@ Usage:
 """
 
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -29,40 +30,51 @@ if str(API_DIR) not in sys.path:
     sys.path.insert(0, str(API_DIR))
 
 
+# Demo env defaults, applied via os.environ.setdefault so any real env still wins.
+_DEMO_ENV_DEFAULTS = {
+    "HOSTNAME": "localhost",
+    "JUPYTERHUB_USER": "dev-user",
+    "JUPYTERHUB_SERVICE_PREFIX": "/",
+    "POD_NAMESPACE": "default",
+    "HUB_NAMESPACE": "default",
+    "PVC_NAME": "demo-pvc",
+    "PVC_STORAGE_SIZE": "100Gi",
+    "NS_REQUESTS_CPU": "2000m",
+    "NS_REQUESTS_MEMORY": "8Gi",
+    "NS_LIMITS_CPU": "14000m",
+    "NS_LIMITS_MEMORY": "25Gi",
+    "NOTEBOOK_CPU_REQUEST": "200m",
+    "NOTEBOOK_MEMORY_REQUEST": "512Mi",
+    "NOTEBOOK_CPU_LIMIT": "2",
+    "NOTEBOOK_MEMORY_LIMIT": "4Gi",
+    "GMX_CPU_REQUEST": "100m",
+    "GMX_MEMORY_REQUEST": "256Mi",
+    "GMX_CPU_LIMIT": "2000m",
+    "GMX_MEMORY_LIMIT": "2Gi",
+    "GPU_TYPE": "nvidia.com/gpu",
+    "TUNER_USER": "demo",
+    "TUNER_PASSWORD": "demo",
+    "S3_BUCKET": "demo-bucket",
+    "MDREPO_URL": "https://workflow-repo.test.du.cesnet.cz",
+    "MDREPO_SCOPES": "openid profile",
+    "MDREPO_CLIENT_ID": "demo-client",
+    "MDREPO_CLIENT_SECRET": "demo-secret",
+    "MDREPO_UPLOADER_IMAGE": "demo-mdrepo-uploader",
+    "DEFAULT_NOTEBOOKS_REPO": "https://github.com/sb-ncbr/mddash-notebooks.git",
+    "MDPOSIT_URL": "https://mdposit.mddbr.eu",
+}
+
+
 def _configure_demo_env() -> None:
     """Configure environment variables for demo mode."""
     demo_data_dir = os.environ.get("MDDASH_DEMO_DATA_DIR", "/tmp/mddash")
+    # Reset on every start (including debug-reloader restarts): demo data is
+    # disposable, so there is no rehydration path to keep in sync with the seed.
+    shutil.rmtree(demo_data_dir, ignore_errors=True)
+    Path(demo_data_dir).mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("DATA_DIR", demo_data_dir)
-    os.environ.setdefault("HOSTNAME", "localhost")
-    os.environ.setdefault("JUPYTERHUB_USER", "dev-user")
-    os.environ.setdefault("JUPYTERHUB_SERVICE_PREFIX", "/")
-    os.environ.setdefault("POD_NAMESPACE", "default")
-    os.environ.setdefault("HUB_NAMESPACE", "default")
-    os.environ.setdefault("PVC_NAME", "demo-pvc")
-    os.environ.setdefault("PVC_STORAGE_SIZE", "100Gi")
-    os.environ.setdefault("NS_REQUESTS_CPU", "2000m")
-    os.environ.setdefault("NS_REQUESTS_MEMORY", "8Gi")
-    os.environ.setdefault("NS_LIMITS_CPU", "14000m")
-    os.environ.setdefault("NS_LIMITS_MEMORY", "25Gi")
-    os.environ.setdefault("NOTEBOOK_CPU_REQUEST", "200m")
-    os.environ.setdefault("NOTEBOOK_MEMORY_REQUEST", "512Mi")
-    os.environ.setdefault("NOTEBOOK_CPU_LIMIT", "2")
-    os.environ.setdefault("NOTEBOOK_MEMORY_LIMIT", "4Gi")
-    os.environ.setdefault("GMX_CPU_REQUEST", "100m")
-    os.environ.setdefault("GMX_MEMORY_REQUEST", "256Mi")
-    os.environ.setdefault("GMX_CPU_LIMIT", "2000m")
-    os.environ.setdefault("GMX_MEMORY_LIMIT", "2Gi")
-    os.environ.setdefault("GPU_TYPE", "nvidia.com/gpu")
-    os.environ.setdefault("TUNER_USER", "demo")
-    os.environ.setdefault("TUNER_PASSWORD", "demo")
-    os.environ.setdefault("S3_BUCKET", "demo-bucket")
-    os.environ.setdefault("MDREPO_URL", "https://workflow-repo.test.du.cesnet.cz")
-    os.environ.setdefault("MDREPO_SCOPES", "openid profile")
-    os.environ.setdefault("MDREPO_CLIENT_ID", "demo-client")
-    os.environ.setdefault("MDREPO_CLIENT_SECRET", "demo-secret")
-    os.environ.setdefault("MDREPO_UPLOADER_IMAGE", "demo-mdrepo-uploader")
-    os.environ.setdefault("DEFAULT_NOTEBOOKS_REPO", "https://github.com/sb-ncbr/mddash-notebooks.git")
-    os.environ.setdefault("MDPOSIT_URL", "https://mdposit.mddbr.eu")
+    for key, value in _DEMO_ENV_DEFAULTS.items():
+        os.environ.setdefault(key, value)
 
 
 def create_demo_app() -> "Flask":
