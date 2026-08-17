@@ -27,6 +27,8 @@ export * from './createExperimentForm.ts';
 export * from './createExperimentFormType.ts';
 export * from './engine.ts';
 export * from './experiment.ts';
+export * from './experimentSource.ts';
+export * from './experimentSourceType.ts';
 export * from './fileInfo.ts';
 export * from './forbiddenResponse.ts';
 export * from './getAmberJobLogParams.ts';

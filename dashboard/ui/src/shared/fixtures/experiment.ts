@@ -6,7 +6,7 @@ export function experiment(id: string, overrides: Partial<Experiment> = {}): Exp
     name: `Experiment ${id}`,
     created_at: "2026-08-13T00:00:00Z",
     updated_at: new Date(Date.now() - 12 * 60_000).toISOString(),
-    source_message: null,
+    source: null,
     engine: "GMX",
     latest_simulation_path: null,
     notebook: null,

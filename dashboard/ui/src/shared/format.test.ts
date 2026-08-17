@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { formatBytes, formatTime, relativeTime } from "./format"
+import { formatBytes, formatDate, formatTime, relativeTime } from "./format"
 
 describe("formatTime", () => {
   it("shows the two most significant units compactly", () => {
@@ -19,6 +19,13 @@ describe("formatBytes", () => {
     expect(formatBytes(0)).toBe("0 KB")
     expect(formatBytes(15 * 1024 ** 2)).toBe("15 MB")
     expect(formatBytes(8.7 * 1024 ** 3)).toBe("8.7 GB")
+  })
+})
+
+describe("formatDate", () => {
+  it("formats ISO timestamps as short dates", () => {
+    expect(formatDate("2026-07-20T13:43:20Z")).toBe("Jul 20, 2026")
+    expect(formatDate("2026-01-05T00:00:00Z")).toBe("Jan 5, 2026")
   })
 })
 

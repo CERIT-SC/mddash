@@ -7,6 +7,7 @@
  */
 import type { AnalysisJob } from './analysisJob.ts';
 import type { Engine } from './engine.ts';
+import type { ExperimentSource } from './experimentSource.ts';
 import type { Notebook } from './notebook.ts';
 import type { NullableString } from './nullableString.ts';
 import type { SimulationJob } from './simulationJob.ts';
@@ -20,10 +21,9 @@ export interface Experiment {
   module_name?: NullableString | null;
   /** @nullable */
   latest_simulation_path: string | null;
-  source_label?: NullableString | null;
+  source?: ExperimentSource | null;
   /** @nullable */
   size_bytes?: number | null;
-  source_message: NullableString | null;
   notebooks_repo?: NullableString | null;
   mdrepo_id?: NullableString | null;
   /** @nullable */

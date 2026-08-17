@@ -6,13 +6,12 @@ from datetime import datetime, timedelta
 
 import requests
 from config import DATA_DIR
-from enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus, PodStatus
+from enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus, PodStatus, SourceType
 from extensions import db
 from models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook, TunerJob
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
 
 from .files import (
-    MDPOSIT_DEMO_ACCESSION,
     MDPOSIT_DEMO_PROJECT_URL,
     ensure_amber_demo_files,
     ensure_demo_files,
@@ -43,8 +42,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         id="aaaaa",
         name="GPCR membrane protein in lipid bilayer",
         module_name="Membrane protein (BioBB)",
-        source_label="gpcr_membrane.tpr + 1",
-        source_message="Created by uploading files: gpcr_membrane.tpr, structure.pdb.",
+        source_type=SourceType.FILE,
+        source_files=["gpcr_membrane.tpr", "structure.pdb"],
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
         created_at=now - timedelta(days=3),
         updated_at=now - timedelta(days=2),
@@ -105,8 +104,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         id="bbbbb",
         name="HIV protease inhibitor binding study",
         module_name="Protein",
-        source_label="10.5281/zenodo.7261108",
-        source_message="Created by downloading repository from 'https://zenodo.org/records/7261108'.",
+        source_type=SourceType.REPO,
+        source_ref="https://zenodo.org/records/7261108",
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
         created_at=now - timedelta(days=2),
         updated_at=now - timedelta(days=1),
@@ -264,8 +263,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         id="ccccc",
         name="Hen egg-white lysozyme folding stability",
         module_name="Protein",
-        source_label="PDB (1LYZ)",
-        source_message="Created by uploading files: lysozyme_hewl.tpr.",
+        source_type=SourceType.PDB,
+        source_ref="1LYZ",
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
         mdrepo_id="8gahj-dh519",
         mdrepo_published=True,
@@ -340,8 +339,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         id="ddddd",
         name="AMBER villin headpiece folding",
         module_name="Protein (BioBB)",
-        source_label="villin.prmtop + 2",
-        source_message="Created by uploading files: villin.prmtop, villin.inpcrd, production.mdin.",
+        source_type=SourceType.FILE,
+        source_files=["villin.prmtop", "villin.inpcrd", "production.mdin"],
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
         engine=Engine.AMBER,
         created_at=now - timedelta(hours=6),
@@ -409,8 +408,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         id="eeeee",
         name="AMBER DNA duplex stability",
         module_name="Nucleic Acid",
-        source_label="dna.prmtop + 2",
-        source_message="Created by uploading files: dna.prmtop, dna.inpcrd, simulation.mdin.",
+        source_type=SourceType.REPO,
+        source_ref="https://doi.org/10.5281/zenodo.10440684",
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
         engine=Engine.AMBER,
         created_at=now - timedelta(days=7),
@@ -468,8 +467,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         Experiment,
         id="fffff",
         name="MDPosit imported lysozyme trajectory",
-        source_label=MDPOSIT_DEMO_ACCESSION,
-        source_message=f"Created by downloading repository from '{MDPOSIT_DEMO_PROJECT_URL}'.",
+        source_type=SourceType.REPO,
+        source_ref=MDPOSIT_DEMO_PROJECT_URL,
         notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
         created_at=now - timedelta(days=1, hours=6),
         updated_at=now - timedelta(days=1),
@@ -579,7 +578,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     write_mdrun_stdio(enzyme.id, "production", running_gmx.id)
 
     # Published study: simple structure
-    ensure_demo_files(published.id, ["lysozyme_hewl.tpr", "structure.pdb", "trajectory.xtc"])
+    ensure_demo_files(published.id, ["lysozyme_hewl.tpr", "structure.pdb", "trajectory.xtc", "input.pdb"])
     write_finished_gmx_log(published.id, "lysozyme_hewl", nsteps=1000000, performance=45.3)
 
     # AMBER villin folding study: uses AMBER file format

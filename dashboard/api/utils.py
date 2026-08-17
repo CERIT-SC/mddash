@@ -11,7 +11,7 @@ import time
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from werkzeug.exceptions import InternalServerError, NotFound
 
@@ -57,6 +57,14 @@ class FileInfo:
     name: str
     size: int
     path: str
+
+
+def file_download_url(experiment_id: str, path: str) -> str:
+    """Build the API download URL for an experiment file; each path segment is percent-encoded."""
+    from config import API_PREFIX  # ruff:ignore[import-outside-top-level]
+
+    quoted = "/".join(quote(part) for part in Path(path).parts if part)
+    return f"{API_PREFIX}/experiments/{experiment_id}/files/{quoted}"
 
 
 def generate_id(length: int = 5) -> str:

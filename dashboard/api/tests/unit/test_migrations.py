@@ -196,6 +196,47 @@ def test_migration_008_adds_simulation_path_to_analysis(tmp_path: Path) -> None:
         assert cols["simulation_path"]["nullable"] is False
 
 
+def test_migration_011_structures_source_columns(tmp_path: Path) -> None:
+    """Legacy display strings are parsed into source_type/source_ref/source_files, then dropped."""
+    import sqlalchemy as sa
+
+    app = _make_app(tmp_path / "test.db")
+    _upgrade_to(app, "010")
+    with app.app_context(), db.engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                "INSERT INTO experiments (id, created_at, updated_at, name, source_message) VALUES "
+                "('pdbid', '2026-01-01', '2026-01-01', 'a', \"Created by downloading '1LYZ' from RCSB PDB.\"), "
+                "('pdburl', '2026-01-01', '2026-01-01', 'b', \"Created by downloading PDB file from 'https://x.org/y.pdb'.\"), "
+                "('repo', '2026-01-01', '2026-01-01', 'c', \"Created by downloading repository from 'https://zenodo.org/records/1'.\"), "
+                "('upload', '2026-01-01', '2026-01-01', 'd', 'Created by uploading files: a.tpr, b.pdb.'), "
+                "('junk', '2026-01-01', '2026-01-01', 'e', 'Some hand-written note.')"
+            )
+        )
+
+    _upgrade_to(app, "head")
+    with app.app_context():
+        cols = _column_names(db.engine, "experiments")
+        assert {"source_type", "source_ref", "source_files"} <= cols
+        assert "source_label" not in cols
+        assert "source_message" not in cols
+        with db.engine.connect() as conn:
+            rows = {
+                row.id: row.v
+                for row in conn.execute(
+                    sa.text(
+                        "SELECT id, IFNULL(source_type, '') || '|' || IFNULL(source_ref, '') || '|' || IFNULL(source_files, '') AS v "
+                        "FROM experiments"
+                    )
+                ).mappings()
+            }
+        assert rows["pdbid"] == "pdb|1LYZ|"
+        assert rows["pdburl"] == "pdb|https://x.org/y.pdb|"
+        assert rows["repo"] == "repo|https://zenodo.org/records/1|"
+        assert rows["upload"] == 'file||["a.tpr", "b.pdb"]'
+        assert rows["junk"] == "||"
+
+
 def test_all_migrations_reach_head(tmp_path: Path) -> None:
     app = _make_app(tmp_path / "test.db")
     with app.app_context():

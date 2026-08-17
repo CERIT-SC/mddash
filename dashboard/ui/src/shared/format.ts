@@ -36,6 +36,13 @@ export function formatBytes(bytes: number): string {
 }
 
 /**
+ * Format an ISO timestamp as a short date (e.g. "Jul 20, 2026").
+ */
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+}
+
+/**
  * Format an ISO timestamp as a human-friendly age (e.g. "12 min ago", "yesterday").
  */
 export function relativeTime(iso: string, now = Date.now()): string {

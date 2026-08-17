@@ -14,3 +14,4 @@ dashboard/ui.old/*
 .playwright-mcp/
 pmemd*.tar.bz2
 ambertools*.tar.bz2
+.playwright-cli/

@@ -36,7 +36,6 @@ def _make_experiment(db_session: Session) -> Experiment:
     experiment = Experiment(
         id="abcde",
         name="Test",
-        source_message="test",
         notebooks_repo="https://example.com/repo",
         engine=Engine.AMBER,
     )

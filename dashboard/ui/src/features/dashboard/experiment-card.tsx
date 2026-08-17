@@ -13,6 +13,8 @@ import {
 } from "@/api/generated/client"
 import type { Experiment } from "@/api/generated/models"
 import { formatBytes, formatTime, relativeTime } from "@/shared/format"
+import { sourceLabel } from "@/shared/source"
+import { ladderStepIndex } from "@/shared/steps"
 import {
   Alert,
   AlertDescription,
@@ -49,6 +51,7 @@ import {
   List,
 } from "@e-infra/design-system"
 import { useQueryClient } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import {
   Activity,
   Archive,
@@ -82,7 +85,7 @@ const SPINNING_STATUSES = new Set(["simulating", "tuning", "analyzing"])
 // backend ladder: 0-1=setup, 2=tune, 3=run, 4=analyze, 5=publish
 function stepParts(experiment: Experiment): { shownStep: number; stepIndex: number } {
   const step = Math.max(0, Math.min(experiment.step ?? 0, STEP_LABELS.length))
-  return { shownStep: Math.max(step, 1), stepIndex: step === 0 ? 0 : step - 1 }
+  return { shownStep: Math.max(step, 1), stepIndex: ladderStepIndex(step) }
 }
 
 // Icon/color keyed by the workflow step (mock: flask=setup, sliders=tune,
@@ -308,7 +311,10 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
   const deleteActiveJobs = activeJobCount(experiment)
 
   return (
-    <Card className="bg-white pb-0">
+    // The whole card links to the wizard: the title anchor stretches an ::after
+    // overlay across the card, and interactive elements rise above it with z-10.
+    // DS cards are borderless (shadow-only), so hover means lift, not border.
+    <Card className="relative bg-white pb-0 transition-shadow hover:shadow-md">
       <CardHeader>
         <div className="flex min-w-0 items-center gap-3">
           <span
@@ -318,7 +324,15 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
             <StepIcon size={20} />
           </span>
           <div className="min-w-0">
-            <CardTitle className="truncate leading-tight">{experiment.name}</CardTitle>
+            <CardTitle className="truncate leading-tight">
+              <Link
+                to="/experiments/$experimentId"
+                params={{ experimentId: experiment.id }}
+                className="after:absolute after:inset-0"
+              >
+                {experiment.name}
+              </Link>
+            </CardTitle>
             <p className="text-text-muted truncate text-sm" title={subtitle(experiment)}>
               {subtitle(experiment)}
             </p>
@@ -327,7 +341,12 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
         <CardAction>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label={`Actions for ${experiment.name}`}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative z-10"
+                aria-label={`Actions for ${experiment.name}`}
+              >
                 <Ellipsis size={18} />
               </Button>
             </DropdownMenuTrigger>
@@ -409,7 +428,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
       {/* pt-3! must outrank the DS rule that pads [.border-t] footers to pt-6;
           bg + rounded-b reproduce the mock's subtle footer band flush with the card edge. */}
       <CardFooter className="border-border bg-background gap-3 rounded-b-md border-t pt-3! pb-3 text-sm">
-        <span className="text-text-muted truncate">{experiment.mdrepo_id ?? experiment.source_label ?? ""}</span>
+        <span className="text-text-muted truncate">{sourceLabel(experiment.source) ?? ""}</span>
         <span className="text-text-muted ml-auto flex shrink-0 items-center gap-3">
           {experiment.size_bytes !== null && experiment.size_bytes !== undefined && (
             <span className="flex items-center gap-1.5">

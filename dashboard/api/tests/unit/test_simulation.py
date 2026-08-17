@@ -34,7 +34,7 @@ def _seed_experiment(app: Flask, exp_id: str = "simts") -> str:
         The experiment ID.
     """
     with app.app_context():
-        exp = Experiment(id=exp_id, name="Sim Test", source_message="test", notebooks_repo="https://github.com/t/r.git")
+        exp = Experiment(id=exp_id, name="Sim Test", notebooks_repo="https://github.com/t/r.git")
         db.session.add(exp)
         db.session.flush()
         nb = Notebook(experiment_id=exp_id)

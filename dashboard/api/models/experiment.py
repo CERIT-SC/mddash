@@ -5,14 +5,13 @@ from http import HTTPStatus
 from pathlib import Path
 from shutil import rmtree
 from typing import TYPE_CHECKING
-from urllib.parse import quote, urlparse
+from urllib.parse import urlparse
 
 import yaml
 from cache import mdrepo_status_cache, step_status_cache
 from cachetools import cached
 from clients import mdposit, mdrepo, metadump
 from config import (
-    API_PREFIX,
     DATA_DIR,
     MDPOSIT_URL,
     MDPOSIT_VRE_LITE_URL,
@@ -23,7 +22,7 @@ from config import (
     MDREPO_TOKEN_URL,
     MDREPO_URL,
 )
-from enums import Engine, PodStatus
+from enums import Engine, PodStatus, SourceType
 from errors import ApiError
 from extensions import db
 from flask import session
@@ -40,7 +39,7 @@ from upload.submission import (
     is_upload_active,
     submit_upload_job,
 )
-from utils import download_git_repo, download_git_repo_module, get_du_size, get_unique_id
+from utils import download_git_repo, download_git_repo_module, file_download_url, get_du_size, get_unique_id
 from validators import validate_http_url
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import BadRequest, Conflict, InternalServerError, NotFound
@@ -79,7 +78,7 @@ class Experiment(db.Model):  # type: ignore
         created_at: Timestamp when the experiment was created.
         updated_at: Timestamp when the experiment was last modified.
         name: Human-readable name of the experiment.
-        source_message: Description of how the experiment was created.
+        source_type: How the experiment's structure source was created.
         notebooks_repo: Git repository URL containing setup notebooks.
         mdrepo_id: MDRepo record ID if the experiment has been published.
         engine: Molecular dynamics engine (GMX or AMBER).
@@ -105,10 +104,11 @@ class Experiment(db.Model):  # type: ignore
     name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # display name of the curated notebook module used at creation; None = custom workflow
     module_name: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
-    # human-readable source label (PDB ID, uploaded filename, record DOI) for the dashboard footer
-    source_label: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
-    # message for user to understand the source of the experiment
-    source_message: Mapped[str | None] = mapped_column(db.Text, nullable=False)
+    source_type: Mapped[SourceType | None] = mapped_column(db.Enum(SourceType), nullable=True)
+    # RCSB accession, or the resolved download URL for URL/repo sources
+    source_ref: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
+    # original uploaded filenames (source_type=file only) — creation history, not derived state
+    source_files: Mapped[list[str] | None] = mapped_column(db.JSON, nullable=True)
     # git repository URL containing setup notebooks (nullable for legacy experiments) TODO: make non-nullable (breaks db migration)
     notebooks_repo: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
     # ID of the experiment in MDRepo
@@ -134,6 +134,40 @@ class Experiment(db.Model):  # type: ignore
     analysis_jobs: Mapped[list["AnalysisJob"]] = relationship(
         "AnalysisJob", back_populates="experiment", cascade="all, delete-orphan"
     )
+
+    @property
+    def source(self) -> dict | None:
+        """
+        Structured provenance for API payloads; None on legacy rows.
+
+        ``files`` lists source artifacts still downloadable (pdb sources always
+        download to ``input.pdb``); ``file_count`` is the creation-time upload
+        count that survives file deletions.
+        """
+        if self.source_type is None:
+            return None
+
+        result: dict[str, object] = {"type": str(self.source_type)}
+        if self.source_ref:
+            if self.source_type == SourceType.PDB and not self.source_ref.startswith(("http://", "https://")):
+                result["pdb_id"] = self.source_ref
+            else:
+                result["url"] = self.source_ref
+        if self.source_type == SourceType.FILE:
+            result["file_count"] = len(self.source_files or [])
+
+        names = ["input.pdb"] if self.source_type == SourceType.PDB else sorted(self.source_files or [])
+        files: list[dict[str, object]] = []
+        for name in names:
+            try:
+                size = (path := DATA_DIR / self.id / name).stat().st_size
+            except OSError:
+                continue  # raced deletion — never leak a broken entry into the payload
+            if not path.is_file():
+                continue
+            files.append({"name": name, "size": size, "path": name, "url": file_download_url(self.id, name)})
+        result["files"] = files
+        return result
 
     @property
     def step(self) -> int:
@@ -250,13 +284,11 @@ class Experiment(db.Model):  # type: ignore
         try:
             if is_url:
                 url: str = validate_http_url(source)
-                message: str = f"Created by downloading PDB file from '{source}'."
-                source_label: str | None = f"PDB ({url.rsplit('/', 1)[-1]})"
+                source_ref: str = url
             else:
                 pdb_id = source.upper()
                 url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
-                message = f"Created by downloading '{pdb_id}' from RCSB PDB."
-                source_label = f"PDB ({pdb_id})"
+                source_ref = pdb_id
 
             # Download PDB file
             response = fetch_pdb(url)
@@ -279,11 +311,11 @@ class Experiment(db.Model):  # type: ignore
             experiment = cls(
                 id=experiment_id,
                 name=name,
-                source_message=message,
                 notebooks_repo=notebooks_repo,
                 engine=engine,
                 module_name=notebook_module.name if notebook_module else None,
-                source_label=source_label,
+                source_type=SourceType.PDB,
+                source_ref=source_ref,
             )
 
             return cls._create_with_notebook(experiment)
@@ -327,15 +359,14 @@ class Experiment(db.Model):  # type: ignore
             else:
                 import_invenio_repo(resolved_repo_link, experiment_id)
 
-            message: str = f"Created by downloading repository from '{repo_link}'."
             experiment = cls(
                 id=experiment_id,
                 name=name,
-                source_message=message,
                 notebooks_repo=notebooks_repo,
                 engine=engine,
                 module_name=notebook_module.name if notebook_module else None,
-                source_label=urlparse(resolved_repo_link).path.rsplit("/", 1)[-1] or None,
+                source_type=SourceType.REPO,
+                source_ref=resolved_repo_link,
             )
 
             return cls._create_with_notebook(experiment)
@@ -387,16 +418,14 @@ class Experiment(db.Model):  # type: ignore
                 file.save(DATA_DIR / experiment_id / filename)
                 filenames.append(filename)
 
-            message: str = f"Created by uploading files: {', '.join(filenames)}."
-            source_label = filenames[0] + (f" + {len(filenames) - 1}" if len(filenames) > 1 else "")
             experiment = cls(
                 id=experiment_id,
                 name=name,
-                source_message=message,
                 notebooks_repo=notebooks_repo,
                 engine=engine,
                 module_name=notebook_module.name if notebook_module else None,
-                source_label=source_label,
+                source_type=SourceType.FILE,
+                source_files=filenames,
             )
 
             return cls._create_with_notebook(experiment)
@@ -755,7 +784,7 @@ class Experiment(db.Model):  # type: ignore
             files.append({
                 "role": publish_role,
                 "path": relative_path,
-                "url": self._file_download_url(relative_path),
+                "url": file_download_url(self.id, relative_path),
             })
 
         metadata = self._build_mdposit_metadata(selected_paths)
@@ -770,21 +799,11 @@ class Experiment(db.Model):  # type: ignore
         return {
             "metadata_file": {
                 "path": metadata_relative_path,
-                "url": self._file_download_url(metadata_relative_path),
+                "url": file_download_url(self.id, metadata_relative_path),
             },
             "files": files,
             "vre_lite_url": MDPOSIT_VRE_LITE_URL or None,
         }
-
-    def _file_download_url(self, relative_path: str) -> str:
-        """
-        Build a URL-encoded download link for a file relative to the experiment directory.
-
-        Returns:
-            Absolute API URL with each path segment percent-encoded.
-        """
-        quoted = "/".join(quote(part) for part in Path(relative_path).parts if part)
-        return f"{API_PREFIX}/experiments/{self.id}/files/{quoted}"
 
     def _build_mdposit_metadata(self, selected_paths: dict[str, Path]) -> dict:
         """
@@ -803,7 +822,6 @@ class Experiment(db.Model):  # type: ignore
 
         metadata: dict[str, object] = {
             "name": self.name,
-            **({"description": self.source_message} if self.source_message else {}),
             **({"program": program} if program else {}),
             "type": "trajectory",
             "method": "Classical MD",

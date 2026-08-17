@@ -1,22 +1,19 @@
 import { experiment, withNotebook } from "@/shared/fixtures/experiment"
 import { mockFetch } from "@/shared/fixtures/mock-fetch"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, within } from "@testing-library/react"
+import { renderWithProviders } from "@/shared/fixtures/render-with-providers"
+import { screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it } from "vitest"
 
-import { Dashboard } from "./dashboard"
+import { Dashboard, type DashboardSearch } from "./dashboard"
 
-function renderDashboard(search = {}) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={client}>
-      <Dashboard
-        search={search}
-        onSearchChange={() => undefined}
-        defaultNotebooksRepo="https://example.test/notebooks.git"
-      />
-    </QueryClientProvider>
+function renderDashboard(search: DashboardSearch = {}) {
+  return renderWithProviders(
+    <Dashboard
+      search={search}
+      onSearchChange={() => undefined}
+      defaultNotebooksRepo="https://example.test/notebooks.git"
+    />
   )
 }
 
@@ -29,7 +26,7 @@ describe("Dashboard", () => {
         experiment("three"),
       ])
     )
-    renderDashboard()
+    await renderDashboard()
     const running = await screen.findByRole("heading", { name: /notebook running/i })
     expect(within(running).getByText("1")).toBeVisible()
     const stopped = screen.getByRole("heading", { name: /notebook stopped/i })
@@ -42,20 +39,20 @@ describe("Dashboard", () => {
     mockFetch(
       Response.json([experiment("alpha", { name: "Analyze protein" }), experiment("beta", { name: "Tuning membrane" })])
     )
-    renderDashboard({ q: "membrane" })
+    await renderDashboard({ q: "membrane" })
     expect(await screen.findByText("Tuning membrane")).toBeVisible()
     expect(screen.queryByText("Analyze protein")).not.toBeInTheDocument()
   })
 
   it("shows an empty state when there are no experiments", async () => {
     mockFetch(Response.json([]))
-    renderDashboard()
+    await renderDashboard()
     expect(await screen.findByText("No experiments yet.")).toBeVisible()
   })
 
   it("shows a no-match state when the search filters everything out", async () => {
     mockFetch(Response.json([experiment("alpha", { name: "Analyze" })]))
-    renderDashboard({ q: "zzz" })
+    await renderDashboard({ q: "zzz" })
     expect(await screen.findByText("No experiments match “zzz”.")).toBeVisible()
   })
 
@@ -68,7 +65,7 @@ describe("Dashboard", () => {
       Response.json([experiment("recovered")])
     )
     const user = userEvent.setup()
-    renderDashboard()
+    await renderDashboard()
     expect(await screen.findByRole("alert")).toHaveTextContent("urn:mddash:upstream-unavailable")
     await user.click(screen.getByRole("button", { name: "Retry" }))
     expect(await screen.findByText("Experiment recovered")).toBeVisible()
@@ -76,7 +73,7 @@ describe("Dashboard", () => {
 
   it("disables unimplemented features", async () => {
     mockFetch(Response.json([experiment("one")]))
-    renderDashboard()
+    await renderDashboard()
     expect(await screen.findByRole("button", { name: /new/i })).toBeEnabled()
     expect(screen.getByRole("tab", { name: /archived/i })).toBeDisabled()
   })

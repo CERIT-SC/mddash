@@ -7,6 +7,7 @@ from .job_status import JobStatus
 from .notebook_tier import NotebookTier
 from .pod_status import PodStatus
 from .preprocessing_mode import PreprocessingMode
+from .source_type import SourceType
 
 __all__ = [
     "AmberBinary",
@@ -18,4 +19,5 @@ __all__ = [
     "NotebookTier",
     "PodStatus",
     "PreprocessingMode",
+    "SourceType",
 ]

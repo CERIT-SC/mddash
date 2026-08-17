@@ -1,8 +1,8 @@
 import type { Experiment } from "@/api/generated/models"
 import { experiment, withNotebook } from "@/shared/fixtures/experiment"
 import { mockFetch, requestUrl } from "@/shared/fixtures/mock-fetch"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { renderWithProviders } from "@/shared/fixtures/render-with-providers"
+import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -12,20 +12,15 @@ import { ExperimentCard } from "./experiment-card"
 const analyze = (overrides: Partial<Experiment> = {}) => experiment("exp1", { name: "Analyze", ...overrides })
 
 function renderCard(exp: Experiment) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={client}>
-      <ExperimentCard experiment={exp} />
-    </QueryClientProvider>
-  )
+  return renderWithProviders(<ExperimentCard experiment={exp} />)
 }
 
 describe("ExperimentCard", () => {
   beforeEach(() => vi.unstubAllGlobals())
 
-  it("renders name, engine, step progress and idle status line", () => {
+  it("renders name, engine, step progress and idle status line", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    renderCard(analyze())
+    await renderCard(analyze())
     expect(screen.getByText("Analyze")).toBeVisible()
     expect(screen.getByText("Custom · GROMACS")).toBeVisible()
     expect(screen.getByText("Tune · 2 of 5")).toBeVisible()
@@ -33,9 +28,9 @@ describe("ExperimentCard", () => {
     expect(screen.getByText("Active 12 min ago")).toBeVisible()
   })
 
-  it("shows the live phase for active statuses", () => {
+  it("shows the live phase for active statuses", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    renderCard(analyze({ step: 3, status: "simulating" }))
+    await renderCard(analyze({ step: 3, status: "simulating" }))
     expect(screen.getByText("Run · 3 of 5")).toBeVisible()
     expect(screen.getByText("Simulating")).toBeVisible()
   })
@@ -44,12 +39,12 @@ describe("ExperimentCard", () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
     const user = userEvent.setup()
 
-    const { unmount } = renderCard(analyze({ notebook: withNotebook("RUNNING") }))
+    const { unmount } = await renderCard(analyze({ notebook: withNotebook("RUNNING") }))
     await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
     expect(screen.getByRole("menuitem", { name: /stop notebook/i })).toBeVisible()
     unmount()
 
-    renderCard(analyze({ notebook: withNotebook("DOWN") }))
+    await renderCard(analyze({ notebook: withNotebook("DOWN") }))
     await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
     expect(screen.getByRole("menuitem", { name: /start notebook/i })).toBeVisible()
     expect(screen.getByRole("menuitem", { name: /duplicate/i })).toHaveAttribute("aria-disabled", "true")
@@ -59,7 +54,7 @@ describe("ExperimentCard", () => {
   it("renames via dialog", async () => {
     const calls = mockFetch(new Response("{}", { status: 200 }), new Response("[]", { status: 200 }))
     const user = userEvent.setup()
-    renderCard(analyze())
+    await renderCard(analyze())
     await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
     await user.click(screen.getByRole("menuitem", { name: /rename/i }))
     const input = screen.getByLabelText("Name")
@@ -78,7 +73,7 @@ describe("ExperimentCard", () => {
   it("deletes after confirmation", async () => {
     const calls = mockFetch(new Response(null, { status: 204 }))
     const user = userEvent.setup()
-    renderCard(analyze())
+    await renderCard(analyze())
     await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
     await user.click(screen.getByRole("menuitem", { name: /^delete$/i }))
     await user.click(screen.getByRole("button", { name: "Delete experiment" }))
@@ -92,7 +87,7 @@ describe("ExperimentCard", () => {
   it("spells out delete consequences from experiment data", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
     const user = userEvent.setup()
-    renderCard(
+    await renderCard(
       analyze({
         size_bytes: 12.8 * 1024 ** 3,
         notebook: withNotebook("RUNNING"),
@@ -148,7 +143,7 @@ describe("ExperimentCard", () => {
   it("omits absent consequences from the delete dialog", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
     const user = userEvent.setup()
-    renderCard(analyze())
+    await renderCard(analyze())
     await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
     await user.click(screen.getByRole("menuitem", { name: /^delete$/i }))
     expect(screen.getByText(/^all simulation files and results$/i)).toBeVisible()
@@ -157,28 +152,32 @@ describe("ExperimentCard", () => {
     expect(screen.getByText(/archiving frees disk space/i)).toBeVisible()
   })
 
-  it("shows the module name, source label, and size when present", () => {
+  it("shows the module name, source label, and size when present", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    renderCard(
-      analyze({ module_name: "Membrane protein (BioBB)", source_label: "PDB (1BNA)", size_bytes: 8.7 * 1024 ** 3 })
+    await renderCard(
+      analyze({
+        module_name: "Membrane protein (BioBB)",
+        source: { type: "pdb", pdb_id: "1BNA", files: [] },
+        size_bytes: 8.7 * 1024 ** 3,
+      })
     )
     expect(screen.getByText("Membrane protein (BioBB) · GROMACS")).toBeVisible()
-    expect(screen.getByText("PDB (1BNA)")).toBeVisible()
+    expect(screen.getByText("RCSB PDB (1BNA)")).toBeVisible()
     expect(screen.getByText("8.7 GB")).toBeVisible()
   })
 
-  it("shows setup details on a setup-step card", () => {
+  it("shows setup details on a setup-step card", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    renderCard(analyze({ step: 1, status: "setup complete" }))
+    await renderCard(analyze({ step: 1, status: "setup complete" }))
     expect(screen.getByText("Setup ready")).toBeVisible()
     expect(screen.getByText("Yes")).toBeVisible()
     expect(screen.getByText("Workflow")).toBeVisible()
     expect(screen.getByText("Custom")).toBeVisible()
   })
 
-  it("shows tuner details on a tune-step card", () => {
+  it("shows tuner details on a tune-step card", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    renderCard(
+    await renderCard(
       analyze({
         step: 2,
         status: "tuning",
@@ -226,7 +225,7 @@ describe("ExperimentCard", () => {
       }
       return new Response(null, { status: 404 })
     })
-    renderCard(
+    await renderCard(
       analyze({
         step: 4,
         status: "analyzing",
@@ -250,30 +249,45 @@ describe("ExperimentCard", () => {
     expect(await screen.findByText("1 of 4 ready")).toBeVisible()
   })
 
-  it("falls back to N/A when step detail data is missing", () => {
+  it("falls back to N/A when step detail data is missing", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    renderCard(analyze({ step: 2, status: "tuning", latest_simulation_path: "md.simulation.json" }))
+    await renderCard(analyze({ step: 2, status: "tuning", latest_simulation_path: "md.simulation.json" }))
     expect(screen.getAllByText("N/A")).toHaveLength(2)
   })
 
-  it("shows different icons for the publishing and published states", () => {
+  it("shows different icons for the publishing and published states", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    const { container, unmount } = renderCard(analyze({ step: 5, status: "publishing", mdrepo_published: false }))
+    const { container, unmount } = await renderCard(analyze({ step: 5, status: "publishing", mdrepo_published: false }))
     expect(container.querySelector("span.bg-info-100")).not.toBeNull()
     expect(container.querySelector("span.bg-primary-100")).toBeNull()
     unmount()
-    const published = renderCard(analyze({ step: 5, status: "published", mdrepo_published: true }))
+    const published = await renderCard(analyze({ step: 5, status: "published", mdrepo_published: true }))
     expect(published.container.querySelector("span.bg-primary-100")).not.toBeNull()
   })
 
-  it("shows publish details on a publish-step card", () => {
+  it("shows publish details on a publish-step card", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    renderCard(analyze({ step: 5, status: "published", mdrepo_published: true, mdrepo_id: "10.5281/demo" }))
+    await renderCard(analyze({ step: 5, status: "published", mdrepo_published: true, mdrepo_id: "10.5281/demo" }))
     expect(screen.getByText("Published")).toBeVisible()
     expect(screen.getByText("Yes")).toBeVisible()
     expect(screen.getByText("Target")).toBeVisible()
     expect(screen.getByText("Invenio / MDRepo")).toBeVisible()
-    expect(screen.getByText("10.5281/demo")).toBeVisible()
+    // The opaque record id stays out of the UI; the record link belongs to the wizard publish step.
+    expect(screen.queryByText("10.5281/demo")).not.toBeInTheDocument()
+  })
+
+  it("shows only the experiment source in the footer, never the MDRepo record id", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    await renderCard(
+      analyze({
+        status: "published",
+        mdrepo_published: true,
+        mdrepo_id: "8gahj-dh519",
+        source: { type: "pdb", pdb_id: "1LYZ", files: [] },
+      })
+    )
+    expect(screen.getByText("RCSB PDB (1LYZ)")).toBeVisible()
+    expect(screen.queryByText(/8gahj/)).not.toBeInTheDocument()
   })
 
   it("closes the rename dialog from Cancel without a request", async () => {
@@ -283,7 +297,7 @@ describe("ExperimentCard", () => {
       return new Response("[]", { status: 200 })
     })
     const user = userEvent.setup()
-    renderCard(analyze())
+    await renderCard(analyze())
     await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
     await user.click(screen.getByRole("menuitem", { name: /rename/i }))
     expect(screen.getByRole("dialog")).toBeInTheDocument()
@@ -295,7 +309,7 @@ describe("ExperimentCard", () => {
   it("starts a down notebook from the menu", async () => {
     const calls = mockFetch(new Response("{}", { status: 200 }), new Response("[]", { status: 200 }))
     const user = userEvent.setup()
-    renderCard(analyze({ notebook: withNotebook("DOWN") }))
+    await renderCard(analyze({ notebook: withNotebook("DOWN") }))
     await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
     await user.click(screen.getByRole("menuitem", { name: /start notebook/i }))
     expect(calls).toContainEqual({

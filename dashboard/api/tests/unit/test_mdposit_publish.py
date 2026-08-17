@@ -79,7 +79,7 @@ def _seed_experiment(app: Flask, exp_id: str = "pubsh", name: str = "Publish Tes
         The experiment ID.
     """
     with app.app_context():
-        exp = Experiment(id=exp_id, name=name, source_message="test", notebooks_repo="https://github.com/t/r.git")
+        exp = Experiment(id=exp_id, name=name, notebooks_repo="https://github.com/t/r.git")
         db.session.add(exp)
         db.session.flush()
         nb = Notebook(experiment_id=exp_id)

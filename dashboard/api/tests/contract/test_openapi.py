@@ -158,9 +158,10 @@ def test_empty_experiment_list_response_matches_contract(client: FlaskClient, co
 def test_populated_experiment_list_response_matches_contract(
     client: FlaskClient, contract: dict[str, Any], db_session: Any
 ) -> None:
+    from enums import SourceType
     from models import Experiment
 
-    experiment = Experiment(id="slice", name="Vertical slice", source_message="Contract test")
+    experiment = Experiment(id="slice", name="Vertical slice", source_type=SourceType.PDB, source_ref="1LYZ")
     db_session.add(experiment)
     db_session.commit()
 

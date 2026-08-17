@@ -905,7 +905,7 @@ components:
       additionalProperties: false
     Experiment:
       type: object
-      required: [id, created_at, updated_at, name, source_message, engine, latest_simulation_path, notebook, tuner_jobs, simulation_jobs, analysis_jobs]
+      required: [id, created_at, updated_at, name, engine, latest_simulation_path, notebook, tuner_jobs, simulation_jobs, analysis_jobs]
       properties:
         id: {type: string}
         created_at: {type: string, format: date-time}
@@ -915,9 +915,11 @@ components:
         # Manifest path of the most recently active simulation; the experiment's
         # step/status and dashboard detail rows always inherit from it.
         latest_simulation_path: {type: [string, 'null']}
-        source_label: {$ref: '#/components/schemas/NullableString'}
+        source:
+          oneOf:
+            - {$ref: '#/components/schemas/ExperimentSource'}
+            - {type: 'null'}
         size_bytes: {type: [integer, 'null']}
-        source_message: {$ref: '#/components/schemas/NullableString'}
         notebooks_repo: {$ref: '#/components/schemas/NullableString'}
         mdrepo_id: {$ref: '#/components/schemas/NullableString'}
         mdrepo_published: {type: [boolean, 'null']}
@@ -951,6 +953,16 @@ components:
       type: object
       required: [name]
       properties: {name: {type: string}}
+      additionalProperties: false
+    ExperimentSource:
+      type: object
+      required: [type, files]
+      properties:
+        type: {type: string, enum: [pdb, repo, file]}
+        pdb_id: {type: string}
+        url: {type: string}
+        files: {type: array, items: {$ref: '#/components/schemas/FileInfo'}}
+        file_count: {type: integer, minimum: 0}
       additionalProperties: false
     FileInfo:
       type: object

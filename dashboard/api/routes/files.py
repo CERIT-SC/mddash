@@ -2,7 +2,7 @@ from dataclasses import asdict
 
 from config import API_PREFIX, DATA_DIR
 from flask import Blueprint, Response, jsonify, request, send_file
-from utils import get_files_with_extensions
+from utils import file_download_url, get_files_with_extensions
 from validators import check_experiment_id, check_path
 from werkzeug.exceptions import NotFound
 
@@ -26,7 +26,7 @@ def get_files(experiment_id: str) -> Response:
     file_dicts = []
     for f in files:
         file_dict = asdict(f)
-        file_dict["url"] = f"{API_PREFIX}/experiments/{experiment_id}/files/{f.path}"
+        file_dict["url"] = file_download_url(experiment_id, f.path)
         file_dicts.append(file_dict)
 
     return jsonify(file_dicts)

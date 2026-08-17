@@ -60,6 +60,10 @@ export const GetNotebookConfigResponse = zod.object({
 /**
  * @summary List experiments
  */
+export const listExperimentsResponseSourceOneFilesItemSizeMin = 0;
+
+export const listExperimentsResponseSourceOneFileCountMin = 0;
+
 
 
 
@@ -71,9 +75,19 @@ export const ListExperimentsResponseItem = zod.object({
   "name": zod.string(),
   "module_name": zod.string().nullish(),
   "latest_simulation_path": zod.string().nullable(),
-  "source_label": zod.string().nullish(),
+  "source": zod.union([zod.object({
+  "type": zod.enum(['pdb', 'repo', 'file']),
+  "pdb_id": zod.string().optional(),
+  "url": zod.string().optional(),
+  "files": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.int().min(listExperimentsResponseSourceOneFilesItemSizeMin),
+  "path": zod.string(),
+  "url": zod.string()
+})),
+  "file_count": zod.int().min(listExperimentsResponseSourceOneFileCountMin).optional()
+}),zod.null()]).optional(),
   "size_bytes": zod.int().nullish(),
-  "source_message": zod.string().nullable(),
   "notebooks_repo": zod.string().nullish(),
   "mdrepo_id": zod.string().nullish(),
   "mdrepo_published": zod.boolean().nullish(),
@@ -154,6 +168,10 @@ export const CreateExperimentBody = zod.object({
   "simulation-files": zod.array(zod.instanceof(File)).optional()
 })
 
+export const createExperimentResponseSourceOneFilesItemSizeMin = 0;
+
+export const createExperimentResponseSourceOneFileCountMin = 0;
+
 
 
 
@@ -165,9 +183,19 @@ export const CreateExperimentResponse = zod.object({
   "name": zod.string(),
   "module_name": zod.string().nullish(),
   "latest_simulation_path": zod.string().nullable(),
-  "source_label": zod.string().nullish(),
+  "source": zod.union([zod.object({
+  "type": zod.enum(['pdb', 'repo', 'file']),
+  "pdb_id": zod.string().optional(),
+  "url": zod.string().optional(),
+  "files": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.int().min(createExperimentResponseSourceOneFilesItemSizeMin),
+  "path": zod.string(),
+  "url": zod.string()
+})),
+  "file_count": zod.int().min(createExperimentResponseSourceOneFileCountMin).optional()
+}),zod.null()]).optional(),
   "size_bytes": zod.int().nullish(),
-  "source_message": zod.string().nullable(),
   "notebooks_repo": zod.string().nullish(),
   "mdrepo_id": zod.string().nullish(),
   "mdrepo_published": zod.boolean().nullish(),
@@ -239,6 +267,10 @@ export const GetExperimentParams = zod.object({
   "experiment_id": zod.string().min(1)
 })
 
+export const getExperimentResponseSourceOneFilesItemSizeMin = 0;
+
+export const getExperimentResponseSourceOneFileCountMin = 0;
+
 
 
 
@@ -250,9 +282,19 @@ export const GetExperimentResponse = zod.object({
   "name": zod.string(),
   "module_name": zod.string().nullish(),
   "latest_simulation_path": zod.string().nullable(),
-  "source_label": zod.string().nullish(),
+  "source": zod.union([zod.object({
+  "type": zod.enum(['pdb', 'repo', 'file']),
+  "pdb_id": zod.string().optional(),
+  "url": zod.string().optional(),
+  "files": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.int().min(getExperimentResponseSourceOneFilesItemSizeMin),
+  "path": zod.string(),
+  "url": zod.string()
+})),
+  "file_count": zod.int().min(getExperimentResponseSourceOneFileCountMin).optional()
+}),zod.null()]).optional(),
   "size_bytes": zod.int().nullish(),
-  "source_message": zod.string().nullable(),
   "notebooks_repo": zod.string().nullish(),
   "mdrepo_id": zod.string().nullish(),
   "mdrepo_published": zod.boolean().nullish(),
@@ -328,6 +370,10 @@ export const UpdateExperimentBody = zod.object({
   "name": zod.string()
 })
 
+export const updateExperimentResponseSourceOneFilesItemSizeMin = 0;
+
+export const updateExperimentResponseSourceOneFileCountMin = 0;
+
 
 
 
@@ -339,9 +385,19 @@ export const UpdateExperimentResponse = zod.object({
   "name": zod.string(),
   "module_name": zod.string().nullish(),
   "latest_simulation_path": zod.string().nullable(),
-  "source_label": zod.string().nullish(),
+  "source": zod.union([zod.object({
+  "type": zod.enum(['pdb', 'repo', 'file']),
+  "pdb_id": zod.string().optional(),
+  "url": zod.string().optional(),
+  "files": zod.array(zod.object({
+  "name": zod.string(),
+  "size": zod.int().min(updateExperimentResponseSourceOneFilesItemSizeMin),
+  "path": zod.string(),
+  "url": zod.string()
+})),
+  "file_count": zod.int().min(updateExperimentResponseSourceOneFileCountMin).optional()
+}),zod.null()]).optional(),
   "size_bytes": zod.int().nullish(),
-  "source_message": zod.string().nullable(),
   "notebooks_repo": zod.string().nullish(),
   "mdrepo_id": zod.string().nullish(),
   "mdrepo_published": zod.boolean().nullish(),

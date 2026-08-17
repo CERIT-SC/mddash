@@ -1,0 +1,189 @@
+import type { Experiment } from "@/api/generated/models"
+import { experiment } from "@/shared/fixtures/experiment"
+import { mockApiBySuffix } from "@/shared/fixtures/mock-fetch"
+import { simulation } from "@/shared/fixtures/simulation"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+import { describe, expect, it } from "vitest"
+
+import { ExperimentWizard, type WizardSearch } from "./wizard"
+
+const alpha = simulation("alpha.simulation.json", { name: "Alpha", step: 2 })
+const beta = simulation("nested/beta.simulation.json", { name: "Beta", step: 3 })
+const mockApi = mockApiBySuffix
+
+function okExperiment(overrides: Partial<Experiment> = {}) {
+  return Response.json(experiment("exp1", { name: "Membrane study", ...overrides }))
+}
+
+function renderWizard(search: WizardSearch = {}, onSearchChange: (next: WizardSearch) => void = () => undefined) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={client}>
+      <ExperimentWizard experimentId="exp1" search={search} onSearchChange={onSearchChange} />
+    </QueryClientProvider>
+  )
+}
+
+describe("ExperimentWizard", () => {
+  it("renders the title row with the rename chip and metadata", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha]),
+      "/experiments/exp1": okExperiment({
+        source: { type: "pdb", pdb_id: "1L2Y", files: [] },
+        created_at: "2026-07-20T13:43:20Z",
+        notebooks_repo: "https://github.com/sb-ncbr/mddash-notebooks.git",
+      }),
+    })
+    renderWizard({})
+    expect(await screen.findByRole("heading", { name: "Experiment" })).toBeVisible()
+    expect(screen.getByRole("button", { name: "Rename experiment" })).toHaveTextContent("Membrane study")
+    expect(screen.getByText("RCSB PDB (1L2Y)")).toBeVisible()
+    expect(screen.getByText("Jul 20, 2026")).toBeVisible()
+    expect(screen.getByText("sb-ncbr/mddash-notebooks.git")).toBeVisible()
+  })
+
+  it("hides metadata items the API has no values for", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha]),
+      "/experiments/exp1": okExperiment({ source: null, notebooks_repo: null }),
+    })
+    renderWizard({})
+    expect(await screen.findByRole("heading", { name: "Experiment" })).toBeVisible()
+    expect(screen.getByText("Aug 13, 2026")).toBeVisible()
+    expect(screen.queryByText(/github\.com/)).not.toBeInTheDocument()
+    expect(screen.queryByText("·")).not.toBeInTheDocument()
+  })
+
+  it("constrains very long experiment names with truncation", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha]),
+      "/experiments/exp1": okExperiment({ name: `Long ${"y".repeat(300)}` }),
+    })
+    renderWizard({})
+    const button = await screen.findByRole("button", { name: "Rename experiment" })
+    expect(button).toHaveClass("max-w-full")
+    expect(button.querySelector("span.truncate")).toBeInTheDocument()
+  })
+
+  it("renames the experiment from the title chip", async () => {
+    const calls = mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha]),
+      "/experiments/exp1": okExperiment(),
+    })
+    const user = userEvent.setup()
+    renderWizard({})
+    await user.click(await screen.findByRole("button", { name: "Rename experiment" }))
+    const input = screen.getByLabelText("Name")
+    await user.clear(input)
+    await user.type(input, "Renamed study")
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    expect(calls).toContainEqual({
+      url: "/dash/api/experiments/exp1",
+      method: "PATCH",
+      body: { name: "Renamed study" },
+    })
+  })
+
+  it("renders one tab per simulation, preselecting the URL simulation", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha, beta]),
+      "/experiments/exp1": okExperiment({ latest_simulation_path: alpha.simulation_path }),
+    })
+    renderWizard({ simulation: beta.simulation_path })
+    expect(await screen.findByRole("tab", { name: "Alpha" })).toHaveAttribute("aria-selected", "false")
+    expect(screen.getByRole("tab", { name: "Beta" })).toHaveAttribute("aria-selected", "true")
+  })
+
+  it.each([
+    ["latest simulation", { latest_simulation_path: beta.simulation_path }, "Beta"],
+    ["first simulation", { latest_simulation_path: null }, "Alpha"],
+  ])("defaults to the %s tab without a URL simulation", async (_label, overrides, expected) => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha, beta]),
+      "/experiments/exp1": okExperiment(overrides),
+    })
+    renderWizard({})
+    expect((await screen.findAllByRole("tab")).length).toBe(2)
+    expect(screen.getByRole("tab", { name: expected })).toHaveAttribute("aria-selected", "true")
+  })
+
+  it("falls back to the default tab when the URL simulation is unknown", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha, beta]),
+      "/experiments/exp1": okExperiment(),
+    })
+    renderWizard({ simulation: "gone.simulation.json" })
+    expect((await screen.findAllByRole("tab")).length).toBe(2)
+    expect(screen.getByRole("tab", { name: "Alpha" })).toHaveAttribute("aria-selected", "true")
+  })
+
+  it("shows the step from the URL and reports navigation through onSearchChange", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha]),
+      "/experiments/exp1": okExperiment(),
+    })
+    const changes: WizardSearch[] = []
+    const user = userEvent.setup()
+    renderWizard({ step: 2 }, (next) => changes.push(next))
+
+    expect(await screen.findByText("Section 3:")).toBeInTheDocument()
+    expect(screen.getByText(/Section \d+:/).parentElement).toHaveTextContent("Section 3: Run")
+
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    expect(changes).toEqual([{ simulation: alpha.simulation_path, step: 3 }])
+
+    await user.click(screen.getByRole("button", { name: "Go to section 1: Setup" }))
+    expect(changes).toEqual([
+      { simulation: alpha.simulation_path, step: 3 },
+      { simulation: alpha.simulation_path, step: 0 },
+    ])
+  })
+
+  it("falls back to the simulation's own step when the URL has none", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha, beta]),
+      "/experiments/exp1": okExperiment({ latest_simulation_path: beta.simulation_path }),
+    })
+    renderWizard({})
+    expect(await screen.findByText("Section 3:")).toBeInTheDocument()
+    expect(screen.getByText(/Section \d+:/).parentElement).toHaveTextContent("Section 3: Run")
+  })
+
+  it("switches simulations from the tab bar, dropping the step", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha, beta]),
+      "/experiments/exp1": okExperiment(),
+    })
+    const changes: WizardSearch[] = []
+    const user = userEvent.setup()
+    renderWizard({ simulation: alpha.simulation_path, step: 1 }, (next) => changes.push(next))
+    await user.click(await screen.findByRole("tab", { name: "Beta" }))
+    // Radix may re-fire activation (mousedown + focus) while the controlled
+    // value is stale; the real route re-renders on the first navigation.
+    expect(changes[changes.length - 1]).toEqual({ simulation: beta.simulation_path })
+    expect(changes.every((change) => change.step === undefined)).toBe(true)
+  })
+
+  it("shows an empty state when the experiment has no simulations", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([]),
+      "/experiments/exp1": okExperiment(),
+    })
+    renderWizard({})
+    expect(await screen.findByText("No simulations yet.")).toBeVisible()
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument()
+  })
+
+  it("shows problem details for a missing experiment", async () => {
+    mockApi({
+      "/experiments/exp1": Response.json(
+        { type: "urn:mddash:not-found", title: "Not Found", detail: "Experiment exp1 does not exist" },
+        { status: 404 }
+      ),
+    })
+    renderWizard({})
+    expect(await screen.findByRole("alert")).toHaveTextContent("urn:mddash:not-found")
+  })
+})
