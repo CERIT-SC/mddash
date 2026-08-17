@@ -3,10 +3,11 @@ import { experiment } from "@/shared/fixtures/experiment"
 import { mockApiBySuffix } from "@/shared/fixtures/mock-fetch"
 import { simulation } from "@/shared/fixtures/simulation"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it } from "vitest"
 
+import { CREATE_TAB } from "./simulation-tabs"
 import { ExperimentWizard, type WizardSearch } from "./wizard"
 
 const alpha = simulation("alpha.simulation.json", { name: "Alpha", step: 2 })
@@ -94,6 +95,8 @@ describe("ExperimentWizard", () => {
     renderWizard({ simulation: beta.simulation_path })
     expect(await screen.findByRole("tab", { name: "Alpha" })).toHaveAttribute("aria-selected", "false")
     expect(screen.getByRole("tab", { name: "Beta" })).toHaveAttribute("aria-selected", "true")
+    expect(screen.queryByRole("tab", { name: "[Unnamed Simulation]" })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "New simulation" })).toBeVisible()
   })
 
   it.each([
@@ -166,14 +169,87 @@ describe("ExperimentWizard", () => {
     expect(changes.every((change) => change.step === undefined)).toBe(true)
   })
 
-  it("shows an empty state when the experiment has no simulations", async () => {
+  it("shows only the unnamed tab, selected, when the experiment has no simulations", async () => {
     mockApi({
       "/experiments/exp1/simulations": Response.json([]),
       "/experiments/exp1": okExperiment(),
     })
     renderWizard({})
-    expect(await screen.findByText("No simulations yet.")).toBeVisible()
-    expect(screen.queryByRole("tab")).not.toBeInTheDocument()
+    expect(await screen.findByRole("tab", { name: "[Unnamed Simulation]" })).toHaveAttribute("aria-selected", "true")
+    expect(screen.getAllByRole("tab").length).toBe(1)
+    expect(screen.getByText(/Section \d+:/).parentElement).toHaveTextContent("Section 1: Setup")
+    expect(screen.getByRole("button", { name: "New simulation" })).toBeVisible()
+  })
+
+  it("switches to the unnamed tab from New simulation, dropping the step", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha]),
+      "/experiments/exp1": okExperiment(),
+    })
+    const changes: WizardSearch[] = []
+    const user = userEvent.setup()
+    renderWizard({ simulation: alpha.simulation_path, step: 1 }, (next) => changes.push(next))
+    await user.click(await screen.findByRole("button", { name: "New simulation" }))
+    expect(changes[changes.length - 1]).toEqual({ simulation: CREATE_TAB })
+  })
+
+  it("activates the unnamed tab from the URL and always shows the setup step", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha, beta]),
+      "/experiments/exp1": okExperiment(),
+    })
+    renderWizard({ simulation: CREATE_TAB, step: 3 })
+    expect(await screen.findByRole("tab", { name: "[Unnamed Simulation]" })).toHaveAttribute("aria-selected", "true")
+    expect(screen.getByText(/Section \d+:/).parentElement).toHaveTextContent("Section 1: Setup")
+  })
+
+  it("deletes a simulation from its tab menu after confirmation", async () => {
+    const calls = mockApi({
+      "/experiments/exp1/simulations/alpha.simulation.json": new Response(null, { status: 204 }),
+      "/experiments/exp1/simulations": Response.json([alpha, beta]),
+      "/experiments/exp1": okExperiment(),
+    })
+    const user = userEvent.setup()
+    renderWizard({})
+    await user.click(await screen.findByRole("button", { name: "Actions for Alpha" }))
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }))
+    await user.click(screen.getByRole("button", { name: "Delete simulation" }))
+    expect(calls).toContainEqual({
+      url: expect.stringContaining("/experiments/exp1/simulations/alpha.simulation.json"),
+      method: "DELETE",
+      body: undefined,
+    })
+  })
+
+  it("keeps the URL selection when deleting a different tab", async () => {
+    mockApi({
+      "/experiments/exp1/simulations/beta.simulation.json": new Response(null, { status: 204 }),
+      "/experiments/exp1/simulations": Response.json([alpha, beta]),
+      "/experiments/exp1": okExperiment(),
+    })
+    const changes: WizardSearch[] = []
+    const user = userEvent.setup()
+    renderWizard({ simulation: alpha.simulation_path }, (next) => changes.push(next))
+    await user.click(await screen.findByRole("button", { name: "Actions for Beta" }))
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }))
+    await user.click(screen.getByRole("button", { name: "Delete simulation" }))
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Delete simulation" })).not.toBeInTheDocument())
+    expect(changes).toEqual([])
+  })
+
+  it("drops the URL selection after deleting the selected simulation", async () => {
+    mockApi({
+      "/experiments/exp1/simulations/alpha.simulation.json": new Response(null, { status: 204 }),
+      "/experiments/exp1/simulations": Response.json([alpha, beta]),
+      "/experiments/exp1": okExperiment(),
+    })
+    const changes: WizardSearch[] = []
+    const user = userEvent.setup()
+    renderWizard({ simulation: alpha.simulation_path, step: 1 }, (next) => changes.push(next))
+    await user.click(await screen.findByRole("button", { name: "Actions for Alpha" }))
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }))
+    await user.click(screen.getByRole("button", { name: "Delete simulation" }))
+    await waitFor(() => expect(changes).toContainEqual({}))
   })
 
   it("shows problem details for a missing experiment", async () => {

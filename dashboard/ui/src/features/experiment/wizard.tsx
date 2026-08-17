@@ -29,14 +29,12 @@ import {
   Stepper,
   StepperContent,
   StepperHeader,
-  Tabs,
-  TabsList,
-  TabsTrigger,
 } from "@e-infra/design-system"
 import { useQueryClient } from "@tanstack/react-query"
 import { Calendar, GitBranch, Pencil } from "lucide-react"
 import { toast } from "sonner"
 
+import { CREATE_TAB, SimulationTabs } from "./simulation-tabs"
 import { SourceItem } from "./source-metadata"
 
 const STEPS = [{ label: "Setup" }, { label: "Tune" }, { label: "Run" }, { label: "Analyze" }, { label: "Publish" }]
@@ -197,51 +195,50 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
     )
   }
 
-  if (list.length === 0) {
-    return (
-      <section className="space-y-6 md:space-y-8">
-        <TitleRow experiment={data} />
-        <p className="text-text-muted py-12 text-center">No simulations yet.</p>
-      </section>
-    )
-  }
-
-  const selected =
-    list.find((candidate) => candidate.simulation_path === search.simulation) ??
-    (data.latest_simulation_path !== null
-      ? list.find((candidate) => candidate.simulation_path === data.latest_simulation_path)
-      : undefined) ??
-    list[0]
+  // The unnamed create tab doubles as the empty state when there are no manifests to select.
+  const creating = search.simulation === CREATE_TAB || list.length === 0
+  const selected = creating
+    ? undefined
+    : (list.find((candidate) => candidate.simulation_path === search.simulation) ??
+      (data.latest_simulation_path !== null
+        ? list.find((candidate) => candidate.simulation_path === data.latest_simulation_path)
+        : undefined) ??
+      list[0])
   // The API ladder decodes through the shared mapping; the URL-owned step is used verbatim.
-  const step = clampStep(search.step ?? ladderStepIndex(selected.step))
+  // A simulation that does not exist yet has no progress of its own, so create
+  // mode always lands on Setup.
+  const step = selected === undefined ? 0 : clampStep(search.step ?? ladderStepIndex(selected.step))
+  const tab = selected?.simulation_path ?? CREATE_TAB
 
   return (
     <section className="space-y-6 md:space-y-8">
       <TitleRow experiment={data} />
 
-      <div className="space-y-2">
-        <Tabs
-          value={selected.simulation_path}
-          // Switching simulations resets the step to that simulation's own progress.
+      <div>
+        <SimulationTabs
+          experimentId={experimentId}
+          simulations={list}
+          value={tab}
           onValueChange={(simulation) => onSearchChange({ simulation })}
-        >
-          <TabsList aria-label="Simulations">
-            {list.map((item) => (
-              <TabsTrigger key={item.simulation_path} value={item.simulation_path}>
-                {item.name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+          onDeleted={(deleted) => {
+            // The URL still points at the deleted manifest; drop the selection so
+            // the refreshed list falls back to its default tab.
+            if (search.simulation === deleted.simulation_path) onSearchChange({})
+          }}
+        />
 
-        <Card className="bg-white">
+        {/* Shares its top edge with the tab boxes — restyle them together. */}
+        <Card className="border-border rounded-t-none border bg-white">
           <CardContent className="pt-6 md:pt-8 lg:pt-12">
             {/* URL owns the step: onStepChange only fires on user navigation, while a
-                changed initialStep re-syncs the DS Stepper's internal state. */}
+                changed initialStep re-syncs the DS Stepper's internal state.
+                TODO(CERIT-SC/design-system#110): switch to the controlled `step` prop
+                once released — the uncontrolled Stepper can drift from the URL-owned
+                step in create mode, where the Setup pin is display-only. */}
             <Stepper
               initialStep={step}
               totalSteps={STEPS.length}
-              onStepChange={(next) => onSearchChange({ simulation: selected.simulation_path, step: next })}
+              onStepChange={(next) => onSearchChange({ simulation: tab, step: next })}
             >
               {/* Two fixed overrides, both mock-mandated: mb-0 (DS stacks an mb-8 meant
                   for content below) and max-w-none on the header's capped max-w-lg bar
