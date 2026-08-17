@@ -1,14 +1,43 @@
-"""Unit tests for Notebook.start() quota enforcement."""
+"""Unit tests for Notebook.start() quota enforcement and pod info properties."""
 
+from datetime import datetime, timezone
 from typing import ClassVar
 from unittest.mock import MagicMock, patch
 
 import pytest
 from clients.k8s import create_notebook_pod
-from enums import NotebookTier
+from enums import NotebookTier, PodStatus
 from errors import ApiError
 from models.notebook import Notebook
+from schemas.notebook import NotebookSchema
 from werkzeug.exceptions import BadRequest, Forbidden
+
+
+class TestNotebookPodInfo:
+    """status and started_at share one cached K8s read per notebook instance."""
+
+    def test_status_and_started_at_share_one_read(self) -> None:
+        started = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+        notebook = Notebook(experiment_id="exp1", token="t")
+        with patch("models.notebook.k8s.get_pod_info", return_value=(PodStatus.RUNNING, started)) as mock_info:
+            assert notebook.status == PodStatus.RUNNING
+            assert notebook.started_at == started
+            mock_info.assert_called_once_with("notebook-exp1")
+
+    def test_started_at_none_when_pod_down(self) -> None:
+        notebook = Notebook(experiment_id="exp1", token="t")
+        with patch("models.notebook.k8s.get_pod_info", return_value=(PodStatus.DOWN, None)):
+            assert notebook.status == PodStatus.DOWN
+            assert notebook.started_at is None
+
+    def test_schema_dumps_started_at_as_iso8601(self) -> None:
+        """The declared field exists so the property matches the contract's format: date-time."""
+        started = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+        notebook = Notebook(experiment_id="exp1", token="t")
+        with patch("models.notebook.k8s.get_pod_info", return_value=(PodStatus.RUNNING, started)):
+            data = NotebookSchema().dump(notebook)
+        assert data["started_at"] == started.isoformat()
+        assert "_pod_info" not in data
 
 
 class TestNotebookStartQuotaCheck:

@@ -11,6 +11,7 @@ This module provides:
 import os
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generator
 from unittest.mock import MagicMock, patch
@@ -80,6 +81,14 @@ def mock_k8s() -> Generator[MagicMock, None, None]:
         mock_core_api.return_value = MagicMock()
         mock_batch_api.return_value = MagicMock()
         mock_rbac_api.return_value = MagicMock()
+        # Plausible pod shape: default MagicMock attributes produce truthy
+        # deletion_timestamps and non-datetime start_times that break serialization.
+        pod = MagicMock()
+        pod.metadata.deletion_timestamp = None
+        pod.status.phase = "Running"
+        pod.status.container_statuses = []
+        pod.status.start_time = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        mock_core_api.return_value.read_namespaced_pod.return_value = pod
         yield mock_core_api
 
 

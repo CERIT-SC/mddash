@@ -13,6 +13,7 @@ import {
 } from "@/api/generated/client"
 import type { Experiment } from "@/api/generated/models"
 import { formatBytes, formatTime, relativeTime } from "@/shared/format"
+import { isNotebookActive } from "@/shared/pod-status"
 import { sourceLabel } from "@/shared/source"
 import { ladderStepIndex } from "@/shared/steps"
 import {
@@ -73,7 +74,6 @@ import {
 import { toast } from "sonner"
 
 import { ENGINE_LABELS } from "./engine-labels"
-import { isNotebookActive } from "./notebook-status"
 
 const STEP_LABELS = ["Setup", "Tune", "Run", "Analyze", "Publish"] as const
 

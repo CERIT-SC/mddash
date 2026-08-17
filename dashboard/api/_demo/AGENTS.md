@@ -5,7 +5,7 @@
 ## Structure
 
 - Mocks are applied before app import in `app.py` — this ordering matters; seeding/mocks live in `_demo/profile.py`.
-- K8s is mocked by mutating `clients.k8s` functions (not by patching the `kubernetes` lib — `load_incluster_config` is lazy, so patching the library class before import does nothing). `check_quota_headroom`, `count_notebook_pods`, `read_job`, `wait_for_pod_admission` etc. are all neutralized in `_demo/mocks/k8s.py`.
+- K8s is mocked by mutating `clients.k8s` functions (not by patching the `kubernetes` lib — `load_incluster_config` is lazy, so patching the library class before import does nothing). `check_quota_headroom`, `count_notebook_pods`, `read_job`, `wait_for_pod_admission` etc. are all neutralized in `_demo/mocks/k8s.py`. Notebooks are covered by `get_pod_info`, which pairs the status from `demo_state.notebook_status` with the start time in `demo_state.notebook_started_at` (set on mock start, cleared on stop, staggered in the seed for RUNNING notebooks).
 
 ## Persistence & Reset
 

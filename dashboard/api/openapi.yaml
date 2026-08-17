@@ -893,7 +893,7 @@ components:
       additionalProperties: false
     Notebook:
       type: object
-      required: [id, experiment_id, token, gpu, path, status]
+      required: [id, experiment_id, token, gpu, path, status, started_at]
       properties:
         id: {type: integer}
         experiment_id: {type: string}
@@ -902,6 +902,7 @@ components:
         gpu: {type: boolean}
         path: {type: string}
         status: {$ref: '#/components/schemas/PodStatus'}
+        started_at: {type: [string, 'null'], format: date-time, description: Pod start time; null while the pod is absent}
       additionalProperties: false
     Experiment:
       type: object

@@ -27,5 +27,6 @@ export function withNotebook(status: PodStatus, experimentId = "exp1"): Experime
     gpu: false,
     path: `/${experimentId}`,
     status,
+    started_at: status === "RUNNING" ? new Date(Date.now() - 5 * 60_000).toISOString() : null,
   }
 }

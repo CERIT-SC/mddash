@@ -99,7 +99,8 @@ export const ListExperimentsResponseItem = zod.object({
   "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
   "gpu": zod.boolean(),
   "path": zod.string(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']),
+  "started_at": zod.iso.datetime({"offset":true}).nullable().describe('Pod start time; null while the pod is absent')
 }),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -207,7 +208,8 @@ export const CreateExperimentResponse = zod.object({
   "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
   "gpu": zod.boolean(),
   "path": zod.string(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']),
+  "started_at": zod.iso.datetime({"offset":true}).nullable().describe('Pod start time; null while the pod is absent')
 }),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -306,7 +308,8 @@ export const GetExperimentResponse = zod.object({
   "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
   "gpu": zod.boolean(),
   "path": zod.string(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']),
+  "started_at": zod.iso.datetime({"offset":true}).nullable().describe('Pod start time; null while the pod is absent')
 }),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -409,7 +412,8 @@ export const UpdateExperimentResponse = zod.object({
   "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
   "gpu": zod.boolean(),
   "path": zod.string(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']),
+  "started_at": zod.iso.datetime({"offset":true}).nullable().describe('Pod start time; null while the pod is absent')
 }),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -1315,7 +1319,8 @@ export const GetNotebookResponse = zod.object({
   "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
   "gpu": zod.boolean(),
   "path": zod.string(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']),
+  "started_at": zod.iso.datetime({"offset":true}).nullable().describe('Pod start time; null while the pod is absent')
 })
 
 
@@ -1343,7 +1348,8 @@ export const StartNotebookResponse = zod.object({
   "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
   "gpu": zod.boolean(),
   "path": zod.string(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']),
+  "started_at": zod.iso.datetime({"offset":true}).nullable().describe('Pod start time; null while the pod is absent')
 })
 
 

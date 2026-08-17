@@ -17,4 +17,9 @@ export interface Notebook {
   gpu: boolean;
   path: string;
   status: PodStatus;
+  /**
+     * Pod start time; null while the pod is absent
+     * @nullable
+     */
+  started_at: string | null;
 }

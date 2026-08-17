@@ -1,4 +1,5 @@
 import logging
+from functools import cached_property
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -13,6 +14,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from .experiment import Experiment
 
 
@@ -85,11 +88,20 @@ class Notebook(db.Model):  # type: ignore
         """Path to access the notebook via Caddy."""
         return f"{PREFIX}/notebook/{self.experiment_id}/?token={self.token}"
 
+    @cached_property
+    def _pod_info(self) -> tuple[PodStatus, "datetime | None"]:
+        """Status + start time from ONE K8s read, cached per instance (request-scoped)."""
+        return k8s.get_pod_info(f"notebook-{self.experiment_id}")
+
     @property
     def status(self) -> PodStatus:
         """The status of the notebook pod."""
-        pod_name = f"notebook-{self.experiment_id}"
-        return k8s.get_pod_status(pod_name)
+        return self._pod_info[0]
+
+    @property
+    def started_at(self) -> "datetime | None":
+        """When the notebook pod was started (None while the pod is absent)."""
+        return self._pod_info[1]
 
     def start(self, tier: NotebookTier | None = None, gpu: bool = False) -> None:
         """

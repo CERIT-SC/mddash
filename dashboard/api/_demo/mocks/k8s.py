@@ -12,6 +12,7 @@ import logging
 import re
 import threading
 import time
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import requests
@@ -49,7 +50,8 @@ _MDPOSIT_NAME_MAP: dict[str, str] = {
 
 def install_k8s_mocks() -> None:
     """Install Kubernetes client mocks via module mutation."""
-    k8s.get_pod_status = _get_pod_status  # type: ignore
+    # The single pod read notebooks use for both status and start time.
+    k8s.get_pod_info = _get_pod_info  # type: ignore
     k8s.create_notebook_pod = _create_notebook_pod  # type: ignore
     k8s.delete_pod = _delete_pod  # type: ignore
     k8s.create_service = _create_service  # type: ignore
@@ -115,17 +117,14 @@ def _read_upload_job(name: str) -> SimpleNamespace | None:
     return SimpleNamespace(status=SimpleNamespace(active=1))
 
 
-def _get_pod_status(name: str) -> PodStatus:
-    """
-    Get mock pod status.
-
-    Returns:
-        The pod status for the given notebook name.
-    """
+def _get_pod_info(name: str) -> tuple[PodStatus, "datetime | None"]:
+    """Mock (status, start_time) per notebook name; start time is None while DOWN."""
     if not name.startswith("notebook-"):
-        return PodStatus.DOWN
+        return PodStatus.DOWN, None
     experiment_id = name.removeprefix("notebook-")
-    return demo_state.notebook_status.get(experiment_id, PodStatus.DOWN)
+    status = demo_state.notebook_status.get(experiment_id, PodStatus.DOWN)
+    started = demo_state.notebook_started_at.get(experiment_id) if status != PodStatus.DOWN else None
+    return status, started
 
 
 def _create_notebook_pod(
@@ -140,6 +139,7 @@ def _create_notebook_pod(
     """Create a mock notebook pod."""
     logger.debug("Mock creating notebook pod %s for experiment %s", name, experiment_id)
     demo_state.notebook_status[experiment_id] = PodStatus.RUNNING
+    demo_state.notebook_started_at[experiment_id] = datetime.now(timezone.utc)
 
 
 def _delete_pod(name: str) -> None:
@@ -148,6 +148,7 @@ def _delete_pod(name: str) -> None:
         return
     experiment_id = name.removeprefix("notebook-")
     demo_state.notebook_status[experiment_id] = PodStatus.DOWN
+    demo_state.notebook_started_at.pop(experiment_id, None)
 
 
 def _create_service(name: str, target_name: str) -> None:  # ruff:ignore[unused-function-argument]

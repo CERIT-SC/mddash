@@ -7,6 +7,8 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Callable, cast
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from enums import NotebookTier
 
     # Available at runtime via _load_k8s() populating module globals.
@@ -624,25 +626,19 @@ def check_quota_headroom(
     return None
 
 
-def get_pod_status(name: str) -> PodStatus:
-    """
-    Get the current status of a pod.
-
-    Args:
-        name: The name of the pod.
-
-    Returns:
-        PodStatus: The current status (RUNNING, PENDING, TERMINATED, ERROR, DOWN, TERMINATING, or UNKNOWN).
-    """
+def get_pod_info(name: str) -> tuple[PodStatus, "datetime | None"]:
+    """Pod (status, start_time) from one API read; start_time is None while the pod is absent."""
     try:
         core_v1 = get_core_v1()
         pod = cast("V1Pod", core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE))
 
         if not pod.metadata or not pod.status:
-            return PodStatus.UNKNOWN
+            return PodStatus.UNKNOWN, None
+
+        start_time = pod.status.start_time
 
         if pod.metadata.deletion_timestamp:
-            return PodStatus.TERMINATING
+            return PodStatus.TERMINATING, start_time
 
         phase = pod.status.phase
 
@@ -650,19 +646,20 @@ def get_pod_status(name: str) -> PodStatus:
             # Check if all containers are ready
             if pod.status.container_statuses:
                 all_ready = all(container.ready for container in pod.status.container_statuses)
-                return PodStatus.RUNNING if all_ready else PodStatus.PENDING
-            return PodStatus.RUNNING
+                return (PodStatus.RUNNING if all_ready else PodStatus.PENDING), start_time
+            return PodStatus.RUNNING, start_time
         if phase == "Succeeded":
-            return PodStatus.TERMINATED
+            return PodStatus.TERMINATED, start_time
         if phase == "Failed":
-            return PodStatus.ERROR
+            return PodStatus.ERROR, start_time
         if phase == "Pending":
-            return PodStatus.PENDING
+            return PodStatus.PENDING, start_time
 
-        return PodStatus.UNKNOWN
+        return PodStatus.UNKNOWN, start_time
 
     except ApiException as e:
-        return PodStatus.DOWN if e.status == HTTPStatus.NOT_FOUND else PodStatus.ERROR
+        status = PodStatus.DOWN if e.status == HTTPStatus.NOT_FOUND else PodStatus.ERROR
+        return status, None
 
 
 def get_job_status(name: str) -> JobStatus:

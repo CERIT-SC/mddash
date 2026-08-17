@@ -2,7 +2,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import requests
 from config import DATA_DIR
@@ -112,6 +112,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     )
     enzyme_notebook = build_model(Notebook, experiment_id=enzyme.id, token="demo-token-enzyme")
     demo_state.notebook_status[enzyme.id] = PodStatus.RUNNING
+    # Fresh notebook so the controller bar shows a short ticking uptime on the experiment page.
+    demo_state.notebook_started_at[enzyme.id] = datetime.now(timezone.utc) - timedelta(seconds=15)
 
     # Running tuner job for the main production run
     running_tuner = build_model(
@@ -348,6 +350,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     )
     amber_folding_notebook = build_model(Notebook, experiment_id=amber_folding.id, token="demo-token-amber")
     demo_state.notebook_status[amber_folding.id] = PodStatus.RUNNING
+    demo_state.notebook_started_at[amber_folding.id] = datetime.now(timezone.utc) - timedelta(minutes=40)
 
     # Finished AMBER production job (villin), so the villin simulation genuinely
     # owns the analyze phase; its analyses are seeded below.

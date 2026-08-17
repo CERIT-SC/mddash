@@ -1,6 +1,7 @@
 import { useListExperiments } from "@/api/generated/client"
 import { CreateExperimentDialog } from "@/features/dashboard/create-experiment-dialog"
 import { ExperimentCard } from "@/features/dashboard/experiment-card"
+import { isNotebookActive } from "@/shared/pod-status"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import {
   Badge,
@@ -16,8 +17,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "@e-infra/design-system"
-
-import { isNotebookActive } from "./notebook-status"
 
 export type DashboardSearch = {
   q?: string
