@@ -3,7 +3,8 @@ import { SetupStep, type SetupSource } from "@/features/setup"
 import { CREATE_TAB, SimulationTabs } from "@/features/simulation"
 import { ladderStepIndex } from "@/shared/steps"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
-import { Card, CardContent, Skeleton, Stepper, StepperContent, StepperHeader } from "@e-infra/design-system"
+import { Stepper, StepperContent, StepperHeader } from "@/shared/ui/stepper"
+import { Card, CardContent, Skeleton } from "@e-infra/design-system"
 
 import { TitleRow } from "./title-row"
 
@@ -92,18 +93,17 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         {/* Shares its top edge with the tab boxes — restyle them together. */}
         <Card className="border-border rounded-t-none border bg-white">
           <CardContent className="pt-6 md:pt-8 lg:pt-12">
-            {/* URL owns the step; initialStep re-syncs the uncontrolled DS Stepper.
-                TODO(CERIT-SC/design-system#110): switch to controlled `step` — until
-                then it can drift from the URL in create mode, where the Setup pin is display-only. */}
+            {/* URL owns the step via the controlled `step` prop; create mode pins it
+                to Setup, so a Next click there is vetoed instead of drifting the marker. */}
             <Stepper
-              initialStep={step}
+              step={step}
               totalSteps={STEPS.length}
               onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
             >
-              {/* Mock-mandated: mb-0 (DS reserves it for content below) + max-w-none
-                  on the header's capped bar. Brittle if DS renames that utility. */}
+              {/* mb-0 drops the header's reserved bottom margin; max-w-none widens the
+                  bar past the max-w-lg cap (which only balances against the nav buttons). */}
               <StepperHeader steps={STEPS} className="mb-0 [&_.max-w-lg]:max-w-none" />
-              {/* No StepperFooter — the DS header already renders Previous/Next. */}
+              {/* No StepperFooter — the header renders Previous/Next. */}
               <StepperContent>
                 <SetupStep
                   experimentId={experimentId}
