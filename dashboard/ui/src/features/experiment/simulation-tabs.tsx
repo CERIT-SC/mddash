@@ -105,7 +105,7 @@ export function SimulationTabs({ experimentId, simulations, value, onValueChange
             ))}
             {creating && (
               // Exists only while creating — naming it in Setup replaces it with a real tab.
-              <div className={cn(TAB_BOX, FUSED_ACTIVE)}>
+              <div className={cn(TAB_BOX, FUSED_ACTIVE, "flex")}>
                 <TabsTrigger value={CREATE_TAB} className={INNER_TRIGGER}>
                   [Unnamed Simulation]
                 </TabsTrigger>

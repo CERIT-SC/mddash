@@ -3,7 +3,7 @@ import { experiment } from "@/shared/fixtures/experiment"
 import { mockApiBySuffix } from "@/shared/fixtures/mock-fetch"
 import { simulation } from "@/shared/fixtures/simulation"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it } from "vitest"
 
@@ -88,6 +88,7 @@ describe("ExperimentWizard", () => {
   })
 
   it("renders one tab per simulation, preselecting the URL simulation", async () => {
+    // NB: the tab queries here target the simulations tablist; the Setup step has its own source tabs.
     mockApi({
       "/experiments/exp1/simulations": Response.json([alpha, beta]),
       "/experiments/exp1": okExperiment({ latest_simulation_path: alpha.simulation_path }),
@@ -108,8 +109,12 @@ describe("ExperimentWizard", () => {
       "/experiments/exp1": okExperiment(overrides),
     })
     renderWizard({})
-    expect((await screen.findAllByRole("tab")).length).toBe(2)
-    expect(screen.getByRole("tab", { name: expected })).toHaveAttribute("aria-selected", "true")
+    expect(
+      (await within(await screen.findByRole("tablist", { name: "Simulations" })).findAllByRole("tab")).length
+    ).toBe(2)
+    expect(
+      within(screen.getByRole("tablist", { name: "Simulations" })).getByRole("tab", { name: expected })
+    ).toHaveAttribute("aria-selected", "true")
   })
 
   it("falls back to the default tab when the URL simulation is unknown", async () => {
@@ -118,8 +123,9 @@ describe("ExperimentWizard", () => {
       "/experiments/exp1": okExperiment(),
     })
     renderWizard({ simulation: "gone.simulation.json" })
-    expect((await screen.findAllByRole("tab")).length).toBe(2)
-    expect(screen.getByRole("tab", { name: "Alpha" })).toHaveAttribute("aria-selected", "true")
+    const tablist = within(await screen.findByRole("tablist", { name: "Simulations" }))
+    expect((await tablist.findAllByRole("tab")).length).toBe(2)
+    expect(tablist.getByRole("tab", { name: "Alpha" })).toHaveAttribute("aria-selected", "true")
   })
 
   it("shows the step from the URL and reports navigation through onSearchChange", async () => {
@@ -154,6 +160,22 @@ describe("ExperimentWizard", () => {
     expect(screen.getByText(/Section \d+:/).parentElement).toHaveTextContent("Section 3: Run")
   })
 
+  it("keeps the setup source view across tab and step navigations", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha, beta]),
+      "/experiments/exp1": okExperiment(),
+    })
+    const changes: WizardSearch[] = []
+    const user = userEvent.setup()
+    renderWizard({ simulation: alpha.simulation_path, step: 0, source: "manual" }, (next) => changes.push(next))
+    await user.click(await screen.findByRole("tab", { name: "Beta" }))
+    expect(changes[changes.length - 1]).toEqual({ source: "manual", simulation: beta.simulation_path })
+    // The mounted props still point at alpha until the router applies the search,
+    // so the Next click navigates alpha's stepper — the source rides along regardless.
+    await user.click(screen.getByRole("button", { name: "Next" }))
+    expect(changes[changes.length - 1]).toEqual({ source: "manual", simulation: alpha.simulation_path, step: 1 })
+  })
+
   it("switches simulations from the tab bar, dropping the step", async () => {
     mockApi({
       "/experiments/exp1/simulations": Response.json([alpha, beta]),
@@ -176,7 +198,7 @@ describe("ExperimentWizard", () => {
     })
     renderWizard({})
     expect(await screen.findByRole("tab", { name: "[Unnamed Simulation]" })).toHaveAttribute("aria-selected", "true")
-    expect(screen.getAllByRole("tab").length).toBe(1)
+    expect(within(screen.getByRole("tablist", { name: "Simulations" })).getAllByRole("tab").length).toBe(1)
     expect(screen.getByText(/Section \d+:/).parentElement).toHaveTextContent("Section 1: Setup")
     expect(screen.getByRole("button", { name: "New simulation" })).toBeVisible()
   })

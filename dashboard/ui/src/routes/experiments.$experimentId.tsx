@@ -8,6 +8,7 @@ export const Route = createFileRoute("/experiments/$experimentId")({
       typeof search.step === "number" && Number.isInteger(search.step) && search.step >= 0 && search.step <= 4
         ? search.step
         : undefined,
+    source: search.source === "manual" ? "manual" : undefined,
   }),
   component: function WizardRoute() {
     const { experimentId } = Route.useParams()

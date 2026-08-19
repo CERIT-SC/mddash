@@ -34,6 +34,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Calendar, GitBranch, Pencil } from "lucide-react"
 import { toast } from "sonner"
 
+import { SetupStep } from "./setup-step"
 import { CREATE_TAB, SimulationTabs } from "./simulation-tabs"
 import { SourceItem } from "./source-metadata"
 
@@ -41,11 +42,15 @@ const STEPS = [{ label: "Setup" }, { label: "Tune" }, { label: "Run" }, { label:
 
 const LAST_STEP = STEPS.length - 1
 
+export type SetupSource = "notebook" | "manual"
+
 export type WizardSearch = {
   /** Selected simulation tab — the simulation_path, which may contain slashes. */
   simulation?: string
   /** Current wizard step (0-based); defaults to the simulation's own progress. */
   step?: number
+  /** Setup source view; only the non-default "manual" is worth a param. */
+  source?: SetupSource
 }
 
 type ExperimentWizardProps = {
@@ -210,6 +215,10 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
   const step = selected === undefined ? 0 : clampStep(search.step ?? ladderStepIndex(selected.step))
   const tab = selected?.simulation_path ?? CREATE_TAB
 
+  // The Setup source view rides along on every navigation (remounts must not
+  // bounce a mid-form user back to the default); only a full reset drops it.
+  const updateSearch = (next: WizardSearch) => onSearchChange({ source: search.source, ...next })
+
   return (
     <section className="space-y-6 md:space-y-8">
       <TitleRow experiment={data} />
@@ -219,7 +228,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
           experimentId={experimentId}
           simulations={list}
           value={tab}
-          onValueChange={(simulation) => onSearchChange({ simulation })}
+          onValueChange={(simulation) => updateSearch({ simulation })}
           onDeleted={(deleted) => {
             // The URL still points at the deleted manifest; drop the selection so
             // the refreshed list falls back to its default tab.
@@ -230,23 +239,29 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         {/* Shares its top edge with the tab boxes — restyle them together. */}
         <Card className="border-border rounded-t-none border bg-white">
           <CardContent className="pt-6 md:pt-8 lg:pt-12">
-            {/* URL owns the step: onStepChange only fires on user navigation, while a
-                changed initialStep re-syncs the DS Stepper's internal state.
-                TODO(CERIT-SC/design-system#110): switch to the controlled `step` prop
-                once released — the uncontrolled Stepper can drift from the URL-owned
-                step in create mode, where the Setup pin is display-only. */}
+            {/* URL owns the step; initialStep re-syncs the uncontrolled DS Stepper.
+                TODO(CERIT-SC/design-system#110): switch to controlled `step` — until
+                then it can drift from the URL in create mode, where the Setup pin is display-only. */}
             <Stepper
               initialStep={step}
               totalSteps={STEPS.length}
-              onStepChange={(next) => onSearchChange({ simulation: tab, step: next })}
+              onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
             >
-              {/* Two fixed overrides, both mock-mandated: mb-0 (DS stacks an mb-8 meant
-                  for content below) and max-w-none on the header's capped max-w-lg bar
-                  so the stepper spans the panel. Brittle if DS renames that utility. */}
+              {/* Mock-mandated: mb-0 (DS reserves it for content below) + max-w-none
+                  on the header's capped bar. Brittle if DS renames that utility. */}
               <StepperHeader steps={STEPS} className="mb-0 [&_.max-w-lg]:max-w-none" />
               {/* No StepperFooter — the DS header already renders Previous/Next. */}
               <StepperContent>
-                {STEPS.map(({ label }) => (
+                <SetupStep
+                  experimentId={experimentId}
+                  experiment={data}
+                  simulation={selected}
+                  creating={creating}
+                  source={search.source ?? "notebook"}
+                  onSourceChange={(source) => updateSearch({ simulation: tab, step: search.step, source })}
+                  onOpenSimulation={(simulation) => updateSearch({ simulation })}
+                />
+                {STEPS.slice(1).map(({ label }) => (
                   <div key={label} />
                 ))}
               </StepperContent>

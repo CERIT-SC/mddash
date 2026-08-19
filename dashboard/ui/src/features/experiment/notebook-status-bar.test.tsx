@@ -43,7 +43,7 @@ describe("NotebookStatusBar", () => {
     expect(await screen.findByRole("region", { name: "Notebook status" })).toBeVisible()
     expect(await screen.findByText(/^[0-9]s$/)).toBeVisible()
 
-    const open = await screen.findByRole("link", { name: "Open" })
+    const open = await screen.findByRole("link", { name: "Open notebook" })
     expect(open).toHaveAttribute("href", SERVE)
     expect(open).toHaveAttribute("target", "_blank")
     expect(screen.getByRole("button", { name: "Stop notebook" })).toBeEnabled()
@@ -55,7 +55,7 @@ describe("NotebookStatusBar", () => {
     expect(await screen.findByText("Initializing…")).toBeVisible()
     // Stop stays available so a slow/stuck start can be cancelled
     expect(screen.getByRole("button", { name: "Stop notebook" })).toBeEnabled()
-    expect(screen.queryByRole("link", { name: "Open" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Open notebook" })).not.toBeInTheDocument()
   })
 
   it("flags initialization taking longer than expected instead of fast-polling forever", async () => {
@@ -78,7 +78,7 @@ describe("NotebookStatusBar", () => {
 
     expect(await screen.findByText("Starting…")).toBeVisible()
     expect(screen.getByRole("button", { name: "Stop notebook" })).toBeEnabled()
-    expect(screen.queryByRole("link", { name: "Open" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Open notebook" })).not.toBeInTheDocument()
     expect(calls.some((call) => call.url.includes("/dash/notebook/"))).toBe(false)
   })
 
@@ -88,7 +88,7 @@ describe("NotebookStatusBar", () => {
     // both the status label and the stop button read Stopping…
     expect((await screen.findAllByText("Stopping…")).length).toBe(2)
     expect(screen.getByRole("button", { name: "Stopping…" })).toBeDisabled()
-    expect(screen.queryByRole("link", { name: "Open" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Open notebook" })).not.toBeInTheDocument()
   })
 
   it("shows an idle placeholder for UNKNOWN with stop disabled", async () => {
@@ -96,7 +96,7 @@ describe("NotebookStatusBar", () => {
 
     expect(await screen.findByText("…")).toBeVisible()
     expect(screen.getByRole("button", { name: "Stop notebook" })).toBeDisabled()
-    expect(screen.queryByRole("link", { name: "Open" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Open notebook" })).not.toBeInTheDocument()
   })
 
   it("renders nothing while the notebook is DOWN", async () => {

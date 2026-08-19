@@ -21,6 +21,17 @@ Object.defineProperty(window, "localStorage", {
 
 window.scrollTo = () => undefined
 
+// jsdom lacks pointer capture; Radix primitives (Select, Slider) call these on interactions.
+if (!Element.prototype.hasPointerCapture) {
+  Element.prototype.hasPointerCapture = () => false
+  Element.prototype.setPointerCapture = () => undefined
+  Element.prototype.releasePointerCapture = () => undefined
+}
+// Radix focuses items via scrollIntoView, which jsdom does not implement.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => undefined
+}
+
 afterEach(() => {
   cleanup()
   localStorage.clear()
