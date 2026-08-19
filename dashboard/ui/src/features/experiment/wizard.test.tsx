@@ -1,4 +1,5 @@
 import type { Experiment } from "@/api/generated/models"
+import { CREATE_TAB } from "@/features/simulation"
 import { experiment } from "@/shared/fixtures/experiment"
 import { mockApiBySuffix } from "@/shared/fixtures/mock-fetch"
 import { simulation } from "@/shared/fixtures/simulation"
@@ -7,7 +8,6 @@ import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it } from "vitest"
 
-import { CREATE_TAB } from "./simulation-tabs"
 import { ExperimentWizard, type WizardSearch } from "./wizard"
 
 const alpha = simulation("alpha.simulation.json", { name: "Alpha", step: 2 })

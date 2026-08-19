@@ -1,6 +1,4 @@
 import { useListExperiments } from "@/api/generated/client"
-import { CreateExperimentDialog } from "@/features/dashboard/create-experiment-dialog"
-import { ExperimentCard } from "@/features/dashboard/experiment-card"
 import { isNotebookActive } from "@/shared/pod-status"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import {
@@ -17,6 +15,9 @@ import {
   TabsList,
   TabsTrigger,
 } from "@e-infra/design-system"
+
+import { CreateExperimentDialog } from "./create-experiment-dialog"
+import { ExperimentCard } from "./experiment-card"
 
 export type DashboardSearch = {
   q?: string

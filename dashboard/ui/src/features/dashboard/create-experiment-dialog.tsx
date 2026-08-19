@@ -3,6 +3,7 @@ import { useMemo, useState } from "react"
 import { toApiError } from "@/api/errors"
 import { getListExperimentsQueryKey, useCreateExperiment, useListNotebookModules } from "@/api/generated/client"
 import type { CreateExperimentForm, Engine, NotebookModule } from "@/api/generated/models"
+import { ENGINE_LABELS } from "@/shared/engine"
 import { formatBytes } from "@/shared/format"
 import {
   Badge,
@@ -47,8 +48,6 @@ import { useDropzone, type FileRejection } from "react-dropzone"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
-
-import { ENGINE_LABELS } from "./engine-labels"
 
 const ENGINE_ORDER: Engine[] = ["GMX", "AMBER"]
 

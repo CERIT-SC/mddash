@@ -9,7 +9,7 @@ import {
 } from "@/api/generated/client"
 import { Engine } from "@/api/generated/models"
 import type { Simulation, SimulationWrite } from "@/api/generated/models"
-import { ENGINE_LABELS } from "@/features/dashboard/engine-labels"
+import { ENGINE_LABELS } from "@/shared/engine"
 import {
   Alert,
   AlertDescription,

@@ -1,4 +1,4 @@
-import { ExperimentWizard, type WizardSearch } from "@/features/experiment/wizard"
+import { ExperimentWizard, type WizardSearch } from "@/features/experiment"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/experiments/$experimentId")({

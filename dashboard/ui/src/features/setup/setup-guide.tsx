@@ -1,8 +1,7 @@
 import type { Notebook } from "@/api/generated/models"
+import { NotebookLauncher } from "@/features/notebook"
 import { Button, cn } from "@e-infra/design-system"
 import { Check, ExternalLink } from "lucide-react"
-
-import { NotebookLauncher } from "./notebook-launcher"
 
 type GuideState = "done" | "active" | "pending"
 

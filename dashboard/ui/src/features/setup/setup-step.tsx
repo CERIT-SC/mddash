@@ -2,15 +2,14 @@ import { useEffect, useRef } from "react"
 
 import { useListExperimentFiles, useListSimulations } from "@/api/generated/client"
 import type { Experiment, Simulation } from "@/api/generated/models"
+import { NotebookLauncher, notebookRoleUrl, useNotebook, useNotebookReady } from "@/features/notebook"
+import { SimulationForm } from "@/features/simulation"
 import { H4, Tabs, TabsContent, TabsList, TabsTrigger } from "@e-infra/design-system"
 import { toast } from "sonner"
 
-import { notebookRoleUrl } from "./notebook"
-import { useNotebook, useNotebookReady } from "./notebook-hooks"
-import { NotebookLauncher } from "./notebook-launcher"
 import { SetupGuide } from "./setup-guide"
-import { SimulationForm } from "./simulation-form"
-import type { SetupSource } from "./wizard"
+
+export type SetupSource = "notebook" | "manual"
 
 /** Heartbeat while the setup step is mounted — the manifest can appear mid-wait. */
 const SIMULATIONS_POLL_MS = 5000

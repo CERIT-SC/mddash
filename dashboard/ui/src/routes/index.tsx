@@ -1,4 +1,4 @@
-import { Dashboard, type DashboardSearch } from "@/features/dashboard/dashboard"
+import { Dashboard, type DashboardSearch } from "@/features/dashboard"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 
 export const Route = createFileRoute("/")({

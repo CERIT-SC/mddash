@@ -12,6 +12,7 @@ import {
   useUpdateExperiment,
 } from "@/api/generated/client"
 import type { Experiment } from "@/api/generated/models"
+import { ENGINE_LABELS } from "@/shared/engine"
 import { formatBytes, formatTime, relativeTime } from "@/shared/format"
 import { isNotebookActive } from "@/shared/pod-status"
 import { sourceLabel } from "@/shared/source"
@@ -72,8 +73,6 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { toast } from "sonner"
-
-import { ENGINE_LABELS } from "./engine-labels"
 
 const STEP_LABELS = ["Setup", "Tune", "Run", "Analyze", "Publish"] as const
 

@@ -1,6 +1,6 @@
 import { ServerStatusBar } from "@/app/server-status-bar"
 import { SiteHeader } from "@/app/site-header"
-import { NotebookStatusBar } from "@/features/experiment/notebook-status-bar"
+import { NotebookStatusBar } from "@/features/notebook"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Content, Toaster } from "@e-infra/design-system"
 import { Outlet, useParams, useRouteContext, type ErrorComponentProps } from "@tanstack/react-router"
