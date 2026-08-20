@@ -1,7 +1,7 @@
 import { Engine } from "@/api/generated/models"
 import { describe, expect, it } from "vitest"
 
-import { toJobRequest } from "./hardware-config-form"
+import { toJobRequest } from "./run-request"
 
 describe("toJobRequest", () => {
   it("maps GMX values to the GromacsJobRequest shape", () => {
