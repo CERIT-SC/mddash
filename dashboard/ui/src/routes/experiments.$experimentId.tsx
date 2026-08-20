@@ -9,6 +9,8 @@ export const Route = createFileRoute("/experiments/$experimentId")({
         ? search.step
         : undefined,
     source: search.source === "manual" ? "manual" : undefined,
+    trial: typeof search.trial === "string" && search.trial !== "" ? search.trial : undefined,
+    mode: search.mode === "manual" ? "manual" : undefined,
   }),
   component: function WizardRoute() {
     const { experimentId } = Route.useParams()
@@ -18,7 +20,8 @@ export const Route = createFileRoute("/experiments/$experimentId")({
       <ExperimentWizard
         experimentId={experimentId}
         search={search}
-        onSearchChange={(next) => void navigate({ search: () => next, replace: true })}
+        // Search-only updates must not bounce the viewport (e.g. picking a trial mid-table).
+        onSearchChange={(next) => void navigate({ search: () => next, replace: true, resetScroll: false })}
       />
     )
   },

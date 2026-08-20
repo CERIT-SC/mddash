@@ -5,6 +5,7 @@ import { getListExperimentsQueryKey, useCreateExperiment, useListNotebookModules
 import type { CreateExperimentForm, Engine, NotebookModule } from "@/api/generated/models"
 import { ENGINE_LABELS } from "@/shared/engine"
 import { formatBytes } from "@/shared/format"
+import { HintTooltip } from "@/shared/ui/hint-tooltip"
 import {
   Badge,
   Button,
@@ -27,23 +28,10 @@ import {
   Skeleton,
   ToggleGroup,
   ToggleGroupItem,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
 } from "@e-infra/design-system"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { useQueryClient } from "@tanstack/react-query"
-import {
-  ChevronUp,
-  CircleCheck,
-  CircleHelp,
-  CloudUpload,
-  Code,
-  FlaskConical,
-  LoaderCircle,
-  Plus,
-  Trash2,
-} from "lucide-react"
+import { ChevronUp, CircleCheck, CloudUpload, Code, FlaskConical, LoaderCircle, Plus, Trash2 } from "lucide-react"
 import { useDropzone, type FileRejection } from "react-dropzone"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
@@ -385,14 +373,7 @@ export function CreateExperimentDialog({ defaultNotebooksRepo }: CreateExperimen
                       <FormItem>
                         <div className="flex items-center gap-1.5">
                           <FormLabel>MD Engine</FormLabel>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button type="button" aria-label="MD engine help" className="text-text-muted">
-                                <CircleHelp size={14} />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent>Simulation tools used by the experiment's notebooks.</TooltipContent>
-                          </Tooltip>
+                          <HintTooltip text="Simulation tools used by the experiment's notebooks." />
                         </div>
                         <FormControl>
                           <ToggleGroup
@@ -421,16 +402,7 @@ export function CreateExperimentDialog({ defaultNotebooksRepo }: CreateExperimen
                     <FormItem>
                       <div className="flex items-center gap-1.5">
                         <FormLabel>Initial Data</FormLabel>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button type="button" aria-label="Initial data help" className="text-text-muted">
-                              <CircleHelp size={14} />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            How the experiment's starting structure and files are obtained.
-                          </TooltipContent>
-                        </Tooltip>
+                        <HintTooltip text="How the experiment's starting structure and files are obtained." />
                       </div>
                       <FormControl>
                         <ToggleGroup
@@ -462,14 +434,7 @@ export function CreateExperimentDialog({ defaultNotebooksRepo }: CreateExperimen
                       <FormItem>
                         <div className="flex items-center gap-1.5">
                           <FormLabel>PDB ID or URL</FormLabel>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button type="button" aria-label="PDB help" className="text-text-muted">
-                                <CircleHelp size={14} />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent>RCSB PDB ID (e.g. 1ABC) or a direct URL to a .pdb file.</TooltipContent>
-                          </Tooltip>
+                          <HintTooltip text="RCSB PDB ID (e.g. 1ABC) or a direct URL to a .pdb file." />
                         </div>
                         <FormControl>
                           <Input placeholder="e.g. 1ABC or https://files.rcsb.org/download/1AKI.pdb" {...field} />

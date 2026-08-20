@@ -1,6 +1,7 @@
 import { useGetExperiment, useListSimulations } from "@/api/generated/client"
 import { SetupStep, type SetupSource } from "@/features/setup"
 import { CREATE_TAB, SimulationTabs } from "@/features/simulation"
+import { TuneStep } from "@/features/tune"
 import { ladderStepIndex } from "@/shared/steps"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Stepper, StepperContent, StepperHeader } from "@/shared/ui/stepper"
@@ -19,6 +20,10 @@ export type WizardSearch = {
   step?: number
   /** Setup source view; only the non-default "manual" is worth a param. */
   source?: SetupSource
+  /** Picked tuning trial on the Tune step (dropped when the job is re-tuned). */
+  trial?: string
+  /** Tune step view; only the non-default "manual" is worth a param. */
+  mode?: "manual"
 }
 
 type ExperimentWizardProps = {
@@ -69,9 +74,10 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
   const step = selected === undefined ? 0 : clampStep(search.step ?? ladderStepIndex(selected.step))
   const tab = selected?.simulation_path ?? CREATE_TAB
 
-  // The Setup source view rides along on every navigation (remounts must not
-  // bounce a mid-form user back to the default); only a full reset drops it.
-  const updateSearch = (next: WizardSearch) => onSearchChange({ source: search.source, ...next })
+  // Setup/Tune URL params ride along on every navigation so remounts keep user
+  // context; only a full reset drops them.
+  const updateSearch = (next: WizardSearch) =>
+    onSearchChange({ source: search.source, trial: search.trial, mode: search.mode, ...next })
 
   return (
     <section className="space-y-6 md:space-y-8">
@@ -114,7 +120,28 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
                   onSourceChange={(source) => updateSearch({ simulation: tab, step: search.step, source })}
                   onOpenSimulation={(simulation) => updateSearch({ simulation })}
                 />
-                {STEPS.slice(1).map(({ label }) => (
+                {/* Create mode pins the stepper to Setup, so this placeholder never renders. */}
+                {selected === undefined ? (
+                  <div />
+                ) : (
+                  <TuneStep
+                    experimentId={experimentId}
+                    engine={data.engine}
+                    simulation={selected}
+                    trialId={search.trial}
+                    mode={search.mode ?? "tuning"}
+                    onTrialIdChange={(trial) => updateSearch({ simulation: tab, step: search.step, trial })}
+                    onModeChange={(mode) =>
+                      updateSearch({
+                        simulation: tab,
+                        step: search.step,
+                        mode: mode === "manual" ? "manual" : undefined,
+                      })
+                    }
+                    onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
+                  />
+                )}
+                {STEPS.slice(2).map(({ label }) => (
                   <div key={label} />
                 ))}
               </StepperContent>
