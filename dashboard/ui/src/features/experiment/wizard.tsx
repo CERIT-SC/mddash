@@ -6,10 +6,17 @@ import { ladderStepIndex } from "@/shared/steps"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Stepper, StepperContent, StepperHeader } from "@/shared/ui/stepper"
 import { Card, CardContent, Skeleton } from "@e-infra/design-system"
+import { Atom, ChartColumn, Play, SlidersHorizontal, Upload } from "lucide-react"
 
 import { TitleRow } from "./title-row"
 
-const STEPS = [{ label: "Setup" }, { label: "Tune" }, { label: "Run" }, { label: "Analyze" }, { label: "Publish" }]
+const STEPS = [
+  { label: "Setup", icon: Atom },
+  { label: "Tune", icon: SlidersHorizontal },
+  { label: "Run", icon: Play },
+  { label: "Analyze", icon: ChartColumn },
+  { label: "Publish", icon: Upload },
+]
 
 const LAST_STEP = STEPS.length - 1
 
@@ -71,7 +78,8 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
   // The API ladder decodes through the shared mapping; the URL-owned step is used verbatim.
   // A simulation that does not exist yet has no progress of its own, so create
   // mode always lands on Setup.
-  const step = selected === undefined ? 0 : clampStep(search.step ?? ladderStepIndex(selected.step))
+  const maxStep = selected === undefined ? 0 : ladderStepIndex(selected.step)
+  const step = selected === undefined ? 0 : clampStep(search.step ?? maxStep)
   const tab = selected?.simulation_path ?? CREATE_TAB
 
   // Setup/Tune URL params ride along on every navigation so remounts keep user
@@ -99,17 +107,13 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         {/* Shares its top edge with the tab boxes — restyle them together. */}
         <Card className="border-border rounded-t-none border bg-white">
           <CardContent className="pt-6 md:pt-8 lg:pt-12">
-            {/* URL owns the step via the controlled `step` prop; create mode pins it
-                to Setup, so a Next click there is vetoed instead of drifting the marker. */}
             <Stepper
               step={step}
               totalSteps={STEPS.length}
               onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
             >
-              {/* mb-0 drops the header's reserved bottom margin; max-w-none widens the
-                  bar past the max-w-lg cap (which only balances against the nav buttons). */}
-              <StepperHeader steps={STEPS} className="mb-0 [&_.max-w-lg]:max-w-none" />
-              {/* No StepperFooter — the header renders Previous/Next. */}
+              {/* mb-0 drops the header's reserved bottom margin. */}
+              <StepperHeader steps={STEPS} className="mb-0" maxStep={maxStep} />
               <StepperContent>
                 <SetupStep
                   experimentId={experimentId}

@@ -137,15 +137,18 @@ describe("ExperimentWizard", () => {
     const user = userEvent.setup()
     renderWizard({ step: 2 }, (next) => changes.push(next))
 
-    expect(await screen.findByText("Section 3:")).toBeInTheDocument()
-    expect(screen.getByText(/Section \d+:/).parentElement).toHaveTextContent("Section 3: Run")
+    expect(await screen.findByRole("button", { name: "Go to section 3: Run" })).toHaveAttribute("aria-current", "step")
+    expect(
+      screen.getByRole("button", { name: "Go to section 1: Setup" }).querySelector("svg.lucide-check")
+    ).not.toBeNull()
+    expect(screen.getByRole("button", { name: "Go to section 4: Analyze" })).toBeDisabled()
 
-    await user.click(screen.getByRole("button", { name: "Next" }))
-    expect(changes).toEqual([{ simulation: alpha.simulation_path, step: 3 }])
+    await user.click(screen.getByRole("button", { name: "Go to section 2: Tune" }))
+    expect(changes).toEqual([{ simulation: alpha.simulation_path, step: 1 }])
 
     await user.click(screen.getByRole("button", { name: "Go to section 1: Setup" }))
     expect(changes).toEqual([
-      { simulation: alpha.simulation_path, step: 3 },
+      { simulation: alpha.simulation_path, step: 1 },
       { simulation: alpha.simulation_path, step: 0 },
     ])
   })
@@ -156,8 +159,26 @@ describe("ExperimentWizard", () => {
       "/experiments/exp1": okExperiment({ latest_simulation_path: beta.simulation_path }),
     })
     renderWizard({})
-    expect(await screen.findByText("Section 3:")).toBeInTheDocument()
-    expect(screen.getByText(/Section \d+:/).parentElement).toHaveTextContent("Section 3: Run")
+    expect(await screen.findByRole("button", { name: "Go to section 3: Run" })).toHaveAttribute("aria-current", "step")
+  })
+
+  it("disables markers past the simulation's API-reported progress", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha]),
+      "/experiments/exp1": okExperiment(),
+    })
+    const changes: WizardSearch[] = []
+    const user = userEvent.setup()
+    renderWizard({}, (next) => changes.push(next))
+
+    expect(await screen.findByRole("button", { name: "Go to section 2: Tune" })).toHaveAttribute("aria-current", "step")
+    expect(screen.getByRole("button", { name: "Go to section 1: Setup" })).toBeEnabled()
+    for (const name of ["Go to section 3: Run", "Go to section 4: Analyze", "Go to section 5: Publish"]) {
+      expect(screen.getByRole("button", { name })).toBeDisabled()
+    }
+
+    await user.click(screen.getByRole("button", { name: "Go to section 3: Run" }))
+    expect(changes).toEqual([])
   })
 
   it("keeps the setup source view across tab and step navigations", async () => {
@@ -171,8 +192,8 @@ describe("ExperimentWizard", () => {
     await user.click(await screen.findByRole("tab", { name: "Beta" }))
     expect(changes[changes.length - 1]).toEqual({ source: "manual", simulation: beta.simulation_path })
     // The mounted props still point at alpha until the router applies the search,
-    // so the Next click navigates alpha's stepper — the source rides along regardless.
-    await user.click(screen.getByRole("button", { name: "Next" }))
+    // so the marker click navigates alpha's stepper — the source rides along regardless.
+    await user.click(screen.getByRole("button", { name: "Go to section 2: Tune" }))
     expect(changes[changes.length - 1]).toEqual({ source: "manual", simulation: alpha.simulation_path, step: 1 })
   })
 
@@ -199,7 +220,7 @@ describe("ExperimentWizard", () => {
     renderWizard({})
     expect(await screen.findByRole("tab", { name: "[Unnamed Simulation]" })).toHaveAttribute("aria-selected", "true")
     expect(within(screen.getByRole("tablist", { name: "Simulations" })).getAllByRole("tab").length).toBe(1)
-    expect(screen.getByText(/Section \d+:/).parentElement).toHaveTextContent("Section 1: Setup")
+    expect(screen.getByRole("button", { name: "Go to section 1: Setup" })).toHaveAttribute("aria-current", "step")
     expect(screen.getByRole("button", { name: "New simulation" })).toBeVisible()
   })
 
@@ -222,7 +243,7 @@ describe("ExperimentWizard", () => {
     })
     renderWizard({ simulation: CREATE_TAB, step: 3 })
     expect(await screen.findByRole("tab", { name: "[Unnamed Simulation]" })).toHaveAttribute("aria-selected", "true")
-    expect(screen.getByText(/Section \d+:/).parentElement).toHaveTextContent("Section 1: Setup")
+    expect(screen.getByRole("button", { name: "Go to section 1: Setup" })).toHaveAttribute("aria-current", "step")
   })
 
   it("deletes a simulation from its tab menu after confirmation", async () => {

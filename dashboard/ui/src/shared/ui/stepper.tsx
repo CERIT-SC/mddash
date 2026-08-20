@@ -3,8 +3,8 @@
 
 import * as React from "react"
 
-import { Button, cn } from "@e-infra/design-system"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { cn } from "@e-infra/design-system"
+import { Check } from "lucide-react"
 
 interface Step {
   label: string
@@ -15,14 +15,12 @@ interface Step {
 interface StepperContextValue {
   currentStep: number
   totalSteps: number
-  nextStep: () => void
-  previousStep: () => void
   goToStep: (step: number) => void
 }
 
 const StepperContext = React.createContext<StepperContextValue | undefined>(undefined)
 
-export function useStepper() {
+function useStepper() {
   const context = React.useContext(StepperContext)
   if (!context) {
     throw new Error("useStepper must be used within a Stepper")
@@ -32,85 +30,30 @@ export function useStepper() {
 
 interface StepperProps {
   children: React.ReactNode
-  initialStep?: number
-  step?: number
+  step: number
   totalSteps?: number
-  onStepChange?: (step: number) => void
+  onStepChange: (step: number) => void
 }
 
-export function Stepper({
-  children,
-  initialStep = 0,
-  step: stepProp,
-  totalSteps: totalStepsProp,
-  onStepChange,
-}: StepperProps) {
-  const clampStep = React.useCallback((step: number, stepsCount: number) => {
+export function Stepper({ children, step, totalSteps: totalStepsProp, onStepChange }: StepperProps) {
+  const clampStep = React.useCallback((value: number, stepsCount: number) => {
     const maxIndex = Math.max(stepsCount - 1, 0)
-    return Math.max(0, Math.min(step, maxIndex))
+    return Math.max(0, Math.min(value, maxIndex))
   }, [])
 
-  const isControlled = stepProp !== undefined
-  const [internalStep, setInternalStep] = React.useState(initialStep)
   const steps = React.Children.toArray(children)
   const totalSteps = Math.max(totalStepsProp ?? steps.length, 1)
-  const currentStep = clampStep(isControlled ? stepProp : internalStep, totalSteps)
-  const previousInitialStepRef = React.useRef(initialStep)
-
-  const changeStep = React.useCallback(
-    (step: number) => {
-      if (!isControlled) {
-        setInternalStep(step)
-      }
-      onStepChange?.(step)
-    },
-    [isControlled, onStepChange]
-  )
-
-  const nextStep = React.useCallback(() => {
-    changeStep(clampStep(currentStep + 1, totalSteps))
-  }, [changeStep, clampStep, currentStep, totalSteps])
-
-  const previousStep = React.useCallback(() => {
-    changeStep(clampStep(currentStep - 1, totalSteps))
-  }, [changeStep, clampStep, currentStep, totalSteps])
+  const currentStep = clampStep(step, totalSteps)
 
   const goToStep = React.useCallback(
-    (step: number) => {
-      changeStep(clampStep(step, totalSteps))
+    (value: number) => {
+      onStepChange(clampStep(value, totalSteps))
     },
-    [changeStep, clampStep, totalSteps]
+    [onStepChange, clampStep, totalSteps]
   )
 
-  React.useEffect(() => {
-    if (isControlled) {
-      return
-    }
-    setInternalStep((prev) => {
-      const clamped = clampStep(prev, totalSteps)
-      return prev === clamped ? prev : clamped
-    })
-  }, [clampStep, isControlled, totalSteps])
-
-  React.useEffect(() => {
-    if (isControlled || previousInitialStepRef.current === initialStep) {
-      return
-    }
-
-    previousInitialStepRef.current = initialStep
-    setInternalStep(clampStep(initialStep, totalSteps))
-  }, [clampStep, initialStep, isControlled, totalSteps])
-
   return (
-    <StepperContext.Provider
-      value={{
-        currentStep,
-        totalSteps,
-        nextStep,
-        previousStep,
-        goToStep,
-      }}
-    >
+    <StepperContext.Provider value={{ currentStep, totalSteps, goToStep }}>
       <div className="w-full">{children}</div>
     </StepperContext.Provider>
   )
@@ -119,16 +62,17 @@ export function Stepper({
 interface StepperHeaderProps {
   steps?: Step[]
   className?: string
-  showNavigation?: boolean
+  /** Farthest clickable marker (server-reported progress); later ones render disabled. */
+  maxStep?: number
 }
 
-export function StepperHeader({ steps = [], className, showNavigation = true }: StepperHeaderProps) {
-  const { currentStep, previousStep, nextStep, goToStep, totalSteps } = useStepper()
+export function StepperHeader({ steps = [], className, maxStep }: StepperHeaderProps) {
+  const { currentStep, goToStep, totalSteps } = useStepper()
   const safeTotalSteps = Math.max(totalSteps, 1)
   const activeStepIndex = Math.min(Math.max(currentStep, 0), safeTotalSteps - 1)
   const progressPercentage = safeTotalSteps > 1 ? (activeStepIndex / (safeTotalSteps - 1)) * 100 : 100
   const isLastStep = activeStepIndex === safeTotalSteps - 1
-  const stepMarkerSize = 28
+  const stepMarkerSize = 40
   const stepItems = Array.from({ length: safeTotalSteps }, (_, index) => ({
     label: steps[index]?.label ?? `Step ${String(index + 1)}`,
     icon: steps[index]?.icon,
@@ -138,60 +82,48 @@ export function StepperHeader({ steps = [], className, showNavigation = true }: 
   return (
     <nav aria-label="Progress" className={cn("mb-8", className)}>
       <div className="flex w-full flex-col items-center gap-3">
-        <p className="text-text text-center text-xs">
-          <span className="font-normal">Section {activeStepIndex + 1}: </span>
-          <span className="font-semibold">{currentStepLabel}</span>
-        </p>
         <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
           Section {activeStepIndex + 1} of {safeTotalSteps}: {currentStepLabel}
         </p>
 
-        <div className="flex w-full items-center justify-center gap-4 md:gap-10">
-          {showNavigation && (
-            <div className="shrink-0">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={previousStep}
-                disabled={currentStep === 0}
-                className="gap-1.5 md:min-w-26"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Previous
-              </Button>
-            </div>
-          )}
+        <div className="w-full">
+          <div className="relative">
+            {/* Track lines sit on the circle row's center: markers are h-10 (40px), so center is top-5. */}
+            <div className="bg-border/80 absolute top-5 right-3 left-3 h-2 -translate-y-1/2 rounded-full" />
+            <div
+              className="bg-primary absolute top-5 left-3 h-2 -translate-y-1/2 rounded-full transition-all"
+              style={{
+                width: `calc(${String(progressPercentage)}% - ${String(progressPercentage / 100)} * ${String(stepMarkerSize)}px + ${String(isLastStep ? 0 : stepMarkerSize)}px)`,
+              }}
+            />
 
-          {/* max-w-lg only balances against the flanking Previous/Next buttons */}
-          <div className={cn("relative w-full", showNavigation && "max-w-lg")}>
-            <div className="relative">
-              <div className="bg-border/80 absolute top-1/2 right-3 left-3 h-2 -translate-y-1/2 rounded-full" />
-              <div
-                className="bg-primary absolute top-1/2 left-3 h-2 -translate-y-1/2 rounded-full transition-all"
-                style={{
-                  width: `calc(${String(progressPercentage)}% - ${String(progressPercentage / 100)} * ${String(stepMarkerSize)}px + ${String(isLastStep ? 0 : stepMarkerSize)}px)`,
-                }}
-              />
+            <div className="relative flex items-start justify-between">
+              {stepItems.map((step, index) => {
+                const isComplete = index < currentStep
+                const isCurrent = index === currentStep
+                const reachable = maxStep === undefined || index <= maxStep
 
-              <div className="relative flex items-center justify-between">
-                {stepItems.map((step, index) => {
-                  const isComplete = index < currentStep
-                  const isCurrent = index === currentStep
-
-                  return (
-                    <button
-                      key={`${step.label}-${String(index)}`}
-                      type="button"
-                      onClick={() => {
-                        goToStep(index)
-                      }}
-                      aria-current={isCurrent ? "step" : undefined}
-                      aria-label={`Go to section ${String(index + 1)}: ${step.label}`}
+                return (
+                  <button
+                    key={`${step.label}-${String(index)}`}
+                    type="button"
+                    disabled={!reachable}
+                    onClick={() => {
+                      goToStep(index)
+                    }}
+                    aria-current={isCurrent ? "step" : undefined}
+                    aria-label={`Go to section ${String(index + 1)}: ${step.label}`}
+                    className={cn(
+                      "relative z-10 flex flex-col items-center gap-1.5 first:items-start last:items-end",
+                      reachable ? "cursor-pointer" : "cursor-not-allowed"
+                    )}
+                  >
+                    <span
                       className={cn(
-                        "relative z-10 flex cursor-pointer items-center justify-center rounded-full text-[14px] leading-5 font-semibold tracking-[0.07px] transition-all duration-300",
-                        isComplete && "border-success bg-success text-success-foreground h-6 w-6 border-4",
-                        isCurrent && "border-background bg-warning text-warning-foreground h-7 w-7 border-2",
-                        !isComplete && !isCurrent && "border-background bg-border/80 text-text h-7 w-7 border-2"
+                        "flex items-center justify-center rounded-full text-[14px] leading-5 font-semibold tracking-[0.07px] transition-all duration-300",
+                        isComplete && "border-success bg-success text-success-foreground h-9 w-9 border-4",
+                        isCurrent && "border-background bg-warning text-warning-foreground h-10 w-10 border-2",
+                        !isComplete && !isCurrent && "border-background bg-border/80 text-text h-10 w-10 border-2"
                       )}
                       style={{
                         boxShadow: isComplete
@@ -201,28 +133,27 @@ export function StepperHeader({ steps = [], className, showNavigation = true }: 
                             : "0 0 6px rgba(115, 112, 128, 0.38)",
                       }}
                     >
-                      {step.icon ? <step.icon className="h-4 w-4" aria-hidden /> : index + 1}
-                    </button>
-                  )
-                })}
-              </div>
+                      {isComplete ? (
+                        <Check className="h-5 w-5" aria-hidden />
+                      ) : step.icon ? (
+                        <step.icon className="h-6 w-6" aria-hidden />
+                      ) : (
+                        index + 1
+                      )}
+                    </span>
+                    <span
+                      className={cn(
+                        "text-xs whitespace-nowrap",
+                        isCurrent ? "text-text font-semibold" : "text-muted-foreground"
+                      )}
+                    >
+                      {step.label}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </div>
-
-          {showNavigation && (
-            <div className="shrink-0">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={nextStep}
-                disabled={currentStep === totalSteps - 1}
-                className="gap-1.5 md:min-w-26"
-              >
-                Next
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          )}
         </div>
       </div>
     </nav>
@@ -239,43 +170,4 @@ export function StepperContent({ children, className }: StepperContentProps) {
   const steps = React.Children.toArray(children)
 
   return <div className={cn("py-4", className)}>{steps[currentStep] || null}</div>
-}
-
-interface StepperFooterProps {
-  children?: React.ReactNode
-  className?: string
-  showDefaultButtons?: boolean
-  nextLabel?: string
-  previousLabel?: string
-  finishLabel?: string
-  onFinish?: () => void
-}
-
-export function StepperFooter({
-  children,
-  className,
-  showDefaultButtons = true,
-  nextLabel = "Next",
-  previousLabel = "Previous",
-  finishLabel = "Finish",
-  onFinish,
-}: StepperFooterProps) {
-  const { currentStep, totalSteps, nextStep, previousStep } = useStepper()
-  const isFirstStep = currentStep === 0
-  const isLastStep = currentStep === totalSteps - 1
-
-  if (children) {
-    return <div className={cn("mt-8 flex justify-between", className)}>{children}</div>
-  }
-
-  if (!showDefaultButtons) return null
-
-  return (
-    <div className={cn("mt-8 flex justify-between", className)}>
-      <Button variant="outline" onClick={previousStep} disabled={isFirstStep}>
-        {previousLabel}
-      </Button>
-      {isLastStep ? <Button onClick={onFinish}>{finishLabel}</Button> : <Button onClick={nextStep}>{nextLabel}</Button>}
-    </div>
-  )
 }
