@@ -1,0 +1,175 @@
+import {
+  useDeleteAmberJob,
+  useDeleteGromacsJob,
+  useGetAmberJob,
+  useGetAmberJobLog,
+  useGetGromacsJob,
+  useGetGromacsJobLog,
+  useSubmitAmberJob,
+  useSubmitGromacsJob,
+} from "@/api/generated/client"
+import {
+  Engine,
+  JobStatus,
+  type AmberJob,
+  type AmberJobRequest,
+  type GromacsJob,
+  type GromacsJobRequest,
+  type SimulationJob,
+} from "@/api/generated/models"
+
+/** Non-terminal states — the job keeps being polled while any of these. */
+export function jobLive(job: SimulationJob): boolean {
+  return job.status === JobStatus.PENDING || job.status === JobStatus.RUNNING || job.status === JobStatus.UNKNOWN
+}
+
+/** Engine log stream key used by the log endpoint (`?type=`). */
+export function engineLogType(engine: Engine): "gmx" | "mdout" {
+  return engine === Engine.AMBER ? "mdout" : "gmx"
+}
+
+/** Rebuild the submit request from an existing job (used by Re-run). */
+export function jobConfigRequest(engine: Engine, job: SimulationJob): GromacsJobRequest | AmberJobRequest {
+  if (engine === Engine.AMBER) {
+    const amber = job as AmberJob
+    return { binary: amber.binary ?? "pmemd.cuda", ewald: amber.ewald ?? "default", np: job.np, ntomp: job.ntomp }
+  }
+  const gmx = job as GromacsJob
+  return { pme: gmx.pme ?? "cpu", nb: gmx.nb ?? "cpu", np: job.np, ntomp: job.ntomp }
+}
+
+// The generated hooks come in engine pairs; each wrapper mounts both but enables
+// only the engine's own, then hands the active one to the caller.
+
+const pollWhileLive =
+  (pollMs: number) =>
+  (query: { state: { error: unknown; data: unknown } }): number | false => {
+    // A 404 means "no job", even with the previous 200 kept as stale data.
+    if ((query.state.error as { status?: number } | null)?.status === 404) return false
+    // Anything other than a live 200 (terminal states, other errors) stops the poll.
+    const data = query.state.data as { status: number; data: SimulationJob } | undefined
+    return data?.status === 200 && jobLive(data.data) ? pollMs : false
+  }
+
+export type SimulationJobQuery = {
+  /** Present only on a resolved 200; stays undefined on 404 ("no job"). */
+  job: GromacsJob | AmberJob | undefined
+  /** Resolved 404 — there is no job for this simulation. */
+  missing: boolean
+  pending: boolean
+  /** Non-404 query failure. */
+  error: unknown
+  retry: () => void
+}
+
+export function useSimulationJobQuery(
+  experimentId: string,
+  simulationPath: string,
+  engine: Engine,
+  pollMs: number
+): SimulationJobQuery {
+  const gmx = useGetGromacsJob(experimentId, simulationPath, {
+    query: { retry: false, enabled: engine !== Engine.AMBER, refetchInterval: pollWhileLive(pollMs) },
+  })
+  const amber = useGetAmberJob(experimentId, simulationPath, {
+    query: { retry: false, enabled: engine === Engine.AMBER, refetchInterval: pollWhileLive(pollMs) },
+  })
+  const active = engine === Engine.AMBER ? amber : gmx
+  const missing = (active.error as { status?: number } | null)?.status === 404
+  const job = !missing && active.data?.status === 200 ? active.data.data : undefined
+  return {
+    job,
+    missing,
+    pending: active.isPending,
+    error: active.isError && !missing ? active.error : undefined,
+    retry: () => void active.refetch(),
+  }
+}
+
+export type SubmitVars = { experimentId: string; simulationPath: string; data?: GromacsJobRequest | AmberJobRequest }
+export type DeleteVars = { experimentId: string; simulationPath: string }
+
+export type JobMutation<Vars> = {
+  mutate: (
+    vars: Vars,
+    options?: { onSuccess?: () => void; onError?: (error: unknown) => void; onSettled?: () => void }
+  ) => void
+  isPending: boolean
+}
+
+export type JobMutations = {
+  submit: JobMutation<SubmitVars>
+  remove: JobMutation<DeleteVars>
+}
+
+/**
+ * Engine-picked submit/delete. The union cast is sound: callers pair the GMX
+ * request body with engine GMX (and AMBER with AMBER) via toJobRequest /
+ * jobConfigRequest.
+ */
+export function useJobMutations(engine: Engine): JobMutations {
+  const gmxSubmit = useSubmitGromacsJob()
+  const amberSubmit = useSubmitAmberJob()
+  const gmxDelete = useDeleteGromacsJob()
+  const amberDelete = useDeleteAmberJob()
+  const submit = engine === Engine.AMBER ? amberSubmit : gmxSubmit
+  const remove = engine === Engine.AMBER ? amberDelete : gmxDelete
+  return {
+    submit: { mutate: submit.mutate as unknown as JobMutation<SubmitVars>["mutate"], isPending: submit.isPending },
+    remove: { mutate: remove.mutate as unknown as JobMutation<DeleteVars>["mutate"], isPending: remove.isPending },
+  }
+}
+
+/** Matches the server default window; longer logs show a truncation note. */
+export const LOG_TAIL = 10000
+
+export type SimulationJobLog = {
+  /** Fetched window; undefined while loading or on 404. */
+  text: string | undefined
+  /** The stream's file does not exist yet. */
+  missing: boolean
+  pending: boolean
+  /** Non-404 fetch failure. */
+  failed: boolean
+}
+
+export function useSimulationJobLog(
+  experimentId: string,
+  simulationPath: string,
+  engine: Engine,
+  type: string,
+  options: { enabled: boolean; live: boolean; pollMs: number }
+): SimulationJobLog {
+  const gmx = useGetGromacsJobLog(
+    experimentId,
+    simulationPath,
+    { type, tail: LOG_TAIL },
+    {
+      query: {
+        retry: false,
+        enabled: engine !== Engine.AMBER && options.enabled,
+        refetchInterval: options.live ? options.pollMs : false,
+      },
+    }
+  )
+  const amber = useGetAmberJobLog(
+    experimentId,
+    simulationPath,
+    { type, tail: LOG_TAIL },
+    {
+      query: {
+        retry: false,
+        enabled: engine === Engine.AMBER && options.enabled,
+        refetchInterval: options.live ? options.pollMs : false,
+      },
+    }
+  )
+  const active = engine === Engine.AMBER ? amber : gmx
+  const missing = (active.error as { status?: number } | null)?.status === 404
+  return {
+    text: !missing && active.data?.status === 200 ? active.data.data : undefined,
+    missing,
+    pending: active.isPending,
+    failed: active.isError && !missing,
+  }
+}

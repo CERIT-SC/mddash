@@ -1,4 +1,5 @@
 import { useGetExperiment, useListSimulations } from "@/api/generated/client"
+import { RunStep } from "@/features/run"
 import { SetupStep, type SetupSource } from "@/features/setup"
 import { CREATE_TAB, SimulationTabs } from "@/features/simulation"
 import { TuneStep } from "@/features/tune"
@@ -145,7 +146,17 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
                     onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
                   />
                 )}
-                {STEPS.slice(2).map(({ label }) => (
+                {selected === undefined ? (
+                  <div />
+                ) : (
+                  <RunStep
+                    experimentId={experimentId}
+                    engine={data.engine}
+                    simulation={selected}
+                    onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
+                  />
+                )}
+                {STEPS.slice(3).map(({ label }) => (
                   <div key={label} />
                 ))}
               </StepperContent>

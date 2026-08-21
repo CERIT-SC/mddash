@@ -39,6 +39,43 @@ type TrialsTableProps = {
   onShowLogs: (trialId: string) => void
 }
 
+/**
+ * Header shared by the trials picker and the Run step's single-row
+ * "configuration used" table (pickColumn hides the radio column there).
+ */
+export function TrialsTableHeader({ engine, pickColumn = true }: { engine: Engine; pickColumn?: boolean }) {
+  return (
+    <TableHeader>
+      <TableRow>
+        {pickColumn && (
+          <TableHead className="w-10">
+            <span className="sr-only">Pick</span>
+          </TableHead>
+        )}
+        <TableHead>Status</TableHead>
+        <HintedHead
+          label="Performance"
+          hint="Throughput measured during the tuning run (ns of simulated time per day). Higher is faster."
+        />
+        <HintedHead
+          label="Est. time"
+          hint="Estimated wall-clock time for the full production simulation with this configuration."
+        />
+        <HintedHead
+          label="Est. cost"
+          hint="Estimated compute cost for the full production simulation with this configuration."
+        />
+        {/* Hardware config grouped apart from the outcome columns by a divider. */}
+        {(engine === Engine.AMBER ? AMBER_HARDWARE : GMX_HARDWARE).map(([label, hint], index) => (
+          <HintedHead key={label} label={label} hint={hint} separated={index === 0} />
+        ))}
+        <HintedHead label="MPI processes" hint="Number of parallel MPI ranks." />
+        <HintedHead label="Threads" hint="CPU threads per MPI rank." />
+      </TableRow>
+    </TableHeader>
+  )
+}
+
 /** Trial results: tuner's suggestions (fastest/cheapest) first, then the rest in API order. */
 export function TrialsTable({ engine, rows, value, onValueChange, live, onShowLogs }: TrialsTableProps) {
   const { fastestId, ecoId } = suggest(rows)
@@ -52,32 +89,7 @@ export function TrialsTable({ engine, rows, value, onValueChange, live, onShowLo
     <RadioGroup value={value ?? ""} onValueChange={onValueChange} aria-label="Pick a configuration">
       <div className="overflow-x-auto">
         <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-10">
-                <span className="sr-only">Pick</span>
-              </TableHead>
-              <TableHead>Status</TableHead>
-              <HintedHead
-                label="Performance"
-                hint="Throughput measured during the tuning run (ns of simulated time per day). Higher is faster."
-              />
-              <HintedHead
-                label="Est. time"
-                hint="Estimated wall-clock time for the full production simulation with this configuration."
-              />
-              <HintedHead
-                label="Est. cost"
-                hint="Estimated compute cost for the full production simulation with this configuration."
-              />
-              {/* Hardware config grouped apart from the outcome columns by a divider. */}
-              {(engine === Engine.AMBER ? AMBER_HARDWARE : GMX_HARDWARE).map(([label, hint], index) => (
-                <HintedHead key={label} label={label} hint={hint} separated={index === 0} />
-              ))}
-              <HintedHead label="MPI processes" hint="Number of parallel MPI ranks." />
-              <HintedHead label="Threads" hint="CPU threads per MPI rank." />
-            </TableRow>
-          </TableHeader>
+          <TrialsTableHeader engine={engine} />
           <TableBody>
             {rows.length === 0 && live && (
               <TableRow className="hover:bg-transparent">
@@ -149,20 +161,19 @@ function GroupBand({ label }: { label: string }) {
   )
 }
 
-type TrialRowViewProps = {
+type TrialRowCellsProps = {
   engine: Engine
   row: TrialRow
   fastest: boolean
   eco: boolean
-  onShowLogs: (trialId: string) => void
+  /** Error-row log button; omit where trial logs are not reachable (e.g. the Run step). */
+  onShowLogs?: (trialId: string) => void
 }
 
-function TrialRowView({ engine, row, fastest, eco, onShowLogs }: TrialRowViewProps) {
+/** The trial's cells (no surrounding TableRow) — shared by the picker and "configuration used". */
+export function TrialRowCells({ engine, row, fastest, eco, onShowLogs }: TrialRowCellsProps) {
   return (
-    <TableRow>
-      <TableCell>
-        <RadioGroupItem value={row.id} disabled={!selectable(row)} aria-label={`Pick configuration ${row.id}`} />
-      </TableCell>
+    <>
       <TableCell>
         <TrialStatus row={row} fastest={fastest} eco={eco} onShowLogs={onShowLogs} />
       </TableCell>
@@ -187,11 +198,26 @@ function TrialRowView({ engine, row, fastest, eco, onShowLogs }: TrialRowViewPro
       )}
       <TableCell className="text-text-muted tabular-nums">{row.np ?? "—"}</TableCell>
       <TableCell className="text-text-muted tabular-nums">{row.ntomp ?? "—"}</TableCell>
+    </>
+  )
+}
+
+type TrialRowViewProps = Omit<TrialRowCellsProps, "onShowLogs"> & {
+  onShowLogs: (trialId: string) => void
+}
+
+function TrialRowView({ engine, row, fastest, eco, onShowLogs }: TrialRowViewProps) {
+  return (
+    <TableRow>
+      <TableCell>
+        <RadioGroupItem value={row.id} disabled={!selectable(row)} aria-label={`Pick configuration ${row.id}`} />
+      </TableCell>
+      <TrialRowCells engine={engine} row={row} fastest={fastest} eco={eco} onShowLogs={onShowLogs} />
     </TableRow>
   )
 }
 
-function TrialStatus({ row, fastest, eco, onShowLogs }: Omit<TrialRowViewProps, "engine">) {
+function TrialStatus({ row, fastest, eco, onShowLogs }: Omit<TrialRowCellsProps, "engine">) {
   if (fastest || eco) {
     return (
       <span className="flex flex-wrap items-center gap-1.5">
@@ -217,15 +243,17 @@ function TrialStatus({ row, fastest, eco, onShowLogs }: Omit<TrialRowViewProps, 
     return (
       <span className="flex items-center gap-1">
         <Badge variant="error">Failed</Badge>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={`View output of failed trial ${row.id}`}
-          onClick={() => onShowLogs(row.id)}
-        >
-          <FileText aria-hidden />
-        </Button>
+        {onShowLogs !== undefined && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`View output of failed trial ${row.id}`}
+            onClick={() => onShowLogs(row.id)}
+          >
+            <FileText aria-hidden />
+          </Button>
+        )}
       </span>
     )
   }

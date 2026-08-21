@@ -11,6 +11,7 @@ import { TuneStep } from "./tune-step"
 const SIM = "md.simulation.json"
 const TUNER_ONE = `/experiments/exp1/tuner/${SIM}`
 const TUNER_ALL = "/experiments/exp1/tuner"
+const GMX_ONE = `/experiments/exp1/gmx/${SIM}`
 
 const FAST_TRIAL: TunerTrial = {
   id: "t1",
@@ -69,7 +70,7 @@ function tunerJob(overrides: Partial<TunerJob> = {}): TunerJob {
   }
 }
 
-function mockTuner(initial: TunerJob | null) {
+function mockTuner(initial: TunerJob | null, options: { submitFails?: boolean } = {}) {
   const state = { current: initial }
   const calls: { url: string; method: string; body?: unknown }[] = []
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -80,6 +81,15 @@ function mockTuner(initial: TunerJob | null) {
       method,
       body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
     })
+    if (url.endsWith(GMX_ONE) && method === "POST") {
+      if (options.submitFails) {
+        return Response.json(
+          { type: "urn:mddash:forbidden", title: "Forbidden", detail: "MDRun refused the job." },
+          { status: 403 }
+        )
+      }
+      return Response.json({ id: "run1" }, { status: 201 })
+    }
     if (url.endsWith(`${TUNER_ONE}/trials/err1/stdout`)) return Response.json("trial stdout contents")
     if (url.endsWith(`${TUNER_ONE}/trials/err1/stderr`)) return Response.json("trial stderr contents")
     if (url.endsWith(`${TUNER_ONE}/stop`)) return new Response(null, { status: 204 })
@@ -113,7 +123,11 @@ function renderTune(props: Partial<React.ComponentProps<typeof TuneStep>> = {}) 
       <TuneStep
         experimentId="exp1"
         engine="GMX"
-        simulation={simulation(SIM, { valid: true, missing_files: [] })}
+        simulation={simulation(SIM, {
+          valid: true,
+          missing_files: [],
+          files: { run_input: "prod.tpr", reference_structure: "ref.gro", trajectory: "prod.xtc" },
+        })}
         trialId={undefined}
         mode="tuning"
         {...spies}
@@ -167,6 +181,67 @@ describe("TuneStep idle state", () => {
     expect(screen.getByRole("button", { name: /start tuning/i })).toBeDisabled()
   })
 
+  it("allows re-tuning when only run-output roles (e.g. trajectory) are missing", async () => {
+    mockTuner(null)
+    renderTune({
+      simulation: simulation(SIM, {
+        valid: true,
+        missing_files: ["trajectory", "run_structure"],
+        files: { run_input: "prod.tpr", reference_structure: "ref.gro", trajectory: "prod.xtc" },
+      }),
+    })
+
+    expect(await screen.findByRole("button", { name: /start tuning/i })).toBeEnabled()
+    expect(screen.queryByText("Finish setup first")).not.toBeInTheDocument()
+  })
+
+  it("blocks tuning when a tuning-required role file is missing (GMX run input)", async () => {
+    mockTuner(null)
+    renderTune({
+      simulation: simulation(SIM, {
+        valid: true,
+        missing_files: ["run_input"],
+        files: { run_input: "prod.tpr", reference_structure: "ref.gro", trajectory: "prod.xtc" },
+      }),
+    })
+
+    expect(await screen.findByText("Finish setup first")).toBeInTheDocument()
+    expect(screen.getByText(/Run input/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /start tuning/i })).toBeDisabled()
+  })
+
+  it("blocks tuning when an AMBER input role file is missing", async () => {
+    mockTuner(null)
+    renderTune({
+      engine: "AMBER",
+      simulation: simulation(SIM, {
+        engine: "AMBER",
+        valid: true,
+        files: { topology: "sys.prmtop", coordinates: "sys.inpcrd", control: "prod.mdin", trajectory: "prod.nc" },
+        missing_files: ["topology"],
+      }),
+    })
+
+    expect(await screen.findByText("Finish setup first")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /start tuning/i })).toBeDisabled()
+  })
+
+  it("allows AMBER tuning when only the trajectory output is missing", async () => {
+    mockTuner(null)
+    renderTune({
+      engine: "AMBER",
+      simulation: simulation(SIM, {
+        engine: "AMBER",
+        valid: true,
+        files: { topology: "sys.prmtop", coordinates: "sys.inpcrd", control: "prod.mdin", trajectory: "prod.nc" },
+        missing_files: ["trajectory"],
+      }),
+    })
+
+    expect(await screen.findByRole("button", { name: /start tuning/i })).toBeEnabled()
+    expect(screen.queryByText("Finish setup first")).not.toBeInTheDocument()
+  })
+
   it("clears a carried-over pick and keeps Run disabled on a simulation with no tuner job", async () => {
     // Regression: a cross-tab pick survived on a job-less simulation and enabled Run.
     mockTuner(null)
@@ -207,15 +282,33 @@ describe("TuneStep running job", () => {
     expect(calls.some((call) => call.method === "POST" && call.url.endsWith(`${TUNER_ONE}/stop`))).toBe(true)
   })
 
-  it("enables Run Simulation once a trial is picked", async () => {
-    mockTuner(job)
+  it("enables Run Simulation once a trial is picked, submits the job, then navigates", async () => {
+    const { calls } = mockTuner(job)
     const spies = renderTune({ trialId: "t2" })
 
     const run = screen.getByRole("button", { name: /run simulation/i })
     // The gate waits for the job load: the pick must exist in the job's trials.
     await waitFor(() => expect(run).toBeEnabled())
     await userEvent.click(run)
+    expect(calls.find((call) => call.method === "POST" && call.url.endsWith(GMX_ONE))?.body).toEqual({
+      np: 1,
+      ntomp: 1,
+      pme: "cpu",
+      nb: "cpu",
+    })
     expect(spies.onStepChange).toHaveBeenCalledWith(2)
+  })
+
+  it("stays on Tune when the run submission fails", async () => {
+    const { calls } = mockTuner(job, { submitFails: true })
+    const spies = renderTune({ trialId: "t2" })
+
+    const run = screen.getByRole("button", { name: /run simulation/i })
+    await waitFor(() => expect(run).toBeEnabled())
+    await userEvent.click(run)
+
+    await waitFor(() => expect(calls.some((call) => call.method === "POST" && call.url.endsWith(GMX_ONE))).toBe(true))
+    expect(spies.onStepChange).not.toHaveBeenCalled()
   })
 })
 
@@ -281,7 +374,7 @@ describe("TuneStep footer and manual tab", () => {
   })
 
   it("validates the manual form before Run Simulation submits", async () => {
-    mockTuner(null)
+    const { calls } = mockTuner(null)
     const spies = renderTune({ mode: "manual" })
 
     const run = await screen.findByRole("button", { name: /run simulation/i })
@@ -298,6 +391,12 @@ describe("TuneStep footer and manual tab", () => {
     // Resolver validation is async — let it settle before asserting the gate lifts.
     await waitFor(() => expect(run).toBeEnabled())
     await userEvent.click(run)
+    expect(calls.find((call) => call.method === "POST" && call.url.endsWith(GMX_ONE))?.body).toEqual({
+      np: 1,
+      ntomp: 2,
+      pme: "gpu",
+      nb: "gpu",
+    })
     expect(spies.onStepChange).toHaveBeenCalledWith(2)
   })
 })

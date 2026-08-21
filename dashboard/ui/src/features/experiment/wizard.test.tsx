@@ -14,6 +14,25 @@ const alpha = simulation("alpha.simulation.json", { name: "Alpha", step: 2 })
 const beta = simulation("nested/beta.simulation.json", { name: "Beta", step: 3 })
 const mockApi = mockApiBySuffix
 
+/** Minimal running GMX job — keeps a mounted Run step from auto-navigating back to Tune. */
+function runningGmxJob(simulationPath: string) {
+  return Response.json({
+    id: "job1",
+    experiment_id: "exp1",
+    simulation_path: simulationPath,
+    created_at: "2026-08-19T00:00:00Z",
+    engine: "GMX",
+    np: 1,
+    ntomp: 1,
+    pme: "cpu",
+    nb: "cpu",
+    status: "RUNNING",
+    nsteps: 100,
+    nsteps_done: 50,
+    estimated_time: 60,
+  })
+}
+
 function okExperiment(overrides: Partial<Experiment> = {}) {
   return Response.json(experiment("exp1", { name: "Membrane study", ...overrides }))
 }
@@ -132,6 +151,7 @@ describe("ExperimentWizard", () => {
     mockApi({
       "/experiments/exp1/simulations": Response.json([alpha]),
       "/experiments/exp1": okExperiment(),
+      [`/experiments/exp1/gmx/${alpha.simulation_path}`]: runningGmxJob(alpha.simulation_path),
     })
     const changes: WizardSearch[] = []
     const user = userEvent.setup()
@@ -157,6 +177,7 @@ describe("ExperimentWizard", () => {
     mockApi({
       "/experiments/exp1/simulations": Response.json([alpha, beta]),
       "/experiments/exp1": okExperiment({ latest_simulation_path: beta.simulation_path }),
+      [`/experiments/exp1/gmx/${beta.simulation_path}`]: runningGmxJob(beta.simulation_path),
     })
     renderWizard({})
     expect(await screen.findByRole("button", { name: "Go to section 3: Run" })).toHaveAttribute("aria-current", "step")

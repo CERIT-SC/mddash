@@ -2,15 +2,27 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { toApiError } from "@/api/errors"
 import {
+  getGetAmberJobQueryKey,
   getGetExperimentQueryKey,
+  getGetGromacsJobQueryKey,
   getGetTunerJobQueryKey,
   getListSimulationsQueryKey,
   useDeleteTunerJob,
   useGetTunerJob,
   useStartTunerJob,
   useStopTunerJob,
+  useSubmitAmberJob,
+  useSubmitGromacsJob,
 } from "@/api/generated/client"
-import { JobStatus, type Engine, type Simulation, type TunerJob } from "@/api/generated/models"
+import {
+  Engine,
+  JobStatus,
+  type AmberJobRequest,
+  type GromacsJobRequest,
+  type Simulation,
+  type TunerJob,
+} from "@/api/generated/models"
+import { ROLE_SPECS, type FileRoleKey } from "@/features/simulation"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { HintTooltip } from "@/shared/ui/hint-tooltip"
 import {
@@ -41,15 +53,28 @@ import { ArrowLeft, Clock, LoaderCircle, Play, RotateCcw, Square } from "lucide-
 import { toast } from "sonner"
 
 import { CustomizeConfigSection } from "./customize-config"
-import { HardwareConfigForm } from "./hardware-config-form"
+import { HardwareConfigForm, type HardwareConfigValues } from "./hardware-config-form"
 import { DEFAULT_NSTEPS, NstepsSelect } from "./nsteps-select"
+import { toJobRequest } from "./run-request"
 import { TrialLogDialog } from "./trial-log-dialog"
 import { TrialsTable } from "./trials-table"
 import { jobLive, parseTrials, type TrialRow } from "./tuned-trials"
 
 type TuneMode = "tuning" | "manual"
 
+type SubmitRunVars = { experimentId: string; simulationPath: string; data?: GromacsJobRequest | AmberJobRequest }
+type SubmitRun = {
+  mutate: (vars: SubmitRunVars, options?: { onSuccess?: () => void; onError?: (error: unknown) => void }) => void
+  isPending: boolean
+}
+
 const TUNING_POLL_MS = 5000
+
+/** File roles tuning requires on disk, per engine. Mirrors `require_files` in `tuner_job.py`. */
+const TUNE_REQUIRED_ROLES: Record<Engine, FileRoleKey[]> = {
+  [Engine.GMX]: ["run_input"],
+  [Engine.AMBER]: ["topology", "coordinates", "control"],
+}
 // The footer submits whichever hardware form is active by native form id.
 const MANUAL_FORM_ID = "tune-manual-config"
 const CUSTOMIZE_FORM_ID = "tune-customize-config"
@@ -145,6 +170,33 @@ export function TuneStep({
     },
   })
 
+  // The Run Simulation footer submits the production job, then navigates to Run.
+  // Engine-picked hook pair; the request body matches the engine via toJobRequest.
+  const gmxSubmit = useSubmitGromacsJob()
+  const amberSubmit = useSubmitAmberJob()
+  const submitRun = (engine === Engine.AMBER ? amberSubmit : gmxSubmit) as unknown as SubmitRun
+
+  // Run Simulation submits the production job and navigates to Run on success;
+  // a failure stays on Tune with the actionable error.
+  const startRun = (values: HardwareConfigValues) =>
+    submitRun.mutate(
+      { experimentId, simulationPath: simulation.simulation_path, data: toJobRequest(engine, values) },
+      {
+        onSuccess: () => {
+          toast.success("Run started")
+          const jobKey =
+            engine === Engine.AMBER
+              ? getGetAmberJobQueryKey(experimentId, simulation.simulation_path)
+              : getGetGromacsJobQueryKey(experimentId, simulation.simulation_path)
+          void queryClient.invalidateQueries({ queryKey: jobKey })
+          void queryClient.invalidateQueries({ queryKey: getListSimulationsQueryKey(experimentId) })
+          void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experimentId) })
+          onStepChange(2)
+        },
+        onError: (error) => toast.error(toApiError(error).message),
+      }
+    )
+
   // The pick counts only while THIS job contains it (tab switches carry the URL over).
   const pickedRow = useMemo(
     () => (trialId === undefined ? undefined : rows.find((row) => row.id === trialId)),
@@ -224,7 +276,7 @@ export function TuneStep({
               engine={engine}
               row={pickedRow}
               formId={CUSTOMIZE_FORM_ID}
-              onSubmit={() => onStepChange(2)}
+              onSubmit={startRun}
               onValidityChange={setFormValid}
             />
           )}
@@ -236,7 +288,7 @@ export function TuneStep({
             <HardwareConfigForm
               engine={engine}
               formId={MANUAL_FORM_ID}
-              onSubmit={() => onStepChange(2)}
+              onSubmit={startRun}
               onValidityChange={setFormValid}
             />
           </div>
@@ -255,9 +307,9 @@ export function TuneStep({
         <Button
           type="submit"
           form={mode === "manual" ? MANUAL_FORM_ID : CUSTOMIZE_FORM_ID}
-          disabled={mode === "manual" ? !formValid : !(picked && formValid)}
+          disabled={submitRun.isPending || (mode === "manual" ? !formValid : !(picked && formValid))}
         >
-          <Play aria-hidden />
+          {submitRun.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Play aria-hidden />}
           Run Simulation
         </Button>
       </div>
@@ -375,7 +427,13 @@ function TuningBody({
   if (job === undefined) {
     const blockers: string[] = []
     if (!simulation.valid) blockers.push("The simulation manifest is invalid.")
-    if (simulation.missing_files.length > 0) blockers.push(`Missing files: ${simulation.missing_files.join(", ")}.`)
+    const missingRequired = TUNE_REQUIRED_ROLES[engine].filter(
+      (role) => !simulation.files[role] || simulation.missing_files.includes(role)
+    )
+    if (missingRequired.length > 0) {
+      const labels = missingRequired.map((role) => ROLE_SPECS[engine].find((spec) => spec.key === role)?.label ?? role)
+      blockers.push(`Missing files: ${labels.join(", ")}.`)
+    }
     return (
       <div className="space-y-4">
         {blockers.length > 0 && (
