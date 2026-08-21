@@ -7,6 +7,7 @@
  */
 import type { Engine } from './engine.ts';
 import type { JobStatus } from './jobStatus.ts';
+import type { SimulationJobLogLines } from './simulationJobLogLines.ts';
 
 export interface SimulationJob {
   id: string;
@@ -37,5 +38,7 @@ export interface SimulationJob {
      * @nullable
      */
   estimated_time?: number | null;
+  /** Line counts per log stream for sizing badges without fetching logs; null while a stream's file does not exist yet */
+  log_lines?: SimulationJobLogLines;
   [key: string]: unknown;
  }

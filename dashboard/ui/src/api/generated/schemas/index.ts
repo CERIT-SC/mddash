@@ -133,7 +133,13 @@ export const ListExperimentsResponseItem = zod.object({
   "nsteps": zod.int().nullish(),
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "log_lines": zod.object({
+  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
+  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
+  "stdout": zod.int().nullish(),
+  "stderr": zod.int().nullish()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 })),
   "analysis_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -242,7 +248,13 @@ export const CreateExperimentResponse = zod.object({
   "nsteps": zod.int().nullish(),
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "log_lines": zod.object({
+  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
+  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
+  "stdout": zod.int().nullish(),
+  "stderr": zod.int().nullish()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 })),
   "analysis_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -342,7 +354,13 @@ export const GetExperimentResponse = zod.object({
   "nsteps": zod.int().nullish(),
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "log_lines": zod.object({
+  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
+  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
+  "stdout": zod.int().nullish(),
+  "stderr": zod.int().nullish()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 })),
   "analysis_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -446,7 +464,13 @@ export const UpdateExperimentResponse = zod.object({
   "nsteps": zod.int().nullish(),
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "log_lines": zod.object({
+  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
+  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
+  "stdout": zod.int().nullish(),
+  "stderr": zod.int().nullish()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 })),
   "analysis_jobs": zod.array(zod.object({
   "id": zod.string(),
@@ -835,7 +859,13 @@ export const ListGromacsJobsResponseItem = zod.object({
   "nsteps": zod.int().nullish(),
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "log_lines": zod.object({
+  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
+  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
+  "stdout": zod.int().nullish(),
+  "stderr": zod.int().nullish()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 }).and(zod.object({
   "pme": zod.enum(['cpu', 'gpu']).optional(),
   "nb": zod.enum(['cpu', 'gpu']).optional()
@@ -873,7 +903,13 @@ export const GetGromacsJobResponse = zod.object({
   "nsteps": zod.int().nullish(),
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "log_lines": zod.object({
+  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
+  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
+  "stdout": zod.int().nullish(),
+  "stderr": zod.int().nullish()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 }).and(zod.object({
   "pme": zod.enum(['cpu', 'gpu']).optional(),
   "nb": zod.enum(['cpu', 'gpu']).optional()
@@ -921,7 +957,13 @@ export const SubmitGromacsJobResponse = zod.object({
   "nsteps": zod.int().nullish(),
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "log_lines": zod.object({
+  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
+  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
+  "stdout": zod.int().nullish(),
+  "stderr": zod.int().nullish()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 }).and(zod.object({
   "pme": zod.enum(['cpu', 'gpu']).optional(),
   "nb": zod.enum(['cpu', 'gpu']).optional()
@@ -997,7 +1039,13 @@ export const ListAmberJobsResponseItem = zod.object({
   "nsteps": zod.int().nullish(),
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "log_lines": zod.object({
+  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
+  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
+  "stdout": zod.int().nullish(),
+  "stderr": zod.int().nullish()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 }).and(zod.object({
   "binary": zod.string().optional(),
   "ewald": zod.string().optional()
@@ -1035,7 +1083,13 @@ export const GetAmberJobResponse = zod.object({
   "nsteps": zod.int().nullish(),
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "log_lines": zod.object({
+  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
+  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
+  "stdout": zod.int().nullish(),
+  "stderr": zod.int().nullish()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 }).and(zod.object({
   "binary": zod.string().optional(),
   "ewald": zod.string().optional()
@@ -1083,7 +1137,13 @@ export const SubmitAmberJobResponse = zod.object({
   "nsteps": zod.int().nullish(),
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion')
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "log_lines": zod.object({
+  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
+  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
+  "stdout": zod.int().nullish(),
+  "stderr": zod.int().nullish()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 }).and(zod.object({
   "binary": zod.string().optional(),
   "ewald": zod.string().optional()

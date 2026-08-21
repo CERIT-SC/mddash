@@ -495,6 +495,32 @@ class TestStepStatus:
             assert ligand.step == 1
             assert ligand.status == "setup complete"
 
+    def test_pending_sim_job_stays_at_step_two(self, app: Flask, tmp_path: Path) -> None:
+        """A submitted job counts toward the ladder only once it is actually running."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        _add_gmx_job(app, exp_id, "protein.simulation.json")
+
+        with app.app_context():
+            sim = Simulation.get(exp_id, "protein.simulation.json")
+            assert sim.step == 2
+            assert sim.status == "simulating"
+
+    def test_running_sim_job_gives_step_three(self, app: Flask, tmp_path: Path) -> None:
+        """A running job sits at step 3."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        _add_gmx_job(app, exp_id, "protein.simulation.json", _last_known_status=JobStatus.RUNNING)
+
+        with app.app_context():
+            sim = Simulation.get(exp_id, "protein.simulation.json")
+            assert sim.step == 3
+            assert sim.status == "simulating"
+
     def test_tuner_trials_give_step_two(self, app: Flask, tmp_path: Path) -> None:
         """A tuner trial with performance lifts only its own simulation to step 2 (no live API call)."""
         exp_id = _seed_experiment(app)
@@ -517,6 +543,137 @@ class TestStepStatus:
             sim = Simulation.get(exp_id, "protein.simulation.json")
             assert sim.step == 2
             assert sim.status == "tuning"
+
+
+class TestLogLines:
+    """SimulationJob.log_lines rides the job payload so the UI shows log sizes without fetching them."""
+
+    def setup_method(self) -> None:
+        """Clear the log-lines cache before each test."""
+        from cache import simulation_log_lines_cache
+
+        simulation_log_lines_cache.clear()
+
+    def teardown_method(self) -> None:
+        """Clear the log-lines cache after each test."""
+        from cache import simulation_log_lines_cache
+
+        simulation_log_lines_cache.clear()
+
+    def test_none_until_logs_exist_and_counts_afterwards(
+        self, app: Flask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Missing streams report None; written streams report their line count."""
+        monkeypatch.setattr("models.gromacs_job.DATA_DIR", tmp_path)
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True)
+        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        _add_gmx_job(app, exp_id, "protein.simulation.json")
+
+        with app.app_context():
+            job = db.session.query(GromacsJob).one()
+            assert job.log_lines == {"gmx": None, "stdout": None, "stderr": None}
+
+            production = exp_dir / "production"
+            production.mkdir()
+            (production / "protein.log").write_text("a\nb\nc\n")
+            (production / f"mdrun-{job.id}.out").write_text("x\n")
+
+            from cache import simulation_log_lines_cache
+
+            simulation_log_lines_cache.clear()
+            assert job.log_lines == {"gmx": 3, "stdout": 1, "stderr": None}
+
+    def test_finished_count_reflects_immediately_without_stale_caches(
+        self, app: Flask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """
+        Regression: a dump right after the finish flip must not serve a stale step count.
+
+        The derived fields used to sit behind TTL caches (100ms-1s) evaluated
+        independently of status, so one payload could say FINISHED with a
+        step count from before the flip.
+        """
+        monkeypatch.setattr("models.gromacs_job.DATA_DIR", tmp_path)
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True)
+        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        _add_gmx_job(app, exp_id, "protein.simulation.json", _last_known_status=JobStatus.RUNNING)
+
+        production = exp_dir / "production"
+        production.mkdir()
+        log = production / "protein.log"
+        log.write_text(
+            "header\n"
+            "nsteps = 50000\n"
+            "Started mdrun on rank 0 Thu Aug 21 09:00:00 2026\n"
+            "           40000     800.00000    Thu Aug 21 09:10:00 2026\n"
+        )
+
+        with app.app_context():
+            from schemas.gromacs_job import GromacsJobSchema
+
+            job = db.session.query(GromacsJob).one()
+            assert GromacsJobSchema().dump(job)["nsteps_done"] == 40000
+
+            # The finish flip lands between two polls (status swap + performance persist).
+            log.write_text(
+                "header\n"
+                "nsteps = 50000\n"
+                "Started mdrun on rank 0 Thu Aug 21 09:00:00 2026\n"
+                "           40000     800.00000    Thu Aug 21 09:10:00 2026\n"
+                "           50000    1000.00000    Thu Aug 21 09:20:00 2026\n"
+                "Finished mdrun\n"
+            )
+            job._performance = 62.5
+            db.session.commit()
+
+            fresh = db.session.query(GromacsJob).one()
+            dumped = GromacsJobSchema().dump(fresh)
+            assert dumped["nsteps_done"] == 50000
+            assert dumped["performance"] == 62.5
+
+    def test_pme_and_nb_serialize_by_contract_value(
+        self, app: Flask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """
+        OpenAPI declares pme/nb as lowercase [cpu, gpu] — the payload must match.
+
+        The UI compares these against tuner-trial configs (lowercase) when
+        rendering "Configuration used"; name-cased values silently break that.
+        """
+        monkeypatch.setattr("models.gromacs_job.DATA_DIR", tmp_path)
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True)
+        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        _add_gmx_job(app, exp_id, "protein.simulation.json")
+
+        with app.app_context():
+            from schemas.gromacs_job import GromacsJobSchema
+
+            job = db.session.query(GromacsJob).one()
+            dumped = GromacsJobSchema().dump(job)
+            assert dumped["pme"] == "cpu"
+            assert dumped["nb"] == "cpu"
+
+    def test_serialized_with_the_job_payload(self, app: Flask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The auto schema includes log_lines without extra schema code."""
+        from schemas.gromacs_job import GromacsJobSchema
+
+        monkeypatch.setattr("models.gromacs_job.DATA_DIR", tmp_path)
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True)
+        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        _add_gmx_job(app, exp_id, "protein.simulation.json")
+
+        with app.app_context():
+            job = db.session.query(GromacsJob).one()
+            dumped = GromacsJobSchema().dump(job)
+            assert dumped["log_lines"] == {"gmx": None, "stdout": None, "stderr": None}
 
 
 class TestExperimentDelegation:

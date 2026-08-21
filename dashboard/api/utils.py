@@ -190,6 +190,31 @@ def is_excluded_path(path: Path, base_dir: Path) -> bool:
     return any(fnmatch.fnmatch(path.name, pattern) for pattern in EXCLUDED_FILES)
 
 
+def count_lines(file: Path | str, chunk_size: int = 1024 * 1024) -> int | None:
+    """
+    Count newline-terminated lines (``wc -l`` semantics) without loading the file.
+
+    The last, possibly unterminated line of a still-growing log is deliberately
+    not counted until its newline lands.
+
+    Args:
+        file: Path to the file.
+        chunk_size: Read buffer size in bytes.
+
+    Returns:
+        The number of newline characters, or None when the file cannot be read.
+    """
+    file_path = Path(file) if isinstance(file, str) else file
+    try:
+        count = 0
+        with file_path.open("rb") as f:
+            while chunk := f.read(chunk_size):
+                count += chunk.count(b"\n")
+        return count
+    except OSError:
+        return None
+
+
 def tail(file: Path | str, n: int = 10) -> str:
     """
     Read last n lines of a file efficiently by reading chunks from the end.

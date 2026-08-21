@@ -134,13 +134,15 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
             "max_trials": 12,
             "trials": [
                 {
+                    # Matches the seeded running production job's config, so the
+                    # Run step shows tuned estimates for "Configuration used".
                     "id": "prod_00000",
                     "status": JobStatus.FINISHED.value,
-                    "np": 8,
-                    "ntomp": 1,
+                    "np": 4,
+                    "ntomp": 2,
                     "nb": "gpu",
                     "pme": "cpu",
-                    "performance": 72.4,
+                    "performance": 704.12,
                 },
                 {
                     "id": "prod_00001",

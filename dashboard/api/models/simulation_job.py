@@ -1,13 +1,15 @@
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cache import simulation_status_cache
+from cache import simulation_log_lines_cache, simulation_status_cache
 from cachetools import cached
 from clients import mdrun
 from enums import Engine, JobStatus
 from extensions import db
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from utils import count_lines
 
 if TYPE_CHECKING:
     from .experiment import Experiment
@@ -92,6 +94,26 @@ class SimulationJob(db.Model):  # type: ignore
             if self._last_known_status:
                 return self._last_known_status
             return JobStatus.UNKNOWN
+
+    @property
+    @cached(cache=simulation_log_lines_cache)
+    def log_lines(self) -> dict[str, int | None]:
+        """
+        Line count per log stream, keyed by the log endpoint's ``type`` values.
+
+        Lets clients size logs (line-count badges) without downloading them;
+        None while a stream's file does not exist yet. The counts ride the job
+        payload, so they stay fresh on the existing status polls.
+        """
+        return {name: count_lines(path) for name, path in self._log_files().items()}
+
+    def _log_files(self) -> dict[str, Path]:
+        """
+        Log streams of this job, keyed by the log endpoint's ``type`` values.
+
+        Engine-specific; the engine log key is ``gmx`` or ``mdout``.
+        """
+        raise NotImplementedError
 
     def delete(self) -> None:
         """

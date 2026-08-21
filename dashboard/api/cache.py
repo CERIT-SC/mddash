@@ -22,26 +22,11 @@ tuner_last_known_status: dict[str, dict] = {}
 # Cache for GROMACS job status (1s TTL)
 gromacs_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
 
-# Cache for GROMACS job performance metrics (1s TTL)
-gromacs_performance_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
-
-# Cache for GROMACS job nsteps done (500ms TTL)
-gromacs_nsteps_done_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)
-
-# Cache for GROMACS job estimated time (500ms TTL)
-gromacs_estimated_time_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)
-
 # Cache for analysis job status (2s TTL — analyses are long-running)
 analysis_status_cache: TTLCache = TTLCache(maxsize=100, ttl=2)
 
 # Cache for simulation job status (1s TTL)
 simulation_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
 
-# Cache for AMBER job performance metrics (1s TTL)
-amber_performance_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
-
-# Cache for AMBER job nsteps done (500ms TTL)
-amber_nsteps_done_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)
-
-# Cache for AMBER job estimated time (500ms TTL)
-amber_estimated_time_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)
+# Cache for simulation job log line counts (500ms TTL — counting streams whole files)
+simulation_log_lines_cache: TTLCache = TTLCache(maxsize=100, ttl=0.5)

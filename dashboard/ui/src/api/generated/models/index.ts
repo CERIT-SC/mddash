@@ -86,6 +86,7 @@ export * from './serviceUnavailableResponse.ts';
 export * from './simulation.ts';
 export * from './simulationFiles.ts';
 export * from './simulationJob.ts';
+export * from './simulationJobLogLines.ts';
 export * from './simulationPathQueryParameter.ts';
 export * from './simulationWrite.ts';
 export * from './startNotebookRequest.ts';

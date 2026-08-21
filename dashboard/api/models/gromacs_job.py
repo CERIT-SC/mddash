@@ -5,12 +5,6 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cache import (
-    gromacs_estimated_time_cache,
-    gromacs_nsteps_done_cache,
-    gromacs_performance_cache,
-)
-from cachetools import cached
 from clients import mdrun
 from config import DATA_DIR, S3_BUCKET
 from enums import DeviceType, Engine, JobStatus
@@ -121,7 +115,6 @@ class GromacsJob(SimulationJob):
         return self._init_step or 0
 
     @property
-    @cached(cache=gromacs_nsteps_done_cache)
     def nsteps_done(self) -> int | None:
         """Number of steps completed so far."""
         # If simulation has finished, return total steps
@@ -158,7 +151,6 @@ class GromacsJob(SimulationJob):
         return self._finish_timestamp
 
     @property
-    @cached(cache=gromacs_estimated_time_cache)
     def estimated_time(self) -> int | None:
         """Estimated time until completion in seconds."""
         if self.start_timestamp is None or self.nsteps is None or self.nsteps_done is None:
@@ -183,7 +175,6 @@ class GromacsJob(SimulationJob):
         return max(0, int(base_estimate - time_since_update))
 
     @property
-    @cached(cache=gromacs_performance_cache)
     def performance(self) -> float | None:
         """Performance of the job in ns/day."""
         if self._performance:
@@ -257,6 +248,10 @@ class GromacsJob(SimulationJob):
         logger.info(f"Started GROMACS job {job.id} for experiment {experiment.id} (simulation {simulation_path})")
 
         return job
+
+    def _log_files(self) -> dict[str, Path]:
+        """GROMACS log streams keyed by the log endpoint's ``type`` values."""
+        return {"gmx": self._gmx_log, "stdout": self._stdout_log, "stderr": self._stderr_log}
 
     def get_log(self, type: str = "gmx", tail_lines: int | None = None) -> str:
         """

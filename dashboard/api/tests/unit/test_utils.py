@@ -5,6 +5,7 @@ from pathlib import Path
 
 from pytest_mock import MockerFixture
 from utils import (
+    count_lines,
     generate_id,
     get_files_with_extensions,
     get_unique_id,
@@ -180,6 +181,32 @@ class TestNstepsOverride:
         """Unbalanced quotes must never raise; parsing is best-effort."""
         assert nsteps_override("-nsteps 1000 'unterminated") == 1000
         assert nsteps_override("'unterminated -maxh 1.0") is None
+
+
+class TestCountLines:
+    """Tests for the count_lines function."""
+
+    def test_counts_newline_terminated_lines(self, tmp_path: Path) -> None:
+        """Counts newline characters, wc -l style."""
+        log = tmp_path / "md.log"
+        log.write_text("alpha\nbeta\ngamma\n")
+        assert count_lines(log) == 3
+
+    def test_ignores_unterminated_tail_line(self, tmp_path: Path) -> None:
+        """A final line without a newline is not counted yet — the file is still being written."""
+        log = tmp_path / "md.log"
+        log.write_text("alpha\nbeta\ngamma")
+        assert count_lines(log) == 2
+
+    def test_empty_file_returns_zero(self, tmp_path: Path) -> None:
+        """An existing but empty file has no lines."""
+        log = tmp_path / "md.log"
+        log.write_text("")
+        assert count_lines(log) == 0
+
+    def test_missing_file_returns_none(self, tmp_path: Path) -> None:
+        """A missing file reports None, not zero — zero is a real count."""
+        assert count_lines(tmp_path / "nope.log") is None
 
 
 class TestDuMonitor:
