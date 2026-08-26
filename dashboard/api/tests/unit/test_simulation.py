@@ -788,3 +788,56 @@ class TestExperimentDelegation:
             experiment.mdrepo_published = False
             assert experiment.step == 5
             assert experiment.status == "publishing"
+
+
+class TestCanPublish:
+    """can_publish is the experiment-level Publish unlock: a draft exists, or any run finished."""
+
+    def test_false_without_draft_or_finished_run(self, app: Flask) -> None:
+        exp_id = _seed_experiment(app)
+        with app.app_context():
+            experiment = db.session.get(Experiment, exp_id)
+            assert experiment is not None
+            assert experiment.can_publish is False
+
+    def test_running_run_does_not_unlock(self, app: Flask, tmp_path: Path) -> None:
+        """A running run unlocks Analyze (step 3), not Publish."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        _add_gmx_job(app, exp_id, "protein.simulation.json", _last_known_status=JobStatus.RUNNING)
+
+        with app.app_context():
+            experiment = db.session.get(Experiment, exp_id)
+            assert experiment is not None
+            assert experiment.can_publish is False
+
+    def test_finished_run_unlocks_even_when_not_latest(self, app: Flask, tmp_path: Path) -> None:
+        """A finished non-latest run leaves the ladder at the latest sim but unlocks Publish."""
+        exp_id = _seed_experiment(app)
+        _write_two_sims(tmp_path / exp_id)
+        from datetime import datetime
+
+        _add_gmx_job(
+            app,
+            exp_id,
+            "protein.simulation.json",
+            _last_known_status=JobStatus.FINISHED,
+            _start_timestamp=1_700_000_100,
+            created_at=datetime.fromtimestamp(1_700_000_000),
+        )
+
+        with app.app_context():
+            experiment = db.session.get(Experiment, exp_id)
+            assert experiment is not None
+            assert experiment.step == 1  # ligand is newer — the ladder follows it
+            assert experiment.can_publish is True
+
+    def test_draft_unlocks_without_any_run(self, app: Flask) -> None:
+        exp_id = _seed_experiment(app)
+        with app.app_context():
+            experiment = db.session.get(Experiment, exp_id)
+            assert experiment is not None
+            experiment.mdrepo_id = "rec123"
+            assert experiment.can_publish is True

@@ -22,7 +22,7 @@ from config import (
     MDREPO_TOKEN_URL,
     MDREPO_URL,
 )
-from enums import Engine, PodStatus, SourceType
+from enums import Engine, JobStatus, PodStatus, SourceType
 from errors import ApiError
 from extensions import db
 from flask import session
@@ -178,6 +178,18 @@ class Experiment(db.Model):  # type: ignore
     def status(self) -> str:
         """Status of the experiment based on its current state."""
         return self._step_status()[1]
+
+    @property
+    def can_publish(self) -> bool:
+        """
+        Whether the Publish wizard step is unlocked.
+
+        Publishing is experiment-level (the MDRepo upload covers the whole
+        experiment), so this lives here rather than on a simulation: unlocked
+        once a draft/record exists, or once any run finished anywhere in the
+        experiment.
+        """
+        return self.mdrepo_id is not None or any(job.status == JobStatus.FINISHED for job in self.simulation_jobs)
 
     @property
     def mdrepo_record_url(self) -> str | None:
