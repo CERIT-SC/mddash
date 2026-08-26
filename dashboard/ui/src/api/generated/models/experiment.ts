@@ -35,5 +35,6 @@ export interface Experiment {
   analysis_jobs: AnalysisJob[];
   step?: number;
   status?: string;
+  can_publish?: boolean;
   mdrepo_record_url?: NullableString | null;
 }

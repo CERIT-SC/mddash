@@ -64,9 +64,11 @@ interface StepperHeaderProps {
   className?: string
   /** Farthest clickable marker (server-reported progress); later ones render disabled. */
   maxStep?: number
+  /** Extra markers clickable outside the maxStep threshold (e.g. experiment-level Publish). */
+  unlockedIndexes?: readonly number[]
 }
 
-export function StepperHeader({ steps = [], className, maxStep }: StepperHeaderProps) {
+export function StepperHeader({ steps = [], className, maxStep, unlockedIndexes = [] }: StepperHeaderProps) {
   const { currentStep, goToStep, totalSteps } = useStepper()
   const safeTotalSteps = Math.max(totalSteps, 1)
   const activeStepIndex = Math.min(Math.max(currentStep, 0), safeTotalSteps - 1)
@@ -101,7 +103,9 @@ export function StepperHeader({ steps = [], className, maxStep }: StepperHeaderP
               {stepItems.map((step, index) => {
                 const isComplete = index < currentStep
                 const isCurrent = index === currentStep
-                const reachable = maxStep === undefined || index <= maxStep
+                // maxStep opens a contiguous range; unlockedIndexes open specific
+                // markers beyond it without freeing the ladder in between.
+                const reachable = maxStep === undefined || index <= maxStep || unlockedIndexes.includes(index)
 
                 return (
                   <button

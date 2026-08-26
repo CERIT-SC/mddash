@@ -1,5 +1,6 @@
 import { useGetExperiment, useListSimulations } from "@/api/generated/client"
 import { AnalyzeStep } from "@/features/analyze"
+import { PublishStep } from "@/features/publish"
 import { RunStep } from "@/features/run"
 import { SetupStep, type SetupSource } from "@/features/setup"
 import { CREATE_TAB, SimulationTabs } from "@/features/simulation"
@@ -40,11 +41,11 @@ type ExperimentWizardProps = {
   onSearchChange: (next: WizardSearch) => void
 }
 
-const clampStep = (step: number) => Math.max(0, Math.min(step, LAST_STEP))
-
 export function ExperimentWizard({ experimentId, search, onSearchChange }: ExperimentWizardProps) {
   const experiment = useGetExperiment(experimentId, { query: { retry: false } })
-  const simulations = useListSimulations(experimentId, { query: { retry: false } })
+  // The 5s poll is the wizard heartbeat: the step ladder advances server-side
+  // when a run finishes, and the stepper must follow without user action.
+  const simulations = useListSimulations(experimentId, { query: { retry: false, refetchInterval: 5000 } })
 
   if (experiment.isError) {
     return <ApiErrorAlert error={experiment.error} onRetry={() => void experiment.refetch()} />
@@ -76,22 +77,80 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         ? list.find((candidate) => candidate.simulation_path === data.latest_simulation_path)
         : undefined) ??
       list[0])
-  // Unlock rule from the API pair (step = deepest completed phase, status =
-  // current phase): everything before the current phase is reachable, and a
-  // live "simulating" run additionally unlocks Analyze (partial results).
-  // A simulation that does not exist yet has no progress of its own, so create
-  // mode always lands on Setup.
-  const maxStep =
-    selected === undefined
-      ? 0
-      : Math.max(0, Math.min((selected.step ?? 0) - 1 + (selected.status === "simulating" ? 1 : 0), 4))
-  const step = selected === undefined ? 0 : clampStep(search.step ?? maxStep)
+  // The API owns the ladder — consume it directly: a simulation's step gates
+  // Tune/Run/Analyze for that simulation only (live run 3, finished run 4).
+  // can_publish unlocks ONLY the experiment-level Publish marker. Ranges are
+  // guaranteed upstream (API ladder 0-4, validateSearch, Stepper clamps), so
+  // no clamping happens here. Create mode has no ladder: Setup.
+  const ownStep = selected === undefined ? 0 : selected.step
+  const maxStep = selected === undefined ? 0 : ownStep
+  const step = selected === undefined ? 0 : (search.step ?? ownStep)
   const tab = selected?.simulation_path ?? CREATE_TAB
 
   // Setup/Tune URL params ride along on every navigation so remounts keep user
   // context; only a full reset drops them.
   const updateSearch = (next: WizardSearch) =>
     onSearchChange({ source: search.source, trial: search.trial, mode: search.mode, ...next })
+
+  // The five steps are StepperContent's direct children in index order (Setup=0
+  // .. Publish=4). Create mode keeps only Setup; the rest render once a
+  // simulation exists.
+  const steps = [
+    <SetupStep
+      key="setup"
+      experimentId={experimentId}
+      experiment={data}
+      simulation={selected}
+      creating={creating}
+      source={search.source ?? "notebook"}
+      onSourceChange={(source) => updateSearch({ simulation: tab, step: search.step, source })}
+      onOpenSimulation={(simulation) => updateSearch({ simulation })}
+    />,
+    ...(selected === undefined
+      ? []
+      : [
+          <TuneStep
+            key="tune"
+            experimentId={experimentId}
+            engine={data.engine}
+            simulation={selected}
+            trialId={search.trial}
+            mode={search.mode ?? "tuning"}
+            onTrialIdChange={(trial) => updateSearch({ simulation: tab, step: search.step, trial })}
+            onModeChange={(mode) =>
+              updateSearch({
+                simulation: tab,
+                step: search.step,
+                mode: mode === "manual" ? "manual" : undefined,
+              })
+            }
+            onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
+          />,
+          <RunStep
+            key="run"
+            experimentId={experimentId}
+            engine={data.engine}
+            simulation={selected}
+            onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
+          />,
+          <AnalyzeStep
+            key="analyze"
+            experimentId={experimentId}
+            engine={data.engine}
+            simulation={selected}
+            canPublish={data.can_publish ?? false}
+            onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
+          />,
+          <PublishStep
+            key="publish"
+            experiment={data}
+            simulation={selected}
+            onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
+            // Re-asserting the typed search drops the MDRepo OAuth params from the URL.
+            onOAuthHandled={() => updateSearch({ simulation: tab, step })}
+          />,
+        ]),
+  ]
 
   return (
     <section className="space-y-6 md:space-y-8">
@@ -119,62 +178,13 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
               onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
             >
               {/* mb-0 drops the header's reserved bottom margin. */}
-              <StepperHeader steps={STEPS} className="mb-0" maxStep={maxStep} />
-              <StepperContent>
-                <SetupStep
-                  experimentId={experimentId}
-                  experiment={data}
-                  simulation={selected}
-                  creating={creating}
-                  source={search.source ?? "notebook"}
-                  onSourceChange={(source) => updateSearch({ simulation: tab, step: search.step, source })}
-                  onOpenSimulation={(simulation) => updateSearch({ simulation })}
-                />
-                {/* Create mode pins the stepper to Setup, so this placeholder never renders. */}
-                {selected === undefined ? (
-                  <div />
-                ) : (
-                  <TuneStep
-                    experimentId={experimentId}
-                    engine={data.engine}
-                    simulation={selected}
-                    trialId={search.trial}
-                    mode={search.mode ?? "tuning"}
-                    onTrialIdChange={(trial) => updateSearch({ simulation: tab, step: search.step, trial })}
-                    onModeChange={(mode) =>
-                      updateSearch({
-                        simulation: tab,
-                        step: search.step,
-                        mode: mode === "manual" ? "manual" : undefined,
-                      })
-                    }
-                    onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
-                  />
-                )}
-                {selected === undefined ? (
-                  <div />
-                ) : (
-                  <RunStep
-                    experimentId={experimentId}
-                    engine={data.engine}
-                    simulation={selected}
-                    onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
-                  />
-                )}
-                {selected === undefined ? (
-                  <div />
-                ) : (
-                  <AnalyzeStep
-                    experimentId={experimentId}
-                    engine={data.engine}
-                    simulation={selected}
-                    canPublish={maxStep >= LAST_STEP}
-                    onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
-                  />
-                )}
-                {/* Publish stays a placeholder until that step is implemented. */}
-                <div />
-              </StepperContent>
+              <StepperHeader
+                steps={STEPS}
+                className="mb-0"
+                maxStep={maxStep}
+                unlockedIndexes={data.can_publish ? [LAST_STEP] : []}
+              />
+              <StepperContent>{steps}</StepperContent>
             </Stepper>
           </CardContent>
         </Card>

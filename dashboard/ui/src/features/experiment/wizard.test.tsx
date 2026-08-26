@@ -187,23 +187,57 @@ describe("ExperimentWizard", () => {
     )
   })
 
-  it("disables markers past the simulation's API-reported progress", async () => {
+  it("enables markers up to the simulation's API-reported step", async () => {
+    // alpha sits at backend step 2 (tuning done): Setup/Tune/Run reachable, Analyze/Publish not.
     mockApi({
       "/experiments/exp1/simulations": Response.json([alpha]),
       "/experiments/exp1": okExperiment(),
+      [`/experiments/exp1/gmx/${alpha.simulation_path}`]: runningGmxJob(alpha.simulation_path),
     })
     const changes: WizardSearch[] = []
     const user = userEvent.setup()
     renderWizard({}, (next) => changes.push(next))
 
-    expect(await screen.findByRole("button", { name: "Go to section 2: Tune" })).toHaveAttribute("aria-current", "step")
-    expect(screen.getByRole("button", { name: "Go to section 1: Setup" })).toBeEnabled()
-    for (const name of ["Go to section 3: Run", "Go to section 4: Analyze", "Go to section 5: Publish"]) {
+    expect(await screen.findByRole("button", { name: "Go to section 3: Run" })).toHaveAttribute("aria-current", "step")
+    for (const name of ["Go to section 1: Setup", "Go to section 2: Tune", "Go to section 3: Run"]) {
+      expect(screen.getByRole("button", { name })).toBeEnabled()
+    }
+    for (const name of ["Go to section 4: Analyze", "Go to section 5: Publish"]) {
       expect(screen.getByRole("button", { name })).toBeDisabled()
     }
 
-    await user.click(screen.getByRole("button", { name: "Go to section 3: Run" }))
+    await user.click(screen.getByRole("button", { name: "Go to section 4: Analyze" }))
     expect(changes).toEqual([])
+  })
+
+  it("lands on Publish once the run finished (backend step 4)", async () => {
+    const done = simulation("done.simulation.json", { name: "Done", step: 4, status: "analyzing" })
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([done]),
+      "/experiments/exp1": okExperiment({ latest_simulation_path: done.simulation_path }),
+      "/dash/api/mdrepo/status": Response.json({ authenticated: true }),
+    })
+    renderWizard({})
+
+    const publish = await screen.findByRole("button", { name: "Go to section 5: Publish" })
+    expect(publish).toBeEnabled()
+    expect(publish).toHaveAttribute("aria-current", "step")
+    expect(await screen.findByText(/redirected to MDRepo to complete the metadata/)).toBeInTheDocument()
+  })
+
+  it("unlocks Publish experiment-wide once the API reports can_publish", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha]),
+      "/experiments/exp1": okExperiment({ can_publish: true }),
+      [`/experiments/exp1/gmx/${alpha.simulation_path}`]: runningGmxJob(alpha.simulation_path),
+    })
+    renderWizard({ simulation: alpha.simulation_path })
+
+    expect(await screen.findByRole("button", { name: "Go to section 3: Run" })).toHaveAttribute("aria-current", "step")
+    // Alpha's own ladder stays at Run (per-simulation); can_publish opens ONLY
+    // the experiment-level Publish marker — Tune/Run/Analyze stay gated per sim.
+    expect(screen.getByRole("button", { name: "Go to section 4: Analyze" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Go to section 5: Publish" })).toBeEnabled()
   })
 
   it("keeps the setup source view across tab and step navigations", async () => {
@@ -294,6 +328,8 @@ describe("ExperimentWizard", () => {
       "/experiments/exp1/simulations/beta.simulation.json": new Response(null, { status: 204 }),
       "/experiments/exp1/simulations": Response.json([alpha, beta]),
       "/experiments/exp1": okExperiment(),
+      // alpha defaults to its own step (2 = Run); the mounted Run step needs its job.
+      [`/experiments/exp1/gmx/${alpha.simulation_path}`]: runningGmxJob(alpha.simulation_path),
     })
     const changes: WizardSearch[] = []
     const user = userEvent.setup()

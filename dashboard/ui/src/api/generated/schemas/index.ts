@@ -152,6 +152,7 @@ export const ListExperimentsResponseItem = zod.object({
 })),
   "step": zod.int().optional(),
   "status": zod.string().optional(),
+  "can_publish": zod.boolean().optional(),
   "mdrepo_record_url": zod.string().nullish()
 })
 export const ListExperimentsResponse = zod.array(ListExperimentsResponseItem)
@@ -267,6 +268,7 @@ export const CreateExperimentResponse = zod.object({
 })),
   "step": zod.int().optional(),
   "status": zod.string().optional(),
+  "can_publish": zod.boolean().optional(),
   "mdrepo_record_url": zod.string().nullish()
 })
 
@@ -373,6 +375,7 @@ export const GetExperimentResponse = zod.object({
 })),
   "step": zod.int().optional(),
   "status": zod.string().optional(),
+  "can_publish": zod.boolean().optional(),
   "mdrepo_record_url": zod.string().nullish()
 })
 
@@ -483,6 +486,7 @@ export const UpdateExperimentResponse = zod.object({
 })),
   "step": zod.int().optional(),
   "status": zod.string().optional(),
+  "can_publish": zod.boolean().optional(),
   "mdrepo_record_url": zod.string().nullish()
 })
 
@@ -563,7 +567,12 @@ export const GetPublishStatusResponse = zod.object({
   "total_bytes": zod.int().min(getPublishStatusResponseTotalBytesMin),
   "completed_bytes": zod.int().min(getPublishStatusResponseCompletedBytesMin),
   "current_file": zod.string().nullish(),
-  "error": zod.string().nullish()
+  "error": zod.string().nullish(),
+  "upload_attempt_id": zod.string().optional(),
+  "failed_files": zod.array(zod.object({
+  "key": zod.string(),
+  "error": zod.string()
+})).optional()
 })
 
 

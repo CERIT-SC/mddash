@@ -5,6 +5,7 @@
  * API for experiment, simulation, compute, analysis, notebook, file, and publication workflows.
  * OpenAPI spec version: 1.0.0
  */
+import type { FailedUploadFile } from './failedUploadFile.ts';
 import type { NullableString } from './nullableString.ts';
 
 export interface PublishStatus {
@@ -24,5 +25,7 @@ export interface PublishStatus {
   completed_bytes: number;
   current_file?: NullableString | null;
   error?: NullableString | null;
+  upload_attempt_id?: string;
+  failed_files?: FailedUploadFile[];
   [key: string]: unknown;
  }
