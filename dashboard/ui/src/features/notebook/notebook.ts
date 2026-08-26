@@ -1,6 +1,6 @@
 import type { FileInfo, Notebook } from "@/api/generated/models"
 
-export type NotebookRole = "setup" | "analysis"
+type NotebookRole = "setup" | "analysis"
 
 const ROLE_FILENAMES: Record<NotebookRole, string> = {
   setup: "setup.ipynb",

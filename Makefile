@@ -45,6 +45,10 @@ lint-py: ## Check Python linting
 lint-ui: ## Check frontend linting (dashboard/ui, landing and hub/ui via Oxlint)
 	pnpm run lint
 
+.PHONY: knip
+knip: ## Check frontend dead code (dashboard/ui, landing and hub/ui via Knip)
+	pnpm run knip
+
 .PHONY: lint-workflows
 lint-workflows: ## Validate GitHub Actions workflows (actionlint + zizmor). Requires actionlint + zizmor (in devcontainer).
 	actionlint

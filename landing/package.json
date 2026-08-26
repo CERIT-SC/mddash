@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "knip": "knip",
     "build": "tsc -b && vite build",
     "type-check": "tsc --noEmit",
     "preview": "vite preview",
@@ -23,8 +24,8 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
+    "knip": "^6.32.2",
     "sharp": "^0.34.5",
-    "svgo": "^4.0.1",
     "vite": "^6.4.2",
     "vite-plugin-singlefile": "^2.0.4"
   }

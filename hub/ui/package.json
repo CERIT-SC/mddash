@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --base /",
+    "knip": "knip",
     "build": "tsc -b && vite build && pnpm run validate",
     "validate": "node scripts/validate-build.mjs",
     "type-check": "tsc --noEmit",
@@ -25,6 +26,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
+    "knip": "^6.32.2",
     "vite": "^6.4.2"
   }
 }

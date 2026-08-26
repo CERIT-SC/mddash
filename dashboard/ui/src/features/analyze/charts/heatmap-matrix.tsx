@@ -14,7 +14,7 @@ export type TooltipContext = {
   yLabel?: string
 }
 
-export interface HeatmapMatrixProps {
+interface HeatmapMatrixProps {
   // Data as [xIndex, yIndex, value]
   data: Array<[number, number, number]>
   xLabels?: string[]

@@ -29,7 +29,7 @@ import type {
 import type { LineSeries } from "../charts/line-chart"
 import type { StackedSeries } from "../charts/stacked-area-chart"
 
-export function hasStatSeries(
+function hasStatSeries(
   obj: unknown,
   ...keys: string[]
 ): obj is {
@@ -77,7 +77,7 @@ const isLegacyRmsdPairwise = (
   )
 }
 
-export function isRmsdPairwise(obj: unknown): obj is RMSDPairwiseAnalysis {
+function isRmsdPairwise(obj: unknown): obj is RMSDPairwiseAnalysis {
   if (!obj || typeof obj !== "object") return false
   const payload = obj as RMSDPairwiseAnalysis
   return (
@@ -105,8 +105,6 @@ export const isRmsdAnalysis = (obj: Analysis): obj is RMSDAnalysis => hasStatSer
 
 export const isRadiusOfGyrationAnalysis = (obj: Analysis): obj is RadiusOfGyrationAnalysis =>
   hasStatSeries(obj, "rgyr", "rgyrx", "rgyry", "rgyrz")
-
-export const isRmsdPairwiseAnalysis = isRmsdPairwise
 
 export const extractRmsdPairwiseAnalysis = (obj: Analysis): RMSDPairwiseAnalysis | undefined => {
   if (isRmsdPairwise(obj)) {
@@ -174,7 +172,7 @@ const isRmsdPerResidueMatrix = (obj: unknown): obj is RMSDPerResidueMatrixAnalys
   )
 }
 
-export function isRmsdPerResidueAnalysis(obj: Analysis): obj is RMSDPerResidueAnalysis {
+function isRmsdPerResidueAnalysis(obj: Analysis): obj is RMSDPerResidueAnalysis {
   if (!obj || typeof obj !== "object") return false
   const data = (obj as RMSDPerResidueAnalysis).data
   if (!Array.isArray(data) || data.length === 0) return false
@@ -227,8 +225,6 @@ const isPcaShape = (obj: unknown): obj is PCAAnalysis => {
   )
 }
 
-export const isPcaAnalysis = (obj: unknown): obj is PCAAnalysis => isPcaShape(obj)
-
 export const extractPcaAnalysis = (obj: Analysis): PCAAnalysis | undefined => {
   if (isPcaShape(obj)) {
     return obj
@@ -260,7 +256,7 @@ const isNumericMatrix = (matrix: unknown): matrix is number[][] =>
       Array.isArray(row) && row.length > 0 && row.every((value) => typeof value === "number" && Number.isFinite(value))
   )
 
-export const isDistancePerResidueAnalysis = (obj: Analysis): obj is DistancePerResidueAnalysis => {
+const isDistancePerResidueAnalysis = (obj: Analysis): obj is DistancePerResidueAnalysis => {
   if (!obj || typeof obj !== "object") return false
   const dataset = (obj as DistancePerResidueAnalysis).data
   if (!Array.isArray(dataset) || dataset.length === 0) return false
@@ -349,7 +345,7 @@ export const isAreaPerLipidAnalysis = (obj: Analysis): obj is AreaPerLipidAnalys
   return isNumericMatrix(upper) || isNumericMatrix(lower)
 }
 
-export const isHydrogenBondsAnalysis = (obj: Analysis): obj is HydrogenBondsAnalysis => {
+const isHydrogenBondsAnalysis = (obj: Analysis): obj is HydrogenBondsAnalysis => {
   if (!obj || typeof obj !== "object") return false
   const dataset = (obj as HydrogenBondsAnalysis).data
   if (!Array.isArray(dataset) || dataset.length === 0) return false
@@ -672,7 +668,7 @@ const hasEnergyAgentData = (agent: unknown): agent is EnergiesAgentData => {
   return arrays.every((value) => Array.isArray(value))
 }
 
-export const isEnergiesAnalysis = (obj: Analysis): obj is EnergiesAnalysis => {
+const isEnergiesAnalysis = (obj: Analysis): obj is EnergiesAnalysis => {
   if (!obj || typeof obj !== "object") return false
   const payload = obj as EnergiesAnalysis
   if (!Array.isArray(payload.data) || !payload.data.length) return false

@@ -25,7 +25,7 @@ async function fetchJson(url: string, signal?: AbortSignal): Promise<Response> {
  * Display data for a PDB entry; the polymer-entity call is best-effort —
  * synthetic constructs leave organism null.
  */
-export async function fetchPdbEntry(pdbId: string, signal?: AbortSignal): Promise<PdbEntry> {
+async function fetchPdbEntry(pdbId: string, signal?: AbortSignal): Promise<PdbEntry> {
   const id = encodeURIComponent(pdbId)
   const [entry, entity] = await Promise.allSettled([
     fetchJson(`${RCSB_API}/entry/${id}`, signal),

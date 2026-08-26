@@ -93,10 +93,10 @@ export function useSimulationJobQuery(
   }
 }
 
-export type SubmitVars = { experimentId: string; simulationPath: string; data?: GromacsJobRequest | AmberJobRequest }
-export type DeleteVars = { experimentId: string; simulationPath: string }
+type SubmitVars = { experimentId: string; simulationPath: string; data?: GromacsJobRequest | AmberJobRequest }
+type DeleteVars = { experimentId: string; simulationPath: string }
 
-export type JobMutation<Vars> = {
+type JobMutation<Vars> = {
   mutate: (
     vars: Vars,
     options?: { onSuccess?: () => void; onError?: (error: unknown) => void; onSettled?: () => void }

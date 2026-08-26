@@ -3,7 +3,7 @@ import React from "react"
 import EChartsBase from "./echarts-base"
 import type { EChartsOption } from "./echarts-setup"
 
-export interface ScreePlotProps {
+interface ScreePlotProps {
   eigenvalues: number[]
   labelPrefix?: string // e.g., "PC"
   height?: number | string

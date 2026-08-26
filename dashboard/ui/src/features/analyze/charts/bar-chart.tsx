@@ -3,12 +3,12 @@ import React from "react"
 import EChartsBase from "./echarts-base"
 import type { EChartsOption } from "./echarts-setup"
 
-export interface BarSeries {
+interface BarSeries {
   name: string
   data: number[]
 }
 
-export interface BarChartProps {
+interface BarChartProps {
   categories: string[]
   series: BarSeries[] // allow multiple series for comparisons
   horizontal?: boolean

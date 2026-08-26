@@ -3,14 +3,14 @@ import React from "react"
 import EChartsBase from "./echarts-base"
 import type { EChartsOption } from "./echarts-setup"
 
-export interface ScatterPoint {
+interface ScatterPoint {
   x: number
   y: number
   /** Optional scalar driving the visualMap color. */
   c?: number
 }
 
-export interface Scatter2DProps {
+interface Scatter2DProps {
   points: ScatterPoint[]
   xLabel?: string
   yLabel?: string

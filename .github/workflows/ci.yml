@@ -47,6 +47,8 @@ jobs:
         run: make format-check-ui lint-ui
       - name: Type-check frontend workspace
         run: pnpm run type-check
+      - name: Check frontend dead code
+        run: pnpm run knip
       - name: Check Dashboard API client drift
         run: pnpm run generated:check
       - name: Test Dashboard UI

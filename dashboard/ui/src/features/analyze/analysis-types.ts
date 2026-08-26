@@ -129,7 +129,7 @@ export interface AreaPerLipidAnalysis {
   }
 }
 
-export interface DensityProfileComponent {
+interface DensityProfileComponent {
   name: string
   selection: number[]
   number: { dens: number[]; stdv: number[] }
@@ -152,7 +152,7 @@ export interface LipidInteractionAnalysis {
   }
 }
 
-export interface LipidOrderSegment {
+interface LipidOrderSegment {
   atoms: string[]
   avg: number[]
   std: number[]
@@ -198,7 +198,7 @@ export interface RMSDPairwiseAnalysis {
   data: RMSDPairwiseMatrix[]
 }
 
-export interface RMSDPerResidueSeries {
+interface RMSDPerResidueSeries {
   name: string
   rmsds: number[]
 }

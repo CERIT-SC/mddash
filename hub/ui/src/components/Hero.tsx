@@ -81,7 +81,7 @@ export function LogEntry({ html, children }: { html?: string; children?: ReactNo
 }
 
 /** Support escalation link. */
-export const SUPPORT_ISSUES_URL = "https://github.com/CERIT-SC/mddash/issues"
+const SUPPORT_ISSUES_URL = "https://github.com/CERIT-SC/mddash/issues"
 
 export function SupportNote() {
   return (

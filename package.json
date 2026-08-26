@@ -11,6 +11,7 @@
     "build:hub-ui": "pnpm --filter hub-ui build",
     "test:ui": "pnpm --filter dash test",
     "type-check": "pnpm --parallel --filter dash --filter landing --filter hub-ui type-check",
+    "knip": "pnpm --parallel --filter dash --filter landing --filter hub-ui knip",
     "lint": "oxlint --type-aware --deny-warnings dashboard/ui landing hub/ui",
     "lint:fix": "oxlint --type-aware --fix dashboard/ui landing hub/ui",
     "format": "prettier --write --log-level warn \"{dashboard/ui,landing,hub/ui}/src/**/*.{ts,tsx,css}\"",

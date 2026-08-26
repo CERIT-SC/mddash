@@ -2,7 +2,7 @@ import React from "react"
 
 import ReactEChartsCore, { echarts, type EChartsOption } from "./echarts-setup"
 
-export interface EChartsBaseProps {
+interface EChartsBaseProps {
   option: EChartsOption
   className?: string
   style?: React.CSSProperties

@@ -16,7 +16,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 
 /** Poll interval while an analysis job is active; matches the run step. */
-export const ANALYSIS_POLL_MS = 5000
+const ANALYSIS_POLL_MS = 5000
 
 /** URL prefix of every analysis endpoint for this experiment (jobs, results, variants, data). */
 const analysisQueryPrefix = (experimentId: string) =>

@@ -6,6 +6,7 @@
   "scripts": {
     "api:generate": "orval --config orval.config.ts",
     "generated:check": "pnpm api:generate && pnpm routes:generate && git diff --exit-code -- src/api/generated src/routeTree.gen.ts",
+    "knip": "knip",
     "build": "vite build",
     "dev": "vite",
     "routes:generate": "tsr generate",
@@ -46,6 +47,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^4.7.0",
     "jsdom": "^26.1.0",
+    "knip": "^6.32.2",
     "msw": "2.15.0",
     "orval": "8.24.0",
     "sass": "^1.99.0",

@@ -8,7 +8,7 @@ export interface StackedSeries {
   data: Array<[number, number]> // [x, y]
 }
 
-export interface StackedAreaChartProps {
+interface StackedAreaChartProps {
   series: StackedSeries[]
   xLabel?: string
   yLabel?: string

@@ -8,7 +8,7 @@ export interface LineSeries {
   data: Array<[number, number]> // [x, y]
 }
 
-export interface LineChartProps {
+interface LineChartProps {
   series: LineSeries[]
   xLabel?: string
   yLabel?: string
