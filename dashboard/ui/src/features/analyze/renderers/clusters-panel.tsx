@@ -1,10 +1,10 @@
 import { useCallback, useMemo, type FC } from "react"
 
+import { escapeHtml } from "@/shared/escape-html"
 import { Badge } from "@e-infra/design-system"
 
 import type { ClustersAnalysis } from "../analysis-types"
 import { BarChart, HeatmapMatrix } from "../charts"
-import { escapeHtml } from "../charts/escape-html"
 
 const MAX_VISIBLE_CLUSTERS = 20
 

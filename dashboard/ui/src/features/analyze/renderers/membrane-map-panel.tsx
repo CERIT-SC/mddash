@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type FC } from "react"
 
+import { escapeHtml } from "@/shared/escape-html"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@e-infra/design-system"
 
 import type { MembraneMapAnalysis } from "../analysis-types"
 import EChartsBase from "../charts/echarts-base"
 import type { EChartsOption } from "../charts/echarts-setup"
-import { escapeHtml } from "../charts/escape-html"
 import LabeledList from "./labeled-list"
 
 const sanitizeIndexList = (values: unknown): number[] => {

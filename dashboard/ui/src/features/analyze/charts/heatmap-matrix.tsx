@@ -1,8 +1,9 @@
 import React from "react"
 
+import { escapeHtml } from "@/shared/escape-html"
+
 import EChartsBase from "./echarts-base"
 import type { EChartsOption } from "./echarts-setup"
-import { escapeHtml } from "./escape-html"
 
 export type TooltipContext = {
   params: unknown

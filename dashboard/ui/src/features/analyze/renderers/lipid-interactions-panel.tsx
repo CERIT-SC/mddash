@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FC } from "react"
 
+import { escapeHtml } from "@/shared/escape-html"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@e-infra/design-system"
 
 import type { LipidInteractionAnalysis } from "../analysis-types"
 import { HeatmapMatrix, type TooltipContext } from "../charts"
-import { escapeHtml } from "../charts/escape-html"
 import LabeledList from "./labeled-list"
 
 const sanitizeResidues = (values: unknown): number[] => {
