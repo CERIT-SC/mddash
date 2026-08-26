@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { Engine, type SimulationJobLogLines } from "@/api/generated/models"
+import { countNewlines } from "@/shared/log-text"
+import { LogPane } from "@/shared/ui/log-pane"
 import {
   Badge,
   Button,
@@ -9,7 +11,6 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   Label,
-  Skeleton,
   Tabs,
   TabsContent,
   TabsList,
@@ -18,7 +19,6 @@ import {
 import { ChevronDown, Copy, Download } from "lucide-react"
 import { toast } from "sonner"
 
-import { countNewlines, toLogHtml } from "./log-text"
 import { engineLogType, LOG_TAIL, useSimulationJobLog } from "./use-simulation-job"
 
 type StreamType = keyof SimulationJobLogLines
@@ -73,14 +73,6 @@ export function RunLogs({ experimentId, simulationPath, engine, logLines, live, 
   const activeLabel = allStreams.find((stream) => stream.type === tab)?.label ?? tab
   const text = log.text
   const hasText = text !== undefined && text.trim() !== ""
-
-  const html = useMemo(() => (hasText ? toLogHtml(text) : ""), [hasText, text])
-  const paneRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const pane = paneRef.current
-    // scrollTop assignment instead of scrollTo — Element.scrollTo is missing in jsdom.
-    if (follow && pane) pane.scrollTop = pane.scrollHeight
-  }, [html, follow, tab])
 
   const copy = async () => {
     try {
@@ -169,11 +161,11 @@ export function RunLogs({ experimentId, simulationPath, engine, logLines, live, 
             <TabsContent key={stream.type} value={stream.type} className="pt-2">
               {tab === stream.type && (
                 <LogPane
-                  html={html}
-                  pending={log.pending && text === undefined}
-                  failed={log.failed}
-                  label={activeLabel}
-                  paneRef={paneRef}
+                  logs={text}
+                  isLoading={log.pending && text === undefined}
+                  errorText={log.failed ? "The log could not be loaded." : undefined}
+                  emptyText={`${activeLabel} is empty.`}
+                  follow={follow}
                 />
               )}
             </TabsContent>
@@ -194,39 +186,5 @@ export function RunLogs({ experimentId, simulationPath, engine, logLines, live, 
         </div>
       </CollapsibleContent>
     </Collapsible>
-  )
-}
-
-type LogPaneProps = {
-  html: string
-  pending: boolean
-  failed: boolean
-  label: string
-  paneRef: React.RefObject<HTMLDivElement | null>
-}
-
-function LogPane({ html, pending, failed, label, paneRef }: LogPaneProps) {
-  if (pending) {
-    return (
-      <div className="space-y-2">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-4 w-2/3" />
-      </div>
-    )
-  }
-  if (failed) {
-    return <p className="text-text-muted text-sm">The log could not be loaded.</p>
-  }
-  if (html === "") {
-    return <p className="text-text-muted text-sm">{label} is empty.</p>
-  }
-  return (
-    // ansi-to-html escapes XML/HTML entities before converting color codes, so this is safe
-    <div
-      ref={paneRef}
-      className="bg-surface text-text max-h-96 overflow-auto rounded-md p-3 font-mono text-xs break-all whitespace-pre-wrap"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
   )
 }
