@@ -10,7 +10,7 @@ export type AnalysisJobRequestPreprocessingMode = typeof AnalysisJobRequestPrepr
 
 
 export const AnalysisJobRequestPreprocessingMode = {
-  'as-is': 'as-is',
+  as_is: 'as_is',
   image: 'image',
-  'image-fit': 'image-fit',
+  image_fit: 'image_fit',
 } as const;

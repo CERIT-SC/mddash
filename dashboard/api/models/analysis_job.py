@@ -17,6 +17,8 @@ from extensions import db
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from werkzeug.exceptions import Forbidden
 
+from .simulation_job import SimulationJob
+
 if TYPE_CHECKING:
     from .experiment import Experiment
 
@@ -249,6 +251,9 @@ class AnalysisJob(db.Model):  # type: ignore
     structure_file: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
     trajectory_file: Mapped[str] = mapped_column(db.String(255), nullable=False)
     topology_file: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
+    # Fraction of the simulation's steps available when the analysis inputs were
+    # snapshotted; None when the run progress was unknown (or no run existed).
+    sim_progress: Mapped[float | None] = mapped_column(db.Float, nullable=True)
 
     _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", db.Enum(JobStatus), nullable=True)
 
@@ -320,6 +325,20 @@ class AnalysisJob(db.Model):  # type: ignore
         job_id = str(uuid.uuid4())[:12]
         job_name = f"analysis-{job_id}"
 
+        # Snapshot the run's progress now: the inputs copied at job start are
+        # exactly the data this analysis will cover.
+        run_job = (
+            SimulationJob.query
+            .filter_by(experiment_id=experiment.id, simulation_path=simulation_path)
+            .order_by(SimulationJob.created_at.desc())
+            .first()
+        )
+        sim_progress: float | None = None
+        if run_job is not None and run_job.nsteps is not None and run_job.nsteps > 0:
+            done = run_job.nsteps_done
+            if done is not None:
+                sim_progress = min(1.0, done / run_job.nsteps)
+
         command = format_mwf_analysis_command(
             analysis_name=analysis_name,
             structure_file=structure_file,
@@ -353,6 +372,7 @@ class AnalysisJob(db.Model):  # type: ignore
             structure_file=structure_file.as_posix() if structure_file else None,  # type: ignore[call-arg]
             trajectory_file=trajectory_file.as_posix(),  # type: ignore[call-arg]
             topology_file=topology_file.as_posix() if topology_file else None,  # type: ignore[call-arg]
+            sim_progress=sim_progress,  # type: ignore[call-arg]
         )
         db.session.add(job)
         db.session.commit()

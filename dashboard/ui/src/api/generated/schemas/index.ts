@@ -145,10 +145,10 @@ export const ListExperimentsResponseItem = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
-  "analysis_name": zod.string(),
-  "preprocessing_mode": zod.enum(['as-is', 'image', 'image-fit']),
+  "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })),
   "step": zod.int().optional(),
   "status": zod.string().optional(),
@@ -260,10 +260,10 @@ export const CreateExperimentResponse = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
-  "analysis_name": zod.string(),
-  "preprocessing_mode": zod.enum(['as-is', 'image', 'image-fit']),
+  "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })),
   "step": zod.int().optional(),
   "status": zod.string().optional(),
@@ -366,10 +366,10 @@ export const GetExperimentResponse = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
-  "analysis_name": zod.string(),
-  "preprocessing_mode": zod.enum(['as-is', 'image', 'image-fit']),
+  "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })),
   "step": zod.int().optional(),
   "status": zod.string().optional(),
@@ -476,10 +476,10 @@ export const UpdateExperimentResponse = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
-  "analysis_name": zod.string(),
-  "preprocessing_mode": zod.enum(['as-is', 'image', 'image-fit']),
+  "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })),
   "step": zod.int().optional(),
   "status": zod.string().optional(),
@@ -1447,10 +1447,10 @@ export const ListAnalysisJobsResponseItem = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
-  "analysis_name": zod.string(),
-  "preprocessing_mode": zod.enum(['as-is', 'image', 'image-fit']),
+  "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })
 export const ListAnalysisJobsResponse = zod.array(ListAnalysisJobsResponseItem)
 
@@ -1466,22 +1466,22 @@ export const SubmitAnalysisJobParams = zod.object({
 })
 
 
-export const submitAnalysisJobBodyPreprocessingModeDefault = `as-is`;
+export const submitAnalysisJobBodyPreprocessingModeDefault = `as_is`;
 
 export const SubmitAnalysisJobBody = zod.object({
   "simulation_path": zod.string().min(1),
   "analysis": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
-  "preprocessing_mode": zod.enum(['as-is', 'image', 'image-fit']).default(submitAnalysisJobBodyPreprocessingModeDefault)
+  "preprocessing_mode": zod.enum(['as_is', 'image', 'image_fit']).default(submitAnalysisJobBodyPreprocessingModeDefault)
 })
 
 export const SubmitAnalysisJobResponse = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
-  "analysis_name": zod.string(),
-  "preprocessing_mode": zod.enum(['as-is', 'image', 'image-fit']),
+  "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })
 
 
@@ -1667,10 +1667,10 @@ export const GetAnalysisJobResponse = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
-  "analysis_name": zod.string(),
-  "preprocessing_mode": zod.enum(['as-is', 'image', 'image-fit']),
+  "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR'])
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })
 
 
