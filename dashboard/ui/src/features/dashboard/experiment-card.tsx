@@ -16,7 +16,6 @@ import { ENGINE_LABELS } from "@/shared/engine"
 import { formatBytes, formatTime, relativeTime } from "@/shared/format"
 import { isNotebookActive } from "@/shared/pod-status"
 import { sourceLabel } from "@/shared/source"
-import { ladderStepIndex } from "@/shared/steps"
 import {
   Alert,
   AlertDescription,
@@ -81,10 +80,12 @@ const IDLE_STATUSES = new Set(["setup", "setup complete", "published"])
 // Phases with work in flight get the spinner (matches the mock's live statuses).
 const SPINNING_STATUSES = new Set(["simulating", "tuning", "analyzing"])
 
-// backend ladder: 0-1=setup, 2=tune, 3=run, 4=analyze, 5=publish
+// The API ladder reports the deepest completed phase, one slot right of the
+// display index (finished Run=4 → Analyze=3); the shown counter counts it up
+// again. No status-string mapping needed here.
 function stepParts(experiment: Experiment): { shownStep: number; stepIndex: number } {
   const step = Math.max(0, Math.min(experiment.step ?? 0, STEP_LABELS.length))
-  return { shownStep: Math.max(step, 1), stepIndex: ladderStepIndex(step) }
+  return { shownStep: Math.max(step, 1), stepIndex: Math.max(0, Math.min(step - 1, STEP_LABELS.length - 1)) }
 }
 
 // Icon/color keyed by the workflow step (mock: flask=setup, sliders=tune,

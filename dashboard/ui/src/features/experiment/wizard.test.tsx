@@ -173,14 +173,18 @@ describe("ExperimentWizard", () => {
     ])
   })
 
-  it("falls back to the simulation's own step when the URL has none", async () => {
+  it("lands on Analyze while a run is in flight (results arrive mid-run)", async () => {
+    const runningBeta = simulation("nested/beta.simulation.json", { name: "Beta", step: 3, status: "simulating" })
     mockApi({
-      "/experiments/exp1/simulations": Response.json([alpha, beta]),
-      "/experiments/exp1": okExperiment({ latest_simulation_path: beta.simulation_path }),
-      [`/experiments/exp1/gmx/${beta.simulation_path}`]: runningGmxJob(beta.simulation_path),
+      "/experiments/exp1/simulations": Response.json([alpha, runningBeta]),
+      "/experiments/exp1": okExperiment({ latest_simulation_path: runningBeta.simulation_path }),
+      [`/experiments/exp1/gmx/${runningBeta.simulation_path}`]: runningGmxJob(runningBeta.simulation_path),
     })
     renderWizard({})
-    expect(await screen.findByRole("button", { name: "Go to section 3: Run" })).toHaveAttribute("aria-current", "step")
+    expect(await screen.findByRole("button", { name: "Go to section 4: Analyze" })).toHaveAttribute(
+      "aria-current",
+      "step"
+    )
   })
 
   it("disables markers past the simulation's API-reported progress", async () => {

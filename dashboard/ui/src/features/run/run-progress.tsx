@@ -3,7 +3,7 @@ import { formatTime } from "@/shared/format"
 import { Button, Progress } from "@e-infra/design-system"
 import { Clock, LoaderCircle, RotateCcw, Square } from "lucide-react"
 
-import { jobLive } from "./use-simulation-job"
+import { jobLive, jobProgressPercent } from "./use-simulation-job"
 
 type RunProgressProps = {
   job: SimulationJob
@@ -22,7 +22,7 @@ export function RunProgress({ job, busy, onStop, onRestart }: RunProgressProps) 
   const total = job.nsteps !== null && job.nsteps !== undefined && job.nsteps > 0 ? job.nsteps : null
   const done = job.nsteps_done ?? null
   const known = total !== null && done !== null
-  const percent = known ? Math.min(100, Math.round(((done as number) / (total as number)) * 100)) : null
+  const percent = jobProgressPercent(job)
 
   let headline: React.ReactNode
   if (finished) {

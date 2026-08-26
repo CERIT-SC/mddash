@@ -23,6 +23,13 @@ export function jobLive(job: SimulationJob): boolean {
   return job.status === JobStatus.PENDING || job.status === JobStatus.RUNNING || job.status === JobStatus.UNKNOWN
 }
 
+/** Whole-percent progress; null while either step count is unknown. */
+export function jobProgressPercent(job: SimulationJob): number | null {
+  if (job.nsteps === null || job.nsteps === undefined || job.nsteps <= 0) return null
+  if (job.nsteps_done === null || job.nsteps_done === undefined) return null
+  return Math.min(100, Math.round((job.nsteps_done / job.nsteps) * 100))
+}
+
 /** Engine log stream key used by the log endpoint (`?type=`). */
 export function engineLogType(engine: Engine): "gmx" | "mdout" {
   return engine === Engine.AMBER ? "mdout" : "gmx"

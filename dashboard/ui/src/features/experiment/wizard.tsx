@@ -1,9 +1,9 @@
 import { useGetExperiment, useListSimulations } from "@/api/generated/client"
+import { AnalyzeStep } from "@/features/analyze"
 import { RunStep } from "@/features/run"
 import { SetupStep, type SetupSource } from "@/features/setup"
 import { CREATE_TAB, SimulationTabs } from "@/features/simulation"
 import { TuneStep } from "@/features/tune"
-import { ladderStepIndex } from "@/shared/steps"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Stepper, StepperContent, StepperHeader } from "@/shared/ui/stepper"
 import { Card, CardContent, Skeleton } from "@e-infra/design-system"
@@ -76,10 +76,15 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         ? list.find((candidate) => candidate.simulation_path === data.latest_simulation_path)
         : undefined) ??
       list[0])
-  // The API ladder decodes through the shared mapping; the URL-owned step is used verbatim.
+  // Unlock rule from the API pair (step = deepest completed phase, status =
+  // current phase): everything before the current phase is reachable, and a
+  // live "simulating" run additionally unlocks Analyze (partial results).
   // A simulation that does not exist yet has no progress of its own, so create
   // mode always lands on Setup.
-  const maxStep = selected === undefined ? 0 : ladderStepIndex(selected.step)
+  const maxStep =
+    selected === undefined
+      ? 0
+      : Math.max(0, Math.min((selected.step ?? 0) - 1 + (selected.status === "simulating" ? 1 : 0), 4))
   const step = selected === undefined ? 0 : clampStep(search.step ?? maxStep)
   const tab = selected?.simulation_path ?? CREATE_TAB
 
@@ -156,9 +161,19 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
                     onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
                   />
                 )}
-                {STEPS.slice(3).map(({ label }) => (
-                  <div key={label} />
-                ))}
+                {selected === undefined ? (
+                  <div />
+                ) : (
+                  <AnalyzeStep
+                    experimentId={experimentId}
+                    engine={data.engine}
+                    simulation={selected}
+                    canPublish={maxStep >= LAST_STEP}
+                    onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
+                  />
+                )}
+                {/* Publish stays a placeholder until that step is implemented. */}
+                <div />
               </StepperContent>
             </Stepper>
           </CardContent>

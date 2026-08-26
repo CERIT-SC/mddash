@@ -144,7 +144,7 @@ export function StepperHeader({ steps = [], className, maxStep }: StepperHeaderP
                     <span
                       className={cn(
                         "text-xs whitespace-nowrap",
-                        isCurrent ? "text-text font-semibold" : "text-muted-foreground"
+                        isCurrent ? "text-text font-semibold" : "text-text-muted"
                       )}
                     >
                       {step.label}
