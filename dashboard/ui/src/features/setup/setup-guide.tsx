@@ -1,6 +1,6 @@
 import type { Notebook } from "@/api/generated/models"
 import { NotebookLauncher } from "@/features/notebook"
-import { Button, cn } from "@e-infra/design-system"
+import { Button, cn, Small } from "@e-infra/design-system"
 import { Check, ExternalLink } from "lucide-react"
 
 type GuideState = "done" | "active" | "pending"
@@ -34,7 +34,7 @@ export function SetupGuide({
       body:
         step1 === "active" ? (
           <>
-            <p className="text-text-muted text-sm">This gives you a running environment to prepare the files.</p>
+            <Small>This gives you a running environment to prepare the files.</Small>
             <NotebookLauncher
               experimentId={experimentId}
               notebook={notebook}
@@ -63,26 +63,23 @@ export function SetupGuide({
                 </a>
               </Button>
             </div>
-            <p className="text-text-muted text-sm">Wait for the run to finish.</p>
+            <Small>Wait for the run to finish.</Small>
           </>
         ) : null,
     },
     {
       title: "Go to Tune",
       state: step3,
-      body:
-        step3 === "active" ? (
-          <p className="text-text-muted text-sm">Check the validity of data below and move on to tune.</p>
-        ) : null,
+      body: step3 === "active" ? <Small>Check the validity of data below and move on to tune.</Small> : null,
     },
   ]
 
   return (
     <section
       aria-label="Setup guide"
-      className="border-info-300 bg-info-50 space-y-4 rounded-lg border border-l-4 p-4 md:p-6"
+      className="border-info bg-info/50 supports-backdrop-filter:bg-info/60 space-y-3 rounded-lg border px-4 py-3 text-sm"
     >
-      <p className="text-info text-xs font-semibold tracking-widest uppercase">Step by step</p>
+      <p className="font-medium tracking-tight">Step by step</p>
       <ol className="space-y-4">
         {steps.map((step, index) => (
           <li key={index} className="relative flex gap-3">

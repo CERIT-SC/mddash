@@ -245,7 +245,7 @@ export function SimulationForm({ experimentId, engine, simulation, onSaved }: Si
                 </Badge>
               )}
               {simulation.valid ? (
-                <Badge variant="outline" className="border-success-300 bg-success-50 text-success">
+                <Badge variant="outline" className="border-success text-success">
                   Valid
                 </Badge>
               ) : (

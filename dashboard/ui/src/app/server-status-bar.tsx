@@ -91,7 +91,7 @@ export function ServerStatusBar({ user }: ServerStatusBarProps) {
         <Button
           variant="outline"
           size="sm"
-          className="border-error-400 text-error hover:bg-error-50"
+          className="border-error text-error hover:bg-error/10"
           onClick={onStop}
           disabled={stopping}
         >

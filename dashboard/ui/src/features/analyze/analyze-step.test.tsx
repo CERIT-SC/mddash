@@ -206,7 +206,6 @@ describe("AnalyzeStep layout", () => {
     renderAnalyze()
 
     expect(await screen.findByText("Simulation is still running (20%)")).toBeInTheDocument()
-    expect(screen.getByText("Results are still being calculated")).toBeInTheDocument()
   })
 
   it("always shows the notebook launcher so the notebook can be started from the step", async () => {

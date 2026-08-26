@@ -92,10 +92,10 @@ function stepParts(experiment: Experiment): { shownStep: number; stepIndex: numb
 // rocket=run, pulse=analyze, award=publish); module/engine stay text in the subtitle.
 const STEP_ICONS: { Icon: LucideIcon; className: string }[] = [
   { Icon: FlaskConical, className: "bg-base-200 text-text-muted" },
-  { Icon: SlidersHorizontal, className: "bg-info-100 text-info" },
-  { Icon: Rocket, className: "bg-success-100 text-success" },
-  { Icon: Activity, className: "bg-warning-100 text-warning" },
-  { Icon: Award, className: "bg-primary-100 text-primary" },
+  { Icon: SlidersHorizontal, className: "bg-info text-info-foreground" },
+  { Icon: Rocket, className: "bg-success text-success-foreground" },
+  { Icon: Activity, className: "bg-warning text-warning-foreground" },
+  { Icon: Award, className: "bg-primary text-primary-foreground" },
 ]
 
 function subtitle(experiment: Experiment): string {
@@ -290,8 +290,8 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
   const { Icon: StepIcon, className: stepIconClass } =
     stepIndex === 4
       ? experiment.status === "published"
-        ? { Icon: Award, className: "bg-primary-100 text-primary" }
-        : { Icon: Upload, className: "bg-info-100 text-info" }
+        ? { Icon: Award, className: "bg-primary text-primary-foreground" }
+        : { Icon: Upload, className: "bg-info text-info-foreground" }
       : STEP_ICONS[stepIndex]
 
   function toggleNotebook() {

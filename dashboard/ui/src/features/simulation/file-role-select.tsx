@@ -26,10 +26,7 @@ const SELECT_NONE = "__none__"
 
 export function RolePresenceBadge({ presence }: { presence: boolean }) {
   return (
-    <Badge
-      variant={presence ? "outline" : "error"}
-      className={presence ? "border-success-300 bg-success-50 text-success" : undefined}
-    >
+    <Badge variant={presence ? "outline" : "error"} className={presence ? "border-success text-success" : undefined}>
       {presence ? "present" : "missing"}
     </Badge>
   )

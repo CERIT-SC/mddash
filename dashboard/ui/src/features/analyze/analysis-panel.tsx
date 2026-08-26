@@ -296,7 +296,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
           ))}
 
         {!activeJob && calculatedPercent !== null && (
-          <Badge variant="outline" className="border-warning-300 bg-warning-50 text-warning-700 ml-auto gap-1">
+          <Badge variant="outline" className="border-warning text-warning ml-auto gap-1">
             <TriangleAlert className="h-3 w-3" aria-hidden />
             Calculated at {calculatedPercent}%
           </Badge>
@@ -320,7 +320,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
               type="button"
               size="sm"
               variant="outline"
-              className="border-error text-error hover:bg-error-50 hover:text-error"
+              className="border-error text-error hover:bg-error/10 hover:text-error"
               onClick={() => setConfirmCancel(true)}
             >
               <Square aria-hidden />

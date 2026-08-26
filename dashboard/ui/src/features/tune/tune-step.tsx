@@ -479,7 +479,7 @@ function TuningBody({
           <Button
             type="button"
             variant="outline"
-            className="border-error text-error hover:bg-error-50 hover:text-error"
+            className="border-error text-error hover:bg-error/10 hover:text-error"
             onClick={onStop}
             disabled={stopPending}
           >

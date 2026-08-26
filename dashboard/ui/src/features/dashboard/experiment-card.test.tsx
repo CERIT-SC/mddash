@@ -258,11 +258,11 @@ describe("ExperimentCard", () => {
   it("shows different icons for the publishing and published states", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
     const { container, unmount } = await renderCard(analyze({ step: 5, status: "publishing", mdrepo_published: false }))
-    expect(container.querySelector("span.bg-info-100")).not.toBeNull()
-    expect(container.querySelector("span.bg-primary-100")).toBeNull()
+    expect(container.querySelector("span.bg-info.text-info-foreground")).not.toBeNull()
+    expect(container.querySelector("span.bg-primary.text-primary-foreground")).toBeNull()
     unmount()
     const published = await renderCard(analyze({ step: 5, status: "published", mdrepo_published: true }))
-    expect(published.container.querySelector("span.bg-primary-100")).not.toBeNull()
+    expect(published.container.querySelector("span.bg-primary.text-primary-foreground")).not.toBeNull()
   })
 
   it("shows publish details on a publish-step card", async () => {

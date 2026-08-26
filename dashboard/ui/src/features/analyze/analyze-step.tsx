@@ -93,18 +93,10 @@ export function AnalyzeStep({
   return (
     <div className="space-y-6">
       {simRunning && (
-        <Alert className="border-info-200 bg-info-50">
-          <AlertTitle className="text-info text-xs font-semibold tracking-wide uppercase">
-            Results are still being calculated
-          </AlertTitle>
-          <AlertDescription className="space-y-1">
-            <p className="text-sm font-semibold">
-              Simulation is still running{simPercent !== null ? ` (${String(simPercent)}%)` : ""}
-            </p>
-            <p className="text-text-muted text-sm">
-              Trajectories and analyses will change as more results are calculated.
-            </p>
-          </AlertDescription>
+        // DS default variant is the info banner.
+        <Alert>
+          <AlertTitle>Simulation is still running{simPercent !== null ? ` (${String(simPercent)}%)` : ""}</AlertTitle>
+          <AlertDescription>Trajectories and analyses will change as more results are calculated.</AlertDescription>
         </Alert>
       )}
 

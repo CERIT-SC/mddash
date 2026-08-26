@@ -100,7 +100,7 @@ export function NotebookControls({
         <Button
           variant="outline"
           size="sm"
-          className="border-error-400 text-error hover:bg-error-50"
+          className="border-error text-error hover:bg-error/10"
           onClick={() => stop.mutate({ experimentId })}
           disabled={stopping || notebook.status === "UNKNOWN"}
         >
