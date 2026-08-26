@@ -1,16 +1,14 @@
-import json
 import logging
 import os
 import time
 from datetime import datetime, timedelta, timezone
 
-import requests
 from config import DATA_DIR
 from enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus, PodStatus, SourceType
 from extensions import db
 from models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook, TunerJob
-from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
 
+from .analysis_data import materialize_analysis, start_analysis_thread
 from .files import (
     MDPOSIT_DEMO_PROJECT_URL,
     ensure_amber_demo_files,
@@ -29,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 # Ids of seeded analyses that stay RUNNING (no result files are seeded for them).
 RUNNING_SEEDED_ANALYSIS_IDS = {"analysis-dna-clusters", "analysis-villin-clusters"}
+# Longer than the 3s mock submit runtime so the seeded RUNNING analyses stay
+# visibly in-flight before completing with real MDPosit outputs.
+SEEDED_ANALYSIS_DURATION_SEC = 25.0
 
 
 def seed_data() -> None:  # ruff:ignore[too-many-locals]
@@ -302,41 +303,6 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "nsteps": 1000000,
     }
 
-    # Analysis jobs for the published experiment (completed)
-    rmsd_analysis = build_model(
-        AnalysisJob,
-        id="analysis-rmsd",
-        experiment=published,
-        simulation_path="lysozyme_hewl.simulation.json",
-        analysis_name=AnalysisType.RMSDS,
-        structure_file="structure.pdb",
-        trajectory_file="trajectory.xtc",
-        topology_file=None,
-    )
-
-    sasa_analysis = build_model(
-        AnalysisJob,
-        id="analysis-sasa",
-        experiment=published,
-        simulation_path="lysozyme_hewl.simulation.json",
-        analysis_name=AnalysisType.SAS,
-        structure_file="structure.pdb",
-        trajectory_file="trajectory.xtc",
-        topology_file=None,
-    )
-
-    # Analysis job for enzyme experiment (completed)
-    hbonds_analysis = build_model(
-        AnalysisJob,
-        id="analysis-hbonds",
-        experiment=enzyme,
-        simulation_path="md.simulation.json",
-        analysis_name=AnalysisType.HBONDS,
-        structure_file="structure.pdb",
-        trajectory_file="trajectory.xtc",
-        topology_file=None,
-    )
-
     # Experiment 4: AMBER protein folding study (currently running AMBER simulation)
     amber_folding = build_model(
         Experiment,
@@ -507,6 +473,41 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "nsteps": 2000000,
     }
 
+    # Finished analysis jobs, simulating ones the user ran earlier; their
+    # result files are materialized below with the same fetch a real run does.
+    rmsd_analysis = build_model(
+        AnalysisJob,
+        id="analysis-rmsd",
+        experiment=published,
+        simulation_path="lysozyme_hewl.simulation.json",
+        analysis_name=AnalysisType.RMSDS,
+        structure_file="structure.pdb",
+        trajectory_file="trajectory.xtc",
+        topology_file=None,
+    )
+
+    sasa_analysis = build_model(
+        AnalysisJob,
+        id="analysis-sasa",
+        experiment=published,
+        simulation_path="lysozyme_hewl.simulation.json",
+        analysis_name=AnalysisType.SAS,
+        structure_file="structure.pdb",
+        trajectory_file="trajectory.xtc",
+        topology_file=None,
+    )
+
+    hbonds_analysis = build_model(
+        AnalysisJob,
+        id="analysis-hbonds",
+        experiment=enzyme,
+        simulation_path="md.simulation.json",
+        analysis_name=AnalysisType.HBONDS,
+        structure_file="structure.pdb",
+        trajectory_file="trajectory.xtc",
+        topology_file=None,
+    )
+
     db.session.add_all([
         membrane,
         membrane_notebook,
@@ -531,6 +532,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         amber_dna_notebook,
         dna_rmsd_analysis,
         dna_clusters_analysis,
+        villin_rmsd_analysis,
+        villin_clusters_analysis,
         finished_amber_dna,
         mdposit_demo,
         mdposit_demo_notebook,
@@ -561,6 +564,25 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
             "analysis_name": analysis.analysis_name.value,
             "created_at": time.time(),
         }
+
+    # Seeded FINISHED analyses were "calculated earlier": leave the result
+    # files a real run would have left, fetched from MDPosit. Offline, the job
+    # records stay FINISHED with no output — the UI shows "produced no data".
+    for analysis, status in analysis_statuses.items():
+        if status is JobStatus.FINISHED:
+            materialize_analysis(analysis.experiment_id, analysis.simulation_path, analysis.analysis_name.value)
+
+    # Seeded RUNNING analyses complete like user-submitted ones: after a longer
+    # visible runtime the thread writes real MDPosit outputs and flips FINISHED.
+    for analysis, status in analysis_statuses.items():
+        if status is JobStatus.RUNNING:
+            start_analysis_thread(
+                f"analysis-{analysis.id}",
+                analysis.experiment_id,
+                analysis.simulation_path,
+                analysis.analysis_name.value,
+                delay_sec=SEEDED_ANALYSIS_DURATION_SEC,
+            )
 
     # Seed files for each experiment
     # Membrane protein: standard files
@@ -663,75 +685,6 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         coordinates="dna.inpcrd",
         control="simulation.mdin",
     )
-
-    # Write analysis result files (fetched from MDposit)
-    _fetch_and_write_analysis_results(published.id, "lysozyme_hewl.simulation.json", ["rmsds", "sasa"])
-    _fetch_and_write_analysis_results(enzyme.id, "md.simulation.json", ["hbonds"])
-    _fetch_and_write_analysis_results(amber_dna.id, "dna.simulation.json", ["rmsds"])
-    _fetch_and_write_analysis_results(amber_folding.id, "villin.simulation.json", ["rmsds"])
-
-
-def _fetch_and_write_analysis_results(experiment_id: str, simulation_path: str, analysis_names: list[str]) -> None:
-    """Fetch analysis data from MDposit and write result files for seeding."""
-    mdposit_analyses_url = "https://mdposit.mddbr.eu/api/rest/v1/projects/MD-A003ZT.2/analyses"
-
-    # MDposit uses different endpoint names for some analysis types
-    mdposit_name_map: dict[str, str] = {
-        "dist": "dist-perres",
-        "inter": "interactions",
-        "linter": "lipid-inter",
-        "lorder": "lipid-order",
-        "pairwise": "rmsd-pairwise",
-        "perres": "rmsd-perres",
-        "rmsf": "fluctuation",
-        "sas": "sasa",
-        "tmscore": "tmscores",
-    }
-
-    mwf_dir = DATA_DIR / experiment_id / mwf_output_dir(simulation_path)
-    mwf_dir.mkdir(parents=True, exist_ok=True)
-
-    headers = {"Accept": "application/json"}
-
-    for analysis_name in analysis_names:
-        mdposit_name = mdposit_name_map.get(analysis_name, analysis_name)
-        try:
-            response = requests.get(
-                f"{mdposit_analyses_url}/{mdposit_name}",
-                headers=headers,
-                timeout=30,
-            )
-            if not response.ok:
-                logger.warning("Failed to fetch %s from MDposit: %s", mdposit_name, response.status_code)
-                continue
-
-            data = response.json()
-            filename = f"{ANALYSIS_RESULT_PREFIX}{mdposit_name.replace('-', '_')}{ANALYSIS_RESULT_SUFFIX}"
-            (mwf_dir / filename).write_text(json.dumps(data), encoding="utf-8")
-
-            # If the result is a summary list pointing to variants, fetch each one
-            if isinstance(data, list):
-                for item in data:
-                    if not isinstance(item, dict):
-                        continue
-                    variant_name = item.get("analysis", "")
-                    if not variant_name:
-                        continue
-                    variant_response = requests.get(
-                        f"{mdposit_analyses_url}/{variant_name}",
-                        headers=headers,
-                        timeout=30,
-                    )
-                    if variant_response.ok:
-                        variant_filename = (
-                            f"{ANALYSIS_RESULT_PREFIX}{variant_name.replace('-', '_')}{ANALYSIS_RESULT_SUFFIX}"
-                        )
-                        (mwf_dir / variant_filename).write_text(json.dumps(variant_response.json()), encoding="utf-8")
-
-            logger.debug("Fetched analysis %s for experiment %s", mdposit_name, experiment_id)
-
-        except Exception:
-            logger.exception("Failed to fetch analysis %s for seeding", mdposit_name)
 
 
 def _backdate_stale_simulations(experiment_id: str, stems: tuple[str, ...]) -> None:

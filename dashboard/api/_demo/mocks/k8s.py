@@ -7,7 +7,6 @@ module-level functions instead of using HTTP mocking.
 Analysis jobs fetch real data from MDposit API for realistic demo data.
 """
 
-import json
 import logging
 import re
 import threading
@@ -15,12 +14,11 @@ import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-import requests
 from clients import k8s
 from config import DATA_DIR
 from enums import JobStatus, PodStatus
-from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
 
+from ..analysis_data import start_analysis_thread
 from ..state import demo_state
 
 logger = logging.getLogger(__name__)
@@ -30,22 +28,6 @@ ANALYSIS_JOB_DURATION_SEC = 3.0
 
 # MDRepo upload job duration in seconds
 UPLOAD_JOB_DURATION_SEC = 4.0
-
-# MDposit API endpoint for analysis data
-MDPOSIT_ANALYSES_URL = "https://mdposit.mddbr.eu/api/rest/v1/projects/MD-A003ZT.2/analyses"
-
-# MDposit uses different endpoint names for some analysis types
-_MDPOSIT_NAME_MAP: dict[str, str] = {
-    "dist": "dist-perres",
-    "inter": "interactions",
-    "linter": "lipid-inter",
-    "lorder": "lipid-order",
-    "pairwise": "rmsd-pairwise",
-    "perres": "rmsd-perres",
-    "rmsf": "fluctuation",
-    "sas": "sasa",
-    "tmscore": "tmscores",
-}
 
 
 def install_k8s_mocks() -> None:
@@ -173,10 +155,11 @@ def _create_job(
     match = re.search(r"-i\s+(\w+)\s*$", command)
     analysis_name = match.group(1) if match else ""
 
-    # Extract simulation_path from the "-md analysis/mwf/<stem>" flag
+    # Extract simulation_path from the "-md analysis/mwf/<stem>" flag — the
+    # stem already ends in ".simulation", so the manifest is stem + ".json".
     md_match = re.search(r"-md\s+analysis/mwf/(\S+)", command)
     simulation_stem = md_match.group(1) if md_match else ""
-    simulation_path = f"{simulation_stem}.simulation.json" if simulation_stem else ""
+    simulation_path = f"{simulation_stem}.json" if simulation_stem else ""
 
     demo_state.analysis_jobs[name] = {
         "status": JobStatus.RUNNING.value,
@@ -186,13 +169,8 @@ def _create_job(
         "created_at": time.time(),
     }
 
-    # Start background thread to fetch real analysis data from MDposit
-    thread = threading.Thread(
-        target=_fetch_and_store_analysis,
-        args=(name, experiment_id, simulation_path, analysis_name),
-        daemon=True,
-    )
-    thread.start()
+    # Job lifecycle: finish with real MDPosit outputs after the mock runtime.
+    start_analysis_thread(name, experiment_id, simulation_path, analysis_name, delay_sec=ANALYSIS_JOB_DURATION_SEC)
 
 
 def _get_job_status(name: str) -> JobStatus:
@@ -240,64 +218,3 @@ def _get_job_logs(name: str, tail_lines: int = 200) -> str:  # ruff:ignore[unuse
     if status == JobStatus.ERROR.value:
         return "Running MDDB workflow\nError: Failed to fetch analysis data."
     return "Running MDDB workflow\nFetching analysis data..."
-
-
-def _mdposit_get(path: str) -> requests.Response:
-    """
-    Fetch analysis data from MDposit API.
-
-    Returns:
-        The HTTP response from MDposit.
-    """
-    headers = {"Accept": "application/json"}
-    return requests.get(f"{MDPOSIT_ANALYSES_URL}/{path}", headers=headers, timeout=30)
-
-
-def _fetch_and_store_analysis(job_name: str, experiment_id: str, simulation_path: str, analysis_name: str) -> None:
-    """Fetch analysis data from MDposit and write result files, then mark the job done."""
-    time.sleep(ANALYSIS_JOB_DURATION_SEC)
-    try:
-        mdposit_name = _MDPOSIT_NAME_MAP.get(analysis_name, analysis_name)
-        response = _mdposit_get(mdposit_name)
-        if not response.ok:
-            logger.warning(
-                "MDposit returned %s for analysis '%s' (endpoint: '%s')",
-                response.status_code,
-                analysis_name,
-                mdposit_name,
-            )
-            demo_state.analysis_jobs[job_name]["status"] = JobStatus.ERROR.value
-            return
-
-        data = response.json()
-        mwf_dir = DATA_DIR / experiment_id / mwf_output_dir(simulation_path)
-        mwf_dir.mkdir(parents=True, exist_ok=True)
-
-        # Use the mwf output name (= MDposit endpoint name), not the AnalysisType value.
-        # mwf uses different output file names for some analyses (e.g. "-i inter" produces
-        # mda.interactions.json, "-i rmsf" produces mda.fluctuation.json).
-        primary_filename = f"{ANALYSIS_RESULT_PREFIX}{mdposit_name.replace('-', '_')}{ANALYSIS_RESULT_SUFFIX}"
-        (mwf_dir / primary_filename).write_text(json.dumps(data), encoding="utf-8")
-
-        # If the result is a summary list pointing to variants, fetch each one
-        if isinstance(data, list):
-            for item in data:
-                if not isinstance(item, dict):
-                    continue
-                variant_name = item.get("analysis", "")
-                if not variant_name:
-                    continue
-                variant_response = _mdposit_get(variant_name)
-                if variant_response.ok:
-                    variant_filename = (
-                        f"{ANALYSIS_RESULT_PREFIX}{variant_name.replace('-', '_')}{ANALYSIS_RESULT_SUFFIX}"
-                    )
-                    (mwf_dir / variant_filename).write_text(json.dumps(variant_response.json()), encoding="utf-8")
-
-        demo_state.analysis_jobs[job_name]["status"] = JobStatus.FINISHED.value
-        logger.debug("Analysis job %s completed with MDposit data", job_name)
-
-    except Exception:
-        logger.exception("Failed to fetch analysis '%s' for demo job %s", analysis_name, job_name)
-        if job_name in demo_state.analysis_jobs:
-            demo_state.analysis_jobs[job_name]["status"] = JobStatus.ERROR.value
