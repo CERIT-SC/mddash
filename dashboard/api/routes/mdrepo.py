@@ -9,7 +9,7 @@ import logging
 import secrets
 import time
 from http import HTTPStatus
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
 from config import (
@@ -37,6 +37,14 @@ from werkzeug.wrappers import Response as WerkzeugResponse
 logger = logging.getLogger(__name__)
 
 mdrepo_bp = Blueprint("mdrepo", __name__, url_prefix=f"{API_PREFIX}/mdrepo")
+
+
+def _redirect_with_query(url: str, **params: str) -> WerkzeugResponse:
+    """Redirect to a URL with query params merged in — the return URL may already carry its own query string."""
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.update(params)
+    return redirect(urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)))
 
 
 def get_mdrepo_token() -> str | None:
@@ -136,16 +144,16 @@ def oauth_callback() -> WerkzeugResponse:
     if error:
         error_description = request.args.get("error_description", "Authorization denied")
         logger.error(f"MDRepo OAuth error: {error} - {error_description}")
-        return redirect(f"{return_url}?mdrepo_error={error_description}")
+        return _redirect_with_query(return_url, mdrepo_error=error_description)
 
     # Validate state to prevent CSRF
     if not state or state != stored_state:
         logger.error("MDRepo OAuth: Invalid state parameter")
-        return redirect(f"{return_url}?mdrepo_error=Invalid+state+parameter")
+        return _redirect_with_query(return_url, mdrepo_error="Invalid state parameter")
 
     if not code:
         logger.error("MDRepo OAuth: No authorization code received")
-        return redirect(f"{return_url}?mdrepo_error=No+authorization+code")
+        return _redirect_with_query(return_url, mdrepo_error="No authorization code")
 
     # Exchange code for token
     try:
@@ -161,7 +169,7 @@ def oauth_callback() -> WerkzeugResponse:
 
         if not response.ok:
             logger.error(f"MDRepo token exchange failed: {response.status_code} - {response.text}")
-            return redirect(f"{return_url}?mdrepo_error=Token+exchange+failed")
+            return _redirect_with_query(return_url, mdrepo_error="Token exchange failed")
 
         token_response = response.json()
         access_token = token_response.get("access_token")
@@ -170,7 +178,7 @@ def oauth_callback() -> WerkzeugResponse:
 
         if not access_token:
             logger.error("MDRepo OAuth: No access token in response")
-            return redirect(f"{return_url}?mdrepo_error=No+access+token")
+            return _redirect_with_query(return_url, mdrepo_error="No access token")
 
         # Store complete token information in session
         session[MDREPO_TOKEN_KEY] = access_token
@@ -185,11 +193,11 @@ def oauth_callback() -> WerkzeugResponse:
         mdrepo_status_cache.clear()
         logger.info("MDRepo OAuth: Cleared mdrepo_status_cache")
 
-        return redirect(f"{return_url}?mdrepo_auth=success")
+        return _redirect_with_query(return_url, mdrepo_auth="success")
 
     except requests.RequestException as e:
         logger.error(f"MDRepo OAuth request error: {e}")
-        return redirect(f"{return_url}?mdrepo_error=Request+failed")
+        return _redirect_with_query(return_url, mdrepo_error="Request failed")
 
 
 @mdrepo_bp.route("/logout", methods=["POST"])

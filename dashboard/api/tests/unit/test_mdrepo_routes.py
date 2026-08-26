@@ -188,6 +188,28 @@ class TestMDRepoRoutes:
         assert response.status_code == HTTPStatus.FOUND
         assert "mdrepo_error=Invalid+state+parameter" in response.location
 
+    def test_oauth_callback_error_preserves_return_url_query(self, client: FlaskClient) -> None:
+        """Error params merge into a return URL that already carries its own query string."""
+        with client.session_transaction() as sess:
+            sess["mdrepo_oauth_state"] = "correct_state"
+            sess["mdrepo_return_url"] = "/dash/experiments/exp1?simulation=md.simulation.json&step=4"
+
+        response = client.get("/dash/api/mdrepo/callback?code=test_code&state=wrong_state")
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == (
+            "/dash/experiments/exp1?simulation=md.simulation.json&step=4&mdrepo_error=Invalid+state+parameter"
+        )
+
+    def test_oauth_callback_error_on_plain_return_url(self, client: FlaskClient) -> None:
+        """Error params append to a return URL that has no query string of its own."""
+        with client.session_transaction() as sess:
+            sess["mdrepo_oauth_state"] = "correct_state"
+            sess["mdrepo_return_url"] = "/dash/experiments/exp1"
+
+        response = client.get("/dash/api/mdrepo/callback?code=test_code&state=wrong_state")
+        assert response.status_code == HTTPStatus.FOUND
+        assert response.location == "/dash/experiments/exp1?mdrepo_error=Invalid+state+parameter"
+
     @patch("routes.mdrepo.requests.post")
     def test_oauth_callback_token_exchange_failed(self, mock_post: Mock, client: FlaskClient) -> None:
         """Test OAuth callback when token exchange fails."""
