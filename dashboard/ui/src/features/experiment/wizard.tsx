@@ -97,7 +97,11 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
   // unlocks ONLY the experiment-level Publish marker. Create mode: Setup.
   const ownStep = selected === undefined ? 0 : selected.step
   const maxStep = selected === undefined ? 0 : ownStep
-  const step = selected === undefined ? 0 : (search.step ?? ownStep)
+  // Content gates like the header: a URL step past the unlocks (stale Publish
+  // bookmark) falls back to the simulation's own progress, never locked UI.
+  const requestedStep = search.step ?? ownStep
+  const unlocked = requestedStep <= maxStep || ((data.can_publish ?? false) && requestedStep === LAST_STEP)
+  const step = selected === undefined ? 0 : unlocked ? requestedStep : ownStep
   const tab = selected?.simulation_path ?? CREATE_TAB
 
   // Setup/Tune URL params ride along on every navigation so remounts keep user

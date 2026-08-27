@@ -253,6 +253,44 @@ describe("ExperimentWizard", () => {
     expect(screen.getByRole("button", { name: "Go to section 5: Publish" })).toBeEnabled()
   })
 
+  it("ignores a URL step that is not unlocked (stale Publish bookmark)", async () => {
+    // Bookmarked with can_publish true; now false — content falls back to the
+    // simulation's own progress, never the locked Publish step.
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha]),
+      "/experiments/exp1": okExperiment({ can_publish: false }),
+      [`/experiments/exp1/gmx/${alpha.simulation_path}`]: runningGmxJob(alpha.simulation_path),
+    })
+    renderWizard({ step: 4 })
+    expect(await screen.findByRole("button", { name: "Go to section 3: Run" })).toHaveAttribute("aria-current", "step")
+    expect(await screen.findByRole("heading", { name: "Run your simulation" })).toBeVisible()
+  })
+
+  it("shows Publish from the URL when can_publish is true", async () => {
+    mockApi({
+      "/experiments/exp1/publish/status": Response.json({
+        experiment_id: "exp1",
+        mdrepo_id: "rec1",
+        draft_url: "https://mdrepo.example/uploads/rec1",
+        upload_state: "completed",
+        reason: null,
+        total_files: 5,
+        completed_files: 5,
+        total_bytes: 1024,
+        completed_bytes: 1024,
+      }),
+      "/dash/api/mdrepo/status": Response.json({ authenticated: false }),
+      "/experiments/exp1/simulations": Response.json([alpha]),
+      "/experiments/exp1": okExperiment({ can_publish: true }),
+      [`/experiments/exp1/gmx/${alpha.simulation_path}`]: runningGmxJob(alpha.simulation_path),
+    })
+    renderWizard({ step: 4 })
+    expect(await screen.findByRole("button", { name: "Go to section 5: Publish" })).toHaveAttribute(
+      "aria-current",
+      "step"
+    )
+  })
+
   it("keeps the setup source view across tab and step navigations", async () => {
     mockApi({
       "/experiments/exp1/simulations": Response.json([alpha, beta]),
