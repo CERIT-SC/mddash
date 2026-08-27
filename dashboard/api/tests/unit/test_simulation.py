@@ -705,6 +705,32 @@ class TestLogLines:
             assert dumped["pme"] == "cpu"
             assert dumped["nb"] == "cpu"
 
+    def test_binary_and_ewald_serialize_by_contract_value(self, app: Flask) -> None:
+        """
+        Same contract as gmx pme/nb: OpenAPI declares values (pmemd.cuda).
+
+        Re-run re-POSTs the dumped fields and trial matching compares against
+        values, so name-cased payloads (PMEMD_CUDA) break both flows.
+        """
+        from enums import AmberBinary, EwaldPreset
+        from models.amber_job import AmberJob
+        from schemas.amber_job import AmberJobSchema
+
+        with app.app_context():
+            job = AmberJob(
+                id=str(uuid.uuid4()),
+                experiment_id="exp",
+                simulation_path="protein.simulation.json",
+                np=1,
+                ntomp=1,
+                binary=AmberBinary.PMEMD_CUDA,
+                ewald=EwaldPreset.DEFAULT,
+                engine=Engine.AMBER,
+            )
+            dumped = AmberJobSchema().dump(job)
+            assert dumped["binary"] == "pmemd.cuda"
+            assert dumped["ewald"] == "default"
+
     def test_serialized_with_the_job_payload(self, app: Flask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """The auto schema includes log_lines without extra schema code."""
         from schemas.gromacs_job import GromacsJobSchema
