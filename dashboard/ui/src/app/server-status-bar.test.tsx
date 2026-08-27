@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
@@ -41,7 +41,7 @@ describe("ServerStatusBar", () => {
     expect(screen.getByText("12m 52s")).toBeVisible()
   })
 
-  it("sends the browser to the hub home page to stop the server", async () => {
+  it("confirms before sending the browser to the hub home page to stop the server", async () => {
     stubMetricsFetch()
     const assign = vi.fn()
     // jsdom forbids mocking location.assign itself; replace the whole property.
@@ -49,6 +49,10 @@ describe("ServerStatusBar", () => {
     const user = userEvent.setup()
     renderBar()
     await user.click(screen.getByRole("button", { name: "Stop server" }))
+    // Destructive action must confirm first — no navigation yet.
+    expect(assign).not.toHaveBeenCalled()
+    const dialog = await screen.findByRole("alertdialog")
+    await user.click(within(dialog).getByRole("button", { name: "Stop server" }))
     expect(assign).toHaveBeenCalledWith("/hub/home?stop")
     expect(screen.getByRole("button", { name: "Stopping…" })).toBeDisabled()
   })

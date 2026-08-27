@@ -2,8 +2,21 @@ import { useEffect, useState } from "react"
 
 import { useGetMetrics } from "@/api/generated/client"
 import { formatBytes, formatTime } from "@/shared/format"
-import { Button, Progress, Separator } from "@e-infra/design-system"
-import { Square } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Button,
+  buttonVariants,
+  Progress,
+  Separator,
+} from "@e-infra/design-system"
+import { Square, X } from "lucide-react"
 
 // The hub's _xsrf cookie is path-scoped to /hub, so this page can neither read
 // it nor call the hub API. The hub home page owns the stop call (Jinja-rendered
@@ -13,6 +26,7 @@ const HUB_STOP_URL = "/hub/home?stop"
 
 export function ServerStatusBar() {
   const metrics = useGetMetrics({ query: { retry: false } })
+  const [confirmStop, setConfirmStop] = useState(false)
   const [stopping, setStopping] = useState(false)
   // Forces a re-render every second so the uptime readout ticks between refetches.
   const [, setTick] = useState(0)
@@ -68,13 +82,36 @@ export function ServerStatusBar() {
           variant="outline"
           size="sm"
           className="border-error text-error hover:bg-error/10"
-          onClick={onStop}
+          onClick={() => setConfirmStop(true)}
           disabled={stopping}
         >
           <Square size={14} />
           {stopping ? "Stopping…" : "Stop server"}
         </Button>
       </div>
+
+      {/* One click must not kill the server and its in-memory kernel state —
+          every destructive action in the app confirms first. */}
+      <AlertDialog open={confirmStop} onOpenChange={setConfirmStop}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <X className="text-error" aria-hidden />
+              Stop server
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Stop this server? Any unsaved notebook state will be lost; the server can be started again from the
+              server's home page.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep running</AlertDialogCancel>
+            <AlertDialogAction className={buttonVariants({ variant: "error" })} onClick={onStop}>
+              Stop server
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   )
 }
