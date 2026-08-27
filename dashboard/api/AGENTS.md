@@ -21,7 +21,7 @@ Flask REST API that orchestrates molecular dynamics experiments across Kubernete
 - **`step` IS the wizard phase index** (Setup 0, Tune 1, Run 2, Analyze 3) and `live` flags non-terminal tuner/production jobs (`JobStatus.is_live`); clients consume both directly — never decode ints or status strings client-side. `Experiment._step_status` extends the same scale with publish = 4.
 
 ### Migrations
-- `create_app()` runs `flask_migrate.upgrade()` on startup (skipped at head), falling back to `db.create_all()`. Add a migration file in `migrations/versions/` when adding columns. Do NOT manually run `flask db upgrade`.
+- `create_app()` runs `flask_migrate.upgrade()` on startup (skipped at head). Fresh databases are created by the same migrations — there is no `db.create_all()` fallback; a failed migration fails startup loudly. Add a migration file in `migrations/versions/` when adding columns. Do NOT manually run `flask db upgrade`.
 - `db.Enum(PyEnum)` stores enum member NAMES in the DB (no `values_callable`, cf. 006), never `.value` strings — and SQLite emits no CHECK, so nothing rejects wrong values at write time. Migration DDL (`sa.Enum("PDB", ...)`) and any raw-SQL writes must use names; storing a value makes every ORM read of that row fail with LookupError.
 
 ### Authentication

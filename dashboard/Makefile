@@ -90,6 +90,7 @@ push-ui: build-ui ## Build and push UI image
 .PHONY: push-proxy
 push-proxy: build-proxy ## Build and push proxy image
 	docker push $(proxy_image):$(tag)
+	@echo "NOTE: run 'make deploy' before restarting user pods — the spawned proxy's k8s command comes from the hub's pre_spawn_hook and must match the new image."
 
 .PHONY: push-auth
 push-auth: build-auth ## Build and push auth image
