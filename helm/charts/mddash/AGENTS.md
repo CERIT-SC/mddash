@@ -14,6 +14,7 @@ Deploys a multi-tenant JupyterHub environment for MDDash: isolated per-user name
 
 - **Rancher annotations**: namespaces require `field.cattle.io/projectId` and `field.cattle.io/resourceQuota`. The hook waits for `InitialRolesPopulated`, patches the namespace, then waits for ResourceQuota status to become active.
 - **Proxy readiness waits on health**: the proxy sidecar waits for `auth` `/health` and the dashboard `/dash/api/health` with `curl --fail` before starting Caddy. Don't replace this with bare port checks — non-2xx must not count as readiness.
+- **Proxy k8s command overrides the image CMD**: `_proxy_start_command` replaces the Dockerfile CMD, so `entrypoint.sh` never runs its caddy branch in-cluster. The command therefore chains `CONFIG_ONLY=1 /usr/local/bin/entrypoint.sh` first — drop that and `/config/runtime-config.json` is never generated, breaking the UI on every spawn.
 - **Cross-namespace hub access**: the hook overrides `JUPYTERHUB_API_URL` to `http://hub.{hub_namespace}.svc.cluster.local:8081/hub/api`.
 - **Security hardening**: `modify_pod_hook` drops all capabilities and sets seccomp profiles (e-INFRA compliance).
 - **Network policies and pre-puller are disabled** intentionally (deployment model + resource limits).
