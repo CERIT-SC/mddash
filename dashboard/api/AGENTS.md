@@ -22,6 +22,7 @@ Flask REST API that orchestrates molecular dynamics experiments across Kubernete
 
 ### Migrations
 - `create_app()` runs `flask_migrate.upgrade()` on startup (skipped at head), falling back to `db.create_all()`. Add a migration file in `migrations/versions/` when adding columns. Do NOT manually run `flask db upgrade`.
+- `db.Enum(PyEnum)` stores enum member NAMES in the DB (no `values_callable`, cf. 006), never `.value` strings — and SQLite emits no CHECK, so nothing rejects wrong values at write time. Migration DDL (`sa.Enum("PDB", ...)`) and any raw-SQL writes must use names; storing a value makes every ORM read of that row fail with LookupError.
 
 ### Authentication
 - MDRepo OAuth tokens live in the Flask session, NOT the database. Use `MDRepoTokenManager(session).get_valid_token()`; refresh is automatic with exponential backoff (3 retries).

@@ -196,9 +196,10 @@ def test_migration_008_adds_simulation_path_to_analysis(tmp_path: Path) -> None:
         assert cols["simulation_path"]["nullable"] is False
 
 
-def test_migration_010_structures_source_columns(tmp_path: Path) -> None:
-    """Legacy display strings are parsed into source_type/source_ref/source_files, then dropped."""
+def test_migration_010_adds_structured_source_columns(tmp_path: Path) -> None:
+    """Source columns are added empty; migrated rows must load through the ORM (enum names, not values)."""
     import sqlalchemy as sa
+    from models.experiment import Experiment
 
     app = _make_app(tmp_path / "test.db")
     _upgrade_to(app, "009")
@@ -217,24 +218,19 @@ def test_migration_010_structures_source_columns(tmp_path: Path) -> None:
     _upgrade_to(app, "head")
     with app.app_context():
         cols = _column_names(db.engine, "experiments")
-        assert {"source_type", "source_ref", "source_files"} <= cols
+        assert {"module_name", "source_type", "source_ref", "source_files"} <= cols
         assert "source_label" not in cols
         assert "source_message" not in cols
         with db.engine.connect() as conn:
-            rows = {
-                row.id: row.v
-                for row in conn.execute(
-                    sa.text(
-                        "SELECT id, IFNULL(source_type, '') || '|' || IFNULL(source_ref, '') || '|' || IFNULL(source_files, '') AS v "
-                        "FROM experiments"
-                    )
-                ).mappings()
-            }
-        assert rows["pdbid"] == "pdb|1LYZ|"
-        assert rows["pdburl"] == "pdb|https://x.org/y.pdb|"
-        assert rows["repo"] == "repo|https://zenodo.org/records/1|"
-        assert rows["upload"] == 'file||["a.tpr", "b.pdb"]'
-        assert rows["junk"] == "||"
+            backfilled = conn.execute(
+                sa.text(
+                    "SELECT COUNT(*) FROM experiments WHERE "
+                    "source_type IS NOT NULL OR source_ref IS NOT NULL OR source_files IS NOT NULL"
+                )
+            ).scalar_one()
+        assert backfilled == 0
+        # crashes with LookupError if any stored source_type is not an enum name
+        assert len(Experiment.query.all()) == 5
 
 
 def test_all_migrations_reach_head(tmp_path: Path) -> None:

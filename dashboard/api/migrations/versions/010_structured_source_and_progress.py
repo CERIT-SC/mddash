@@ -3,10 +3,11 @@ Rework experiment display fields and add sim/job progress columns.
 
 Experiments gain module_name and structured source columns (source_type,
 source_ref, source_files) replacing the legacy source_message display string.
-Backfill parses legacy provenance sentences; unparseable rows keep NULL source
-data (the UI hides the source item). Tuner jobs gain a caller-supplied nsteps,
-and analysis jobs gain a nullable sim_progress float recording the fraction of
-the simulation's steps available when the analysis started, so the UI can flag
+Legacy rows are not backfilled — free-text provenance can't be safely mapped
+into enum names (db.Enum convention, cf. 006) — so they keep NULL source data
+(the UI hides the source item). Tuner jobs gain a caller-supplied nsteps, and
+analysis jobs gain a nullable sim_progress float recording the fraction of the
+simulation's steps available when the analysis started, so the UI can flag
 results from still-running simulations as partial ("Calculated at N%").
 
 Revision ID: 010
@@ -15,7 +16,6 @@ Create Date: 2026-08-21
 """
 
 import json
-import re
 
 import sqlalchemy as sa
 from alembic import op
@@ -29,48 +29,13 @@ depends_on = None
 # never import live constants — a later default change must not rewrite history.
 TUNER_DEFAULT_NSTEPS = 25000
 
-# Legacy message shapes produced by Experiment.from_pdb / from_repo / from_files.
-_PDB_URL_RE = re.compile(r"^Created by downloading PDB file from '([^']+)'\.$")
-_OTHER_RE = re.compile(r"^Created by downloading '([^']+)' from RCSB PDB\.$")
-_REPO_RE = re.compile(r"^Created by downloading repository from '([^']+)'\.$")
-_UPLOAD_RE = re.compile(r"^Created by uploading files: (.+)\.$")
-
-
-def _parse_source(message: str) -> tuple[str, str | None, str | None] | None:
-    """Derive (source_type, source_ref, source_files json) from a legacy source_message."""
-    if match := _PDB_URL_RE.match(message):
-        return ("pdb", match.group(1), None)
-    if match := _OTHER_RE.match(message):
-        return ("pdb", match.group(1), None)
-    if match := _REPO_RE.match(message):
-        return ("repo", match.group(1), None)
-    if match := _UPLOAD_RE.match(message):
-        return ("file", None, json.dumps(match.group(1).split(", ")))
-    return None
-
 
 def upgrade() -> None:
     with op.batch_alter_table("experiments") as batch_op:
         batch_op.add_column(sa.Column("module_name", sa.String(length=255), nullable=True))
-        batch_op.add_column(sa.Column("source_type", sa.Enum("pdb", "repo", "file", name="sourcetype"), nullable=True))
+        batch_op.add_column(sa.Column("source_type", sa.Enum("PDB", "REPO", "FILE", name="sourcetype"), nullable=True))
         batch_op.add_column(sa.Column("source_ref", sa.String(length=512), nullable=True))
         batch_op.add_column(sa.Column("source_files", sa.JSON(), nullable=True))
-
-    connection = op.get_bind()
-    rows = connection.execute(
-        sa.text("SELECT id, source_message FROM experiments WHERE source_message IS NOT NULL")
-    ).fetchall()
-    for experiment_id, message in rows:
-        parsed = _parse_source(message)
-        if parsed is None:
-            continue
-        source_type, source_ref, source_files = parsed
-        connection.execute(
-            sa.text(
-                "UPDATE experiments SET source_type = :type, source_ref = :ref, source_files = :files WHERE id = :id"
-            ),
-            {"type": source_type, "ref": source_ref, "files": source_files, "id": experiment_id},
-        )
 
     with op.batch_alter_table("experiments") as batch_op:
         batch_op.drop_column("source_message")
@@ -98,14 +63,14 @@ def downgrade() -> None:
         sa.text("SELECT id, source_type, source_ref, source_files FROM experiments WHERE source_type IS NOT NULL")
     ).fetchall()
     for experiment_id, source_type, source_ref, source_files in rows:
-        if source_type == "pdb":
+        if source_type == "PDB":
             is_url = bool(source_ref) and source_ref.startswith(("http://", "https://"))
             message = (
                 f"Created by downloading PDB file from '{source_ref}'."
                 if is_url
                 else f"Created by downloading '{source_ref}' from RCSB PDB."
             )
-        elif source_type == "repo":
+        elif source_type == "REPO":
             message = f"Created by downloading repository from '{source_ref}'."
         else:
             uploaded = json.loads(source_files) if source_files else []
