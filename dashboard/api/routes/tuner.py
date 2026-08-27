@@ -65,7 +65,12 @@ def start_tuner_job(experiment_id: str) -> ResponseReturnValue:
     raw_nsteps = data.get("nsteps", request.args.get("nsteps"))
     if raw_nsteps is None:
         raise BadRequest("nsteps is required.")
-    nsteps = int(raw_nsteps)
+    try:
+        nsteps = int(raw_nsteps)
+    except (ValueError, TypeError) as exc:
+        raise BadRequest("nsteps must be an integer.") from exc
+    if nsteps < 1:
+        raise BadRequest("nsteps must be at least 1.")
 
     tuner_job = TunerJob.start(experiment, simulation_path, nsteps=nsteps)
     return jsonify(schema.dump(tuner_job)), HTTPStatus.CREATED
