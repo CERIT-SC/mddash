@@ -49,7 +49,16 @@ EOF
 
     # Stage filters into the workdir: bisync writes its filter-hash .md5 next to them.
     mkdir -p "$WORKDIR"
-    cp "$SRC_FILTERS" "$FILTERS_FILE"
+    if [ -f "$FILTERS_FILE" ] && ! cmp -s "$SRC_FILTERS" "$FILTERS_FILE" && ! is_first_run; then
+        # Changed filters fail every normal cycle until a --resync; run the
+        # sanctioned recovery now, not after the loop's failure backoff.
+        log "Filters changed since last boot: applying recovery --resync for the new filters..."
+        cp "$SRC_FILTERS" "$FILTERS_FILE"
+        rclone bisync /mddash s3remote:${S3_BUCKET} $RESYNC_FLAGS \
+            || log "Filters-change resync had issues; loop will retry"
+    else
+        cp "$SRC_FILTERS" "$FILTERS_FILE"
+    fi
 }
 
 is_first_run() {
