@@ -59,3 +59,29 @@ export function toLogHtml(text: string): string {
   const converter = new AnsiToHtml({ escapeXML: true })
   return converter.toHtml(processTerminalOutput(text))
 }
+
+const SPAN_TAG = /<\/?span(?:\s[^>]*)?>/g
+
+/**
+ * toLogHtml split per line, each line independently well-formed. ansi-to-html
+ * keeps a color span open across \n, so a naive split would leave unclosed
+ * spans: spans still open at a line boundary are closed at that line's end and
+ * reopened on the next line. Per-line HTML lets the log pane render memoized
+ * rows and append live output without re-rendering the whole tail.
+ */
+export function toLogLinesHtml(text: string): string[] {
+  const open: string[] = []
+  return toLogHtml(text)
+    .split("\n")
+    .map((line) => {
+      const prefix = open.join("")
+      const stack = [...open]
+      for (const [tag] of line.matchAll(SPAN_TAG)) {
+        if (tag.startsWith("</")) stack.pop()
+        else stack.push(tag)
+      }
+      open.length = 0
+      open.push(...stack)
+      return prefix + line + "</span>".repeat(stack.length)
+    })
+}

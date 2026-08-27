@@ -1,13 +1,13 @@
 import { useState } from "react"
 
 import { useGetTunerTrialStderr, useGetTunerTrialStdout } from "@/api/generated/client"
+import { LogPane } from "@/shared/ui/log-pane"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  Skeleton,
   Tabs,
   TabsContent,
   TabsList,
@@ -19,36 +19,6 @@ type TrialLogDialogProps = {
   simulationPath: string
   trialId: string | null
   onClose: () => void
-}
-
-type LogPaneProps = {
-  pending: boolean
-  error: boolean
-  text: string | undefined
-  emptyLabel: string
-}
-
-function LogPane({ pending, error, text, emptyLabel }: LogPaneProps) {
-  if (pending) {
-    return (
-      <div className="space-y-2">
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-4 w-2/3" />
-      </div>
-    )
-  }
-  if (error) {
-    return <p className="text-text-muted text-sm">The log could not be loaded.</p>
-  }
-  if (text === undefined || text.trim() === "") {
-    return <p className="text-text-muted text-sm">{emptyLabel}</p>
-  }
-  return (
-    <pre className="bg-surface text-text max-h-96 overflow-auto rounded-md p-3 font-mono text-xs break-all whitespace-pre-wrap">
-      {text}
-    </pre>
-  )
 }
 
 /** stdout/stderr for one trial, mainly for diagnosing failed configurations. */
@@ -85,10 +55,10 @@ export function TrialLogDialog({ experimentId, simulationPath, trialId, onClose 
           ).map(([stream, label, query]) => (
             <TabsContent key={stream} value={stream} className="pt-3">
               <LogPane
-                pending={query.isPending}
-                error={query.isError}
-                text={query.data?.status === 200 ? query.data.data : undefined}
-                emptyLabel={`${label} is empty.`}
+                isLoading={query.isPending}
+                errorText={query.isError ? "The log could not be loaded." : undefined}
+                logs={query.data?.status === 200 ? query.data.data : undefined}
+                emptyText={`${label} is empty.`}
               />
             </TabsContent>
           ))}

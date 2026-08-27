@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef } from "react"
+import { memo, useEffect, useMemo, useRef } from "react"
 
-import { toLogHtml } from "@/shared/log-text"
+import { toLogLinesHtml } from "@/shared/log-text"
 import { cn } from "@e-infra/design-system"
 
 export type LogPaneProps = {
@@ -19,6 +19,15 @@ export type LogPaneProps = {
   className?: string
 }
 
+// Memoized row: unchanged lines keep their DOM nodes across polls, so a live
+// log appends rows instead of re-rendering the entire tail (up to 10k lines)
+// on every poll.
+const LogLine = memo(function LogLine({ html }: { html: string }) {
+  // ansi-to-html escapes XML/HTML entities before converting color codes, so this is safe.
+  // The nbsp keeps blank lines at full line height (an empty div collapses).
+  return html ? <div dangerouslySetInnerHTML={{ __html: html }} /> : <div>{" "}</div>
+})
+
 /**
  * Monospaced, ANSI-colored log pane shared by the run and analyze steps:
  * terminal \r-overwrites collapsed, colors via ansi-to-html, scroll pinned to
@@ -33,14 +42,14 @@ export function LogPane({
   errorText,
   className,
 }: LogPaneProps) {
-  const html = useMemo(() => (logs?.trim() ? toLogHtml(logs) : ""), [logs])
+  const lines = useMemo(() => (logs?.trim() ? toLogLinesHtml(logs) : []), [logs])
 
   const paneRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = paneRef.current
     // scrollTop assignment instead of scrollTo — Element.scrollTo is missing in jsdom.
     if (follow && el) el.scrollTop = el.scrollHeight
-  }, [html, follow])
+  }, [lines, follow])
 
   const cls = cn(
     "border-border bg-surface text-text max-h-96 w-full overflow-auto rounded-md border p-3 font-mono text-xs break-all whitespace-pre-wrap",
@@ -53,9 +62,16 @@ export function LogPane({
   if (isLoading) {
     return <div className={cn(cls, "text-text-muted animate-pulse select-none")}>{loadingText}</div>
   }
-  if (html) {
-    // ansi-to-html escapes XML/HTML entities before converting color codes, so this is safe
-    return <div ref={paneRef} className={cls} dangerouslySetInnerHTML={{ __html: html }} />
+  if (lines.length > 0) {
+    return (
+      <div ref={paneRef} className={cls}>
+        {lines.map((html, index) => (
+          // Index keys are right here: memoized rows make positional reuse a
+          // win, while content keys would miss on every tail-window slide.
+          <LogLine key={index} html={html} />
+        ))}
+      </div>
+    )
   }
   return <div className={cn(cls, "text-text-muted/70 italic select-none")}>{emptyText}</div>
 }
