@@ -1,7 +1,7 @@
 import { Engine, JobStatus, type TunerTrial } from "@/api/generated/models"
 import { describe, expect, it } from "vitest"
 
-import { formatCost, formatHardware, parseTrial, suggest, type TrialRow } from "./tuned-trials"
+import { formatCost, formatHardware, parseTrial, sortTrials, suggest, type TrialRow } from "./tuned-trials"
 
 function rawTrial(overrides: Record<string, unknown> = {}): TunerTrial {
   return {
@@ -97,6 +97,28 @@ describe("suggest", () => {
       row({ id: "no-cost", performance: 999, estCost: null }),
     ]
     expect(suggest(rows)).toEqual({ fastestId: "no-cost", ecoId: null })
+  })
+})
+
+describe("sortTrials", () => {
+  it("orders results by performance with result-less trials last", () => {
+    const rows = [
+      row({ id: "pending", status: JobStatus.PENDING, performance: null }),
+      row({ id: "mid", performance: 500 }),
+      row({ id: "fast", performance: 700 }),
+      row({ id: "running", status: JobStatus.RUNNING, performance: null }),
+      row({ id: "slow", performance: 40 }),
+    ]
+    expect(sortTrials(rows).map((r) => r.id)).toEqual(["fast", "mid", "slow", "pending", "running"])
+  })
+
+  it("keeps result-less trials in arrival order", () => {
+    const rows = [
+      row({ id: "first", status: JobStatus.RUNNING, performance: null }),
+      row({ id: "fast", performance: 700 }),
+      row({ id: "second", status: JobStatus.ERROR, performance: null }),
+    ]
+    expect(sortTrials(rows).map((r) => r.id)).toEqual(["fast", "first", "second"])
   })
 })
 

@@ -15,7 +15,7 @@ import {
 } from "@e-infra/design-system"
 import { FileText, Leaf, LoaderCircle, Zap } from "lucide-react"
 
-import { formatCost, formatHardware, selectable, suggest, type TrialRow } from "./tuned-trials"
+import { formatCost, formatHardware, selectable, sortTrials, suggest, type TrialRow } from "./tuned-trials"
 
 const COLUMN_COUNT = 9
 
@@ -76,14 +76,9 @@ export function TrialsTableHeader({ engine, pickColumn = true }: { engine: Engin
   )
 }
 
-/** Trial results: tuner's suggestions (fastest/cheapest) first, then the rest in API order. */
+/** Trial results sorted by measured performance (best first); badges mark the tuner's suggestions. */
 export function TrialsTable({ engine, rows, value, onValueChange, live, onShowLogs }: TrialsTableProps) {
   const { fastestId, ecoId } = suggest(rows)
-  // Fastest and eco may be the same row — dedupe before mapping.
-  const suggested = [...new Set([fastestId, ecoId])]
-    .map((id) => rows.find((row) => row.id === id))
-    .filter((row): row is TrialRow => row !== undefined)
-  const others = rows.filter((row) => row.id !== fastestId && row.id !== ecoId)
 
   return (
     <RadioGroup value={value ?? ""} onValueChange={onValueChange} aria-label="Pick a configuration">
@@ -101,29 +96,13 @@ export function TrialsTable({ engine, rows, value, onValueChange, live, onShowLo
                 </TableCell>
               </TableRow>
             )}
-            {suggested.length > 0 && (
-              <>
-                <GroupBand label="Suggested" />
-                {suggested.map((row) => (
-                  <TrialRowView
-                    key={row.id}
-                    engine={engine}
-                    row={row}
-                    fastest={row.id === fastestId}
-                    eco={row.id === ecoId}
-                    onShowLogs={onShowLogs}
-                  />
-                ))}
-              </>
-            )}
-            {suggested.length > 0 && others.length > 0 && <GroupBand label="Other configurations" />}
-            {others.map((row) => (
+            {sortTrials(rows).map((row) => (
               <TrialRowView
                 key={row.id}
                 engine={engine}
                 row={row}
-                fastest={false}
-                eco={false}
+                fastest={row.id === fastestId}
+                eco={row.id === ecoId}
                 onShowLogs={onShowLogs}
               />
             ))}
@@ -143,21 +122,6 @@ function HintedHead({ label, hint, separated = false }: { label: string; hint: s
         <HintTooltip text={hint} />
       </span>
     </TableHead>
-  )
-}
-
-function GroupBand({ label }: { label: string }) {
-  return (
-    <TableRow className="bg-surface hover:bg-surface">
-      {/* Two cells so the hardware divider runs unbroken through the band. */}
-      <TableCell
-        colSpan={COLUMN_COUNT - 4}
-        className="text-text-muted py-2 text-xs font-semibold tracking-wide uppercase"
-      >
-        {label}
-      </TableCell>
-      <TableCell colSpan={4} className="border-border border-l" />
-    </TableRow>
   )
 }
 

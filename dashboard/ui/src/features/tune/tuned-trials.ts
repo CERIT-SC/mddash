@@ -91,6 +91,17 @@ export function suggest(rows: TrialRow[]): Suggestions {
   return { fastestId: fastest?.id ?? null, ecoId: eco?.id ?? null }
 }
 
+/** Results by performance (best first); trials without a result keep arrival order below. */
+export function sortTrials(rows: TrialRow[]): TrialRow[] {
+  return [...rows].sort((a, b) => {
+    if (a.performance === null || b.performance === null) {
+      if (a.performance === b.performance) return 0
+      return a.performance === null ? 1 : -1
+    }
+    return b.performance - a.performance
+  })
+}
+
 /** "$2.60" → "$2.6", while tiny costs keep precision ("$0.04"). */
 export function formatCost(cost: number): string {
   return `$${cost.toFixed(2).replace(/\.?0+$/, "")}`
