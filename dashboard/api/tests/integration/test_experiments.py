@@ -83,6 +83,26 @@ class TestGetExperiment:
         assert response.status_code == HTTPStatus.NOT_FOUND
 
 
+class TestPublishExperiment:
+    """Invenio publish is gated server-side by the same can_publish rule the wizard uses."""
+
+    def test_rejects_when_nothing_publishable(self, client: FlaskClient, db_session: Session) -> None:
+        """Authenticated but no finished run and no existing publication → 409, no MDRepo draft."""
+        exp = Experiment()
+        exp.id = "pubc1"
+        exp.name = "Publish Gate"
+        db_session.add(exp)
+        db_session.commit()
+
+        token_manager = MagicMock()
+        token_manager.get_valid_token.return_value = "valid-token"
+        with patch("routes.experiments.MDRepoTokenManager", return_value=token_manager):
+            response = client.post("/dash/api/experiments/pubc1/publish", json={"target": "invenio"})
+
+        assert response.status_code == HTTPStatus.CONFLICT
+        assert response.mimetype == "application/problem+json"
+
+
 class TestCreateExperiment:
     """Tests for POST /api/experiments."""
 
