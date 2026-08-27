@@ -98,6 +98,13 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
 
   const simulationPath = simulation.simulation_path
 
+  // Steps stay mounted across simulation tab switches, so per-simulation picks
+  // reset explicitly or B inherits A's analysis/variant. (PublishStep pattern.)
+  useEffect(() => {
+    setSelectedAnalysis(null)
+    setSelectedVariant(null)
+  }, [simulationPath])
+
   const jobsQuery = useAnalysisJobs(experimentId, simulationPath, pollMs)
   const jobs = jobsQuery.data?.status === 200 ? jobsQuery.data.data : undefined
   const activeJob = useMemo(
