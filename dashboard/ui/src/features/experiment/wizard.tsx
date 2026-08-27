@@ -4,7 +4,7 @@ import { AnalyzeStep } from "@/features/analyze"
 import { PublishStep } from "@/features/publish"
 import { RunStep } from "@/features/run"
 import { SetupStep, type SetupSource } from "@/features/setup"
-import { CREATE_TAB, SimulationTabs } from "@/features/simulation"
+import { CREATE_TAB, simulationParam, SimulationTabs } from "@/features/simulation"
 import { TuneStep } from "@/features/tune"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Stepper, StepperContent, StepperHeader } from "@/shared/ui/stepper"
@@ -33,7 +33,7 @@ const pollWhileAnyLive =
   }
 
 export type WizardSearch = {
-  /** Selected simulation tab — the simulation_path, which may contain slashes. */
+  /** Selected simulation tab — simulation_path minus the ".simulation.json" suffix (may still contain slashes). */
   simulation?: string
   /** Current wizard step (0-based); defaults to the simulation's own progress. */
   step?: number
@@ -83,9 +83,11 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
 
   // The unnamed create tab doubles as the empty state when there are no manifests to select.
   const creating = search.simulation === CREATE_TAB || list.length === 0
+  // Idempotent strip keeps legacy suffixed links resolving.
+  const requested = search.simulation === undefined ? undefined : simulationParam(search.simulation)
   const selected = creating
     ? undefined
-    : (list.find((candidate) => candidate.simulation_path === search.simulation) ??
+    : (list.find((candidate) => simulationParam(candidate.simulation_path) === requested) ??
       (data.latest_simulation_path !== null
         ? list.find((candidate) => candidate.simulation_path === data.latest_simulation_path)
         : undefined) ??
@@ -101,7 +103,16 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
   // Setup/Tune URL params ride along on every navigation so remounts keep user
   // context; only a full reset drops them.
   const updateSearch = (next: WizardSearch) =>
-    onSearchChange({ source: search.source, trial: search.trial, mode: search.mode, ...next })
+    onSearchChange({
+      source: search.source,
+      trial: search.trial,
+      mode: search.mode,
+      ...next,
+      simulation:
+        next.simulation === undefined || next.simulation === CREATE_TAB
+          ? next.simulation
+          : simulationParam(next.simulation),
+    })
 
   // The five steps are StepperContent's direct children in index order (Setup=0
   // .. Publish=4). Create mode keeps only Setup; the rest render once a
@@ -176,7 +187,11 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
           onDeleted={(deleted) => {
             // The URL still points at the deleted manifest; drop the selection so
             // the refreshed list falls back to its default tab.
-            if (search.simulation === deleted.simulation_path) onSearchChange({})
+            if (
+              search.simulation !== undefined &&
+              simulationParam(search.simulation) === simulationParam(deleted.simulation_path)
+            )
+              onSearchChange({})
           }}
         />
 

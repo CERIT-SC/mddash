@@ -1,5 +1,5 @@
 import type { Experiment } from "@/api/generated/models"
-import { CREATE_TAB } from "@/features/simulation"
+import { CREATE_TAB, simulationParam } from "@/features/simulation"
 import { experiment } from "@/shared/fixtures/experiment"
 import { mockApiBySuffix } from "@/shared/fixtures/mock-fetch"
 import { simulation } from "@/shared/fixtures/simulation"
@@ -112,11 +112,20 @@ describe("ExperimentWizard", () => {
       "/experiments/exp1/simulations": Response.json([alpha, beta]),
       "/experiments/exp1": okExperiment({ latest_simulation_path: alpha.simulation_path }),
     })
-    renderWizard({ simulation: beta.simulation_path })
+    renderWizard({ simulation: simulationParam(beta.simulation_path) })
     expect(await screen.findByRole("tab", { name: "Alpha" })).toHaveAttribute("aria-selected", "false")
     expect(screen.getByRole("tab", { name: "Beta" })).toHaveAttribute("aria-selected", "true")
     expect(screen.queryByRole("tab", { name: "[Unnamed Simulation]" })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "New simulation" })).toBeVisible()
+  })
+
+  it("still selects the tab from a legacy suffixed URL simulation", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha, beta]),
+      "/experiments/exp1": okExperiment(),
+    })
+    renderWizard({ simulation: beta.simulation_path })
+    expect(await screen.findByRole("tab", { name: "Beta" })).toHaveAttribute("aria-selected", "true")
   })
 
   it.each([
@@ -141,7 +150,7 @@ describe("ExperimentWizard", () => {
       "/experiments/exp1/simulations": Response.json([alpha, beta]),
       "/experiments/exp1": okExperiment(),
     })
-    renderWizard({ simulation: "gone.simulation.json" })
+    renderWizard({ simulation: "gone" })
     const tablist = within(await screen.findByRole("tablist", { name: "Simulations" }))
     expect((await tablist.findAllByRole("tab")).length).toBe(2)
     expect(tablist.getByRole("tab", { name: "Alpha" })).toHaveAttribute("aria-selected", "true")
@@ -164,12 +173,12 @@ describe("ExperimentWizard", () => {
     expect(screen.getByRole("button", { name: "Go to section 4: Analyze" })).toBeDisabled()
 
     await user.click(screen.getByRole("button", { name: "Go to section 2: Tune" }))
-    expect(changes).toEqual([{ simulation: alpha.simulation_path, step: 1 }])
+    expect(changes).toEqual([{ simulation: simulationParam(alpha.simulation_path), step: 1 }])
 
     await user.click(screen.getByRole("button", { name: "Go to section 1: Setup" }))
     expect(changes).toEqual([
-      { simulation: alpha.simulation_path, step: 1 },
-      { simulation: alpha.simulation_path, step: 0 },
+      { simulation: simulationParam(alpha.simulation_path), step: 1 },
+      { simulation: simulationParam(alpha.simulation_path), step: 0 },
     ])
   })
 
@@ -235,7 +244,7 @@ describe("ExperimentWizard", () => {
       "/experiments/exp1": okExperiment({ can_publish: true }),
       [`/experiments/exp1/gmx/${alpha.simulation_path}`]: runningGmxJob(alpha.simulation_path),
     })
-    renderWizard({ simulation: alpha.simulation_path })
+    renderWizard({ simulation: simulationParam(alpha.simulation_path) })
 
     expect(await screen.findByRole("button", { name: "Go to section 3: Run" })).toHaveAttribute("aria-current", "step")
     // Alpha's own ladder stays at Run (per-simulation); can_publish opens ONLY
@@ -251,13 +260,22 @@ describe("ExperimentWizard", () => {
     })
     const changes: WizardSearch[] = []
     const user = userEvent.setup()
-    renderWizard({ simulation: alpha.simulation_path, step: 0, source: "manual" }, (next) => changes.push(next))
+    renderWizard({ simulation: simulationParam(alpha.simulation_path), step: 0, source: "manual" }, (next) =>
+      changes.push(next)
+    )
     await user.click(await screen.findByRole("tab", { name: "Beta" }))
-    expect(changes[changes.length - 1]).toEqual({ source: "manual", simulation: beta.simulation_path })
+    expect(changes[changes.length - 1]).toEqual({
+      source: "manual",
+      simulation: simulationParam(beta.simulation_path),
+    })
     // The mounted props still point at alpha until the router applies the search,
     // so the marker click navigates alpha's stepper — the source rides along regardless.
     await user.click(screen.getByRole("button", { name: "Go to section 2: Tune" }))
-    expect(changes[changes.length - 1]).toEqual({ source: "manual", simulation: alpha.simulation_path, step: 1 })
+    expect(changes[changes.length - 1]).toEqual({
+      source: "manual",
+      simulation: simulationParam(alpha.simulation_path),
+      step: 1,
+    })
   })
 
   it("switches simulations from the tab bar, dropping the step", async () => {
@@ -267,11 +285,11 @@ describe("ExperimentWizard", () => {
     })
     const changes: WizardSearch[] = []
     const user = userEvent.setup()
-    renderWizard({ simulation: alpha.simulation_path, step: 1 }, (next) => changes.push(next))
+    renderWizard({ simulation: simulationParam(alpha.simulation_path), step: 1 }, (next) => changes.push(next))
     await user.click(await screen.findByRole("tab", { name: "Beta" }))
     // Radix may re-fire activation (mousedown + focus) while the controlled
     // value is stale; the real route re-renders on the first navigation.
-    expect(changes[changes.length - 1]).toEqual({ simulation: beta.simulation_path })
+    expect(changes[changes.length - 1]).toEqual({ simulation: simulationParam(beta.simulation_path) })
     expect(changes.every((change) => change.step === undefined)).toBe(true)
   })
 
@@ -294,7 +312,7 @@ describe("ExperimentWizard", () => {
     })
     const changes: WizardSearch[] = []
     const user = userEvent.setup()
-    renderWizard({ simulation: alpha.simulation_path, step: 1 }, (next) => changes.push(next))
+    renderWizard({ simulation: simulationParam(alpha.simulation_path), step: 1 }, (next) => changes.push(next))
     await user.click(await screen.findByRole("button", { name: "New simulation" }))
     expect(changes[changes.length - 1]).toEqual({ simulation: CREATE_TAB })
   })
@@ -337,7 +355,7 @@ describe("ExperimentWizard", () => {
     })
     const changes: WizardSearch[] = []
     const user = userEvent.setup()
-    renderWizard({ simulation: alpha.simulation_path }, (next) => changes.push(next))
+    renderWizard({ simulation: simulationParam(alpha.simulation_path) }, (next) => changes.push(next))
     await user.click(await screen.findByRole("button", { name: "Actions for Beta" }))
     await user.click(screen.getByRole("menuitem", { name: "Delete" }))
     await user.click(screen.getByRole("button", { name: "Delete simulation" }))
@@ -353,7 +371,7 @@ describe("ExperimentWizard", () => {
     })
     const changes: WizardSearch[] = []
     const user = userEvent.setup()
-    renderWizard({ simulation: alpha.simulation_path, step: 1 }, (next) => changes.push(next))
+    renderWizard({ simulation: simulationParam(alpha.simulation_path), step: 1 }, (next) => changes.push(next))
     await user.click(await screen.findByRole("button", { name: "Actions for Alpha" }))
     await user.click(screen.getByRole("menuitem", { name: "Delete" }))
     await user.click(screen.getByRole("button", { name: "Delete simulation" }))
