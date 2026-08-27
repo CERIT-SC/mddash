@@ -246,7 +246,7 @@ describe("AnalyzeStep submit flow", () => {
     await openAnalyzeTab()
     await screen.findByText("Select an analysis to view or calculate.")
     await userEvent.click(screen.getByRole("combobox", { name: /analysis/i }))
-    await userEvent.click(await screen.findByRole("option", { name: /^RMSD/ }))
+    await userEvent.click(await screen.findByRole("option", { name: /^RMSD$/ }))
 
     await userEvent.click(screen.getByRole("button", { name: /calculate/i }))
 
@@ -369,7 +369,7 @@ describe("AnalyzeStep analysis switching", () => {
     // label (and the data is cached, so there is no loading gap to hide it).
     renderSpy.mockClear()
     await userEvent.click(screen.getByRole("combobox", { name: /analysis/i }))
-    await userEvent.click(await screen.findByRole("option", { name: /^RMSD/ }))
+    await userEvent.click(await screen.findByRole("option", { name: /^RMSD ready$/ }))
 
     await waitFor(() => expect(renderSpy).toHaveBeenCalledWith({ analysisName: "rmsds", data: RMSDS_RESULT }))
     expect(renderSpy.mock.calls.every(([props]) => props.analysisName !== "clusters-00")).toBe(true)
@@ -385,7 +385,7 @@ describe("AnalyzeStep failed job", () => {
     await openAnalyzeTab()
     await screen.findByText("Select an analysis to view or calculate.")
     await userEvent.click(screen.getByRole("combobox", { name: /analysis/i }))
-    await userEvent.click(await screen.findByRole("option", { name: /^RMSD/ }))
+    await userEvent.click(await screen.findByRole("option", { name: /^RMSD$/ }))
 
     expect(await screen.findByText("Previous analysis run failed.")).toBeInTheDocument()
     await userEvent.click(screen.getByRole("button", { name: /view logs/i }))

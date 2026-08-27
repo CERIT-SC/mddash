@@ -37,6 +37,9 @@ export const AVAILABLE_ANALYSES: AnalysisInfo[] = [
     resultName: "dist-perres",
     hasVariants: true,
   },
+  // Runnable per the API enum (AnalysisType.PERRES → mwf 'perres'); the catalog
+  // covers every submittable analysis so wizard and card counts agree.
+  { value: AnalysisJobRequestAnalysis.perres, label: "RMSD Per Residue", resultName: "rmsd-perres" },
   { value: AnalysisJobRequestAnalysis.inter, label: "Interactions", resultName: "interactions" },
   // Membrane — auto-detected from structure; skipped if no lipid bilayer present
   { value: AnalysisJobRequestAnalysis.density, label: "Density Profile", resultName: "density" },
