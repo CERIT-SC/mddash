@@ -151,8 +151,9 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
 
   const recordUrl = upload?.draft_url ?? experiment.mdrepo_record_url ?? null
   const failureReason = uploadFailureReason(upload?.reason)
-  // Captured at render; the wizard URL (simulation + step) round-trips through the OAuth callback.
-  const authHref = getAuthorizeMDRepoUrl({ return_url: window.location.href })
+  // Captured at render; the wizard URL (simulation + step) round-trips through the
+  // OAuth callback. Must stay a relative path — the API rejects absolute return_urls.
+  const authHref = getAuthorizeMDRepoUrl({ return_url: `${window.location.pathname}${window.location.search}` })
 
   const handlePublish = () => {
     publish.mutate(

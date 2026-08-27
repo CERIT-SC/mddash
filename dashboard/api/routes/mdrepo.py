@@ -47,6 +47,14 @@ def _redirect_with_query(url: str, **params: str) -> WerkzeugResponse:
     return redirect(urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)))
 
 
+def _safe_return_url(url: str) -> str:
+    r"""Same-origin paths only (open-redirect guard, CWE-601): absolute, protocol-relative, and backslash variants fall back to ``/``."""
+    parts = urlsplit(url)
+    if parts.scheme or parts.netloc or "\\" in url or not url.startswith("/") or url.startswith("//"):
+        return "/"
+    return url
+
+
 def get_mdrepo_token() -> str | None:
     """
     Get the MDRepo access token from the current session.
@@ -104,8 +112,8 @@ def initiate_auth() -> Response | WerkzeugResponse:
             "MDRepo integration isn't enabled on this deployment; contact the administrator.",
         )
 
-    # Store return URL and state in session
-    return_url = request.args.get("return_url", "/")
+    # The stored return URL becomes the post-OAuth 302 target.
+    return_url = _safe_return_url(request.args.get("return_url", "/"))
     state = secrets.token_urlsafe(32)
     session[MDREPO_STATE_KEY] = state
     session["mdrepo_return_url"] = return_url
