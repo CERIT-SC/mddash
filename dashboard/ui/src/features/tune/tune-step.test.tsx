@@ -275,12 +275,13 @@ describe("TuneStep running job", () => {
     expect(spies.onTrialIdChange).toHaveBeenCalledWith("t2")
   })
 
-  it("sorts the table by performance as results land between pending trials", async () => {
-    // Regression: finished trials used to stay in API order, stranded between pending ones.
+  it("groups suggestions under a Suggested band ahead of sorted Other configurations", async () => {
     mockTuner(tunerJob({ trials: [RUNNING_TRIAL, ECO_TRIAL, FAST_TRIAL, ERROR_TRIAL] }))
     renderTune()
 
     await screen.findByText("Fastest")
+    expect(screen.getByText("Suggested")).toBeInTheDocument()
+    expect(screen.getByText("Other configurations")).toBeInTheDocument()
     const order = screen.getAllByRole("radio").map((radio) => radio.getAttribute("aria-label"))
     expect(order).toEqual([
       "Pick configuration t1",
