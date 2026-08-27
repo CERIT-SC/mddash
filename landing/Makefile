@@ -26,7 +26,7 @@ format: ## Format source files with Prettier
 
 .PHONY: build
 build: ## Build Docker image
-	docker build $(platform) -f landing/Dockerfile -t $(image):$(tag) ..
+	docker build $(platform) -f Dockerfile -t $(image):$(tag) ..
 
 .PHONY: push
 push: build ## Build and push Docker image

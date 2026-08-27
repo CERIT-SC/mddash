@@ -26,7 +26,7 @@ format: ## Format UI source files with Prettier
 
 .PHONY: build
 build: ## Build JupyterHub image (k8s-hub + EGI auth + custom hub-ui)
-	docker build $(platform) -f hub/Dockerfile -t $(image):$(tag) ..
+	docker build $(platform) -f Dockerfile -t $(image):$(tag) ..
 
 .PHONY: push
 push: build ## Build and push JupyterHub image
