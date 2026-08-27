@@ -195,8 +195,11 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
           }}
         />
 
-        {/* Shares its top edge with the tab boxes — restyle them together. */}
-        <Card className="border-border rounded-t-none border bg-white">
+        {/* Shares its top edge with the tab boxes — restyle them together. The
+            panel stays on bg-background (like DS dialogs): TabsList, Input and
+            TableRow all paint bg-surface and only stay visible on the canvas
+            color; on a bg-surface card they blend into the card face. */}
+        <Card className="border-border bg-background rounded-t-none border">
           <CardContent className="pt-6 md:pt-8 lg:pt-12">
             <Stepper
               step={step}

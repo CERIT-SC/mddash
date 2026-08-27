@@ -31,10 +31,13 @@ import { toast } from "sonner"
     manifest name (409 reserved), so the URL can never collide with a real simulation. */
 export const CREATE_TAB = "_new"
 
-/* Browser-style tab boxes overriding the DS pill treatment (! — brittle on retune); the active bg matches the white card below. */
+/* Browser-style tab boxes overriding the DS pill treatment (! — brittle on retune).
+   Inactive tabs float on the canvas as bg-surface boxes; the active tab matches
+   the wizard panel's bg-background so box and panel fuse into one. */
 const TAB_BOX =
   "relative -ml-px h-9 flex-none items-center rounded-t-md rounded-b-none! border border-b-0 border-border! bg-surface px-3 text-text-muted! first:ml-0"
-const FUSED_ACTIVE = "has-data-[state=active]:z-10 has-data-[state=active]:bg-white has-data-[state=active]:text-text"
+const FUSED_ACTIVE =
+  "has-data-[state=active]:z-10 has-data-[state=active]:bg-background has-data-[state=active]:text-text"
 /* The trigger inside a fused tab carries no styling of its own — the wrapper is the box. */
 const INNER_TRIGGER =
   "h-auto! flex-none rounded-none! border-0! bg-transparent! px-0! py-0! text-inherit! data-[state=active]:bg-transparent! data-[state=active]:shadow-none dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-transparent!"

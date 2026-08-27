@@ -122,20 +122,19 @@ export function StepperHeader({ steps = [], className, maxStep, unlockedIndexes 
                       reachable ? "cursor-pointer" : "cursor-not-allowed"
                     )}
                   >
+                    {/* border-background punches the marker out of the track — the
+                        markers sit on the wizard panel's bg-background. */}
                     <span
                       className={cn(
                         "flex items-center justify-center rounded-full text-[14px] leading-5 font-semibold tracking-[0.07px] transition-all duration-300",
-                        isComplete && "border-success bg-success text-success-foreground h-9 w-9 border-4",
-                        isCurrent && "border-background bg-warning text-warning-foreground h-10 w-10 border-2",
-                        !isComplete && !isCurrent && "border-background bg-border/80 text-text h-10 w-10 border-2"
+                        isComplete &&
+                          "border-success bg-success text-success-foreground shadow-success/50 h-9 w-9 border-4 shadow-[0_0_8px,0_0_16px]",
+                        isCurrent &&
+                          "border-background bg-warning text-warning-foreground shadow-warning/50 h-10 w-10 border-2 shadow-[0_0_8px,0_0_14px]",
+                        !isComplete &&
+                          !isCurrent &&
+                          "border-background bg-border/80 text-text shadow-base-500/40 h-10 w-10 border-2 shadow-[0_0_6px]"
                       )}
-                      style={{
-                        boxShadow: isComplete
-                          ? "0 0 8px rgba(22, 154, 89, 0.65), 0 0 16px rgba(22, 154, 89, 0.35)"
-                          : isCurrent
-                            ? "0 0 8px rgba(247, 206, 91, 0.55), 0 0 14px rgba(247, 206, 91, 0.3)"
-                            : "0 0 6px rgba(115, 112, 128, 0.38)",
-                      }}
                     >
                       {isComplete ? (
                         <Check className="h-5 w-5" aria-hidden />

@@ -90,7 +90,7 @@ function stepParts(experiment: Experiment): { shownStep: number; stepIndex: numb
 // Icon/color keyed by the workflow step (mock: flask=setup, sliders=tune,
 // rocket=run, pulse=analyze, award=publish); module/engine stay text in the subtitle.
 const STEP_ICONS: { Icon: LucideIcon; className: string }[] = [
-  { Icon: FlaskConical, className: "bg-base-200 text-text-muted" },
+  { Icon: FlaskConical, className: "bg-surface-raised text-text-muted" },
   { Icon: SlidersHorizontal, className: "bg-info text-info-foreground" },
   { Icon: Rocket, className: "bg-success text-success-foreground" },
   { Icon: Activity, className: "bg-warning text-warning-foreground" },
@@ -315,7 +315,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
     // The whole card links to the wizard: the title anchor stretches an ::after
     // overlay across the card, and interactive elements rise above it with z-10.
     // DS cards are borderless (shadow-only), so hover means lift, not border.
-    <Card className="relative bg-white pb-0 transition-shadow hover:shadow-md">
+    <Card className="relative pb-0 transition-shadow hover:shadow-md">
       <CardHeader>
         <div className="flex min-w-0 items-center gap-3">
           <span
@@ -426,9 +426,11 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
         <StepDetails experiment={experiment} stepIndex={stepIndex} />
       </CardContent>
 
-      {/* pt-3! must outrank the DS rule that pads [.border-t] footers to pt-6;
-          bg + rounded-b reproduce the mock's subtle footer band flush with the card edge. */}
-      <CardFooter className="border-border bg-background gap-3 rounded-b-md border-t pt-3! pb-3 text-sm">
+      {/* pt-3! must outrank the DS rule that pads [.border-t] footers to pt-6. The
+          surface-raised + rounded-b footer band is the only legal surface step above
+          the card's bg-surface — bg-background would match the page canvas and read
+          as a hole in dark mode (and reverse the surface order in light). */}
+      <CardFooter className="border-border bg-surface-raised gap-3 rounded-b-md border-t pt-3! pb-3 text-sm">
         <span className="text-text-muted truncate">{sourceLabel(experiment.source) ?? ""}</span>
         <span className="text-text-muted ml-auto flex shrink-0 items-center gap-3">
           {experiment.size_bytes !== null && experiment.size_bytes !== undefined && (
