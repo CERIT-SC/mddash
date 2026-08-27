@@ -1,4 +1,5 @@
 import { useGetExperiment, useListSimulations } from "@/api/generated/client"
+import type { Simulation } from "@/api/generated/models"
 import { AnalyzeStep } from "@/features/analyze"
 import { PublishStep } from "@/features/publish"
 import { RunStep } from "@/features/run"
@@ -22,6 +23,15 @@ const STEPS = [
 
 const LAST_STEP = STEPS.length - 1
 
+const SIMULATIONS_POLL_MS = 5000
+
+const pollWhileAnyLive =
+  (pollMs: number) =>
+  (query: { state: { data: unknown } }): number | false => {
+    const data = query.state.data as { status: number; data: Simulation[] } | undefined
+    return data?.status === 200 && data.data.some((simulation) => simulation.live) ? pollMs : false
+  }
+
 export type WizardSearch = {
   /** Selected simulation tab — the simulation_path, which may contain slashes. */
   simulation?: string
@@ -43,9 +53,12 @@ type ExperimentWizardProps = {
 
 export function ExperimentWizard({ experimentId, search, onSearchChange }: ExperimentWizardProps) {
   const experiment = useGetExperiment(experimentId, { query: { retry: false } })
-  // The 5s poll is the wizard heartbeat: the step ladder advances server-side
-  // when a run finishes, and the stepper must follow without user action.
-  const simulations = useListSimulations(experimentId, { query: { retry: false, refetchInterval: 5000 } })
+  // The poll is the wizard heartbeat — the step ladder advances server-side when
+  // a run finishes and the stepper must follow. Each refetch scans manifests +
+  // job states, so it pauses once no simulation has work in flight.
+  const simulations = useListSimulations(experimentId, {
+    query: { retry: false, refetchInterval: pollWhileAnyLive(SIMULATIONS_POLL_MS) },
+  })
 
   if (experiment.isError) {
     return <ApiErrorAlert error={experiment.error} onRetry={() => void experiment.refetch()} />
@@ -77,11 +90,9 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         ? list.find((candidate) => candidate.simulation_path === data.latest_simulation_path)
         : undefined) ??
       list[0])
-  // The API owns the ladder — consume it directly: a simulation's step gates
-  // Tune/Run/Analyze for that simulation only (live run 3, finished run 4).
-  // can_publish unlocks ONLY the experiment-level Publish marker. Ranges are
-  // guaranteed upstream (API ladder 0-4, validateSearch, Stepper clamps), so
-  // no clamping happens here. Create mode has no ladder: Setup.
+  // The API owns phase semantics: step is already the stepper index (Setup 0,
+  // Tune 1, Run 2, Analyze 3), consumed directly with no decode. can_publish
+  // unlocks ONLY the experiment-level Publish marker. Create mode: Setup.
   const ownStep = selected === undefined ? 0 : selected.step
   const maxStep = selected === undefined ? 0 : ownStep
   const step = selected === undefined ? 0 : (search.step ?? ownStep)

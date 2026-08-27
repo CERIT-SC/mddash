@@ -991,7 +991,7 @@ components:
       additionalProperties: false
     Simulation:
       type: object
-      required: [simulation_path, name, engine, files, resolved_files, extra_args, locked, valid, errors, missing_files, step, status, last_activity]
+      required: [simulation_path, name, engine, files, resolved_files, extra_args, locked, valid, errors, missing_files, step, status, live, last_activity]
       properties:
         simulation_path: {type: string}
         name: {type: string}
@@ -1003,8 +1003,11 @@ components:
         valid: {type: boolean}
         errors: {type: array, items: {type: string}}
         missing_files: {type: array, items: {type: string}}
-        step: {type: integer, minimum: 0, maximum: 4}
+        # Wizard phase index (Setup 0, Tune 1, Run 2, Analyze 3); publish is experiment-level.
+        step: {type: integer, minimum: 0, maximum: 3}
         status: {type: string}
+        # True while any tuner or production job for this simulation may still advance on its own.
+        live: {type: boolean}
         last_activity: {type: number}
       additionalProperties: false
     SimulationJob:
@@ -1038,14 +1041,18 @@ components:
     GromacsJob:
       allOf:
         - {$ref: '#/components/schemas/SimulationJob'}
+        # pme/nb are non-nullable columns — every stored job carries them.
         - type: object
+          required: [pme, nb]
           properties:
             pme: {type: string, enum: [cpu, gpu]}
             nb: {type: string, enum: [cpu, gpu]}
     AmberJob:
       allOf:
         - {$ref: '#/components/schemas/SimulationJob'}
+        # binary/ewald are non-nullable columns — every stored job carries them.
         - type: object
+          required: [binary, ewald]
           properties:
             binary: {type: string}
             ewald: {type: string}

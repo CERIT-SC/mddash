@@ -80,12 +80,11 @@ const IDLE_STATUSES = new Set(["setup", "setup complete", "published"])
 // Phases with work in flight get the spinner (matches the mock's live statuses).
 const SPINNING_STATUSES = new Set(["simulating", "tuning", "analyzing"])
 
-// The API ladder reports the deepest completed phase, one slot right of the
-// display index (finished Run=4 → Analyze=3); the shown counter counts it up
-// again. No status-string mapping needed here.
+// The API step IS the phase index (Setup 0 .. Analyze 3, publish states 4) —
+// consumed directly; the shown counter counts from 1.
 function stepParts(experiment: Experiment): { shownStep: number; stepIndex: number } {
-  const step = Math.max(0, Math.min(experiment.step ?? 0, STEP_LABELS.length))
-  return { shownStep: Math.max(step, 1), stepIndex: Math.max(0, Math.min(step - 1, STEP_LABELS.length - 1)) }
+  const step = Math.max(0, Math.min(experiment.step ?? 0, STEP_LABELS.length - 1))
+  return { shownStep: step + 1, stepIndex: step }
 }
 
 // Icon/color keyed by the workflow step (mock: flask=setup, sliders=tune,
@@ -134,9 +133,11 @@ const latest = <T extends { created_at: string }>(jobs: T[]) =>
   jobs.reduce<T | undefined>((best, job) => (!best || job.created_at > best.created_at ? job : best), undefined)
 
 function SetupDetails({ experiment }: DetailsProps) {
+  // Index 0 is only ever paired with status "setup" (backend tuple invariant),
+  // so setup is by definition not ready on this card.
   return (
     <>
-      <DetailRow label="Setup ready" value={experiment.status === "setup complete" ? "Yes" : "No"} />
+      <DetailRow label="Setup ready" value="No" />
       <DetailRow label="Workflow" value={experiment.module_name ?? "Custom"} />
     </>
   )
@@ -412,8 +413,8 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
               className={cn(
                 "h-1.5 flex-1 rounded-full",
                 // Completed steps fill solid, the current step stays tinted,
-                // future steps stay grey; everything fills at the final step.
-                (experiment.step ?? 0) >= STEP_LABELS.length || index < stepIndex
+                // future steps stay grey; a published experiment fills all.
+                experiment.status === "published" || index < stepIndex
                   ? "bg-primary"
                   : index === stepIndex
                     ? "bg-primary/40"

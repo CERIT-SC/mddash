@@ -96,6 +96,11 @@ class SimulationJob(db.Model):  # type: ignore
             return JobStatus.UNKNOWN
 
     @property
+    def is_live(self) -> bool:
+        """Non-terminal states — the job may still advance without user action."""
+        return self.status.is_live
+
+    @property
     @cached(cache=simulation_log_lines_cache)
     def log_lines(self) -> dict[str, int | None]:
         """

@@ -54,6 +54,11 @@ class TunerJob(db.Model):  # type: ignore
         return self._status().get("status", JobStatus.UNKNOWN)
 
     @property
+    def is_live(self) -> bool:
+        """Non-terminal states — a stopped job is terminal even though its status reads UNKNOWN."""
+        return not self.is_stopped and self.tuner_status.is_live
+
+    @property
     def sim_length_ns(self) -> float | None:
         """Full production simulation length (ns) reported by the tuner."""
         return self._status().get("sim_length_ns")

@@ -10,6 +10,6 @@ import type { GromacsJobPme } from './gromacsJobPme.ts';
 import type { SimulationJob } from './simulationJob.ts';
 
 export type GromacsJob = SimulationJob & {
-  pme?: GromacsJobPme;
-  nb?: GromacsJobNb;
+  pme: GromacsJobPme;
+  nb: GromacsJobNb;
 };

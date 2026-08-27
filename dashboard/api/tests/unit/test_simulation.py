@@ -490,7 +490,7 @@ class TestStepStatus:
         with app.app_context():
             protein = Simulation.get(exp_id, "protein.simulation.json")
             ligand = Simulation.get(exp_id, "ligand.simulation.json")
-            assert protein.step == 4
+            assert protein.step == 3
             assert protein.status == "analyzing"
             assert ligand.step == 1
             assert ligand.status == "setup complete"
@@ -508,8 +508,8 @@ class TestStepStatus:
             assert sim.step == 2
             assert sim.status == "simulating"
 
-    def test_running_sim_job_gives_step_three(self, app: Flask, tmp_path: Path) -> None:
-        """A running job sits at step 3."""
+    def test_running_sim_job_keeps_step_two(self, app: Flask, tmp_path: Path) -> None:
+        """The Run phase spans queued and running jobs — a running job stays at step 2."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
@@ -518,7 +518,7 @@ class TestStepStatus:
 
         with app.app_context():
             sim = Simulation.get(exp_id, "protein.simulation.json")
-            assert sim.step == 3
+            assert sim.step == 2
             assert sim.status == "simulating"
 
     def test_tuner_trials_give_step_two(self, app: Flask, tmp_path: Path) -> None:
@@ -543,6 +543,52 @@ class TestStepStatus:
             sim = Simulation.get(exp_id, "protein.simulation.json")
             assert sim.step == 2
             assert sim.status == "tuning"
+
+    def test_pending_and_running_jobs_are_live(self, app: Flask, tmp_path: Path) -> None:
+        """Non-terminal jobs keep the simulation live; the dict carries the flag."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        _write_sim_file(exp_dir, "ligand.simulation.json", GMX_FILES)
+        _add_gmx_job(app, exp_id, "protein.simulation.json")
+        _add_gmx_job(app, exp_id, "ligand.simulation.json", _last_known_status=JobStatus.RUNNING)
+
+        with app.app_context():
+            assert Simulation.get(exp_id, "protein.simulation.json").live is True
+            assert Simulation.get(exp_id, "ligand.simulation.json").live is True
+            assert Simulation.get(exp_id, "protein.simulation.json").to_dict()["live"] is True
+
+    def test_terminal_jobs_are_not_live(self, app: Flask, tmp_path: Path) -> None:
+        """Finished/failed jobs and stopped tuner jobs leave the simulation settled."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        _add_gmx_job(app, exp_id, "protein.simulation.json", _last_known_status=JobStatus.FINISHED)
+
+        with app.app_context():
+            tuner = TunerJob(
+                id=str(uuid.uuid4()),
+                experiment_id=exp_id,
+                simulation_path="protein.simulation.json",
+                is_stopped=True,  # stopped jobs report UNKNOWN status but are terminal
+                nsteps=25000,
+            )
+            db.session.add(tuner)
+            db.session.commit()
+
+            assert Simulation.get(exp_id, "protein.simulation.json").live is False
+
+    def test_no_jobs_is_not_live(self, app: Flask, tmp_path: Path) -> None:
+        """A bare manifest has nothing in flight."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+
+        with app.app_context():
+            assert Simulation.get(exp_id, "protein.simulation.json").live is False
 
 
 class TestLogLines:
@@ -767,7 +813,7 @@ class TestExperimentDelegation:
             assert latest.name == "protein"
 
     def test_publish_state_overrides(self, app: Flask, tmp_path: Path) -> None:
-        """Published/publishing (step 5) beats the latest simulation's step."""
+        """Published/publishing (step 4) beats the latest simulation's step."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
@@ -780,13 +826,13 @@ class TestExperimentDelegation:
             assert experiment is not None
 
             experiment.mdrepo_published = True
-            assert experiment.step == 5
+            assert experiment.step == 4
             assert experiment.status == "published"
 
             # the ladder is TTL-cached per instance; clear to observe the state change
             step_status_cache.clear()
             experiment.mdrepo_published = False
-            assert experiment.step == 5
+            assert experiment.step == 4
             assert experiment.status == "publishing"
 
 
@@ -801,7 +847,7 @@ class TestCanPublish:
             assert experiment.can_publish is False
 
     def test_running_run_does_not_unlock(self, app: Flask, tmp_path: Path) -> None:
-        """A running run unlocks Analyze (step 3), not Publish."""
+        """A running run is still in the Run phase — Analyze (and Publish) wait for the finish."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)

@@ -20,9 +20,10 @@ export interface Simulation {
   missing_files: string[];
   /**
      * @minimum 0
-     * @maximum 4
+     * @maximum 3
      */
   step: number;
   status: string;
+  live: boolean;
   last_activity: number;
 }

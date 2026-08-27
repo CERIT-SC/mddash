@@ -8,6 +8,6 @@
 import type { SimulationJob } from './simulationJob.ts';
 
 export type AmberJob = SimulationJob & {
-  binary?: string;
-  ewald?: string;
+  binary: string;
+  ewald: string;
 };

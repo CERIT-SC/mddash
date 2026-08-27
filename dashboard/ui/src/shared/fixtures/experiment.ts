@@ -13,8 +13,8 @@ export function experiment(id: string, overrides: Partial<Experiment> = {}): Exp
     tuner_jobs: [],
     simulation_jobs: [],
     analysis_jobs: [],
-    step: 2,
-    status: "setup",
+    step: 1,
+    status: "setup complete",
     ...overrides,
   }
 }

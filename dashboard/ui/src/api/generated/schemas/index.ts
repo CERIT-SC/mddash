@@ -673,7 +673,7 @@ export const ListSimulationsParams = zod.object({
 
 
 export const listSimulationsResponseStepMin = 0;
-export const listSimulationsResponseStepMax = 4;
+export const listSimulationsResponseStepMax = 3;
 
 
 
@@ -690,6 +690,7 @@ export const ListSimulationsResponseItem = zod.object({
   "missing_files": zod.array(zod.string()),
   "step": zod.int().min(listSimulationsResponseStepMin).max(listSimulationsResponseStepMax),
   "status": zod.string(),
+  "live": zod.boolean(),
   "last_activity": zod.number()
 })
 export const ListSimulationsResponse = zod.array(ListSimulationsResponseItem)
@@ -720,7 +721,7 @@ export const CreateSimulationBody = zod.object({
 
 
 export const createSimulationResponseStepMin = 0;
-export const createSimulationResponseStepMax = 4;
+export const createSimulationResponseStepMax = 3;
 
 
 
@@ -737,6 +738,7 @@ export const CreateSimulationResponse = zod.object({
   "missing_files": zod.array(zod.string()),
   "step": zod.int().min(createSimulationResponseStepMin).max(createSimulationResponseStepMax),
   "status": zod.string(),
+  "live": zod.boolean(),
   "last_activity": zod.number()
 })
 
@@ -756,7 +758,7 @@ export const GetSimulationParams = zod.object({
 
 
 export const getSimulationResponseStepMin = 0;
-export const getSimulationResponseStepMax = 4;
+export const getSimulationResponseStepMax = 3;
 
 
 
@@ -773,6 +775,7 @@ export const GetSimulationResponse = zod.object({
   "missing_files": zod.array(zod.string()),
   "step": zod.int().min(getSimulationResponseStepMin).max(getSimulationResponseStepMax),
   "status": zod.string(),
+  "live": zod.boolean(),
   "last_activity": zod.number()
 })
 
@@ -804,7 +807,7 @@ export const UpdateSimulationBody = zod.object({
 
 
 export const updateSimulationResponseStepMin = 0;
-export const updateSimulationResponseStepMax = 4;
+export const updateSimulationResponseStepMax = 3;
 
 
 
@@ -821,6 +824,7 @@ export const UpdateSimulationResponse = zod.object({
   "missing_files": zod.array(zod.string()),
   "step": zod.int().min(updateSimulationResponseStepMin).max(updateSimulationResponseStepMax),
   "status": zod.string(),
+  "live": zod.boolean(),
   "last_activity": zod.number()
 })
 
@@ -876,8 +880,8 @@ export const ListGromacsJobsResponseItem = zod.object({
   "stderr": zod.int().nullish()
 }).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 }).and(zod.object({
-  "pme": zod.enum(['cpu', 'gpu']).optional(),
-  "nb": zod.enum(['cpu', 'gpu']).optional()
+  "pme": zod.enum(['cpu', 'gpu']),
+  "nb": zod.enum(['cpu', 'gpu'])
 }))
 export const ListGromacsJobsResponse = zod.array(ListGromacsJobsResponseItem)
 
@@ -920,8 +924,8 @@ export const GetGromacsJobResponse = zod.object({
   "stderr": zod.int().nullish()
 }).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 }).and(zod.object({
-  "pme": zod.enum(['cpu', 'gpu']).optional(),
-  "nb": zod.enum(['cpu', 'gpu']).optional()
+  "pme": zod.enum(['cpu', 'gpu']),
+  "nb": zod.enum(['cpu', 'gpu'])
 }))
 
 
@@ -974,8 +978,8 @@ export const SubmitGromacsJobResponse = zod.object({
   "stderr": zod.int().nullish()
 }).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 }).and(zod.object({
-  "pme": zod.enum(['cpu', 'gpu']).optional(),
-  "nb": zod.enum(['cpu', 'gpu']).optional()
+  "pme": zod.enum(['cpu', 'gpu']),
+  "nb": zod.enum(['cpu', 'gpu'])
 }))
 
 
@@ -1056,8 +1060,8 @@ export const ListAmberJobsResponseItem = zod.object({
   "stderr": zod.int().nullish()
 }).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 }).and(zod.object({
-  "binary": zod.string().optional(),
-  "ewald": zod.string().optional()
+  "binary": zod.string(),
+  "ewald": zod.string()
 }))
 export const ListAmberJobsResponse = zod.array(ListAmberJobsResponseItem)
 
@@ -1100,8 +1104,8 @@ export const GetAmberJobResponse = zod.object({
   "stderr": zod.int().nullish()
 }).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 }).and(zod.object({
-  "binary": zod.string().optional(),
-  "ewald": zod.string().optional()
+  "binary": zod.string(),
+  "ewald": zod.string()
 }))
 
 
@@ -1154,8 +1158,8 @@ export const SubmitAmberJobResponse = zod.object({
   "stderr": zod.int().nullish()
 }).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
 }).and(zod.object({
-  "binary": zod.string().optional(),
-  "ewald": zod.string().optional()
+  "binary": zod.string(),
+  "ewald": zod.string()
 }))
 
 

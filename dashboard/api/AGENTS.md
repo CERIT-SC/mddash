@@ -18,6 +18,7 @@ Flask REST API that orchestrates molecular dynamics experiments across Kubernete
 - `get_simulation()` validates against the JSON Schema referenced by `$schema` (which must be a mddash schema URL — see `manifest_schema.py`); invalid simulations are returned with errors and can't be used by downstream steps.
 - A simulation is locked when its file is read-only or when a tuner/production job references its `simulation_path`. `mark_simulation_readonly()` chmods the file `0444`.
 - Manifest `name` must be unique per experiment (wizard tab identity); `_new` is reserved (create-tab sentinel).
+- **`step` IS the wizard phase index** (Setup 0, Tune 1, Run 2, Analyze 3) and `live` flags non-terminal tuner/production jobs (`JobStatus.is_live`); clients consume both directly — never decode ints or status strings client-side. `Experiment._step_status` extends the same scale with publish = 4.
 
 ### Migrations
 - `create_app()` runs `flask_migrate.upgrade()` on startup (skipped at head), falling back to `db.create_all()`. Add a migration file in `migrations/versions/` when adding columns. Do NOT manually run `flask db upgrade`.

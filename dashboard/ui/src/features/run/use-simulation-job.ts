@@ -17,6 +17,7 @@ import {
   type GromacsJobRequest,
   type SimulationJob,
 } from "@/api/generated/models"
+import { toJobRequest } from "@/features/tune"
 
 /** Non-terminal states — the job keeps being polled while any of these. */
 export function jobLive(job: SimulationJob): boolean {
@@ -37,12 +38,13 @@ export function engineLogType(engine: Engine): "gmx" | "mdout" {
 
 /** Rebuild the submit request from an existing job (used by Re-run). */
 export function jobConfigRequest(engine: Engine, job: SimulationJob): GromacsJobRequest | AmberJobRequest {
-  if (engine === Engine.AMBER) {
-    const amber = job as AmberJob
-    return { binary: amber.binary ?? "pmemd.cuda", ewald: amber.ewald ?? "default", np: job.np, ntomp: job.ntomp }
-  }
-  const gmx = job as GromacsJob
-  return { pme: gmx.pme ?? "cpu", nb: gmx.nb ?? "cpu", np: job.np, ntomp: job.ntomp }
+  // Job fields are non-nullable server-side; only the engine→field mapping
+  // (shared with the submit path via toJobRequest) happens here.
+  const picks =
+    engine === Engine.AMBER
+      ? { pickA: (job as AmberJob).binary, pickB: (job as AmberJob).ewald }
+      : { pickA: (job as GromacsJob).pme, pickB: (job as GromacsJob).nb }
+  return toJobRequest(engine, { ...picks, np: job.np, ntomp: job.ntomp })
 }
 
 // The generated hooks come in engine pairs; each wrapper mounts both but enables

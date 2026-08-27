@@ -479,14 +479,14 @@ class Experiment(db.Model):  # type: ignore
         Publish state overrides; otherwise inherit the latest simulation's (step, status).
 
         Returns:
-            A tuple of (step, status) where step is an integer (0-5) and status
-            is a string describing the current phase.
+            A tuple of (step, status) where step is the phase index (0-4, with
+            publish 4) and status is a string describing the current phase.
         """
         if self.mdrepo_published is True:
-            return 5, "published"
+            return 4, "published"
 
         if self.mdrepo_published is False:
-            return 5, "publishing"
+            return 4, "publishing"
 
         if latest := self._latest_simulation():
             return latest.step_status

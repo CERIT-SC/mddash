@@ -30,7 +30,7 @@ describe("ExperimentCard", () => {
 
   it("shows the live phase for active statuses", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    await renderCard(analyze({ step: 3, status: "simulating" }))
+    await renderCard(analyze({ step: 2, status: "simulating" }))
     expect(screen.getByText("Run · 3 of 5")).toBeVisible()
     expect(screen.getByText("Simulating")).toBeVisible()
   })
@@ -168,9 +168,9 @@ describe("ExperimentCard", () => {
 
   it("shows setup details on a setup-step card", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    await renderCard(analyze({ step: 1, status: "setup complete" }))
+    await renderCard(analyze({ step: 0, status: "setup" }))
     expect(screen.getByText("Setup ready")).toBeVisible()
-    expect(screen.getByText("Yes")).toBeVisible()
+    expect(screen.getByText("No")).toBeVisible()
     expect(screen.getByText("Workflow")).toBeVisible()
     expect(screen.getByText("Custom")).toBeVisible()
   })
@@ -179,7 +179,7 @@ describe("ExperimentCard", () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
     await renderCard(
       analyze({
-        step: 2,
+        step: 1,
         status: "tuning",
         latest_simulation_path: "md.simulation.json",
         tuner_jobs: [
@@ -194,7 +194,7 @@ describe("ExperimentCard", () => {
             tuner_status: "RUNNING",
             sim_length_ns: 250,
             trials: [
-              { id: "a", status: "FINISHED", performance: 70 },
+              { id: "a", status: "RUNNING", performance: null },
               { id: "b", status: "RUNNING", performance: null },
               { id: "c", performance: null },
             ],
@@ -203,7 +203,7 @@ describe("ExperimentCard", () => {
       })
     )
     expect(screen.getByText("Configurations")).toBeVisible()
-    expect(screen.getByText("1 of 3 explored")).toBeVisible()
+    expect(screen.getByText("0 of 3 explored")).toBeVisible()
     expect(screen.getByText("Steps")).toBeVisible()
     expect(screen.getByText("10,000")).toBeVisible()
   })
@@ -227,7 +227,7 @@ describe("ExperimentCard", () => {
     })
     await renderCard(
       analyze({
-        step: 4,
+        step: 3,
         status: "analyzing",
         latest_simulation_path: "md.simulation.json",
         simulation_jobs: [
@@ -251,23 +251,23 @@ describe("ExperimentCard", () => {
 
   it("falls back to N/A when step detail data is missing", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    await renderCard(analyze({ step: 2, status: "tuning", latest_simulation_path: "md.simulation.json" }))
+    await renderCard(analyze({ step: 1, status: "tuning", latest_simulation_path: "md.simulation.json" }))
     expect(screen.getAllByText("N/A")).toHaveLength(2)
   })
 
   it("shows different icons for the publishing and published states", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    const { container, unmount } = await renderCard(analyze({ step: 5, status: "publishing", mdrepo_published: false }))
+    const { container, unmount } = await renderCard(analyze({ step: 4, status: "publishing", mdrepo_published: false }))
     expect(container.querySelector("span.bg-info.text-info-foreground")).not.toBeNull()
     expect(container.querySelector("span.bg-primary.text-primary-foreground")).toBeNull()
     unmount()
-    const published = await renderCard(analyze({ step: 5, status: "published", mdrepo_published: true }))
+    const published = await renderCard(analyze({ step: 4, status: "published", mdrepo_published: true }))
     expect(published.container.querySelector("span.bg-primary.text-primary-foreground")).not.toBeNull()
   })
 
   it("shows publish details on a publish-step card", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    await renderCard(analyze({ step: 5, status: "published", mdrepo_published: true, mdrepo_id: "10.5281/demo" }))
+    await renderCard(analyze({ step: 4, status: "published", mdrepo_published: true, mdrepo_id: "10.5281/demo" }))
     expect(screen.getByText("Published")).toBeVisible()
     expect(screen.getByText("Yes")).toBeVisible()
     expect(screen.getByText("Target")).toBeVisible()

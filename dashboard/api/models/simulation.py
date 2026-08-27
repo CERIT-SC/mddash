@@ -288,20 +288,22 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         (step, status) from jobs referencing this ``simulation_path``.
 
-        Finished job (4), running job (3), any job or tuned trial (2), any
-        tuner job (1), valid manifest (1), otherwise 0. Publish is
-        experiment-level and not part of this ladder.
+        The step is the wizard phase index (Setup 0, Tune 1, Run 2, Analyze 3):
+        a valid manifest reaches Tune, a tuned trial or any production job
+        reaches Run (the phase spans queued and running jobs), and a finished
+        run lands on Analyze. Publish is experiment-level and not part of
+        this ladder.
 
         Returns:
-            A tuple of (step, status) where step is an integer (0-4) and status
+            A tuple of (step, status) where step is an integer (0-3) and status
             is a string describing the current phase.
         """
         jobs = self._cached_jobs()
 
         if any(j.status == JobStatus.FINISHED for j in jobs.simulation):
-            return 4, "analyzing"
+            return 3, "analyzing"
         if any(j.status == JobStatus.RUNNING for j in jobs.simulation):
-            return 3, "simulating"
+            return 2, "simulating"
         if jobs.simulation:
             return 2, "simulating"
 
@@ -313,6 +315,12 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if self.valid:
             return 1, "setup complete"
         return 0, "setup"
+
+    @property
+    def live(self) -> bool:
+        """Whether any tuner or production job for this simulation may still advance on its own."""
+        jobs = self._cached_jobs()
+        return any(j.is_live for j in jobs.tuner) or any(j.is_live for j in jobs.simulation)
 
     def to_dict(self) -> dict:
         """
@@ -336,6 +344,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             "missing_files": missing,
             "step": self.step,
             "status": self.status,
+            "live": self.live,
             "last_activity": self.last_activity,
         }
 

@@ -10,6 +10,11 @@ class JobStatus(str, Enum):
     FINISHED = "FINISHED"
     ERROR = "ERROR"
 
+    @property
+    def is_live(self) -> bool:
+        """Non-terminal states — the job may still advance without user action."""
+        return self in {JobStatus.UNKNOWN, JobStatus.PENDING, JobStatus.RUNNING}
+
     def __str__(self) -> str:
         return self.value
 

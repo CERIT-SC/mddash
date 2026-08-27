@@ -14,6 +14,7 @@ export function simulation(path: string, overrides: Partial<Simulation> = {}): S
     missing_files: [],
     step: 0,
     status: "setup",
+    live: false,
     last_activity: 0,
     ...overrides,
   }
