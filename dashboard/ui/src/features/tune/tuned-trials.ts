@@ -1,4 +1,4 @@
-import { Engine, JobStatus, type TunerJob, type TunerTrial } from "@/api/generated/models"
+import { Engine, JobStatus, type TunerTrial } from "@/api/generated/models"
 import { z } from "zod"
 
 // TunerTrial config fields are engine-shaped and left untyped by the API —
@@ -89,16 +89,6 @@ export function suggest(rows: TrialRow[]): Suggestions {
     if (row.estCost !== null && (eco === null || row.estCost < eco.estCost!)) eco = row
   }
   return { fastestId: fastest?.id ?? null, ecoId: eco?.id ?? null }
-}
-
-/** Stopped jobs report UNKNOWN, hence the is_stopped guard. */
-export function jobLive(job: TunerJob): boolean {
-  if (job.is_stopped) return false
-  return (
-    job.tuner_status === JobStatus.PENDING ||
-    job.tuner_status === JobStatus.RUNNING ||
-    job.tuner_status === JobStatus.UNKNOWN
-  )
 }
 
 /** "$2.60" → "$2.6", while tiny costs keep precision ("$0.04"). */

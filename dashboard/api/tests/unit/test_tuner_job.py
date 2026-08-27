@@ -278,3 +278,50 @@ class TestTunerJobStartFailure:
         assert exc_info.value.problem_type == "urn:mddash:upstream-unavailable"
         assert exc_info.value.code == HTTPStatus.INTERNAL_SERVER_ERROR
         assert exc_info.value.problem_solution is not None
+
+
+class TestTunerStatusCoercion:
+    """The status dict carries raw JSON strings; tuner_status must still return JobStatus members."""
+
+    def setup_method(self) -> None:
+        """Clear tuner caches before each test."""
+        tuner_status_cache.clear()
+        tuner_last_known_status.clear()
+
+    def teardown_method(self) -> None:
+        """Clear tuner caches after each test."""
+        tuner_status_cache.clear()
+        tuner_last_known_status.clear()
+
+    def test_raw_string_status_is_coerced(self, app: Flask, db_session: Session) -> None:
+        """A raw "RUNNING" from the tuner becomes the RUNNING member, and the job is live."""
+        experiment = _make_experiment(db_session)
+        job = _make_tuner_job(experiment)
+        db_session.add(job)
+        db_session.commit()
+
+        with patch("models.tuner_job.tuner.amber_poll_status", return_value={"status": "RUNNING", "trials": []}):
+            assert job.tuner_status is JobStatus.RUNNING
+            assert job.is_live is True
+
+    def test_unknown_status_string_degrades_to_unknown(self, app: Flask, db_session: Session) -> None:
+        """A status outside the enum vocabulary reads as UNKNOWN rather than raising."""
+        experiment = _make_experiment(db_session)
+        job = _make_tuner_job(experiment)
+        db_session.add(job)
+        db_session.commit()
+
+        with patch("models.tuner_job.tuner.amber_poll_status", return_value={"status": "FUTURE_STATE", "trials": []}):
+            assert job.tuner_status is JobStatus.UNKNOWN
+            assert job.is_live is True
+
+    def test_stopped_job_is_not_live(self, app: Flask, db_session: Session) -> None:
+        """A stopped job reports UNKNOWN (from the empty status dict) but is terminal."""
+        experiment = _make_experiment(db_session)
+        job = _make_tuner_job(experiment)
+        job.is_stopped = True
+        db_session.add(job)
+        db_session.commit()
+
+        assert job.tuner_status is JobStatus.UNKNOWN
+        assert job.is_live is False

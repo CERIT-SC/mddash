@@ -57,6 +57,7 @@ const RUNNING_SIM_JOB = {
   simulation_path: SIM,
   engine: "GMX",
   status: "RUNNING",
+  is_live: true,
   np: 1,
   ntomp: 1,
   created_at: "2026-08-19T00:00:00Z",

@@ -101,6 +101,7 @@ describe("ExperimentCard", () => {
             np: 4,
             ntomp: 2,
             status: "RUNNING",
+            is_live: true,
           },
           {
             id: "s2",
@@ -111,6 +112,7 @@ describe("ExperimentCard", () => {
             np: 4,
             ntomp: 2,
             status: "FINISHED",
+            is_live: false,
           },
         ],
         tuner_jobs: [
@@ -123,6 +125,7 @@ describe("ExperimentCard", () => {
             is_stopped: false,
             engine: "GMX",
             tuner_status: "PENDING",
+            is_live: true,
             trials: [],
           },
         ],
@@ -192,6 +195,7 @@ describe("ExperimentCard", () => {
             is_stopped: false,
             engine: "GMX",
             tuner_status: "RUNNING",
+            is_live: true,
             sim_length_ns: 250,
             trials: [
               { id: "a", status: "RUNNING", performance: null },
@@ -240,6 +244,7 @@ describe("ExperimentCard", () => {
             np: 4,
             ntomp: 2,
             status: "FINISHED",
+            is_live: false,
           },
         ],
       })

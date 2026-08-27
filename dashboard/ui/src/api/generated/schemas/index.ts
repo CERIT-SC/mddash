@@ -112,6 +112,7 @@ export const ListExperimentsResponseItem = zod.object({
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
   "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
@@ -134,6 +135,7 @@ export const ListExperimentsResponseItem = zod.object({
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
   "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
   "log_lines": zod.object({
   "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
   "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
@@ -228,6 +230,7 @@ export const CreateExperimentResponse = zod.object({
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
   "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
@@ -250,6 +253,7 @@ export const CreateExperimentResponse = zod.object({
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
   "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
   "log_lines": zod.object({
   "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
   "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
@@ -335,6 +339,7 @@ export const GetExperimentResponse = zod.object({
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
   "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
@@ -357,6 +362,7 @@ export const GetExperimentResponse = zod.object({
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
   "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
   "log_lines": zod.object({
   "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
   "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
@@ -446,6 +452,7 @@ export const UpdateExperimentResponse = zod.object({
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
   "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
@@ -468,6 +475,7 @@ export const UpdateExperimentResponse = zod.object({
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
   "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
   "log_lines": zod.object({
   "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
   "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
@@ -873,6 +881,7 @@ export const ListGromacsJobsResponseItem = zod.object({
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
   "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
   "log_lines": zod.object({
   "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
   "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
@@ -917,6 +926,7 @@ export const GetGromacsJobResponse = zod.object({
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
   "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
   "log_lines": zod.object({
   "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
   "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
@@ -971,6 +981,7 @@ export const SubmitGromacsJobResponse = zod.object({
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
   "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
   "log_lines": zod.object({
   "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
   "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
@@ -1053,6 +1064,7 @@ export const ListAmberJobsResponseItem = zod.object({
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
   "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
   "log_lines": zod.object({
   "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
   "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
@@ -1097,6 +1109,7 @@ export const GetAmberJobResponse = zod.object({
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
   "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
   "log_lines": zod.object({
   "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
   "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
@@ -1151,6 +1164,7 @@ export const SubmitAmberJobResponse = zod.object({
   "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
   "performance": zod.number().nullish(),
   "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
   "log_lines": zod.object({
   "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
   "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
@@ -1224,6 +1238,7 @@ export const ListTunerJobsResponseItem = zod.object({
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
   "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
@@ -1271,6 +1286,7 @@ export const StartTunerJobResponse = zod.object({
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
   "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
@@ -1302,6 +1318,7 @@ export const GetTunerJobResponse = zod.object({
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
   "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),

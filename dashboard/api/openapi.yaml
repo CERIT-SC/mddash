@@ -1012,7 +1012,7 @@ components:
       additionalProperties: false
     SimulationJob:
       type: object
-      required: [id, experiment_id, simulation_path, created_at, engine, np, ntomp, status]
+      required: [id, experiment_id, simulation_path, created_at, engine, np, ntomp, status, is_live]
       properties:
         id: {type: string}
         experiment_id: {type: string}
@@ -1028,6 +1028,8 @@ components:
         nsteps_done: {type: [integer, 'null'], description: Steps completed so far (parsed from the engine log)}
         performance: {type: [number, 'null']}
         estimated_time: {type: [integer, 'null'], description: Estimated seconds until completion}
+        # True while the job's status is non-terminal; auto-emitted with every job payload.
+        is_live: {type: boolean}
         log_lines:
           type: object
           description: Line counts per log stream for sizing badges without fetching logs; null while a stream's file does not exist yet
@@ -1083,7 +1085,7 @@ components:
       additionalProperties: true
     TunerJob:
       type: object
-      required: [id, experiment_id, simulation_path, created_at, nsteps, is_stopped, engine, tuner_status, trials]
+      required: [id, experiment_id, simulation_path, created_at, nsteps, is_stopped, engine, tuner_status, trials, is_live]
       properties:
         id: {type: string}
         experiment_id: {type: string}
@@ -1094,6 +1096,8 @@ components:
         is_stopped: {type: boolean}
         engine: {$ref: '#/components/schemas/Engine'}
         tuner_status: {$ref: '#/components/schemas/JobStatus'}
+        # True while the tuner job is not stopped and its status is non-terminal.
+        is_live: {type: boolean}
         sim_length_ns: {type: [number, 'null']}
         trials: {type: array, items: {$ref: '#/components/schemas/TunerTrial'}}
       additionalProperties: false

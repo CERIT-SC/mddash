@@ -1,7 +1,7 @@
-import { Engine, JobStatus, type TunerJob, type TunerTrial } from "@/api/generated/models"
+import { Engine, JobStatus, type TunerTrial } from "@/api/generated/models"
 import { describe, expect, it } from "vitest"
 
-import { formatCost, formatHardware, jobLive, parseTrial, suggest, type TrialRow } from "./tuned-trials"
+import { formatCost, formatHardware, parseTrial, suggest, type TrialRow } from "./tuned-trials"
 
 function rawTrial(overrides: Record<string, unknown> = {}): TunerTrial {
   return {
@@ -97,30 +97,6 @@ describe("suggest", () => {
       row({ id: "no-cost", performance: 999, estCost: null }),
     ]
     expect(suggest(rows)).toEqual({ fastestId: "no-cost", ecoId: null })
-  })
-})
-
-describe("jobLive", () => {
-  const base: TunerJob = {
-    id: "j1",
-    experiment_id: "exp1",
-    simulation_path: "md.simulation.json",
-    nsteps: 25000,
-    created_at: "2026-08-19T00:00:00Z",
-    is_stopped: false,
-    engine: Engine.GMX,
-    tuner_status: JobStatus.RUNNING,
-    sim_length_ns: 100,
-    trials: [],
-  }
-
-  it("is live for pending/running/unknown, never when stopped or finished", () => {
-    expect(jobLive({ ...base, tuner_status: JobStatus.RUNNING })).toBe(true)
-    expect(jobLive({ ...base, tuner_status: JobStatus.PENDING })).toBe(true)
-    expect(jobLive({ ...base, tuner_status: JobStatus.FINISHED })).toBe(false)
-    expect(jobLive({ ...base, is_stopped: true })).toBe(false)
-    // Stopped jobs report UNKNOWN from the API fallback.
-    expect(jobLive({ ...base, is_stopped: true, tuner_status: JobStatus.UNKNOWN })).toBe(false)
   })
 })
 

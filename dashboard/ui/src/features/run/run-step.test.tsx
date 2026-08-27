@@ -49,6 +49,7 @@ function gmxJob(overrides: Partial<GromacsJob> = {}): GromacsJob {
     pme: "cpu",
     nb: "cpu",
     status: "RUNNING",
+    is_live: true,
     start_timestamp: 1_755_000_000,
     finish_timestamp: null,
     nsteps: 10000,
@@ -70,6 +71,7 @@ function tunerJob(trials: TunerTrial[]): TunerJob {
     is_stopped: false,
     engine: "GMX",
     tuner_status: "FINISHED",
+    is_live: false,
     sim_length_ns: 100,
     trials,
   }
@@ -219,7 +221,9 @@ describe("RunStep running job", () => {
 
 describe("RunStep finished job", () => {
   it("shows Finished, enables Analyze, and hides the stop button", async () => {
-    mockRun({ initial: gmxJob({ status: "FINISHED", nsteps_done: 10000, estimated_time: 0, performance: 62.5 }) })
+    mockRun({
+      initial: gmxJob({ status: "FINISHED", is_live: false, nsteps_done: 10000, estimated_time: 0, performance: 62.5 }),
+    })
     const spies = renderRun()
 
     expect(await screen.findByText("Finished")).toBeInTheDocument()
@@ -233,7 +237,7 @@ describe("RunStep finished job", () => {
   })
 
   it("re-runs with the job's config after confirmation", async () => {
-    const { calls } = mockRun({ initial: gmxJob({ status: "FINISHED", nsteps_done: 10000 }) })
+    const { calls } = mockRun({ initial: gmxJob({ status: "FINISHED", is_live: false, nsteps_done: 10000 }) })
     const spies = renderRun()
 
     await userEvent.click(await screen.findByRole("button", { name: /re-run/i }))
@@ -254,7 +258,10 @@ describe("RunStep finished job", () => {
 
 describe("RunStep error job", () => {
   it("shows Failed and opens the logs on standard error", async () => {
-    const { calls } = mockRun({ initial: gmxJob({ status: "ERROR" }), logs: { stderr: "simulation exploded\n" } })
+    const { calls } = mockRun({
+      initial: gmxJob({ status: "ERROR", is_live: false }),
+      logs: { stderr: "simulation exploded\n" },
+    })
     renderRun()
 
     expect(await screen.findByText("Failed")).toBeInTheDocument()

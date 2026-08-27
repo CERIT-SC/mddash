@@ -20,6 +20,7 @@ export interface TunerJob {
   is_stopped: boolean;
   engine: Engine;
   tuner_status: JobStatus;
+  is_live: boolean;
   /** @nullable */
   sim_length_ns?: number | null;
   trials: TunerTrial[];

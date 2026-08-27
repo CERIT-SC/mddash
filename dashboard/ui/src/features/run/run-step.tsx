@@ -33,7 +33,7 @@ import { toast } from "sonner"
 import { ConfigUsed } from "./config-used"
 import { RunLogs } from "./run-logs"
 import { RunProgress } from "./run-progress"
-import { jobConfigRequest, jobLive, useJobMutations, useSimulationJobQuery } from "./use-simulation-job"
+import { jobConfigRequest, useJobMutations, useSimulationJobQuery } from "./use-simulation-job"
 
 const RUN_POLL_MS = 5000
 
@@ -56,7 +56,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
 
   const jobQuery = useSimulationJobQuery(experimentId, simulation.simulation_path, engine, pollMs)
   const job = jobQuery.job
-  const live = job !== undefined && jobLive(job)
+  const live = job !== undefined && job.is_live
   const failed = job?.status === JobStatus.ERROR
 
   // Tuner trials power the config table's estimates; a 404 just means "no tuning".

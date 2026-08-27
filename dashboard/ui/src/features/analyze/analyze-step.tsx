@@ -3,7 +3,7 @@ import { lazy, Suspense, useMemo, useState } from "react"
 import { getDownloadExperimentFileUrl, useListExperimentFiles } from "@/api/generated/client"
 import { type Engine, type Simulation } from "@/api/generated/models"
 import { NotebookLauncher, notebookRoleUrl, useNotebook, useNotebookReady } from "@/features/notebook"
-import { jobLive, jobProgressPercent, useSimulationJobQuery } from "@/features/run"
+import { jobProgressPercent, useSimulationJobQuery } from "@/features/run"
 import {
   Alert,
   AlertDescription,
@@ -56,7 +56,7 @@ export function AnalyzeStep({
   // The simulation may still be running — results keep changing while it is.
   const jobQuery = useSimulationJobQuery(experimentId, simulation.simulation_path, engine, pollMs)
   const simJob = jobQuery.job
-  const simRunning = simJob !== undefined && jobLive(simJob)
+  const simRunning = simJob !== undefined && simJob.is_live
   const simPercent = simJob !== undefined ? jobProgressPercent(simJob) : null
 
   // Notebook mirrors the setup step's wiring, targeting the analysis notebook.

@@ -10,7 +10,6 @@ import {
 } from "@/api/generated/client"
 import {
   Engine,
-  JobStatus,
   type AmberJob,
   type AmberJobRequest,
   type GromacsJob,
@@ -18,11 +17,6 @@ import {
   type SimulationJob,
 } from "@/api/generated/models"
 import { toJobRequest } from "@/features/tune"
-
-/** Non-terminal states — the job keeps being polled while any of these. */
-export function jobLive(job: SimulationJob): boolean {
-  return job.status === JobStatus.PENDING || job.status === JobStatus.RUNNING || job.status === JobStatus.UNKNOWN
-}
 
 /** Whole-percent progress; null while either step count is unknown. */
 export function jobProgressPercent(job: SimulationJob): number | null {
@@ -57,7 +51,7 @@ const pollWhileLive =
     if ((query.state.error as { status?: number } | null)?.status === 404) return false
     // Anything other than a live 200 (terminal states, other errors) stops the poll.
     const data = query.state.data as { status: number; data: SimulationJob } | undefined
-    return data?.status === 200 && jobLive(data.data) ? pollMs : false
+    return data?.status === 200 && data.data.is_live ? pollMs : false
   }
 
 export type SimulationJobQuery = {

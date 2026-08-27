@@ -58,7 +58,7 @@ import { DEFAULT_NSTEPS, NstepsSelect } from "./nsteps-select"
 import { toJobRequest } from "./run-request"
 import { TrialLogDialog } from "./trial-log-dialog"
 import { TrialsTable } from "./trials-table"
-import { jobLive, parseTrials, type TrialRow } from "./tuned-trials"
+import { parseTrials, type TrialRow } from "./tuned-trials"
 
 type TuneMode = "tuning" | "manual"
 
@@ -125,14 +125,14 @@ export function TuneStep({
         // A gone job is terminal even though TanStack keeps the last 200 as stale data.
         if ((query.state.error as { status?: number } | null)?.status === 404) return false
         const data = query.state.data
-        return data?.status === 200 && !hasErrorMessage(data.data) && jobLive(data.data) ? pollMs : false
+        return data?.status === 200 && !hasErrorMessage(data.data) && data.data.is_live ? pollMs : false
       },
     },
   })
   // A 404 means "no job", even with the previous 200 kept as stale data.
   const missing = jobQuery.error?.status === 404
   const job = !missing && jobQuery.data?.status === 200 ? jobQuery.data.data : undefined
-  const live = job !== undefined && !hasErrorMessage(job) && jobLive(job)
+  const live = job !== undefined && !hasErrorMessage(job) && job.is_live
   const rows = useMemo(() => (job === undefined ? [] : parseTrials(engine, job.trials)), [engine, job])
 
   const invalidate = () => {

@@ -38,6 +38,7 @@ export interface SimulationJob {
      * @nullable
      */
   estimated_time?: number | null;
+  is_live: boolean;
   /** Line counts per log stream for sizing badges without fetching logs; null while a stream's file does not exist yet */
   log_lines?: SimulationJobLogLines;
   [key: string]: unknown;

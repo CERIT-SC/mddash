@@ -64,6 +64,7 @@ function tunerJob(overrides: Partial<TunerJob> = {}): TunerJob {
     is_stopped: false,
     engine: "GMX",
     tuner_status: "RUNNING",
+    is_live: true,
     sim_length_ns: 100,
     trials: [],
     ...overrides,
@@ -314,7 +315,7 @@ describe("TuneStep running job", () => {
 
 describe("TuneStep finished and error jobs", () => {
   it("clears a stale pick once the job settled", async () => {
-    mockTuner(tunerJob({ is_stopped: true, tuner_status: "UNKNOWN", trials: [FAST_TRIAL] }))
+    mockTuner(tunerJob({ is_stopped: true, is_live: false, tuner_status: "UNKNOWN", trials: [FAST_TRIAL] }))
     const spies = renderTune({ trialId: "gone" })
 
     await screen.findByText("Fastest")
@@ -325,7 +326,7 @@ describe("TuneStep finished and error jobs", () => {
   it("re-tunes a stopped job back to the idle state", async () => {
     // Regression: the 404'd refetch kept the deleted job as stale data, so idle never returned.
     const { calls } = mockTuner(
-      tunerJob({ is_stopped: true, tuner_status: "UNKNOWN", trials: [FAST_TRIAL, ECO_TRIAL] })
+      tunerJob({ is_stopped: true, is_live: false, tuner_status: "UNKNOWN", trials: [FAST_TRIAL, ECO_TRIAL] })
     )
     const spies = renderTune({ trialId: "t1" })
 
@@ -339,7 +340,9 @@ describe("TuneStep finished and error jobs", () => {
   })
 
   it("shows the tuner error and restarts via Tune again", async () => {
-    const { calls } = mockTuner(tunerJob({ tuner_status: "ERROR", error_message: "The tuning service exploded." }))
+    const { calls } = mockTuner(
+      tunerJob({ tuner_status: "ERROR", is_live: false, error_message: "The tuning service exploded." })
+    )
     renderTune()
 
     expect(await screen.findByText("Tuning failed")).toBeInTheDocument()
