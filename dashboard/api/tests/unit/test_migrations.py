@@ -196,12 +196,12 @@ def test_migration_008_adds_simulation_path_to_analysis(tmp_path: Path) -> None:
         assert cols["simulation_path"]["nullable"] is False
 
 
-def test_migration_011_structures_source_columns(tmp_path: Path) -> None:
+def test_migration_010_structures_source_columns(tmp_path: Path) -> None:
     """Legacy display strings are parsed into source_type/source_ref/source_files, then dropped."""
     import sqlalchemy as sa
 
     app = _make_app(tmp_path / "test.db")
-    _upgrade_to(app, "010")
+    _upgrade_to(app, "009")
     with app.app_context(), db.engine.begin() as conn:
         conn.execute(
             sa.text(

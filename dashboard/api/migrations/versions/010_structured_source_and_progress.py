@@ -1,12 +1,17 @@
 """
-Replace source_label/source_message display strings with structured source columns.
+Rework experiment display fields and add sim/job progress columns.
 
+Experiments gain module_name and structured source columns (source_type,
+source_ref, source_files) replacing the legacy source_message display string.
 Backfill parses legacy provenance sentences; unparseable rows keep NULL source
-data (the UI hides the source item).
+data (the UI hides the source item). Tuner jobs gain a caller-supplied nsteps,
+and analysis jobs gain a nullable sim_progress float recording the fraction of
+the simulation's steps available when the analysis started, so the UI can flag
+results from still-running simulations as partial ("Calculated at N%").
 
-Revision ID: 011
-Revises: 010
-Create Date: 2026-08-17
+Revision ID: 010
+Revises: 009
+Create Date: 2026-08-21
 """
 
 import json
@@ -15,10 +20,14 @@ import re
 import sqlalchemy as sa
 from alembic import op
 
-revision = "011"
-down_revision = "010"
+revision = "010"
+down_revision = "009"
 branch_labels = None
 depends_on = None
+
+# Frozen copy of clients.tuner.DEFAULT_NSTEPS at migration time; migrations must
+# never import live constants — a later default change must not rewrite history.
+TUNER_DEFAULT_NSTEPS = 25000
 
 # Legacy message shapes produced by Experiment.from_pdb / from_repo / from_files.
 _PDB_URL_RE = re.compile(r"^Created by downloading PDB file from '([^']+)'\.$")
@@ -42,6 +51,7 @@ def _parse_source(message: str) -> tuple[str, str | None, str | None] | None:
 
 def upgrade() -> None:
     with op.batch_alter_table("experiments") as batch_op:
+        batch_op.add_column(sa.Column("module_name", sa.String(length=255), nullable=True))
         batch_op.add_column(sa.Column("source_type", sa.Enum("pdb", "repo", "file", name="sourcetype"), nullable=True))
         batch_op.add_column(sa.Column("source_ref", sa.String(length=512), nullable=True))
         batch_op.add_column(sa.Column("source_files", sa.JSON(), nullable=True))
@@ -63,13 +73,24 @@ def upgrade() -> None:
         )
 
     with op.batch_alter_table("experiments") as batch_op:
-        batch_op.drop_column("source_label")
         batch_op.drop_column("source_message")
+    with op.batch_alter_table("tuner_jobs") as batch_op:
+        # server_default exists only to backfill rows created before the column did
+        batch_op.add_column(sa.Column("nsteps", sa.Integer, nullable=False, server_default=str(TUNER_DEFAULT_NSTEPS)))
+    with op.batch_alter_table("tuner_jobs") as batch_op:
+        # nsteps is always caller-supplied (fail fast) — no default survives the upgrade
+        batch_op.alter_column("nsteps", existing_type=sa.Integer, server_default=None)
+    with op.batch_alter_table("analysis_jobs") as batch_op:
+        batch_op.add_column(sa.Column("sim_progress", sa.Float(), nullable=True))
 
 
 def downgrade() -> None:
+    with op.batch_alter_table("analysis_jobs") as batch_op:
+        batch_op.drop_column("sim_progress")
+    with op.batch_alter_table("tuner_jobs") as batch_op:
+        batch_op.drop_column("nsteps")
+
     with op.batch_alter_table("experiments") as batch_op:
-        batch_op.add_column(sa.Column("source_label", sa.String(length=512), nullable=True))
         batch_op.add_column(sa.Column("source_message", sa.Text(), nullable=False, server_default=""))
 
     connection = op.get_bind()
@@ -99,3 +120,4 @@ def downgrade() -> None:
         batch_op.drop_column("source_type")
         batch_op.drop_column("source_ref")
         batch_op.drop_column("source_files")
+        batch_op.drop_column("module_name")
