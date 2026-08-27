@@ -130,3 +130,11 @@ export function rolePresence(simulation: Simulation, key: string): boolean | nul
   if (!simulation.files[key]) return null
   return true
 }
+
+/**
+ * Subset of `requiredRoles` whose files are absent for this simulation — the
+ * availability predicate shared by the tune/analyze/publish wizards.
+ */
+export function missingRequiredRoles(simulation: Simulation, requiredRoles: readonly string[]): string[] {
+  return requiredRoles.filter((role) => rolePresence(simulation, role) !== true)
+}

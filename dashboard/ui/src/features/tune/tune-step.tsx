@@ -22,7 +22,7 @@ import {
   type Simulation,
   type TunerJob,
 } from "@/api/generated/models"
-import { ROLE_SPECS, type FileRoleKey } from "@/features/simulation"
+import { missingRequiredRoles, ROLE_SPECS, type FileRoleKey } from "@/features/simulation"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { HintTooltip } from "@/shared/ui/hint-tooltip"
 import {
@@ -427,9 +427,7 @@ function TuningBody({
   if (job === undefined) {
     const blockers: string[] = []
     if (!simulation.valid) blockers.push("The simulation manifest is invalid.")
-    const missingRequired = TUNE_REQUIRED_ROLES[engine].filter(
-      (role) => !simulation.files[role] || simulation.missing_files.includes(role)
-    )
+    const missingRequired = missingRequiredRoles(simulation, TUNE_REQUIRED_ROLES[engine])
     if (missingRequired.length > 0) {
       const labels = missingRequired.map((role) => ROLE_SPECS[engine].find((spec) => spec.key === role)?.label ?? role)
       blockers.push(`Missing files: ${labels.join(", ")}.`)
