@@ -100,8 +100,10 @@ class SimulationJob(db.Model):  # type: ignore
         """Non-terminal states — the job may still advance without user action."""
         return self.status.is_live
 
+    # Key by job id: ORM instances are rebuilt per request, so the default
+    # instance-hash key would never hit and every dump would stream whole logs.
     @property
-    @cached(cache=simulation_log_lines_cache)
+    @cached(cache=simulation_log_lines_cache, key=lambda job: job.id)
     def log_lines(self) -> dict[str, int | None]:
         """
         Line count per log stream, keyed by the log endpoint's ``type`` values.
