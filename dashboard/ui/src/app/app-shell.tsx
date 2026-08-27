@@ -15,7 +15,7 @@ export function AppShell() {
         {/* Attached to the header like the mock; kept out of Content's padding.
             Experiment pages swap in the notebook controller — server controls don't belong there. */}
         <div className="relative z-10 flex justify-center px-4">
-          {experimentId ? <NotebookStatusBar experimentId={experimentId} /> : <ServerStatusBar user={config.user} />}
+          {experimentId ? <NotebookStatusBar experimentId={experimentId} /> : <ServerStatusBar />}
         </div>
         <Content>
           <Outlet />

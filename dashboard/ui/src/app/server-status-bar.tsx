@@ -4,35 +4,14 @@ import { useGetMetrics } from "@/api/generated/client"
 import { formatBytes, formatTime } from "@/shared/format"
 import { Button, Progress, Separator } from "@e-infra/design-system"
 import { Square } from "lucide-react"
-import { toast } from "sonner"
 
-type ServerStatusBarProps = { user: string }
+// The hub's _xsrf cookie is path-scoped to /hub, so this page can neither read
+// it nor call the hub API. The hub home page owns the stop call (Jinja-rendered
+// token) and honors ?stop; it routes through spawn-pending → stop_pending.html,
+// which survives the user pod dying mid-transition (unlike any /user/ URL).
+const HUB_STOP_URL = "/hub/home?stop"
 
-// Hub-owned stop-confirmation page; it renders stop_pending.html and survives
-// the user pod dying mid-transition (unlike any /user/ URL).
-const HUB_STOP_PENDING_URL = "/hub/stop-pending"
-
-function xsrfToken(): string {
-  return (
-    document.cookie
-      .split("; ")
-      .find((cookie) => cookie.startsWith("_xsrf="))
-      ?.split("=")[1] ?? ""
-  )
-}
-
-async function stopServer(user: string): Promise<void> {
-  // Same call the hub home page makes: hub API with session cookie + _xsrf header.
-  const response = await fetch(`/hub/api/users/${encodeURIComponent(user)}/server`, {
-    method: "DELETE",
-    credentials: "same-origin",
-    headers: { "X-XSRFToken": xsrfToken() },
-  })
-  if (!response.ok) throw new Error(`Stop failed with status ${response.status}`)
-  location.assign(HUB_STOP_PENDING_URL)
-}
-
-export function ServerStatusBar({ user }: ServerStatusBarProps) {
+export function ServerStatusBar() {
   const metrics = useGetMetrics({ query: { retry: false } })
   const [stopping, setStopping] = useState(false)
   // Forces a re-render every second so the uptime readout ticks between refetches.
@@ -52,10 +31,7 @@ export function ServerStatusBar({ user }: ServerStatusBarProps) {
 
   function onStop() {
     setStopping(true)
-    stopServer(user).catch(() => {
-      setStopping(false)
-      toast.error("The server could not be stopped. Retry or stop it from JupyterHub home.")
-    })
+    location.assign(HUB_STOP_URL)
   }
 
   return (
