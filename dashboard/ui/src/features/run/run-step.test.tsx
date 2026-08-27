@@ -150,8 +150,8 @@ function renderRun(props: Partial<React.ComponentProps<typeof RunStep>> = {}) {
 afterEach(() => vi.unstubAllGlobals())
 
 describe("RunStep pending job", () => {
-  it("shows Preparing without step counts or estimates", async () => {
-    mockRun({
+  it("shows Preparing without step counts, estimates, or logs", async () => {
+    const { calls } = mockRun({
       initial: gmxJob({
         status: "PENDING",
         start_timestamp: null,
@@ -168,6 +168,10 @@ describe("RunStep pending job", () => {
     expect(screen.getByRole("progressbar")).toBeInTheDocument()
     expect(screen.queryByText(/steps$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/remaining/)).not.toBeInTheDocument()
+    // A pending pod cannot have produced any log output — the section stays hidden
+    // and nothing ever hits the log endpoint.
+    expect(screen.queryByRole("button", { name: /logs/i })).not.toBeInTheDocument()
+    expect(calls.some((call) => call.url.includes("/log"))).toBe(false)
     // The job's hardware config is shown; estimates stay dashed without a tuner match.
     expect(screen.getAllByText("CPU")).not.toHaveLength(0)
     expect(screen.getAllByText("—")).toHaveLength(3)

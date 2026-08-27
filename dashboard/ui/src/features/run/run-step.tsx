@@ -153,15 +153,19 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
             onStop={() => setConfirmStop(true)}
             onRestart={() => setConfirmRestart(true)}
           />
-          <RunLogs
-            experimentId={experimentId}
-            simulationPath={simulation.simulation_path}
-            engine={engine}
-            logLines={job.log_lines}
-            live={live}
-            failed={failed}
-            pollMs={pollMs}
-          />
+          {/* A pending pod has produced nothing — every stream 404s, so there is
+              nothing to show and no reason to hit the log endpoint. */}
+          {job.status !== JobStatus.PENDING && (
+            <RunLogs
+              experimentId={experimentId}
+              simulationPath={simulation.simulation_path}
+              engine={engine}
+              logLines={job.log_lines}
+              live={live}
+              failed={failed}
+              pollMs={pollMs}
+            />
+          )}
         </div>
       )}
 
