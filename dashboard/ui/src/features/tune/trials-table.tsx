@@ -46,13 +46,15 @@ type TrialsTableProps = {
 export function TrialsTableHeader({ engine, pickColumn = true }: { engine: Engine; pickColumn?: boolean }) {
   return (
     <TableHeader>
-      <TableRow>
+      {/* Primary band matches the pre-rewrite TunerTable header; hover stays
+          primary so the DS row hover doesn't wash it out. */}
+      <TableRow className="bg-primary hover:bg-primary">
         {pickColumn && (
-          <TableHead className="w-10">
+          <TableHead className="text-primary-foreground w-10">
             <span className="sr-only">Pick</span>
           </TableHead>
         )}
-        <TableHead>Status</TableHead>
+        <TableHead className="text-primary-foreground">Status</TableHead>
         <HintedHead
           label="Performance"
           hint="Throughput measured during the tuning run (ns of simulated time per day). Higher is faster."
@@ -116,10 +118,18 @@ export function TrialsTable({ engine, rows, value, onValueChange, live, onShowLo
 /** aria-label keeps the hint button's text out of the columnheader's accessible name. */
 function HintedHead({ label, hint, separated = false }: { label: string; hint: string; separated?: boolean }) {
   return (
-    <TableHead aria-label={label} className={separated ? "border-border border-l pl-6" : undefined}>
+    <TableHead
+      aria-label={label}
+      className={
+        separated ? "text-primary-foreground border-primary-foreground/30 border-l pl-6" : "text-primary-foreground"
+      }
+    >
       <span className="inline-flex items-center gap-1 whitespace-nowrap">
         {label}
-        <HintTooltip text={hint} />
+        {/* Muted gray would die on the primary band; inherit its foreground. */}
+        <span className="[&_button]:text-primary-foreground/60 [&_button:hover]:text-primary-foreground contents">
+          <HintTooltip text={hint} />
+        </span>
       </span>
     </TableHead>
   )
