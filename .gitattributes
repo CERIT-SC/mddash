@@ -1,1 +1,5 @@
-dashboard/ui/src/api/generated/** -whitespace
+dashboard/ui/src/api/generated/** linguist-generated -diff -whitespace
+dashboard/ui/src/routeTree.gen.ts linguist-generated -diff -whitespace
+notebook/jupyterlab-pipeline-tracker/jupyterlab_pipeline_tracker/labextension/** linguist-generated -diff -whitespace
+pnpm-lock.yaml linguist-generated -diff
+uv.lock linguist-generated -diff
