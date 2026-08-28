@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from "node:fs"
 
 // All entries must carry the same CSP; enforcing it here catches copy drift.
 const CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; base-uri 'self'; form-action 'self'"
+  "default-src 'self'; script-src 'self' 'unsafe-inline' https://talqo.chat; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://talqo.chat; base-uri 'self'; form-action 'self'"
 
 const ENTRIES = [
   "login.html",
