@@ -1,6 +1,6 @@
 from http import HTTPStatus
 
-from config import API_PREFIX
+from config import API_PREFIX, MAX_NOTEBOOKS
 from enums import NotebookTier
 from extensions import db
 from flask import Blueprint, Response, jsonify, request
@@ -16,10 +16,10 @@ notebook_config_bp = Blueprint("notebook_config", __name__, url_prefix=API_PREFI
 @notebook_config_bp.route("/notebook-config", methods=["GET"])
 def get_notebook_config() -> Response:
     """
-    Get available notebook resource tiers and the default tier.
+    Get available notebook resource tiers, the default tier, and the concurrent-notebook limit.
 
     Returns:
-        Response: JSON response with tiers list and default tier.
+        Response: JSON response with tiers list, default tier, and the per-user concurrent limit.
     """
     tiers = []
     for t in NotebookTier:
@@ -32,6 +32,7 @@ def get_notebook_config() -> Response:
     return jsonify({
         "tiers": tiers,
         "defaultTier": NotebookTier.SMALL.value,
+        "concurrentLimit": MAX_NOTEBOOKS,
     })
 
 

@@ -1,8 +1,9 @@
 import type { Experiment } from "@/api/generated/models"
 import { experiment, withNotebook } from "@/shared/fixtures/experiment"
 import { mockFetch, requestUrl } from "@/shared/fixtures/mock-fetch"
+import { mockNotebookQuotaApi } from "@/shared/fixtures/notebook-quota"
 import { renderWithProviders } from "@/shared/fixtures/render-with-providers"
-import { screen } from "@testing-library/react"
+import { screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -322,5 +323,49 @@ describe("ExperimentCard", () => {
       method: "POST",
       body: {},
     })
+  })
+
+  it("defers the start into the quota dialog when all slots are taken", async () => {
+    const { calls, quotaSettled } = mockNotebookQuotaApi({
+      limit: 1,
+      experiments: [
+        analyze({ notebook: withNotebook("DOWN", "exp1") }),
+        experiment("exp2", { name: "Busy A", notebook: withNotebook("RUNNING", "exp2") }),
+      ],
+    })
+    const user = userEvent.setup()
+    await renderCard(analyze({ notebook: withNotebook("DOWN") }))
+    await quotaSettled()
+
+    await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
+    await user.click(screen.getByRole("menuitem", { name: /start notebook/i }))
+
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).getByText("Notebook limit reached")).toBeVisible()
+    expect(await within(dialog).findByText("Busy A")).toBeVisible()
+    // Known-full starts open the dialog without even attempting the request.
+    expect(calls.find((call) => call.method === "POST")).toBeUndefined()
+  })
+
+  it("opens the quota dialog when the API refuses a start over the limit", async () => {
+    // Unknown limit (config never resolves) → the start fires and its quota 403 opens the dialog.
+    mockNotebookQuotaApi({
+      limit: 3,
+      configNeverResolves: true,
+      experiments: [
+        analyze({ notebook: withNotebook("DOWN", "exp1") }),
+        experiment("exp2", { name: "Busy A", notebook: withNotebook("RUNNING", "exp2") }),
+        experiment("exp3", { name: "Busy B", notebook: withNotebook("RUNNING", "exp3") }),
+      ],
+      startFails: true,
+    })
+    const user = userEvent.setup()
+    await renderCard(analyze({ notebook: withNotebook("DOWN") }))
+    await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
+    await user.click(screen.getByRole("menuitem", { name: /start notebook/i }))
+
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).getByText("Notebook limit reached")).toBeVisible()
+    expect(await within(dialog).findByText("Busy A")).toBeVisible()
   })
 })
