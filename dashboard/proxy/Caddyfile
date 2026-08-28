@@ -66,16 +66,19 @@ http://:8888 {
 	}
 	redir @dash_redirect {$CADDY_ROUTE_PREFIX}/dash/ 308
 
-	# Dynamic config.js for React app - injects runtime configuration
-	@config_js {
-		path {$CADDY_ROUTE_PREFIX}/dash/config.js
+	# Authenticated runtime configuration generated with JSON-safe encoding.
+	@config_json {
+		path {$CADDY_ROUTE_PREFIX}/dash/runtime-config.json
 	}
-	handle @config_js {
+	handle @config_json {
 		forward_auth {$AUTH_HOST}:5001 {
 			uri /auth
 		}
-		header Content-Type "application/javascript"
-		respond `window.MDDASH_CONFIG = {basePath: "{$CADDY_ROUTE_PREFIX}/dash", apiPath: "{$CADDY_ROUTE_PREFIX}/dash/api", user: "{$JUPYTERHUB_USER}", defaultNotebooksRepo: "{$DEFAULT_NOTEBOOKS_REPO}", mdpositUrl: "{$MDPOSIT_URL}"};`
+		header Content-Type "application/json"
+		header Cache-Control "no-store"
+		rewrite * /runtime-config.json
+		root * /config
+		file_server
 	}
 
 	# Dashboard routes - static files with authentication

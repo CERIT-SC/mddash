@@ -63,7 +63,7 @@ jobs:
       matrix:
         include:
           - name: ui
-            context: dashboard/ui
+            context: .
             dockerfile: dashboard/ui/Dockerfile
             image-suffix: mddash-ui
           - name: auth
@@ -180,11 +180,11 @@ jobs:
             dockerfile: tuner/Dockerfile
             image-suffix: tuner-api
           - name: landing
-            context: landing
+            context: .
             dockerfile: landing/Dockerfile
             image-suffix: mddash-landing
           - name: hub
-            context: hub
+            context: .
             dockerfile: hub/Dockerfile
             image-suffix: mddash-hub
     steps:

@@ -349,10 +349,13 @@ def _proxy_start_command(service_prefix: str) -> str:
     """
     api_health_url = f"http://localhost:5000{service_prefix}/dash/api/health"
     return (
+        # The k8s command overrides the image CMD, so entrypoint.sh must be
+        # invoked explicitly here or /config/runtime-config.json never exists.
+        "CONFIG_ONLY=1 /usr/local/bin/entrypoint.sh && "
         "until "
         "curl --fail --silent --show-error --connect-timeout 1 http://localhost:5001/health > /dev/null "
         f"&& curl --fail --silent --show-error --connect-timeout 1 {api_health_url} > /dev/null; "
-        "do echo 'waiting for auth and dashboard API health'; sleep 0.1; done; "
+        "do echo 'waiting for auth and dashboard API health'; sleep 0.1; done && "
         "exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile"
     )
 

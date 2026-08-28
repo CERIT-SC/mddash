@@ -22,11 +22,11 @@ help: ## Show this help
 
 .PHONY: format
 format: ## Format UI source files with Prettier
-	cd ui && pnpm run format
+	cd .. && pnpm --filter hub-ui format
 
 .PHONY: build
 build: ## Build JupyterHub image (k8s-hub + EGI auth + custom hub-ui)
-	docker build $(platform) -t $(image):$(tag) .
+	docker build $(platform) -f Dockerfile -t $(image):$(tag) ..
 
 .PHONY: push
 push: build ## Build and push JupyterHub image

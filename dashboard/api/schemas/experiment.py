@@ -9,6 +9,9 @@ class ExperimentSchema(BaseAutoSchema):
     """Schema for serializing Experiment model instances."""
 
     engine = fields.Enum(Engine, by_value=True)
+    size_bytes = fields.Integer(allow_none=True, dump_only=True)
+    latest_simulation_path = fields.String(allow_none=True, dump_only=True)
+    source = fields.Method("get_source", dump_only=True)
     notebook = fields.Nested("NotebookSchema", allow_none=False)
     tuner_jobs = fields.Nested("TunerJobSchema", many=True)
     simulation_jobs = fields.Nested("SimulationJobSchema", many=True)
@@ -19,6 +22,11 @@ class ExperimentSchema(BaseAutoSchema):
         model = Experiment
         load_instance = True
         include_relationships = True
+        exclude = ("source_type", "source_ref", "source_files")
+
+    def get_source(self, data: Experiment) -> dict | None:
+        """Serialize the structured experiment source."""
+        return data.source
 
     @pre_dump
     def sync_mdrepo(self, data: Experiment, **kwargs: dict) -> Experiment:  # ruff:ignore[unused-method-argument]

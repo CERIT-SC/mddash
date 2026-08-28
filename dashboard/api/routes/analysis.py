@@ -152,6 +152,17 @@ def get_analysis_job_logs(experiment_id: str, job_id: str) -> Response:
     return jsonify(logs[idx:] if idx != -1 else logs)
 
 
+@analysis_bp.route("/types", methods=["GET"])
+def list_analysis_types(experiment_id: str) -> Response:  # ruff: ignore[unused-function-argument]
+    """
+    List the mwf analysis task names the dashboard supports (the experiment-independent MDDB pool).
+
+    Returns:
+        Response: JSON array of analysis type ids.
+    """
+    return jsonify([analysis_type.value for analysis_type in AnalysisType])
+
+
 @analysis_bp.route("/results", methods=["GET"])
 def list_analysis_results(experiment_id: str) -> Response:
     """

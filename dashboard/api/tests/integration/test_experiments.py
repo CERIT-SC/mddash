@@ -36,7 +36,6 @@ class TestListExperiments:
         exp = Experiment()
         exp.id = "testx"
         exp.name = "Test Experiment"
-        exp.source_message = "Test"
         db_session.add(exp)
         db_session.flush()
 
@@ -62,7 +61,6 @@ class TestGetExperiment:
         exp = Experiment()
         exp.id = "abcde"
         exp.name = "My Experiment"
-        exp.source_message = "Created for test"
         db_session.add(exp)
         db_session.flush()
 
@@ -83,6 +81,26 @@ class TestGetExperiment:
         response = client.get("/dash/api/experiments/zzzzz")
 
         assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+class TestPublishExperiment:
+    """Invenio publish is gated server-side by the same can_publish rule the wizard uses."""
+
+    def test_rejects_when_nothing_publishable(self, client: FlaskClient, db_session: Session) -> None:
+        """Authenticated but no finished run and no existing publication → 409, no MDRepo draft."""
+        exp = Experiment()
+        exp.id = "pubc1"
+        exp.name = "Publish Gate"
+        db_session.add(exp)
+        db_session.commit()
+
+        token_manager = MagicMock()
+        token_manager.get_valid_token.return_value = "valid-token"
+        with patch("routes.experiments.MDRepoTokenManager", return_value=token_manager):
+            response = client.post("/dash/api/experiments/pubc1/publish", json={"target": "invenio"})
+
+        assert response.status_code == HTTPStatus.CONFLICT
+        assert response.mimetype == "application/problem+json"
 
 
 class TestCreateExperiment:
@@ -168,7 +186,7 @@ class TestCreateExperiment:
             assert response.status_code == HTTPStatus.CREATED
             data = json.loads(response.data)
             assert data["name"] == "PDB URL Experiment"
-            assert pdb_url in data["source_message"]
+            assert data["source"]["url"] == pdb_url
             assert len(data["id"]) == EXPERIMENT_ID_LENGTH
             # The URL should be fetched directly, not the RCSB ID URL
             mock_get.assert_called_once_with(pdb_url, timeout=30, allow_redirects=False)
@@ -638,7 +656,6 @@ class TestEditExperiment:
         exp = Experiment()
         exp.id = "editx"
         exp.name = "Original Name"
-        exp.source_message = "Test"
         db_session.add(exp)
         db_session.flush()
 
@@ -672,7 +689,6 @@ class TestEditExperiment:
         exp = Experiment()
         exp.id = "nodta"
         exp.name = "Test"
-        exp.source_message = "Test"
         db_session.add(exp)
         db_session.flush()
 
@@ -703,7 +719,6 @@ class TestDeleteExperiment:
             exp = Experiment()
             exp.id = "delme"
             exp.name = "To Delete"
-            exp.source_message = "Test"
             db_session.add(exp)
             db_session.flush()
 
@@ -732,7 +747,6 @@ class TestPublishStatus:
         exp = Experiment()
         exp.id = "pstat"
         exp.name = "Status Test"
-        exp.source_message = "test"
         db_session.add(exp)
         db_session.flush()
         nb = Notebook()
@@ -816,7 +830,6 @@ class TestDeleteDuringUpload:
             exp = Experiment()
             exp.id = "delup"
             exp.name = "Upload Active"
-            exp.source_message = "test"
             db_session.add(exp)
             db_session.flush()
             nb = Notebook()

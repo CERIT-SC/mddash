@@ -1,20 +1,29 @@
-# MDDash UI
+# Dashboard UI
 
-## Mission
+## Architecture
 
-React + TypeScript wizard-driven web interface for creating, configuring, and managing molecular dynamics experiments. The compiled SPA is embedded as static assets in the proxy container image.
+One-way imports: `app/routes → features → api/shared`. Lower layers never import upper; feature cycles forbidden.
 
-## Core Practices
+## Features
 
-- All fetching/mutations go through TanStack Query hooks in `src/hooks/` (polling via `refetchInterval`). Use the configured `api` instance in `lib/http.ts`, never raw `axios`; call `api.get/post/patch/delete(path).then(r => r.data)` directly (no wrapper functions).
-- Manual route tree in `src/router.tsx` with `basepath: BASE_PATH` (no file-based routing).
-- Backend returns resources directly — `r.data` is the payload (no envelope); the axios error interceptor builds an `ApiError` from RFC 9457 problem-details responses (`{type, title, detail[, solution]}` with `Content-Type: application/problem+json`). `error.message` is the toast line (`solution ?? detail ?? title`) so `toast.error(error.message)` works unchanged and shows the actionable line when a `solution` is present. `type` is the support-reportable error code. A React `ErrorBoundary` wraps the app root for render-time crashes.
+- A feature owns a product capability, not the page that renders it: notebook lifecycle, simulation manifests, and each implemented wizard step are their own features. Create features only with real behavior — no stubs.
+- Cross-feature imports use the feature's `index.ts` (named re-exports only); deep paths into another feature are forbidden. Within a feature, import siblings directly; tests live beside their module.
+- `shared/` accepts a module only after 2+ features use it or it is inherently app-wide; enum→label maps over generated types start in `shared/`.
 
-## Non-Obvious Gotchas
+## API
 
-- **Runtime config**: `window.MDDASH_CONFIG` is injected by Caddy via `config.js` in production; `DEBUG` is `true` when undefined. `BASE_PATH`/`API_BASE` come from runtime config, not build time (dev defaults `API_BASE` to `/dash/api`).
-- **ShadCN + Tailwind v4**: don't `@apply` CSS-var utilities (e.g. `border-border`) unless the `@theme` registration exists. `Select` requires non-empty string values — use `SELECT_NONE = "__none__"` (`util/const.ts`) for "none" options.
-- **Theme/FOUC**: initial mode is applied synchronously before first render to prevent FOUC. Sonner reads `ThemeContext` (not `next-themes`).
-- **Notifications**: call `sonner` `toast.*()` directly — no context/hook (the old `NotificationContext`/`useNotification()` is removed).
-- **Wizard state lives in the URL** (`/$id/wizard?tab=<simulation name>&step=<0-4>`); `tab=_new` is the create-mode sentinel. Each `.simulation.json` owns its step (inferred per manifest server-side); the experiment inherits its latest simulation's step, and Publish unlocks once any simulation reaches step 4. `WizardStepper` is a URL-driven shell: simulation tabs above the stepper, steps receive `{ experiment, simulation, goToStep }`, and `useSimulations` (5 s poll) is the heartbeat.
-- **MolStar cleanup is manual**: call `plugin.dispose()` and `root.unmount()` on unmount; use `isMountedRef` to guard post-unmount state. Resolve formats via `resolveStructureFormat()`/`resolveCoordsFormat()` (`src/util/molstar-formats.ts`). `loadStructureWithCoordinates` treats both trajectory (PDB, GRO) and topology (PRMTOP, PSF, TOP) formats as structure sources.
+- `dashboard/api/openapi.yaml` is authoritative (`pnpm api:generate` regenerates; drift fails CI). Import only `@/api/generated/{client,models,schemas,mocks}`; never edit generated files or recreate generated types/enums.
+- `fetch` only outside the Dashboard API; Dashboard endpoints go through the generated client only, never hand-built URLs.
+- Query policy the contract can't express (polling, invalidation webs) lives in feature-local modules that never restate generated types.
+
+## State
+
+URL path/search owns shareable state; TanStack Query owns server state; local state owns transient interactions; context only for app-wide non-server values (runtime config, theme).
+
+## Constraints
+
+- Forms: React Hook Form + e-INFRA `Form` primitives + Zod at explicit runtime boundaries.
+- Loading, stale, empty, and error are durable UI states, never toast-only.
+- e-INFRA components and semantic tokens only; no parallel design system, no one-to-one DS wrappers; design mocks never override the design system.
+- The inline `index.html` bootstrap sets the runtime `<base>` and theme before assets and CSS paint.
+- Runtime configuration is authenticated JSON generated with `jq`; never interpolate environment values into JavaScript.

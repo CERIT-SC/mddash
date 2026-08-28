@@ -45,6 +45,7 @@
 				"ms-python.python",
 				"redhat.vscode-yaml",
 				"esbenp.prettier-vscode",
+				"oxc.oxc-vscode",
 				"charliermarsh.ruff",
 				"astral-sh.ty"
 			],

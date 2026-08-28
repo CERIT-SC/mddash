@@ -1,0 +1,29 @@
+{
+  "name": "mddash",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.13.0",
+  "scripts": {
+    "api:generate": "pnpm --filter dash api:generate",
+    "generated:check": "pnpm --filter dash generated:check",
+    "build:ui": "pnpm --filter dash build",
+    "build:landing": "pnpm --filter landing build",
+    "build:hub-ui": "pnpm --filter hub-ui build",
+    "test:ui": "pnpm --filter dash test",
+    "type-check": "pnpm --parallel --filter dash --filter landing --filter hub-ui type-check",
+    "knip": "pnpm --parallel --filter dash --filter landing --filter hub-ui knip",
+    "lint": "oxlint --type-aware --deny-warnings dashboard/ui landing hub/ui",
+    "lint:fix": "oxlint --type-aware --fix dashboard/ui landing hub/ui",
+    "format": "prettier --write --log-level warn \"{dashboard/ui,landing,hub/ui}/src/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"{dashboard/ui,landing,hub/ui}/src/**/*.{ts,tsx,css}\""
+  },
+  "devDependencies": {
+    "@ianvs/prettier-plugin-sort-imports": "4.7.1",
+    "@types/node": "24.13.3",
+    "oxlint": "1.78.0",
+    "oxlint-tsgolint": "7.0.2001",
+    "prettier": "3.9.6",
+    "prettier-plugin-tailwindcss": "0.8.1",
+    "typescript": "7.0.2"
+  }
+}

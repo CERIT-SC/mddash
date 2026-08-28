@@ -129,8 +129,10 @@ class TestAnalysisJobStartQuotaCheck:
             patch("models.analysis_job.k8s.delete_job"),
             patch.object(AnalysisJob, "query") as mock_query,
             patch("models.analysis_job.db.session"),
+            patch("models.analysis_job.SimulationJob") as mock_sim_job,
         ):
             mock_query.filter_by.return_value.all.return_value = []
+            mock_sim_job.query.filter_by.return_value.order_by.return_value.first.return_value = None
             structure_file = tmp_path / "input.gro"
             structure_file.touch()
             trajectory_file = tmp_path / "traj.xtc"
@@ -157,8 +159,10 @@ class TestAnalysisJobStartQuotaCheck:
             patch("models.analysis_job.k8s.delete_job"),
             patch.object(AnalysisJob, "query") as mock_query,
             patch("models.analysis_job.db.session"),
+            patch("models.analysis_job.SimulationJob") as mock_sim_job,
         ):
             mock_query.filter_by.return_value.all.return_value = []
+            mock_sim_job.query.filter_by.return_value.order_by.return_value.first.return_value = None
             structure_file = tmp_path / "input.gro"
             structure_file.touch()
             trajectory_file = tmp_path / "traj.xtc"
@@ -176,3 +180,58 @@ class TestAnalysisJobStartQuotaCheck:
 
             mock_create_job.assert_called_once()
             assert mock_create_job.call_args.kwargs["resources"] == ANALYSIS_RESOURCES
+
+
+class TestAnalysisJobStartSimProgress:
+    """Tests for the simulation-progress snapshot in AnalysisJob.start()."""
+
+    def _start(self, mock_session: MagicMock, tmp_path: Path) -> float | None:
+        exp = MagicMock()
+        exp.id = "exp-test"
+        trajectory_file = tmp_path / "traj.xtc"
+        trajectory_file.touch()
+        topology_file = tmp_path / "topol.tpr"
+        topology_file.touch()
+        AnalysisJob.start(
+            experiment=exp,
+            simulation_path="test.simulation.json",
+            analysis_name=AnalysisType.RMSDS,
+            structure_file=None,
+            trajectory_file=trajectory_file,
+            topology_file=topology_file,
+            preprocessing_mode=PreprocessingMode.AS_IS,
+        )
+        job: AnalysisJob = mock_session.add.call_args[0][0]
+        return job.sim_progress
+
+    def _patched_start(self, run_job: MagicMock | None, app: object, tmp_path: Path) -> float | None:
+        with (
+            patch("models.analysis_job.k8s.check_quota_headroom", return_value=None),
+            patch("models.analysis_job.k8s.create_job"),
+            patch("models.analysis_job.k8s.delete_job"),
+            patch.object(AnalysisJob, "query") as mock_query,
+            patch("models.analysis_job.db.session") as mock_session,
+            patch("models.analysis_job.SimulationJob") as mock_sim_job,
+        ):
+            mock_query.filter_by.return_value.all.return_value = []
+            mock_sim_job.query.filter_by.return_value.order_by.return_value.first.return_value = run_job
+            return self._start(mock_session, tmp_path)
+
+    def test_records_progress_fraction_from_run_job(self, app: object, tmp_path: Path) -> None:
+        """A mid-run simulation's progress is snapshotted onto the new analysis job."""
+        run_job = MagicMock(nsteps=200, nsteps_done=40)
+        assert self._patched_start(run_job, app, tmp_path) == pytest.approx(0.2)
+
+    def test_progress_is_none_without_run_job(self, app: object, tmp_path: Path) -> None:
+        """No run job for the simulation means no progress to snapshot."""
+        assert self._patched_start(None, app, tmp_path) is None
+
+    def test_progress_is_none_when_done_is_unknown(self, app: object, tmp_path: Path) -> None:
+        """Unknown nsteps_done cannot produce a truthful fraction."""
+        run_job = MagicMock(nsteps=200, nsteps_done=None)
+        assert self._patched_start(run_job, app, tmp_path) is None
+
+    def test_progress_clamped_at_one(self, app: object, tmp_path: Path) -> None:
+        """A finished run must not report more than 100%."""
+        run_job = MagicMock(nsteps=200, nsteps_done=250)
+        assert self._patched_start(run_job, app, tmp_path) == 1.0

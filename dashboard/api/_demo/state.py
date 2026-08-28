@@ -6,6 +6,7 @@ during demo sessions. All state is held in memory and cleared on restart.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, TypeVar
 
 from enums import PodStatus
@@ -39,6 +40,7 @@ class DemoState:
 
     initialized: bool = False
     notebook_status: dict[str, PodStatus] = field(default_factory=dict)
+    notebook_started_at: dict[str, datetime] = field(default_factory=dict)
     mdrun_jobs: dict[str, dict[str, Any]] = field(default_factory=dict)
     tuner_jobs: dict[str, dict[str, Any]] = field(default_factory=dict)
     analysis_jobs: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -50,6 +52,7 @@ class DemoState:
     def reset(self) -> None:
         """Clear all runtime state."""
         self.notebook_status.clear()
+        self.notebook_started_at.clear()
         self.mdrun_jobs.clear()
         self.tuner_jobs.clear()
         self.analysis_jobs.clear()

@@ -5,6 +5,11 @@ __pycache__/
 .mcp.json
 .worktrees/
 .pnpm-store/
+node_modules/
+**/node_modules/
+**/dist/
+**/*.tsbuildinfo
 .playwright-mcp/
 pmemd*.tar.bz2
 ambertools*.tar.bz2
+.playwright-cli/

@@ -26,7 +26,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 
 ### Configuration
 - **Environment = explicit `ENV`**: `ENV=dev` or `ENV=prod`, defaulting to `dev`. Dev images use a static `dev` tag; prod uses immutable SemVer tags (e.g. `0.1.0`) provided by the release workflow. No branch-based inference.
-- **Runtime config injection**: UI receives config via `window.MDDASH_CONFIG` injected by Caddy at `{$CADDY_ROUTE_PREFIX}/dash/config.js`. Dev mode is detected when this is undefined.
+- **Runtime configuration**: the proxy generates JSON at startup and serves it through the authenticated `{$CADDY_ROUTE_PREFIX}/dash/runtime-config.json` route. The UI validates it before creating application providers; local development falls back only when that route returns 404.
 
 ### Authentication
 - All auth flows through JupyterHub OAuth2.
@@ -48,7 +48,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - The image pins `rclone/rclone:1.74.4` via multi-stage (alpine's `apk` package ships a stale `-DEV` build).
 
 ### Database
-- **Dashboard API**: runs `flask_migrate.upgrade()` on startup against versioned migrations in `dashboard/api/migrations/versions/`. Falls back to `db.create_all()` if migration fails. Add a new migration file when adding columns — do NOT manually run `flask db upgrade`.
+- **Dashboard API**: runs `flask_migrate.upgrade()` on startup against versioned migrations in `dashboard/api/migrations/versions/` (fresh databases are created by the same migrations — no `db.create_all()` fallback; details in `dashboard/api/AGENTS.md`). Add a new migration file when adding columns — do NOT manually run `flask db upgrade`.
 - **MDRun API**: `db.create_all()` only — no Alembic migrations. SQLite WAL mode for concurrent reads/writes.
 
 ### Error Handling
@@ -57,17 +57,18 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - `str(e)` and internal details never reach the client: unexpected exceptions return a generic 500 detail with a retry/support `solution`, traceback logged server-side only. This includes the Tuner rayworker's persisted job error, which is a user-friendly message, never the raw exception text.
 - The dashboard API wraps Tuner and MDRepo submit failures as `urn:mddash:upstream-unavailable` (with a `solution`) rather than letting them surface as generic 500s.
 - Validation errors carry no `solution` (the `detail` already implies the fix).
-- The UI's `ApiError.message` is `solution ?? detail ?? title` (`dashboard/ui/src/lib/http.ts`), so `toast.error(error.message)` shows the actionable line when a `solution` is present.
+- The UI's `ApiError.message` is `solution ?? detail` (`dashboard/ui/src/api/errors.ts`); error states are durable UI (alerts/placeholders), never toast-only (see `dashboard/ui/AGENTS.md`).
 
 ## Development & Feedback Loop
 
-- `make demo` runs the real Flask API (`dashboard/api/_demo/app.py`, test-style mocks + seeded data) plus the React dev server locally.
+- `make demo` runs the real Flask API (`dashboard/api/_demo/app.py`, test-style mocks + seeded data) plus the React dev server locally. The demo data dir is wiped and reseeded on every start — mutations never survive a restart.
 - Run from repo root before claiming any code is correct — each must pass before the next:
 
 ```bash
-make fix  # always — format + auto-fix Python and frontend
-make type-check  # always — Python (ty) and TypeScript (tsc)
-make test  # always — Python unit/integration tests
+make fix
+make type-check
+make knip
+make test
 make validate-charts  # when editing Helm charts or config (requires helm + gomplate + yq)
 make lint-workflows  # when editing GitHub Actions workflows (requires actionlint + zizmor)
 ```

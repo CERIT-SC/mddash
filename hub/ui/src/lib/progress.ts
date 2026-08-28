@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 
-export interface ProgressEvent {
+interface ProgressEvent {
   progress?: number
   message?: string
   html_message?: string

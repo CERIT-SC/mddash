@@ -28,12 +28,11 @@ help: ## Show this help
 # ==================== FORMAT / LINT ====================
 
 .PHONY: fix
-fix: ## Auto-fix formatting and lint issues (Python via ruff, frontend via prettier/eslint)
+fix: ## Auto-fix formatting and lint issues (Python via Ruff, frontend via Prettier/Oxlint)
 	ruff format .
 	ruff check . --fix
-	cd dashboard/ui && pnpm run format && pnpm exec eslint . --fix
-	cd landing && pnpm run format
-	cd hub/ui && pnpm run format
+	pnpm run format
+	pnpm run lint:fix
 
 .PHONY: lint
 lint: lint-py lint-ui ## Check linting without auto-fix
@@ -43,8 +42,12 @@ lint-py: ## Check Python linting
 	ruff check .
 
 .PHONY: lint-ui
-lint-ui: ## Check frontend linting (dashboard/ui via eslint)
-	cd dashboard/ui && pnpm exec eslint . --max-warnings=0
+lint-ui: ## Check frontend linting (dashboard/ui, landing and hub/ui via Oxlint)
+	pnpm run lint
+
+.PHONY: knip
+knip: ## Check frontend dead code (dashboard/ui, landing and hub/ui via Knip)
+	pnpm run knip
 
 .PHONY: lint-workflows
 lint-workflows: ## Validate GitHub Actions workflows (actionlint + zizmor). Requires actionlint + zizmor (in devcontainer).
@@ -60,9 +63,7 @@ format-check-py: ## Check Python formatting
 
 .PHONY: format-check-ui
 format-check-ui: ## Check frontend formatting (dashboard/ui, landing and hub/ui via prettier)
-	cd dashboard/ui && pnpm run format:check
-	cd landing && pnpm run format:check
-	cd hub/ui && pnpm run format:check
+	pnpm run format:check
 
 .PHONY: lint-helm
 lint-helm: validate-charts ## Validate all Helm charts including umbrella dependency build. Requires helm + gomplate + yq.
@@ -106,21 +107,25 @@ type-check-tuner: ## Type-check Tuner API
 	cd tuner && uv run ty check api
 
 .PHONY: type-check-ui
-type-check-ui: ## Type-check dashboard UI (TypeScript)
-	cd dashboard/ui && pnpm run type-check
+type-check-ui: ## Type-check dashboard UI architecture configuration (TypeScript)
+	pnpm --filter dash type-check
 
 .PHONY: type-check-landing
 type-check-landing: ## Type-check landing page (TypeScript)
-	cd landing && pnpm run type-check
+	pnpm --filter landing type-check
 
 .PHONY: type-check-hub-ui
 type-check-hub-ui: ## Type-check hub UI (TypeScript)
-	cd hub/ui && pnpm run type-check
+	pnpm --filter hub-ui type-check
 
 # ==================== TEST ====================
 
 .PHONY: test
-test: test-dashboard-api test-dashboard-auth test-mdrun-api test-tuner test-pre-spawn-hook ## Run all tests
+test: test-dashboard-api test-dashboard-auth test-dashboard-ui test-mdrun-api test-tuner test-pre-spawn-hook ## Run all tests
+
+.PHONY: test-dashboard-ui
+test-dashboard-ui: ## Run Dashboard UI tests
+	pnpm --filter dash test
 
 .PHONY: test-dashboard-api
 test-dashboard-api: ## Run dashboard API tests
@@ -150,6 +155,10 @@ build: build-dashboard build-notebook build-mdrun-api build-tuner-api build-land
 .PHONY: build-dashboard
 build-dashboard: ## Build dashboard sidecar images (ui, proxy, auth, api, s3sync)
 	@$(MAKE) -C dashboard build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
+
+.PHONY: build-ui
+build-ui: ## Build Dashboard UI static bundle
+	pnpm --filter dash build
 
 .PHONY: build-notebook
 build-notebook: ## Build notebook image
@@ -290,14 +299,9 @@ rollback: ## Rollback to previous revision (REVISION=N for specific)
 
 .PHONY: demo
 demo: ## Run local demo (real Flask API in demo profile + React dev server)
-	@echo "Starting Flask API..."; \
+	@fuser -k 8888/tcp 5173/tcp 2>/dev/null || true # clean up stale listeners from previous runs
+	@echo "Demo running at http://localhost:5173/dash/ (Ctrl+C to stop)"; \
+	trap "kill 0 2>/dev/null; exit" INT TERM EXIT; \
 	PORT=8888 uv run --directory dashboard/api python _demo/app.py & \
-	API_PID=$$!; \
-	echo "Flask API started (PID: $$API_PID)"; \
-	echo "Starting React dev server..."; \
-	cd dashboard/ui && pnpm run dev & \
-	VITE_PID=$$!; \
-	echo "React dev server started (PID: $$VITE_PID)"; \
-	echo "Demo running - Press Ctrl+C to stop"; \
-	trap "echo 'Stopping...'; kill $$API_PID $$VITE_PID 2>/dev/null; exit" INT TERM EXIT; \
+	pnpm --filter dash dev & \
 	wait || true

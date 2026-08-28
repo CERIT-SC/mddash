@@ -7,7 +7,7 @@
  * (falling back to the _xsrf cookie value).
  */
 
-export class HubApiError extends Error {
+class HubApiError extends Error {
   constructor(
     public status: number,
     message: string

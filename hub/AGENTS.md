@@ -18,6 +18,7 @@ The in-repo JupyterHub image (`mddash-hub`) powering MDDash's hub: stock `quay.i
 - **Build validation**: `pnpm run build` also runs `scripts/validate-build.mjs`, which asserts all 12 entries exist in `dist/`, carry the appConfig injection, and reference assets only under `/hub/static/hub-ui/`.
 - **Page chrome is shared, never inlined**: status pages compose their hero markup from `ui/src/components/Hero.tsx` and card pages from `IconCard.tsx`. Duplicating that markup in a page is forbidden — extend the shared components instead.
 - **`not_running` is a dispatcher, not the stopped-server page**: the hub's Python handlers always render `not_running.html` for `/user/:name` with no server, so the stopped state can't be a hub route — our template client-side redirects to `/hub/home` and only renders the two states home can't model (failed spawn, implicit-spawn countdown).
+- **`/hub/home?stop` is the dashboard's stop entry point**: the dashboard UI can't call the hub API (the `_xsrf` cookie is path-scoped to `/hub/`, unreadable from `/user/:name/dash/`), so its server-bar button navigates here and the home page auto-triggers the existing stop flow (mirroring the hub's own action-on-GET `/hub/spawn/:name`). Keep the param honored in `ui/src/pages/home.tsx`; the stopping transition routes to `spawn-pending/:name`, which renders `stop_pending.html` while the server stops.
 
 ## Non-Obvious Gotchas
 

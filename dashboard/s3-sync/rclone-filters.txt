@@ -1,4 +1,8 @@
 - .rclone-bisync/**
+- .storage_size
+- **/.storage_size
+- .storage_size.tmp*
+- **/.storage_size.tmp*
 - #*#
 - *.swp
 - *.tmp

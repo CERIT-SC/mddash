@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { Button, H1, Muted } from "@e-infra/design-system"
 import { Atom, ExternalLink, Play, Square } from "lucide-react"
@@ -73,7 +73,19 @@ export function HomePage() {
       setOptimistic(null)
       setBusy(false)
     })
-  }, [api])
+  }, [api, cfg.userName])
+
+  // Dashboard "Stop server" lands here with ?stop: hub pages own the stop call
+  // (the dashboard can't reach the hub API — the _xsrf cookie is scoped to /hub),
+  // and the stopping transition below routes to spawn-pending like a manual stop.
+  const stopRequested = useRef(new URLSearchParams(window.location.search).has("stop"))
+
+  useEffect(() => {
+    if (stopRequested.current && status === "running") {
+      stopRequested.current = false
+      stop()
+    }
+  }, [status, stop])
 
   return (
     <AuthedLayout

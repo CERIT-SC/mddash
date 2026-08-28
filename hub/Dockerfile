@@ -2,21 +2,24 @@
 # (provides /hub/jwt_login, pinned to the same commit as the previously used
 # eginotebooks/hub image) + the compiled hub-ui (login/home/spawn/… pages).
 
-FROM node:26-alpine AS build
+FROM node:26-slim AS build
 
 WORKDIR /app
 
 RUN npm install -g pnpm@11.13.0 --quiet
-COPY ui/package.json ui/pnpm-lock.yaml ui/pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY dashboard/ui/package.json dashboard/ui/package.json
+COPY landing/package.json landing/package.json
+COPY hub/ui/package.json hub/ui/package.json
+RUN pnpm install --frozen-lockfile --filter hub-ui...
 
-COPY ui/ ./
-RUN pnpm run build
+COPY hub/ui/ hub/ui/
+RUN pnpm --filter hub-ui build
 
 # Separate rendered-at-runtime templates from static assets.
 RUN mkdir -p /out/tpl /out/static && \
-    cp dist/*.html /out/tpl/ && \
-    cp -r dist/assets /out/static/assets
+    cp hub/ui/dist/*.html /out/tpl/ && \
+    cp -r hub/ui/dist/assets /out/static/assets
 
 FROM quay.io/jupyterhub/k8s-hub:4.4.0 AS runtime
 

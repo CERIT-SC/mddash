@@ -5,11 +5,6 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cache import (
-    amber_estimated_time_cache,
-    amber_nsteps_done_cache,
-)
-from cachetools import cached
 from clients import mdrun
 from config import DATA_DIR, S3_BUCKET
 from enums import AmberBinary, Engine, EwaldPreset, JobStatus
@@ -91,7 +86,6 @@ class AmberJob(SimulationJob):
         return self._nsteps
 
     @property
-    @cached(cache=amber_nsteps_done_cache)
     def nsteps_done(self) -> int | None:
         """Number of steps completed so far."""
         if self._performance:
@@ -127,7 +121,6 @@ class AmberJob(SimulationJob):
         return self._finish_timestamp
 
     @property
-    @cached(cache=amber_estimated_time_cache)
     def estimated_time(self) -> int | None:
         """Estimated time until completion in seconds."""
         if self.start_timestamp is None or self.nsteps is None or self.nsteps_done is None or self.nsteps_done == 0:
@@ -215,6 +208,10 @@ class AmberJob(SimulationJob):
         logger.info(f"Started AMBER job {job.id} for experiment {experiment.id} (simulation {simulation_path})")
 
         return job
+
+    def _log_files(self) -> dict[str, Path]:
+        """AMBER log streams keyed by the log endpoint's ``type`` values (mdinfo is progress state, not a stream)."""
+        return {"mdout": self._mdout_log, "stdout": self._stdout_log, "stderr": self._stderr_log}
 
     def get_log(self, type: str = "mdout", tail_lines: int | None = None) -> str:
         """

@@ -29,4 +29,4 @@ Steps unlock automatically as the underlying work completes — users can always
 - **Home page** (`/`): "My Experiments" card grid, "Resource Usage" (CPU/Memory/Storage quota bars), and a Documentation section.
 - **New experiment** (`/new`): creation form.
 - **Wizard** (`/<id>/wizard`): the five-step experiment workflow.
-- **JupyterHub home** (`/hub/home`): start/stop the personal server (the pod the whole UI runs in), API tokens, log out.
+- **JupyterHub home** (`/hub/home`): start/stop the personal server (the pod the whole UI runs in), API tokens, log out. The dashboard's server bar "Stop server" button routes here with `?stop` (the hub performs the stop) and then shows the hub's stopping page.

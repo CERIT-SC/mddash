@@ -13,6 +13,12 @@
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
     "moduleDetection": "force",
+    "rootDir": ".",
+    "types": [
+      "vite/client",
+      "vitest/globals",
+      "@testing-library/jest-dom"
+    ],
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
@@ -28,6 +34,8 @@
   },
   "include": [
     "src",
-    "vite.config.ts"
+    "test",
+    "vite.config.ts",
+    "orval.config.ts"
   ]
 }

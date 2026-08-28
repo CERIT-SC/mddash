@@ -1,0 +1,15 @@
+@import "tailwindcss";
+@import "@e-infra/design-system/setup.css";
+@source "../../../node_modules/@e-infra/design-system/dist";
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+}

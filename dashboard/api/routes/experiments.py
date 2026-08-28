@@ -10,7 +10,7 @@ from notebook_modules import load_catalog
 from schemas import ExperimentSchema, PublishSchema
 from token_manager import MDRepoTokenManager
 from validators import validate_git_url
-from werkzeug.exceptions import BadRequest, Unauthorized
+from werkzeug.exceptions import BadRequest, Conflict, Unauthorized
 
 experiments_bp = Blueprint("experiments", __name__, url_prefix=f"{API_PREFIX}/experiments")
 
@@ -185,6 +185,11 @@ def publish_experiment(experiment_id: str) -> ResponseReturnValue:
         token = token_manager.get_valid_token()
         if not token:
             raise Unauthorized("Not authenticated with MDRepo. Please authenticate first.")
+
+        # Same gate as the wizard's can_publish unlock — a stale URL/bookmark
+        # must not create an MDRepo draft for an experiment with nothing publishable.
+        if not experiment.can_publish:
+            raise Conflict("Nothing to publish yet: no finished run and no existing publication.")
 
         # TODO: Add endpoint to fetch available communities from MDRepo and allow user to select from a dropdown in the publish UI.
         #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.

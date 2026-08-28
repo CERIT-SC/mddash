@@ -760,77 +760,13 @@ def _install_external_download_mocks(rsps: responses.RequestsMock) -> None:
     rsps.add_callback(responses.HEAD, re.compile(r"https://.*"), callback=head_request)
 
 
-ANALYSIS_FIXTURES: dict[str, object] = {
-    "rmsds": {
-        "start": 0,
-        "step": 100,
-        "data": [
-            {
-                "reference": "backbone",
-                "group": "C-alpha",
-                "values": [0.0, 0.12, 0.23, 0.31, 0.38, 0.42, 0.45, 0.47, 0.49, 0.50],
-            },
-            {
-                "reference": "backbone",
-                "group": "Mainchain",
-                "values": [0.0, 0.11, 0.21, 0.29, 0.35, 0.39, 0.42, 0.44, 0.46, 0.47],
-            },
-        ],
-    },
-    "sasa": {
-        "saspf": [
-            [120.5, 118.2, 115.8, 113.4, 111.0, 108.6, 106.2, 103.8, 101.4, 99.0],
-            [85.3, 84.1, 82.9, 81.7, 80.5, 79.3, 78.1, 76.9, 75.7, 74.5],
-            [210.4, 207.8, 205.2, 202.6, 200.0, 197.4, 194.8, 192.2, 189.6, 187.0],
-            [65.1, 64.3, 63.5, 62.7, 61.9, 61.1, 60.3, 59.5, 58.7, 57.9],
-            [150.2, 148.5, 146.8, 145.1, 143.4, 141.7, 140.0, 138.3, 136.6, 134.9],
-        ],
-        "means": [116.8, 79.9, 198.7, 61.1, 142.6],
-        "stdvs": [7.5, 4.1, 8.9, 2.7, 5.9],
-    },
-    "hbonds": [
-        {"name": "Protein-Water", "analysis": "hbonds-00"},
-        {"name": "Intra-Protein", "analysis": "hbonds-01"},
-    ],
-    "hbonds-00": {
-        "data": [
-            {
-                "name": "Protein-Water",
-                "acceptors": [15, 27, 42, 58],
-                "donors": [3, 19, 35, 51],
-                "hydrogens": [8, 22, 38, 54],
-                "hbonds": [
-                    [True, False, True, True],
-                    [False, True, False, True],
-                    [True, True, True, False],
-                    [False, False, True, True],
-                    [True, True, False, False],
-                ],
-            }
-        ]
-    },
-    "hbonds-01": {
-        "data": [
-            {
-                "name": "Intra-Protein",
-                "acceptors": [5, 12, 30],
-                "donors": [8, 25, 45],
-                "hydrogens": [7, 20, 40],
-                "hbonds": [
-                    [True, True, False],
-                    [False, True, True],
-                    [True, False, True],
-                    [True, True, True],
-                    [False, True, False],
-                ],
-            }
-        ]
-    },
-}
-
-
 def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
-    """Install deterministic MDPosit mocks for offline demo imports and analyses."""
+    """
+    Install deterministic MDPosit mocks for offline demo imports.
+
+    Analysis endpoints are a deliberate exception: they pass through to the
+    real MDPosit API so the seeded analysis graphs carry real data.
+    """
 
     def get_project(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
         accession = _extract_mdposit_accession(request.url)
@@ -872,22 +808,6 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
             return (HTTPStatus.NOT_FOUND, {}, b"")
         return (HTTPStatus.OK, {"Content-Type": "application/octet-stream"}, content)
 
-    def get_analysis(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        match = re.search(r"/analyses/(?P<analysis>[^/?#]+)", request.url)
-        analysis_name = unquote(match.group("analysis")) if match else ""
-        fixture = ANALYSIS_FIXTURES.get(analysis_name)
-        if fixture is None:
-            return (
-                HTTPStatus.NOT_FOUND,
-                {},
-                json.dumps({
-                    "type": "urn:mddash:not-found",
-                    "title": "Not Found",
-                    "detail": f"Analysis '{analysis_name}' not found",
-                }),
-            )
-        return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(fixture))
-
     project_base_pattern = _mdposit_project_base_pattern()
     rsps.add_callback(
         responses.GET,
@@ -904,11 +824,11 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
         re.compile(rf"{project_base_pattern}/(?P<accession>[^/]+)$"),
         callback=get_project,
     )
-    rsps.add_callback(
-        responses.GET,
-        re.compile(_mdposit_analysis_pattern()),
-        callback=get_analysis,
-    )
+    # Analyses fetch real data from MDPosit on purpose (see docstring above).
+    # The public accession 302-redirects to the canonical host (different
+    # accession), and requests follows it — allow both URL shapes through.
+    rsps.add_passthru(re.compile(_mdposit_analysis_pattern()))
+    rsps.add_passthru(re.compile(r"https://irb-dev\.mddbr\.eu/api/rest/v1/projects/[^/]+/analyses/[^/?#]+"))
 
 
 def _mdposit_analysis_pattern() -> str:

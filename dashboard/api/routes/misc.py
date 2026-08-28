@@ -1,10 +1,14 @@
-from cache import metrics_cache
-from config import API_PREFIX, CPU_REQUEST_QUOTA, DATA_DIR, MEMORY_REQUEST_QUOTA, PVC_SIZE
+import time
+
+from config import API_PREFIX, DATA_DIR, PVC_SIZE
 from flask import Blueprint, Response, jsonify
 from notebook_modules import load_catalog
 from utils import get_du_size
 
 misc_bp = Blueprint("misc", __name__, url_prefix=API_PREFIX)
+
+# The API sidecar starts with the user server pod, so process uptime ≈ server uptime.
+_STARTED_AT = time.monotonic()
 
 
 @misc_bp.route("/", methods=["GET"])
@@ -34,25 +38,16 @@ def get_notebook_modules() -> Response:
 @misc_bp.route("/metrics", methods=["GET"])
 def get_metrics() -> Response:
     """
-    Get resource usage metrics for the current user.
+    Get storage usage and server uptime for the current user.
 
     Returns:
-        Response: JSON response with current resource requests and configured limits for CPU, memory, and storage.
+        Response: JSON response with used/limit storage in bytes (used is null
+        until the du monitor records a measurement) and the server uptime in seconds.
     """
     from clients import k8s  # ruff:ignore[import-outside-top-level]
 
-    if "pod_resources" in metrics_cache:
-        pod_requests = metrics_cache["pod_resources"]
-    else:
-        pod_requests = k8s.get_pod_resource_requests()
-        metrics_cache["pod_resources"] = pod_requests
-
-    requests: dict[str, int | None] = {**pod_requests, "storage": get_du_size(DATA_DIR)}
-
-    limits = {
-        "cpu": k8s.parse_cpu(CPU_REQUEST_QUOTA),
-        "memory": k8s.parse_memory(MEMORY_REQUEST_QUOTA),
-        "storage": k8s.parse_memory(PVC_SIZE),
-    }
-
-    return jsonify({"requests": requests, "limits": limits})
+    return jsonify({
+        "storage_used_bytes": get_du_size(DATA_DIR),
+        "storage_limit_bytes": k8s.parse_memory(PVC_SIZE),
+        "uptime_seconds": round(time.monotonic() - _STARTED_AT),
+    })

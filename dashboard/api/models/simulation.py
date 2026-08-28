@@ -239,6 +239,11 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """Whether the simulation is locked (read-only file or active job references)."""
         if not os.access(self._file, os.W_OK):
             return True
+        return self.has_jobs
+
+    @property
+    def has_jobs(self) -> bool:
+        """Whether any tuner or simulation job references this simulation."""
         jobs = self._cached_jobs()
         return bool(jobs.tuner or jobs.simulation)
 
@@ -283,18 +288,19 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         (step, status) from jobs referencing this ``simulation_path``.
 
-        Finished job (4), running job (3), any job or tuned trial (2), any
-        tuner job (1), valid manifest (1), otherwise 0. Publish is
-        experiment-level and not part of this ladder.
+        Step is the wizard phase index: Setup 0, Tune 1, Run 2, Analyze 3.
+        A running job already counts as Run done, so Analyze activates once
+        the run starts and partial trajectories can be analyzed mid-run.
+        Publish is experiment-level, not part of this ladder.
 
         Returns:
-            A tuple of (step, status) where step is an integer (0-4) and status
+            A tuple of (step, status) where step is an integer (0-3) and status
             is a string describing the current phase.
         """
         jobs = self._cached_jobs()
 
         if any(j.status == JobStatus.FINISHED for j in jobs.simulation):
-            return 4, "analyzing"
+            return 3, "analyzing"
         if any(j.status == JobStatus.RUNNING for j in jobs.simulation):
             return 3, "simulating"
         if jobs.simulation:
@@ -308,6 +314,12 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if self.valid:
             return 1, "setup complete"
         return 0, "setup"
+
+    @property
+    def live(self) -> bool:
+        """Whether any tuner or production job for this simulation may still advance on its own."""
+        jobs = self._cached_jobs()
+        return any(j.is_live for j in jobs.tuner) or any(j.is_live for j in jobs.simulation)
 
     def to_dict(self) -> dict:
         """
@@ -331,6 +343,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             "missing_files": missing,
             "step": self.step,
             "status": self.status,
+            "live": self.live,
             "last_activity": self.last_activity,
         }
 

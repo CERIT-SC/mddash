@@ -11,6 +11,7 @@ This module provides:
 import os
 import sys
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generator
 from unittest.mock import MagicMock, patch
@@ -47,12 +48,14 @@ with (
     from extensions import db, ma
     from routes import (
         amber_bp,
+        analysis_bp,
         experiments_bp,
         files_bp,
         gmx_bp,
         mdrepo_bp,
         misc_bp,
         notebook_bp,
+        notebook_config_bp,
         simulations_bp,
         tuner_bp,
     )
@@ -78,6 +81,14 @@ def mock_k8s() -> Generator[MagicMock, None, None]:
         mock_core_api.return_value = MagicMock()
         mock_batch_api.return_value = MagicMock()
         mock_rbac_api.return_value = MagicMock()
+        # Plausible pod shape: default MagicMock attributes produce truthy
+        # deletion_timestamps and non-datetime start_times that break serialization.
+        pod = MagicMock()
+        pod.metadata.deletion_timestamp = None
+        pod.status.phase = "Running"
+        pod.status.container_statuses = []
+        pod.status.start_time = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+        mock_core_api.return_value.read_namespaced_pod.return_value = pod
         yield mock_core_api
 
 
@@ -105,11 +116,14 @@ def app(mock_k8s: MagicMock, tmp_path: Path) -> Generator[Flask, None, None]:
     # Patch DATA_DIR and import routes with the patch active
     with (
         patch.dict("config.__dict__", {"DATA_DIR": tmp_path}),
+        patch("models.analysis_job.DATA_DIR", tmp_path),
         patch("models.simulation.DATA_DIR", tmp_path),
     ):
         # Register blueprints
         test_app.register_blueprint(experiments_bp)
         test_app.register_blueprint(notebook_bp)
+        test_app.register_blueprint(notebook_config_bp)
+        test_app.register_blueprint(analysis_bp)
         test_app.register_blueprint(tuner_bp)
         test_app.register_blueprint(gmx_bp)
         test_app.register_blueprint(amber_bp)

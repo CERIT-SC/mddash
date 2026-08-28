@@ -33,7 +33,11 @@ help: ## Show this help
 # ==================== TEST ====================
 
 .PHONY: test
-test: test-api test-auth ## Run all dashboard tests
+test: test-api test-auth test-ui ## Run all dashboard tests
+
+.PHONY: test-ui
+test-ui: ## Run Dashboard UI tests
+	cd .. && pnpm --filter dash test
 
 .PHONY: test-api
 test-api: ## Run API tests
@@ -50,8 +54,8 @@ test-auth: ## Run auth tests
 build: build-proxy build-auth build-api build-s3sync build-mdrepo-uploader ## Build all sidecar images
 
 .PHONY: build-ui
-build-ui: ## Build UI image (React static files)
-	docker build $(platform) -f ui/Dockerfile -t $(ui_image):$(tag) ui/
+build-ui: ## Build Dashboard UI image
+	docker build $(platform) -f ui/Dockerfile -t $(ui_image):$(tag) ..
 
 .PHONY: build-proxy
 build-proxy: build-ui ## Build proxy image (Caddy + UI static files)
@@ -112,12 +116,3 @@ clean: ## Remove all Docker images
 	docker rmi $(api_image):$(tag) 2>/dev/null || true
 	docker rmi $(s3sync_image):$(tag) 2>/dev/null || true
 	docker rmi $(mdrepo_uploader_image):$(tag) 2>/dev/null || true
-
-# Development helpers
-.PHONY: dev-ui
-dev-ui: ## Run UI dev server (hot reload)
-	cd ui && pnpm run dev
-
-.PHONY: dev-api
-dev-api: ## Run API dev server (hot reload)
-	cd api && uv run python app.py

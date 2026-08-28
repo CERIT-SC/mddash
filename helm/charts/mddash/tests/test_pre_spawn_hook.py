@@ -539,12 +539,27 @@ def test_proxy_start_command_gates_on_health_before_caddy(monkeypatch: pytest.Mo
     module = _load_module(monkeypatch)
     cmd = module._proxy_start_command("/user/alice")
 
-    assert cmd.startswith("until ")
+    assert "until " in cmd
     assert "curl --fail" in cmd
     assert "http://localhost:5001/health" in cmd
     assert "http://localhost:5000/user/alice/dash/api/health" in cmd
     assert "sleep 0.1" in cmd
     assert cmd.rstrip().endswith("exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile")
+
+
+def test_proxy_start_command_generates_runtime_config_first(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Config generation is chained before the health wait.
+
+    The k8s command overrides the image CMD, so the health wait never runs
+    entrypoint.sh on its own — and a failed generation must block Caddy (a
+    missing runtime-config.json breaks the UI).
+    """
+    module = _load_module(monkeypatch)
+    cmd = module._proxy_start_command("/user/alice")
+
+    assert cmd.startswith("CONFIG_ONLY=1 /usr/local/bin/entrypoint.sh && until ")
+    assert "done && exec caddy" in cmd
 
 
 def test_proxy_container_built_from_image_env(monkeypatch: pytest.MonkeyPatch) -> None:
