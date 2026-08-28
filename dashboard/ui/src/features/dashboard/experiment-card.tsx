@@ -261,7 +261,6 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
         invalidate()
       },
       onError: (error) => {
-        // The concurrent limit is recoverable in place; other failures stay toasts.
         if (isNotebookQuotaError(error)) setQuotaOpen(true)
         else onMutationError(error)
       },
@@ -313,7 +312,6 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
     else {
       const request: PendingNotebookStart = { experimentId: experiment.id, data: {} }
       setPendingStart(request)
-      // Known-full slots defer straight to the dialog; otherwise the API is the referee.
       if (quota.full) setQuotaOpen(true)
       else start.mutate(request)
     }

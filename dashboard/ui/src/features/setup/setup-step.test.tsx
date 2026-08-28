@@ -132,7 +132,7 @@ describe("SetupStep", () => {
     const user = userEvent.setup()
     renderSetup()
     const start = await screen.findByRole("button", { name: "Start notebook" })
-    // The proactive path only fires once both quota inputs have settled.
+    // Proactive deferral requires the quota queries to have settled.
     await vi.waitFor(() => {
       expect(calls.some((call) => call.url.endsWith(CONFIG))).toBe(true)
       expect(calls.some((call) => call.url.endsWith(EXPERIMENTS))).toBe(true)

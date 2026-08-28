@@ -43,7 +43,7 @@ type NotebookQuotaDialogProps = {
 
 type NotebookQuotaRowProps = {
   experiment: Experiment
-  /** Called once the stop request is accepted, so the row survives as "Stopped". */
+  /** Fires after the stop lands, so the row survives as "Stopped". */
   onStopped: (experimentId: string) => void
   onError: (error: unknown) => void
 }
@@ -54,7 +54,6 @@ function NotebookQuotaRow({ experiment, onStopped, onError }: NotebookQuotaRowPr
   const running = notebook?.status === "RUNNING"
   const transitioning = notebook?.status === "TERMINATING" || notebook?.status === "PENDING"
 
-  // Shared with NotebookControls: a RUNNING notebook ticks its uptime every second.
   const [, setTick] = useState(0)
   useEffect(() => {
     if (!running || notebook?.started_at === null || notebook?.started_at === undefined) return
@@ -112,7 +111,7 @@ function NotebookQuotaRow({ experiment, onStopped, onError }: NotebookQuotaRowPr
               </a>
             </Button>
           )}
-          {/* UNKNOWN is a K8s hiccup stop can't act on (the API no-ops it). */}
+          {/* Stop can't act on UNKNOWN (K8s hiccup; the API no-ops it). */}
           <Button
             variant="outline"
             size="icon"
@@ -130,19 +129,17 @@ function NotebookQuotaRow({ experiment, onStopped, onError }: NotebookQuotaRowPr
 }
 
 /**
- * Quota-recovery dialog for a failed or proactively deferred notebook start:
- * lists the running notebooks so one can be stopped, then retries the pending
- * start. Designs beyond the mock's happy path (loading rows, durable action
- * errors, UNKNOWN pods) follow the same visual language.
+ * Quota recovery for a deferred/refused notebook start: stop a running
+ * notebook to free a slot, then retry the pending start.
  */
 export function NotebookQuotaDialog({ open, onOpenChange, pendingStart }: NotebookQuotaDialogProps) {
   const queryClient = useQueryClient()
-  // Poll while open so a stopping pod flips to "Stopped" without user input.
+  // Poll so a stopping pod flips to "Stopped" without user action.
   const { limit, experiments, runningCount } = useNotebookQuota({ poll: open })
   const [stoppedIds, setStoppedIds] = useState<ReadonlySet<string>>(new Set())
   const [actionError, setActionError] = useState<unknown>(null)
 
-  // Each opening starts a fresh quota session: no stale "Stopped" rows or errors.
+  // Reopening resets the quota session: no stale "Stopped" rows or errors.
   useEffect(() => {
     if (open) {
       setStoppedIds(new Set())
@@ -153,8 +150,7 @@ export function NotebookQuotaDialog({ open, onOpenChange, pendingStart }: Notebo
   const rows = (experiments ?? []).filter(
     (entry) => entry.notebook !== null && (isNotebookActive(entry.notebook.status) || stoppedIds.has(entry.id))
   )
-  // The offer unlocks once a slot is provably free; without a known limit, any
-  // completed stop is the best signal available. A loading list offers nothing.
+  // Unlock on a provably free slot; with an unknown limit, a completed stop is the signal.
   const readyToStart =
     pendingStart !== null &&
     experiments !== undefined &&
@@ -214,8 +210,7 @@ export function NotebookQuotaDialog({ open, onOpenChange, pendingStart }: Notebo
               ))}
             </ul>
           )}
-          {/* Transient failures (stop rejected, retried start still refused) are
-              durable UI, matching the app's no-toast-only error rule. */}
+          {/* Action failures must be durable UI (no toast-only), per app convention. */}
           {actionError !== null && <ApiErrorAlert error={actionError} />}
         </div>
 

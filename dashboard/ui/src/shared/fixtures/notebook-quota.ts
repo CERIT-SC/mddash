@@ -17,20 +17,19 @@ export function notebookConfigResponse(concurrentLimit: number = 2): Response {
 
 type NotebookQuotaApiOptions = {
   limit: number
-  /** Full contents of GET /experiments; a notebook DELETE flips that experiment to DOWN. */
+  /** GET /experiments content; a notebook DELETE flips that experiment to DOWN. */
   experiments: Experiment[]
-  /** When true, notebook start POSTs are rejected with the quota problem (403 fallback path). */
+  /** Notebook start POSTs are rejected with the quota 403 (fallback path). */
   startFails?: boolean
-  /** When true, GET /experiments never resolves (loading state). */
+  /** GET /experiments never resolves (loading state). */
   listNeverResolves?: boolean
-  /** When true, GET /notebook-config never resolves — the limit stays unknown client-side. */
+  /** GET /notebook-config never resolves — the limit stays unknown client-side. */
   configNeverResolves?: boolean
 }
 
 /**
- * Stateful quota scenario shared by the quota-dialog and start-site tests.
- * `served` records every URL the stub answered so tests can wait for queries
- * to settle before interacting (proactive-start paths depend on settled quota).
+ * Stateful quota mock: DELETE flips a notebook to DOWN; `served` tracks answered
+ * URLs so proactive-path tests can wait for the quota queries to settle.
  */
 export function mockNotebookQuotaApi({
   limit,
@@ -85,7 +84,6 @@ export function mockNotebookQuotaApi({
     return new Response(null, { status: 404 })
   })
 
-  /** Resolves once both quota inputs (config + list) have been answered. */
   async function quotaSettled(): Promise<void> {
     await vi.waitFor(() => {
       expect(served.has(NOTEBOOK_CONFIG_URL)).toBe(true)

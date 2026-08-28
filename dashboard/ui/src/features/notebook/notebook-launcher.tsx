@@ -63,7 +63,6 @@ export function NotebookLauncher({ experimentId, notebook, ready, probeFailures,
     mutation: {
       onSuccess: invalidate,
       onError: (error) => {
-        // The concurrent limit is recoverable in place; other failures stay toasts.
         if (isNotebookQuotaError(error)) setQuotaOpen(true)
         else toast.error(toApiError(error).message)
       },
@@ -73,7 +72,6 @@ export function NotebookLauncher({ experimentId, notebook, ready, probeFailures,
   function attemptStart() {
     const request: PendingNotebookStart = { experimentId, data: { tier: tier || undefined, gpu } }
     setPendingStart(request)
-    // Known-full slots defer straight to the dialog; otherwise the API is the referee.
     if (quota.full) setQuotaOpen(true)
     else start.mutate(request)
   }

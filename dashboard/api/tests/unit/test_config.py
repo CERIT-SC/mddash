@@ -48,5 +48,5 @@ class TestMaxNotebooksRequired:
         result = _import_config({"DATA_DIR": str(tmp_path), "NS_MAX_NOTEBOOKS": "3"})
 
         assert result.returncode == 0
-        # config logs its missing-optional-env warnings to stdout before the print.
+        # config logs optional-env warnings to stdout before the print, so compare the last line.
         assert result.stdout.strip().splitlines()[-1] == "3"

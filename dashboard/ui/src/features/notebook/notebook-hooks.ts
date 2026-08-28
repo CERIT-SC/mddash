@@ -74,9 +74,8 @@ export function isNotebookQuotaError(error: unknown): boolean {
 }
 
 /**
- * Cross-experiment notebook quota: the API-declared concurrent limit plus the
- * running count derived from the experiments list. `full` is only true when
- * both are known and every slot is taken — unknown state never blocks starts.
+ * Concurrent-notebook quota from /notebook-config plus the experiments list.
+ * `full` requires both to be known — an unknown state never blocks starts.
  */
 export function useNotebookQuota({ poll = false }: { poll?: boolean } = {}) {
   const config = useGetNotebookConfig({ query: { retry: false } })

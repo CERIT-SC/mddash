@@ -33,7 +33,6 @@ describe("NotebookQuotaDialog", () => {
     expect(within(dialog).getByText(/stop one of your notebooks to free a slot/i)).toBeVisible()
     expect(await within(dialog).findByText("2/2")).toBeVisible()
 
-    // Only active notebooks are listed; the idle one stays out.
     expect(await within(dialog).findByText("test")).toBeVisible()
     expect(within(dialog).getByText("Experiment no.2")).toBeVisible()
     expect(within(dialog).queryByText("Idle")).not.toBeInTheDocument()

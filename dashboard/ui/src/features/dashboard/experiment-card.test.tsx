@@ -348,8 +348,7 @@ describe("ExperimentCard", () => {
   })
 
   it("opens the quota dialog when the API refuses a start over the limit", async () => {
-    // The unresolved config keeps the limit unknown client-side, so the start
-    // is attempted and the quota-exceeded 403 falls back to the dialog.
+    // Unknown limit (config never resolves) → the start fires and its quota 403 opens the dialog.
     mockNotebookQuotaApi({
       limit: 3,
       configNeverResolves: true,
