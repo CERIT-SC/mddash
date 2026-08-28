@@ -7,10 +7,11 @@ import { SetupStep, type SetupSource } from "@/features/setup"
 import { CREATE_TAB, simulationParam, SimulationTabs } from "@/features/simulation"
 import { TuneStep } from "@/features/tune"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
-import { Stepper, StepperContent, StepperHeader } from "@/shared/ui/stepper"
+import { Stepper, StepperContent } from "@/shared/ui/stepper"
 import { Card, CardContent, Skeleton } from "@e-infra/design-system"
 import { Atom, ChartColumn, Play, SlidersHorizontal, Upload } from "lucide-react"
 
+import { WizardStepperHeader } from "./stepper-header"
 import { TitleRow } from "./title-row"
 
 const STEPS = [
@@ -210,12 +211,14 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
               totalSteps={STEPS.length}
               onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
             >
-              {/* mb-0 drops the header's reserved bottom margin. */}
-              <StepperHeader
+              <WizardStepperHeader
+                experimentId={experimentId}
+                engine={data.engine}
+                simulation={selected}
                 steps={STEPS}
-                className="mb-0"
                 maxStep={maxStep}
                 unlockedIndexes={data.can_publish ? [LAST_STEP] : []}
+                pollMs={SIMULATIONS_POLL_MS}
               />
               <StepperContent>{steps}</StepperContent>
             </Stepper>
