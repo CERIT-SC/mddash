@@ -9,8 +9,6 @@ node_modules/
 **/node_modules/
 **/dist/
 **/*.tsbuildinfo
-dashboard/ui.old/*
-!dashboard/ui.old/.gitignore
 .playwright-mcp/
 pmemd*.tar.bz2
 ambertools*.tar.bz2

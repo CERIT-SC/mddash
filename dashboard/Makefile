@@ -90,7 +90,6 @@ push-ui: build-ui ## Build and push UI image
 .PHONY: push-proxy
 push-proxy: build-proxy ## Build and push proxy image
 	docker push $(proxy_image):$(tag)
-	@echo "NOTE: run 'make deploy' before restarting user pods — the spawned proxy's k8s command comes from the hub's pre_spawn_hook and must match the new image."
 
 .PHONY: push-auth
 push-auth: build-auth ## Build and push auth image
@@ -117,13 +116,3 @@ clean: ## Remove all Docker images
 	docker rmi $(api_image):$(tag) 2>/dev/null || true
 	docker rmi $(s3sync_image):$(tag) 2>/dev/null || true
 	docker rmi $(mdrepo_uploader_image):$(tag) 2>/dev/null || true
-
-# Development helpers
-.PHONY: dev-ui
-dev-ui: ## Run UI dev server (unavailable while the greenfield UI is a skeleton)
-	@echo "Dashboard UI implementation has not started; dashboard/ui currently contains architecture scaffolding only." >&2
-	@exit 1
-
-.PHONY: dev-api
-dev-api: ## Run API dev server (hot reload)
-	cd api && uv run python app.py
