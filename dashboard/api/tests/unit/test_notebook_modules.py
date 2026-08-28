@@ -10,6 +10,13 @@ from notebook_modules import load_catalog
 MIN_MODULE_COUNT = 2
 
 
+def _module_dict(**overrides) -> dict:
+    """Return a minimal valid module entry with individual fields overridden."""
+    module = {"id": "x", "name": "X", "engine": "GMX", "author": "A", "icon": "protein", "path": "x/y"}
+    module.update(overrides)
+    return module
+
+
 def _catalog_json(modules: list[dict]) -> str:
     """
     Serialize a minimal catalog document with the given modules list.
@@ -33,6 +40,8 @@ class TestLoadCatalog:
         for module in catalog:
             assert module.name
             assert module.engine in {"GMX", "AMBER"}
+            assert module.author
+            assert module.icon in {"protein", "membrane"}
 
     def test_unknown_property_rejected(self, tmp_path: Path) -> None:
         """An unknown top-level property should fail validation."""
@@ -44,7 +53,7 @@ class TestLoadCatalog:
 
     def test_duplicate_module_ids_rejected(self, tmp_path: Path) -> None:
         """Duplicate module IDs should fail validation."""
-        module = {"id": "dup", "name": "Dup", "engine": "GMX", "path": "gromacs/dup"}
+        module = _module_dict(id="dup", name="Dup", path="gromacs/dup")
         catalog_file = tmp_path / "notebook-modules.json"
         catalog_file.write_text(_catalog_json([module, module]))
 
@@ -54,7 +63,15 @@ class TestLoadCatalog:
     def test_unknown_engine_rejected(self, tmp_path: Path) -> None:
         """An engine outside the allowed enum should fail validation."""
         catalog_file = tmp_path / "notebook-modules.json"
-        catalog_file.write_text(_catalog_json([{"id": "x", "name": "X", "engine": "NAMD", "path": "x/y"}]))
+        catalog_file.write_text(_catalog_json([_module_dict(engine="NAMD")]))
+
+        with pytest.raises(ValidationError):
+            load_catalog(path=catalog_file)
+
+    def test_unknown_icon_rejected(self, tmp_path: Path) -> None:
+        """An icon outside the allowed enum should fail validation."""
+        catalog_file = tmp_path / "notebook-modules.json"
+        catalog_file.write_text(_catalog_json([_module_dict(icon="rocket")]))
 
         with pytest.raises(ValidationError):
             load_catalog(path=catalog_file)
@@ -62,7 +79,7 @@ class TestLoadCatalog:
     def test_unsafe_path_rejected(self, tmp_path: Path) -> None:
         """A path containing traversal or leading slash should fail validation."""
         catalog_file = tmp_path / "notebook-modules.json"
-        catalog_file.write_text(_catalog_json([{"id": "x", "name": "X", "engine": "GMX", "path": "../escape"}]))
+        catalog_file.write_text(_catalog_json([_module_dict(path="../escape")]))
 
         with pytest.raises(ValidationError):
             load_catalog(path=catalog_file)
@@ -105,6 +122,8 @@ class TestCatalogLookup:
             assert "id" in entry
             assert "name" in entry
             assert "engine" in entry
+            assert "author" in entry
+            assert "icon" in entry
             assert "path" not in entry
             assert "repository" not in entry
         json.dumps(public)
@@ -127,17 +146,14 @@ class TestRepositoryField:
         """A module with a repository field and path '.' should load as a root module."""
         catalog_file = tmp_path / "notebook-modules.json"
         catalog_file.write_text(
-            json.dumps({
-                "modules": [
-                    {
-                        "id": "binder-gmx",
-                        "name": "Binder",
-                        "engine": "GMX",
-                        "path": ".",
-                        "repository": "https://github.com/bioexcel/biobb_wf_md_setup_membrane.git",
-                    }
-                ]
-            })
+            _catalog_json([
+                _module_dict(
+                    id="binder-gmx",
+                    name="Binder",
+                    path=".",
+                    repository="https://github.com/bioexcel/biobb_wf_md_setup_membrane.git",
+                )
+            ])
         )
 
         catalog = load_catalog(path=catalog_file)

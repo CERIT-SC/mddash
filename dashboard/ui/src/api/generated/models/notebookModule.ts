@@ -6,10 +6,13 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { Engine } from './engine.ts';
+import type { NotebookModuleIcon } from './notebookModuleIcon.ts';
 
 export interface NotebookModule {
   id: string;
   name: string;
   description?: string;
   engine: Engine;
+  author: string;
+  icon: NotebookModuleIcon;
 }

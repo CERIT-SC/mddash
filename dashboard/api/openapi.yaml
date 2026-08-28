@@ -859,14 +859,17 @@ components:
       required: [message]
       properties: {message: {type: string}}
       additionalProperties: false
+    NotebookModuleIcon: {type: string, enum: [protein, membrane]}
     NotebookModule:
       type: object
-      required: [id, name, engine]
+      required: [id, name, engine, author, icon]
       properties:
         id: {type: string}
         name: {type: string}
         description: {type: string}
         engine: {$ref: '#/components/schemas/Engine'}
+        author: {type: string}
+        icon: {$ref: '#/components/schemas/NotebookModuleIcon'}
       additionalProperties: false
     Metrics:
       type: object

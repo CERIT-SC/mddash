@@ -28,6 +28,8 @@ class NotebookModule:
     name: str
     description: str | None
     engine: str
+    author: str
+    icon: str
     path: str
     repository: str | None = None
 
@@ -41,9 +43,9 @@ class NotebookModule:
         Display metadata for the UI, excluding internal Git paths.
 
         Returns:
-            A dictionary with id, name, engine, and optional description.
+            A dictionary with id, name, engine, author, icon, and optional description.
         """
-        data: dict = {"id": self.id, "name": self.name, "engine": self.engine}
+        data: dict = {"id": self.id, "name": self.name, "engine": self.engine, "author": self.author, "icon": self.icon}
         if self.description is not None:
             data["description"] = self.description
         return data
@@ -124,6 +126,8 @@ def _build_catalog(data: dict) -> NotebookModulesCatalog:
                 name=raw["name"],
                 description=raw.get("description"),
                 engine=raw["engine"],
+                author=raw["author"],
+                icon=raw["icon"],
                 path=raw["path"],
                 repository=raw.get("repository"),
             )
