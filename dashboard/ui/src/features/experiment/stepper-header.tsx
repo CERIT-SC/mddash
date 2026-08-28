@@ -7,7 +7,6 @@ const RUN_STEP = 2
 type WizardStepperHeaderProps = {
   experimentId: string
   engine: Engine
-  /** Undefined in create mode — no job to poll. */
   simulation: Simulation | undefined
   steps: Step[]
   maxStep: number
