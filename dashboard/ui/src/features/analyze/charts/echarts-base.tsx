@@ -1,6 +1,7 @@
 import React from "react"
 
 import ReactEChartsCore, { echarts, type EChartsOption } from "./echarts-setup"
+import { useChartPalette } from "./palette"
 
 interface EChartsBaseProps {
   option: EChartsOption
@@ -17,11 +18,14 @@ interface EChartsBaseProps {
 }
 
 const EChartsBase: React.FC<EChartsBaseProps> = ({ option, className, style, opts, height = 400 }) => {
+  const palette = useChartPalette()
+  // Canvas can't read CSS vars — resolve tokens at render time.
+  const resolvedOption: EChartsOption = palette ? { ...option, color: option.color ?? palette } : option
   const resolvedHeight = typeof height === "number" ? `${height}px` : height
   return (
     <ReactEChartsCore
       echarts={echarts}
-      option={option}
+      option={resolvedOption}
       className={className}
       style={{ width: "100%", height: resolvedHeight, ...style }}
       opts={opts}
