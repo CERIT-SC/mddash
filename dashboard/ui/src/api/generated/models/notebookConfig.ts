@@ -12,4 +12,9 @@ export interface NotebookConfig {
   /** @minItems 1 */
   tiers: NotebookTier[];
   defaultTier: NotebookConfigDefaultTier;
+  /**
+     * Max concurrent notebook pods per user namespace
+     * @minimum 1
+     */
+  concurrentLimit: number;
 }

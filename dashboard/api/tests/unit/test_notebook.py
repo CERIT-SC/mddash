@@ -6,11 +6,23 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from clients.k8s import create_notebook_pod
+from config import MAX_NOTEBOOKS
 from enums import NotebookTier, PodStatus
 from errors import ApiError
+from flask.testing import FlaskClient
 from models.notebook import Notebook
 from schemas.notebook import NotebookSchema
 from werkzeug.exceptions import BadRequest, Forbidden
+
+
+class TestNotebookConfigRoute:
+    """GET /notebook-config exposes the concurrent-notebook limit to clients."""
+
+    def test_includes_concurrent_limit(self, client: FlaskClient) -> None:
+        response = client.get("/dash/api/notebook-config")
+
+        assert response.status_code == 200
+        assert response.get_json()["concurrentLimit"] == MAX_NOTEBOOKS
 
 
 class TestNotebookPodInfo:

@@ -886,10 +886,11 @@ components:
       additionalProperties: false
     NotebookConfig:
       type: object
-      required: [tiers, defaultTier]
+      required: [tiers, defaultTier, concurrentLimit]
       properties:
         tiers: {type: array, minItems: 1, items: {$ref: '#/components/schemas/NotebookTier'}}
         defaultTier: {type: string, enum: [1x, 2x, 4x]}
+        concurrentLimit: {type: integer, minimum: 1, description: Max concurrent notebook pods per user namespace}
       additionalProperties: false
     Notebook:
       type: object

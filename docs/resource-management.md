@@ -56,7 +56,7 @@ Resources are configured via `resources.notebook` in `config.yaml`.
 
 **Why jupyter limits are generous:** User notebooks can spike in memory (e.g. loading a large trajectory). The 8Gi limit prevents a runaway computation from OOMKilling other pods.
 
-`resources.notebookQuota.maxConcurrent` sets the API-enforced count limit on concurrent notebook pods. It is sized so that `maxConcurrent` notebooks at the **4x tier** fit within the namespace quota — the same quota headroom fits `maxConcurrent × 4` notebooks at 1x tier.
+`resources.notebookQuota.maxConcurrent` sets the API-enforced count limit on concurrent notebook pods (passed to the API as `NS_MAX_NOTEBOOKS`, a **required** env var — the API refuses to start without it and exposes it via `GET /api/.../notebook-config` as `concurrentLimit`). It is sized so that `maxConcurrent` notebooks at the **4x tier** fit within the namespace quota — the same quota headroom fits `maxConcurrent × 4` notebooks at 1x tier.
 
 ### Analysis jobs
 
@@ -137,4 +137,4 @@ The `notebooks` table has `tier` (enum: 1x, 2x, 4x) and `gpu` (boolean) columns.
 ### API endpoints
 
 - `POST /api/.../notebook` — accepts optional `{"tier": "2x", "gpu": true}` JSON body
-- `GET /api/.../notebook-config` — returns available tiers and the default tier
+- `GET /api/.../notebook-config` — returns available tiers, the default tier, and `concurrentLimit` (max concurrent notebook pods per user)

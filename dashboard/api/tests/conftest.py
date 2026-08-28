@@ -35,6 +35,7 @@ os.environ["POD_NAMESPACE"] = "test-namespace"
 os.environ["HUB_NAMESPACE"] = "test-hub-namespace"
 os.environ["PVC_NAME"] = "test-pvc"
 os.environ["PVC_STORAGE_SIZE"] = "1Gi"
+os.environ["NS_MAX_NOTEBOOKS"] = "2"
 os.environ["TUNER_USER"] = "tuner"
 os.environ["TUNER_PASSWORD"] = "secret"
 

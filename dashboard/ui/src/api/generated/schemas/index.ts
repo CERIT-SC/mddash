@@ -47,13 +47,15 @@ export const GetMetricsResponse = zod.object({
 
 
 
+
 export const GetNotebookConfigResponse = zod.object({
   "tiers": zod.array(zod.object({
   "value": zod.enum(['1x', '2x', '4x']),
   "cpuLimit": zod.string(),
   "memoryLimit": zod.string()
 })).min(1),
-  "defaultTier": zod.enum(['1x', '2x', '4x'])
+  "defaultTier": zod.enum(['1x', '2x', '4x']),
+  "concurrentLimit": zod.int().min(1).describe('Max concurrent notebook pods per user namespace')
 })
 
 

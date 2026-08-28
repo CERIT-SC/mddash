@@ -17,7 +17,8 @@ import { Play } from "lucide-react"
 import { toast } from "sonner"
 
 import { NotebookControls } from "./notebook-controls"
-import { useNotebookInvalidation } from "./notebook-hooks"
+import { isNotebookQuotaError, useNotebookInvalidation, useNotebookQuota } from "./notebook-hooks"
+import { NotebookQuotaDialog, type PendingNotebookStart } from "./notebook-quota-dialog"
 
 function formatCpu(cpu: string): string {
   const cores = cpu.endsWith("m") ? parseInt(cpu) / 1000 : parseFloat(cpu)
@@ -54,10 +55,28 @@ export function NotebookLauncher({ experimentId, notebook, ready, probeFailures,
   }, [defaultTier])
 
   const invalidate = useNotebookInvalidation(experimentId)
+  const quota = useNotebookQuota()
+  const [quotaOpen, setQuotaOpen] = useState(false)
+  const [pendingStart, setPendingStart] = useState<PendingNotebookStart | null>(null)
 
   const start = useStartNotebook({
-    mutation: { onSuccess: invalidate, onError: (error) => toast.error(toApiError(error).message) },
+    mutation: {
+      onSuccess: invalidate,
+      onError: (error) => {
+        // The concurrent limit is recoverable in place; other failures stay toasts.
+        if (isNotebookQuotaError(error)) setQuotaOpen(true)
+        else toast.error(toApiError(error).message)
+      },
+    },
   })
+
+  function attemptStart() {
+    const request: PendingNotebookStart = { experimentId, data: { tier: tier || undefined, gpu } }
+    setPendingStart(request)
+    // Known-full slots defer straight to the dialog; otherwise the API is the referee.
+    if (quota.full) setQuotaOpen(true)
+    else start.mutate(request)
+  }
 
   const status = notebook?.status
 
@@ -76,47 +95,46 @@ export function NotebookLauncher({ experimentId, notebook, ready, probeFailures,
   }
 
   return (
-    <div
-      aria-label="Notebook launcher"
-      className="border-border bg-surface flex w-fit max-w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-3 py-2"
-    >
-      <span className="flex items-center gap-2 text-sm font-medium">
-        <span className="bg-text-muted/40 h-2 w-2 rounded-full" aria-hidden="true" />
-        Notebook
-      </span>
-      {tiers.length > 0 && (
-        <Select value={tier} onValueChange={(value) => setTier(value as StartNotebookRequestTier)}>
-          <SelectTrigger aria-label="Notebook size" className="w-auto min-w-40">
-            <SelectValue placeholder="Size" />
-          </SelectTrigger>
-          <SelectContent>
-            {tiers.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {formatCpu(option.cpuLimit)} / {formatMemory(option.memoryLimit)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-      <div className="flex items-center gap-2">
-        <Checkbox
-          id={`gpu-${experimentId}`}
-          checked={gpu}
-          onCheckedChange={(checked) => setGpu(checked === true)}
-          aria-label="GPU"
-        />
-        <Label htmlFor={`gpu-${experimentId}`} className="text-sm font-normal">
-          GPU
-        </Label>
-      </div>
-      <Button
-        size="sm"
-        onClick={() => start.mutate({ experimentId, data: { tier: tier || undefined, gpu } })}
-        disabled={start.isPending || (tiers.length > 0 && tier === "")}
+    <>
+      <div
+        aria-label="Notebook launcher"
+        className="border-border bg-surface flex w-fit max-w-full flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border px-3 py-2"
       >
-        <Play aria-hidden="true" />
-        {start.isPending ? "Starting…" : "Start notebook"}
-      </Button>
-    </div>
+        <span className="flex items-center gap-2 text-sm font-medium">
+          <span className="bg-text-muted/40 h-2 w-2 rounded-full" aria-hidden="true" />
+          Notebook
+        </span>
+        {tiers.length > 0 && (
+          <Select value={tier} onValueChange={(value) => setTier(value as StartNotebookRequestTier)}>
+            <SelectTrigger aria-label="Notebook size" className="w-auto min-w-40">
+              <SelectValue placeholder="Size" />
+            </SelectTrigger>
+            <SelectContent>
+              {tiers.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {formatCpu(option.cpuLimit)} / {formatMemory(option.memoryLimit)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={`gpu-${experimentId}`}
+            checked={gpu}
+            onCheckedChange={(checked) => setGpu(checked === true)}
+            aria-label="GPU"
+          />
+          <Label htmlFor={`gpu-${experimentId}`} className="text-sm font-normal">
+            GPU
+          </Label>
+        </div>
+        <Button size="sm" onClick={attemptStart} disabled={start.isPending || (tiers.length > 0 && tier === "")}>
+          <Play aria-hidden="true" />
+          {start.isPending ? "Starting…" : "Start notebook"}
+        </Button>
+      </div>
+      <NotebookQuotaDialog open={quotaOpen} onOpenChange={setQuotaOpen} pendingStart={pendingStart} />
+    </>
   )
 }

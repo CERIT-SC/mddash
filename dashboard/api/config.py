@@ -64,7 +64,9 @@ if not all([CPU_REQUEST_QUOTA, MEMORY_REQUEST_QUOTA, CPU_LIMIT_QUOTA, MEMORY_LIM
         "NS_REQUESTS_CPU, NS_REQUESTS_MEMORY, NS_LIMITS_CPU, or NS_LIMITS_MEMORY environment variables are not set. Namespace resource quota checks may not be configured properly."
     )
 
-MAX_NOTEBOOKS = int(os.environ.get("NS_MAX_NOTEBOOKS", "2"))
+if "NS_MAX_NOTEBOOKS" not in os.environ:
+    raise RuntimeError("NS_MAX_NOTEBOOKS environment variable is required (max concurrent notebooks per namespace).")
+MAX_NOTEBOOKS = int(os.environ["NS_MAX_NOTEBOOKS"])
 
 NOTEBOOK_RESOURCES: dict[str, dict[str, str]] = {
     "requests": {

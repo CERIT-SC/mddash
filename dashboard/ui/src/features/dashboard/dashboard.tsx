@@ -1,4 +1,4 @@
-import { useListExperiments } from "@/api/generated/client"
+import { useGetNotebookConfig, useListExperiments } from "@/api/generated/client"
 import { isNotebookActive } from "@/shared/pod-status"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import {
@@ -31,22 +31,24 @@ type DashboardProps = {
   defaultNotebooksRepo: string
 }
 
-function SectionHeading({ children, count }: { children: string; count: number }) {
+function SectionHeading({ children, count, limit }: { children: string; count: number; limit?: number }) {
   return (
     <h2 className="text-text-muted flex items-center gap-2 text-sm font-medium tracking-wide uppercase">
-      {children} <Badge variant="secondary">{count}</Badge>
+      {children} <Badge variant="secondary">{limit === undefined ? count : `${count}/${limit}`}</Badge>
     </h2>
   )
 }
 
 export function Dashboard({ search, onSearchChange, defaultNotebooksRepo }: DashboardProps) {
   const query = useListExperiments({ query: { retry: false } })
+  const config = useGetNotebookConfig({ query: { retry: false } })
 
   if (query.isError) {
     return <ApiErrorAlert error={query.error} onRetry={() => void query.refetch()} />
   }
 
   const experiments = query.data?.status === 200 ? query.data.data : undefined
+  const concurrentLimit = config.data?.status === 200 ? config.data.data.concurrentLimit : undefined
   const q = search.q?.trim().toLowerCase() ?? ""
 
   const filtered = (experiments ?? [])
@@ -120,7 +122,9 @@ export function Dashboard({ search, onSearchChange, defaultNotebooksRepo }: Dash
         <div className="space-y-8">
           {running.length > 0 && (
             <div className="space-y-4">
-              <SectionHeading count={running.length}>Notebook running</SectionHeading>
+              <SectionHeading count={running.length} limit={concurrentLimit}>
+                Notebook running
+              </SectionHeading>
               <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {running.map((experiment) => (
                   <ExperimentCard key={experiment.id} experiment={experiment} />

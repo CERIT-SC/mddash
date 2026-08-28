@@ -12,6 +12,12 @@ import {
   useUpdateExperiment,
 } from "@/api/generated/client"
 import type { Experiment } from "@/api/generated/models"
+import {
+  isNotebookQuotaError,
+  NotebookQuotaDialog,
+  useNotebookQuota,
+  type PendingNotebookStart,
+} from "@/features/notebook"
 import { ENGINE_LABELS } from "@/shared/engine"
 import { formatBytes, formatTime, relativeTime } from "@/shared/format"
 import { isNotebookActive } from "@/shared/pod-status"
@@ -240,10 +246,13 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
   const queryClient = useQueryClient()
   const [renameOpen, setRenameOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [quotaOpen, setQuotaOpen] = useState(false)
+  const [pendingStart, setPendingStart] = useState<PendingNotebookStart | null>(null)
   const [name, setName] = useState(experiment.name)
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: getListExperimentsQueryKey() })
   const onMutationError = (error: unknown) => toast.error(toApiError(error).message)
+  const quota = useNotebookQuota()
 
   const start = useStartNotebook({
     mutation: {
@@ -251,7 +260,11 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
         toast.success(`Notebook starting for “${experiment.name}”`)
         invalidate()
       },
-      onError: onMutationError,
+      onError: (error) => {
+        // The concurrent limit is recoverable in place; other failures stay toasts.
+        if (isNotebookQuotaError(error)) setQuotaOpen(true)
+        else onMutationError(error)
+      },
     },
   })
   const stop = useStopNotebook({
@@ -297,7 +310,13 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
 
   function toggleNotebook() {
     if (active) stop.mutate({ experimentId: experiment.id })
-    else start.mutate({ experimentId: experiment.id, data: {} })
+    else {
+      const request: PendingNotebookStart = { experimentId: experiment.id, data: {} }
+      setPendingStart(request)
+      // Known-full slots defer straight to the dialog; otherwise the API is the referee.
+      if (quota.full) setQuotaOpen(true)
+      else start.mutate(request)
+    }
   }
 
   function submitRename(event: React.FormEvent) {
@@ -529,6 +548,8 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <NotebookQuotaDialog open={quotaOpen} onOpenChange={setQuotaOpen} pendingStart={pendingStart} />
     </Card>
   )
 }

@@ -1,5 +1,5 @@
 import type { FileInfo, Notebook, Simulation } from "@/api/generated/models"
-import { experiment } from "@/shared/fixtures/experiment"
+import { experiment, withNotebook } from "@/shared/fixtures/experiment"
 import { requestUrl } from "@/shared/fixtures/mock-fetch"
 import { simulation } from "@/shared/fixtures/simulation"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
@@ -12,6 +12,7 @@ import { SetupStep } from "./setup-step"
 const API_NOTEBOOK = "/experiments/exp1/notebook"
 const SERVE = "/dash/notebook/exp1/?token=tok"
 const CONFIG = "/notebook-config"
+const EXPERIMENTS = "/dash/api/experiments"
 
 function ipynb(path: string): FileInfo {
   return { name: path.split("/").pop() ?? path, size: 10, path, url: `/files/${path}` }
@@ -38,7 +39,13 @@ const NOTEBOOK_CONFIG = {
   defaultTier: "1x",
 }
 
-function mockSetup({ notebooks = notebook(), sims = [] as Simulation[], ipynbs = [] as FileInfo[] } = {}) {
+function mockSetup({
+  notebooks = notebook(),
+  sims = [] as Simulation[],
+  ipynbs = [] as FileInfo[],
+  experimentsList = [] as ReturnType<typeof experiment>[],
+  concurrentLimit = 2,
+} = {}) {
   const simState = { current: sims }
   const calls: { url: string; method: string; body?: unknown }[] = []
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -48,9 +55,10 @@ function mockSetup({ notebooks = notebook(), sims = [] as Simulation[], ipynbs =
       method: init?.method ?? "GET",
       body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
     })
-    if (url.endsWith(CONFIG)) return Response.json(NOTEBOOK_CONFIG)
+    if (url.endsWith(CONFIG)) return Response.json({ ...NOTEBOOK_CONFIG, concurrentLimit })
     if (url.endsWith(API_NOTEBOOK)) return Response.json(notebooks)
     if (url.endsWith(SERVE)) return new Response(null, { status: 200 })
+    if (url.endsWith(EXPERIMENTS)) return Response.json(experimentsList)
     if (url.endsWith("/experiments/exp1/simulations")) return Response.json([...simState.current])
     if (url.endsWith("files?ext=ipynb")) return Response.json(ipynbs)
     if (url.includes("files?ext=")) return Response.json([])
@@ -114,6 +122,26 @@ describe("SetupStep", () => {
       method: "POST",
       body: { tier: "1x", gpu: false },
     })
+  })
+
+  it("defers the start into the quota dialog when the notebook limit is full", async () => {
+    const { calls } = mockSetup({
+      concurrentLimit: 1,
+      experimentsList: [experiment("exp2", { name: "Busy A", notebook: withNotebook("RUNNING", "exp2") })],
+    })
+    const user = userEvent.setup()
+    renderSetup()
+    const start = await screen.findByRole("button", { name: "Start notebook" })
+    // The proactive path only fires once both quota inputs have settled.
+    await vi.waitFor(() => {
+      expect(calls.some((call) => call.url.endsWith(CONFIG))).toBe(true)
+      expect(calls.some((call) => call.url.endsWith(EXPERIMENTS))).toBe(true)
+    })
+
+    await user.click(start)
+    const dialog = await screen.findByRole("dialog")
+    expect(within(dialog).getByText("Notebook limit reached")).toBeVisible()
+    expect(calls.find((call) => call.method === "POST")).toBeUndefined()
   })
 
   it("advances to the pipeline step once the notebook serves, deep-linking setup.ipynb", async () => {

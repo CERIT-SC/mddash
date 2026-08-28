@@ -1,10 +1,14 @@
+import { toApiError } from "@/api/errors"
 import {
   getGetExperimentQueryKey,
   getGetNotebookQueryKey,
   getListExperimentsQueryKey,
   useGetNotebook,
+  useGetNotebookConfig,
+  useListExperiments,
 } from "@/api/generated/client"
 import type { Notebook } from "@/api/generated/models"
+import { isNotebookActive } from "@/shared/pod-status"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 
 // Transitioning pods get a fast poll so the UI follows them closely; steady
@@ -59,5 +63,33 @@ export function useNotebookInvalidation(experimentId: string) {
     void queryClient.invalidateQueries({ queryKey: getGetNotebookQueryKey(experimentId) })
     void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experimentId) })
     void queryClient.invalidateQueries({ queryKey: getListExperimentsQueryKey() })
+  }
+}
+
+const QUOTA_POLL_MS = 3000
+
+/** True only for the API's concurrent-notebook limit problem — not other 403s (quota headroom etc.). */
+export function isNotebookQuotaError(error: unknown): boolean {
+  return toApiError(error).type === "urn:mddash:notebook-quota-exceeded"
+}
+
+/**
+ * Cross-experiment notebook quota: the API-declared concurrent limit plus the
+ * running count derived from the experiments list. `full` is only true when
+ * both are known and every slot is taken — unknown state never blocks starts.
+ */
+export function useNotebookQuota({ poll = false }: { poll?: boolean } = {}) {
+  const config = useGetNotebookConfig({ query: { retry: false } })
+  const list = useListExperiments({
+    query: { retry: false, refetchInterval: poll ? QUOTA_POLL_MS : undefined },
+  })
+  const limit = config.data?.status === 200 ? config.data.data.concurrentLimit : undefined
+  const experiments = list.data?.status === 200 ? list.data.data : undefined
+  const runningCount = experiments?.filter((experiment) => isNotebookActive(experiment.notebook?.status)).length
+  return {
+    limit,
+    experiments,
+    runningCount,
+    full: limit !== undefined && runningCount !== undefined && runningCount >= limit,
   }
 }
