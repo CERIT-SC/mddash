@@ -508,8 +508,8 @@ class TestStepStatus:
             assert sim.step == 2
             assert sim.status == "simulating"
 
-    def test_running_sim_job_keeps_step_two(self, app: Flask, tmp_path: Path) -> None:
-        """The Run phase spans queued and running jobs — a running job stays at step 2."""
+    def test_running_sim_job_activates_analyze(self, app: Flask, tmp_path: Path) -> None:
+        """A running job counts the launched run as done: Analyze activates (partial trajectories analyzable mid-run)."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
@@ -518,7 +518,7 @@ class TestStepStatus:
 
         with app.app_context():
             sim = Simulation.get(exp_id, "protein.simulation.json")
-            assert sim.step == 2
+            assert sim.step == 3
             assert sim.status == "simulating"
 
     def test_tuner_trials_give_step_two(self, app: Flask, tmp_path: Path) -> None:
