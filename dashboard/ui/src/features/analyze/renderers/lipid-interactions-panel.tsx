@@ -107,7 +107,7 @@ const LipidInteractionsPanel: FC<{ data: LipidInteractionAnalysis }> = ({ data }
       const lipidLabel = escapeHtml(xLabel ?? `Lipid ${xIndex + 1}`)
       return `<div><strong>${residueLabel}</strong><br/>${lipidLabel}: ${formatNumber(
         value
-      )}<br/><span style="color:#94a3b8">${percent}% of ${lipidLabel}</span></div>`
+      )}<br/><span style="color:var(--text-muted)">${percent}% of ${lipidLabel}</span></div>`
     },
     [columnTotals]
   )

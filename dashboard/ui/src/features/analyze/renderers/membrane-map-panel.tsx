@@ -91,7 +91,7 @@ const buildTooltipFormatter =
         const value = typeof entry.value === "number" ? entry.value : residues.length
         return (
           `${entry.marker ?? ""}${escapeHtml(entry.seriesName)}: ${value}<br/>` +
-          `<span style="margin-left:12px;font-size:11px;color:#94a3b8;">${formatResidueList(residues)}</span>`
+          `<span style="margin-left:12px;font-size:11px;color:var(--text-muted);">${formatResidueList(residues)}</span>`
         )
       })
       .join("<br/>")
@@ -144,9 +144,10 @@ const MembraneMapAnalysisPanel: FC<{ data: MembraneMapAnalysis }> = ({ data }) =
       tooltip: {
         trigger: "axis",
         axisPointer: { type: "shadow" },
-        borderWidth: 0,
-        backgroundColor: "#0f172a",
-        textStyle: { color: "#f8fafc" },
+        borderWidth: 1,
+        borderColor: "var(--border)",
+        backgroundColor: "var(--surface-raised)",
+        textStyle: { color: "var(--text)" },
         formatter: buildTooltipFormatter(categories),
       },
       legend: {},
