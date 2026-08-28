@@ -69,13 +69,15 @@ export function useSimulationJobQuery(
   experimentId: string,
   simulationPath: string,
   engine: Engine,
-  pollMs: number
+  pollMs: number,
+  options?: { enabled?: boolean }
 ): SimulationJobQuery {
+  const enabled = options?.enabled ?? true
   const gmx = useGetGromacsJob(experimentId, simulationPath, {
-    query: { retry: false, enabled: engine !== Engine.AMBER, refetchInterval: pollWhileLive(pollMs) },
+    query: { retry: false, enabled: engine !== Engine.AMBER && enabled, refetchInterval: pollWhileLive(pollMs) },
   })
   const amber = useGetAmberJob(experimentId, simulationPath, {
-    query: { retry: false, enabled: engine === Engine.AMBER, refetchInterval: pollWhileLive(pollMs) },
+    query: { retry: false, enabled: engine === Engine.AMBER && enabled, refetchInterval: pollWhileLive(pollMs) },
   })
   const active = engine === Engine.AMBER ? amber : gmx
   const missing = (active.error as { status?: number } | null)?.status === 404

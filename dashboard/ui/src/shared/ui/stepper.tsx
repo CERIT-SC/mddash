@@ -6,10 +6,11 @@ import * as React from "react"
 import { cn } from "@e-infra/design-system"
 import { Check } from "lucide-react"
 
-interface Step {
+export interface Step {
   label: string
   description?: string
   icon?: React.ComponentType<{ className?: string }>
+  progress?: number | null
 }
 
 interface StepperContextValue {
@@ -26,6 +27,32 @@ function useStepper() {
     throw new Error("useStepper must be used within a Stepper")
   }
   return context
+}
+
+function ProgressRing({ value }: { value: number }) {
+  const size = 48
+  const strokeWidth = 4
+  const center = size / 2
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const clamped = Math.min(100, Math.max(0, value))
+  return (
+    <svg aria-hidden className="absolute -inset-1" viewBox={`0 0 ${String(size)} ${String(size)}`}>
+      <circle cx={center} cy={center} r={radius} fill="none" strokeWidth={strokeWidth} className="stroke-success/25" />
+      <circle
+        cx={center}
+        cy={center}
+        r={radius}
+        fill="none"
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        className="stroke-success transition-[stroke-dashoffset] duration-500"
+        strokeDasharray={circumference}
+        strokeDashoffset={circumference * (1 - clamped / 100)}
+        transform={`rotate(-90 ${String(center)} ${String(center)})`}
+      />
+    </svg>
+  )
 }
 
 interface StepperProps {
@@ -78,6 +105,7 @@ export function StepperHeader({ steps = [], className, maxStep, unlockedIndexes 
   const stepItems = Array.from({ length: safeTotalSteps }, (_, index) => ({
     label: steps[index]?.label ?? `Step ${String(index + 1)}`,
     icon: steps[index]?.icon,
+    progress: steps[index]?.progress,
   }))
   const currentStepLabel = stepItems[activeStepIndex]?.label ?? `Step ${String(activeStepIndex + 1)}`
 
@@ -103,9 +131,11 @@ export function StepperHeader({ steps = [], className, maxStep, unlockedIndexes 
               {stepItems.map((step, index) => {
                 const isComplete = index < currentStep
                 const isCurrent = index === currentStep
+                const inProgress = typeof step.progress === "number"
                 // maxStep opens a contiguous range; unlockedIndexes open specific
                 // markers beyond it without freeing the ladder in between.
                 const reachable = maxStep === undefined || index <= maxStep || unlockedIndexes.includes(index)
+                const progressLabel = inProgress ? `, ${String(step.progress)}% complete` : ""
 
                 return (
                   <button
@@ -116,7 +146,7 @@ export function StepperHeader({ steps = [], className, maxStep, unlockedIndexes 
                       goToStep(index)
                     }}
                     aria-current={isCurrent ? "step" : undefined}
-                    aria-label={`Go to section ${String(index + 1)}: ${step.label}`}
+                    aria-label={`Go to section ${String(index + 1)}: ${step.label}${progressLabel}`}
                     className={cn(
                       "relative z-10 flex flex-col items-center gap-1.5 first:items-start last:items-end",
                       reachable ? "cursor-pointer" : "cursor-not-allowed"
@@ -126,17 +156,23 @@ export function StepperHeader({ steps = [], className, maxStep, unlockedIndexes 
                         markers sit on the wizard panel's bg-background. */}
                     <span
                       className={cn(
-                        "flex items-center justify-center rounded-full text-[14px] leading-5 font-semibold tracking-[0.07px] transition-all duration-300",
-                        isComplete &&
+                        "relative flex items-center justify-center rounded-full text-[14px] leading-5 font-semibold tracking-[0.07px] transition-all duration-300",
+                        inProgress &&
+                          "border-background text-success shadow-base-500/40 h-10 w-10 border-2 bg-[color-mix(in_srgb,var(--color-success)_10%,var(--color-background))] shadow-[0_0_6px]",
+                        !inProgress &&
+                          isComplete &&
                           "border-success bg-success text-success-foreground shadow-success/50 h-9 w-9 border-4 shadow-[0_0_8px,0_0_16px]",
-                        isCurrent &&
+                        !inProgress &&
+                          isCurrent &&
                           "border-background bg-warning text-warning-foreground shadow-warning/50 h-10 w-10 border-2 shadow-[0_0_8px,0_0_14px]",
-                        !isComplete &&
+                        !inProgress &&
+                          !isComplete &&
                           !isCurrent &&
                           "border-background bg-border/80 text-text shadow-base-500/40 h-10 w-10 border-2 shadow-[0_0_6px]"
                       )}
                     >
-                      {isComplete ? (
+                      {typeof step.progress === "number" && <ProgressRing value={step.progress} />}
+                      {isComplete && !inProgress ? (
                         <Check className="h-5 w-5" aria-hidden />
                       ) : step.icon ? (
                         <step.icon className="h-6 w-6" aria-hidden />
@@ -147,10 +183,15 @@ export function StepperHeader({ steps = [], className, maxStep, unlockedIndexes 
                     <span
                       className={cn(
                         "text-xs whitespace-nowrap",
-                        isCurrent ? "text-text font-semibold" : "text-text-muted"
+                        inProgress
+                          ? "text-success font-semibold"
+                          : isCurrent
+                            ? "text-text font-semibold"
+                            : "text-text-muted"
                       )}
                     >
                       {step.label}
+                      {inProgress && <> · {step.progress}%</>}
                     </span>
                   </button>
                 )
