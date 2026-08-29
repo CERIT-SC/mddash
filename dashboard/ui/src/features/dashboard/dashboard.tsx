@@ -62,7 +62,7 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
 
   return (
     <section className="space-y-6 md:space-y-8">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center gap-4">
         <H1>My Experiments</H1>
         <Button asChild>
           <Link to="/new">
