@@ -11,14 +11,8 @@ type WorkflowCardProps = {
 }
 
 /**
- * A single curated workflow. Deliberately a separate component from the experiment
- * card (static catalog selection vs. live-state monitor), but sharing its visual
- * shell: same tile sizing, title/subtitle typography, colored category tile, and
- * raised footer band. The whole card activates via a stretched button on the title
- * (same overlay pattern as experiment cards): DS cards are borderless (shadow-only),
- * so hover means lift, and focus lands on the title button. Hover tooltips are per
- * zone: the truncated name span shows the full name, and the truncated description
- * rises above the overlay (z-10) with its own full text.
+ * Catalog selection card: shares the experiment card's visual shell, not its
+ * component (static selection vs. live-state monitor; different lifecycles).
  */
 export function WorkflowCard({ module, onSelect }: WorkflowCardProps) {
   return (
@@ -28,11 +22,9 @@ export function WorkflowCard({ module, onSelect }: WorkflowCardProps) {
           <ModuleIconTile category={module.category} />
           <div className="min-w-0">
             <CardTitle className="leading-tight">
-              {/* Names repeat across engines ("Protein" ×2) — the engine disambiguates. */}
-              {/* The inner span truncates (block box → a real ellipsis) and owns the
-                  full-name tooltip. The button must NOT carry overflow-hidden: a clipped
-                  ancestor between it and the Card would shrink its ::after overlay back
-                  to the title box; nor a title, which would fire over the whole card. */}
+              {/* aria-label adds the engine: names repeat across engines ("Protein" ×2). */}
+              {/* The span truncates and owns the tooltip; the button stays overflow-free
+                  (clipping would shrink its ::after overlay to the title row) and title-free. */}
               <button
                 type="button"
                 onClick={onSelect}
@@ -52,15 +44,14 @@ export function WorkflowCard({ module, onSelect }: WorkflowCardProps) {
       </CardHeader>
       {module.description && (
         <CardContent>
-          {/* z-10 rises above the card's stretched-overlay button so the description's
-              own full-text tooltip can fire; this strip is hover-only, not a click target. */}
+          {/* z-10 lifts above the card overlay so its tooltip fires; hover-only strip. */}
           <p className="text-text-muted relative z-10 line-clamp-2" title={module.description}>
             {module.description}
           </p>
         </CardContent>
       )}
-      {/* Same footer band as experiment cards: surface-raised is the only legal surface
-          step above bg-surface; pt-3! outranks the DS rule padding border-t footers to pt-6. */}
+      {/* Experiment-card footer band: surface-raised is the only legal step above
+          bg-surface; pt-3! outranks the DS border-t pt-6 rule. */}
       <CardFooter className="border-border bg-surface-raised gap-3 rounded-b-md border-t pt-3! pb-3 text-sm">
         <span className="text-text-muted truncate">{module.author}</span>
       </CardFooter>

@@ -136,7 +136,7 @@ type CreateExperimentDialogProps = {
   defaultNotebooksRepo: string
 }
 
-/** Remounts on every selection change, so the form always starts fresh — no reset plumbing. */
+/** Remount per selection resets the form without reset plumbing. */
 export function CreateExperimentDialog({ selection, ...rest }: CreateExperimentDialogProps) {
   if (selection === null) return null
   return <CreateExperimentDialogInner selection={selection} {...rest} />
@@ -213,7 +213,7 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
             </span>
             <div className="min-w-0">
               <DialogTitle className="truncate">
-                {/* colon, not parens: names may themselves contain parentheses ((BioBB) -> "()))") */}
+                {/* Colon, not parens: module names can contain parentheses. */}
                 {isCustom ? "Custom workflow" : `New Experiment: ${selection.name}`}
               </DialogTitle>
               <DialogDescription className="truncate">

@@ -65,8 +65,7 @@ describe("CreateExperimentDialog", () => {
     await vi.waitFor(() => expect(router.state.location.pathname).toBe("/experiments/new1"))
   })
 
-  // Interaction-heavy (several typed round-trips) — needs headroom past the 5s
-  // default when the full suite saturates the CPU; observed load-induced flake.
+  // typed round-trips need headroom past the 5s default under full-suite CPU contention
   it("validates the custom branch and submits repo, engine and DOI fields", { timeout: 15000 }, async () => {
     const getSubmitted = stubApi(experiment("new1"))
     const user = userEvent.setup()

@@ -1,8 +1,8 @@
 import type { NotebookModule } from "@/api/generated/models"
 
 /**
- * The full curated catalog, verbatim from dashboard/api/notebook-modules.json.
- * Duplicate display names across engines exercise grouping and disambiguation.
+ * The bundled catalog, verbatim from dashboard/api/notebook-modules.json;
+ * duplicate names across engines exercise grouping and disambiguation.
  */
 export const CATALOG_MODULES: NotebookModule[] = [
   {

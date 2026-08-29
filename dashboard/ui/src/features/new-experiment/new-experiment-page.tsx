@@ -63,7 +63,7 @@ export function NewExperimentPage({ search, onSearchChange, defaultNotebooksRepo
             ))}
           </TabsList>
         </Tabs>
-        {/* Custom stays available even when the catalog fetch fails — it needs no catalog data. */}
+        {/* Custom needs no catalog data, so it stays available on fetch failure. */}
         <Button variant="outline" onClick={() => setSelection("custom")}>
           <SlidersHorizontal size={16} /> Use custom workflow
         </Button>

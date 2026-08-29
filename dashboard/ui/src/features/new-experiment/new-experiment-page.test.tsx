@@ -38,14 +38,12 @@ describe("NewExperimentPage", () => {
     const gmxCards = screen.getAllByRole("button", { name: /· GROMACS$/ })
     expect(gmxCards.map((card) => card.textContent)).toEqual(["Protein", "Protein (BioBB)", "Membrane protein (BioBB)"])
     expect(screen.getAllByRole("button", { name: /· AMBER$/ })).toHaveLength(2)
-    // subtitles carry category and engine, mock-style
+    // subtitle = category · engine
     expect(screen.getAllByText("Protein · GROMACS")).toHaveLength(2)
     expect(screen.getByText("Membrane protein · GROMACS")).toBeVisible()
-    // truncated texts expose their full content on hover: the name via the
-    // truncating span's tooltip, the description via its own z-raised tooltip
+    // truncated texts expose their full content on hover (name span, description z-10)
     expect(screen.getByTitle("Membrane protein (BioBB)")).toHaveClass("truncate")
     expect(screen.getByTitle(/membrane-embedded/)).toHaveClass("line-clamp-2")
-    // every card carries its catalog author
     expect(screen.getAllByText("e-INFRA")).toHaveLength(2)
     expect(screen.getAllByText("BioBB")).toHaveLength(3)
   })
