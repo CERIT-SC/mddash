@@ -213,7 +213,8 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
             </span>
             <div className="min-w-0">
               <DialogTitle className="truncate">
-                {isCustom ? "Custom workflow" : `New Experiment (${selection.name})`}
+                {/* colon, not parens: names may themselves contain parentheses ((BioBB) -> "()))") */}
+                {isCustom ? "Custom workflow" : `New Experiment: ${selection.name}`}
               </DialogTitle>
               <DialogDescription className="truncate">
                 {isCustom

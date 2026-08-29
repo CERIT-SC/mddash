@@ -131,7 +131,7 @@ describe("NewExperimentPage", () => {
 
     await user.click(await screen.findByRole("button", { name: "Protein (BioBB) · AMBER" }))
     const dialog = await screen.findByRole("dialog")
-    expect(within(dialog).getByRole("heading", { name: "New Experiment (Protein (BioBB))" })).toBeVisible()
+    expect(within(dialog).getByRole("heading", { name: "New Experiment: Protein (BioBB)" })).toBeVisible()
     expect(within(dialog).getByText("Protein · AMBER")).toBeVisible()
     // the preset fixes the engine — no engine choice to make
     expect(within(dialog).queryByRole("radio", { name: "GROMACS" })).not.toBeInTheDocument()
