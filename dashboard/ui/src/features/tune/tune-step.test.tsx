@@ -44,6 +44,15 @@ const RUNNING_TRIAL: TunerTrial = {
   pme: "cpu",
   nb: "gpu",
 }
+const PENDING_TRIAL: TunerTrial = {
+  id: "t4",
+  status: "PENDING",
+  performance: null,
+  np: 1,
+  ntomp: 1,
+  pme: "gpu",
+  nb: "gpu",
+}
 const ERROR_TRIAL: TunerTrial = {
   id: "err1",
   status: "ERROR",
@@ -289,6 +298,15 @@ describe("TuneStep running job", () => {
       "Pick configuration t3",
       "Pick configuration err1",
     ])
+  })
+
+  it("shows Queued for pending trials and spins only the running one", async () => {
+    mockTuner(tunerJob({ trials: [FAST_TRIAL, ECO_TRIAL, RUNNING_TRIAL, PENDING_TRIAL] }))
+    renderTune()
+
+    await screen.findByText("Fastest")
+    expect(screen.getByText("Queued…")).toBeInTheDocument()
+    expect(screen.getAllByRole("img", { name: "Running" })).toHaveLength(1)
   })
 
   it("stops the job", async () => {

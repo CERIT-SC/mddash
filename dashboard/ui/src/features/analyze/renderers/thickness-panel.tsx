@@ -26,7 +26,7 @@ const average = (values: number[]) => {
 }
 
 const formatStat = (value?: number, precision = 2) =>
-  typeof value === "number" && Number.isFinite(value) ? value.toFixed(precision) : "—"
+  typeof value === "number" && Number.isFinite(value) ? value.toFixed(precision) : "N/A"
 
 const ThicknessAnalysisPanel: FC<{ data: ThicknessAnalysis }> = ({ data }) => {
   const dataset = data?.data
@@ -98,7 +98,7 @@ const ThicknessAnalysisPanel: FC<{ data: ThicknessAnalysis }> = ({ data }) => {
       value:
         stats && typeof stats.min === "number" && typeof stats.max === "number"
           ? `${stats.min.toFixed(2)}–${stats.max.toFixed(2)} Å`
-          : "—",
+          : "N/A",
     },
     {
       label: "Avg thickness σ",
@@ -106,7 +106,7 @@ const ThicknessAnalysisPanel: FC<{ data: ThicknessAnalysis }> = ({ data }) => {
     },
     {
       label: "Frames analyzed",
-      value: frames.length ? frames.length.toString() : "—",
+      value: frames.length ? frames.length.toString() : "N/A",
     },
   ]
 

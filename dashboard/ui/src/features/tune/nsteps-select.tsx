@@ -90,8 +90,8 @@ export function NstepsSelect({ value, onValueChange, disabled = false, id }: Nst
             </span>
           </SelectItem>
         ))}
-        <SelectItem value={CUSTOM} textValue="Enter custom value…">
-          <PenLine className="h-3.5 w-3.5" />
+        <SelectItem value={CUSTOM} textValue="Enter custom value…" className="text-primary">
+          <PenLine className="text-primary h-3.5 w-3.5" />
           Enter custom value…
         </SelectItem>
       </SelectContent>

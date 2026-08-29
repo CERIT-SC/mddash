@@ -54,7 +54,7 @@ export function TrialsTableHeader({ engine, pickColumn = true }: { engine: Engin
             <span className="sr-only">Pick</span>
           </TableHead>
         )}
-        <TableHead className="text-primary-foreground">Status</TableHead>
+        <TableHead className="text-primary-foreground text-center">Status</TableHead>
         <HintedHead
           label="Performance"
           hint="Throughput measured during the tuning run (ns of simulated time per day). Higher is faster."
@@ -185,7 +185,7 @@ type TrialRowCellsProps = {
 export function TrialRowCells({ engine, row, fastest, eco, onShowLogs }: TrialRowCellsProps) {
   return (
     <>
-      <TableCell>
+      <TableCell className="text-center">
         <TrialStatus row={row} fastest={fastest} eco={eco} onShowLogs={onShowLogs} />
       </TableCell>
       <TableCell className="tabular-nums">{row.performance === null ? "—" : row.performance.toFixed(2)}</TableCell>
@@ -231,7 +231,7 @@ function TrialRowView({ engine, row, fastest, eco, onShowLogs }: TrialRowViewPro
 function TrialStatus({ row, fastest, eco, onShowLogs }: Omit<TrialRowCellsProps, "engine">) {
   if (fastest || eco) {
     return (
-      <span className="flex flex-wrap items-center gap-1.5">
+      <span className="flex flex-wrap items-center justify-center gap-1.5">
         {fastest && (
           <Badge className="gap-1 [&>svg]:size-3">
             <Zap aria-hidden />
@@ -247,12 +247,15 @@ function TrialStatus({ row, fastest, eco, onShowLogs }: Omit<TrialRowCellsProps,
       </span>
     )
   }
-  if (row.status === JobStatus.PENDING || row.status === JobStatus.RUNNING) {
-    return <LoaderCircle className="text-text-muted h-4 w-4 animate-spin" role="img" aria-label="Running" />
+  if (row.status === JobStatus.PENDING) {
+    return <span className="text-text-muted text-sm">Queued…</span>
+  }
+  if (row.status === JobStatus.RUNNING) {
+    return <LoaderCircle className="text-text-muted mx-auto h-4 w-4 animate-spin" role="img" aria-label="Running" />
   }
   if (row.status === JobStatus.ERROR) {
     return (
-      <span className="flex items-center gap-1">
+      <span className="flex items-center justify-center gap-1">
         <Badge variant="error">Failed</Badge>
         {onShowLogs !== undefined && (
           <Button

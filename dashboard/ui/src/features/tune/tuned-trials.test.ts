@@ -101,7 +101,7 @@ describe("suggest", () => {
 })
 
 describe("sortTrials", () => {
-  it("orders results by performance with result-less trials last", () => {
+  it("orders results by performance with running trials above queued ones below", () => {
     const rows = [
       row({ id: "pending", status: JobStatus.PENDING, performance: null }),
       row({ id: "mid", performance: 500 }),
@@ -109,16 +109,25 @@ describe("sortTrials", () => {
       row({ id: "running", status: JobStatus.RUNNING, performance: null }),
       row({ id: "slow", performance: 40 }),
     ]
-    expect(sortTrials(rows).map((r) => r.id)).toEqual(["fast", "mid", "slow", "pending", "running"])
+    expect(sortTrials(rows).map((r) => r.id)).toEqual(["fast", "mid", "slow", "running", "pending"])
   })
 
   it("keeps result-less trials in arrival order", () => {
     const rows = [
-      row({ id: "first", status: JobStatus.RUNNING, performance: null }),
+      row({ id: "first", status: JobStatus.PENDING, performance: null }),
       row({ id: "fast", performance: 700 }),
       row({ id: "second", status: JobStatus.ERROR, performance: null }),
     ]
     expect(sortTrials(rows).map((r) => r.id)).toEqual(["fast", "first", "second"])
+  })
+
+  it("lifts running trials above queued ones regardless of arrival order", () => {
+    const rows = [
+      row({ id: "queued-first", status: JobStatus.PENDING, performance: null }),
+      row({ id: "running-later", status: JobStatus.RUNNING, performance: null }),
+      row({ id: "queued-later", status: JobStatus.PENDING, performance: null }),
+    ]
+    expect(sortTrials(rows).map((r) => r.id)).toEqual(["running-later", "queued-first", "queued-later"])
   })
 })
 
