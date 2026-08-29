@@ -69,4 +69,4 @@ The picked trial is remembered in the URL (`?trial=`) and survives tab switches.
 - Tuning runs as short benchmark jobs on the cluster; the full production cost/time figures are extrapolations from those measurements.
 - Badges and suggested bands only consider FINISHED trials with measured data.
 - Only failed trials expose logs (and stopping the job drops those rows).
-- Operator note: active tuner jobs cannot survive a Tuner service restart (they are marked failed) — just start a new tuning job if that happens.
+- A Tuner service restart marks in-flight tuning jobs failed — if an active tuning job suddenly fails for no apparent reason, just start a new tuning job.

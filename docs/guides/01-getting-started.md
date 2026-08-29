@@ -16,7 +16,7 @@ After login the browser lands on **JupyterHub home** (`/hub/home`). It shows a s
 
 **First startup** provisions the personal namespace, storage, and S3 bucket and streams progress with a percentage bar and the current step: "Creating user namespace…", "Waiting for namespace to be ready…", "Setting up access controls…", "Waiting for resource quota…", "Starting sidecar containers…", "Waiting for MDDash to start…". Startup can take a couple of minutes, and the page offers a **"Cancel startup"** button. If spawning fails, a **"Failed to start your server"** page appears with a **"Try again"** button and an expandable event log.
 
-The top navigation offers **Home**, **Get Token** (JupyterHub API tokens), **Admin** (admins only), a theme toggle, the username, and **Log out**. The MDDash dashboard header repeats the theme toggle, username, and a **Log out** button, so logging out is possible from both places.
+The top navigation offers **Home**, **Get Token** (JupyterHub API tokens), a theme toggle, the username, and **Log out**. The MDDash dashboard header repeats the theme toggle, username, and a **Log out** button, so logging out is possible from both places.
 
 ## Landing in the dashboard
 
