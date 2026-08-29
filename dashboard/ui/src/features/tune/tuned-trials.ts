@@ -91,11 +91,13 @@ export function suggest(rows: TrialRow[]): Suggestions {
   return { fastestId: fastest?.id ?? null, ecoId: eco?.id ?? null }
 }
 
-/** Results by performance (best first); trials without a result keep arrival order below. */
+/** Results by performance (best first); result-less trials last, running above queued/failed. */
 export function sortTrials(rows: TrialRow[]): TrialRow[] {
+  // 0/1 keeps arrival order among equally-ranked rows (Array#sort is stable).
+  const rank = (row: TrialRow) => (row.status === JobStatus.RUNNING ? 0 : 1)
   return [...rows].sort((a, b) => {
     if (a.performance === null || b.performance === null) {
-      if (a.performance === b.performance) return 0
+      if (a.performance === b.performance) return rank(a) - rank(b)
       return a.performance === null ? 1 : -1
     }
     return b.performance - a.performance
