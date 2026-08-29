@@ -6,7 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { Engine } from './engine.ts';
-import type { NotebookModuleIcon } from './notebookModuleIcon.ts';
+import type { NotebookModuleCategory } from './notebookModuleCategory.ts';
 
 export interface NotebookModule {
   id: string;
@@ -14,5 +14,5 @@ export interface NotebookModule {
   description?: string;
   engine: Engine;
   author: string;
-  icon: NotebookModuleIcon;
+  category: NotebookModuleCategory;
 }

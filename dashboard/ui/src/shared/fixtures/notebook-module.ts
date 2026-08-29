@@ -11,7 +11,7 @@ export const CATALOG_MODULES: NotebookModule[] = [
     description: "Prepare and analyze a solvated protein with GROMACS. A solid default for single-chain proteins.",
     engine: "GMX",
     author: "e-INFRA",
-    icon: "protein",
+    category: "protein",
   },
   {
     id: "amber-protein",
@@ -19,7 +19,7 @@ export const CATALOG_MODULES: NotebookModule[] = [
     description: "Prepare and analyze a solvated protein with AMBER. A solid default for single-chain proteins.",
     engine: "AMBER",
     author: "e-INFRA",
-    icon: "protein",
+    category: "protein",
   },
   {
     id: "biobb-protein-gmx",
@@ -28,7 +28,7 @@ export const CATALOG_MODULES: NotebookModule[] = [
       "Set up a solvated protein system using BioExcel Building Blocks and GROMACS. A modular, reproducible pipeline.",
     engine: "GMX",
     author: "BioBB",
-    icon: "protein",
+    category: "protein",
   },
   {
     id: "biobb-protein-amber",
@@ -37,7 +37,7 @@ export const CATALOG_MODULES: NotebookModule[] = [
       "Set up a solvated protein system using BioExcel Building Blocks and AmberTools. A modular, reproducible pipeline.",
     engine: "AMBER",
     author: "BioBB",
-    icon: "protein",
+    category: "protein",
   },
   {
     id: "biobb-membrane-gmx",
@@ -45,6 +45,6 @@ export const CATALOG_MODULES: NotebookModule[] = [
     description: "Set up a membrane-embedded protein system using BioExcel Building Blocks and GROMACS.",
     engine: "GMX",
     author: "BioBB",
-    icon: "membrane",
+    category: "membrane-protein",
   },
 ]

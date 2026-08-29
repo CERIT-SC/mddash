@@ -5,6 +5,7 @@ import { getListExperimentsQueryKey, useCreateExperiment } from "@/api/generated
 import type { CreateExperimentForm, NotebookModule } from "@/api/generated/models"
 import { ENGINE_LABELS } from "@/shared/engine"
 import { formatBytes } from "@/shared/format"
+import { CATEGORY_LABELS } from "@/shared/notebook-module"
 import { HintTooltip } from "@/shared/ui/hint-tooltip"
 import {
   Button,
@@ -208,14 +209,16 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
               className="bg-surface text-text-muted flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
               aria-hidden="true"
             >
-              {isCustom ? <CustomWorkflowIcon /> : <ModuleIcon icon={selection.icon} />}
+              {isCustom ? <CustomWorkflowIcon /> : <ModuleIcon category={selection.category} />}
             </span>
             <div className="min-w-0">
               <DialogTitle className="truncate">
                 {isCustom ? "Custom workflow" : `New Experiment (${selection.name})`}
               </DialogTitle>
               <DialogDescription className="truncate">
-                {isCustom ? "Any engine" : `${selection.name} · ${ENGINE_LABELS[selection.engine]}`}
+                {isCustom
+                  ? "Any engine"
+                  : `${CATEGORY_LABELS[selection.category]} · ${ENGINE_LABELS[selection.engine]}`}
               </DialogDescription>
             </div>
           </div>

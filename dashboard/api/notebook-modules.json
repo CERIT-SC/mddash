@@ -7,7 +7,7 @@
       "description": "Prepare and analyze a solvated protein with GROMACS. A solid default for single-chain proteins.",
       "engine": "GMX",
       "author": "e-INFRA",
-      "icon": "protein",
+      "category": "protein",
       "path": "gromacs/protein"
     },
     {
@@ -16,7 +16,7 @@
       "description": "Prepare and analyze a solvated protein with AMBER. A solid default for single-chain proteins.",
       "engine": "AMBER",
       "author": "e-INFRA",
-      "icon": "protein",
+      "category": "protein",
       "path": "amber/protein"
     },
     {
@@ -25,7 +25,7 @@
       "description": "Set up a solvated protein system using BioExcel Building Blocks and GROMACS. A modular, reproducible pipeline.",
       "engine": "GMX",
       "author": "BioBB",
-      "icon": "protein",
+      "category": "protein",
       "path": ".",
       "repository": "https://github.com/bioexcel/biobb_wf_md_setup.git"
     },
@@ -35,7 +35,7 @@
       "description": "Set up a solvated protein system using BioExcel Building Blocks and AmberTools. A modular, reproducible pipeline.",
       "engine": "AMBER",
       "author": "BioBB",
-      "icon": "protein",
+      "category": "protein",
       "path": ".",
       "repository": "https://github.com/bioexcel/biobb_wf_amber.git"
     },
@@ -45,7 +45,7 @@
       "description": "Set up a membrane-embedded protein system using BioExcel Building Blocks and GROMACS.",
       "engine": "GMX",
       "author": "BioBB",
-      "icon": "membrane",
+      "category": "membrane-protein",
       "path": ".",
       "repository": "https://github.com/bioexcel/biobb_wf_md_setup_membrane.git"
     }

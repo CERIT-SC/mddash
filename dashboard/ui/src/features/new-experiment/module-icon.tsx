@@ -1,15 +1,20 @@
-import type { NotebookModuleIcon } from "@/api/generated/models"
-import { Atom, Layers, SlidersHorizontal, type LucideIcon } from "lucide-react"
+import type { NotebookModuleCategory } from "@/api/generated/models"
+import { Atom, Dna, Hexagon, Layers, Link2, SlidersHorizontal, Spline, Wheat, type LucideIcon } from "lucide-react"
 
-/** Symbolic catalog icon keys mapped to the app's icon set. */
-const MODULE_ICONS: Record<NotebookModuleIcon, LucideIcon> = {
+/** Exhaustive by type: adding a catalog category without an icon breaks the build. */
+const CATEGORY_ICONS: Record<NotebookModuleCategory, LucideIcon> = {
   protein: Atom,
-  membrane: Layers,
+  "membrane-protein": Layers,
+  "nucleic-acids": Dna,
+  "protein-ligand": Link2,
+  "small-molecule": Hexagon,
+  carbohydrate: Wheat,
+  polymer: Spline,
 }
 
 /** Decorative icon for a catalog workflow — callers hide its tile from assistive tech. */
-export function ModuleIcon({ icon, size = 20 }: { icon: NotebookModuleIcon; size?: number }) {
-  const Icon = MODULE_ICONS[icon]
+export function ModuleIcon({ category, size = 20 }: { category: NotebookModuleCategory; size?: number }) {
+  const Icon = CATEGORY_ICONS[category]
   return <Icon size={size} aria-hidden="true" />
 }
 

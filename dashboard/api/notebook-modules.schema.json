@@ -16,7 +16,7 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "name", "engine", "author", "icon", "path"],
+        "required": ["id", "name", "engine", "author", "category", "path"],
         "additionalProperties": false,
         "properties": {
           "id": {
@@ -39,9 +39,9 @@
             "$comment": "Attribution shown on the workflow card.",
             "minLength": 1
           },
-          "icon": {
-            "enum": ["protein", "membrane"],
-            "$comment": "Symbolic icon key; clients map it to their own icon set."
+          "category": {
+            "enum": ["protein", "membrane-protein", "nucleic-acids", "protein-ligand", "small-molecule", "carbohydrate", "polymer"],
+            "$comment": "Semantic system category. Shown on the workflow card and mapped to its icon client-side."
           },
           "repository": {
             "type": "string",

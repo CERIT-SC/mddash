@@ -613,7 +613,7 @@ class TestCreateExperimentCuratedModule:
             description="d",
             engine="GMX",
             author="a",
-            icon="protein",
+            category="protein",
             path=".",
             repository="https://github.com/bioexcel/biobb_wf_md_setup_membrane.git",
         )

@@ -12,7 +12,7 @@ MIN_MODULE_COUNT = 2
 
 def _module_dict(**overrides) -> dict:
     """Return a minimal valid module entry with individual fields overridden."""
-    module = {"id": "x", "name": "X", "engine": "GMX", "author": "A", "icon": "protein", "path": "x/y"}
+    module = {"id": "x", "name": "X", "engine": "GMX", "author": "A", "category": "protein", "path": "x/y"}
     module.update(overrides)
     return module
 
@@ -41,7 +41,7 @@ class TestLoadCatalog:
             assert module.name
             assert module.engine in {"GMX", "AMBER"}
             assert module.author
-            assert module.icon in {"protein", "membrane"}
+            assert module.category in {"protein", "membrane-protein"}
 
     def test_unknown_property_rejected(self, tmp_path: Path) -> None:
         """An unknown top-level property should fail validation."""
@@ -68,10 +68,10 @@ class TestLoadCatalog:
         with pytest.raises(ValidationError):
             load_catalog(path=catalog_file)
 
-    def test_unknown_icon_rejected(self, tmp_path: Path) -> None:
-        """An icon outside the allowed enum should fail validation."""
+    def test_unknown_category_rejected(self, tmp_path: Path) -> None:
+        """A category outside the allowed enum should fail validation."""
         catalog_file = tmp_path / "notebook-modules.json"
-        catalog_file.write_text(_catalog_json([_module_dict(icon="rocket")]))
+        catalog_file.write_text(_catalog_json([_module_dict(category="rocket")]))
 
         with pytest.raises(ValidationError):
             load_catalog(path=catalog_file)
@@ -123,7 +123,7 @@ class TestCatalogLookup:
             assert "name" in entry
             assert "engine" in entry
             assert "author" in entry
-            assert "icon" in entry
+            assert "category" in entry
             assert "path" not in entry
             assert "repository" not in entry
         json.dumps(public)

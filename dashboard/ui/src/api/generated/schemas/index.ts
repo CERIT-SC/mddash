@@ -28,7 +28,7 @@ export const ListNotebookModulesResponseItem = zod.object({
   "description": zod.string().optional(),
   "engine": zod.enum(['GMX', 'AMBER']),
   "author": zod.string(),
-  "icon": zod.enum(['protein', 'membrane'])
+  "category": zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer'])
 })
 export const ListNotebookModulesResponse = zod.array(ListNotebookModulesResponseItem)
 

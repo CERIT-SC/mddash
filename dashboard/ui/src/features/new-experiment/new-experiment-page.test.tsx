@@ -38,6 +38,9 @@ describe("NewExperimentPage", () => {
     const gmxCards = screen.getAllByRole("button", { name: /· GROMACS$/ })
     expect(gmxCards.map((card) => card.textContent)).toEqual(["Protein", "Protein (BioBB)", "Membrane protein (BioBB)"])
     expect(screen.getAllByRole("button", { name: /· AMBER$/ })).toHaveLength(2)
+    // subtitles carry category and engine, mock-style
+    expect(screen.getAllByText("Protein · GROMACS")).toHaveLength(2)
+    expect(screen.getByText("Membrane protein · GROMACS")).toBeVisible()
     // every card carries its catalog author
     expect(screen.getAllByText("e-INFRA")).toHaveLength(2)
     expect(screen.getAllByText("BioBB")).toHaveLength(3)
@@ -125,7 +128,7 @@ describe("NewExperimentPage", () => {
     await user.click(await screen.findByRole("button", { name: "Protein (BioBB) · AMBER" }))
     const dialog = await screen.findByRole("dialog")
     expect(within(dialog).getByRole("heading", { name: "New Experiment (Protein (BioBB))" })).toBeVisible()
-    expect(within(dialog).getByText("Protein (BioBB) · AMBER")).toBeVisible()
+    expect(within(dialog).getByText("Protein · AMBER")).toBeVisible()
     // the preset fixes the engine — no engine choice to make
     expect(within(dialog).queryByRole("radio", { name: "GROMACS" })).not.toBeInTheDocument()
 
