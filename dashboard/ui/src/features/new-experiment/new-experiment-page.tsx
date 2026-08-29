@@ -4,7 +4,7 @@ import { useListNotebookModules } from "@/api/generated/client"
 import type { NotebookModule } from "@/api/generated/models"
 import { asEngineFilter, ENGINE_LABELS, ENGINE_ORDER, ENGINE_TAB_VALUES, type EngineFilter } from "@/shared/engine"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
-import { Button, H1, H2, Skeleton, Tabs, TabsList, TabsTrigger } from "@e-infra/design-system"
+import { Button, H1, H3, Skeleton, Tabs, TabsList, TabsTrigger } from "@e-infra/design-system"
 import { Link } from "@tanstack/react-router"
 import { ArrowLeft, SlidersHorizontal } from "lucide-react"
 
@@ -42,7 +42,7 @@ export function NewExperimentPage({ search, onSearchChange, defaultNotebooksRepo
           </Button>
           <H1>New Experiment</H1>
         </div>
-        <H2>Select a Workflow</H2>
+        <H3>Select a Workflow</H3>
         <p className="text-text-muted max-w-2xl">
           A workflow is a set of notebooks that prepares and runs your simulation. Start from a curated one, or bring
           your own git repository.
@@ -85,9 +85,9 @@ export function NewExperimentPage({ search, onSearchChange, defaultNotebooksRepo
               if (engineModules.length === 0) return null
               return (
                 <div key={engine} className="space-y-4">
-                  <h3 className="text-text-muted text-sm font-medium tracking-wide uppercase">
+                  <h4 className="text-text-muted text-sm font-medium tracking-wide uppercase">
                     {ENGINE_LABELS[engine]}
-                  </h3>
+                  </h4>
                   <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
                     {engineModules.map((module) => (
                       <WorkflowCard key={module.id} module={module} onSelect={() => setSelection(module)} />
