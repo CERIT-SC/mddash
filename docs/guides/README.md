@@ -6,10 +6,10 @@ User-facing documentation for the MDDash production deployment. Suitable as cont
 |---|---|
 | `00-overview.md` | What MDDash is, the five-stage workflow, core concepts (experiments, simulation manifests, jobs, notebooks, storage) |
 | `01-getting-started.md` | Landing page, e-INFRA CZ login, JupyterHub home, starting the personal server, creating the first experiment |
-| `02-home-and-navigation.md` | Dashboard Home page (My Experiments cards, Resource Usage), header/footer, global navigation |
+| `02-home-and-navigation.md` | Dashboard Home page (experiment cards, search/sort, New Experiment page link), header, server status bar, global navigation |
 | `03-wizard-mechanics.md` | The experiment wizard: stepper, step unlocking rules, simulation tabs |
 | `04-step-setup.md` | Step 1 Setup: setup notebook, creating/editing simulations, the `.simulation.json` manifest, file roles, locking |
-| `05-step-tune.md` | Step 2 Tune: benchmarking trials, performance/cost estimates, badges, skipping tuning |
+| `05-step-tune.md` | Step 2 Tune: tuning trials, manual configuration, performance/cost estimates, badges |
 | `06-step-run.md` | Step 3 Run: GROMACS/AMBER start forms, job lifecycle, progress, logs |
 | `07-step-analyze.md` | Step 4 Analyze: Mol* 3D viewer, built-in analyses catalogue, preprocessing |
 | `08-step-publish.md` | Step 5 Publish: MDRepo OAuth, draft upload and statuses, MDPosit handoff |
