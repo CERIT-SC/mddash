@@ -312,6 +312,13 @@ def create_gromacs_job(
     logger.info(f"Created GROMACS job {name} in namespace {ns}")
 
 
+def _amber_restart_prefix(mdin_name: str, inpcrd_name: str, output_prefix: str) -> str:
+    """-r <stem>.rst7 would clobber a colliding coordinates input (md.mdin + md.rst7)."""
+    if Path(inpcrd_name) == Path(mdin_name).parent / f"{output_prefix}.rst7":
+        return _q(f"{output_prefix}_out.rst7")
+    return _q(f"{output_prefix}.rst7")
+
+
 def create_amber_job(
     ns: str,
     bucket_name: str,
@@ -348,8 +355,8 @@ def create_amber_job(
     base_flags = (
         f"-O -i {_q(mdin_rel)} -o {_q(f'{output_prefix}.out')} "
         f"-p {_q(prmtop_rel)} -c {_q(inpcrd_rel)} "
-        f"-r {_q(f'{output_prefix}.rst7')} -x {_q(f'{output_prefix}.nc')} "
-        f"-inf {_q(f'{output_prefix}.mdinfo')}"
+        f"-r {_amber_restart_prefix(mdin_name, inpcrd_name, output_prefix)} "
+        f"-x {_q(f'{output_prefix}.nc')} -inf {_q(f'{output_prefix}.mdinfo')}"
     )
 
     amber_command, use_gpu = _amber_command(binary, np, ewald, extra_args, base_flags, mdin_rel, name)
