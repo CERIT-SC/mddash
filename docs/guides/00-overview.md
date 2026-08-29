@@ -2,7 +2,9 @@
 
 MDDash is a browser-based Virtual Research Environment for molecular dynamics (MD) simulations. It lets users prepare, tune, run, analyze, and publish MD simulations without leaving the browser. It supports the GROMACS and AMBER engines.
 
-Authentication is via e-INFRA CZ single sign-on ("Sign in with e-INFRA CZ"). New users need a lightweight registration approved by the MDDash team before their first login.
+Authentication is via e-INFRA CZ single sign-on ("Sign in with e-INFRA CZ"); any e-INFRA CZ account can sign in.
+
+A Talqo chat assistant widget is embedded on every page (landing, JupyterHub, and dashboard) for in-browser help.
 
 ## The five-stage workflow
 
@@ -18,15 +20,17 @@ Steps unlock automatically as the underlying work completes — users can always
 
 ## Key concepts
 
-- **Experiment** — the top-level project unit. Created from the Home page with a name, an MD engine (GROMACS or AMBER), initial data (file upload, PDB ID, or a DOI/repository link), and a notebook workflow (a curated analysis notebook or a custom git repository).
-- **Simulation manifest (`.simulation.json`)** — a small JSON file inside the experiment directory that assigns *roles* to files (run input, topology, coordinates, control file, reference structure, trajectory) and holds extra engine flags. It is the single source of truth every job is based on. Created by the setup notebook or manually via the "Create/Edit Simulation" form in the Setup step.
+- **Experiment** — the top-level project unit. Created on the **New Experiment** page (`/new`) by picking a curated workflow card (or a custom notebooks repository) and providing a name, an MD engine (GROMACS or AMBER; fixed for the lifetime of the experiment), and initial data (a PDB structure, file upload, or a DOI/repository link).
+- **Simulation manifest (`.simulation.json`)** — a small JSON file inside the experiment directory that assigns *roles* to files (run input, topology, coordinates, control file, reference structure, trajectory) and holds extra engine flags. It is the single source of truth every job is based on. Created by the setup notebook or manually via the simulation form in the Setup step.
 - **Jobs** — tunings, simulations, analyses, and uploads all run as Kubernetes jobs on the cluster. They keep running even if the user closes the browser; status and logs are available on return. Statuses: PENDING, RUNNING, FINISHED, ERROR, UNKNOWN.
-- **Notebook** — a per-experiment JupyterLab environment (MD workstation with GROMACS, AmberTools, Mol*). Started on demand from the Setup or Analyze step.
+- **Notebook** — a per-experiment JupyterLab environment (MD workstation with GROMACS, AmberTools, NGL). Started on demand from the Home page, the Setup step, or the Analyze step.
 - **Personal storage** — all experiment files live on a persistent personal volume and are continuously mirrored to S3.
 
 ## Where things are
 
-- **Home page** (`/`): "My Experiments" card grid, "Resource Usage" (CPU/Memory/Storage quota bars), and a Documentation section.
-- **New experiment** (`/new`): creation form.
-- **Wizard** (`/<id>/wizard`): the five-step experiment workflow.
-- **JupyterHub home** (`/hub/home`): start/stop the personal server (the pod the whole UI runs in), API tokens, log out. The dashboard's server bar "Stop server" button routes here with `?stop` (the hub performs the stop) and then shows the hub's stopping page.
+- **Landing page** (`/`): public overview of MDDash with **"Try MDDash"** / **"Launch MDDash"** buttons.
+- **JupyterHub home** (`/hub/home`): start/stop the personal server (the pod the whole UI runs in); server status, API tokens (`/hub/token`), and log out.
+- **Dashboard Home** (`/dash`): "My Experiments" — experiment cards grouped by notebook state, with search, sorting, and the **"New"** button. A server status bar under the header shows uptime and storage usage.
+- **New Experiment** (`/dash/new`): workflow selection — curated workflow cards grouped by engine (filterable via tabs), each opening the creation dialog; own git repositories via "Use custom workflow".
+- **Experiment Wizard** (`/dash/experiments/<id>`): the five-step workflow. The active step, simulation, and related state are reflected in the URL (`?step=`, `?simulation=`), so a link returns to the exact same view.
+- Unknown dashboard URLs show a "Page not found" screen.
