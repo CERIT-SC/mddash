@@ -42,7 +42,7 @@ const buildAxisLabels = (values: unknown, fallbackLength: number, prefix: string
 }
 
 const formatStat = (value?: number): string => {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "—"
+  if (typeof value !== "number" || !Number.isFinite(value)) return "N/A"
   return value.toFixed(2)
 }
 

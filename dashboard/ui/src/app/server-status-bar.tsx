@@ -70,7 +70,7 @@ export function ServerStatusBar() {
               <span className="text-text-muted">{` / ${formatBytes(limit ?? 0)}`}</span>
             </span>
           ) : (
-            <span className="text-text-muted">Unavailable</span>
+            <span className="text-text-muted">N/A</span>
           )}
         </span>
         {hasStorage && <Progress value={percent} className="w-full" aria-label="Storage usage" />}
