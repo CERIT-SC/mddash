@@ -162,7 +162,7 @@ def _get_trial_stdout(job_id: str, trial_id: str) -> str:
         return ""
 
     # Generate realistic-looking output
-    performance = trial.get("performance", 50.0)
+    performance = trial.get("performance") or 50.0
     np = trial.get("np", 2)
     ntomp = trial.get("ntomp", 4)
     nsteps = 25000
