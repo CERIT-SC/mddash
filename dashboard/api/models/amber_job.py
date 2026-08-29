@@ -259,9 +259,18 @@ class AmberJob(SimulationJob):
 
     def _cleanup_files(self) -> None:
         base_name = Path(self._files["control"]).stem
+        # Mirrors mdrun-api restart renaming: md.mdin + md.rst7 -> md_out.rst7.
+        collision = Path(self._files["coordinates"]) == self._sim_dir / f"{base_name}.rst7"
+        # Trajectory excluded: a previous run's output may legitimately sit there.
+        inputs = {Path(path) for role, path in self._files.items() if path and role != "trajectory"}
 
         for ext in self.RESULT_EXTENSIONS:
-            file = DATA_DIR / self.experiment_id / self._sim_dir / f"{base_name}.{ext}"
+            prefix = f"{base_name}_out" if ext == "rst7" and collision else base_name
+            rel_path = self._sim_dir / f"{prefix}.{ext}"
+            if rel_path in inputs:
+                logger.info(f"Keeping manifest input file: {rel_path}")
+                continue
+            file = DATA_DIR / self.experiment_id / rel_path
             if file.exists():
                 file.unlink()
                 logger.info(f"Deleted previous result file: {file}")
