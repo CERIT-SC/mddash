@@ -14,8 +14,8 @@ type WorkflowCardProps = {
  * A single curated workflow. The whole card activates via a stretched button on the
  * title (same overlay pattern as experiment cards): DS cards are borderless
  * (shadow-only), so hover means lift, and focus lands on the title button.
- * The title truncates on narrow cards; the stretched button doubles as the hover
- * target, so its `title` attribute shows the full name anywhere on the card.
+ * Hover tooltips are per zone: the truncated name span shows the full name, and the
+ * truncated description rises above the overlay (z-10) with its own full text.
  */
 export function WorkflowCard({ module, onSelect }: WorkflowCardProps) {
   return (
@@ -29,16 +29,21 @@ export function WorkflowCard({ module, onSelect }: WorkflowCardProps) {
             <ModuleIcon category={module.category} />
           </span>
           <div className="min-w-0">
-            <CardTitle className="truncate leading-tight">
+            <CardTitle className="leading-tight">
               {/* Names repeat across engines ("Protein" ×2) — the engine disambiguates. */}
+              {/* The inner span truncates (block box → a real ellipsis) and owns the
+                  full-name tooltip. The button must NOT carry overflow-hidden: a clipped
+                  ancestor between it and the Card would shrink its ::after overlay back
+                  to the title box; nor a title, which would fire over the whole card. */}
               <button
                 type="button"
                 onClick={onSelect}
                 aria-label={`${module.name} · ${ENGINE_LABELS[module.engine]}`}
-                title={module.name}
-                className="focus-visible:ring-border-focus/50 rounded-sm text-left after:absolute after:inset-0 focus-visible:ring-[3px] focus-visible:outline-none"
+                className="focus-visible:ring-border-focus/50 block w-full rounded-sm text-left after:absolute after:inset-0 focus-visible:ring-[3px] focus-visible:outline-none"
               >
-                {module.name}
+                <span className="block truncate" title={module.name}>
+                  {module.name}
+                </span>
               </button>
             </CardTitle>
             <p className="text-text-muted truncate text-sm">
@@ -49,7 +54,11 @@ export function WorkflowCard({ module, onSelect }: WorkflowCardProps) {
       </CardHeader>
       {module.description && (
         <CardContent>
-          <p className="text-text-muted line-clamp-2">{module.description}</p>
+          {/* z-10 rises above the card's stretched-overlay button so the description's
+              own full-text tooltip can fire; this strip is hover-only, not a click target. */}
+          <p className="text-text-muted relative z-10 line-clamp-2" title={module.description}>
+            {module.description}
+          </p>
         </CardContent>
       )}
       <CardFooter>

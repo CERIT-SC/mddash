@@ -43,7 +43,7 @@ export function NewExperimentPage({ search, onSearchChange, defaultNotebooksRepo
           <H1>New Experiment</H1>
         </div>
         <H3>Select a Workflow</H3>
-        <p className="text-text-muted max-w-2xl">
+        <p className="text-text-muted">
           A workflow is a set of notebooks that prepares and runs your simulation. Start from a curated one, or bring
           your own git repository.
         </p>

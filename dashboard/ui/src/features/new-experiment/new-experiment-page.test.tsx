@@ -41,6 +41,10 @@ describe("NewExperimentPage", () => {
     // subtitles carry category and engine, mock-style
     expect(screen.getAllByText("Protein · GROMACS")).toHaveLength(2)
     expect(screen.getByText("Membrane protein · GROMACS")).toBeVisible()
+    // truncated texts expose their full content on hover: the name via the
+    // truncating span's tooltip, the description via its own z-raised tooltip
+    expect(screen.getByTitle("Membrane protein (BioBB)")).toHaveClass("truncate")
+    expect(screen.getByTitle(/membrane-embedded/)).toHaveClass("line-clamp-2")
     // every card carries its catalog author
     expect(screen.getAllByText("e-INFRA")).toHaveLength(2)
     expect(screen.getAllByText("BioBB")).toHaveLength(3)
