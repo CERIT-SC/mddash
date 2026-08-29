@@ -3,7 +3,7 @@ import { ENGINE_LABELS } from "@/shared/engine"
 import { CATEGORY_LABELS } from "@/shared/notebook-module"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@e-infra/design-system"
 
-import { ModuleIcon } from "./module-icon"
+import { ModuleIconTile } from "./module-icon"
 
 type WorkflowCardProps = {
   module: NotebookModule
@@ -11,23 +11,21 @@ type WorkflowCardProps = {
 }
 
 /**
- * A single curated workflow. The whole card activates via a stretched button on the
- * title (same overlay pattern as experiment cards): DS cards are borderless
- * (shadow-only), so hover means lift, and focus lands on the title button.
- * Hover tooltips are per zone: the truncated name span shows the full name, and the
- * truncated description rises above the overlay (z-10) with its own full text.
+ * A single curated workflow. Deliberately a separate component from the experiment
+ * card (static catalog selection vs. live-state monitor), but sharing its visual
+ * shell: same tile sizing, title/subtitle typography, colored category tile, and
+ * raised footer band. The whole card activates via a stretched button on the title
+ * (same overlay pattern as experiment cards): DS cards are borderless (shadow-only),
+ * so hover means lift, and focus lands on the title button. Hover tooltips are per
+ * zone: the truncated name span shows the full name, and the truncated description
+ * rises above the overlay (z-10) with its own full text.
  */
 export function WorkflowCard({ module, onSelect }: WorkflowCardProps) {
   return (
-    <Card className="relative transition-shadow hover:shadow-md">
+    <Card className="relative pb-0 transition-shadow hover:shadow-md">
       <CardHeader>
         <div className="flex min-w-0 items-center gap-3">
-          <span
-            className="bg-surface text-text-muted flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
-            aria-hidden="true"
-          >
-            <ModuleIcon category={module.category} />
-          </span>
+          <ModuleIconTile category={module.category} />
           <div className="min-w-0">
             <CardTitle className="leading-tight">
               {/* Names repeat across engines ("Protein" ×2) — the engine disambiguates. */}
@@ -61,8 +59,10 @@ export function WorkflowCard({ module, onSelect }: WorkflowCardProps) {
           </p>
         </CardContent>
       )}
-      <CardFooter>
-        <span className="text-text-muted text-sm">{module.author}</span>
+      {/* Same footer band as experiment cards: surface-raised is the only legal surface
+          step above bg-surface; pt-3! outranks the DS rule padding border-t footers to pt-6. */}
+      <CardFooter className="border-border bg-surface-raised gap-3 rounded-b-md border-t pt-3! pb-3 text-sm">
+        <span className="text-text-muted truncate">{module.author}</span>
       </CardFooter>
     </Card>
   )
