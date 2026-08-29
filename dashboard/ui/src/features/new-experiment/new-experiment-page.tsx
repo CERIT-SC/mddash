@@ -1,8 +1,8 @@
 import { useState } from "react"
 
 import { useListNotebookModules } from "@/api/generated/client"
-import type { Engine, NotebookModule } from "@/api/generated/models"
-import { ENGINE_LABELS } from "@/shared/engine"
+import type { NotebookModule } from "@/api/generated/models"
+import { asEngineFilter, ENGINE_LABELS, ENGINE_ORDER, ENGINE_TAB_VALUES, type EngineFilter } from "@/shared/engine"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Button, H1, H2, Skeleton, Tabs, TabsList, TabsTrigger } from "@e-infra/design-system"
 import { Link } from "@tanstack/react-router"
@@ -11,11 +11,7 @@ import { ArrowLeft, SlidersHorizontal } from "lucide-react"
 import { CreateExperimentDialog } from "./create-experiment-dialog"
 import { WorkflowCard } from "./workflow-card"
 
-export type NewExperimentSearch = { engine?: "gmx" | "amber" }
-
-/** GMX workflows are preferred — list their section first. */
-const ENGINE_SECTIONS: Engine[] = ["GMX", "AMBER"]
-const ENGINE_TAB_VALUES: Record<Engine, "gmx" | "amber"> = { GMX: "gmx", AMBER: "amber" }
+export type NewExperimentSearch = { engine?: EngineFilter }
 
 type NewExperimentPageProps = {
   search: NewExperimentSearch
@@ -29,9 +25,11 @@ export function NewExperimentPage({ search, onSearchChange, defaultNotebooksRepo
   const [selection, setSelection] = useState<NotebookModule | "custom" | null>(null)
 
   const modules = modulesQuery.data?.status === 200 ? modulesQuery.data.data : undefined
-  const visibleEngines = ENGINE_SECTIONS.filter(
+  const visibleEngines = ENGINE_ORDER.filter(
     (engine) => search.engine === undefined || ENGINE_TAB_VALUES[engine] === search.engine
   )
+  const filteredEngine = search.engine === undefined ? undefined : visibleEngines[0]
+  const visibleModules = modules?.filter((module) => visibleEngines.includes(module.engine))
 
   return (
     <section className="space-y-6 md:space-y-8">
@@ -54,14 +52,15 @@ export function NewExperimentPage({ search, onSearchChange, defaultNotebooksRepo
       <div className="flex flex-wrap items-center justify-between gap-4">
         <Tabs
           value={search.engine ?? "all"}
-          onValueChange={(value) =>
-            onSearchChange({ engine: value === "gmx" || value === "amber" ? value : undefined })
-          }
+          onValueChange={(value) => onSearchChange({ engine: asEngineFilter(value) })}
         >
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="gmx">GROMACS</TabsTrigger>
-            <TabsTrigger value="amber">AMBER</TabsTrigger>
+            {ENGINE_ORDER.map((engine) => (
+              <TabsTrigger key={engine} value={ENGINE_TAB_VALUES[engine]}>
+                {ENGINE_LABELS[engine]}
+              </TabsTrigger>
+            ))}
           </TabsList>
         </Tabs>
         {/* Custom stays available even when the catalog fetch fails — it needs no catalog data. */}
@@ -78,27 +77,33 @@ export function NewExperimentPage({ search, onSearchChange, defaultNotebooksRepo
         </div>
       )}
       {modulesQuery.isError && <ApiErrorAlert error={modulesQuery.error} onRetry={() => void modulesQuery.refetch()} />}
-      {modules !== undefined && modules.length === 0 && (
-        <p className="text-text-muted py-12 text-center">No workflows available.</p>
-      )}
-      {modules !== undefined && (
-        <div className="space-y-8">
-          {visibleEngines.map((engine) => {
-            const engineModules = modules.filter((module) => module.engine === engine)
-            if (engineModules.length === 0) return null
-            return (
-              <div key={engine} className="space-y-4">
-                <h3 className="text-text-muted text-sm font-medium tracking-wide uppercase">{ENGINE_LABELS[engine]}</h3>
-                <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {engineModules.map((module) => (
-                    <WorkflowCard key={module.id} module={module} onSelect={() => setSelection(module)} />
-                  ))}
+      {visibleModules !== undefined &&
+        (visibleModules.length > 0 ? (
+          <div className="space-y-8">
+            {visibleEngines.map((engine) => {
+              const engineModules = visibleModules.filter((module) => module.engine === engine)
+              if (engineModules.length === 0) return null
+              return (
+                <div key={engine} className="space-y-4">
+                  <h3 className="text-text-muted text-sm font-medium tracking-wide uppercase">
+                    {ENGINE_LABELS[engine]}
+                  </h3>
+                  <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+                    {engineModules.map((module) => (
+                      <WorkflowCard key={module.id} module={module} onSelect={() => setSelection(module)} />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+              )
+            })}
+          </div>
+        ) : (
+          <p className="text-text-muted py-12 text-center">
+            {filteredEngine === undefined
+              ? "No workflows available."
+              : `No ${ENGINE_LABELS[filteredEngine]} workflows available.`}
+          </p>
+        ))}
 
       <CreateExperimentDialog
         selection={selection}

@@ -32,7 +32,7 @@ export function WorkflowCard({ module, onSelect }: WorkflowCardProps) {
                 type="button"
                 onClick={onSelect}
                 aria-label={`${module.name} · ${ENGINE_LABELS[module.engine]}`}
-                className="focus-visible:ring-border-focus/50 rounded-sm focus-visible:ring-[3px] focus-visible:outline-none"
+                className="focus-visible:ring-border-focus/50 rounded-sm after:absolute after:inset-0 focus-visible:ring-[3px] focus-visible:outline-none"
               >
                 {module.name}
               </button>

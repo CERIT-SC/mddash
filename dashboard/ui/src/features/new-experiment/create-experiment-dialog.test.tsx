@@ -1,6 +1,7 @@
-import type { Experiment, NotebookModule } from "@/api/generated/models"
+import type { Experiment } from "@/api/generated/models"
 import { experiment } from "@/shared/fixtures/experiment"
 import { requestUrl } from "@/shared/fixtures/mock-fetch"
+import { CATALOG_MODULES } from "@/shared/fixtures/notebook-module"
 import { renderWithProviders } from "@/shared/fixtures/render-with-providers"
 import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -10,35 +11,6 @@ import { NewExperimentPage } from "./new-experiment-page"
 
 const NOTEBOOKS_REPO = "https://example.test/notebooks.git"
 
-const CATALOG = {
-  modules: [
-    {
-      id: "gromacs-protein",
-      name: "Protein",
-      description: "Prepare and analyze a solvated protein with GROMACS. A solid default for single-chain proteins.",
-      engine: "GMX",
-      author: "e-INFRA",
-      icon: "protein",
-    },
-    {
-      id: "amber-protein",
-      name: "Protein",
-      description: "Prepare and analyze a solvated protein with AMBER. A solid default for single-chain proteins.",
-      engine: "AMBER",
-      author: "e-INFRA",
-      icon: "protein",
-    },
-    {
-      id: "biobb-membrane-gmx",
-      name: "Membrane protein (BioBB)",
-      description: "Set up a membrane-embedded protein system using BioExcel Building Blocks and GROMACS.",
-      engine: "GMX",
-      author: "BioBB",
-      icon: "membrane",
-    },
-  ] satisfies NotebookModule[],
-}
-
 function stubApi(created: Experiment) {
   let submitted: [string, FormDataEntryValue][] | null = null
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -47,7 +19,7 @@ function stubApi(created: Experiment) {
       submitted = Array.from(init.body.entries())
       return Response.json(created, { status: 201 })
     }
-    if (url.includes("notebook-modules")) return Response.json(CATALOG.modules)
+    if (url.includes("notebook-modules")) return Response.json(CATALOG_MODULES)
     return Response.json([])
   })
   return () => submitted
@@ -93,7 +65,9 @@ describe("CreateExperimentDialog", () => {
     await vi.waitFor(() => expect(router.state.location.pathname).toBe("/experiments/new1"))
   })
 
-  it("validates the custom branch and submits repo, engine and DOI fields", async () => {
+  // Interaction-heavy (several typed round-trips) — needs headroom past the 5s
+  // default when the full suite saturates the CPU; observed load-induced flake.
+  it("validates the custom branch and submits repo, engine and DOI fields", { timeout: 15000 }, async () => {
     const getSubmitted = stubApi(experiment("new1"))
     const user = userEvent.setup()
     await renderPage()

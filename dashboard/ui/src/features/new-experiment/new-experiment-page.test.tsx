@@ -1,5 +1,5 @@
-import type { NotebookModule } from "@/api/generated/models"
 import { requestUrl } from "@/shared/fixtures/mock-fetch"
+import { CATALOG_MODULES } from "@/shared/fixtures/notebook-module"
 import { renderWithProviders } from "@/shared/fixtures/render-with-providers"
 import { screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
@@ -9,57 +9,10 @@ import { NewExperimentPage, type NewExperimentSearch } from "./new-experiment-pa
 
 const NOTEBOOKS_REPO = "https://example.test/notebooks.git"
 
-// Mirrors dashboard/api/notebook-modules.json: duplicate display names across
-// engines, so grouping and engine-dependent labeling are exercised.
-const CATALOG = {
-  modules: [
-    {
-      id: "gromacs-protein",
-      name: "Protein",
-      description: "Prepare and analyze a solvated protein with GROMACS. A solid default for single-chain proteins.",
-      engine: "GMX",
-      author: "e-INFRA",
-      icon: "protein",
-    },
-    {
-      id: "amber-protein",
-      name: "Protein",
-      description: "Prepare and analyze a solvated protein with AMBER. A solid default for single-chain proteins.",
-      engine: "AMBER",
-      author: "e-INFRA",
-      icon: "protein",
-    },
-    {
-      id: "biobb-protein-gmx",
-      name: "Protein (BioBB)",
-      description: "Set up a solvated protein system using BioExcel Building Blocks and GROMACS.",
-      engine: "GMX",
-      author: "BioBB",
-      icon: "protein",
-    },
-    {
-      id: "biobb-protein-amber",
-      name: "Protein (BioBB)",
-      description: "Set up a solvated protein system using BioExcel Building Blocks and AmberTools.",
-      engine: "AMBER",
-      author: "BioBB",
-      icon: "protein",
-    },
-    {
-      id: "biobb-membrane-gmx",
-      name: "Membrane protein (BioBB)",
-      description: "Set up a membrane-embedded protein system using BioExcel Building Blocks and GROMACS.",
-      engine: "GMX",
-      author: "BioBB",
-      icon: "membrane",
-    },
-  ] satisfies NotebookModule[],
-}
-
 function stubCatalog(override?: () => Response) {
   vi.stubGlobal("fetch", async (input: RequestInfo | URL) => {
     const url = requestUrl(input)
-    if (url.includes("notebook-modules")) return override ? override() : Response.json(CATALOG.modules)
+    if (url.includes("notebook-modules")) return override ? override() : Response.json(CATALOG_MODULES)
     return Response.json([])
   })
 }
@@ -106,7 +59,7 @@ describe("NewExperimentPage", () => {
             { type: "urn:mddash:upstream-unavailable", title: "Unavailable", detail: "Try later" },
             { status: 503 }
           )
-        : Response.json(CATALOG.modules)
+        : Response.json(CATALOG_MODULES)
     })
     const user = userEvent.setup()
     await renderPage()
@@ -147,6 +100,21 @@ describe("NewExperimentPage", () => {
     expect(await screen.findByRole("heading", { name: "AMBER" })).toBeVisible()
     expect(screen.queryByRole("heading", { name: "GROMACS" })).not.toBeInTheDocument()
     expect(screen.getAllByRole("button", { name: /· AMBER$/ })).toHaveLength(2)
+  })
+
+  it("shows an engine-scoped empty state when the filter matches no modules", async () => {
+    stubCatalog(() => Response.json(CATALOG_MODULES.filter((module) => module.engine === "GMX")))
+    await renderPage({ engine: "amber" })
+
+    expect(await screen.findByText("No AMBER workflows available.")).toBeVisible()
+    expect(screen.queryByRole("button", { name: /· AMBER$/ })).not.toBeInTheDocument()
+  })
+
+  it("shows an empty state when the catalog has no modules at all", async () => {
+    stubCatalog(() => Response.json([]))
+    await renderPage()
+
+    expect(await screen.findByText("No workflows available.")).toBeVisible()
   })
 
   it("opens the creation dialog for a card and returns to the gallery on cancel", async () => {
