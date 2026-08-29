@@ -16,7 +16,7 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["id", "name", "engine", "path"],
+        "required": ["id", "name", "engine", "author", "category", "path"],
         "additionalProperties": false,
         "properties": {
           "id": {
@@ -33,6 +33,15 @@
           },
           "engine": {
             "enum": ["GMX", "AMBER"]
+          },
+          "author": {
+            "type": "string",
+            "$comment": "Attribution shown on the workflow card.",
+            "minLength": 1
+          },
+          "category": {
+            "enum": ["protein", "membrane-protein", "nucleic-acids", "protein-ligand", "small-molecule", "carbohydrate", "polymer"],
+            "$comment": "Semantic system category. Shown on the workflow card and mapped to its icon client-side."
           },
           "repository": {
             "type": "string",

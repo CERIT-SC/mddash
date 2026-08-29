@@ -10,7 +10,15 @@ from werkzeug.exceptions import InternalServerError
 
 
 def _gmx_module() -> NotebookModule:
-    return NotebookModule(id="gromacs-protein", name="Protein", description="d", engine="GMX", path="gromacs/protein")
+    return NotebookModule(
+        id="gromacs-protein",
+        name="Protein",
+        description="d",
+        engine="GMX",
+        author="a",
+        category="protein",
+        path="gromacs/protein",
+    )
 
 
 def _binder_module() -> NotebookModule:
@@ -19,6 +27,8 @@ def _binder_module() -> NotebookModule:
         name="Binder",
         description="d",
         engine="GMX",
+        author="a",
+        category="protein",
         path=".",
         repository="https://github.com/bioexcel/biobb_wf_md_setup_membrane.git",
     )

@@ -28,6 +28,8 @@ class TestNotebookModulesEndpoint:
             assert "name" in module
             assert "engine" in module
             assert module["engine"] in {"GMX", "AMBER"}
+            assert "author" in module
+            assert module["category"] in {"protein", "membrane-protein"}
             assert "path" not in module
             assert "repository" not in module
             assert "url" not in module

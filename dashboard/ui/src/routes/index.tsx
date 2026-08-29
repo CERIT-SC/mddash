@@ -9,13 +9,6 @@ export const Route = createFileRoute("/")({
   component: function DashboardRoute() {
     const search = Route.useSearch()
     const navigate = useNavigate({ from: "/" })
-    const { config } = Route.useRouteContext()
-    return (
-      <Dashboard
-        search={search}
-        onSearchChange={(next) => void navigate({ search: next, replace: true })}
-        defaultNotebooksRepo={config.defaultNotebooksRepo}
-      />
-    )
+    return <Dashboard search={search} onSearchChange={(next) => void navigate({ search: next, replace: true })} />
   },
 })

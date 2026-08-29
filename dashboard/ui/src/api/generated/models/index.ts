@@ -67,6 +67,7 @@ export * from './notebook.ts';
 export * from './notebookConfig.ts';
 export * from './notebookConfigDefaultTier.ts';
 export * from './notebookModule.ts';
+export * from './notebookModuleCategory.ts';
 export * from './notebookTier.ts';
 export * from './notebookTierProperty.ts';
 export * from './notebookTierValue.ts';

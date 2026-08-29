@@ -1,51 +1,15 @@
-import type { Experiment, NotebookModule } from "@/api/generated/models"
+import type { Experiment } from "@/api/generated/models"
 import { experiment } from "@/shared/fixtures/experiment"
 import { requestUrl } from "@/shared/fixtures/mock-fetch"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, within } from "@testing-library/react"
+import { CATALOG_MODULES } from "@/shared/fixtures/notebook-module"
+import { renderWithProviders } from "@/shared/fixtures/render-with-providers"
+import { screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-import { CreateExperimentDialog } from "./create-experiment-dialog"
+import { NewExperimentPage } from "./new-experiment-page"
 
 const NOTEBOOKS_REPO = "https://example.test/notebooks.git"
-
-// Mirrors dashboard/api/notebook-modules.json: duplicate display names with
-// engine-specific descriptions, so grouping and engine-dependent text are tested.
-const CATALOG = {
-  modules: [
-    {
-      id: "gromacs-protein",
-      name: "Protein",
-      description: "Prepare and analyze a solvated protein with GROMACS.",
-      engine: "GMX",
-    },
-    {
-      id: "amber-protein",
-      name: "Protein",
-      description: "Prepare a solvated protein with AMBER.",
-      engine: "AMBER",
-    },
-    {
-      id: "biobb-protein-gmx",
-      name: "Protein (BioBB)",
-      description: "Set up a solvated protein system using BioExcel Building Blocks and GROMACS.",
-      engine: "GMX",
-    },
-    {
-      id: "biobb-protein-amber",
-      name: "Protein (BioBB)",
-      description: "Set up a solvated protein system using BioExcel Building Blocks and AmberTools.",
-      engine: "AMBER",
-    },
-    {
-      id: "biobb-membrane-gmx",
-      name: "Membrane protein (BioBB)",
-      description: "Set up a membrane protein system using BioExcel Building Blocks and GROMACS.",
-      engine: "GMX",
-    },
-  ] satisfies NotebookModule[],
-}
 
 function stubApi(created: Experiment) {
   let submitted: [string, FormDataEntryValue][] | null = null
@@ -55,7 +19,7 @@ function stubApi(created: Experiment) {
       submitted = Array.from(init.body.entries())
       return Response.json(created, { status: 201 })
     }
-    if (url.includes("notebook-modules")) return Response.json(CATALOG.modules)
+    if (url.includes("notebook-modules")) return Response.json(CATALOG_MODULES)
     return Response.json([])
   })
   return () => submitted
@@ -68,44 +32,21 @@ async function waitForSubmit(getSubmitted: () => [string, FormDataEntryValue][] 
   return getSubmitted()!
 }
 
-function renderDialog() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
-    <QueryClientProvider client={client}>
-      <CreateExperimentDialog defaultNotebooksRepo={NOTEBOOKS_REPO} />
-    </QueryClientProvider>
+function renderPage() {
+  return renderWithProviders(
+    <NewExperimentPage search={{}} onSearchChange={() => undefined} defaultNotebooksRepo={NOTEBOOKS_REPO} />
   )
-}
-
-async function openDialog(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: /new/i }))
-  return await screen.findByRole("dialog")
 }
 
 describe("CreateExperimentDialog", () => {
   beforeEach(() => vi.unstubAllGlobals())
 
-  it("lists every preset module sorted with GMX workflows first", async () => {
-    stubApi(experiment("new1"))
-    const user = userEvent.setup()
-    renderDialog()
-    await openDialog(user)
-
-    const cards = await screen.findAllByRole("button", { name: /protein/i })
-    expect(cards.length).toBe(5)
-    // every card carries exactly one engine chip and GMX workflows come first
-    const chips = cards.map((card) => (within(card).queryByText("GROMACS") ? "GMX" : "AMBER"))
-    expect(chips).toEqual(["GMX", "GMX", "GMX", "AMBER", "AMBER"])
-    expect(screen.getByRole("button", { name: /custom use your own/i })).toBeVisible()
-  })
-
-  it("submits a preset PDB experiment with the module of the chosen engine", async () => {
+  it("submits a preset PDB experiment with the module of the chosen engine, then opens it", async () => {
     const getSubmitted = stubApi(experiment("new1"))
     const user = userEvent.setup()
-    renderDialog()
-    await openDialog(user)
+    const { router } = await renderPage()
 
-    await user.click(await screen.findByRole("button", { name: /protein prepare a solvated/i }))
+    await user.click(await screen.findByRole("button", { name: "Protein · AMBER" }))
     // the preset fixes the engine — no engine choice to make
     expect(screen.queryByRole("radio", { name: "AMBER" })).not.toBeInTheDocument()
     await user.type(screen.getByLabelText("Name"), "Lysozyme run")
@@ -121,15 +62,16 @@ describe("CreateExperimentDialog", () => {
         ["engine", "AMBER"],
       ])
     )
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe("/experiments/new1"))
   })
 
-  it("validates the custom branch and submits repo, engine and DOI fields", async () => {
+  // typed round-trips need headroom past the 5s default under full-suite CPU contention
+  it("validates the custom branch and submits repo, engine and DOI fields", { timeout: 15000 }, async () => {
     const getSubmitted = stubApi(experiment("new1"))
     const user = userEvent.setup()
-    renderDialog()
-    await openDialog(user)
+    await renderPage()
 
-    await user.click(await screen.findByRole("button", { name: /custom use your own/i }))
+    await user.click(screen.getByRole("button", { name: /use custom workflow/i }))
     expect(screen.getByRole("radio", { name: "GROMACS" })).toBeChecked()
     expect(screen.getByLabelText(/notebooks repository/i)).toHaveValue(NOTEBOOKS_REPO)
 
@@ -159,18 +101,16 @@ describe("CreateExperimentDialog", () => {
       ])
     )
 
-    // reopening after a successful create must start from the preset picker, not the stale form
-    await user.click(await screen.findByRole("button", { name: /new/i }))
-    expect(await screen.findByRole("button", { name: /protein prepare and analyze/i })).toBeVisible()
-    expect(screen.queryByLabelText("Name")).not.toBeInTheDocument()
+    // reopening after a successful create must start from a fresh form, not stale values
+    await user.click(await screen.findByRole("button", { name: /use custom workflow/i }))
+    expect(screen.getByLabelText("Name")).toHaveValue("")
   })
 
   it("submits the git access token only for https repositories", async () => {
     const getSubmitted = stubApi(experiment("new1"))
     const user = userEvent.setup()
-    renderDialog()
-    await openDialog(user)
-    await user.click(await screen.findByRole("button", { name: /custom use your own/i }))
+    await renderPage()
+    await user.click(screen.getByRole("button", { name: /use custom workflow/i }))
     await user.type(screen.getByLabelText("Name"), "Token run")
     await user.type(screen.getByLabelText(/pdb id or url/i), "1AKI")
 
@@ -192,9 +132,8 @@ describe("CreateExperimentDialog", () => {
   it("drops a stale hidden token when the repo switches from https to ssh", async () => {
     const getSubmitted = stubApi(experiment("new1"))
     const user = userEvent.setup()
-    renderDialog()
-    await openDialog(user)
-    await user.click(await screen.findByRole("button", { name: /custom use your own/i }))
+    await renderPage()
+    await user.click(screen.getByRole("button", { name: /use custom workflow/i }))
     await user.type(screen.getByLabelText("Name"), "Token run")
     await user.type(screen.getByLabelText(/pdb id or url/i), "1AKI")
 
@@ -216,10 +155,9 @@ describe("CreateExperimentDialog", () => {
   it("uploads files for an engine-fixed preset", async () => {
     const getSubmitted = stubApi(experiment("new1"))
     const user = userEvent.setup()
-    renderDialog()
-    await openDialog(user)
+    await renderPage()
 
-    await user.click(await screen.findByRole("button", { name: /membrane protein \(biobb\)/i }))
+    await user.click(await screen.findByRole("button", { name: "Membrane protein (BioBB) · GROMACS" }))
     expect(screen.queryByRole("radio", { name: "GROMACS" })).not.toBeInTheDocument()
 
     await user.type(screen.getByLabelText("Name"), "Membrane run")

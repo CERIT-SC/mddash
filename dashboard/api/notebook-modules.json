@@ -4,38 +4,48 @@
     {
       "id": "gromacs-protein",
       "name": "Protein",
-      "description": "Prepare and analyze a solvated protein with GROMACS.",
+      "description": "Prepare and analyze a solvated protein with GROMACS. A solid default for single-chain proteins.",
       "engine": "GMX",
+      "author": "e-INFRA",
+      "category": "protein",
       "path": "gromacs/protein"
     },
     {
       "id": "amber-protein",
       "name": "Protein",
-      "description": "Prepare a solvated protein with AMBER.",
+      "description": "Prepare and analyze a solvated protein with AMBER. A solid default for single-chain proteins.",
       "engine": "AMBER",
+      "author": "e-INFRA",
+      "category": "protein",
       "path": "amber/protein"
     },
     {
       "id": "biobb-protein-gmx",
       "name": "Protein (BioBB)",
-      "description": "Set up a solvated protein system using BioExcel Building Blocks and GROMACS.",
+      "description": "Set up a solvated protein system using BioExcel Building Blocks and GROMACS. A modular, reproducible pipeline.",
       "engine": "GMX",
+      "author": "BioBB",
+      "category": "protein",
       "path": ".",
       "repository": "https://github.com/bioexcel/biobb_wf_md_setup.git"
     },
     {
       "id": "biobb-protein-amber",
       "name": "Protein (BioBB)",
-      "description": "Set up a solvated protein system using BioExcel Building Blocks and AmberTools.",
+      "description": "Set up a solvated protein system using BioExcel Building Blocks and AmberTools. A modular, reproducible pipeline.",
       "engine": "AMBER",
+      "author": "BioBB",
+      "category": "protein",
       "path": ".",
       "repository": "https://github.com/bioexcel/biobb_wf_amber.git"
     },
     {
       "id": "biobb-membrane-gmx",
       "name": "Membrane protein (BioBB)",
-      "description": "Set up a membrane protein system using BioExcel Building Blocks and GROMACS.",
+      "description": "Set up a membrane-embedded protein system using BioExcel Building Blocks and GROMACS.",
       "engine": "GMX",
+      "author": "BioBB",
+      "category": "membrane-protein",
       "path": ".",
       "repository": "https://github.com/bioexcel/biobb_wf_md_setup_membrane.git"
     }

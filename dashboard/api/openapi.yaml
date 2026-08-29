@@ -859,14 +859,17 @@ components:
       required: [message]
       properties: {message: {type: string}}
       additionalProperties: false
+    NotebookModuleCategory: {type: string, enum: [protein, membrane-protein, nucleic-acids, protein-ligand, small-molecule, carbohydrate, polymer]}
     NotebookModule:
       type: object
-      required: [id, name, engine]
+      required: [id, name, engine, author, category]
       properties:
         id: {type: string}
         name: {type: string}
         description: {type: string}
         engine: {$ref: '#/components/schemas/Engine'}
+        author: {type: string}
+        category: {$ref: '#/components/schemas/NotebookModuleCategory'}
       additionalProperties: false
     Metrics:
       type: object

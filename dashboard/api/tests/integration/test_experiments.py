@@ -612,6 +612,8 @@ class TestCreateExperimentCuratedModule:
             name="Binder",
             description="d",
             engine="GMX",
+            author="a",
+            category="protein",
             path=".",
             repository="https://github.com/bioexcel/biobb_wf_md_setup_membrane.git",
         )

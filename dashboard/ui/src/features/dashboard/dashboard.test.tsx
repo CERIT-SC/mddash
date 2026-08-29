@@ -9,13 +9,7 @@ import { describe, expect, it, vi } from "vitest"
 import { Dashboard, type DashboardSearch } from "./dashboard"
 
 function renderDashboard(search: DashboardSearch = {}) {
-  return renderWithProviders(
-    <Dashboard
-      search={search}
-      onSearchChange={() => undefined}
-      defaultNotebooksRepo="https://example.test/notebooks.git"
-    />
-  )
+  return renderWithProviders(<Dashboard search={search} onSearchChange={() => undefined} />)
 }
 
 describe("Dashboard", () => {
@@ -104,7 +98,7 @@ describe("Dashboard", () => {
       [NOTEBOOK_CONFIG_URL]: notebookConfigResponse(),
     })
     await renderDashboard()
-    expect(await screen.findByRole("button", { name: /new/i })).toBeEnabled()
+    expect(await screen.findByRole("link", { name: /new/i })).toBeVisible()
     expect(screen.getByRole("tab", { name: /archived/i })).toBeDisabled()
   })
 })

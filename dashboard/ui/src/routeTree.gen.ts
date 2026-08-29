@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
+import { Route as NewRouteImport } from './routes/new'
 import { Route as ExperimentsExperimentIdRouteImport } from './routes/experiments.$experimentId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +24,11 @@ const SplatRoute = SplatRouteImport.update({
   path: '/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NewRoute = NewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ExperimentsExperimentIdRoute = ExperimentsExperimentIdRouteImport.update({
   id: '/experiments/$experimentId',
   path: '/experiments/$experimentId',
@@ -32,30 +38,34 @@ const ExperimentsExperimentIdRoute = ExperimentsExperimentIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/new': typeof NewRoute
   '/experiments/$experimentId': typeof ExperimentsExperimentIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/new': typeof NewRoute
   '/experiments/$experimentId': typeof ExperimentsExperimentIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$': typeof SplatRoute
+  '/new': typeof NewRoute
   '/experiments/$experimentId': typeof ExperimentsExperimentIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/$' | '/experiments/$experimentId'
+  fullPaths: '/' | '/$' | '/new' | '/experiments/$experimentId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/$' | '/experiments/$experimentId'
-  id: '__root__' | '/' | '/$' | '/experiments/$experimentId'
+  to: '/' | '/$' | '/new' | '/experiments/$experimentId'
+  id: '__root__' | '/' | '/$' | '/new' | '/experiments/$experimentId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
+  NewRoute: typeof NewRoute
   ExperimentsExperimentIdRoute: typeof ExperimentsExperimentIdRoute
 }
 
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/new': {
+      id: '/new'
+      path: '/new'
+      fullPath: '/new'
+      preLoaderRoute: typeof NewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/experiments/$experimentId': {
       id: '/experiments/$experimentId'
       path: '/experiments/$experimentId'
@@ -88,6 +105,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
+  NewRoute: NewRoute,
   ExperimentsExperimentIdRoute: ExperimentsExperimentIdRoute,
 }
 export const routeTree = rootRouteImport

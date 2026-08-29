@@ -3,6 +3,7 @@ import { isNotebookActive } from "@/shared/pod-status"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import {
   Badge,
+  Button,
   H1,
   Input,
   Select,
@@ -15,8 +16,9 @@ import {
   TabsList,
   TabsTrigger,
 } from "@e-infra/design-system"
+import { Link } from "@tanstack/react-router"
+import { Plus } from "lucide-react"
 
-import { CreateExperimentDialog } from "./create-experiment-dialog"
 import { ExperimentCard } from "./experiment-card"
 
 export type DashboardSearch = {
@@ -27,8 +29,6 @@ export type DashboardSearch = {
 type DashboardProps = {
   search: DashboardSearch
   onSearchChange: (next: DashboardSearch) => void
-  /** From validated runtime config — environment-derived values get no fallback defaults. */
-  defaultNotebooksRepo: string
 }
 
 function SectionHeading({ children, count, limit }: { children: string; count: number; limit?: number }) {
@@ -39,7 +39,7 @@ function SectionHeading({ children, count, limit }: { children: string; count: n
   )
 }
 
-export function Dashboard({ search, onSearchChange, defaultNotebooksRepo }: DashboardProps) {
+export function Dashboard({ search, onSearchChange }: DashboardProps) {
   const query = useListExperiments({ query: { retry: false } })
   const config = useGetNotebookConfig({ query: { retry: false } })
 
@@ -64,7 +64,11 @@ export function Dashboard({ search, onSearchChange, defaultNotebooksRepo }: Dash
     <section className="space-y-6 md:space-y-8">
       <div className="flex items-center justify-between gap-4">
         <H1>My Experiments</H1>
-        <CreateExperimentDialog defaultNotebooksRepo={defaultNotebooksRepo} />
+        <Button asChild>
+          <Link to="/new">
+            <Plus size={16} /> New
+          </Link>
+        </Button>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4">
