@@ -5,10 +5,10 @@ import { Clock, type LucideIcon } from "lucide-react"
 
 /** Shared hero chrome for the hub status pages (home, spawn, spawn_pending, stop_pending, not_running). */
 
-/** Centered hero shell. */
+/** Hero shell, pinned to the top of the content column (horizontally centered). */
 export function PageHero({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-center gap-6 text-center">
+    <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-center justify-start gap-6 py-8 text-center md:py-12">
       {children}
     </div>
   )
