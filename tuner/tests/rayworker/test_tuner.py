@@ -20,6 +20,19 @@ def job_context(monkeypatch) -> tuner.JobContext:
     return ctx
 
 
+class _FakeTaskID:
+    """Mirrors Ray 2.54 TaskID: str() is repr-style 'TaskID(<hex>)'; only .hex() yields raw hex."""
+
+    def __init__(self, hex_value: str) -> None:
+        self._hex = hex_value
+
+    def __str__(self) -> str:
+        return f"TaskID({self._hex})"
+
+    def hex(self) -> str:
+        return self._hex
+
+
 def test_ensure_ray_initialized_always_inits_and_is_reinit_safe(monkeypatch) -> None:
     ray_mock = Mock()
     monkeypatch.setattr(tuner, "ray", ray_mock)
@@ -38,8 +51,8 @@ class TestRunningTrialIds:
 
     def test_maps_running_task_ids_to_trials(self, job_context, monkeypatch) -> None:
         future_a, future_b = Mock(), Mock()
-        future_a.task_id.return_value = "task-a"
-        future_b.task_id.return_value = "task-b"
+        future_a.task_id.return_value = _FakeTaskID("task-a")
+        future_b.task_id.return_value = _FakeTaskID("task-b")
         job_context.add_job("j1", Mock())
         job_context.add_futures("j1", {future_a: 1, future_b: 2})
         list_tasks_mock = Mock(return_value=[Mock(task_id="task-a")])

@@ -135,7 +135,7 @@ def _running_trial_ids(job_id: str) -> set[int] | None:
     return {
         trial_id
         for future, trial_id in _job_context.get_futures(job_id).items()
-        if str(future.task_id()) in running_task_ids
+        if future.task_id().hex() in running_task_ids
     }
 
 
