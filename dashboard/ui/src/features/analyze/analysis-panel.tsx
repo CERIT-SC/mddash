@@ -386,7 +386,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
 
         {!resolvedAnalysis && <Placeholder icon={BarChart3} message="Select an analysis to view or calculate." />}
 
-        {resolvedAnalysis && isRunningThis && (
+        {resolvedAnalysis && isRunningThis && !hasResult && (
           <Placeholder icon={LoaderCircle} spinning message="Results are being calculated…" />
         )}
 
