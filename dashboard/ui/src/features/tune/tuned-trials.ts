@@ -91,17 +91,20 @@ export function suggest(rows: TrialRow[]): Suggestions {
   return { fastestId: fastest?.id ?? null, ecoId: eco?.id ?? null }
 }
 
-/** Results by performance (best first); result-less trials last, running above queued/failed. */
+/** Result-less trials grouped by outcome: finished > error > running > pending (unknown last). */
+const STATUS_RANK: Record<JobStatus, number> = {
+  [JobStatus.FINISHED]: 0,
+  [JobStatus.ERROR]: 1,
+  [JobStatus.RUNNING]: 2,
+  [JobStatus.PENDING]: 3,
+  [JobStatus.UNKNOWN]: 4,
+}
+
+/** Performance first (best on top); result-less trials trail by status, equal ranks keep arrival order (stable sort). */
 export function sortTrials(rows: TrialRow[]): TrialRow[] {
-  // 0/1 keeps arrival order among equally-ranked rows (Array#sort is stable).
-  const rank = (row: TrialRow) => (row.status === JobStatus.RUNNING ? 0 : 1)
-  return [...rows].sort((a, b) => {
-    if (a.performance === null || b.performance === null) {
-      if (a.performance === b.performance) return rank(a) - rank(b)
-      return a.performance === null ? 1 : -1
-    }
-    return b.performance - a.performance
-  })
+  // A null performance sinks below any measured value (early-stopped trials report none).
+  const perf = (row: TrialRow) => row.performance ?? Number.NEGATIVE_INFINITY
+  return [...rows].sort((a, b) => perf(b) - perf(a) || STATUS_RANK[a.status] - STATUS_RANK[b.status])
 }
 
 /** "$2.60" → "$2.6", while tiny costs keep precision ("$0.04"). */

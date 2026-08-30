@@ -101,7 +101,7 @@ describe("suggest", () => {
 })
 
 describe("sortTrials", () => {
-  it("orders results by performance with running trials above queued ones below", () => {
+  it("keeps performance the primary metric, best first", () => {
     const rows = [
       row({ id: "pending", status: JobStatus.PENDING, performance: null }),
       row({ id: "mid", performance: 500 }),
@@ -112,22 +112,15 @@ describe("sortTrials", () => {
     expect(sortTrials(rows).map((r) => r.id)).toEqual(["fast", "mid", "slow", "running", "pending"])
   })
 
-  it("keeps result-less trials in arrival order", () => {
+  it("orders result-less trials finished > error > running > pending", () => {
     const rows = [
-      row({ id: "first", status: JobStatus.PENDING, performance: null }),
-      row({ id: "fast", performance: 700 }),
-      row({ id: "second", status: JobStatus.ERROR, performance: null }),
+      row({ id: "pending", status: JobStatus.PENDING, performance: null }),
+      row({ id: "running", status: JobStatus.RUNNING, performance: null }),
+      row({ id: "error", status: JobStatus.ERROR, performance: null }),
+      // Early-stopped trials finish without a measured performance.
+      row({ id: "early-stopped", status: JobStatus.FINISHED, performance: null }),
     ]
-    expect(sortTrials(rows).map((r) => r.id)).toEqual(["fast", "first", "second"])
-  })
-
-  it("lifts running trials above queued ones regardless of arrival order", () => {
-    const rows = [
-      row({ id: "queued-first", status: JobStatus.PENDING, performance: null }),
-      row({ id: "running-later", status: JobStatus.RUNNING, performance: null }),
-      row({ id: "queued-later", status: JobStatus.PENDING, performance: null }),
-    ]
-    expect(sortTrials(rows).map((r) => r.id)).toEqual(["running-later", "queued-first", "queued-later"])
+    expect(sortTrials(rows).map((r) => r.id)).toEqual(["early-stopped", "error", "running", "pending"])
   })
 })
 

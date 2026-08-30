@@ -13,8 +13,8 @@ step_status_cache: TTLCache = TTLCache(maxsize=100, ttl=0.1)
 # Cache for MDRepo publication status (60s TTL)
 mdrepo_status_cache: TTLCache = TTLCache(maxsize=100, ttl=60)
 
-# Cache for tuner job status (30s TTL)
-tuner_status_cache: TTLCache = TTLCache(maxsize=100, ttl=30)
+# Cache for tuner job status (1s TTL — request coalescing only; UI polls 5s)
+tuner_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
 
 # Fallback cache for tuner job failures (job_id -> status)
 tuner_last_known_status: dict[str, dict] = {}

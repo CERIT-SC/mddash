@@ -295,8 +295,9 @@ describe("TuneStep running job", () => {
     expect(order).toEqual([
       "Pick configuration t1",
       "Pick configuration t2",
-      "Pick configuration t3",
+      // Error outranks running among the result-less trials.
       "Pick configuration err1",
+      "Pick configuration t3",
     ])
   })
 
