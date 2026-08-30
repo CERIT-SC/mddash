@@ -4,6 +4,8 @@
 
 Deploys a multi-tenant JupyterHub environment for MDDash: isolated per-user namespaces with sidecar services (proxy/auth/api/s3-sync) around the notebook.
 
+Before first install, a cluster admin must apply `helm/rbac/clusterrole.yaml` (and `helm/rbac/rancher-clusterrole.yaml` on Rancher clusters); each file documents its `<NAMESPACE>`/`<PROJECT_ID>` placeholders and why each permission is needed.
+
 ## Patterns
 
 - **Pre-spawn hook** (`files/pre_spawn_hook.py`, injected via `--set-file jupyterhub.hub.extraConfig.pre-spawn-hook`) provisions each user namespace (namespace, RBAC, PVC) before notebook startup. It uses `kubernetes_asyncio` (async — not the sync `kubernetes` client); all calls must be awaited.

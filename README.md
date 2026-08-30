@@ -9,7 +9,7 @@
 
 **Wanna try?** 
 - contact us, we need lightweight registration to make sure the precious hardware funded by our authorities is used according to AUP
-- go to https://mddash.dyn.cloud.e-infra.cz/
+- go to https://mddash.cloud.e-infra.cz/
 
 ## References
 
@@ -112,10 +112,13 @@ make demo
 make build ENV=dev    # Build images
 make push ENV=dev     # Build and push images
 make all ENV=dev      # Build, push images, and deploy (dev only)
-make format           # Format Python and UI code
-make lint             # Check Python linting
+make fix              # Auto-fix formatting and lint issues (Python via Ruff, UI via Prettier/Oxlint)
+make lint             # Check linting without auto-fix (Python and UI)
+make format-check     # Check formatting without modifying files
+make knip             # Check frontend dead code
 make type-check       # Type-check Python components and UI
-make test             # Run Python test suites
+make test             # Run all test suites
+make validate-charts  # Lint and template Helm charts for every environment
 make status ENV=dev   # Check status
 make history ENV=prod # Show deployment history
 make rollback ENV=prod REVISION=3  # Rollback to specific revision
@@ -248,7 +251,7 @@ make deploy ENV=${ENV}
 Shared infrastructure components that manage the platform and compute resources.
 
 - **JupyterHub**
-  - *Location*: Configured in `helm/charts/mddash/values.yaml.tmpl`
+  - *Location*: `hub/` (custom `mddash-hub` image: stock `k8s-hub` + the EGI Check-in authenticator + the MDDash-branded hub UI in `hub/ui/`, one HTML entry per JupyterHub template), configured in `helm/charts/mddash/values.yaml.tmpl`
   - *Purpose*: Orchestrates the platform by managing user logins and spawning isolated environments for each user on demand.
 - **MDRun API**
   - *Location*: `mdrun-api/`, `helm/charts/mdrun-api` (Configured in `helm/charts/mddash/values.yaml.tmpl`)
@@ -301,3 +304,6 @@ Services outside the Kubernetes cluster that the application depends on.
 - **S3**
   - *Location*: Endpoint configured in `config*.yaml` (secrets stored in `${PACKAGE}-s3-creds`)
   - *Purpose*: Provides a central, scalable storage layer accessible by all services to persist large simulation datasets and trajectories.
+- **MDRepo**
+  - *Location*: Endpoint and OAuth client configured in `config*.yaml` (`mdrepo:`, secrets in `${PACKAGE}-mdrepo-credentials`); OAuth flow managed by the Dashboard API
+  - *Purpose*: InvenioRDM-based repository where completed experiments are published.
