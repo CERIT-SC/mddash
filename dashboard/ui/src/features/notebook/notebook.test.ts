@@ -24,10 +24,13 @@ describe("pickNotebookFile", () => {
     expect(pickNotebookFile("setup", [])).toBeUndefined()
   })
 
-  it("prefers the canonical setup file, sorted by path when several exist", () => {
-    const files = [file("z/setup.ipynb"), file("notes.md"), file("a/setup.ipynb"), file("Analysis.ipynb")]
-    expect(pickNotebookFile("setup", files)?.path).toBe("a/setup.ipynb")
-    expect(pickNotebookFile("analysis", files)?.path).toBe("Analysis.ipynb")
+  it("returns the sole canonical file, case-insensitively", () => {
+    expect(pickNotebookFile("setup", [file("notes.md"), file("Setup.ipynb")])?.path).toBe("Setup.ipynb")
+  })
+
+  it("treats several canonical files as ambiguous", () => {
+    const files = [file("z/setup.ipynb"), file("notes.md"), file("a/setup.ipynb")]
+    expect(pickNotebookFile("setup", files)).toBeUndefined()
   })
 
   it("falls back to a lone notebook that is not the other role's", () => {
@@ -50,6 +53,9 @@ describe("notebookRoleUrl", () => {
       "/dash/notebook/exp1/lab/tree/setup.ipynb?token=tok"
     )
     expect(notebookRoleUrl("setup", [], notebook)).toBe("/dash/notebook/exp1/?token=tok")
+    expect(notebookRoleUrl("setup", [file("a/setup.ipynb"), file("b/setup.ipynb")], notebook)).toBe(
+      "/dash/notebook/exp1/?token=tok"
+    )
     expect(notebookRoleUrl("setup", [file("setup.ipynb")], undefined)).toBeUndefined()
   })
 })

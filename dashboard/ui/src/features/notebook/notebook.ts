@@ -7,15 +7,14 @@ const ROLE_FILENAMES: Record<NotebookRole, string> = {
   analysis: "analysis.ipynb",
 }
 
-/** Picks the notebook file for a role: the canonical name wins; a lone other notebook is a fallback. */
+/** Picks the notebook file for a role: the sole canonical-name match wins; several matches are ambiguous,
+ * a lone other notebook is a fallback. Ambiguous or absent means the caller opens the notebook base dir. */
 export function pickNotebookFile(role: NotebookRole, files: FileInfo[] | undefined): FileInfo | undefined {
   if (!files || files.length === 0) return undefined
   const desired = ROLE_FILENAMES[role]
   const other = ROLE_FILENAMES[role === "setup" ? "analysis" : "setup"]
-  const matches = files
-    .filter((file) => file.name.toLowerCase() === desired)
-    .sort((a, b) => a.path.localeCompare(b.path))
-  if (matches.length >= 1) return matches[0]
+  const matches = files.filter((file) => file.name.toLowerCase() === desired)
+  if (matches.length === 1) return matches[0]
   if (files.length === 1 && files[0].name.toLowerCase() !== other) return files[0]
   return undefined
 }
