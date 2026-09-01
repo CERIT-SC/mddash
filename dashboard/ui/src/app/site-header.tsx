@@ -21,7 +21,6 @@ type SiteHeaderProps = {
 }
 
 // Hub routes are the same on every deployment — no need for runtime configuration.
-const HUB_HOME_URL = "/hub/home"
 const HUB_TOKEN_URL = "/hub/token"
 const LOGOUT_URL = "/hub/logout"
 
@@ -49,7 +48,9 @@ export function SiteHeader({ user }: SiteHeaderProps) {
           <NavigationMenu className="ml-4 hidden md:flex">
             <NavigationMenuList>
               <NavigationMenuItem>
-                <NavigationMenuLink href={HUB_HOME_URL}>Home</NavigationMenuLink>
+                <NavigationMenuLink asChild>
+                  <Link to="/">Home</Link>
+                </NavigationMenuLink>
               </NavigationMenuItem>
               <NavigationMenuItem>
                 <NavigationMenuLink href={HUB_TOKEN_URL}>Get Token</NavigationMenuLink>

@@ -8,7 +8,7 @@ Every dashboard page shares the same chrome:
 
 - **Header** (e-INFRA design system):
   - Left: e-INFRA CZ logo and the **"MDDash"** label, both linking back to the Home page.
-  - Left, next to the logo: navigation links **"Home"** (JupyterHub home at `/hub/home` — server control) and **"Get Token"** (`/hub/token` — JupyterHub API tokens).
+  - Left, next to the logo: navigation links **"Home"** (dashboard Home at `/`) and **"Get Token"** (`/hub/token` — JupyterHub API tokens).
   - Right: **theme toggle** (Sun/Moon icon) switching light/dark mode, the **username**, and a **"Log out"** button.
 - **Status bar** attached below the header (hidden on experiment pages, where a notebook bar takes its place — see the step guides):
   - **"Server"** — a green dot plus the server's live uptime (ticking every second).
