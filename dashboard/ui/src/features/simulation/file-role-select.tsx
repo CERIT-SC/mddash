@@ -90,7 +90,7 @@ export function FileRoleSelect({ experimentId, spec, present, disabled, clearVan
             <FormControl>
               <SelectTrigger
                 aria-label={spec.label}
-                className="h-auto w-full overflow-hidden text-left *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:items-start! *:data-[slot=select-value]:overflow-hidden"
+                className="bg-background dark:bg-background h-auto w-full overflow-hidden text-left *:data-[slot=select-value]:line-clamp-none *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:items-start! *:data-[slot=select-value]:overflow-hidden"
               >
                 <SelectValue placeholder={empty ? "No files available yet" : "Select a file"} />
               </SelectTrigger>

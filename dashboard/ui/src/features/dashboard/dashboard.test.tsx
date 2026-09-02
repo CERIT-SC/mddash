@@ -55,10 +55,12 @@ describe("Dashboard", () => {
     expect(screen.queryByText("Analyze protein")).not.toBeInTheDocument()
   })
 
-  it("shows an empty state when there are no experiments", async () => {
+  it("shows a create card as the empty state when there are no experiments", async () => {
     mockApiBySuffix({ [EXPERIMENTS_URL]: Response.json([]), [NOTEBOOK_CONFIG_URL]: notebookConfigResponse() })
     await renderDashboard()
-    expect(await screen.findByText("No experiments yet.")).toBeVisible()
+    const create = await screen.findByRole("link", { name: /create your first experiment/i })
+    expect(create).toHaveAttribute("href", "/new")
+    expect(within(create).getByText("Set up a molecular dynamics run")).toBeVisible()
   })
 
   it("shows a no-match state when the search filters everything out", async () => {

@@ -20,6 +20,7 @@ import {
 } from "@/api/generated/models"
 import { formatBytes } from "@/shared/format"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
+import { InfoBanner } from "@/shared/ui/info-banner"
 import {
   Alert,
   AlertDescription,
@@ -217,26 +218,26 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
           </AlertDescription>
         </Alert>
       ) : active ? (
-        <Alert>
+        <InfoBanner>
           <AlertTitle>Upload in progress</AlertTitle>
           <AlertDescription>
             Files are being uploaded to MDRepo in the background. The draft is already openable in MDRepo, but
             incomplete until the upload finishes.
           </AlertDescription>
-        </Alert>
+        </InfoBanner>
       ) : hasDraft ? (
         <Alert variant="warning">
           <AlertTitle>A draft exists in MDRepo</AlertTitle>
           <AlertDescription>View the draft in MDRepo, or retry the upload to send the files again.</AlertDescription>
         </Alert>
       ) : (
-        <Alert>
+        <InfoBanner>
           <AlertTitle>Publish to MDRepo</AlertTitle>
           <AlertDescription>
             After clicking the button, you&apos;ll be redirected to MDRepo to complete the metadata and finalize the
             publication. Your files will be uploaded in the background.
           </AlertDescription>
-        </Alert>
+        </InfoBanner>
       )}
 
       {upload !== undefined && (
@@ -386,13 +387,13 @@ function MdpositPublish({ experiment, simulation, onStepChange }: MdpositPublish
 
   return (
     <>
-      <Alert>
+      <InfoBanner>
         <AlertTitle>Stateless MDPosit handoff</AlertTitle>
         <AlertDescription>
           This prepares a handoff package for the selected simulation. It does not change the experiment&apos;s
           publication status or wizard progress.
         </AlertDescription>
-      </Alert>
+      </InfoBanner>
 
       {unavailableReason !== null ? (
         <Alert variant="warning">

@@ -122,8 +122,14 @@ export function HomePage() {
                 Open my server
               </a>
             </Button>
-            <Button variant="error" size="sm" onClick={stop} disabled={busy}>
-              <Square size={16} />
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-error text-error hover:bg-error/10"
+              onClick={stop}
+              disabled={busy}
+            >
+              <Square fill="currentColor" size={16} />
               Stop my server
             </Button>
           </>

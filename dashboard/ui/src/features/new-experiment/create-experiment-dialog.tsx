@@ -24,8 +24,9 @@ import {
   FormLabel,
   FormMessage,
   Input,
-  ToggleGroup,
-  ToggleGroupItem,
+  Tabs,
+  TabsList,
+  TabsTrigger,
 } from "@e-infra/design-system"
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { useQueryClient } from "@tanstack/react-query"
@@ -252,19 +253,12 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
                       <HintTooltip text="Simulation tools used by the experiment's notebooks." />
                     </div>
                     <FormControl>
-                      <ToggleGroup
-                        type="single"
-                        value={field.value}
-                        onValueChange={(value) => value && field.onChange(value)}
-                        className="w-full"
-                      >
-                        <ToggleGroupItem value="GMX" className="flex-1">
-                          GROMACS
-                        </ToggleGroupItem>
-                        <ToggleGroupItem value="AMBER" className="flex-1">
-                          AMBER
-                        </ToggleGroupItem>
-                      </ToggleGroup>
+                      <Tabs value={field.value} onValueChange={field.onChange}>
+                        <TabsList aria-label="MD engine">
+                          <TabsTrigger value="GMX">GROMACS</TabsTrigger>
+                          <TabsTrigger value="AMBER">AMBER</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
                     </FormControl>
                   </FormItem>
                 )}
@@ -281,22 +275,13 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
                     <HintTooltip text="How the experiment's starting structure and files are obtained." />
                   </div>
                   <FormControl>
-                    <ToggleGroup
-                      type="single"
-                      value={field.value}
-                      onValueChange={(value) => value && field.onChange(value)}
-                      className="w-full"
-                    >
-                      <ToggleGroupItem value="pdb" className="flex-1">
-                        PDB
-                      </ToggleGroupItem>
-                      <ToggleGroupItem value="file" className="flex-1">
-                        Upload Files
-                      </ToggleGroupItem>
-                      <ToggleGroupItem value="repo" className="flex-1">
-                        DOI / Repository
-                      </ToggleGroupItem>
-                    </ToggleGroup>
+                    <Tabs value={field.value} onValueChange={field.onChange}>
+                      <TabsList aria-label="Initial data">
+                        <TabsTrigger value="pdb">PDB</TabsTrigger>
+                        <TabsTrigger value="file">Upload Files</TabsTrigger>
+                        <TabsTrigger value="repo">DOI / Repository</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
                   </FormControl>
                 </FormItem>
               )}

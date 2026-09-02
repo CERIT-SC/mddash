@@ -171,7 +171,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
 
       <Separator />
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-end gap-2">
         <Button type="button" variant="outline" onClick={() => onStepChange(1)}>
           <ArrowLeft aria-hidden />
           Back
@@ -188,7 +188,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <Square className="text-error" aria-hidden />
+              <Square fill="currentColor" className="text-error" aria-hidden />
               Stop this run?
             </AlertDialogTitle>
             <AlertDialogDescription>
@@ -198,7 +198,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
           <AlertDialogFooter>
             <AlertDialogCancel>Keep running</AlertDialogCancel>
             <AlertDialogAction className={buttonVariants({ variant: "error" })} onClick={stopRun} disabled={stopping}>
-              <Square aria-hidden />
+              <Square fill="currentColor" aria-hidden />
               Stop run
             </AlertDialogAction>
           </AlertDialogFooter>

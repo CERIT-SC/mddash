@@ -1,5 +1,6 @@
 import type { Notebook } from "@/api/generated/models"
 import { NotebookLauncher } from "@/features/notebook"
+import { InfoBanner } from "@/shared/ui/info-banner"
 import { Button, cn, Small } from "@e-infra/design-system"
 import { Check, ExternalLink } from "lucide-react"
 
@@ -75,10 +76,7 @@ export function SetupGuide({
   ]
 
   return (
-    <section
-      aria-label="Setup guide"
-      className="border-info bg-info/50 supports-backdrop-filter:bg-info/60 space-y-3 rounded-lg border px-4 py-3 text-sm"
-    >
+    <InfoBanner role="region" aria-label="Setup guide" className="flex flex-col gap-3">
       <p className="font-medium tracking-tight">Step by step</p>
       <ol className="space-y-4">
         {steps.map((step, index) => (
@@ -102,7 +100,7 @@ export function SetupGuide({
           </li>
         ))}
       </ol>
-    </section>
+    </InfoBanner>
   )
 }
 

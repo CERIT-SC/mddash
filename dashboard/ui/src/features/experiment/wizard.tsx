@@ -8,7 +8,7 @@ import { CREATE_TAB, simulationParam, SimulationTabs } from "@/features/simulati
 import { TuneStep } from "@/features/tune"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Stepper, StepperContent } from "@/shared/ui/stepper"
-import { Card, CardContent, Skeleton } from "@e-infra/design-system"
+import { Card, CardContent, Separator, Skeleton } from "@e-infra/design-system"
 import { Atom, ChartColumn, Play, SlidersHorizontal, Upload } from "lucide-react"
 
 import { WizardStepperHeader } from "./stepper-header"
@@ -132,6 +132,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
       source={search.source ?? "notebook"}
       onSourceChange={(source) => updateSearch({ simulation: tab, step: search.step, source })}
       onOpenSimulation={(simulation) => updateSearch({ simulation })}
+      onContinue={() => updateSearch({ simulation: tab, step: 1 })}
     />,
     ...(selected === undefined
       ? []
@@ -205,8 +206,8 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
             TableRow all paint bg-surface and only stay visible on the canvas
             color; on a bg-surface card they blend into the card face. */}
         {/* box-shadow over drop-shadow: filter would confine molstar's expanded (fixed) viewport to this card. */}
-        <Card className="border-border bg-background rounded-t-none border shadow-[0_4px_4px_rgba(0,0,0,0.15)] drop-shadow-none hover:drop-shadow-none">
-          <CardContent className="pt-6 md:pt-8 lg:pt-12">
+        <Card className="border-border bg-background rounded-t-none border py-0 shadow-[0_4px_4px_rgba(0,0,0,0.15)] drop-shadow-none hover:drop-shadow-none">
+          <CardContent className="pt-6 pb-6 md:pb-8">
             <Stepper
               step={step}
               totalSteps={STEPS.length}
@@ -221,6 +222,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
                 unlockedIndexes={data.can_publish ? [LAST_STEP] : []}
                 pollMs={SIMULATIONS_POLL_MS}
               />
+              <Separator className="mt-4" />
               <StepperContent>{steps}</StepperContent>
             </Stepper>
           </CardContent>

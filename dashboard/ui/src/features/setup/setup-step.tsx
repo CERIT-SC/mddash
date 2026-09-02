@@ -4,7 +4,8 @@ import { useListExperimentFiles, useListSimulations } from "@/api/generated/clie
 import type { Experiment, Simulation } from "@/api/generated/models"
 import { NotebookLauncher, notebookRoleUrl, useNotebook, useNotebookReady } from "@/features/notebook"
 import { SimulationForm } from "@/features/simulation"
-import { H4, Tabs, TabsContent, TabsList, TabsTrigger } from "@e-infra/design-system"
+import { Button, H4, Separator, Tabs, TabsContent, TabsList, TabsTrigger } from "@e-infra/design-system"
+import { ArrowRight } from "lucide-react"
 import { toast } from "sonner"
 
 import { SetupGuide } from "./setup-guide"
@@ -23,6 +24,7 @@ type SetupStepProps = {
   source: SetupSource
   onSourceChange: (source: SetupSource) => void
   onOpenSimulation: (simulationPath: string) => void
+  onContinue: () => void
 }
 
 export function SetupStep({
@@ -33,6 +35,7 @@ export function SetupStep({
   source,
   onSourceChange,
   onOpenSimulation,
+  onContinue,
 }: SetupStepProps) {
   // Polls: the pipeline writes the manifest from inside the notebook, so only a poll notices it.
   const simulationsQuery = useListSimulations(experimentId, { query: { refetchInterval: SIMULATIONS_POLL_MS } })
@@ -118,6 +121,15 @@ export function SetupStep({
           />
         </TabsContent>
       </Tabs>
+
+      <Separator />
+
+      <div className="flex items-center justify-end gap-2">
+        <Button type="button" disabled={simulation === undefined} onClick={onContinue}>
+          Go to Tune
+          <ArrowRight aria-hidden />
+        </Button>
+      </div>
     </div>
   )
 }

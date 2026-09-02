@@ -291,7 +291,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
         {resolvedAnalysis &&
           !activeJob &&
           (hasResult ? (
-            <Button size="sm" variant="secondary" onClick={handleCalculate} disabled={!canSubmit}>
+            <Button size="sm" variant="outline" onClick={handleCalculate} disabled={!canSubmit}>
               <RotateCcw aria-hidden />
               Re-calculate
             </Button>
@@ -302,45 +302,49 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
             </Button>
           ))}
 
-        {!activeJob && calculatedPercent !== null && (
-          <Badge variant="outline" className="border-warning text-warning ml-auto gap-1">
-            <TriangleAlert className="h-3 w-3" aria-hidden />
-            Calculated at {calculatedPercent}%
-          </Badge>
-        )}
+        {/* Run controls share the `ml-auto` rail so they always sit flush right. */}
+        <div className="ml-auto flex items-center gap-3">
+          {!activeJob && calculatedPercent !== null && (
+            <Badge variant="outline" className="border-warning text-warning gap-1">
+              <TriangleAlert className="h-3 w-3" aria-hidden />
+              Calculated at {calculatedPercent}%
+            </Badge>
+          )}
 
-        {activeJob && (
-          <>
-            {/* Status unit the same height as the sm buttons keeps the row on
-                one baseline; the analysis name is bold (design mock). */}
-            <span
-              role="status"
-              className="border-border bg-surface inline-flex h-8 items-center gap-2 rounded-md border px-3 text-sm"
-            >
-              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
-              Calculating{" "}
-              <strong className="font-semibold">
-                {AVAILABLE_ANALYSES.find((a) => a.value === activeJob.analysis_name)?.label ?? activeJob.analysis_name}
-              </strong>
-            </span>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="border-error text-error hover:bg-error/10 hover:text-error"
-              onClick={() => setConfirmCancel(true)}
-            >
-              <Square aria-hidden />
-              Stop calculation
-            </Button>
-            {activeJob.status !== JobStatus.PENDING && (
-              <Button size="sm" variant="ghost" onClick={() => setShowLogs((value) => !value)}>
-                <Terminal aria-hidden />
-                {showLogs ? "Hide logs" : "View logs"}
+          {activeJob && (
+            <>
+              {/* Status unit the same height as the sm buttons keeps the row on
+                  one baseline; the analysis name is bold (design mock). */}
+              <span
+                role="status"
+                className="border-border bg-surface inline-flex h-8 items-center gap-2 rounded-md border px-3 text-sm"
+              >
+                <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
+                Calculating{" "}
+                <strong className="font-semibold">
+                  {AVAILABLE_ANALYSES.find((a) => a.value === activeJob.analysis_name)?.label ??
+                    activeJob.analysis_name}
+                </strong>
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="border-error text-error hover:bg-error/10 hover:text-error"
+                onClick={() => setConfirmCancel(true)}
+              >
+                <Square fill="currentColor" aria-hidden />
+                Stop calculation
               </Button>
-            )}
-          </>
-        )}
+              {activeJob.status !== JobStatus.PENDING && (
+                <Button size="sm" variant="ghost" onClick={() => setShowLogs((value) => !value)}>
+                  <Terminal aria-hidden />
+                  {showLogs ? "Hide logs" : "View logs"}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* A failed run gets one clear, durable banner in the results column
