@@ -357,8 +357,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         Resolve a file role to an absolute Path.
 
-        Roles are resolved relative to the manifest file's directory (with the
-        legacy experiment-relative fallback), consistent with ``resolved_files``.
+        Roles are resolved relative to the manifest file's directory (with an
+        experiment-relative fallback), consistent with ``resolved_files``.
 
         Returns:
             Absolute Path to the role file. The file need not exist yet (e.g.
@@ -381,8 +381,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         Absolute candidate paths for a manifest role value, most preferred first.
 
         The manifest-relative interpretation comes first (the writer convention:
-        notebooks write paths relative to their own directory), the legacy
-        experiment-relative interpretation second.
+        notebooks write paths relative to their own directory), the
+        experiment-relative interpretation second (fallback).
         """
         manifest_dir = self._file.parent
         return [(manifest_dir / rel).resolve(), ((DATA_DIR / self.experiment_id) / rel).resolve()]
@@ -441,10 +441,9 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         Role values are interpreted relative to the manifest file's directory
         — the writer convention, since notebooks write the manifest next to
-        their outputs. Manifests written with experiment-relative paths (the
-        old dashboard convention) keep working: when the manifest-relative
-        file does not exist but the experiment-relative one does, the latter
-        is used.
+        their outputs. Manifests written with experiment-relative paths keep
+        working: when the manifest-relative file does not exist but the
+        experiment-relative one does, the latter is used.
 
         Returns:
             Dict mapping role to experiment-relative path.

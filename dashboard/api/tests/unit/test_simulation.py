@@ -234,7 +234,7 @@ class TestPathResolution:
             assert sim.missing_files == ["trajectory"]
             assert sim.resolve_role("run_input") == tpr
 
-    def test_legacy_experiment_relative_paths_still_resolve(self, app: Flask, tmp_path: Path) -> None:
+    def test_experiment_relative_paths_resolve_via_fallback(self, app: Flask, tmp_path: Path) -> None:
         """Experiment-root-relative paths in nested manifests keep working via the fallback."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
