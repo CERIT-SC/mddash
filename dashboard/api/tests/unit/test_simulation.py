@@ -200,7 +200,7 @@ class TestValidation:
 
 
 class TestPathResolution:
-    """Role paths resolve relative to the manifest directory, with an experiment-root fallback."""
+    """Role paths resolve relative to the manifest directory, with an experiment-relative fallback."""
 
     def test_nested_manifest_paths_are_manifest_relative(self, app: Flask, tmp_path: Path) -> None:
         """Notebook-written manifests live beside their outputs and reference them cwd-relative."""
@@ -235,7 +235,7 @@ class TestPathResolution:
             assert sim.resolve_role("run_input") == tpr
 
     def test_experiment_relative_paths_resolve_via_fallback(self, app: Flask, tmp_path: Path) -> None:
-        """Experiment-root-relative paths in nested manifests keep working via the fallback."""
+        """The fallback keeps mixed conventions (e.g. hand-fixed manifests) resolving."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
@@ -260,7 +260,6 @@ class TestPathResolution:
             assert sim.missing_files == []
 
     def test_missing_everywhere_reports_manifest_relative(self, app: Flask, tmp_path: Path) -> None:
-        """With no candidate on disk, resolution reports the manifest-relative interpretation."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
@@ -281,7 +280,6 @@ class TestPathResolution:
             assert sim.missing_files == ["run_input", "reference_structure", "trajectory"]
 
     def test_escaping_path_is_rejected(self, app: Flask, tmp_path: Path) -> None:
-        """Paths resolving outside the experiment folder stay refused."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)

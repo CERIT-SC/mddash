@@ -214,13 +214,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     @property
     def resolved_files(self) -> dict[str, str]:
-        """
-        Experiment-relative paths for each file role.
-
-        Manifest role values are written relative to the manifest file's
-        directory; this property exposes them rebased onto the experiment
-        root (the resolution base never leaks to consumers).
-        """
+        """Experiment-relative paths for each role (manifests write roles relative to the manifest file)."""
         if self._resolved is None:
             self._resolved = self._resolve_files(self.files)
         return self._resolved
@@ -355,14 +349,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     def resolve_role(self, role: str) -> Path:
         """
-        Resolve a file role to an absolute Path.
-
-        Roles are resolved relative to the manifest file's directory (with an
-        experiment-relative fallback), consistent with ``resolved_files``.
-
-        Returns:
-            Absolute Path to the role file. The file need not exist yet (e.g.
-            the trajectory is written by the production run).
+        Resolve a file role to an absolute Path; the file need not exist yet (e.g. the trajectory).
 
         Raises:
             BadRequest: If the role is absent or points outside the experiment folder.
@@ -377,25 +364,15 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return resolved
 
     def _role_candidates(self, rel: str) -> list[Path]:
-        """
-        Absolute candidate paths for a manifest role value, most preferred first.
-
-        The manifest-relative interpretation comes first (the writer convention:
-        notebooks write paths relative to their own directory), the
-        experiment-relative interpretation second (fallback).
-        """
+        """Absolute candidates for a role value: manifest-relative first, experiment-relative fallback."""
         manifest_dir = self._file.parent
         return [(manifest_dir / rel).resolve(), ((DATA_DIR / self.experiment_id) / rel).resolve()]
 
     def _resolve_role_absolute(self, exp_dir: Path, rel: str) -> Path | None:
         """
-        Pick the absolute Path a manifest role value points at.
+        First existing in-experiment candidate wins; else the manifest-relative one.
 
-        The first candidate that stays inside the experiment folder and exists
-        on disk wins. When neither candidate exists, the manifest-relative one
-        is used so not-yet-written outputs resolve the same way the writer
-        meant them. Returns None when no candidate stays inside the experiment
-        folder.
+        Returns None when no candidate stays inside the experiment folder.
         """
         candidates: list[Path] = []
         for candidate in self._role_candidates(rel):
@@ -439,14 +416,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         Resolve file roles to experiment-relative paths.
 
-        Role values are interpreted relative to the manifest file's directory
-        — the writer convention, since notebooks write the manifest next to
-        their outputs. Manifests written with experiment-relative paths keep
-        working: when the manifest-relative file does not exist but the
-        experiment-relative one does, the latter is used.
-
-        Returns:
-            Dict mapping role to experiment-relative path.
+        Role values are manifest-relative (notebooks write manifests next to
+        their outputs); experiment-relative is the fallback.
         """
         exp_dir = (DATA_DIR / self.experiment_id).resolve()
         resolved: dict[str, str] = {}
