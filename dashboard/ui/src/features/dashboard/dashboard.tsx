@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
   Skeleton,
+  Strong,
   Tabs,
   TabsList,
   TabsTrigger,
@@ -36,6 +37,21 @@ function SectionHeading({ children, count, limit }: { children: string; count: n
     <h2 className="text-text-muted flex items-center gap-2 text-sm font-medium tracking-wide uppercase">
       {children} <Badge variant="secondary">{limit === undefined ? count : `${count}/${limit}`}</Badge>
     </h2>
+  )
+}
+
+function EmptyExperimentsCard() {
+  return (
+    <Link
+      to="/new"
+      className="border-border hover:border-text-muted focus-visible:ring-border-focus/50 flex flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors focus-visible:ring-[3px] focus-visible:outline-none md:p-8 lg:p-12"
+    >
+      <span className="bg-surface text-text-muted flex h-10 w-10 items-center justify-center rounded-full">
+        <Plus size={20} aria-hidden="true" />
+      </span>
+      <Strong>Create your first experiment</Strong>
+      <span className="text-text-muted text-sm">Set up a molecular dynamics run</span>
+    </Link>
   )
 }
 
@@ -119,7 +135,11 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
           ))}
         </div>
       ) : experiments.length === 0 ? (
-        <p className="text-text-muted py-12 text-center">No experiments yet.</p>
+        // Same grid as the populated list: the placeholder occupies exactly one
+        // experiment-card column slot instead of stretching edge-to-edge.
+        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <EmptyExperimentsCard />
+        </div>
       ) : filtered.length === 0 ? (
         <p className="text-text-muted py-12 text-center">{`No experiments match “${search.q}”.`}</p>
       ) : (
