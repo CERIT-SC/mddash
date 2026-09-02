@@ -474,16 +474,21 @@ function TuningBody({
         {/* The displayed nsteps is the job's — changing it requires a re-tune. */}
         <NstepsField id="tune-nsteps-job" value={job.nsteps} onValueChange={() => undefined} disabled />
         {live ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="border-error text-error hover:bg-error/10 hover:text-error"
-            onClick={onStop}
-            disabled={stopPending}
-          >
-            {stopPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Square aria-hidden />}
-            Stop tuning
-          </Button>
+          <>
+            <span role="status" aria-label="Tuning in progress" className="text-primary inline-flex h-9 items-center">
+              <LoaderCircle className="animate-spin" aria-hidden />
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-error text-error hover:bg-error/10 hover:text-error"
+              onClick={onStop}
+              disabled={stopPending}
+            >
+              {stopPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Square aria-hidden />}
+              Stop tuning
+            </Button>
+          </>
         ) : (
           <Button
             type="button"
