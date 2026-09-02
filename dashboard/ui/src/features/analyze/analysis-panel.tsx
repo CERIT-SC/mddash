@@ -322,7 +322,8 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
                 <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden />
                 Calculating{" "}
                 <strong className="font-semibold">
-                  {AVAILABLE_ANALYSES.find((a) => a.value === activeJob.analysis_name)?.label ?? activeJob.analysis_name}
+                  {AVAILABLE_ANALYSES.find((a) => a.value === activeJob.analysis_name)?.label ??
+                    activeJob.analysis_name}
                 </strong>
               </span>
               <Button

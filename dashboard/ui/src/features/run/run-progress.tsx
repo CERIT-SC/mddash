@@ -65,7 +65,11 @@ export function RunProgress({ job, busy, onStop, onRestart }: RunProgressProps) 
               onClick={onStop}
               disabled={busy}
             >
-              {busy ? <LoaderCircle className="animate-spin" aria-hidden /> : <Square fill="currentColor" aria-hidden />}
+              {busy ? (
+                <LoaderCircle className="animate-spin" aria-hidden />
+              ) : (
+                <Square fill="currentColor" aria-hidden />
+              )}
               Stop run
             </Button>
           ) : (
