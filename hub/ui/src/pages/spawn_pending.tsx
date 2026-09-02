@@ -147,7 +147,13 @@ export function SpawnPendingPage() {
         </DetailsLog>
 
         {!failed ? (
-          <Button variant="error" size="sm" disabled={cancelling} onClick={() => void cancelStartup()}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-error text-error hover:bg-error/10"
+            disabled={cancelling}
+            onClick={() => void cancelStartup()}
+          >
             <Square size={16} />
             {cancelling ? "Cancelling startup…" : "Cancel startup"}
           </Button>

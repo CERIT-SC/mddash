@@ -188,7 +188,8 @@ export function AdminPage() {
                               {status === "running" || status === "starting" ? (
                                 <Button
                                   size="sm"
-                                  variant="error"
+                                  variant="outline"
+                                  className="border-error text-error hover:bg-error/10"
                                   disabled={busy}
                                   onClick={() =>
                                     run(user.name, () => api.stopServer(user.name), `Stopping ${user.name}…`)
