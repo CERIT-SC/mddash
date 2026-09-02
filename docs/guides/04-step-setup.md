@@ -37,7 +37,7 @@ Click **"Create simulation"** (or **"Save changes"** when editing; the button st
 
 ## The simulation manifest
 
-The manifest is the contract every later step uses. It declares per-role file paths and extra args. Roles:
+The manifest is the contract every later step uses. It declares per-role file paths and extra args. Paths are written **relative to the manifest file's own directory** — a manifest created by a notebook at `gromacs/dnarna/hammerhead.simulation.json` references `production/hammerhead.tpr` for `gromacs/dnarna/production/hammerhead.tpr`. (Experiment-relative paths keep working as a fallback.) Roles:
 
 | Role | Label | Purpose |
 |---|---|---|

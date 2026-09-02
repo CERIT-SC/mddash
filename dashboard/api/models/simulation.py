@@ -144,6 +144,21 @@ def _build_content(engine: Engine, payload: dict) -> dict:
     }
 
 
+def _rebase_files_to_manifest(files: dict, simulation_path: str) -> dict:
+    """
+    Strip the manifest-directory prefix from experiment-relative role values.
+
+    Form/API clients submit experiment-relative paths (file pickers and
+    ``resolved_files`` prefill are experiment-relative); manifests store
+    manifest-relative ones (the writer convention).
+    """
+    prefix = Path(simulation_path).parent.as_posix()
+    if prefix == ".":
+        return files
+    prefix += "/"
+    return {role: rel.removeprefix(prefix) if isinstance(rel, str) else rel for role, rel in files.items()}
+
+
 def _validate_content_or_raise(content: dict, engine: Engine) -> None:
     schema = resolve_schema_url(content.get("$schema"))
     if schema is None:
@@ -214,7 +229,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     @property
     def resolved_files(self) -> dict[str, str]:
-        """Experiment-relative paths for each file role."""
+        """Experiment-relative paths for each role (manifests write roles relative to the manifest file)."""
         if self._resolved is None:
             self._resolved = self._resolve_files(self.files)
         return self._resolved
@@ -349,13 +364,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     def resolve_role(self, role: str) -> Path:
         """
-        Resolve a file role to an absolute Path.
-
-        Roles are resolved relative to the experiment directory, consistent with
-        ``resolved_files`` and the manifest writer convention.
-
-        Returns:
-            Absolute Path to the role file.
+        Resolve a file role to an absolute Path; the file need not exist yet (e.g. the trajectory).
 
         Raises:
             BadRequest: If the role is absent or points outside the experiment folder.
@@ -364,7 +373,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if not isinstance(rel, str) or not rel:
             raise BadRequest(description=f"The simulation does not define a '{property_label(role)}' file.")
         exp_dir = (DATA_DIR / self.experiment_id).resolve()
-        resolved = (exp_dir / rel).resolve()
+        resolved = (exp_dir / self.resolved_files.get(role, rel)).resolve()
         try:
             resolved.relative_to(exp_dir)
         except ValueError as exc:
@@ -372,6 +381,30 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
                 description=f"The '{property_label(role)}' path points outside the experiment folder."
             ) from exc
         return resolved
+
+    def _role_candidates(self, rel: str) -> list[Path]:
+        """Absolute candidates for a role value: manifest-relative first, experiment-relative fallback."""
+        manifest_dir = self._file.parent
+        return [(manifest_dir / rel).resolve(), ((DATA_DIR / self.experiment_id) / rel).resolve()]
+
+    def _resolve_role_absolute(self, exp_dir: Path, rel: str) -> Path | None:
+        """
+        First existing in-experiment candidate wins; else the manifest-relative one.
+
+        Returns None when no candidate stays inside the experiment folder.
+        """
+        candidates: list[Path] = []
+        for candidate in self._role_candidates(rel):
+            try:
+                candidate.relative_to(exp_dir)
+            except ValueError:
+                continue
+            if candidate not in candidates:
+                candidates.append(candidate)
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[0] if candidates else None
 
     def require_files(self, roles: list[str] | None = None) -> None:
         """
@@ -402,20 +435,16 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         Resolve file roles to experiment-relative paths.
 
-        Returns:
-            Dict mapping role to experiment-relative path.
+        Role values are manifest-relative (notebooks write manifests next to
+        their outputs); experiment-relative is the fallback.
         """
         exp_dir = (DATA_DIR / self.experiment_id).resolve()
         resolved: dict[str, str] = {}
         for role, rel in files.items():
             if not isinstance(rel, str) or not rel:
                 continue
-            try:
-                absolute = (exp_dir / rel).resolve()
-                absolute.relative_to(exp_dir)
-                resolved[role] = str(absolute.relative_to(exp_dir))
-            except (OSError, ValueError):
-                resolved[role] = rel
+            absolute = self._resolve_role_absolute(exp_dir, rel)
+            resolved[role] = str(absolute.relative_to(exp_dir)) if absolute is not None else rel
         return resolved
 
     def _run_validation(self) -> tuple[bool, list[str], list[str]]:
@@ -464,7 +493,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         for role, rel in resolved.items():
             if rel and rel.startswith("/"):
                 errors.append(
-                    f"The path for '{property_label(role)}' must be relative to the experiment folder (it must not start with '/')."
+                    f"The path for '{property_label(role)}' must be relative to the simulation file's directory (it must not start with '/')."
                 )
 
         missing = [role for role, rel in resolved.items() if not (exp_dir / rel).is_file()]
@@ -581,6 +610,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             raise BadRequest(description=f"Simulation '{display_name}' already exists.")
 
         content = _build_content(experiment.engine, payload)
+        content["files"] = _rebase_files_to_manifest(content["files"], simulation_path)
         _validate_content_or_raise(content, experiment.engine)
         cls._require_unique_name(experiment_id, str(content.get("name", "")))
 
@@ -652,6 +682,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             )
 
         content = _build_content(experiment.engine, payload)
+        content["files"] = _rebase_files_to_manifest(content["files"], simulation_path)
         _validate_content_or_raise(content, experiment.engine)
         cls._require_unique_name(experiment_id, str(content.get("name", "")), current_name=current.name)
 
