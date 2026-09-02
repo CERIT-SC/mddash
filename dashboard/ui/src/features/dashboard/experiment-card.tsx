@@ -22,8 +22,8 @@ import { ENGINE_LABELS } from "@/shared/engine"
 import { formatBytes, formatTime, relativeTime } from "@/shared/format"
 import { isNotebookActive } from "@/shared/pod-status"
 import { sourceLabel } from "@/shared/source"
+import { InfoBanner } from "@/shared/ui/info-banner"
 import {
-  Alert,
   AlertDescription,
   AlertDialog,
   AlertDialogAction,
@@ -518,7 +518,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {/* flex overrides the DS Alert's icon grid so the button shares the text row */}
-          <Alert className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <InfoBanner className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 space-y-1">
               <AlertTitle>Want to keep the results?</AlertTitle>
               <AlertDescription>
@@ -530,7 +530,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
             <Button variant="outline" className="self-end sm:shrink-0 sm:self-center" disabled>
               <Archive /> Archive instead
             </Button>
-          </Alert>
+          </InfoBanner>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             {/* TODO: switch to variant="error" prop once CERIT-SC/design-system#108 (variant/size

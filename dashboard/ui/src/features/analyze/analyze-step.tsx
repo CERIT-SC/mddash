@@ -4,8 +4,8 @@ import { getDownloadExperimentFileUrl, useListExperimentFiles } from "@/api/gene
 import { type Engine, type Simulation } from "@/api/generated/models"
 import { NotebookLauncher, notebookRoleUrl, useNotebook, useNotebookReady } from "@/features/notebook"
 import { jobProgressPercent, useSimulationJobQuery } from "@/features/run"
+import { InfoBanner } from "@/shared/ui/info-banner"
 import {
-  Alert,
   AlertDescription,
   AlertTitle,
   Button,
@@ -93,11 +93,10 @@ export function AnalyzeStep({
   return (
     <div className="space-y-6">
       {simRunning && (
-        // DS default variant is the info banner.
-        <Alert>
+        <InfoBanner>
           <AlertTitle>Simulation is still running{simPercent !== null ? ` (${String(simPercent)}%)` : ""}</AlertTitle>
           <AlertDescription>Trajectories and analyses will change as more results are calculated.</AlertDescription>
-        </Alert>
+        </InfoBanner>
       )}
 
       <div className="space-y-1">
