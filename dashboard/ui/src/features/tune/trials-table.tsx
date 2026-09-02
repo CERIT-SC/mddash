@@ -4,6 +4,7 @@ import { HintTooltip } from "@/shared/ui/hint-tooltip"
 import {
   Badge,
   Button,
+  cn,
   RadioGroup,
   RadioGroupItem,
   Table,
@@ -54,25 +55,29 @@ export function TrialsTableHeader({ engine, pickColumn = true }: { engine: Engin
             <span className="sr-only">Pick</span>
           </TableHead>
         )}
+        {/* Only Status gets no w-px, so it absorbs the table's leftover width. */}
         <TableHead className="text-primary-foreground text-center">Status</TableHead>
         <HintedHead
           label="Performance"
           hint="Throughput measured during the tuning run (ns of simulated time per day). Higher is faster."
+          numeric
         />
         <HintedHead
           label="Est. time"
           hint="Estimated wall-clock time for the full production simulation with this configuration."
+          numeric
         />
         <HintedHead
           label="Est. cost"
           hint="Estimated compute cost for the full production simulation with this configuration."
+          numeric
         />
         {/* Hardware config grouped apart from the outcome columns by a divider. */}
         {(engine === Engine.AMBER ? AMBER_HARDWARE : GMX_HARDWARE).map(([label, hint], index) => (
           <HintedHead key={label} label={label} hint={hint} separated={index === 0} />
         ))}
-        <HintedHead label="MPI processes" hint="Number of parallel MPI ranks." />
-        <HintedHead label="Threads" hint="CPU threads per MPI rank." />
+        <HintedHead label="MPI ranks" hint="Number of parallel MPI ranks." numeric />
+        <HintedHead label="Threads" hint="CPU threads per MPI rank." numeric />
       </TableRow>
     </TableHeader>
   )
@@ -137,14 +142,18 @@ export function TrialsTable({ engine, rows, value, onValueChange, live, onShowLo
   )
 }
 
-/** aria-label keeps the hint button's text out of the columnheader's accessible name. */
-function HintedHead({ label, hint, separated = false }: { label: string; hint: string; separated?: boolean }) {
+type HintedHeadProps = { label: string; hint: string; separated?: boolean; numeric?: boolean }
+
+/** aria-label keeps the hint's text out of the accessible name; w-px contracts the column to content. */
+function HintedHead({ label, hint, separated = false, numeric = false }: HintedHeadProps) {
   return (
     <TableHead
       aria-label={label}
-      className={
-        separated ? "text-primary-foreground border-primary-foreground/30 border-l pl-6" : "text-primary-foreground"
-      }
+      className={cn(
+        "text-primary-foreground w-px",
+        separated && "border-primary-foreground/30 border-l pl-6",
+        numeric && "text-right"
+      )}
     >
       <span className="inline-flex items-center gap-1 whitespace-nowrap">
         {label}
@@ -188,11 +197,11 @@ export function TrialRowCells({ engine, row, fastest, eco, onShowLogs }: TrialRo
       <TableCell className="text-center">
         <TrialStatus row={row} fastest={fastest} eco={eco} onShowLogs={onShowLogs} />
       </TableCell>
-      <TableCell className="tabular-nums">{row.performance === null ? "—" : row.performance.toFixed(2)}</TableCell>
-      <TableCell className="whitespace-nowrap tabular-nums">
+      <TableCell className="text-right tabular-nums">{row.performance?.toFixed(2) ?? "—"}</TableCell>
+      <TableCell className="text-right whitespace-nowrap tabular-nums">
         {row.estTimeHours === null ? "—" : formatTime(row.estTimeHours * 3600)}
       </TableCell>
-      <TableCell className="tabular-nums">{row.estCost === null ? "—" : formatCost(row.estCost)}</TableCell>
+      <TableCell className="text-right tabular-nums">{row.estCost === null ? "—" : formatCost(row.estCost)}</TableCell>
       {/* Hardware cells are confirmation detail — muted so badges and outcomes win the eye. */}
       {engine === Engine.AMBER ? (
         <>
@@ -207,8 +216,8 @@ export function TrialRowCells({ engine, row, fastest, eco, onShowLogs }: TrialRo
           <TableCell className="text-text-muted">{formatHardware(row.nb)}</TableCell>
         </>
       )}
-      <TableCell className="text-text-muted tabular-nums">{row.np ?? "—"}</TableCell>
-      <TableCell className="text-text-muted tabular-nums">{row.ntomp ?? "—"}</TableCell>
+      <TableCell className="text-text-muted text-right tabular-nums">{row.np ?? "—"}</TableCell>
+      <TableCell className="text-text-muted text-right tabular-nums">{row.ntomp ?? "—"}</TableCell>
     </>
   )
 }
