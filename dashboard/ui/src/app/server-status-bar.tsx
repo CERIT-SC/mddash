@@ -85,7 +85,7 @@ export function ServerStatusBar() {
           onClick={() => setConfirmStop(true)}
           disabled={stopping}
         >
-          <Square size={14} />
+          <Square fill="currentColor" size={14} />
           {stopping ? "Stopping…" : "Stop server"}
         </Button>
       </div>

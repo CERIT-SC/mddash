@@ -485,7 +485,7 @@ function TuningBody({
               onClick={onStop}
               disabled={stopPending}
             >
-              {stopPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Square aria-hidden />}
+              {stopPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <Square fill="currentColor" aria-hidden />}
               Stop tuning
             </Button>
           </>

@@ -104,7 +104,7 @@ export function NotebookControls({
           onClick={() => stop.mutate({ experimentId })}
           disabled={stopping || notebook.status === "UNKNOWN"}
         >
-          <Square size={14} />
+          <Square fill="currentColor" size={14} />
           {stopping ? "Stopping…" : "Stop notebook"}
         </Button>
       </div>

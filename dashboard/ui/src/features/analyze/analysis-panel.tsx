@@ -330,7 +330,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
               className="border-error text-error hover:bg-error/10 hover:text-error"
               onClick={() => setConfirmCancel(true)}
             >
-              <Square aria-hidden />
+              <Square fill="currentColor" aria-hidden />
               Stop calculation
             </Button>
             {activeJob.status !== JobStatus.PENDING && (

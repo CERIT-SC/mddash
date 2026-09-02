@@ -154,7 +154,7 @@ export function SpawnPendingPage() {
             disabled={cancelling}
             onClick={() => void cancelStartup()}
           >
-            <Square size={16} />
+            <Square fill="currentColor" size={16} />
             {cancelling ? "Cancelling startup…" : "Cancel startup"}
           </Button>
         ) : null}

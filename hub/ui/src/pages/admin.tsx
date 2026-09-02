@@ -195,7 +195,7 @@ export function AdminPage() {
                                     run(user.name, () => api.stopServer(user.name), `Stopping ${user.name}…`)
                                   }
                                 >
-                                  <Square size={12} />
+                                  <Square fill="currentColor" size={12} />
                                   Stop
                                 </Button>
                               ) : (

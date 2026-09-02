@@ -380,7 +380,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
               <DropdownMenuItem onSelect={toggleNotebook} disabled={notebookBusy}>
                 {active ? (
                   <>
-                    <Square className="h-4 w-4" /> Stop notebook
+                    <Square fill="currentColor" className="h-4 w-4" /> Stop notebook
                   </>
                 ) : (
                   <>

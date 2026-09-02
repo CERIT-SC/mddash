@@ -129,7 +129,7 @@ export function HomePage() {
               onClick={stop}
               disabled={busy}
             >
-              <Square size={16} />
+              <Square fill="currentColor" size={16} />
               Stop my server
             </Button>
           </>

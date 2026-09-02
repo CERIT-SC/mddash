@@ -120,7 +120,7 @@ function NotebookQuotaRow({ experiment, onStopped, onError }: NotebookQuotaRowPr
             onClick={() => stop.mutate({ experimentId: experiment.id })}
             disabled={stopping || notebook.status === "UNKNOWN"}
           >
-            <Square size={14} aria-hidden="true" />
+            <Square fill="currentColor" size={14} aria-hidden="true" />
           </Button>
         </span>
       ) : null}
