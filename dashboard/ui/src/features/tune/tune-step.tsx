@@ -297,7 +297,7 @@ export function TuneStep({
 
       <Separator />
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-end gap-2">
         <Button type="button" variant="outline" onClick={() => onStepChange(0)}>
           <ArrowLeft aria-hidden />
           Back

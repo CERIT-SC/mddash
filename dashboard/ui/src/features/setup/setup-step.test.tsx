@@ -72,6 +72,7 @@ function renderSetup(props: Partial<React.ComponentProps<typeof SetupStep>> = {}
   const spies = {
     onOpenSimulation: props.onOpenSimulation ?? vi.fn(),
     onSourceChange: props.onSourceChange ?? vi.fn(),
+    onContinue: props.onContinue ?? vi.fn(),
   }
   render(
     <QueryClientProvider client={client}>
@@ -83,6 +84,7 @@ function renderSetup(props: Partial<React.ComponentProps<typeof SetupStep>> = {}
         source="notebook"
         onOpenSimulation={spies.onOpenSimulation}
         onSourceChange={spies.onSourceChange}
+        onContinue={spies.onContinue}
         {...props}
       />
     </QueryClientProvider>
@@ -183,6 +185,21 @@ describe("SetupStep", () => {
     expect(screen.getByText("Valid")).toBeInTheDocument()
     expect(screen.getByDisplayValue("protein")).toBeEnabled()
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument()
+  })
+
+  it("disables Go to Tune while no simulation exists", async () => {
+    mockSetup()
+    renderSetup()
+    expect(await screen.findByRole("button", { name: "Go to Tune" })).toBeDisabled()
+  })
+
+  it("reports Go to Tune as a step change once a simulation exists", async () => {
+    const existing = simulation("protein.simulation.json", { name: "protein", valid: true, step: 1 })
+    mockSetup({ sims: [existing] })
+    const user = userEvent.setup()
+    const { onContinue } = renderSetup({ simulation: existing, creating: false })
+    await user.click(await screen.findByRole("button", { name: "Go to Tune" }))
+    expect(onContinue).toHaveBeenCalledTimes(1)
   })
 
   it("reports the Manual tab as a source change instead of flipping local state", async () => {

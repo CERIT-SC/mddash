@@ -171,7 +171,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
 
       <Separator />
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-end gap-2">
         <Button type="button" variant="outline" onClick={() => onStepChange(1)}>
           <ArrowLeft aria-hidden />
           Back

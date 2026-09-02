@@ -132,6 +132,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
       source={search.source ?? "notebook"}
       onSourceChange={(source) => updateSearch({ simulation: tab, step: search.step, source })}
       onOpenSimulation={(simulation) => updateSearch({ simulation })}
+      onContinue={() => updateSearch({ simulation: tab, step: 1 })}
     />,
     ...(selected === undefined
       ? []
