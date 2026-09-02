@@ -364,8 +364,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     def resolve_role(self, role: str) -> Path:
         """
-        Resolve a file role to an absolute Path via the memoized ``resolved_files``;
-        the file need not exist yet (e.g. the trajectory).
+        Resolve a file role to an absolute Path; the file need not exist yet (e.g. the trajectory).
 
         Raises:
             BadRequest: If the role is absent or points outside the experiment folder.
