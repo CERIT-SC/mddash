@@ -301,6 +301,140 @@ class TestPathResolution:
                 sim.resolve_role("run_input")
 
 
+class TestWriteRebase:
+    """write()/update() store submitted experiment-relative values manifest-relative."""
+
+    def test_create_rebases_prefixed_values(self, app: Flask, tmp_path: Path) -> None:
+        """Form-submitted experiment-relative values are stripped of the manifest-dir prefix."""
+        exp_id = _seed_experiment(app)
+        (tmp_path / exp_id).mkdir(parents=True, exist_ok=True)
+
+        with app.app_context():
+            sim = Simulation.write(
+                exp_id,
+                {
+                    "name": "hammerhead",
+                    "simulation_path": "gromacs/dnarna/hammerhead.simulation.json",
+                    "files": {
+                        "run_input": "gromacs/dnarna/production/hammerhead.tpr",
+                        "reference_structure": "gromacs/dnarna/analysis/hammerhead-reference.gro",
+                        "trajectory": "gromacs/dnarna/production/hammerhead.xtc",
+                    },
+                    "extra_args": "",
+                },
+            )
+
+        assert sim.files == {
+            "run_input": "production/hammerhead.tpr",
+            "reference_structure": "analysis/hammerhead-reference.gro",
+            "trajectory": "production/hammerhead.xtc",
+        }
+        on_disk = json.loads((tmp_path / exp_id / sim.simulation_path).read_text())
+        assert on_disk["files"]["run_input"] == "production/hammerhead.tpr"
+
+    def test_create_keeps_manifest_relative_values(self, app: Flask, tmp_path: Path) -> None:
+        exp_id = _seed_experiment(app)
+        (tmp_path / exp_id).mkdir(parents=True, exist_ok=True)
+
+        with app.app_context():
+            sim = Simulation.write(
+                exp_id,
+                {
+                    "name": "hammerhead",
+                    "simulation_path": "gromacs/dnarna/hammerhead.simulation.json",
+                    "files": {
+                        "run_input": "production/hammerhead.tpr",
+                        "reference_structure": "analysis/hammerhead-reference.gro",
+                        "trajectory": "shared/hammerhead.xtc",  # outside the manifest dir: no strip
+                    },
+                    "extra_args": "",
+                },
+            )
+
+        assert sim.files["run_input"] == "production/hammerhead.tpr"
+        assert sim.files["trajectory"] == "shared/hammerhead.xtc"
+
+    def test_create_at_root_keeps_values(self, app: Flask, tmp_path: Path) -> None:
+        exp_id = _seed_experiment(app)
+        (tmp_path / exp_id).mkdir(parents=True, exist_ok=True)
+
+        with app.app_context():
+            sim = Simulation.write(
+                exp_id,
+                {
+                    "name": "protein",
+                    "simulation_path": "protein.simulation.json",
+                    "files": {
+                        "run_input": "production/protein.tpr",
+                        "reference_structure": "analysis/protein-reference.gro",
+                        "trajectory": "production/protein.xtc",
+                    },
+                    "extra_args": "",
+                },
+            )
+
+        assert sim.files["run_input"] == "production/protein.tpr"
+
+    def test_update_rebases_prefixed_values(self, app: Flask, tmp_path: Path) -> None:
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        sim_path = _write_sim_file(
+            exp_dir,
+            "gromacs/dnarna/hammerhead.simulation.json",
+            {
+                "run_input": "production/hammerhead.tpr",
+                "reference_structure": "analysis/hammerhead-reference.gro",
+                "trajectory": "production/hammerhead.xtc",
+            },
+            name="hammerhead",
+        )
+
+        with app.app_context():
+            sim = Simulation.update(
+                exp_id,
+                sim_path,
+                {
+                    "name": "hammerhead",
+                    "files": {
+                        "run_input": "gromacs/dnarna/production/hammerhead.tpr",
+                        "reference_structure": "gromacs/dnarna/analysis/hammerhead-reference.gro",
+                        "trajectory": "gromacs/dnarna/production/hammerhead.xtc",
+                    },
+                    "extra_args": "",
+                },
+            )
+
+        assert sim.files["run_input"] == "production/hammerhead.tpr"
+        on_disk = json.loads((tmp_path / exp_id / sim_path).read_text())
+        assert on_disk["files"]["trajectory"] == "production/hammerhead.xtc"
+
+    def test_resolve_role_matches_resolved_files_when_both_candidates_exist(self, app: Flask, tmp_path: Path) -> None:
+        """With both candidates on disk, manifest-relative wins — identically for every consumer."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        sim_path = _write_sim_file(
+            exp_dir,
+            "gromacs/dnarna/hammerhead.simulation.json",
+            {
+                "run_input": "production/hammerhead.tpr",
+                "reference_structure": "analysis/hammerhead-reference.gro",
+                "trajectory": "production/hammerhead.xtc",
+            },
+            name="hammerhead",
+        )
+        (exp_dir / "gromacs/dnarna/production").mkdir(parents=True, exist_ok=True)
+        (exp_dir / "gromacs/dnarna/production/hammerhead.tpr").write_bytes(b"\x00")
+        (exp_dir / "production").mkdir(parents=True, exist_ok=True)
+        (exp_dir / "production/hammerhead.tpr").write_bytes(b"\x00")
+
+        with app.app_context():
+            sim = Simulation.get(exp_id, sim_path)
+            assert sim.resolved_files["run_input"] == "gromacs/dnarna/production/hammerhead.tpr"
+            assert sim.resolve_role("run_input") == exp_dir / "gromacs/dnarna/production/hammerhead.tpr"
+
+
 class TestLocking:
     """Lock inference from file permissions and job references."""
 

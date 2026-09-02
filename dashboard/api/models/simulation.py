@@ -144,6 +144,21 @@ def _build_content(engine: Engine, payload: dict) -> dict:
     }
 
 
+def _rebase_files_to_manifest(files: dict, simulation_path: str) -> dict:
+    """
+    Strip the manifest-directory prefix from experiment-relative role values.
+
+    Form/API clients submit experiment-relative paths (file pickers and
+    ``resolved_files`` prefill are experiment-relative); manifests store
+    manifest-relative ones (the writer convention).
+    """
+    prefix = Path(simulation_path).parent.as_posix()
+    if prefix == ".":
+        return files
+    prefix += "/"
+    return {role: rel.removeprefix(prefix) if isinstance(rel, str) else rel for role, rel in files.items()}
+
+
 def _validate_content_or_raise(content: dict, engine: Engine) -> None:
     schema = resolve_schema_url(content.get("$schema"))
     if schema is None:
@@ -349,7 +364,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     def resolve_role(self, role: str) -> Path:
         """
-        Resolve a file role to an absolute Path; the file need not exist yet (e.g. the trajectory).
+        Resolve a file role to an absolute Path via the memoized ``resolved_files``;
+        the file need not exist yet (e.g. the trajectory).
 
         Raises:
             BadRequest: If the role is absent or points outside the experiment folder.
@@ -358,9 +374,13 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if not isinstance(rel, str) or not rel:
             raise BadRequest(description=f"The simulation does not define a '{property_label(role)}' file.")
         exp_dir = (DATA_DIR / self.experiment_id).resolve()
-        resolved = self._resolve_role_absolute(exp_dir, rel)
-        if resolved is None:
-            raise BadRequest(description=f"The '{property_label(role)}' path points outside the experiment folder.")
+        resolved = (exp_dir / self.resolved_files.get(role, rel)).resolve()
+        try:
+            resolved.relative_to(exp_dir)
+        except ValueError as exc:
+            raise BadRequest(
+                description=f"The '{property_label(role)}' path points outside the experiment folder."
+            ) from exc
         return resolved
 
     def _role_candidates(self, rel: str) -> list[Path]:
@@ -591,6 +611,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             raise BadRequest(description=f"Simulation '{display_name}' already exists.")
 
         content = _build_content(experiment.engine, payload)
+        content["files"] = _rebase_files_to_manifest(content["files"], simulation_path)
         _validate_content_or_raise(content, experiment.engine)
         cls._require_unique_name(experiment_id, str(content.get("name", "")))
 
@@ -662,6 +683,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             )
 
         content = _build_content(experiment.engine, payload)
+        content["files"] = _rebase_files_to_manifest(content["files"], simulation_path)
         _validate_content_or_raise(content, experiment.engine)
         cls._require_unique_name(experiment_id, str(content.get("name", "")), current_name=current.name)
 
