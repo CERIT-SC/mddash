@@ -59,6 +59,7 @@ export function NotebookControls({
   const spinning = starting || stopping
   const uptime =
     notebook.started_at !== null ? Math.max(0, (Date.now() - Date.parse(notebook.started_at)) / 1000) : undefined
+  const showingUptime = running && ready && uptime !== undefined
 
   const label = stopping
     ? "Stopping…"
@@ -84,7 +85,7 @@ export function NotebookControls({
           />
         )}
         <span className="font-medium">Notebook</span>
-        <span className="text-text-muted">{label}</span>
+        <span className={cn("text-text-muted", showingUptime && "w-16 tabular-nums")}>{label}</span>
       </div>
       <div className="flex items-center gap-2">
         {running && ready && (
