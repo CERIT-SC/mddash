@@ -13,6 +13,7 @@ import {
   AlertDialogTitle,
   Button,
   buttonVariants,
+  cn,
   Progress,
   Separator,
 } from "@e-infra/design-system"
@@ -56,7 +57,9 @@ export function ServerStatusBar() {
       <div className="flex items-center gap-3 text-sm">
         <span className="bg-success h-2 w-2 rounded-full" aria-hidden="true" />
         <span className="font-medium">Server</span>
-        <span className="text-text-muted">{uptime === undefined ? "…" : formatTime(uptime)}</span>
+        <span className={cn("text-text-muted", uptime !== undefined && "w-16 tabular-nums")}>
+          {uptime === undefined ? "…" : formatTime(uptime)}
+        </span>
       </div>
       <Separator orientation="vertical" className="hidden h-6 sm:block" />
       <div className="flex flex-col gap-1 text-sm">
