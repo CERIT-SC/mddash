@@ -214,7 +214,13 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
     @property
     def resolved_files(self) -> dict[str, str]:
-        """Experiment-relative paths for each file role."""
+        """
+        Experiment-relative paths for each file role.
+
+        Manifest role values are written relative to the manifest file's
+        directory; this property exposes them rebased onto the experiment
+        root (the resolution base never leaks to consumers).
+        """
         if self._resolved is None:
             self._resolved = self._resolve_files(self.files)
         return self._resolved
@@ -351,11 +357,12 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         Resolve a file role to an absolute Path.
 
-        Roles are resolved relative to the experiment directory, consistent with
-        ``resolved_files`` and the manifest writer convention.
+        Roles are resolved relative to the manifest file's directory (with the
+        legacy experiment-relative fallback), consistent with ``resolved_files``.
 
         Returns:
-            Absolute Path to the role file.
+            Absolute Path to the role file. The file need not exist yet (e.g.
+            the trajectory is written by the production run).
 
         Raises:
             BadRequest: If the role is absent or points outside the experiment folder.
@@ -364,14 +371,44 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if not isinstance(rel, str) or not rel:
             raise BadRequest(description=f"The simulation does not define a '{property_label(role)}' file.")
         exp_dir = (DATA_DIR / self.experiment_id).resolve()
-        resolved = (exp_dir / rel).resolve()
-        try:
-            resolved.relative_to(exp_dir)
-        except ValueError as exc:
-            raise BadRequest(
-                description=f"The '{property_label(role)}' path points outside the experiment folder."
-            ) from exc
+        resolved = self._resolve_role_absolute(exp_dir, rel)
+        if resolved is None:
+            raise BadRequest(description=f"The '{property_label(role)}' path points outside the experiment folder.")
         return resolved
+
+    def _role_candidates(self, rel: str) -> list[Path]:
+        """
+        Absolute candidate paths for a manifest role value, most preferred first.
+
+        The manifest-relative interpretation comes first (the writer convention:
+        notebooks write paths relative to their own directory), the legacy
+        experiment-relative interpretation second.
+        """
+        manifest_dir = self._file.parent
+        return [(manifest_dir / rel).resolve(), ((DATA_DIR / self.experiment_id) / rel).resolve()]
+
+    def _resolve_role_absolute(self, exp_dir: Path, rel: str) -> Path | None:
+        """
+        Pick the absolute Path a manifest role value points at.
+
+        The first candidate that stays inside the experiment folder and exists
+        on disk wins. When neither candidate exists, the manifest-relative one
+        is used so not-yet-written outputs resolve the same way the writer
+        meant them. Returns None when no candidate stays inside the experiment
+        folder.
+        """
+        candidates: list[Path] = []
+        for candidate in self._role_candidates(rel):
+            try:
+                candidate.relative_to(exp_dir)
+            except ValueError:
+                continue
+            if candidate not in candidates:
+                candidates.append(candidate)
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[0] if candidates else None
 
     def require_files(self, roles: list[str] | None = None) -> None:
         """
@@ -402,6 +439,13 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         Resolve file roles to experiment-relative paths.
 
+        Role values are interpreted relative to the manifest file's directory
+        — the writer convention, since notebooks write the manifest next to
+        their outputs. Manifests written with experiment-relative paths (the
+        old dashboard convention) keep working: when the manifest-relative
+        file does not exist but the experiment-relative one does, the latter
+        is used.
+
         Returns:
             Dict mapping role to experiment-relative path.
         """
@@ -410,12 +454,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         for role, rel in files.items():
             if not isinstance(rel, str) or not rel:
                 continue
-            try:
-                absolute = (exp_dir / rel).resolve()
-                absolute.relative_to(exp_dir)
-                resolved[role] = str(absolute.relative_to(exp_dir))
-            except (OSError, ValueError):
-                resolved[role] = rel
+            absolute = self._resolve_role_absolute(exp_dir, rel)
+            resolved[role] = str(absolute.relative_to(exp_dir)) if absolute is not None else rel
         return resolved
 
     def _run_validation(self) -> tuple[bool, list[str], list[str]]:
@@ -464,7 +504,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         for role, rel in resolved.items():
             if rel and rel.startswith("/"):
                 errors.append(
-                    f"The path for '{property_label(role)}' must be relative to the experiment folder (it must not start with '/')."
+                    f"The path for '{property_label(role)}' must be relative to the simulation file's directory (it must not start with '/')."
                 )
 
         missing = [role for role, rel in resolved.items() if not (exp_dir / rel).is_file()]

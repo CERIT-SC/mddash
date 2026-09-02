@@ -199,6 +199,110 @@ class TestValidation:
                 sim.require_files()
 
 
+class TestPathResolution:
+    """Role paths resolve relative to the manifest directory, with an experiment-root fallback."""
+
+    def test_nested_manifest_paths_are_manifest_relative(self, app: Flask, tmp_path: Path) -> None:
+        """Notebook-written manifests live beside their outputs and reference them cwd-relative."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_sim_file(
+            exp_dir,
+            "gromacs/dnarna/hammerhead.simulation.json",
+            {
+                "run_input": "production/hammerhead.tpr",
+                "reference_structure": "analysis/hammerhead-reference.gro",
+                "trajectory": "production/hammerhead.xtc",
+            },
+            name="hammerhead",
+        )
+        tpr = exp_dir / "gromacs/dnarna/production/hammerhead.tpr"
+        tpr.parent.mkdir(parents=True, exist_ok=True)
+        tpr.write_bytes(b"\x00")
+        reference = exp_dir / "gromacs/dnarna/analysis/hammerhead-reference.gro"
+        reference.parent.mkdir(parents=True, exist_ok=True)
+        reference.write_text("gro")
+
+        with app.app_context():
+            sim = Simulation.get(exp_id, "gromacs/dnarna/hammerhead.simulation.json")
+            assert sim.resolved_files["run_input"] == "gromacs/dnarna/production/hammerhead.tpr"
+            assert sim.resolved_files["reference_structure"] == "gromacs/dnarna/analysis/hammerhead-reference.gro"
+            # Not-yet-created outputs (trajectory is produced by the run) resolve manifest-relative too.
+            assert sim.resolved_files["trajectory"] == "gromacs/dnarna/production/hammerhead.xtc"
+            assert sim.valid
+            assert sim.missing_files == ["trajectory"]
+            assert sim.resolve_role("run_input") == tpr
+
+    def test_legacy_experiment_relative_paths_still_resolve(self, app: Flask, tmp_path: Path) -> None:
+        """Experiment-root-relative paths in nested manifests keep working via the fallback."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_sim_file(
+            exp_dir,
+            "equilibration/nvt.simulation.json",
+            {
+                "run_input": "equilibration/nvt.tpr",
+                "reference_structure": "equilibration/nvt-reference.gro",
+                "trajectory": "equilibration/nvt.xtc",
+            },
+            name="nvt",
+        )
+        (exp_dir / "equilibration/nvt.tpr").write_bytes(b"\x00")
+        (exp_dir / "equilibration/nvt-reference.gro").write_text("gro")
+        (exp_dir / "equilibration/nvt.xtc").write_bytes(b"\x00")
+
+        with app.app_context():
+            sim = Simulation.get(exp_id, "equilibration/nvt.simulation.json")
+            assert sim.resolved_files["run_input"] == "equilibration/nvt.tpr"
+            assert sim.valid
+            assert sim.missing_files == []
+
+    def test_missing_everywhere_reports_manifest_relative(self, app: Flask, tmp_path: Path) -> None:
+        """With no candidate on disk, resolution reports the manifest-relative interpretation."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_sim_file(
+            exp_dir,
+            "gromacs/dnarna/hammerhead.simulation.json",
+            {
+                "run_input": "production/hammerhead.tpr",
+                "reference_structure": "analysis/hammerhead-reference.gro",
+                "trajectory": "production/hammerhead.xtc",
+            },
+            name="hammerhead",
+        )
+
+        with app.app_context():
+            sim = Simulation.get(exp_id, "gromacs/dnarna/hammerhead.simulation.json")
+            assert sim.resolved_files["run_input"] == "gromacs/dnarna/production/hammerhead.tpr"
+            assert sim.missing_files == ["run_input", "reference_structure", "trajectory"]
+
+    def test_escaping_path_is_rejected(self, app: Flask, tmp_path: Path) -> None:
+        """Paths resolving outside the experiment folder stay refused."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        sim_path = _write_sim_file(
+            exp_dir,
+            "nested/hammerhead.simulation.json",
+            {
+                "run_input": "/etc/passwd",
+                "reference_structure": "analysis/hammerhead-reference.gro",
+                "trajectory": "production/hammerhead.xtc",
+            },
+            name="hammerhead",
+        )
+
+        with app.app_context():
+            sim = Simulation.get(exp_id, sim_path)
+            assert sim.resolved_files["run_input"] == "/etc/passwd"
+            with pytest.raises(BadRequest, match="outside the experiment folder"):
+                sim.resolve_role("run_input")
+
+
 class TestLocking:
     """Lock inference from file permissions and job references."""
 

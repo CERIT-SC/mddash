@@ -18,7 +18,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 
 ## Core Patterns
 
-- **Simulation Manifest Pattern**: `.simulation.json` files are the single source of truth for file roles and `extra_args`. Job models reference `simulation_path` instead of storing file names. (Dashboard API + UI)
+- **Simulation Manifest Pattern**: `.simulation.json` files are the single source of truth for file roles and `extra_args`. Job models reference `simulation_path` instead of storing file names. (Dashboard API + UI) Paths inside a manifest are relative to the manifest file's own directory (the writer convention — notebooks write manifests next to their outputs); the API re-resolves them to experiment-relative paths, falling back to legacy experiment-relative interpretation only when the manifest-relative file doesn't exist.
 - **Sidecar Polling Pattern**: MDRun API's poller sidecar co-locates with the API on one PVC and polls K8s job status on an interval — SQLite on a block-device-backed volume, never NFS (WAL is unsupported on network filesystems).
 - **Template-Based Configuration**: `helm/charts/mddash/values.yaml.tmpl` is rendered with `gomplate` before Helm. Never edit `values.yaml` — it's generated.
 
