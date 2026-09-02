@@ -267,7 +267,11 @@ export function SimulationForm({ experimentId, engine, simulation, onSaved }: Si
                   <FormItem>
                     <FormLabel>Name</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder={editing ? undefined : "Enter name of your choice"} />
+                      <Input
+                        {...field}
+                        className="bg-background dark:bg-background"
+                        placeholder={editing ? undefined : "Enter name of your choice"}
+                      />
                     </FormControl>
                     <FormDescription className="text-text-muted">Identifier for this simulation setup.</FormDescription>
                     <FormMessage />
@@ -307,6 +311,7 @@ export function SimulationForm({ experimentId, engine, simulation, onSaved }: Si
                           <FormControl>
                             <Input
                               {...field}
+                              className="bg-background dark:bg-background"
                               placeholder={
                                 role.key === "trajectory"
                                   ? `production/protein.${TRAJECTORY_EXTENSION[engine]}`
@@ -332,7 +337,7 @@ export function SimulationForm({ experimentId, engine, simulation, onSaved }: Si
                     <FormItem>
                       <FormLabel className="sr-only">CLI flags</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="No CLI Flags" />
+                        <Input {...field} className="bg-background dark:bg-background" placeholder="No CLI Flags" />
                       </FormControl>
                       <FormDescription className="text-text-muted">
                         Additional {ENGINE_LABELS[engine]} CLI flags passed to mdrun.
