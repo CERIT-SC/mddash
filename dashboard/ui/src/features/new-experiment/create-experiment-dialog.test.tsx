@@ -3,7 +3,7 @@ import { experiment } from "@/shared/fixtures/experiment"
 import { requestUrl } from "@/shared/fixtures/mock-fetch"
 import { CATALOG_MODULES } from "@/shared/fixtures/notebook-module"
 import { renderWithProviders } from "@/shared/fixtures/render-with-providers"
-import { screen } from "@testing-library/react"
+import { screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -38,6 +38,11 @@ function renderPage() {
   )
 }
 
+/** Tab queries must scope to the dialog — the page behind it has engine-filter tabs. */
+function dialogTab(name: string | RegExp) {
+  return within(screen.getByRole("dialog")).getByRole("tab", { name })
+}
+
 describe("CreateExperimentDialog", () => {
   beforeEach(() => vi.unstubAllGlobals())
 
@@ -48,7 +53,7 @@ describe("CreateExperimentDialog", () => {
 
     await user.click(await screen.findByRole("button", { name: "Protein · AMBER" }))
     // the preset fixes the engine — no engine choice to make
-    expect(screen.queryByRole("radio", { name: "AMBER" })).not.toBeInTheDocument()
+    expect(within(screen.getByRole("dialog")).queryByRole("tab", { name: "AMBER" })).not.toBeInTheDocument()
     await user.type(screen.getByLabelText("Name"), "Lysozyme run")
     await user.type(screen.getByLabelText(/pdb id or url/i), "1AKI")
     await user.click(screen.getByRole("button", { name: "Create Experiment" }))
@@ -72,7 +77,7 @@ describe("CreateExperimentDialog", () => {
     await renderPage()
 
     await user.click(screen.getByRole("button", { name: /use custom workflow/i }))
-    expect(screen.getByRole("radio", { name: "GROMACS" })).toBeChecked()
+    expect(dialogTab("GROMACS")).toHaveAttribute("aria-selected", "true")
     expect(screen.getByLabelText(/notebooks repository/i)).toHaveValue(NOTEBOOKS_REPO)
 
     await user.click(screen.getByRole("button", { name: "Create Experiment" }))
@@ -87,7 +92,7 @@ describe("CreateExperimentDialog", () => {
 
     await user.clear(repo)
     await user.type(repo, "git@github.com:lab/notebooks.git")
-    await user.click(screen.getByRole("radio", { name: /doi \/ repository/i }))
+    await user.click(dialogTab(/doi \/ repository/i))
     await user.type(screen.getByLabelText(/doi or repository url/i), "https://doi.org/10.5281/zenodo.1")
     await user.click(screen.getByRole("button", { name: "Create Experiment" }))
 
@@ -158,10 +163,10 @@ describe("CreateExperimentDialog", () => {
     await renderPage()
 
     await user.click(await screen.findByRole("button", { name: "Membrane protein (BioBB) · GROMACS" }))
-    expect(screen.queryByRole("radio", { name: "GROMACS" })).not.toBeInTheDocument()
+    expect(within(screen.getByRole("dialog")).queryByRole("tab", { name: "GROMACS" })).not.toBeInTheDocument()
 
     await user.type(screen.getByLabelText("Name"), "Membrane run")
-    await user.click(screen.getByRole("radio", { name: /upload files/i }))
+    await user.click(dialogTab(/upload files/i))
     await user.upload(
       screen.getByLabelText("Upload files"),
       new File(["x"], "topol.tpr", { type: "application/octet-stream" })
