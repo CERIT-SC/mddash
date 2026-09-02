@@ -490,12 +490,7 @@ function TuningBody({
             </Button>
           </>
         ) : (
-          <Button
-            type="button"
-            variant="outline"
-            className="border-primary text-primary hover:bg-primary/10 hover:text-primary"
-            onClick={onRetune}
-          >
+          <Button type="button" variant="outline" onClick={onRetune}>
             <RotateCcw aria-hidden />
             Re-tune
           </Button>

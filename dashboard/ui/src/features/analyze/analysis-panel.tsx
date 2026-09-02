@@ -291,7 +291,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
         {resolvedAnalysis &&
           !activeJob &&
           (hasResult ? (
-            <Button size="sm" variant="secondary" onClick={handleCalculate} disabled={!canSubmit}>
+            <Button size="sm" variant="outline" onClick={handleCalculate} disabled={!canSubmit}>
               <RotateCcw aria-hidden />
               Re-calculate
             </Button>

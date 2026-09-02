@@ -69,13 +69,7 @@ export function RunProgress({ job, busy, onStop, onRestart }: RunProgressProps) 
               Stop run
             </Button>
           ) : (
-            <Button
-              type="button"
-              variant="outline"
-              className="border-primary text-primary hover:bg-primary/10 hover:text-primary"
-              onClick={onRestart}
-              disabled={busy}
-            >
+            <Button type="button" variant="outline" onClick={onRestart} disabled={busy}>
               {busy ? <LoaderCircle className="animate-spin" aria-hidden /> : <RotateCcw aria-hidden />}
               Re-run
             </Button>
