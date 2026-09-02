@@ -125,7 +125,8 @@ export default function MolStar(props: MolStarProps) {
   }, [structureUrl, structureFormat, coordsUrl, coordsFormat])
 
   return (
-    <div style={{ width, height, position: "relative", zIndex: 10 }}>
+    // zIndex above the sticky site header (z-50) so molstar's expanded viewport covers it.
+    <div style={{ width, height, position: "relative", zIndex: 60 }}>
       {loading && (
         <div
           style={{
