@@ -8,7 +8,7 @@ import { CREATE_TAB, simulationParam, SimulationTabs } from "@/features/simulati
 import { TuneStep } from "@/features/tune"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Stepper, StepperContent } from "@/shared/ui/stepper"
-import { Card, CardContent, Skeleton } from "@e-infra/design-system"
+import { Card, CardContent, Separator, Skeleton } from "@e-infra/design-system"
 import { Atom, ChartColumn, Play, SlidersHorizontal, Upload } from "lucide-react"
 
 import { WizardStepperHeader } from "./stepper-header"
@@ -222,6 +222,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
                 unlockedIndexes={data.can_publish ? [LAST_STEP] : []}
                 pollMs={SIMULATIONS_POLL_MS}
               />
+              <Separator className="mt-4" />
               <StepperContent>{steps}</StepperContent>
             </Stepper>
           </CardContent>
