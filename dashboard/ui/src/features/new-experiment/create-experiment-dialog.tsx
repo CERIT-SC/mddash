@@ -31,7 +31,7 @@ import {
 import { standardSchemaResolver } from "@hookform/resolvers/standard-schema"
 import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { CircleCheck, CloudUpload, LoaderCircle, Trash2 } from "lucide-react"
+import { CircleCheck, CloudUpload, Key, LoaderCircle, Trash2, X } from "lucide-react"
 import { useDropzone, type FileRejection } from "react-dropzone"
 import { useForm } from "react-hook-form"
 import { toast } from "sonner"
@@ -363,9 +363,9 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
                       type="button"
                       onClick={() => setTokenOpen((prev) => !prev)}
                       aria-expanded={tokenOpen}
-                      className="text-text-muted hover:text-text text-sm transition-colors"
+                      className="inline-flex items-center gap-1.5 text-[#0000EE] hover:text-[#000099] underline text-sm transition-colors"
                     >
-                      {tokenOpen ? "Hide access token" : "Private repository? Provide an access token"}
+                      {tokenOpen ? (<><X size={14} aria-hidden="true" /> Remove access token</>) : (<><Key size={14} aria-hidden="true" /> Add access token</>)}
                     </button>
                     {tokenOpen && (
                       <FormField
