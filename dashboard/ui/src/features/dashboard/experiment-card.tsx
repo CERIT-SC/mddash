@@ -269,7 +269,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
   const stop = useStopNotebook({
     mutation: {
       onSuccess: () => {
-        toast.success(`Notebook stopping for “${experiment.name}”`)
+        toast.success(`Notebook stopping for "${experiment.name}"`)
         invalidate()
       },
       onError: onMutationError,
@@ -296,6 +296,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
   })
 
   const active = isNotebookActive(experiment.notebook?.status)
+  const stopping = stop.isPending || experiment.notebook?.status === "TERMINATING"
   const notebookBusy = start.isPending || stop.isPending
 
   const { shownStep, stepIndex } = stepParts(experiment)
@@ -457,11 +458,20 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
             </span>
           )}
           <span className="flex items-center gap-2">
-            <span
-              className={cn("h-2 w-2 rounded-full", active ? "bg-success" : "bg-text-muted/40")}
-              aria-hidden="true"
-            />
-            Notebook
+            {stopping ? (
+              <>
+                <LoaderCircle size={12} className="text-text-muted animate-spin" aria-hidden="true" />
+                <span>Stopping…</span>
+              </>
+            ) : (
+              <>
+                <span
+                  className={cn("h-2 w-2 rounded-full", active ? "bg-success" : "bg-text-muted/40")}
+                  aria-hidden="true"
+                />
+                Notebook
+              </>
+            )}
           </span>
         </span>
       </CardFooter>
