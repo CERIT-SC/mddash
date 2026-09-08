@@ -10,4 +10,4 @@ Gotchas the code does not make obvious:
 - Running GMX/AMBER jobs show live progress: each status poll appends log lines from `_demo/data/md.log`. Logs are written lazily on the first poll because `Job.start()` cleans result files after submit.
 - The seeded running tuner never finishes on purpose: it keeps a rolling window of `max_trials` trials (oldest dropped), and FINISH/ERROR alternates by trial creation `seq` — not list index, which the rolling window would pin to constant parity.
 - Placeholder enzyme manifests are back-dated (`_backdate_stale_simulations`) so the job-linked `md` simulation stays the experiment's most recent activity; equal mtimes would pick the alphabetically-first manifest and drive the wrong step.
-- `/mdrepo/auth` bypasses OAuth with a demo session token; the upload "Job" is a mock K8s thread writing the completed status after ~4s.
+- `/mdrepo/auth` bypasses OAuth with a demo session token; the upload "Job" is a mock K8s thread that writes the completed status and flips the mock record to published after ~4s (standing in for MDRepo-UI finalization, which the demo lacks).
