@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 
-// Fields read from the RCSB PDB Data API; everything else in the responses is ignored.
+// Public RCSB PDB Data API — only the fields in PdbEntry are read.
 const RCSB_API = "https://data.rcsb.org/rest/v1/core"
 
 export type PdbEntry = {
@@ -60,7 +60,7 @@ async function fetchPdbEntry(pdbId: string, signal?: AbortSignal): Promise<PdbEn
   }
 }
 
-/** PDB entries are immutable — cache forever for the session. Disabled without an id. */
+/** PDB entries are immutable — cached for the whole session. */
 export function usePdbEntry(pdbId: string | undefined) {
   return useQuery({
     queryKey: ["rcsb", pdbId ?? ""],

@@ -54,9 +54,8 @@ type ExperimentWizardProps = {
 
 export function ExperimentWizard({ experimentId, search, onSearchChange }: ExperimentWizardProps) {
   const experiment = useGetExperiment(experimentId, { query: { retry: false } })
-  // The poll is the wizard heartbeat — the step ladder advances server-side when
-  // a run finishes and the stepper must follow. Each refetch scans manifests +
-  // job states, so it pauses once no simulation has work in flight.
+  // The wizard heartbeat: the step ladder advances server-side, so the stepper
+  // must follow. Refetches scan manifests + job states, so it pauses when idle.
   const simulations = useListSimulations(experimentId, {
     query: { retry: false, refetchInterval: pollWhileAnyLive(SIMULATIONS_POLL_MS) },
   })
@@ -68,8 +67,8 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
     return <ApiErrorAlert error={simulations.error} onRetry={() => void simulations.refetch()} />
   }
 
-  // The title and the default tab both come from the experiment, so the whole
-  // body waits on both queries rather than re-resolving the tab mid-paint.
+  // The default tab comes from the experiment, so the body waits on both
+  // queries instead of re-resolving the tab mid-paint.
   const data = experiment.data?.status === 200 ? experiment.data.data : undefined
   const list = simulations.data?.status === 200 ? simulations.data.data : undefined
   if (data === undefined || list === undefined) {
@@ -119,9 +118,8 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
           : simulationParam(next.simulation),
     })
 
-  // The five steps are StepperContent's direct children in index order (Setup=0
-  // .. Publish=4). Create mode keeps only Setup; the rest render once a
-  // simulation exists.
+  // Array order must match STEPS — StepperContent renders children by index;
+  // create mode keeps only Setup.
   const steps = [
     <SetupStep
       key="setup"
@@ -191,8 +189,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
           value={tab}
           onValueChange={(simulation) => updateSearch({ simulation })}
           onDeleted={(deleted) => {
-            // The URL still points at the deleted manifest; drop the selection so
-            // the refreshed list falls back to its default tab.
+            // The URL still points at the deleted manifest; {} resets to the default tab.
             if (
               search.simulation !== undefined &&
               simulationParam(search.simulation) === simulationParam(deleted.simulation_path)
@@ -201,10 +198,9 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
           }}
         />
 
-        {/* Shares its top edge with the tab boxes — restyle them together. The
-            panel stays on bg-background (like DS dialogs): TabsList, Input and
-            TableRow all paint bg-surface and only stay visible on the canvas
-            color; on a bg-surface card they blend into the card face. */}
+        {/* bg-background like DS dialogs: TabsList, Input and TableRow paint
+            bg-surface and only stay visible on the canvas color; restyle with
+            the tab boxes. */}
         {/* box-shadow over drop-shadow: filter would confine molstar's expanded (fixed) viewport to this card. */}
         <Card className="border-border bg-background rounded-t-none border py-0 shadow-[0_4px_4px_rgba(0,0,0,0.15)] drop-shadow-none hover:drop-shadow-none">
           <CardContent className="pt-6 pb-6 md:pb-8">

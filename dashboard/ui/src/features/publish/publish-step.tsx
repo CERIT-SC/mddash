@@ -361,9 +361,8 @@ function MdpositPublish({ experiment, simulation, onStepChange }: MdpositPublish
   const handoff: MDPositPublication | undefined = prepare.data?.status === 201 ? prepare.data.data : undefined
   const unavailableReason = mdpositUnavailableReason(simulation)
 
-  // The Stepper doesn't remount this subtree on tab switch, so drop the stale
-  // handoff of the previously selected simulation before preparing a new one.
-  // reset is stable across renders, so the effect re-runs only on sim change.
+  // No remount on tab switch: reset the previous simulation's stale handoff
+  // before preparing a new one (reset is stable — re-runs only on sim change).
   const { reset } = prepare
   useEffect(() => {
     reset()

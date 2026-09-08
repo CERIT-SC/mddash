@@ -111,7 +111,7 @@ describe("ExperimentWizard", () => {
   })
 
   it("renders one tab per simulation, preselecting the URL simulation", async () => {
-    // NB: the tab queries here target the simulations tablist; the Setup step has its own source tabs.
+    // The simulations tablist — the Setup step has its own source tabs.
     mockApi({
       "/experiments/exp1/simulations": Response.json([alpha, beta]),
       "/experiments/exp1": okExperiment({ latest_simulation_path: alpha.simulation_path }),
@@ -204,7 +204,6 @@ describe("ExperimentWizard", () => {
   })
 
   it("enables markers up to the simulation's API-reported step", async () => {
-    // alpha sits at backend step 2 (tuning done): Setup/Tune/Run reachable, Analyze/Publish not.
     mockApi({
       "/experiments/exp1/simulations": Response.json([alpha]),
       "/experiments/exp1": okExperiment(),

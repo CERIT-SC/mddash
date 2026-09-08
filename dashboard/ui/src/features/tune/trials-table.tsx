@@ -47,8 +47,7 @@ type TrialsTableProps = {
 export function TrialsTableHeader({ engine, pickColumn = true }: { engine: Engine; pickColumn?: boolean }) {
   return (
     <TableHeader>
-      {/* Primary band matches the pre-rewrite TunerTable header; hover stays
-          primary so the DS row hover doesn't wash it out. */}
+      {/* Hover stays primary so the DS row hover doesn't wash the band out. */}
       <TableRow className="bg-primary hover:bg-primary">
         {pickColumn && (
           <TableHead className="text-primary-foreground w-10">
