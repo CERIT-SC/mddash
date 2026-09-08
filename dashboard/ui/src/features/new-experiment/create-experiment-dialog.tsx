@@ -359,14 +359,24 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
                 />
                 {isHttpsRepo && (
                   <div className="space-y-2">
-                    <button
+                    <Button
                       type="button"
+                      variant="link"
+                      size="sm"
                       onClick={() => setTokenOpen((prev) => !prev)}
                       aria-expanded={tokenOpen}
-                      className="inline-flex items-center gap-1.5 text-[#0000EE] hover:text-[#000099] underline text-sm transition-colors"
+                      className="h-auto px-0! text-sm underline hover:text-primary/70"
                     >
-                      {tokenOpen ? (<><X size={14} aria-hidden="true" /> Remove access token</>) : (<><Key size={14} aria-hidden="true" /> Add access token</>)}
-                    </button>
+                      {tokenOpen ? (
+                        <>
+                          <X size={14} strokeWidth={2.5} aria-hidden="true" /> Remove access token
+                        </>
+                      ) : (
+                        <>
+                          <Key size={14} strokeWidth={2.5} aria-hidden="true" /> Add access token
+                        </>
+                      )}
+                    </Button>
                     {tokenOpen && (
                       <FormField
                         control={form.control}
