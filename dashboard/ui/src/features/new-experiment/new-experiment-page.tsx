@@ -6,9 +6,10 @@ import { asEngineFilter, ENGINE_LABELS, ENGINE_ORDER, ENGINE_TAB_VALUES, type En
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Button, H1, H3, Skeleton, Tabs, TabsList, TabsTrigger } from "@e-infra/design-system"
 import { Link } from "@tanstack/react-router"
-import { ArrowLeft, SlidersHorizontal } from "lucide-react"
+import { ArrowLeft } from "lucide-react"
 
 import { CreateExperimentDialog } from "./create-experiment-dialog"
+import { CustomWorkflowIcon } from "./module-icon"
 import { WorkflowCard } from "./workflow-card"
 
 export type NewExperimentSearch = { engine?: EngineFilter }
@@ -65,7 +66,7 @@ export function NewExperimentPage({ search, onSearchChange, defaultNotebooksRepo
         </Tabs>
         {/* Custom needs no catalog data, so it stays available on fetch failure. */}
         <Button variant="outline" onClick={() => setSelection("custom")}>
-          <SlidersHorizontal size={16} /> Use custom workflow
+          <CustomWorkflowIcon size={16} /> Use custom workflow
         </Button>
       </div>
 
