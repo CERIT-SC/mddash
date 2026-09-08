@@ -100,12 +100,12 @@ afterEach(() => {
 })
 
 describe("PublishStep MDRepo connection", () => {
-  it("offers Connect to MDRepo when unauthenticated", async () => {
+  it("offers Connect to MDRepo and folds the sign-in note into the info box when unauthenticated", async () => {
     mockPublish({ authenticated: false })
     renderPublish()
 
-    expect(await screen.findByText(/one-time authorization using your e-INFRA CZ account/)).toBeInTheDocument()
-    expect(screen.getByText(/redirected to MDRepo to complete the metadata/)).toBeInTheDocument()
+    expect(await screen.findByRole("alert")).toHaveTextContent(/sign in with your e-INFRA CZ account/)
+    expect(screen.getAllByRole("alert")).toHaveLength(1)
 
     const connect = screen.getByRole("link", { name: /connect to mdrepo/i })
     expect(connect.getAttribute("href")).toContain("/dash/api/mdrepo/auth?")
@@ -188,7 +188,29 @@ describe("PublishStep upload states", () => {
     expect(await screen.findByText("Uploading files… (2/5)")).toBeInTheDocument()
   })
 
-  it("warns when a draft exists but no upload state is readable yet", async () => {
+  it("shows only the sign-in message in the draft banner when unauthenticated", async () => {
+    mockPublish({
+      authenticated: false,
+      upload: uploadStatus({
+        upload_state: null,
+        total_files: 0,
+        completed_files: 0,
+        total_bytes: 0,
+        completed_bytes: 0,
+      }),
+    })
+    renderPublish({ experiment: experiment("exp1", { mdrepo_id: "rec1", mdrepo_record_url: DRAFT_URL }) })
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("A draft exists in MDRepo")
+    const alert = screen.getByRole("alert")
+    expect(alert).toHaveTextContent(/sign in with your e-INFRA CZ account/)
+    // One message, not the state copy plus a stacked hint.
+    expect(alert).not.toHaveTextContent(/retry the upload/)
+    expect(screen.getAllByRole("alert")).toHaveLength(1)
+    expect(screen.getByRole("link", { name: /connect to mdrepo/i })).toBeInTheDocument()
+  })
+
+  it("shows an info banner when a draft exists but no upload state is readable yet", async () => {
     mockPublish({
       upload: uploadStatus({
         upload_state: null,
@@ -210,7 +232,8 @@ describe("PublishStep publication targets", () => {
     mockPublish()
     renderPublish({ experiment: experiment("exp1", { engine: "AMBER" }) })
 
-    expect(await screen.findByText(/redirected to MDRepo to complete the metadata/)).toBeInTheDocument()
+    // Publishing stays on this page: background upload, draft opens in a new tab.
+    expect(await screen.findByText(/new tab/)).toBeInTheDocument()
     expect(screen.queryByRole("combobox", { name: "Publication target" })).not.toBeInTheDocument()
   })
 
