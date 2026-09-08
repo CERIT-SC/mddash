@@ -289,6 +289,67 @@ describe("ExperimentWizard", () => {
     expect(screen.getByRole("button", { name: "Go to section 5: Publish" })).toBeDisabled()
   })
 
+  it("locks Publish while the viewed simulation is live, even with can_publish", async () => {
+    const liveAlpha = simulation(alpha.simulation_path, { name: "Alpha", step: 3, status: "simulating", live: true })
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([liveAlpha]),
+      "/experiments/exp1": okExperiment({ can_publish: true }),
+      [`/experiments/exp1/gmx/${liveAlpha.simulation_path}`]: runningGmxJob(liveAlpha.simulation_path),
+    })
+    renderWizard({ step: 3 })
+
+    expect(await screen.findByRole("button", { name: "Go to section 4: Analyze" })).toHaveAttribute(
+      "aria-current",
+      "step"
+    )
+    expect(screen.getByRole("button", { name: "Go to section 5: Publish" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled()
+  })
+
+  it("keeps Publish open on a finished simulation while another one runs", async () => {
+    const finished = simulation(alpha.simulation_path, { name: "Alpha", step: 3, status: "analyzing" })
+    const running = simulation(beta.simulation_path, { name: "Beta", step: 3, status: "simulating", live: true })
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([finished, running]),
+      "/experiments/exp1": okExperiment({ can_publish: true, latest_simulation_path: finished.simulation_path }),
+    })
+    renderWizard({})
+
+    expect(await screen.findByRole("button", { name: "Go to section 4: Analyze" })).toHaveAttribute(
+      "aria-current",
+      "step"
+    )
+    expect(screen.getByRole("button", { name: "Go to section 5: Publish" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled()
+  })
+
+  it("refetches the experiment once the last live simulation settles, unlocking Publish", async () => {
+    vi.useFakeTimers()
+    const state = {
+      sims: [simulation(alpha.simulation_path, { name: "Alpha", step: 3, status: "simulating", live: true })],
+      exp: experiment("exp1", { can_publish: false }),
+    }
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL): Promise<Response> => {
+      const url = requestUrl(input)
+      if (url.endsWith("/experiments/exp1/simulations")) return Response.json([...state.sims])
+      if (url.endsWith("/experiments/exp1")) return Response.json(state.exp)
+      return new Response(null, { status: 404 })
+    })
+    renderWizard({})
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(screen.getByRole("button", { name: "Go to section 5: Publish" })).toBeDisabled()
+
+    state.sims = [simulation(alpha.simulation_path, { name: "Alpha", step: 3, status: "analyzing" })]
+    state.exp = experiment("exp1", { can_publish: true })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_100)
+    })
+
+    expect(screen.getByRole("button", { name: "Go to section 5: Publish" })).toBeEnabled()
+  })
+
   it("unlocks Publish experiment-wide once the API reports can_publish", async () => {
     mockApi({
       "/experiments/exp1/simulations": Response.json([alpha]),
