@@ -1,6 +1,6 @@
 import type { NotebookModuleCategory } from "@/api/generated/models"
 import { cn } from "@e-infra/design-system"
-import { Atom, Dna, Hexagon, Layers, Link2, SlidersHorizontal, Spline, Wheat, type LucideIcon } from "lucide-react"
+import { Atom, Dna, GitFork, Hexagon, Layers, Link2, Spline, Wheat, type LucideIcon } from "lucide-react"
 
 /** Glyph + filled tile per category; pairs mirror the experiment card's step tiles. */
 const CATEGORY_PRESENTATION: Record<NotebookModuleCategory, { Icon: LucideIcon; tileClass: string }> = {
@@ -32,6 +32,7 @@ export function ModuleIcon({ category, size = 20 }: { category: NotebookModuleCa
   return <Icon size={size} aria-hidden="true" />
 }
 
+/** The user's own git repository of notebooks, as opposed to a curated workflow. */
 export function CustomWorkflowIcon({ size = 20 }: { size?: number }) {
-  return <SlidersHorizontal size={size} aria-hidden="true" />
+  return <GitFork size={size} aria-hidden="true" />
 }

@@ -182,12 +182,13 @@ class Experiment(db.Model):  # type: ignore
     @property
     def can_publish(self) -> bool:
         """
-        Whether the Publish wizard step is unlocked.
+        Whether the experiment has anything publishable.
 
         Publishing is experiment-level (the MDRepo upload covers the whole
         experiment), so this lives here rather than on a simulation: unlocked
         once a draft/record exists, or once any run finished anywhere in the
-        experiment.
+        experiment. The wizard additionally holds Publish while the SELECTED
+        simulation is live — a per-simulation concern this flag can't express.
         """
         return self.mdrepo_id is not None or any(job.status == JobStatus.FINISHED for job in self.simulation_jobs)
 

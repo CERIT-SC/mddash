@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 
-import { Link, Muted, Small } from "@e-infra/design-system"
-import { Clock, type LucideIcon } from "lucide-react"
+import { Badge, Link, Muted, Small } from "@e-infra/design-system"
+import { ArrowRight, Clock, type LucideIcon } from "lucide-react"
 
 /** Shared hero chrome for the hub status pages (home, spawn, spawn_pending, stop_pending, not_running). */
 
@@ -40,6 +40,27 @@ export function HeroHeading({ children, ariaLive = false }: { children: ReactNod
     <div aria-live={ariaLive ? "polite" : undefined} className="flex flex-col gap-2">
       {children}
     </div>
+  )
+}
+
+/** Ordered workflow chips; dashed last step = publish is upcoming. */
+const PIPELINE_STEPS = ["Setup", "Tune", "Run", "Analyze", "Publish"] as const
+
+export function PipelineSteps() {
+  return (
+    <ol aria-label="MDDash workflow" className="flex flex-wrap items-center justify-center gap-2">
+      {PIPELINE_STEPS.map((step, i) => {
+        const upcoming = i === PIPELINE_STEPS.length - 1
+        return (
+          <li key={step} className="flex items-center gap-2">
+            {i > 0 ? <ArrowRight size={14} aria-hidden="true" className="text-text-muted" /> : null}
+            <Badge variant="outline" className={`px-3 py-1 text-sm ${upcoming ? "text-text-muted border-dashed" : ""}`}>
+              {step}
+            </Badge>
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 

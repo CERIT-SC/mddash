@@ -70,11 +70,8 @@ type AnalysisPanelProps = {
   pollMs?: number
 }
 
-/**
- * Analysis picker + runner: chooses an analysis, tracks its job, and renders
- * the produced graph. Empty, running, failed, and no-data states are durable
- * (never toast-only), matching the run step's model.
- */
+/** Analysis picker + runner: choose an analysis, track its job, render its graph.
+ * Empty, running, failed, and no-data states are durable — never toast-only. */
 export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: AnalysisPanelProps) {
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [showLogs, setShowLogs] = useState(false)

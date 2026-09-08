@@ -143,10 +143,8 @@ function FilesSourceDialog({
   )
 }
 
-/**
- * Title-row source item: repo → outbound link, pdb/upload → info dialog.
- * Hidden for legacy experiments without a source.
- */
+/** Title-row source item: repo links out, pdb/upload open a dialog.
+ * Hidden for legacy experiments without a source. */
 export function SourceItem({ experiment }: { experiment: Experiment }) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const source = experiment.source

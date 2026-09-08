@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react"
+
 import { useGetExperiment, useListSimulations } from "@/api/generated/client"
 import type { Simulation } from "@/api/generated/models"
 import { AnalyzeStep } from "@/features/analyze"
@@ -36,7 +38,7 @@ const pollWhileAnyLive =
 export type WizardSearch = {
   /** Selected simulation tab — simulation_path minus the ".simulation.json" suffix (may still contain slashes). */
   simulation?: string
-  /** Current wizard step (0-based); defaults to the simulation's own progress. */
+  /** Current wizard step (0-based); defaults to the simulation's progress — Setup→Tune always waits for a click. */
   step?: number
   /** Setup source view; only the non-default "manual" is worth a param. */
   source?: SetupSource
@@ -54,12 +56,21 @@ type ExperimentWizardProps = {
 
 export function ExperimentWizard({ experimentId, search, onSearchChange }: ExperimentWizardProps) {
   const experiment = useGetExperiment(experimentId, { query: { retry: false } })
-  // The poll is the wizard heartbeat — the step ladder advances server-side when
-  // a run finishes and the stepper must follow. Each refetch scans manifests +
-  // job states, so it pauses once no simulation has work in flight.
+  // The wizard heartbeat: the step ladder advances server-side, so the stepper
+  // must follow. Refetches scan manifests + job states, so it pauses when idle.
   const simulations = useListSimulations(experimentId, {
     query: { retry: false, refetchInterval: pollWhileAnyLive(SIMULATIONS_POLL_MS) },
   })
+
+  // can_publish flips when a run finishes; this query doesn't poll — refetch
+  // once on the live→settled transition so the Publish unlock lands.
+  const anyLive = simulations.data?.status === 200 && simulations.data.data.some((simulation) => simulation.live)
+  const wasLive = useRef(false)
+  const refetchExperiment = experiment.refetch
+  useEffect(() => {
+    if (wasLive.current && !anyLive) void refetchExperiment()
+    wasLive.current = anyLive
+  }, [anyLive, refetchExperiment])
 
   if (experiment.isError) {
     return <ApiErrorAlert error={experiment.error} onRetry={() => void experiment.refetch()} />
@@ -68,8 +79,8 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
     return <ApiErrorAlert error={simulations.error} onRetry={() => void simulations.refetch()} />
   }
 
-  // The title and the default tab both come from the experiment, so the whole
-  // body waits on both queries rather than re-resolving the tab mid-paint.
+  // The default tab comes from the experiment, so the body waits on both
+  // queries instead of re-resolving the tab mid-paint.
   const data = experiment.data?.status === 200 ? experiment.data.data : undefined
   const list = simulations.data?.status === 200 ? simulations.data.data : undefined
   if (data === undefined || list === undefined) {
@@ -93,20 +104,22 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         ? list.find((candidate) => candidate.simulation_path === data.latest_simulation_path)
         : undefined) ??
       list[0])
-  // The API owns phase semantics: step is already the stepper index (Setup 0,
-  // Tune 1, Run 2, Analyze 3), consumed directly with no decode. can_publish
-  // unlocks ONLY the experiment-level Publish marker. Create mode: Setup.
+  // The API owns phase semantics: step is already the stepper index, consumed
+  // with no decode; can_publish unlocks only the experiment-level Publish marker.
   const ownStep = selected === undefined ? 0 : selected.step
   const maxStep = selected === undefined ? 0 : ownStep
-  // Content gates like the header: a URL step past the unlocks (stale Publish
-  // bookmark) falls back to the simulation's own progress, never locked UI.
-  const requestedStep = search.step ?? ownStep
-  const unlocked = requestedStep <= maxStep || ((data.can_publish ?? false) && requestedStep === LAST_STEP)
+  // Publish waits for the viewed simulation to settle; other sims may still run.
+  const publishUnlocked = (data.can_publish ?? false) && !(selected?.live ?? false)
+  // A URL step past the unlocks (stale bookmark) falls back to the simulation's
+  // own progress — never locked UI.
+  // The ladder flips to Tune while the user is in the notebook; the implicit view
+  // (no URL step) holds Setup until they click through; later phases track the ladder.
+  const requestedStep = search.step ?? (ownStep > 1 ? ownStep : 0)
+  const unlocked = requestedStep <= maxStep || (publishUnlocked && requestedStep === LAST_STEP)
   const step = selected === undefined ? 0 : unlocked ? requestedStep : ownStep
   const tab = selected?.simulation_path ?? CREATE_TAB
 
-  // Setup/Tune URL params ride along on every navigation so remounts keep user
-  // context; only a full reset drops them.
+  // Setup/Tune params ride along on every navigation so remounts keep user context.
   const updateSearch = (next: WizardSearch) =>
     onSearchChange({
       source: search.source,
@@ -119,9 +132,8 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
           : simulationParam(next.simulation),
     })
 
-  // The five steps are StepperContent's direct children in index order (Setup=0
-  // .. Publish=4). Create mode keeps only Setup; the rest render once a
-  // simulation exists.
+  // Array order must match STEPS — StepperContent renders children by index;
+  // create mode keeps only Setup.
   const steps = [
     <SetupStep
       key="setup"
@@ -166,7 +178,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
             experimentId={experimentId}
             engine={data.engine}
             simulation={selected}
-            canPublish={data.can_publish ?? false}
+            canPublish={publishUnlocked}
             onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
           />,
           <PublishStep
@@ -191,8 +203,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
           value={tab}
           onValueChange={(simulation) => updateSearch({ simulation })}
           onDeleted={(deleted) => {
-            // The URL still points at the deleted manifest; drop the selection so
-            // the refreshed list falls back to its default tab.
+            // The URL still points at the deleted manifest; {} resets to the default tab.
             if (
               search.simulation !== undefined &&
               simulationParam(search.simulation) === simulationParam(deleted.simulation_path)
@@ -201,10 +212,9 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
           }}
         />
 
-        {/* Shares its top edge with the tab boxes — restyle them together. The
-            panel stays on bg-background (like DS dialogs): TabsList, Input and
-            TableRow all paint bg-surface and only stay visible on the canvas
-            color; on a bg-surface card they blend into the card face. */}
+        {/* bg-background like DS dialogs: TabsList, Input and TableRow paint
+            bg-surface and only stay visible on the canvas color; restyle with
+            the tab boxes. */}
         {/* box-shadow over drop-shadow: filter would confine molstar's expanded (fixed) viewport to this card. */}
         <Card className="border-border bg-background rounded-t-none border py-0 shadow-[0_4px_4px_rgba(0,0,0,0.15)] drop-shadow-none hover:drop-shadow-none">
           <CardContent className="pt-6 pb-6 md:pb-8">
@@ -219,7 +229,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
                 simulation={selected}
                 steps={STEPS}
                 maxStep={maxStep}
-                unlockedIndexes={data.can_publish ? [LAST_STEP] : []}
+                unlockedIndexes={publishUnlocked ? [LAST_STEP] : []}
                 pollMs={SIMULATIONS_POLL_MS}
               />
               <Separator className="mt-4" />

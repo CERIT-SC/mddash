@@ -152,6 +152,10 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
 
   const recordUrl = upload?.draft_url ?? experiment.mdrepo_record_url ?? null
   const failureReason = uploadFailureReason(upload?.reason)
+  // Unauthenticated: sign-in replaces each banner's state copy (OAuth round trip back here; metadata is a later step).
+  const description = authenticated
+    ? null
+    : "You'll be redirected to MDRepo to sign in with your e-INFRA CZ account, then returned here to publish."
   // Captured at render; the wizard URL (simulation + step) round-trips through the
   // OAuth callback. Must stay a relative path — the API rejects absolute return_urls.
   const authHref = getAuthorizeMDRepoUrl({ return_url: `${window.location.pathname}${window.location.search}` })
@@ -205,15 +209,14 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
         <Alert variant="success">
           <AlertTitle>Upload complete</AlertTitle>
           <AlertDescription>
-            Your experiment data has been uploaded to the MDRepo draft. Open MDRepo to complete the metadata and
-            finalize the publication.
+            {description ?? "Open MDRepo to complete the metadata and finalize the publication."}
           </AlertDescription>
         </Alert>
       ) : failed ? (
         <Alert variant="error" role="alert">
           <AlertTitle>Upload failed</AlertTitle>
           <AlertDescription>
-            <p>Your draft and already-uploaded files are preserved — retry the upload to continue.</p>
+            <p>Your draft and uploaded files are preserved. {description ?? "Retry the upload to continue."}</p>
             {failureReason !== null && <p className="mt-1">{failureReason}</p>}
           </AlertDescription>
         </Alert>
@@ -221,21 +224,20 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
         <InfoBanner>
           <AlertTitle>Upload in progress</AlertTitle>
           <AlertDescription>
-            Files are being uploaded to MDRepo in the background. The draft is already openable in MDRepo, but
-            incomplete until the upload finishes.
+            {description ?? "The MDRepo draft is available, but incomplete until the upload finishes."}
           </AlertDescription>
         </InfoBanner>
       ) : hasDraft ? (
-        <Alert variant="warning">
+        <InfoBanner>
           <AlertTitle>A draft exists in MDRepo</AlertTitle>
-          <AlertDescription>View the draft in MDRepo, or retry the upload to send the files again.</AlertDescription>
-        </Alert>
+          <AlertDescription>{description ?? "View the draft in MDRepo, or retry the upload."}</AlertDescription>
+        </InfoBanner>
       ) : (
         <InfoBanner>
           <AlertTitle>Publish to MDRepo</AlertTitle>
           <AlertDescription>
-            After clicking the button, you&apos;ll be redirected to MDRepo to complete the metadata and finalize the
-            publication. Your files will be uploaded in the background.
+            {description ??
+              "Files upload in the background. The MDRepo draft opens in a new tab, where you complete the metadata and finalize the publication."}
           </AlertDescription>
         </InfoBanner>
       )}
@@ -256,22 +258,11 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
         </div>
       )}
 
-      {!authenticated && (
-        <Alert variant="warning">
-          <AlertTitle>MDRepo connection required</AlertTitle>
-          <AlertDescription>
-            You need to authenticate with MDRepo to{" "}
-            {hasDraft ? "view or edit the published experiment" : "publish your experiment"}. This is a one-time
-            authorization using your e-INFRA CZ account.
-          </AlertDescription>
-        </Alert>
-      )}
-
       {active && upload !== undefined && (
         <div className="space-y-2">
           <p className="text-sm font-medium">
             {uploadState === "queued"
-              ? "Upload queued — waiting for the upload job…"
+              ? "Upload queued. Waiting for the upload job…"
               : `Uploading files… (${upload.completed_files}/${upload.total_files})`}
           </p>
           {upload.total_files > 0 && <Progress value={(upload.completed_files / upload.total_files) * 100} />}
@@ -361,9 +352,8 @@ function MdpositPublish({ experiment, simulation, onStepChange }: MdpositPublish
   const handoff: MDPositPublication | undefined = prepare.data?.status === 201 ? prepare.data.data : undefined
   const unavailableReason = mdpositUnavailableReason(simulation)
 
-  // The Stepper doesn't remount this subtree on tab switch, so drop the stale
-  // handoff of the previously selected simulation before preparing a new one.
-  // reset is stable across renders, so the effect re-runs only on sim change.
+  // No remount on tab switch: reset the previous simulation's stale handoff
+  // before preparing a new one (reset is stable — re-runs only on sim change).
   const { reset } = prepare
   useEffect(() => {
     reset()

@@ -120,15 +120,15 @@ describe("CreateExperimentDialog", () => {
     await user.type(screen.getByLabelText(/pdb id or url/i), "1AKI")
 
     // token section is only meaningful for https — cleartext urls hide it
-    expect(screen.getByText(/private repository/i)).toBeVisible()
+    expect(screen.getByRole("button", { name: /add access token/i })).toBeVisible()
     const repo = screen.getByLabelText(/notebooks repository/i)
     await user.clear(repo)
     await user.type(repo, "http://git.example.test/lab/notebooks.git")
-    expect(screen.queryByText(/private repository/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /add access token/i })).not.toBeInTheDocument()
 
     await user.clear(repo)
     await user.type(repo, "https://example.test/notebooks.git")
-    await user.click(screen.getByText(/private repository/i))
+    await user.click(screen.getByRole("button", { name: /add access token/i }))
     await user.type(screen.getByLabelText(/git access token/i), "ghp_secret")
     await user.click(screen.getByRole("button", { name: "Create Experiment" }))
     expect(await waitForSubmit(getSubmitted)).toEqual(expect.arrayContaining([["access-token", "ghp_secret"]]))
@@ -143,14 +143,14 @@ describe("CreateExperimentDialog", () => {
     await user.type(screen.getByLabelText(/pdb id or url/i), "1AKI")
 
     // token entered for the default https repo…
-    await user.click(screen.getByText(/private repository/i))
+    await user.click(screen.getByRole("button", { name: /add access token/i }))
     await user.type(screen.getByLabelText(/git access token/i), "ghp_secret")
 
     // …then the repo switches to ssh: the field hides and the stale value must not leak
     const repo = screen.getByLabelText(/notebooks repository/i)
     await user.clear(repo)
     await user.type(repo, "git@github.com:lab/notebooks.git")
-    expect(screen.queryByText(/private repository/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /add access token/i })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "Create Experiment" }))
     const submitted = await waitForSubmit(getSubmitted)

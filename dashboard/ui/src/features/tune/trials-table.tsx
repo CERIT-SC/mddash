@@ -18,7 +18,7 @@ import { FileText, Leaf, LoaderCircle, Zap } from "lucide-react"
 
 import { formatCost, formatHardware, selectable, sortTrials, suggest, type TrialRow } from "./tuned-trials"
 
-const COLUMN_COUNT = 9
+const COLUMN_COUNT = 10
 
 const GMX_HARDWARE: [string, string][] = [
   ["PME", "Where long-range electrostatics (Particle Mesh Ewald) are computed."],
@@ -47,8 +47,7 @@ type TrialsTableProps = {
 export function TrialsTableHeader({ engine, pickColumn = true }: { engine: Engine; pickColumn?: boolean }) {
   return (
     <TableHeader>
-      {/* Primary band matches the pre-rewrite TunerTable header; hover stays
-          primary so the DS row hover doesn't wash it out. */}
+      {/* Hover stays primary so the DS row hover doesn't wash the band out. */}
       <TableRow className="bg-primary hover:bg-primary">
         {pickColumn && (
           <TableHead className="text-primary-foreground w-10">
@@ -72,9 +71,10 @@ export function TrialsTableHeader({ engine, pickColumn = true }: { engine: Engin
           hint="Estimated compute cost for the full production simulation with this configuration."
           numeric
         />
-        {/* Hardware config grouped apart from the outcome columns by a divider. */}
-        {(engine === Engine.AMBER ? AMBER_HARDWARE : GMX_HARDWARE).map(([label, hint], index) => (
-          <HintedHead key={label} label={label} hint={hint} separated={index === 0} />
+        {/* Empty column grouping the hardware config apart from the outcome columns. */}
+        <TableHead aria-hidden className="w-28 p-0" />
+        {(engine === Engine.AMBER ? AMBER_HARDWARE : GMX_HARDWARE).map(([label, hint]) => (
+          <HintedHead key={label} label={label} hint={hint} />
         ))}
         <HintedHead label="MPI ranks" hint="Number of parallel MPI ranks." numeric />
         <HintedHead label="Threads" hint="CPU threads per MPI rank." numeric />
@@ -142,19 +142,12 @@ export function TrialsTable({ engine, rows, value, onValueChange, live, onShowLo
   )
 }
 
-type HintedHeadProps = { label: string; hint: string; separated?: boolean; numeric?: boolean }
+type HintedHeadProps = { label: string; hint: string; numeric?: boolean }
 
 /** aria-label keeps the hint's text out of the accessible name; w-px contracts the column to content. */
-function HintedHead({ label, hint, separated = false, numeric = false }: HintedHeadProps) {
+function HintedHead({ label, hint, numeric = false }: HintedHeadProps) {
   return (
-    <TableHead
-      aria-label={label}
-      className={cn(
-        "text-primary-foreground w-px",
-        separated && "border-primary-foreground/30 border-l pl-6",
-        numeric && "text-right"
-      )}
-    >
+    <TableHead aria-label={label} className={cn("text-primary-foreground w-px", numeric && "text-right")}>
       <span className="inline-flex items-center gap-1 whitespace-nowrap">
         {label}
         {/* Muted gray would die on the primary band; inherit its foreground. */}
@@ -169,14 +162,9 @@ function HintedHead({ label, hint, separated = false, numeric = false }: HintedH
 function GroupBand({ label }: { label: string }) {
   return (
     <TableRow className="bg-surface hover:bg-surface">
-      {/* Two cells so the hardware divider runs unbroken through the band. */}
-      <TableCell
-        colSpan={COLUMN_COUNT - 4}
-        className="text-text-muted py-2 text-xs font-semibold tracking-wide uppercase"
-      >
+      <TableCell colSpan={COLUMN_COUNT} className="text-text-muted py-2 text-xs font-semibold tracking-wide uppercase">
         {label}
       </TableCell>
-      <TableCell colSpan={4} className="border-border border-l" />
     </TableRow>
   )
 }
@@ -202,17 +190,16 @@ export function TrialRowCells({ engine, row, fastest, eco, onShowLogs }: TrialRo
         {row.estTimeHours === null ? "—" : formatTime(row.estTimeHours * 3600)}
       </TableCell>
       <TableCell className="text-right tabular-nums">{row.estCost === null ? "—" : formatCost(row.estCost)}</TableCell>
+      <TableCell aria-hidden className="w-28 p-0" />
       {/* Hardware cells are confirmation detail — muted so badges and outcomes win the eye. */}
       {engine === Engine.AMBER ? (
         <>
-          <TableCell className="text-text-muted border-border border-l pl-6 whitespace-nowrap">
-            {row.binary ?? "—"}
-          </TableCell>
+          <TableCell className="text-text-muted whitespace-nowrap">{row.binary ?? "—"}</TableCell>
           <TableCell className="text-text-muted">{row.ewald ?? "—"}</TableCell>
         </>
       ) : (
         <>
-          <TableCell className="text-text-muted border-border border-l pl-6">{formatHardware(row.pme)}</TableCell>
+          <TableCell className="text-text-muted">{formatHardware(row.pme)}</TableCell>
           <TableCell className="text-text-muted">{formatHardware(row.nb)}</TableCell>
         </>
       )}

@@ -60,14 +60,16 @@ def _create_job_raw(manifest: dict) -> None:
 
         experiment_id = manifest["metadata"]["labels"][EXPERIMENT_LABEL]
         job_name = manifest["metadata"]["name"]
-    except (KeyError, ImportError):
+        args = manifest["spec"]["template"]["spec"]["containers"][0]["args"]
+        mdrepo_id = args[args.index("--mdrepo-id") + 1]
+    except (KeyError, IndexError, ValueError, ImportError):
         return
 
     demo_state.upload_jobs[job_name] = experiment_id
-    threading.Thread(target=_finish_upload_job, args=(job_name, experiment_id), daemon=True).start()
+    threading.Thread(target=_finish_upload_job, args=(job_name, experiment_id, mdrepo_id), daemon=True).start()
 
 
-def _finish_upload_job(job_name: str, experiment_id: str) -> None:
+def _finish_upload_job(job_name: str, experiment_id: str, mdrepo_id: str) -> None:
     from upload.status import UploadStatus, write_status  # ruff:ignore[import-outside-top-level]
 
     time.sleep(UPLOAD_JOB_DURATION_SEC)
@@ -91,6 +93,13 @@ def _finish_upload_job(job_name: str, experiment_id: str) -> None:
         experiment_id,
         DATA_DIR,
     )
+
+    # Stands in for MDRepo-UI finalization, which the demo lacks; the cache
+    # bust makes the next serialization re-sync at once, not after the TTL.
+    from cache import mdrepo_status_cache  # ruff:ignore[import-outside-top-level]
+
+    demo_state.mdrepo_records[mdrepo_id] = True
+    mdrepo_status_cache.clear()
 
 
 def _read_upload_job(name: str) -> SimpleNamespace | None:

@@ -170,7 +170,6 @@ export function TuneStep({
     },
   })
 
-  // The Run Simulation footer submits the production job, then navigates to Run.
   // Engine-picked hook pair; the request body matches the engine via toJobRequest.
   const gmxSubmit = useSubmitGromacsJob()
   const amberSubmit = useSubmitAmberJob()

@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import { Button, H1, Muted } from "@e-infra/design-system"
+import { Button, H1, Lead, Muted } from "@e-infra/design-system"
 import { Atom, ExternalLink, Play, Square } from "lucide-react"
 import { toast } from "sonner"
 
-import { HeroHeading, PageHero, START_HINT, StatusIcon } from "../components/Hero"
+import { HeroHeading, PageHero, PipelineSteps, START_HINT, StatusIcon } from "../components/Hero"
 import { AuthedLayout } from "../components/Layouts"
 import { HubApi, type HubUserModel } from "../lib/api"
 import { getAppConfig } from "../lib/config"
@@ -102,16 +102,22 @@ export function HomePage() {
         <HeroHeading>
           <H1>
             {status === "running" ? "Your server is running" : null}
-            {status === "stopped" ? "Your server is offline" : null}
+            {status === "stopped" ? "A Virtual Research Environment for Molecular Dynamics" : null}
             {status === "starting" ? "Starting your server…" : null}
             {status === "stopping" ? "Stopping your server…" : null}
           </H1>
-          <Muted className="text-base">
-            {status === "running" ? "Your personal notebook environment is up." : null}
-            {status === "stopped" ? "Your personal notebook server is not running." : null}
-            {status === "starting" ? "You will be redirected automatically when it's ready for you." : null}
-            {status === "stopping" ? "You can start it again once it has finished stopping." : null}
-          </Muted>
+          {status === "stopped" ? (
+            <Lead className="mx-auto max-w-md">
+              MDDash lets you prepare, tune, run, analyze, and publish MD simulations — all in the browser, without
+              touching the command line.
+            </Lead>
+          ) : (
+            <Muted className="text-base">
+              {status === "running" ? "Your personal notebook environment is up." : null}
+              {status === "starting" ? "You will be redirected automatically when it's ready for you." : null}
+              {status === "stopping" ? "You can start it again once it has finished stopping." : null}
+            </Muted>
+          )}
         </HeroHeading>
 
         {status === "running" ? (
@@ -137,6 +143,7 @@ export function HomePage() {
 
         {status === "stopped" ? (
           <>
+            <PipelineSteps />
             <Button size="lg" onClick={start} disabled={busy}>
               <Play size={16} />
               Start my server

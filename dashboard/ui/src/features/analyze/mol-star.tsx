@@ -181,13 +181,8 @@ async function loadSingleStructure(
   }
 }
 
-/**
- * Load a structure/topology + coordinates pair as a trajectory.
- * Mirrors MolStar's own LoadTrajectory action:
- * - Parses structure via dataFormats registry (handles both trajectory and topology formats)
- * - Parses coordinates via dataFormats registry (handles all coordinate formats)
- * - Combines them with TrajectoryFromModelAndCoordinates
- */
+/** Load a structure/topology + coordinates pair as a trajectory —
+ * mirrors MolStar's own LoadTrajectory action. */
 async function loadStructureWithCoordinates(
   plugin: PluginUIContext,
   options: {
@@ -202,7 +197,6 @@ async function loadStructureWithCoordinates(
   const structureName = fileNameFromUrl(structureUrl)
   const coordsName = fileNameFromUrl(coordsUrl)
 
-  // Download and parse structure/topology
   const structureIsBinary = !["pdb", "gro", "psf", "prmtop", "top"].includes(structureFormat)
   const structureData = await plugin.builders.data.download(
     { url: structureUrl, isBinary: structureIsBinary },
@@ -231,7 +225,6 @@ async function loadStructureWithCoordinates(
     throw new Error(`Failed to create model from ${structureFormat}`)
   }
 
-  // Download and parse coordinates via dataFormats registry
   const coordsProvider = plugin.dataFormats.get(coordsFormat)
   if (!coordsProvider) {
     throw new Error(`Unsupported coordinates format: ${coordsFormat}`)
@@ -252,7 +245,6 @@ async function loadStructureWithCoordinates(
     throw new Error(`Failed to parse coordinates file as ${coordsFormat}`)
   }
 
-  // Combine structure/topology model with coordinates
   try {
     const trajectory = await state
       .build()

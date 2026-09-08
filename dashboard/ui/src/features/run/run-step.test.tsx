@@ -200,6 +200,18 @@ describe("RunStep running job", () => {
     expect(await screen.findByText("50%")).toBeInTheDocument()
   })
 
+  it("enables Analyze mid-run (partial trajectories are analyzable)", async () => {
+    mockRun()
+    const spies = renderRun()
+
+    await screen.findByText("20%")
+    const button = screen.getByRole("button", { name: /analyze/i })
+    expect(button).toBeEnabled()
+
+    await userEvent.click(button)
+    expect(spies.onStepChange).toHaveBeenCalledWith(3)
+  })
+
   it("shows estimates and badges from the tuner trial matching the job config", async () => {
     const rerunOfSameConfig: TunerTrial = { ...FAST_TRIAL, id: "t1b", status: "RUNNING", performance: null }
     mockRun({ trials: [rerunOfSameConfig, FAST_TRIAL, ECO_TRIAL] })
@@ -271,6 +283,7 @@ describe("RunStep error job", () => {
     expect(await screen.findByText("Failed")).toBeInTheDocument()
     expect(await screen.findByText("simulation exploded")).toBeInTheDocument()
     expect(calls.some((call) => call.url.includes("type=stderr"))).toBe(true)
+    expect(screen.getByRole("button", { name: /analyze/i })).toBeDisabled()
   })
 })
 
