@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from flask import redirect, request, session
-from token_manager import MDREPO_TOKEN_EXPIRES_AT, MDREPO_TOKEN_KEY
+from token_manager import MDREPO_REFRESH_TOKEN_KEY, MDREPO_TOKEN_EXPIRES_AT, MDREPO_TOKEN_KEY
 
 from .mocks import install_all_mocks
 from .seed import seed_data
@@ -71,6 +71,9 @@ def _install_demo_mdrepo_auth(app: "Flask") -> None:
         """
         return_url = request.args.get("return_url", "/")
         session[MDREPO_TOKEN_KEY] = "demo-access-token"
+        # The signed cookie outlives the 1h token; the refresh grant lets
+        # get_valid_token heal expiry via the mocked token endpoint.
+        session[MDREPO_REFRESH_TOKEN_KEY] = "demo-refresh-token"
         session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + 3600
         return redirect(_with_query_param(return_url, "mdrepo_auth", "success"))
 
