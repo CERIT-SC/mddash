@@ -365,7 +365,7 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
                       size="sm"
                       onClick={() => setTokenOpen((prev) => !prev)}
                       aria-expanded={tokenOpen}
-                      className="h-auto px-0! text-sm underline hover:text-primary/70"
+                      className="hover:text-primary/70 h-auto px-0! text-sm underline"
                     >
                       {tokenOpen ? (
                         <>
