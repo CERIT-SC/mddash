@@ -81,11 +81,6 @@ import { toast } from "sonner"
 
 const STEP_LABELS = ["Setup", "Tune", "Run", "Analyze", "Publish"] as const
 
-const IDLE_STATUSES = new Set(["setup", "setup complete", "published"])
-
-// Phases with work in flight get the spinner (matches the mock's live statuses).
-const SPINNING_STATUSES = new Set(["simulating", "tuning", "analyzing"])
-
 // The API step IS the phase index (Setup 0 .. Analyze 3, publish states 4) —
 // consumed directly; the shown counter counts from 1.
 function stepParts(experiment: Experiment): { shownStep: number; stepIndex: number } {
@@ -107,19 +102,20 @@ function subtitle(experiment: Experiment): string {
   return `${experiment.module_name ?? "Custom"} · ${ENGINE_LABELS[experiment.engine]}`
 }
 
-function capitalize(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1)
-}
+// PENDING covers queued — the API has no QUEUED status.
+const ACTIVE_JOB_STATUSES = new Set(["PENDING", "RUNNING"])
 
-function statusLine(experiment: Experiment): string {
-  const status = experiment.status?.trim()
-  if (!status || IDLE_STATUSES.has(status)) return `Active ${relativeTime(experiment.updated_at)}`
-  if (status === "simulating") {
+// Jobs decide the label, not the status string: a publish draft masks running
+// work, and "analyzing" outlives the last analysis job.
+function liveLabel(experiment: Experiment): string | null {
+  if (experiment.simulation_jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.status))) {
     const job = experiment.simulation_jobs.find((candidate) => candidate.status === "RUNNING")
-    const done = typeof job?.nsteps_done === "number" ? job.nsteps_done : undefined
-    if (job?.nsteps && done) return `${capitalize(status)} · ${Math.round((done / job.nsteps) * 100)}%`
+    const done = job?.nsteps_done
+    return job?.nsteps && done ? `Simulating · ${Math.round((done / job.nsteps) * 100)}%` : "Simulating"
   }
-  return capitalize(status)
+  if (experiment.analysis_jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.status))) return "Analyzing"
+  if (experiment.tuner_jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.tuner_status))) return "Tuning"
+  return null
 }
 
 type DetailRowProps = { label: string; value: string }
@@ -231,14 +227,11 @@ function StepDetails({ experiment, stepIndex }: { experiment: Experiment; stepIn
 
 type ExperimentCardProps = { experiment: Experiment }
 
-const DELETE_ACTIVE_STATUSES = new Set(["PENDING", "RUNNING"])
-
-/** Jobs that would be interrupted by a delete (PENDING covers queued; the API has no QUEUED status). */
 function activeJobCount(experiment: Experiment): number {
   return (
-    experiment.simulation_jobs.filter((job) => DELETE_ACTIVE_STATUSES.has(job.status)).length +
-    experiment.tuner_jobs.filter((job) => DELETE_ACTIVE_STATUSES.has(job.tuner_status)).length +
-    experiment.analysis_jobs.filter((job) => DELETE_ACTIVE_STATUSES.has(job.status)).length
+    experiment.simulation_jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length +
+    experiment.tuner_jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.tuner_status)).length +
+    experiment.analysis_jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length
   )
 }
 
@@ -298,6 +291,8 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
   const active = isNotebookActive(experiment.notebook?.status)
   const stopping = stop.isPending || experiment.notebook?.status === "TERMINATING"
   const notebookBusy = start.isPending || stop.isPending
+
+  const label = liveLabel(experiment)
 
   const { shownStep, stepIndex } = stepParts(experiment)
   // The publish step has a distinct icon per state (upload while publishing, award once published).
@@ -405,16 +400,9 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
       <CardContent className="space-y-2">
         <div className="flex items-baseline justify-between gap-2 text-sm">
           <span>{`${STEP_LABELS[stepIndex]} · ${shownStep} of ${STEP_LABELS.length}`}</span>
-          <span
-            className={cn(
-              "flex items-center gap-1.5",
-              SPINNING_STATUSES.has(experiment.status ?? "") ? undefined : "text-text-muted"
-            )}
-          >
-            {SPINNING_STATUSES.has(experiment.status ?? "") && (
-              <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
-            )}
-            {statusLine(experiment)}
+          <span className={cn("flex items-center gap-1.5", label === null ? "text-text-muted" : undefined)}>
+            {label !== null && <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />}
+            {label ?? `Active ${relativeTime(experiment.updated_at)}`}
           </span>
         </div>
         <div

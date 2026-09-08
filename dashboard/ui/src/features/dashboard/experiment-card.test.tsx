@@ -1,4 +1,4 @@
-import type { Experiment } from "@/api/generated/models"
+import type { AnalysisJob, Experiment, SimulationJob } from "@/api/generated/models"
 import { experiment, withNotebook } from "@/shared/fixtures/experiment"
 import { mockFetch, requestUrl } from "@/shared/fixtures/mock-fetch"
 import { mockNotebookQuotaApi } from "@/shared/fixtures/notebook-quota"
@@ -11,6 +11,33 @@ import { ExperimentCard } from "./experiment-card"
 
 // Suite baseline: the card under test is always experiment exp1 named "Analyze".
 const analyze = (overrides: Partial<Experiment> = {}) => experiment("exp1", { name: "Analyze", ...overrides })
+
+function simulationJob(status: SimulationJob["status"], overrides: Partial<SimulationJob> = {}): SimulationJob {
+  return {
+    id: "s1",
+    experiment_id: "exp1",
+    simulation_path: "md.simulation.json",
+    created_at: "2026-08-13T00:00:00Z",
+    engine: "GMX",
+    np: 4,
+    ntomp: 2,
+    status,
+    is_live: status === "RUNNING" || status === "PENDING",
+    ...overrides,
+  }
+}
+
+function analysisJob(status: AnalysisJob["status"], overrides: Partial<AnalysisJob> = {}): AnalysisJob {
+  return {
+    id: "a1",
+    experiment_id: "exp1",
+    simulation_path: "md.simulation.json",
+    analysis_name: "rmsds",
+    created_at: "2026-08-13T00:00:00Z",
+    status,
+    ...overrides,
+  }
+}
 
 function renderCard(exp: Experiment) {
   return renderWithProviders(<ExperimentCard experiment={exp} />)
@@ -29,11 +56,76 @@ describe("ExperimentCard", () => {
     expect(screen.getByText("Active 12 min ago")).toBeVisible()
   })
 
-  it("shows the live phase for active statuses", async () => {
+  it("shows the live phase with the spinner while a job is in flight", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    await renderCard(analyze({ step: 2, status: "simulating" }))
+    const { container } = await renderCard(
+      analyze({
+        step: 2,
+        status: "simulating",
+        simulation_jobs: [simulationJob("RUNNING", { nsteps: 100, nsteps_done: 40 })],
+      })
+    )
     expect(screen.getByText("Run · 3 of 5")).toBeVisible()
-    expect(screen.getByText("Simulating")).toBeVisible()
+    expect(screen.getByText("Simulating · 40%")).toBeVisible()
+    expect(container.querySelector(".animate-spin")).not.toBeNull()
+  })
+
+  it("shows last activity when no job is running", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(
+      analyze({ step: 3, status: "analyzing", simulation_jobs: [simulationJob("FINISHED", { is_live: false })] })
+    )
+    expect(screen.getByText("Active 12 min ago")).toBeVisible()
+    expect(screen.queryByText("Analyzing")).not.toBeInTheDocument()
+    expect(container.querySelector(".animate-spin")).toBeNull()
+  })
+
+  it("shows Analyzing while an analysis job is running", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(
+      analyze({
+        step: 3,
+        status: "analyzing",
+        simulation_jobs: [simulationJob("FINISHED", { is_live: false })],
+        analysis_jobs: [analysisJob("RUNNING")],
+      })
+    )
+    expect(screen.getByText("Analyzing")).toBeVisible()
+    expect(container.querySelector(".animate-spin")).not.toBeNull()
+  })
+
+  it("a running simulation outranks the publish state", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(
+      analyze({
+        step: 4,
+        status: "publishing",
+        simulation_jobs: [simulationJob("RUNNING", { nsteps: 100, nsteps_done: 40 })],
+      })
+    )
+    expect(screen.getByText("Simulating · 40%")).toBeVisible()
+    expect(container.querySelector(".animate-spin")).not.toBeNull()
+  })
+
+  it("a running analysis outranks the publish state", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(
+      analyze({
+        step: 4,
+        status: "publishing",
+        simulation_jobs: [simulationJob("FINISHED", { is_live: false })],
+        analysis_jobs: [analysisJob("RUNNING")],
+      })
+    )
+    expect(screen.getByText("Analyzing")).toBeVisible()
+    expect(container.querySelector(".animate-spin")).not.toBeNull()
+  })
+
+  it("shows last activity for a publishing experiment — upload progress lives in the wizard", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(analyze({ step: 4, status: "publishing" }))
+    expect(screen.getByText("Active 12 min ago")).toBeVisible()
+    expect(container.querySelector(".animate-spin")).toBeNull()
   })
 
   it("offers Stop notebook when the notebook is up, Start notebook when down", async () => {
