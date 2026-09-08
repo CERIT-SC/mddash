@@ -5,6 +5,7 @@ Installs all mocks and seeds deterministic test data for UI development.
 """
 
 import logging
+import secrets
 import time
 from typing import TYPE_CHECKING
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -39,10 +40,10 @@ def setup_demo_profile(app: "Flask") -> None:
     install_all_mocks()
     _install_demo_mdrepo_auth(app)
 
-    # Configure session for local development
+    # Fresh key per start: stale signed cookies die with the wiped demo data,
+    # so a mock MDRepo session must be re-established after every restart.
     app.config["SESSION_COOKIE_SECURE"] = False
-    if not app.config.get("SECRET_KEY"):
-        app.config["SECRET_KEY"] = "demo-secret"
+    app.config["SECRET_KEY"] = secrets.token_hex(32)
 
     with app.app_context():
         seed_data()
