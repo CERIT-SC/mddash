@@ -1,14 +1,18 @@
 import type { Experiment } from "@/api/generated/models"
 import { CREATE_TAB, simulationParam } from "@/features/simulation"
 import { experiment } from "@/shared/fixtures/experiment"
-import { mockApiBySuffix } from "@/shared/fixtures/mock-fetch"
+import { mockApiBySuffix, requestUrl } from "@/shared/fixtures/mock-fetch"
 import { simulation } from "@/shared/fixtures/simulation"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { ExperimentWizard, type WizardSearch } from "./wizard"
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 const alpha = simulation("alpha.simulation.json", { name: "Alpha", step: 2 })
 const beta = simulation("nested/beta.simulation.json", { name: "Beta", step: 2, status: "tuning" })
@@ -220,6 +224,54 @@ describe("ExperimentWizard", () => {
 
     await user.click(screen.getByRole("button", { name: "Go to section 4: Analyze" }))
     expect(changes).toEqual([])
+  })
+
+  it("stays on Setup when the pipeline completes the manifest mid-wait", async () => {
+    vi.useFakeTimers()
+    const simState = { current: [simulation(alpha.simulation_path, { name: "Alpha", step: 0 })] }
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL): Promise<Response> => {
+      const url = requestUrl(input)
+      if (url.endsWith("/experiments/exp1/simulations")) return Response.json([...simState.current])
+      if (url.endsWith("/experiments/exp1")) return okExperiment()
+      if (url.endsWith("/notebook-config"))
+        return Response.json({
+          tiers: [{ value: "1x", cpuLimit: "1", memoryLimit: "4Gi" }],
+          defaultTier: "1x",
+          concurrentLimit: 2,
+        })
+      if (url.endsWith("/dash/api/experiments")) return Response.json([])
+      if (url.endsWith("/experiments/exp1/notebook"))
+        return Response.json({
+          id: 1,
+          experiment_id: "exp1",
+          token: "tok",
+          gpu: false,
+          path: "/dash/notebook/exp1/?token=tok",
+          status: "DOWN",
+          started_at: null,
+        })
+      if (url.includes("/files?")) return Response.json([])
+      return new Response(null, { status: 404 })
+    })
+    renderWizard({ simulation: simulationParam(alpha.simulation_path) })
+    // Flush the initial queries through the fake clock.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(screen.getByRole("heading", { name: "Set up your simulation" })).toBeVisible()
+
+    // The notebook validates the manifest server-side.
+    simState.current = [
+      simulation(alpha.simulation_path, { name: "Alpha", valid: true, step: 1, status: "setup complete" }),
+    ]
+    // >5s crosses the Setup step's 5s manifest poll.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_100)
+    })
+
+    expect(screen.getByRole("heading", { name: "Set up your simulation" })).toBeVisible()
+    expect(screen.getByRole("button", { name: "Go to Tune" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Go to section 2: Tune" })).toBeEnabled()
   })
 
   it("lands on Analyze once the run finished", async () => {

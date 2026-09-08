@@ -36,7 +36,7 @@ const pollWhileAnyLive =
 export type WizardSearch = {
   /** Selected simulation tab — simulation_path minus the ".simulation.json" suffix (may still contain slashes). */
   simulation?: string
-  /** Current wizard step (0-based); defaults to the simulation's own progress. */
+  /** Current wizard step (0-based); defaults to the simulation's progress — Setup→Tune always waits for a click. */
   step?: number
   /** Setup source view; only the non-default "manual" is worth a param. */
   source?: SetupSource
@@ -93,20 +93,20 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         ? list.find((candidate) => candidate.simulation_path === data.latest_simulation_path)
         : undefined) ??
       list[0])
-  // The API owns phase semantics: step is already the stepper index (Setup 0,
-  // Tune 1, Run 2, Analyze 3), consumed directly with no decode. can_publish
-  // unlocks ONLY the experiment-level Publish marker. Create mode: Setup.
+  // The API owns phase semantics: step is already the stepper index, consumed
+  // with no decode; can_publish unlocks only the experiment-level Publish marker.
   const ownStep = selected === undefined ? 0 : selected.step
   const maxStep = selected === undefined ? 0 : ownStep
-  // Content gates like the header: a URL step past the unlocks (stale Publish
-  // bookmark) falls back to the simulation's own progress, never locked UI.
-  const requestedStep = search.step ?? ownStep
+  // A URL step past the unlocks (stale bookmark) falls back to the simulation's
+  // own progress — never locked UI.
+  // The ladder flips to Tune while the user is in the notebook; the implicit view
+  // (no URL step) holds Setup until they click through; later phases track the ladder.
+  const requestedStep = search.step ?? (ownStep > 1 ? ownStep : 0)
   const unlocked = requestedStep <= maxStep || ((data.can_publish ?? false) && requestedStep === LAST_STEP)
   const step = selected === undefined ? 0 : unlocked ? requestedStep : ownStep
   const tab = selected?.simulation_path ?? CREATE_TAB
 
-  // Setup/Tune URL params ride along on every navigation so remounts keep user
-  // context; only a full reset drops them.
+  // Setup/Tune params ride along on every navigation so remounts keep user context.
   const updateSearch = (next: WizardSearch) =>
     onSearchChange({
       source: search.source,
