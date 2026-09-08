@@ -76,7 +76,7 @@ export function SetupGuide({
   ]
 
   return (
-    <InfoBanner role="region" aria-label="Setup guide" className="border-info-600 border-l-8 flex flex-col gap-3">
+    <InfoBanner role="region" aria-label="Setup guide" className="border-info-600 flex flex-col gap-3 border-l-8">
       <p className="font-medium tracking-tight">Step by step</p>
       <ol className="space-y-4">
         {steps.map((step, index) => (

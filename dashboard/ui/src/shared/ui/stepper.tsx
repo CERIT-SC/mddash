@@ -119,16 +119,16 @@ export function StepperHeader({ steps = [], className, maxStep, unlockedIndexes 
         <div className="w-full">
           <div className="relative">
             {/* Track lines sit on the circle row's center: markers are h-10 (40px), so center is top-5. */}
-            <div className="absolute top-5 right-3 left-3 h-2 -translate-y-1/2 flex" aria-hidden>
-              {Array.from({ length: safeTotalSteps - 1 }, (_, i) => (
+            <div className="absolute top-5 right-3 left-3 flex h-2 -translate-y-1/2" aria-hidden>
+              {Array.from({ length: safeTotalSteps - 1 }, (_, i) =>
                 i === safeTotalSteps - 2 ? (
                   <div key={i} className="flex h-full flex-1 items-center">
-                    <div className="w-full border-t-[5px] border-dashed border-border/80" />
+                    <div className="border-border/80 w-full border-t-[5px] border-dashed" />
                   </div>
                 ) : (
-                  <div key={i} className="h-full flex-1 bg-border/80" />
+                  <div key={i} className="bg-border/80 h-full flex-1" />
                 )
-              ))}
+              )}
             </div>
             <div
               className="bg-primary absolute top-5 left-3 h-2 -translate-y-1/2 rounded-full transition-all"
