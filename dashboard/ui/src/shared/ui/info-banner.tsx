@@ -3,5 +3,5 @@ import type { ComponentProps } from "react"
 import { Alert, cn } from "@e-infra/design-system"
 
 export function InfoBanner({ className, ...props }: ComponentProps<typeof Alert>) {
-  return <Alert className={cn("bg-info-200", className)} {...props} />
+  return <Alert className={cn("bg-info/20 supports-backdrop-filter:bg-info/20", className)} {...props} />
 }
