@@ -1,7 +1,8 @@
 import { Badge, Button } from "@e-infra/design-system"
 import { ArrowRight, Rocket } from "lucide-react"
 
-import dashImg from "../assets/dash.png"
+import dashDarkImg from "../assets/dash-dark.png"
+import dashLightImg from "../assets/dash-light.png"
 import { useReveal } from "../hooks/useReveal"
 
 export function HeroSection() {
@@ -46,7 +47,20 @@ export function HeroSection() {
                   <span className="bg-success h-3 w-3 rounded-full opacity-70" />
                 </div>
               </div>
-              <img src={dashImg} alt="MDDash dashboard" className="block w-full" width={2435} height={2298} />
+              <img
+                src={dashLightImg}
+                alt="MDDash dashboard"
+                className="block w-full dark:hidden"
+                width={1900}
+                height={1950}
+              />
+              <img
+                src={dashDarkImg}
+                alt="MDDash dashboard"
+                className="hidden w-full dark:block"
+                width={1900}
+                height={1950}
+              />
             </div>
           </div>
         </div>

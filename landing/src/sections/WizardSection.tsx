@@ -3,11 +3,15 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, H2, Muted, P } from "@e-infra/design-system"
 import { ChevronRight } from "lucide-react"
 
-import analyzeImg from "../assets/analysis-mwf.png"
-import publishImg from "../assets/publish.png"
-import runImg from "../assets/run.png"
+import analyzeDarkImg from "../assets/analyze-dark.png"
+import analyzeLightImg from "../assets/analyze-light.png"
+import publishDarkImg from "../assets/publish-dark.png"
+import publishLightImg from "../assets/publish-light.png"
+import runDarkImg from "../assets/run-dark.png"
+import runLightImg from "../assets/run-light.png"
 import setupImg from "../assets/setup.png"
-import tuneImg from "../assets/tune.png"
+import tuneDarkImg from "../assets/tune-dark.png"
+import tuneLightImg from "../assets/tune-light.png"
 import { useReveal } from "../hooks/useReveal"
 
 type WizardStep = {
@@ -15,7 +19,8 @@ type WizardStep = {
   label: string
   tagline: string
   description: string
-  img: string
+  lightImg: string
+  darkImg: string
   alt: string
   width: number
   height: number
@@ -28,7 +33,8 @@ const WIZARD_STEPS: WizardStep[] = [
     tagline: "Reproducible from the first command",
     description:
       "Jupyter notebooks replace ad hoc shell scripts. Notebooks are version-controlled, shareable, and self-documenting. Compatible with BioExcel Building Blocks (BioBB) via Binder. Experiments can be initialized from a PDB structure, a local upload, or any previously published MDRepo record.",
-    img: setupImg,
+    lightImg: setupImg,
+    darkImg: setupImg,
     alt: "MDDash setup step",
     width: 1612,
     height: 1462,
@@ -39,10 +45,11 @@ const WIZARD_STEPS: WizardStep[] = [
     tagline: "Optimal performance, automatically",
     description:
       "Integrated Tuner runs short GROMACS and AMBER benchmarks across MPI, OpenMP, and GPU configurations in parallel. The best-performing configuration is offered automatically — no manual guesswork, no wasted compute on long production runs.",
-    img: tuneImg,
+    lightImg: tuneLightImg,
+    darkImg: tuneDarkImg,
     alt: "MDDash tune step with benchmark results",
-    width: 2256,
-    height: 1940,
+    width: 1900,
+    height: 1600,
   },
   {
     num: 3,
@@ -50,10 +57,11 @@ const WIZARD_STEPS: WizardStep[] = [
     tagline: "Live progress without shell access",
     description:
       "Kubernetes Jobs manage execution with proper resource allocation. Watch live progress, stream logs, and inspect intermediate files — all without needing shell access to the cluster. Jobs survive browser disconnects and pod restarts.",
-    img: runImg,
+    lightImg: runLightImg,
+    darkImg: runDarkImg,
     alt: "MDDash run step with live progress",
-    width: 2256,
-    height: 2134,
+    width: 1900,
+    height: 1475,
   },
   {
     num: 4,
@@ -61,10 +69,11 @@ const WIZARD_STEPS: WizardStep[] = [
     tagline: "Three tools, one interface",
     description:
       "Mol* viewer embedded for 3D structures and trajectories. Full MDDB Workflow analyses with interactive charts. On-demand Jupyter notebooks for custom analysis with the complete Python scientific stack. Available during active runs for early issue detection.",
-    img: analyzeImg,
+    lightImg: analyzeLightImg,
+    darkImg: analyzeDarkImg,
     alt: "MDDash analysis step with charts",
-    width: 2300,
-    height: 1309,
+    width: 1900,
+    height: 2000,
   },
   {
     num: 5,
@@ -72,16 +81,18 @@ const WIZARD_STEPS: WizardStep[] = [
     tagline: "One-click FAIR data publication",
     description:
       "One-click publication to MDRepo. Metadata auto-extracted with GROMACS MetaDump. Files upload in the background. The experiment receives a persistent DOI. Built on InvenioRDM — the same framework as Zenodo — enforcing MD-specific metadata schemas and standardized trajectory formats.",
-    img: publishImg,
+    lightImg: publishLightImg,
+    darkImg: publishDarkImg,
     alt: "MDDash publish step",
-    width: 2256,
-    height: 1224,
+    width: 1900,
+    height: 975,
   },
 ]
 
 export function WizardSection() {
   const [active, setActive] = useState(0)
   const titleRef = useReveal()
+  const activeStep = WIZARD_STEPS[active]
 
   return (
     <section className="bg-background py-24">
@@ -146,24 +157,35 @@ export function WizardSection() {
                   ))}
                 </div>
               </div>
+              {/* The Setup screenshot is a terminal window with no light/dark UI variants. */}
               <img
-                src={WIZARD_STEPS[active].img}
-                alt={WIZARD_STEPS[active].alt}
-                className="block w-full"
-                width={WIZARD_STEPS[active].width}
-                height={WIZARD_STEPS[active].height}
-                key={active}
+                src={activeStep.lightImg}
+                alt={activeStep.alt}
+                className={activeStep.darkImg === activeStep.lightImg ? "block w-full" : "block w-full dark:hidden"}
+                width={activeStep.width}
+                height={activeStep.height}
+                key={`light-${active}`}
               />
+              {activeStep.darkImg !== activeStep.lightImg && (
+                <img
+                  src={activeStep.darkImg}
+                  alt={activeStep.alt}
+                  className="hidden w-full dark:block"
+                  width={activeStep.width}
+                  height={activeStep.height}
+                  key={`dark-${active}`}
+                />
+              )}
             </div>
 
             <Card className="gap-2">
               <CardHeader>
                 <CardTitle className="text-base">
-                  Step {WIZARD_STEPS[active].num}: {WIZARD_STEPS[active].label}
+                  Step {activeStep.num}: {activeStep.label}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <P className="text-text-muted text-sm leading-relaxed">{WIZARD_STEPS[active].description}</P>
+                <P className="text-text-muted text-sm leading-relaxed">{activeStep.description}</P>
               </CardContent>
             </Card>
           </div>
