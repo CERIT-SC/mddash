@@ -28,23 +28,12 @@ jobs:
       - name: Check formatting and linting
         run: make format-check-py lint-py
 
-  frontend-checks:
+  frontend-static:
     timeout-minutes: 10
-    name: Frontend checks
+    name: Frontend static checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          persist-credentials: false
-      - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
-        with:
-          version: 11.13.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-frontend
       - name: Check formatting and linting
         run: make format-check-ui lint-ui
       - name: Type-check frontend workspace
@@ -53,10 +42,42 @@ jobs:
         run: pnpm run knip
       - name: Check Dashboard API client drift
         run: pnpm run generated:check
+
+  frontend-test:
+    timeout-minutes: 10
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/setup-frontend
       - name: Test Dashboard UI
         run: pnpm run test:ui
+
+  frontend-build:
+    timeout-minutes: 10
+    name: Frontend builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ./.github/actions/setup-frontend
       - name: Build frontend packages
         run: pnpm --parallel --filter dash --filter landing --filter hub-ui build
+
+  # Name-stable join point so branch protection and callers see one result.
+  frontend-checks:
+    timeout-minutes: 5
+    name: Frontend checks
+    needs: [frontend-static, frontend-test, frontend-build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all frontend jobs to pass
+        env:
+          STATIC: ${{ needs.frontend-static.result }}
+          TEST: ${{ needs.frontend-test.result }}
+          BUILD: ${{ needs.frontend-build.result }}
+        run: |
+          for result in "$STATIC" "$TEST" "$BUILD"; do
+            [ "$result" = "success" ] || { echo "::error::Frontend job did not succeed: $result"; exit 1; }
+          done
 
   check-dashboard-api:
     timeout-minutes: 5
