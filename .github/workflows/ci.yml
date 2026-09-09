@@ -33,6 +33,9 @@ jobs:
     name: Frontend static checks
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-frontend
       - name: Check formatting and linting
         run: make format-check-ui lint-ui
@@ -48,6 +51,9 @@ jobs:
     name: Frontend tests
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-frontend
       - name: Test Dashboard UI
         run: pnpm run test:ui
@@ -57,6 +63,9 @@ jobs:
     name: Frontend builds
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/setup-frontend
       - name: Build frontend packages
         run: pnpm --parallel --filter dash --filter landing --filter hub-ui build
