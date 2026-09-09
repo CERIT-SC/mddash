@@ -3,7 +3,7 @@ import path from "path"
 import tailwindcss from "@tailwindcss/vite"
 import { tanstackRouter } from "@tanstack/router-plugin/vite"
 import react from "@vitejs/plugin-react"
-import { defineConfig, type Plugin } from "vite"
+import { defineConfig, type Plugin } from "vitest/config"
 
 // Dev stand-in for the JSON the production proxy generates with jq.
 // Served over HTTP (never interpolated into JS); values mirror DEV_RUNTIME_CONFIG.
@@ -63,6 +63,25 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./test/setup.ts"],
+    projects: [
+      {
+        test: {
+          name: "no-isolate",
+          // test/setup.ts resets the DOM, fetch stubs and localStorage after every
+          // test, so per-file isolation only re-creates the module graph (~3x slower).
+          isolate: false,
+          include: ["src/**/*.test.{ts,tsx}", "!src/features/analyze/analyze-step.test.tsx"],
+        },
+      },
+      {
+        test: {
+          // Mocks ./renderers and ./mol-star; its factories must not leak into files
+          // importing the same graph (wizard.test.tsx) through a shared registry.
+          name: "isolate",
+          include: ["src/features/analyze/analyze-step.test.tsx"],
+        },
+      },
+    ],
   },
   server: {
     host: "0.0.0.0",

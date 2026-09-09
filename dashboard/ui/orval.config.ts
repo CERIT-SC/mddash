@@ -19,10 +19,6 @@ export default defineConfig({
         runtime: "API_RUNTIME_BASE_URL",
         imports: [{ name: "API_RUNTIME_BASE_URL", importPath: "../../runtime" }],
       },
-      mock: {
-        path: "./src/api/generated/mocks",
-        generators: [{ type: "msw", operationResponses: false }],
-      },
       override: {
         fetch: {
           forceSuccessResponse: true,
