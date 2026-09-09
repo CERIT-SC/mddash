@@ -224,5 +224,5 @@ export function StepperContent({ children, className }: StepperContentProps) {
   const { currentStep } = useStepper()
   const steps = React.Children.toArray(children)
 
-  return <div className={cn("py-4", className)}>{steps[currentStep] || null}</div>
+  return <div className={cn("pt-4", className)}>{steps[currentStep] || null}</div>
 }

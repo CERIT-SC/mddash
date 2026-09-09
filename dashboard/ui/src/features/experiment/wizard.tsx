@@ -217,7 +217,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
             the tab boxes. */}
         {/* box-shadow over drop-shadow: filter would confine molstar's expanded (fixed) viewport to this card. */}
         <Card className="border-border bg-background rounded-t-none border py-0 shadow-[0_4px_4px_rgba(0,0,0,0.15)] drop-shadow-none hover:drop-shadow-none">
-          <CardContent className="pt-6 pb-6 md:pb-8">
+          <CardContent className="pt-6 pb-6">
             <Stepper
               step={step}
               totalSteps={STEPS.length}
