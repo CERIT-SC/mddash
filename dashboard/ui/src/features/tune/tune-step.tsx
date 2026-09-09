@@ -223,6 +223,9 @@ export function TuneStep({
   const silent = live && job?.tuner_status === JobStatus.UNKNOWN && job?.trials.length === 0
   const silentStart = useRef<number | null>(null)
   const [tunerSilent, setTunerSilent] = useState(false)
+  // oxlint-disable react/set-state-in-effect -- latching on elapsed wall-clock time:
+  // effects are for syncing to external systems such as the clock, and a
+  // render-phase comparison would freeze on whatever render happened last.
   useEffect(() => {
     if (!silent) {
       silentStart.current = null
@@ -232,6 +235,7 @@ export function TuneStep({
     silentStart.current ??= Date.now()
     if (Date.now() - silentStart.current > 4 * pollMs) setTunerSilent(true)
   }, [silent, pollMs, jobQuery.dataUpdatedAt])
+  // oxlint-enable react/set-state-in-effect
 
   return (
     <div className="space-y-6">

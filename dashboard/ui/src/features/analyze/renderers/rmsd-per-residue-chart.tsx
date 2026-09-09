@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FC } from "react"
+import { useMemo, useState, type FC } from "react"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@e-infra/design-system"
 
@@ -12,16 +12,8 @@ type RMSDPerResidueChartProps = {
 const RMSDPerResidueChart: FC<RMSDPerResidueChartProps> = ({ data }) => {
   const entries = useMemo(() => data.data ?? [], [data])
   const datasetNames = entries.map((entry) => entry.name)
-  const [selectedDataset, setSelectedDataset] = useState<string>("")
+  const [selectedDataset, setSelectedDataset] = useState<string | null>(null)
   const frameStep = data.step ?? 1
-
-  useEffect(() => {
-    if (!entries.length) return
-    const fallback = entries[0]?.name ?? ""
-    if (!selectedDataset || !entries.some((entry) => entry.name === selectedDataset)) {
-      setSelectedDataset(fallback)
-    }
-  }, [entries, selectedDataset])
 
   const activeEntry = useMemo(() => {
     if (!entries.length) return undefined
@@ -68,7 +60,7 @@ const RMSDPerResidueChart: FC<RMSDPerResidueChartProps> = ({ data }) => {
         {datasetNames.length > 1 && (
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">Residue:</span>
-            <Select value={activeEntry?.name ?? selectedDataset} onValueChange={setSelectedDataset}>
+            <Select value={activeEntry?.name ?? ""} onValueChange={setSelectedDataset}>
               <SelectTrigger className="w-48">
                 <SelectValue />
               </SelectTrigger>

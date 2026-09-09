@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useEffect, useMemo, useState } from "react"
+import { lazy, memo, Suspense, useMemo, useState } from "react"
 
 import { Engine, JobStatus, type Simulation } from "@/api/generated/models"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
@@ -87,20 +87,19 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
     return PREPROCESSING_OPTIONS
   }, [engine])
 
-  useEffect(() => {
-    if (engine === Engine.AMBER && preprocessingMode !== PREPROCESSING_OPTIONS[0].value) {
-      setPreprocessingMode(PREPROCESSING_OPTIONS[0].value)
-    }
-  }, [engine, preprocessingMode])
+  // AMBER always submits the plain trajectory, whatever was picked before.
+  const effectivePreprocessing = engine === Engine.AMBER ? PREPROCESSING_OPTIONS[0].value : preprocessingMode
 
   const simulationPath = simulation.simulation_path
 
   // Steps stay mounted across simulation tab switches, so per-simulation picks
   // reset explicitly or B inherits A's analysis/variant. (PublishStep pattern.)
-  useEffect(() => {
+  const [prevSimulationPath, setPrevSimulationPath] = useState(simulationPath)
+  if (prevSimulationPath !== simulationPath) {
+    setPrevSimulationPath(simulationPath)
     setSelectedAnalysis(null)
     setSelectedVariant(null)
-  }, [simulationPath])
+  }
 
   const jobsQuery = useAnalysisJobs(experimentId, simulationPath, pollMs)
   const jobs = jobsQuery.data?.status === 200 ? jobsQuery.data.data : undefined
@@ -127,10 +126,6 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
     return analysisWithResults?.value ?? null
   }, [selectedAnalysis, activeJob, availableResults])
 
-  useEffect(() => {
-    if (!selectedAnalysis && resolvedAnalysis) setSelectedAnalysis(resolvedAnalysis)
-  }, [selectedAnalysis, resolvedAnalysis])
-
   const analysisConfig = useMemo(() => AVAILABLE_ANALYSES.find((a) => a.value === resolvedAnalysis), [resolvedAnalysis])
   const selectedResultName = analysisConfig?.resultName ?? null
   const submissionAnalysis = (selectedAnalysis ?? resolvedAnalysis) as
@@ -142,13 +137,9 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
     return [...availableResults].filter((r) => pattern.test(r)).sort()
   }, [analysisConfig, selectedResultName, availableResults])
 
-  // Auto-select the first variant once results arrive — the base file is the
+  // Render the first variant unless the user picked one — the base file is the
   // variant index (not renderable), so never fetch it directly.
-  useEffect(() => {
-    if (analysisConfig?.hasVariants && !selectedVariant && variantResults.length > 0) {
-      setSelectedVariant(variantResults[0])
-    }
-  }, [analysisConfig?.hasVariants, variantResults, selectedVariant])
+  const activeVariant = selectedVariant ?? (analysisConfig?.hasVariants ? (variantResults[0] ?? null) : null)
 
   const hasResult = selectedResultName ? availableResults.has(selectedResultName) || variantResults.length > 0 : false
 
@@ -166,7 +157,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
 
   const isRunningThis = activeJob?.analysis_name === resolvedAnalysis
   // For hasVariants analyses the base file is the variant index — never fetch or render it.
-  const effectiveResultName = analysisConfig?.hasVariants ? selectedVariant : (selectedVariant ?? selectedResultName)
+  const effectiveResultName = analysisConfig?.hasVariants ? activeVariant : (activeVariant ?? selectedResultName)
 
   const dataQuery = useAnalysisData(experimentId, simulationPath, hasResult ? effectiveResultName : null)
   const analysisData = dataQuery.data?.status === 200 ? dataQuery.data.data : undefined
@@ -175,11 +166,11 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
   const canSubmit = !unavailableReason && !!submissionAnalysis && !activeJob && !mutations.submit.isPending
 
   const lastJobForAnalysis = useMemo(() => {
-    if (!jobs?.length || !selectedAnalysis) return null
-    const filtered = jobs.filter((j) => j.analysis_name === selectedAnalysis)
+    if (!jobs?.length || !submissionAnalysis) return null
+    const filtered = jobs.filter((j) => j.analysis_name === submissionAnalysis)
     if (!filtered.length) return null
     return filtered.reduce((latest, job) => (new Date(job.created_at) > new Date(latest.created_at) ? job : latest))
-  }, [jobs, selectedAnalysis])
+  }, [jobs, submissionAnalysis])
 
   const completedWithNoResult = lastJobForAnalysis?.status === JobStatus.FINISHED && !hasResult
   const failedForAnalysis = !activeJob && lastJobForAnalysis?.status === JobStatus.ERROR
@@ -190,11 +181,9 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
     lastJobForAnalysis?.status === JobStatus.FINISHED ? (lastJobForAnalysis.sim_progress ?? null) : null
   const calculatedPercent = simProgress !== null && simProgress < 1 ? Math.round(simProgress * 100) : null
 
-  // Reset the logs pane whenever the active job changes or finishes.
-  useEffect(() => {
-    if (!activeJob || activeJob.status === JobStatus.PENDING) setShowLogs(false)
-  }, [activeJob])
-  const logJobId = showLogs ? (activeJob?.id ?? lastJobForAnalysis?.id ?? null) : null
+  // The logs pane hides itself only while a live job has nothing to show yet.
+  const logsVisible = showLogs && activeJob?.status !== JobStatus.PENDING
+  const logJobId = logsVisible ? (activeJob?.id ?? lastJobForAnalysis?.id ?? null) : null
   const logsQuery = useAnalysisLogs(
     experimentId,
     logJobId,
@@ -205,7 +194,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
 
   const handleCalculate = () => {
     if (unavailableReason || !submissionAnalysis) return
-    mutations.submit.mutate(simulationPath, submissionAnalysis, preprocessingMode)
+    mutations.submit.mutate(simulationPath, submissionAnalysis, effectivePreprocessing)
   }
 
   if (jobs === undefined && jobsQuery.isPending) {
@@ -269,7 +258,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
             <HintTooltip text="How the trajectory is treated before analysis: image re-centers molecules in the simulation box; image and fit also aligns them to the reference structure." />
           </div>
           <Select
-            value={preprocessingMode}
+            value={effectivePreprocessing}
             onValueChange={(value) => setPreprocessingMode(value as typeof preprocessingMode)}
           >
             <SelectTrigger id="analysis-preprocessing-mode" aria-label="Preprocessing" className="w-full">
@@ -336,7 +325,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
               {activeJob.status !== JobStatus.PENDING && (
                 <Button size="sm" variant="ghost" onClick={() => setShowLogs((value) => !value)}>
                   <Terminal aria-hidden />
-                  {showLogs ? "Hide logs" : "View logs"}
+                  {logsVisible ? "Hide logs" : "View logs"}
                 </Button>
               )}
             </>
@@ -354,7 +343,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
             <span>Inspect the logs to understand the failure before retrying.</span>
             <Button size="sm" variant="ghost" onClick={() => setShowLogs((value) => !value)}>
               <Terminal aria-hidden />
-              {showLogs ? "Hide logs" : "View logs"}
+              {logsVisible ? "Hide logs" : "View logs"}
             </Button>
           </AlertDescription>
         </Alert>
@@ -362,7 +351,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
 
       {unavailableReason && !hasResult && <p className="text-text-muted text-xs">{unavailableReason}</p>}
 
-      {showLogs && <LogPane logs={jobLogs ?? ""} isLoading={logsQuery.isLoading} />}
+      {logsVisible && <LogPane logs={jobLogs ?? ""} isLoading={logsQuery.isLoading} />}
 
       <div>
         {/* View concern, not a run concern: picks which computed variant the
@@ -370,7 +359,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
         {resolvedAnalysis && hasResult && variantResults.length > 0 && (
           <div className="mb-3 flex items-center justify-end gap-2">
             <span className="text-text-muted text-sm">Variant</span>
-            <Select value={selectedVariant ?? undefined} onValueChange={setSelectedVariant}>
+            <Select value={activeVariant ?? undefined} onValueChange={setSelectedVariant}>
               <SelectTrigger className="w-64" aria-label="Variant">
                 <SelectValue placeholder="Select variant..." />
               </SelectTrigger>

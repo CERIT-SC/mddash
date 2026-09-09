@@ -165,8 +165,11 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
       files: [],
     },
   })
+  // oxlint-disable react/incompatible-library -- react-hook-form's watch is the
+  // supported way to read live field values into render
   const source = form.watch("source")
   const notebooksRepoValue = form.watch("notebooksRepo")
+  // oxlint-enable react/incompatible-library
   const isHttpsRepo = notebooksRepoValue.trim().startsWith("https://")
 
   const create = useCreateExperiment({

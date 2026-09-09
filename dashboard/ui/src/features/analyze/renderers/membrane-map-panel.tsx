@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FC } from "react"
+import { useMemo, useState, type FC } from "react"
 
 import { escapeHtml } from "@/shared/escape-html"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@e-infra/design-system"
@@ -105,26 +105,17 @@ const MembraneMapAnalysisPanel: FC<{ data: MembraneMapAnalysis }> = ({ data }) =
   const hasMultipleMembranes = membranes.length > 1
   const [selectedMembrane, setSelectedMembrane] = useState<string>("all")
 
-  useEffect(() => {
-    if (!hasMultipleMembranes && selectedMembrane !== "all") {
-      setSelectedMembrane("all")
-      return
-    }
-    if (
-      hasMultipleMembranes &&
-      selectedMembrane !== "all" &&
-      !membranes.some((membrane) => membrane.id === selectedMembrane)
-    ) {
-      setSelectedMembrane("all")
-    }
-  }, [hasMultipleMembranes, membranes, selectedMembrane])
-
+  // Single membrane (or a vanished pick) always shows "all".
+  const validMembrane =
+    hasMultipleMembranes && (selectedMembrane === "all" || membranes.some((m) => m.id === selectedMembrane))
+      ? selectedMembrane
+      : "all"
   const filteredMembranes = useMemo(() => {
-    if (!hasMultipleMembranes || selectedMembrane === "all") {
+    if (validMembrane === "all") {
       return membranes
     }
-    return membranes.filter((membrane) => membrane.id === selectedMembrane)
-  }, [hasMultipleMembranes, membranes, selectedMembrane])
+    return membranes.filter((membrane) => membrane.id === validMembrane)
+  }, [membranes, validMembrane])
 
   const stats = useMemo(() => {
     return filteredMembranes.reduce(
@@ -201,7 +192,7 @@ const MembraneMapAnalysisPanel: FC<{ data: MembraneMapAnalysis }> = ({ data }) =
           <p className="text-text-muted text-xs">Stacked counts of top vs bottom leaflet assignments per membrane</p>
         </div>
         {hasMultipleMembranes && (
-          <Select value={selectedMembrane} onValueChange={setSelectedMembrane}>
+          <Select value={validMembrane} onValueChange={setSelectedMembrane}>
             <SelectTrigger className="h-9 w-56 text-sm">
               <SelectValue placeholder="Filter membranes" />
             </SelectTrigger>

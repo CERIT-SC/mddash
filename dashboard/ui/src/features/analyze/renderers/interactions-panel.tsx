@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FC } from "react"
+import { useMemo, useState, type FC } from "react"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@e-infra/design-system"
 
@@ -103,16 +103,8 @@ const InteractionsAnalysisPanel: FC<{
     }))
   }, [data])
 
-  const [selectedId, setSelectedId] = useState(entries[0]?.id ?? "")
-
-  useEffect(() => {
-    if (!entries.length) return
-    if (!entries.some((entry) => entry.id === selectedId)) {
-      setSelectedId(entries[0]?.id ?? "")
-    }
-  }, [entries, selectedId])
-
-  const selected = entries.find((entry) => entry.id === selectedId)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const selected = entries.find((entry) => entry.id === selectedId) ?? entries[0]
   const canRenderMatrix = Boolean(selected && selected.residues1.length && selected.residues2.length)
   const matrix = useMemo(() => (selected && canRenderMatrix ? buildMatrix(selected) : []), [selected, canRenderMatrix])
   const heatmap = useMemo(() => toHeatmapPayload(matrix), [matrix])
@@ -140,7 +132,7 @@ const InteractionsAnalysisPanel: FC<{
         {entries.length > 1 && (
           <div className="flex items-center gap-2">
             <span className="text-text-muted text-xs">Interaction</span>
-            <Select value={selectedId} onValueChange={setSelectedId}>
+            <Select value={selected?.id ?? ""} onValueChange={setSelectedId}>
               <SelectTrigger className="h-8 w-48 text-xs">
                 <SelectValue />
               </SelectTrigger>

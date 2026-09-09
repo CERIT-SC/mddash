@@ -58,7 +58,10 @@ export function NotebookControls({
   const starting = notebook.status === "PENDING" || (running && !ready)
   const spinning = starting || stopping
   const uptime =
-    notebook.started_at !== null ? Math.max(0, (Date.now() - Date.parse(notebook.started_at)) / 1000) : undefined
+    notebook.started_at !== null
+      ? // oxlint-disable-next-line react/purity -- live uptime; re-renders on the notebook probe tick
+        Math.max(0, (Date.now() - Date.parse(notebook.started_at)) / 1000)
+      : undefined
   const showingUptime = running && ready && uptime !== undefined
 
   const label = stopping

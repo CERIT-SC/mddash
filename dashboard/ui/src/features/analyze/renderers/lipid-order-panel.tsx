@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FC } from "react"
+import { useMemo, useState, type FC } from "react"
 
 import { Badge, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@e-infra/design-system"
 
@@ -47,26 +47,12 @@ const LipidOrderPanel: FC<{ data: LipidOrderAnalysis }> = ({ data }) => {
     })
   }, [data])
 
-  const [lipidId, setLipidId] = useState<string>(lipids[0]?.id ?? "")
-  const [segmentId, setSegmentId] = useState<string>(lipids[0]?.segments[0]?.id ?? "")
-
-  useEffect(() => {
-    if (!lipids.length) return
-    if (!lipids.some((lipid) => lipid.id === lipidId)) {
-      setLipidId(lipids[0]?.id ?? "")
-      setSegmentId(lipids[0]?.segments[0]?.id ?? "")
-    }
-  }, [lipids, lipidId])
-
-  useEffect(() => {
-    const selectedLipid = lipids.find((lipid) => lipid.id === lipidId)
-    if (selectedLipid && !selectedLipid.segments.some((segment) => segment.id === segmentId)) {
-      setSegmentId(selectedLipid.segments[0]?.id ?? "")
-    }
-  }, [lipidId, lipids, segmentId])
+  const [lipidId, setLipidId] = useState<string | null>(null)
+  const [segmentId, setSegmentId] = useState<string | null>(null)
 
   const selectedLipid = lipids.find((lipid) => lipid.id === lipidId) ?? lipids[0]
-  const selectedSegment = selectedLipid?.segments.find((segment) => segment.id === segmentId)
+  const selectedSegment =
+    selectedLipid?.segments.find((segment) => segment.id === segmentId) ?? selectedLipid?.segments[0]
 
   const sampleCount = selectedSegment?.avg.length ?? 0
   const xPositions = useMemo(() => {
@@ -133,7 +119,7 @@ const LipidOrderPanel: FC<{ data: LipidOrderAnalysis }> = ({ data }) => {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Select value={lipidId} onValueChange={setLipidId}>
+          <Select value={selectedLipid?.id ?? ""} onValueChange={setLipidId}>
             <SelectTrigger className="h-8 w-48 text-xs">
               <SelectValue placeholder="Lipid" />
             </SelectTrigger>
@@ -146,7 +132,7 @@ const LipidOrderPanel: FC<{ data: LipidOrderAnalysis }> = ({ data }) => {
             </SelectContent>
           </Select>
           {selectedLipid?.segments.length ? (
-            <Select value={segmentId} onValueChange={setSegmentId}>
+            <Select value={selectedSegment?.id ?? ""} onValueChange={setSegmentId}>
               <SelectTrigger className="h-8 w-48 text-xs">
                 <SelectValue placeholder="Segment" />
               </SelectTrigger>

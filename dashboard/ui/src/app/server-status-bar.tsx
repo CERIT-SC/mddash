@@ -42,7 +42,10 @@ export function ServerStatusBar() {
   const hasStorage = used !== undefined && limit !== undefined && limit > 0
   const percent = hasStorage ? Math.min(100, Math.round(((used ?? 0) / (limit ?? 1)) * 100)) : 0
   const uptime =
-    data?.uptime_seconds !== undefined ? data.uptime_seconds + (Date.now() - metrics.dataUpdatedAt) / 1000 : undefined
+    data?.uptime_seconds !== undefined
+      ? // oxlint-disable-next-line react/purity -- elapsed time on the metrics poll tick
+        data.uptime_seconds + (Date.now() - metrics.dataUpdatedAt) / 1000
+      : undefined
 
   function onStop() {
     setStopping(true)

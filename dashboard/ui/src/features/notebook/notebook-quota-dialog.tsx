@@ -78,7 +78,8 @@ function NotebookQuotaRow({ experiment, onStopped, onError }: NotebookQuotaRowPr
   const stopping = stop.isPending || notebook?.status === "TERMINATING"
   const uptime =
     running && notebook.started_at !== null
-      ? formatTime(Math.max(0, (Date.now() - Date.parse(notebook.started_at)) / 1000))
+      ? // oxlint-disable-next-line react/purity -- live uptime; re-renders on the quota poll tick
+        formatTime(Math.max(0, (Date.now() - Date.parse(notebook.started_at)) / 1000))
       : undefined
   const label = !active
     ? "Stopped"
@@ -140,12 +141,14 @@ export function NotebookQuotaDialog({ open, onOpenChange, pendingStart }: Notebo
   const [actionError, setActionError] = useState<unknown>(null)
 
   // Reopening resets the quota session: no stale "Stopped" rows or errors.
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(false)
+  if (open !== prevOpen) {
+    setPrevOpen(open)
     if (open) {
       setStoppedIds(new Set())
       setActionError(null)
     }
-  }, [open])
+  }
 
   const rows = (experiments ?? []).filter(
     (entry) => entry.notebook !== null && (isNotebookActive(entry.notebook.status) || stoppedIds.has(entry.id))

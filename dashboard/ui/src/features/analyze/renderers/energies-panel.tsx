@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FC } from "react"
+import { useMemo, useState, type FC } from "react"
 
 import { Badge, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@e-infra/design-system"
 
@@ -122,16 +122,9 @@ const EnergiesPanel: FC<{ data: EnergiesAnalysis }> = ({ data }) => {
     }))
   }, [data])
 
-  const [interactionId, setInteractionId] = useState<string>(interactions[0]?.id ?? "")
+  const [interactionId, setInteractionId] = useState<string | null>(null)
   const [agentKey, setAgentKey] = useState<"agent1" | "agent2">("agent1")
   const [stage, setStage] = useState<StageKey>("overall")
-
-  useEffect(() => {
-    if (!interactions.length) return
-    if (!interactions.some((entry) => entry.id === interactionId)) {
-      setInteractionId(interactions[0]?.id ?? "")
-    }
-  }, [interactionId, interactions])
 
   const selectedInteraction = interactions.find((entry) => entry.id === interactionId) ?? interactions[0]
   const selectedAgent = selectedInteraction?.[agentKey]
@@ -234,7 +227,7 @@ const EnergiesPanel: FC<{ data: EnergiesAnalysis }> = ({ data }) => {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Select value={interactionId} onValueChange={setInteractionId}>
+          <Select value={selectedInteraction?.id ?? ""} onValueChange={setInteractionId}>
             <SelectTrigger className="h-8 w-48 text-xs">
               <SelectValue placeholder="Interaction" />
             </SelectTrigger>

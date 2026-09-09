@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FC } from "react"
+import { useMemo, useState, type FC } from "react"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@e-infra/design-system"
 
@@ -61,17 +61,9 @@ const PocketsAnalysisPanel: FC<{ data: PocketsAnalysis }> = ({ data }) => {
     })
   }, [data])
 
-  const [selectedPocket, setSelectedPocket] = useState<string>("")
-
-  useEffect(() => {
-    if (!pockets.length) return
-    const fallback = pockets[0]?.id ?? ""
-    if (!selectedPocket || !pockets.some((pocket) => pocket.id === selectedPocket)) {
-      setSelectedPocket(fallback)
-    }
-  }, [pockets, selectedPocket])
-
-  const activePocket = pockets.find((pocket) => pocket.id === selectedPocket)
+  // Explicit user pick; falls back to the first pocket until chosen.
+  const [selectedPocket, setSelectedPocket] = useState<string | null>(null)
+  const activePocket = pockets.find((pocket) => pocket.id === selectedPocket) ?? pockets[0]
 
   const pocketSeries = useMemo(
     () =>
@@ -130,7 +122,7 @@ const PocketsAnalysisPanel: FC<{ data: PocketsAnalysis }> = ({ data }) => {
             {pockets.length > 1 && (
               <div className="flex items-center gap-2">
                 <span className="text-text-muted text-xs">Pocket</span>
-                <Select value={selectedPocket} onValueChange={setSelectedPocket}>
+                <Select value={activePocket?.id ?? ""} onValueChange={setSelectedPocket}>
                   <SelectTrigger className="h-8 w-48 text-xs">
                     <SelectValue />
                   </SelectTrigger>

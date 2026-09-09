@@ -37,9 +37,6 @@
         "fixStyle": "inline-type-imports"
       }
     ],
-    "react/set-state-in-effect": "off",
-    "react/preserve-manual-memoization": "off",
-    "react/purity": "off",
-    "react/incompatible-library": "off"
+    "react/preserve-manual-memoization": "off"
   }
 }

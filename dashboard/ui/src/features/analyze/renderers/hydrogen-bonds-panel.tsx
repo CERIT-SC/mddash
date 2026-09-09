@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FC } from "react"
+import { useMemo, useState, type FC } from "react"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@e-infra/design-system"
 
@@ -120,16 +120,8 @@ const HydrogenBondsAnalysisPanel: FC<{ data: HydrogenBondsAnalysis }> = ({ data 
     return data.data.map((entry, index) => normalizeEntry(entry, index))
   }, [data])
 
-  const [selectedInteractionId, setSelectedInteractionId] = useState<string>(interactions[0]?.id ?? "")
-
-  useEffect(() => {
-    if (!interactions.length) return
-    if (!interactions.some((entry) => entry.id === selectedInteractionId)) {
-      setSelectedInteractionId(interactions[0]?.id ?? "")
-    }
-  }, [interactions, selectedInteractionId])
-
-  const selectedInteraction = interactions.find((entry) => entry.id === selectedInteractionId)
+  const [selectedInteractionId, setSelectedInteractionId] = useState<string | null>(null)
+  const selectedInteraction = interactions.find((entry) => entry.id === selectedInteractionId) ?? interactions[0]
 
   const activeMatrix = useMemo(() => selectedInteraction?.hbonds ?? [], [selectedInteraction])
   const frameCount = useMemo(() => activeMatrix.reduce((max, row) => Math.max(max, row.length), 0), [activeMatrix])
@@ -184,7 +176,7 @@ const HydrogenBondsAnalysisPanel: FC<{ data: HydrogenBondsAnalysis }> = ({ data 
         {interactions.length > 1 && (
           <div className="flex items-center gap-2">
             <span className="text-text-muted text-xs">Interaction</span>
-            <Select value={selectedInteractionId} onValueChange={setSelectedInteractionId}>
+            <Select value={selectedInteraction?.id ?? ""} onValueChange={setSelectedInteractionId}>
               <SelectTrigger className="h-8 w-48 text-xs">
                 <SelectValue />
               </SelectTrigger>
