@@ -179,7 +179,7 @@ export const CreateExperimentBody = zod.object({
   "access-token": zod.string().optional(),
   "notebook-module": zod.string().optional(),
   "engine": zod.enum(['GMX', 'AMBER']).optional(),
-  "simulation-files": zod.array(zod.instanceof(File)).optional()
+  "simulation-files": zod.array(zod.instanceof(Blob)).optional()
 })
 
 export const createExperimentResponseSourceOneFilesItemSizeMin = 0;

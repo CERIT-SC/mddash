@@ -13,6 +13,7 @@ concurrency:
 
 jobs:
   lint-py:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -27,22 +28,15 @@ jobs:
       - name: Check formatting and linting
         run: make format-check-py lint-py
 
-  frontend-checks:
-    name: Frontend checks
+  frontend-static:
+    timeout-minutes: 10
+    name: Frontend static checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
           persist-credentials: false
-      - uses: pnpm/action-setup@008330803749db0355799c700092d9a85fd074e9 # v6.0.9
-        with:
-          version: 11.13.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup-frontend
       - name: Check formatting and linting
         run: make format-check-ui lint-ui
       - name: Type-check frontend workspace
@@ -51,16 +45,33 @@ jobs:
         run: pnpm run knip
       - name: Check Dashboard API client drift
         run: pnpm run generated:check
+
+  frontend-test:
+    timeout-minutes: 10
+    name: Frontend tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-frontend
       - name: Test Dashboard UI
         run: pnpm run test:ui
-      - name: Build Dashboard UI
-        run: pnpm run build:ui
-      - name: Build landing page
-        run: pnpm run build:landing
-      - name: Build Hub UI
-        run: pnpm run build:hub-ui
+
+  frontend-build:
+    timeout-minutes: 10
+    name: Frontend builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-frontend
+      - name: Build frontend packages
+        run: pnpm --parallel --filter dash --filter landing --filter hub-ui build
 
   check-dashboard-api:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -78,6 +89,7 @@ jobs:
       - run: uv run ty check .
 
   check-dashboard-auth:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -95,6 +107,7 @@ jobs:
       - run: uv run ty check .
 
   check-mdrun-api:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -112,6 +125,7 @@ jobs:
       - run: uv run ty check .
 
   check-tuner:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -129,6 +143,7 @@ jobs:
       - run: uv run ty check api
 
   test-pre-spawn-hook:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -142,6 +157,7 @@ jobs:
       - run: uv run --group dev pytest helm/charts/mddash/tests/
 
   validate-charts:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -158,6 +174,7 @@ jobs:
         run: make validate-charts
 
   validate-workflows:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7

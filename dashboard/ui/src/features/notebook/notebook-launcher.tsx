@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 import { toApiError } from "@/api/errors"
 import { useGetNotebookConfig, useStartNotebook } from "@/api/generated/client"
@@ -49,10 +49,8 @@ export function NotebookLauncher({ experimentId, notebook, ready, probeFailures,
 
   const tiers = config.data?.status === 200 ? config.data.data.tiers : []
   const defaultTier = config.data?.status === 200 ? config.data.data.defaultTier : undefined
-  // Adopt the server default once the config lands.
-  useEffect(() => {
-    if (defaultTier !== undefined) setTier((current) => current || defaultTier)
-  }, [defaultTier])
+  // Explicit pick wins; otherwise the server default applies.
+  const effectiveTier = tier || (defaultTier ?? "")
 
   const invalidate = useNotebookInvalidation(experimentId)
   const quota = useNotebookQuota()
@@ -70,7 +68,7 @@ export function NotebookLauncher({ experimentId, notebook, ready, probeFailures,
   })
 
   function attemptStart() {
-    const request: PendingNotebookStart = { experimentId, data: { tier: tier || undefined, gpu } }
+    const request: PendingNotebookStart = { experimentId, data: { tier: effectiveTier || undefined, gpu } }
     setPendingStart(request)
     if (quota.full) setQuotaOpen(true)
     else start.mutate(request)
@@ -103,7 +101,7 @@ export function NotebookLauncher({ experimentId, notebook, ready, probeFailures,
           Notebook
         </span>
         {tiers.length > 0 && (
-          <Select value={tier} onValueChange={(value) => setTier(value as StartNotebookRequestTier)}>
+          <Select value={effectiveTier} onValueChange={(value) => setTier(value as StartNotebookRequestTier)}>
             <SelectTrigger aria-label="Notebook size" className="w-auto min-w-40">
               <SelectValue placeholder="Size" />
             </SelectTrigger>
@@ -127,7 +125,11 @@ export function NotebookLauncher({ experimentId, notebook, ready, probeFailures,
             GPU
           </Label>
         </div>
-        <Button size="sm" onClick={attemptStart} disabled={start.isPending || (tiers.length > 0 && tier === "")}>
+        <Button
+          size="sm"
+          onClick={attemptStart}
+          disabled={start.isPending || (tiers.length > 0 && effectiveTier === "")}
+        >
           <Play aria-hidden="true" />
           {start.isPending ? "Starting…" : "Start notebook"}
         </Button>

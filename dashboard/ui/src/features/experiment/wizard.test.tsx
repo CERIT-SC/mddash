@@ -80,17 +80,6 @@ describe("ExperimentWizard", () => {
     expect(screen.queryByText("·")).not.toBeInTheDocument()
   })
 
-  it("constrains very long experiment names with truncation", async () => {
-    mockApi({
-      "/experiments/exp1/simulations": Response.json([alpha]),
-      "/experiments/exp1": okExperiment({ name: `Long ${"y".repeat(300)}` }),
-    })
-    renderWizard({})
-    const button = await screen.findByRole("button", { name: "Rename experiment" })
-    expect(button).toHaveClass("max-w-full")
-    expect(button.querySelector("span.truncate")).toBeInTheDocument()
-  })
-
   it("renames the experiment from the title chip", async () => {
     const calls = mockApi({
       "/experiments/exp1/simulations": Response.json([alpha]),

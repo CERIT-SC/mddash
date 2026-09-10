@@ -25,6 +25,7 @@ permissions:
 
 jobs:
   setup:
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     outputs:
       registry: ${{ steps.config.outputs.registry }}
@@ -56,6 +57,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
   build-sidecars:
+    timeout-minutes: 60
     needs: setup
     runs-on: ubuntu-latest
     strategy:
@@ -119,6 +121,7 @@ jobs:
           cache-to: type=registry,ref=${{ steps.image.outputs.base }}:buildcache,mode=max
 
   build-proxy:
+    timeout-minutes: 60
     needs: [setup, build-sidecars]
     runs-on: ubuntu-latest
     steps:
@@ -161,6 +164,7 @@ jobs:
           cache-to: type=registry,ref=${{ steps.image.outputs.base }}:buildcache,mode=max
 
   build-components:
+    timeout-minutes: 60
     needs: setup
     runs-on: ubuntu-latest
     strategy:
@@ -224,6 +228,7 @@ jobs:
           cache-to: type=registry,ref=${{ steps.image.outputs.base }}:buildcache,mode=max
 
   push-charts:
+    timeout-minutes: 10
     if: ${{ inputs.release-mode }}
     needs: setup
     runs-on: ubuntu-latest
@@ -255,6 +260,7 @@ jobs:
         run: make push-mddash-chart ENV="$ENV" IMAGE_TAG="$IMAGE_VERSION"
 
   deploy:
+    timeout-minutes: 30
     needs: [setup, build-sidecars, build-proxy, build-components, push-charts]
     if: |
       always() &&

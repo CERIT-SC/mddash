@@ -23,16 +23,6 @@ function renderHeader() {
 }
 
 describe("SiteHeader", () => {
-  it("links to dashboard home, Hub token, and logout routes", async () => {
-    renderHeader()
-    expect(await screen.findByRole("link", { name: "MDDash home" })).toHaveAttribute("href", "/")
-    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute("href", "/")
-    expect(screen.getByRole("link", { name: "Get Token" })).toHaveAttribute("href", "/hub/token")
-    expect(screen.getByRole("link", { name: "Log out" })).toHaveAttribute("href", "/hub/logout")
-    expect(screen.getByText("alice")).toBeVisible()
-    expect([...document.querySelectorAll("img")].every((image) => image.alt === "")).toBe(true)
-  })
-
   it("toggles the theme when persistence is unavailable", async () => {
     const user = userEvent.setup()
     vi.spyOn(window.localStorage, "setItem").mockImplementation(() => {

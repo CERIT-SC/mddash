@@ -33,7 +33,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
 import { CircleCheck, CloudUpload, Key, LoaderCircle, Trash2, X } from "lucide-react"
 import { useDropzone, type FileRejection } from "react-dropzone"
-import { useForm } from "react-hook-form"
+import { useForm, useWatch } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
 
@@ -165,8 +165,8 @@ function CreateExperimentDialogInner({ selection, onClose, defaultNotebooksRepo 
       files: [],
     },
   })
-  const source = form.watch("source")
-  const notebooksRepoValue = form.watch("notebooksRepo")
+  const source = useWatch({ control: form.control, name: "source" })
+  const notebooksRepoValue = useWatch({ control: form.control, name: "notebooksRepo" })
   const isHttpsRepo = notebooksRepoValue.trim().startsWith("https://")
 
   const create = useCreateExperiment({

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FC } from "react"
+import { useCallback, useMemo, useState, type FC } from "react"
 
 import { escapeHtml } from "@/shared/escape-html"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@e-infra/design-system"
@@ -51,17 +51,13 @@ const LipidInteractionsPanel: FC<{ data: LipidInteractionAnalysis }> = ({ data }
   const [lipidFilter, setLipidFilter] = useState<string>("all")
   const [sortMode, setSortMode] = useState<SortMode>("residue")
 
-  useEffect(() => {
-    if (lipidFilter === "all") return
-    if (!lipidEntries.some((entry) => entry.key === lipidFilter)) {
-      setLipidFilter("all")
-    }
-  }, [lipidEntries, lipidFilter])
-
+  // Fall back to "all" when the picked lipid left the data.
+  const validFilter =
+    lipidFilter !== "all" && lipidEntries.some((entry) => entry.key === lipidFilter) ? lipidFilter : "all"
   const activeLipids = useMemo(() => {
-    if (lipidFilter === "all") return lipidEntries
-    return lipidEntries.filter((entry) => entry.key === lipidFilter)
-  }, [lipidEntries, lipidFilter])
+    if (validFilter === "all") return lipidEntries
+    return lipidEntries.filter((entry) => entry.key === validFilter)
+  }, [lipidEntries, validFilter])
 
   const residueOrder = useMemo(() => {
     const order = residueIndices.map((_, index) => index)
@@ -191,7 +187,7 @@ const LipidInteractionsPanel: FC<{ data: LipidInteractionAnalysis }> = ({ data }
                   <SelectItem value="total">Total occupancy</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={lipidFilter} onValueChange={setLipidFilter}>
+              <Select value={validFilter} onValueChange={setLipidFilter}>
                 <SelectTrigger className="h-9 w-48 text-xs">
                   <SelectValue placeholder="Filter lipid" />
                 </SelectTrigger>

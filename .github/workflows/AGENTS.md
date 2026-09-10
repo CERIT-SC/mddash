@@ -7,7 +7,7 @@ CI/CD pipelines for MDDash: lint, test, type-check, build, deploy, and release.
 ## Workflow Architecture
 
 ### `ci.yml`
-Runs on PRs and via `workflow_call`. No deployment credentials. Performs formatting/lint checks, Python and TypeScript type checking, unit tests, Helm chart validation, and workflow validation (actionlint + zizmor). Called as a quality gate by both `cd.yml` and `release.yml`.
+Runs on PRs and via `workflow_call`. No deployment credentials. Performs formatting/lint checks, Python and TypeScript type checking, unit tests, Helm chart validation, and workflow validation (actionlint + zizmor). Called as a quality gate by both `cd.yml` and `release.yml`. Frontend work is split into parallel `frontend-static` / `frontend-test` / `frontend-build` jobs (all using the `.github/actions/setup-frontend` composite); branch protection, if used, should require each of the three checks (there is deliberately no join job).
 
 ### `cd.yml`
 Triggered on `push: master`. Calls `ci.yml` as a quality gate, then calls `_deploy.yml` to deploy all images tagged `dev` to the dev environment. Concurrency group cancels superseded runs.

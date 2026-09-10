@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 import { useGetMetrics } from "@/api/generated/client"
 import { formatBytes, formatTime } from "@/shared/format"
+import { useNow } from "@/shared/use-now"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,12 +30,7 @@ export function ServerStatusBar() {
   const metrics = useGetMetrics({ query: { retry: false } })
   const [confirmStop, setConfirmStop] = useState(false)
   const [stopping, setStopping] = useState(false)
-  // Forces a re-render every second so the uptime readout ticks between refetches.
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    const id = setInterval(() => setTick((tick) => tick + 1), 1000)
-    return () => clearInterval(id)
-  }, [])
+  const now = useNow(true)
 
   const data = metrics.data?.status === 200 ? metrics.data.data : undefined
   const used = data?.storage_used_bytes ?? undefined
@@ -42,7 +38,9 @@ export function ServerStatusBar() {
   const hasStorage = used !== undefined && limit !== undefined && limit > 0
   const percent = hasStorage ? Math.min(100, Math.round(((used ?? 0) / (limit ?? 1)) * 100)) : 0
   const uptime =
-    data?.uptime_seconds !== undefined ? data.uptime_seconds + (Date.now() - metrics.dataUpdatedAt) / 1000 : undefined
+    data?.uptime_seconds !== undefined
+      ? data.uptime_seconds + ((now ?? metrics.dataUpdatedAt) - metrics.dataUpdatedAt) / 1000
+      : undefined
 
   function onStop() {
     setStopping(true)

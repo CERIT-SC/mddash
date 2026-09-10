@@ -26,4 +26,11 @@ dev = [
     "responses>=0.25",
     "watchdog",
     "ty",
+    "pytest-xdist>=3.8.0",
 ]
+
+[tool.pytest.ini_options]
+# 4 workers: GitHub-hosted runners for public repos have 4 vCPUs; do not raise
+# without re-measuring (worker startup ~1s each dominates on short suites).
+addopts = "-n 4 --dist loadfile"
+testpaths = ["tests"]

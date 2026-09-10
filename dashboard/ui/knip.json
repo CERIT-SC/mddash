@@ -3,6 +3,5 @@
   "entry": ["index.html"],
   "project": ["src/**/*.{ts,tsx,css,scss,sass}", "test/**/*.ts"],
   "ignore": ["src/api/generated/**"],
-  "ignoreDependencies": ["msw"],
   "ignoreBinaries": ["tsc", "prettier"]
 }

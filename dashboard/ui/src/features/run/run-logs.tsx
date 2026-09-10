@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 
 import { Engine, type SimulationJobLogLines } from "@/api/generated/models"
 import { countNewlines } from "@/shared/log-text"
@@ -58,12 +58,14 @@ export function RunLogs({ experimentId, simulationPath, engine, logLines, live, 
   const [follow, setFollow] = useState(true)
 
   // Failure pulls the error stream into view once; later closes stay manual.
-  useEffect(() => {
+  const [prevFailed, setPrevFailed] = useState(false)
+  if (failed !== prevFailed) {
+    setPrevFailed(failed)
     if (failed) {
       setOpen(true)
       setTab("stderr")
     }
-  }, [failed])
+  }
 
   // Only the visible stream is fetched.
   const log = useSimulationJobLog(experimentId, simulationPath, engine, tab, { enabled: open, live, pollMs })

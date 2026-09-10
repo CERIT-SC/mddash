@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FC } from "react"
+import { useMemo, useState, type FC } from "react"
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@e-infra/design-system"
 
@@ -66,17 +66,8 @@ const normalizeResidues = (data: SolventAccessibleSurfaceAnalysis): ResidueSerie
 
 const SasaAnalysisPanel: FC<{ data: SolventAccessibleSurfaceAnalysis }> = ({ data }) => {
   const residues = useMemo(() => normalizeResidues(data), [data])
-  const [selectedResidueId, setSelectedResidueId] = useState<string>("")
-
-  useEffect(() => {
-    if (!residues.length) return
-    const fallback = residues[0]?.id ?? ""
-    if (!selectedResidueId || !residues.some((residue) => residue.id === selectedResidueId)) {
-      setSelectedResidueId(fallback)
-    }
-  }, [residues, selectedResidueId])
-
-  const selectedResidue = residues.find((residue) => residue.id === selectedResidueId)
+  const [selectedResidueId, setSelectedResidueId] = useState<string | null>(null)
+  const selectedResidue = residues.find((residue) => residue.id === selectedResidueId) ?? residues[0]
 
   const frameStep = Number.isFinite(data.step) && data.step ? data.step : 1
 
@@ -180,7 +171,7 @@ const SasaAnalysisPanel: FC<{ data: SolventAccessibleSurfaceAnalysis }> = ({ dat
             {residues.length > 1 && (
               <div className="flex items-center gap-2">
                 <span className="text-text-muted text-xs">Residue</span>
-                <Select value={selectedResidueId} onValueChange={setSelectedResidueId}>
+                <Select value={selectedResidue?.id ?? ""} onValueChange={setSelectedResidueId}>
                   <SelectTrigger className="h-8 w-48 text-xs">
                     <SelectValue />
                   </SelectTrigger>

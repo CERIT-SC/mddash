@@ -982,11 +982,13 @@ if(createExperimentForm['simulation-files'] !== undefined) {
 
 
 
-export const getCreateExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExperiment>>, TError,{data: CreateExperimentForm}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof createExperiment>>, TError,{data: CreateExperimentForm}, TContext> => {
+export const getCreateExperimentMutationKey = () => ['createExperiment'] as const;
 
-const mutationKey = ['createExperiment'];
+export const getCreateExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExperiment>>, TError,CreateExperimentMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof createExperiment>>, TError,CreateExperimentMutationVariables, TContext> => {
+
+const mutationKey = getCreateExperimentMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -996,7 +998,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createExperiment>>, {data: CreateExperimentForm}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createExperiment>>, CreateExperimentMutationVariables> = (props) => {
           const {data} = props ?? {};
 
           return  createExperiment(data,fetchOptions)
@@ -1012,16 +1014,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type CreateExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof createExperiment>>>
     export type CreateExperimentMutationBody = CreateExperimentForm
     export type CreateExperimentMutationError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }
+    export type CreateExperimentMutationVariables = {data: CreateExperimentForm}
 
     /**
  * @summary Create an experiment
  */
 export const useCreateExperiment = <TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExperiment>>, TError,{data: CreateExperimentForm}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExperiment>>, TError,CreateExperimentMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createExperiment>>,
         TError,
-        {data: CreateExperimentForm},
+        CreateExperimentMutationVariables,
         TContext
       > => {
       return useMutation(getCreateExperimentMutationOptions(options), queryClient);
@@ -1206,12 +1209,26 @@ export const getUpdateExperimentUrl = (experimentId: string,) => {
 export const updateExperiment = async (experimentId: string,
     updateExperimentBody: UpdateExperiment, options?: RequestInit): Promise<updateExperimentResponseSuccess> => {
 
-  const res = await fetch(getUpdateExperimentUrl(experimentId),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+const res = await fetch(getUpdateExperimentUrl(experimentId),
   {
       credentials: 'same-origin',
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(updateExperimentBody)
   }
 )
@@ -1234,11 +1251,13 @@ export const updateExperiment = async (experimentId: string,
 
 
 
-export const getUpdateExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExperiment>>, TError,{experimentId: string;data: UpdateExperiment}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof updateExperiment>>, TError,{experimentId: string;data: UpdateExperiment}, TContext> => {
+export const getUpdateExperimentMutationKey = () => ['updateExperiment'] as const;
 
-const mutationKey = ['updateExperiment'];
+export const getUpdateExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExperiment>>, TError,UpdateExperimentMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof updateExperiment>>, TError,UpdateExperimentMutationVariables, TContext> => {
+
+const mutationKey = getUpdateExperimentMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -1248,7 +1267,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateExperiment>>, {experimentId: string;data: UpdateExperiment}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateExperiment>>, UpdateExperimentMutationVariables> = (props) => {
           const {experimentId,data} = props ?? {};
 
           return  updateExperiment(experimentId,data,fetchOptions)
@@ -1264,16 +1283,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type UpdateExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof updateExperiment>>>
     export type UpdateExperimentMutationBody = UpdateExperiment
     export type UpdateExperimentMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type UpdateExperimentMutationVariables = {experimentId: string;data: UpdateExperiment}
 
     /**
  * @summary Update an experiment
  */
 export const useUpdateExperiment = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExperiment>>, TError,{experimentId: string;data: UpdateExperiment}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExperiment>>, TError,UpdateExperimentMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateExperiment>>,
         TError,
-        {experimentId: string;data: UpdateExperiment},
+        UpdateExperimentMutationVariables,
         TContext
       > => {
       return useMutation(getUpdateExperimentMutationOptions(options), queryClient);
@@ -1342,11 +1362,13 @@ export const deleteExperiment = async (experimentId: string, options?: RequestIn
 
 
 
-export const getDeleteExperimentMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteExperiment>>, TError,{experimentId: string}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteExperiment>>, TError,{experimentId: string}, TContext> => {
+export const getDeleteExperimentMutationKey = () => ['deleteExperiment'] as const;
 
-const mutationKey = ['deleteExperiment'];
+export const getDeleteExperimentMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteExperiment>>, TError,DeleteExperimentMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteExperiment>>, TError,DeleteExperimentMutationVariables, TContext> => {
+
+const mutationKey = getDeleteExperimentMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -1356,7 +1378,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteExperiment>>, {experimentId: string}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteExperiment>>, DeleteExperimentMutationVariables> = (props) => {
           const {experimentId} = props ?? {};
 
           return  deleteExperiment(experimentId,fetchOptions)
@@ -1372,16 +1394,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type DeleteExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteExperiment>>>
 
     export type DeleteExperimentMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+    export type DeleteExperimentMutationVariables = {experimentId: string}
 
     /**
  * @summary Delete an experiment
  */
 export const useDeleteExperiment = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteExperiment>>, TError,{experimentId: string}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteExperiment>>, TError,DeleteExperimentMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteExperiment>>,
         TError,
-        {experimentId: string},
+        DeleteExperimentMutationVariables,
         TContext
       > => {
       return useMutation(getDeleteExperimentMutationOptions(options), queryClient);
@@ -1438,12 +1461,26 @@ export const getPublishExperimentUrl = (experimentId: string,) => {
 export const publishExperiment = async (experimentId: string,
     publishRequest?: PublishRequest, options?: RequestInit): Promise<publishExperimentResponseSuccess> => {
 
-  const res = await fetch(getPublishExperimentUrl(experimentId),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+const res = await fetch(getPublishExperimentUrl(experimentId),
   {
       credentials: 'same-origin',
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(publishRequest)
   }
 )
@@ -1466,11 +1503,13 @@ export const publishExperiment = async (experimentId: string,
 
 
 
-export const getPublishExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | UnauthorizedResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishExperiment>>, TError,{experimentId: string;data?: PublishRequest}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof publishExperiment>>, TError,{experimentId: string;data?: PublishRequest}, TContext> => {
+export const getPublishExperimentMutationKey = () => ['publishExperiment'] as const;
 
-const mutationKey = ['publishExperiment'];
+export const getPublishExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | UnauthorizedResponse | NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishExperiment>>, TError,PublishExperimentMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof publishExperiment>>, TError,PublishExperimentMutationVariables, TContext> => {
+
+const mutationKey = getPublishExperimentMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -1480,7 +1519,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishExperiment>>, {experimentId: string;data?: PublishRequest}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof publishExperiment>>, PublishExperimentMutationVariables> = (props) => {
           const {experimentId,data} = props ?? {};
 
           return  publishExperiment(experimentId,data,fetchOptions)
@@ -1496,16 +1535,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type PublishExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof publishExperiment>>>
     export type PublishExperimentMutationBody = PublishRequest | undefined
     export type PublishExperimentMutationError = globalThis.Error & { info?: BadRequestResponse | UnauthorizedResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type PublishExperimentMutationVariables = {experimentId: string;data?: PublishRequest}
 
     /**
  * @summary Publish an experiment
  */
 export const usePublishExperiment = <TError = globalThis.Error & { info?: BadRequestResponse | UnauthorizedResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishExperiment>>, TError,{experimentId: string;data?: PublishRequest}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishExperiment>>, TError,PublishExperimentMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof publishExperiment>>,
         TError,
-        {experimentId: string;data?: PublishRequest},
+        PublishExperimentMutationVariables,
         TContext
       > => {
       return useMutation(getPublishExperimentMutationOptions(options), queryClient);
@@ -2120,11 +2160,13 @@ export const logoutMDRepo = async ( options?: RequestInit): Promise<logoutMDRepo
 
 
 
+export const getLogoutMDRepoMutationKey = () => ['logoutMDRepo'] as const;
+
 export const getLogoutMDRepoMutationOptions = <TError = globalThis.Error & { info?: ProblemResponse; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logoutMDRepo>>, TError,void, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof logoutMDRepo>>, TError,void, TContext> => {
 
-const mutationKey = ['logoutMDRepo'];
+const mutationKey = getLogoutMDRepoMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -2150,6 +2192,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type LogoutMDRepoMutationResult = NonNullable<Awaited<ReturnType<typeof logoutMDRepo>>>
 
     export type LogoutMDRepoMutationError = globalThis.Error & { info?: ProblemResponse; status?: number }
+
 
     /**
  * @summary Clear MDRepo credentials
@@ -2648,12 +2691,26 @@ export const getCreateSimulationUrl = (experimentId: string,) => {
 export const createSimulation = async (experimentId: string,
     simulationWrite: SimulationWrite, options?: RequestInit): Promise<createSimulationResponseSuccess> => {
 
-  const res = await fetch(getCreateSimulationUrl(experimentId),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+const res = await fetch(getCreateSimulationUrl(experimentId),
   {
       credentials: 'same-origin',
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(simulationWrite)
   }
 )
@@ -2676,11 +2733,13 @@ export const createSimulation = async (experimentId: string,
 
 
 
-export const getCreateSimulationMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSimulation>>, TError,{experimentId: string;data: SimulationWrite}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof createSimulation>>, TError,{experimentId: string;data: SimulationWrite}, TContext> => {
+export const getCreateSimulationMutationKey = () => ['createSimulation'] as const;
 
-const mutationKey = ['createSimulation'];
+export const getCreateSimulationMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSimulation>>, TError,CreateSimulationMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof createSimulation>>, TError,CreateSimulationMutationVariables, TContext> => {
+
+const mutationKey = getCreateSimulationMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -2690,7 +2749,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSimulation>>, {experimentId: string;data: SimulationWrite}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createSimulation>>, CreateSimulationMutationVariables> = (props) => {
           const {experimentId,data} = props ?? {};
 
           return  createSimulation(experimentId,data,fetchOptions)
@@ -2706,16 +2765,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type CreateSimulationMutationResult = NonNullable<Awaited<ReturnType<typeof createSimulation>>>
     export type CreateSimulationMutationBody = SimulationWrite
     export type CreateSimulationMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number }
+    export type CreateSimulationMutationVariables = {experimentId: string;data: SimulationWrite}
 
     /**
  * @summary Create a simulation manifest
  */
 export const useCreateSimulation = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSimulation>>, TError,{experimentId: string;data: SimulationWrite}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSimulation>>, TError,CreateSimulationMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createSimulation>>,
         TError,
-        {experimentId: string;data: SimulationWrite},
+        CreateSimulationMutationVariables,
         TContext
       > => {
       return useMutation(getCreateSimulationMutationOptions(options), queryClient);
@@ -2915,12 +2975,26 @@ export const updateSimulation = async (experimentId: string,
     simulationPath: string,
     simulationWrite: SimulationWrite, options?: RequestInit): Promise<updateSimulationResponseSuccess> => {
 
-  const res = await fetch(getUpdateSimulationUrl(experimentId,simulationPath),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+const res = await fetch(getUpdateSimulationUrl(experimentId,simulationPath),
   {
       credentials: 'same-origin',
     ...options,
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(simulationWrite)
   }
 )
@@ -2943,11 +3017,13 @@ export const updateSimulation = async (experimentId: string,
 
 
 
-export const getUpdateSimulationMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSimulation>>, TError,{experimentId: string;simulationPath: string;data: SimulationWrite}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof updateSimulation>>, TError,{experimentId: string;simulationPath: string;data: SimulationWrite}, TContext> => {
+export const getUpdateSimulationMutationKey = () => ['updateSimulation'] as const;
 
-const mutationKey = ['updateSimulation'];
+export const getUpdateSimulationMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSimulation>>, TError,UpdateSimulationMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof updateSimulation>>, TError,UpdateSimulationMutationVariables, TContext> => {
+
+const mutationKey = getUpdateSimulationMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -2957,7 +3033,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSimulation>>, {experimentId: string;simulationPath: string;data: SimulationWrite}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateSimulation>>, UpdateSimulationMutationVariables> = (props) => {
           const {experimentId,simulationPath,data} = props ?? {};
 
           return  updateSimulation(experimentId,simulationPath,data,fetchOptions)
@@ -2973,16 +3049,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type UpdateSimulationMutationResult = NonNullable<Awaited<ReturnType<typeof updateSimulation>>>
     export type UpdateSimulationMutationBody = SimulationWrite
     export type UpdateSimulationMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number }
+    export type UpdateSimulationMutationVariables = {experimentId: string;simulationPath: string;data: SimulationWrite}
 
     /**
  * @summary Update a simulation manifest
  */
 export const useUpdateSimulation = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSimulation>>, TError,{experimentId: string;simulationPath: string;data: SimulationWrite}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSimulation>>, TError,UpdateSimulationMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateSimulation>>,
         TError,
-        {experimentId: string;simulationPath: string;data: SimulationWrite},
+        UpdateSimulationMutationVariables,
         TContext
       > => {
       return useMutation(getUpdateSimulationMutationOptions(options), queryClient);
@@ -3058,11 +3135,13 @@ export const deleteSimulation = async (experimentId: string,
 
 
 
-export const getDeleteSimulationMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSimulation>>, TError,{experimentId: string;simulationPath: string}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteSimulation>>, TError,{experimentId: string;simulationPath: string}, TContext> => {
+export const getDeleteSimulationMutationKey = () => ['deleteSimulation'] as const;
 
-const mutationKey = ['deleteSimulation'];
+export const getDeleteSimulationMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSimulation>>, TError,DeleteSimulationMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteSimulation>>, TError,DeleteSimulationMutationVariables, TContext> => {
+
+const mutationKey = getDeleteSimulationMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -3072,7 +3151,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSimulation>>, {experimentId: string;simulationPath: string}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteSimulation>>, DeleteSimulationMutationVariables> = (props) => {
           const {experimentId,simulationPath} = props ?? {};
 
           return  deleteSimulation(experimentId,simulationPath,fetchOptions)
@@ -3088,16 +3167,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type DeleteSimulationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSimulation>>>
 
     export type DeleteSimulationMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type DeleteSimulationMutationVariables = {experimentId: string;simulationPath: string}
 
     /**
  * @summary Delete a simulation manifest
  */
 export const useDeleteSimulation = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSimulation>>, TError,{experimentId: string;simulationPath: string}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSimulation>>, TError,DeleteSimulationMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteSimulation>>,
         TError,
-        {experimentId: string;simulationPath: string},
+        DeleteSimulationMutationVariables,
         TContext
       > => {
       return useMutation(getDeleteSimulationMutationOptions(options), queryClient);
@@ -3425,12 +3505,26 @@ export const submitGromacsJob = async (experimentId: string,
     simulationPath: string,
     gromacsJobRequest?: GromacsJobRequest, options?: RequestInit): Promise<submitGromacsJobResponseSuccess> => {
 
-  const res = await fetch(getSubmitGromacsJobUrl(experimentId,simulationPath),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+const res = await fetch(getSubmitGromacsJobUrl(experimentId,simulationPath),
   {
       credentials: 'same-origin',
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(gromacsJobRequest)
   }
 )
@@ -3453,11 +3547,13 @@ export const submitGromacsJob = async (experimentId: string,
 
 
 
-export const getSubmitGromacsJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,{experimentId: string;simulationPath: string;data?: GromacsJobRequest}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,{experimentId: string;simulationPath: string;data?: GromacsJobRequest}, TContext> => {
+export const getSubmitGromacsJobMutationKey = () => ['submitGromacsJob'] as const;
 
-const mutationKey = ['submitGromacsJob'];
+export const getSubmitGromacsJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,SubmitGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,SubmitGromacsJobMutationVariables, TContext> => {
+
+const mutationKey = getSubmitGromacsJobMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -3467,7 +3563,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitGromacsJob>>, {experimentId: string;simulationPath: string;data?: GromacsJobRequest}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitGromacsJob>>, SubmitGromacsJobMutationVariables> = (props) => {
           const {experimentId,simulationPath,data} = props ?? {};
 
           return  submitGromacsJob(experimentId,simulationPath,data,fetchOptions)
@@ -3483,16 +3579,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type SubmitGromacsJobMutationResult = NonNullable<Awaited<ReturnType<typeof submitGromacsJob>>>
     export type SubmitGromacsJobMutationBody = GromacsJobRequest | undefined
     export type SubmitGromacsJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type SubmitGromacsJobMutationVariables = {experimentId: string;simulationPath: string;data?: GromacsJobRequest}
 
     /**
  * @summary Submit a GROMACS job
  */
 export const useSubmitGromacsJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,{experimentId: string;simulationPath: string;data?: GromacsJobRequest}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,SubmitGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof submitGromacsJob>>,
         TError,
-        {experimentId: string;simulationPath: string;data?: GromacsJobRequest},
+        SubmitGromacsJobMutationVariables,
         TContext
       > => {
       return useMutation(getSubmitGromacsJobMutationOptions(options), queryClient);
@@ -3563,11 +3660,13 @@ export const deleteGromacsJob = async (experimentId: string,
 
 
 
-export const getDeleteGromacsJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGromacsJob>>, TError,{experimentId: string;simulationPath: string}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteGromacsJob>>, TError,{experimentId: string;simulationPath: string}, TContext> => {
+export const getDeleteGromacsJobMutationKey = () => ['deleteGromacsJob'] as const;
 
-const mutationKey = ['deleteGromacsJob'];
+export const getDeleteGromacsJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGromacsJob>>, TError,DeleteGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteGromacsJob>>, TError,DeleteGromacsJobMutationVariables, TContext> => {
+
+const mutationKey = getDeleteGromacsJobMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -3577,7 +3676,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGromacsJob>>, {experimentId: string;simulationPath: string}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGromacsJob>>, DeleteGromacsJobMutationVariables> = (props) => {
           const {experimentId,simulationPath} = props ?? {};
 
           return  deleteGromacsJob(experimentId,simulationPath,fetchOptions)
@@ -3593,16 +3692,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type DeleteGromacsJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGromacsJob>>>
 
     export type DeleteGromacsJobMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+    export type DeleteGromacsJobMutationVariables = {experimentId: string;simulationPath: string}
 
     /**
  * @summary Delete a GROMACS job
  */
 export const useDeleteGromacsJob = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGromacsJob>>, TError,{experimentId: string;simulationPath: string}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGromacsJob>>, TError,DeleteGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteGromacsJob>>,
         TError,
-        {experimentId: string;simulationPath: string},
+        DeleteGromacsJobMutationVariables,
         TContext
       > => {
       return useMutation(getDeleteGromacsJobMutationOptions(options), queryClient);
@@ -4096,12 +4196,26 @@ export const submitAmberJob = async (experimentId: string,
     simulationPath: string,
     amberJobRequest?: AmberJobRequest, options?: RequestInit): Promise<submitAmberJobResponseSuccess> => {
 
-  const res = await fetch(getSubmitAmberJobUrl(experimentId,simulationPath),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+const res = await fetch(getSubmitAmberJobUrl(experimentId,simulationPath),
   {
       credentials: 'same-origin',
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(amberJobRequest)
   }
 )
@@ -4124,11 +4238,13 @@ export const submitAmberJob = async (experimentId: string,
 
 
 
-export const getSubmitAmberJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAmberJob>>, TError,{experimentId: string;simulationPath: string;data?: AmberJobRequest}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof submitAmberJob>>, TError,{experimentId: string;simulationPath: string;data?: AmberJobRequest}, TContext> => {
+export const getSubmitAmberJobMutationKey = () => ['submitAmberJob'] as const;
 
-const mutationKey = ['submitAmberJob'];
+export const getSubmitAmberJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAmberJob>>, TError,SubmitAmberJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof submitAmberJob>>, TError,SubmitAmberJobMutationVariables, TContext> => {
+
+const mutationKey = getSubmitAmberJobMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -4138,7 +4254,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitAmberJob>>, {experimentId: string;simulationPath: string;data?: AmberJobRequest}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitAmberJob>>, SubmitAmberJobMutationVariables> = (props) => {
           const {experimentId,simulationPath,data} = props ?? {};
 
           return  submitAmberJob(experimentId,simulationPath,data,fetchOptions)
@@ -4154,16 +4270,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type SubmitAmberJobMutationResult = NonNullable<Awaited<ReturnType<typeof submitAmberJob>>>
     export type SubmitAmberJobMutationBody = AmberJobRequest | undefined
     export type SubmitAmberJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type SubmitAmberJobMutationVariables = {experimentId: string;simulationPath: string;data?: AmberJobRequest}
 
     /**
  * @summary Submit an AMBER job
  */
 export const useSubmitAmberJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAmberJob>>, TError,{experimentId: string;simulationPath: string;data?: AmberJobRequest}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAmberJob>>, TError,SubmitAmberJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof submitAmberJob>>,
         TError,
-        {experimentId: string;simulationPath: string;data?: AmberJobRequest},
+        SubmitAmberJobMutationVariables,
         TContext
       > => {
       return useMutation(getSubmitAmberJobMutationOptions(options), queryClient);
@@ -4234,11 +4351,13 @@ export const deleteAmberJob = async (experimentId: string,
 
 
 
-export const getDeleteAmberJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAmberJob>>, TError,{experimentId: string;simulationPath: string}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteAmberJob>>, TError,{experimentId: string;simulationPath: string}, TContext> => {
+export const getDeleteAmberJobMutationKey = () => ['deleteAmberJob'] as const;
 
-const mutationKey = ['deleteAmberJob'];
+export const getDeleteAmberJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAmberJob>>, TError,DeleteAmberJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAmberJob>>, TError,DeleteAmberJobMutationVariables, TContext> => {
+
+const mutationKey = getDeleteAmberJobMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -4248,7 +4367,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAmberJob>>, {experimentId: string;simulationPath: string}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAmberJob>>, DeleteAmberJobMutationVariables> = (props) => {
           const {experimentId,simulationPath} = props ?? {};
 
           return  deleteAmberJob(experimentId,simulationPath,fetchOptions)
@@ -4264,16 +4383,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type DeleteAmberJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAmberJob>>>
 
     export type DeleteAmberJobMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+    export type DeleteAmberJobMutationVariables = {experimentId: string;simulationPath: string}
 
     /**
  * @summary Delete an AMBER job
  */
 export const useDeleteAmberJob = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAmberJob>>, TError,{experimentId: string;simulationPath: string}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAmberJob>>, TError,DeleteAmberJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteAmberJob>>,
         TError,
-        {experimentId: string;simulationPath: string},
+        DeleteAmberJobMutationVariables,
         TContext
       > => {
       return useMutation(getDeleteAmberJobMutationOptions(options), queryClient);
@@ -4628,12 +4748,26 @@ export const startTunerJob = async (experimentId: string,
     tunerJobRequest?: TunerJobRequest,
     params?: StartTunerJobParams, options?: RequestInit): Promise<startTunerJobResponseSuccess> => {
 
-  const res = await fetch(getStartTunerJobUrl(experimentId,params),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+const res = await fetch(getStartTunerJobUrl(experimentId,params),
   {
       credentials: 'same-origin',
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(tunerJobRequest)
   }
 )
@@ -4656,11 +4790,13 @@ export const startTunerJob = async (experimentId: string,
 
 
 
-export const getStartTunerJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startTunerJob>>, TError,{experimentId: string;data?: TunerJobRequest;params?: StartTunerJobParams}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof startTunerJob>>, TError,{experimentId: string;data?: TunerJobRequest;params?: StartTunerJobParams}, TContext> => {
+export const getStartTunerJobMutationKey = () => ['startTunerJob'] as const;
 
-const mutationKey = ['startTunerJob'];
+export const getStartTunerJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startTunerJob>>, TError,StartTunerJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof startTunerJob>>, TError,StartTunerJobMutationVariables, TContext> => {
+
+const mutationKey = getStartTunerJobMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -4670,7 +4806,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startTunerJob>>, {experimentId: string;data?: TunerJobRequest;params?: StartTunerJobParams}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startTunerJob>>, StartTunerJobMutationVariables> = (props) => {
           const {experimentId,data,params} = props ?? {};
 
           return  startTunerJob(experimentId,data,params,fetchOptions)
@@ -4686,16 +4822,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type StartTunerJobMutationResult = NonNullable<Awaited<ReturnType<typeof startTunerJob>>>
     export type StartTunerJobMutationBody = TunerJobRequest | undefined
     export type StartTunerJobMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+    export type StartTunerJobMutationVariables = {experimentId: string;data?: TunerJobRequest;params?: StartTunerJobParams}
 
     /**
  * @summary Start a tuner job
  */
 export const useStartTunerJob = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startTunerJob>>, TError,{experimentId: string;data?: TunerJobRequest;params?: StartTunerJobParams}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startTunerJob>>, TError,StartTunerJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof startTunerJob>>,
         TError,
-        {experimentId: string;data?: TunerJobRequest;params?: StartTunerJobParams},
+        StartTunerJobMutationVariables,
         TContext
       > => {
       return useMutation(getStartTunerJobMutationOptions(options), queryClient);
@@ -4912,11 +5049,13 @@ export const deleteTunerJob = async (experimentId: string,
 
 
 
-export const getDeleteTunerJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTunerJob>>, TError,{experimentId: string;simulationPath: string}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteTunerJob>>, TError,{experimentId: string;simulationPath: string}, TContext> => {
+export const getDeleteTunerJobMutationKey = () => ['deleteTunerJob'] as const;
 
-const mutationKey = ['deleteTunerJob'];
+export const getDeleteTunerJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTunerJob>>, TError,DeleteTunerJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTunerJob>>, TError,DeleteTunerJobMutationVariables, TContext> => {
+
+const mutationKey = getDeleteTunerJobMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -4926,7 +5065,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTunerJob>>, {experimentId: string;simulationPath: string}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTunerJob>>, DeleteTunerJobMutationVariables> = (props) => {
           const {experimentId,simulationPath} = props ?? {};
 
           return  deleteTunerJob(experimentId,simulationPath,fetchOptions)
@@ -4942,16 +5081,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type DeleteTunerJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTunerJob>>>
 
     export type DeleteTunerJobMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+    export type DeleteTunerJobMutationVariables = {experimentId: string;simulationPath: string}
 
     /**
  * @summary Delete a tuner job
  */
 export const useDeleteTunerJob = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTunerJob>>, TError,{experimentId: string;simulationPath: string}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTunerJob>>, TError,DeleteTunerJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteTunerJob>>,
         TError,
-        {experimentId: string;simulationPath: string},
+        DeleteTunerJobMutationVariables,
         TContext
       > => {
       return useMutation(getDeleteTunerJobMutationOptions(options), queryClient);
@@ -5022,11 +5162,13 @@ export const stopTunerJob = async (experimentId: string,
 
 
 
-export const getStopTunerJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopTunerJob>>, TError,{experimentId: string;simulationPath: string}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof stopTunerJob>>, TError,{experimentId: string;simulationPath: string}, TContext> => {
+export const getStopTunerJobMutationKey = () => ['stopTunerJob'] as const;
 
-const mutationKey = ['stopTunerJob'];
+export const getStopTunerJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopTunerJob>>, TError,StopTunerJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof stopTunerJob>>, TError,StopTunerJobMutationVariables, TContext> => {
+
+const mutationKey = getStopTunerJobMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -5036,7 +5178,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof stopTunerJob>>, {experimentId: string;simulationPath: string}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof stopTunerJob>>, StopTunerJobMutationVariables> = (props) => {
           const {experimentId,simulationPath} = props ?? {};
 
           return  stopTunerJob(experimentId,simulationPath,fetchOptions)
@@ -5052,16 +5194,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type StopTunerJobMutationResult = NonNullable<Awaited<ReturnType<typeof stopTunerJob>>>
 
     export type StopTunerJobMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+    export type StopTunerJobMutationVariables = {experimentId: string;simulationPath: string}
 
     /**
  * @summary Stop a tuner job
  */
 export const useStopTunerJob = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopTunerJob>>, TError,{experimentId: string;simulationPath: string}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopTunerJob>>, TError,StopTunerJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof stopTunerJob>>,
         TError,
-        {experimentId: string;simulationPath: string},
+        StopTunerJobMutationVariables,
         TContext
       > => {
       return useMutation(getStopTunerJobMutationOptions(options), queryClient);
@@ -5559,12 +5702,26 @@ export const getStartNotebookUrl = (experimentId: string,) => {
 export const startNotebook = async (experimentId: string,
     startNotebookRequest?: StartNotebookRequest, options?: RequestInit): Promise<startNotebookResponseSuccess> => {
 
-  const res = await fetch(getStartNotebookUrl(experimentId),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+const res = await fetch(getStartNotebookUrl(experimentId),
   {
       credentials: 'same-origin',
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(startNotebookRequest)
   }
 )
@@ -5587,11 +5744,13 @@ export const startNotebook = async (experimentId: string,
 
 
 
-export const getStartNotebookMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | ForbiddenResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startNotebook>>, TError,{experimentId: string;data?: StartNotebookRequest}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof startNotebook>>, TError,{experimentId: string;data?: StartNotebookRequest}, TContext> => {
+export const getStartNotebookMutationKey = () => ['startNotebook'] as const;
 
-const mutationKey = ['startNotebook'];
+export const getStartNotebookMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | ForbiddenResponse | NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startNotebook>>, TError,StartNotebookMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof startNotebook>>, TError,StartNotebookMutationVariables, TContext> => {
+
+const mutationKey = getStartNotebookMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -5601,7 +5760,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startNotebook>>, {experimentId: string;data?: StartNotebookRequest}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startNotebook>>, StartNotebookMutationVariables> = (props) => {
           const {experimentId,data} = props ?? {};
 
           return  startNotebook(experimentId,data,fetchOptions)
@@ -5617,16 +5776,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type StartNotebookMutationResult = NonNullable<Awaited<ReturnType<typeof startNotebook>>>
     export type StartNotebookMutationBody = StartNotebookRequest | undefined
     export type StartNotebookMutationError = globalThis.Error & { info?: BadRequestResponse | ForbiddenResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type StartNotebookMutationVariables = {experimentId: string;data?: StartNotebookRequest}
 
     /**
  * @summary Start an experiment notebook
  */
 export const useStartNotebook = <TError = globalThis.Error & { info?: BadRequestResponse | ForbiddenResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startNotebook>>, TError,{experimentId: string;data?: StartNotebookRequest}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startNotebook>>, TError,StartNotebookMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof startNotebook>>,
         TError,
-        {experimentId: string;data?: StartNotebookRequest},
+        StartNotebookMutationVariables,
         TContext
       > => {
       return useMutation(getStartNotebookMutationOptions(options), queryClient);
@@ -5695,11 +5855,13 @@ export const stopNotebook = async (experimentId: string, options?: RequestInit):
 
 
 
-export const getStopNotebookMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopNotebook>>, TError,{experimentId: string}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof stopNotebook>>, TError,{experimentId: string}, TContext> => {
+export const getStopNotebookMutationKey = () => ['stopNotebook'] as const;
 
-const mutationKey = ['stopNotebook'];
+export const getStopNotebookMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopNotebook>>, TError,StopNotebookMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof stopNotebook>>, TError,StopNotebookMutationVariables, TContext> => {
+
+const mutationKey = getStopNotebookMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -5709,7 +5871,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof stopNotebook>>, {experimentId: string}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof stopNotebook>>, StopNotebookMutationVariables> = (props) => {
           const {experimentId} = props ?? {};
 
           return  stopNotebook(experimentId,fetchOptions)
@@ -5725,16 +5887,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type StopNotebookMutationResult = NonNullable<Awaited<ReturnType<typeof stopNotebook>>>
 
     export type StopNotebookMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+    export type StopNotebookMutationVariables = {experimentId: string}
 
     /**
  * @summary Stop an experiment notebook
  */
 export const useStopNotebook = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopNotebook>>, TError,{experimentId: string}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopNotebook>>, TError,StopNotebookMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof stopNotebook>>,
         TError,
-        {experimentId: string},
+        StopNotebookMutationVariables,
         TContext
       > => {
       return useMutation(getStopNotebookMutationOptions(options), queryClient);
@@ -5929,12 +6092,26 @@ export const getSubmitAnalysisJobUrl = (experimentId: string,) => {
 export const submitAnalysisJob = async (experimentId: string,
     analysisJobRequest: AnalysisJobRequest, options?: RequestInit): Promise<submitAnalysisJobResponseSuccess> => {
 
-  const res = await fetch(getSubmitAnalysisJobUrl(experimentId),
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+const res = await fetch(getSubmitAnalysisJobUrl(experimentId),
   {
       credentials: 'same-origin',
     ...options,
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
     body: JSON.stringify(analysisJobRequest)
   }
 )
@@ -5957,11 +6134,13 @@ export const submitAnalysisJob = async (experimentId: string,
 
 
 
-export const getSubmitAnalysisJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAnalysisJob>>, TError,{experimentId: string;data: AnalysisJobRequest}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof submitAnalysisJob>>, TError,{experimentId: string;data: AnalysisJobRequest}, TContext> => {
+export const getSubmitAnalysisJobMutationKey = () => ['submitAnalysisJob'] as const;
 
-const mutationKey = ['submitAnalysisJob'];
+export const getSubmitAnalysisJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAnalysisJob>>, TError,SubmitAnalysisJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof submitAnalysisJob>>, TError,SubmitAnalysisJobMutationVariables, TContext> => {
+
+const mutationKey = getSubmitAnalysisJobMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -5971,7 +6150,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitAnalysisJob>>, {experimentId: string;data: AnalysisJobRequest}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitAnalysisJob>>, SubmitAnalysisJobMutationVariables> = (props) => {
           const {experimentId,data} = props ?? {};
 
           return  submitAnalysisJob(experimentId,data,fetchOptions)
@@ -5987,16 +6166,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type SubmitAnalysisJobMutationResult = NonNullable<Awaited<ReturnType<typeof submitAnalysisJob>>>
     export type SubmitAnalysisJobMutationBody = AnalysisJobRequest
     export type SubmitAnalysisJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type SubmitAnalysisJobMutationVariables = {experimentId: string;data: AnalysisJobRequest}
 
     /**
  * @summary Submit an analysis job
  */
 export const useSubmitAnalysisJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAnalysisJob>>, TError,{experimentId: string;data: AnalysisJobRequest}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAnalysisJob>>, TError,SubmitAnalysisJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof submitAnalysisJob>>,
         TError,
-        {experimentId: string;data: AnalysisJobRequest},
+        SubmitAnalysisJobMutationVariables,
         TContext
       > => {
       return useMutation(getSubmitAnalysisJobMutationOptions(options), queryClient);
@@ -6832,11 +7012,13 @@ export const deleteAnalysisJob = async (experimentId: string,
 
 
 
-export const getDeleteAnalysisJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAnalysisJob>>, TError,{experimentId: string;jobId: string}, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteAnalysisJob>>, TError,{experimentId: string;jobId: string}, TContext> => {
+export const getDeleteAnalysisJobMutationKey = () => ['deleteAnalysisJob'] as const;
 
-const mutationKey = ['deleteAnalysisJob'];
+export const getDeleteAnalysisJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAnalysisJob>>, TError,DeleteAnalysisJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAnalysisJob>>, TError,DeleteAnalysisJobMutationVariables, TContext> => {
+
+const mutationKey = getDeleteAnalysisJobMutationKey();
 const {mutation: mutationOptions, fetch: fetchOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -6846,7 +7028,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAnalysisJob>>, {experimentId: string;jobId: string}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAnalysisJob>>, DeleteAnalysisJobMutationVariables> = (props) => {
           const {experimentId,jobId} = props ?? {};
 
           return  deleteAnalysisJob(experimentId,jobId,fetchOptions)
@@ -6862,16 +7044,17 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type DeleteAnalysisJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAnalysisJob>>>
 
     export type DeleteAnalysisJobMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+    export type DeleteAnalysisJobMutationVariables = {experimentId: string;jobId: string}
 
     /**
  * @summary Delete an analysis job
  */
 export const useDeleteAnalysisJob = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAnalysisJob>>, TError,{experimentId: string;jobId: string}, TContext>, fetch?: RequestInit}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAnalysisJob>>, TError,DeleteAnalysisJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteAnalysisJob>>,
         TError,
-        {experimentId: string;jobId: string},
+        DeleteAnalysisJobMutationVariables,
         TContext
       > => {
       return useMutation(getDeleteAnalysisJobMutationOptions(options), queryClient);

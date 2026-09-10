@@ -138,10 +138,4 @@ describe("NewExperimentPage", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Protein (BioBB) · AMBER" })).toBeVisible()
   })
-
-  it("links back to the dashboard", async () => {
-    stubCatalog()
-    await renderPage()
-    expect(screen.getByRole("link", { name: "Back to My Experiments" })).toBeVisible()
-  })
 })

@@ -1,6 +1,9 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["typescript", "react"],
+  "plugins": [
+    "typescript",
+    "react"
+  ],
   "env": {
     "browser": true
   },
@@ -15,7 +18,10 @@
     "typeAware": true
   },
   "rules": {
-    "eqeqeq": ["error", "always"],
+    "eqeqeq": [
+      "error",
+      "always"
+    ],
     "react/rules-of-hooks": "error",
     "react/exhaustive-deps": "error",
     "react/only-export-components": [
@@ -30,6 +36,7 @@
         "prefer": "type-imports",
         "fixStyle": "inline-type-imports"
       }
-    ]
+    ],
+    "react/preserve-manual-memoization": "off"
   }
 }

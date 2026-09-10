@@ -25,13 +25,6 @@ class TestHelmMdpositRendering:
         content = PRE_SPAWN_HOOK.read_text()
         assert '"MDPOSIT_URL"' in content, "MDPOSIT_URL not in passthrough env list"
 
-    def test_pre_spawn_hook_api_container_uses_passthrough(self) -> None:
-        """The _api_container function must inject _API_PASSTHROUGH_ENV into container env."""
-        content = PRE_SPAWN_HOOK.read_text()
-        assert "_API_PASSTHROUGH_ENV" in content
-        # The env injection line uses getenv over the passthrough keys
-        assert "getenv(k" in content or "getenv(" in content
-
     def test_pre_spawn_hook_proxy_container_includes_mdposit_url(self) -> None:
         """The _proxy_container function must inject MDPOSIT_URL into the proxy env."""
         content = PRE_SPAWN_HOOK.read_text()

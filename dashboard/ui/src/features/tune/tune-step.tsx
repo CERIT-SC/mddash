@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { toApiError } from "@/api/errors"
 import {
@@ -221,17 +221,10 @@ export function TuneStep({
   // UNKNOWN + no trials = no poll ever succeeded (API falls back to empty status when the tuner is
   // down). Structural sharing keeps data identical across polls, so dataUpdatedAt is the tick.
   const silent = live && job?.tuner_status === JobStatus.UNKNOWN && job?.trials.length === 0
-  const silentStart = useRef<number | null>(null)
-  const [tunerSilent, setTunerSilent] = useState(false)
-  useEffect(() => {
-    if (!silent) {
-      silentStart.current = null
-      setTunerSilent(false)
-      return
-    }
-    silentStart.current ??= Date.now()
-    if (Date.now() - silentStart.current > 4 * pollMs) setTunerSilent(true)
-  }, [silent, pollMs, jobQuery.dataUpdatedAt])
+  // Render-adjusted previous-value tracking, not an effect; `since` pins the tick silence began.
+  const [silence, setSilence] = useState({ silent: false, since: 0 })
+  if (silence.silent !== silent) setSilence({ silent, since: jobQuery.dataUpdatedAt })
+  const tunerSilent = silent && jobQuery.dataUpdatedAt - silence.since >= 4 * pollMs
 
   return (
     <div className="space-y-6">
