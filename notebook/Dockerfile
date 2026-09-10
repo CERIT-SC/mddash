@@ -18,12 +18,23 @@ RUN curl -LOs "https://dl.k8s.io/release/$(curl -Ls https://dl.k8s.io/release/st
     && install -m 755 kubectl /usr/local/bin/kubectl \
     && rm kubectl
 
-# GROMACS via conda-forge.  CONDA_OVERRIDE_CUDA allows CUDA builds to install
-# without a GPU present at build time; NVIDIA Container Runtime mounts real
-# CUDA libs at pod startup.
+# GROMACS via conda-forge. The `nompi_cuda*` build-string pin is REQUIRED: without it the
+# solver picks the default OpenCL build, which cannot detect NVIDIA GPUs on this cluster
+# (CONDA_OVERRIDE_CUDA only registers the virtual __cuda package so CUDA builds are
+# installable without a GPU at build time; it does not make the solver prefer them).
+# NVIDIA Container Runtime mounts real CUDA driver libs at pod startup.
+# The CUDA build pulls the full cuda-toolkit metapackage (several GB), so install,
+# cache cleanup, prune of link-time-only/compiler tooling, and the CUDA assertion all
+# happen in ONE layer — deletions in a later layer would not shrink the image.
 ENV CONDA_OVERRIDE_CUDA=12.0
-RUN mamba create -n gromacs -c conda-forge -y gromacs=2026 \
-    && mamba clean -afy
+RUN mamba create -n gromacs -c conda-forge -y "gromacs=2026=nompi_cuda*" \
+    && mamba clean -afy \
+    && find /opt/conda/envs/gromacs -name '*.a' -delete \
+    && rm -rf /opt/conda/envs/gromacs/nvvm \
+    && rm -f /opt/conda/envs/gromacs/bin/nvcc* \
+             /opt/conda/envs/gromacs/bin/nsight* \
+             /opt/conda/envs/gromacs/bin/compute-sanitizer \
+    && /opt/conda/envs/gromacs/bin/gmx --version | grep -q "GPU support:.*CUDA"
 
 COPY --from=amber /opt/ambertools26 /opt/ambertools26
 COPY --from=amber /opt/pmemd26      /opt/pmemd26
