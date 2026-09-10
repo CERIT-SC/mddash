@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 
 import {
   getGetExperimentQueryKey,
@@ -11,6 +11,7 @@ import type { Experiment, StartNotebookRequest } from "@/api/generated/models"
 import { formatTime } from "@/shared/format"
 import { isNotebookActive } from "@/shared/pod-status"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
+import { useNow } from "@/shared/use-now"
 import {
   Badge,
   Button,
@@ -54,12 +55,9 @@ function NotebookQuotaRow({ experiment, onStopped, onError }: NotebookQuotaRowPr
   const running = notebook?.status === "RUNNING"
   const transitioning = notebook?.status === "TERMINATING" || notebook?.status === "PENDING"
 
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    if (!running || notebook?.started_at === null || notebook?.started_at === undefined) return
-    const id = setInterval(() => setTick((tick) => tick + 1), 1000)
-    return () => clearInterval(id)
-  }, [running, notebook?.started_at])
+  const started =
+    notebook?.started_at === null || notebook?.started_at === undefined ? undefined : Date.parse(notebook.started_at)
+  const now = useNow(running && started !== undefined)
 
   const queryClient = useQueryClient()
   const stop = useStopNotebook({
@@ -77,10 +75,7 @@ function NotebookQuotaRow({ experiment, onStopped, onError }: NotebookQuotaRowPr
 
   const stopping = stop.isPending || notebook?.status === "TERMINATING"
   const uptime =
-    running && notebook.started_at !== null
-      ? // oxlint-disable-next-line react/purity -- live uptime; re-renders on the quota poll tick
-        formatTime(Math.max(0, (Date.now() - Date.parse(notebook.started_at)) / 1000))
-      : undefined
+    running && started !== undefined ? formatTime(Math.max(0, ((now ?? started) - started) / 1000)) : undefined
   const label = !active
     ? "Stopped"
     : notebook?.status === "TERMINATING"

@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react"
-
 import { toApiError } from "@/api/errors"
 import { useStopNotebook } from "@/api/generated/client"
 import type { Notebook } from "@/api/generated/models"
 import { formatTime } from "@/shared/format"
+import { useNow } from "@/shared/use-now"
 import { Button, cn } from "@e-infra/design-system"
 import { ExternalLink, LoaderCircle, Square } from "lucide-react"
 import { toast } from "sonner"
@@ -35,13 +34,8 @@ export function NotebookControls({
   className,
 }: NotebookControlsProps) {
   const invalidate = useNotebookInvalidation(experimentId)
-  const ticking = notebook.status === "RUNNING" && ready && notebook.started_at !== null
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    if (!ticking) return
-    const id = setInterval(() => setTick((tick) => tick + 1), 1000)
-    return () => clearInterval(id)
-  }, [ticking])
+  const started = notebook.started_at === null ? undefined : Date.parse(notebook.started_at)
+  const now = useNow(notebook.status === "RUNNING" && ready && started !== undefined)
 
   const stop = useStopNotebook({
     mutation: {
@@ -57,11 +51,7 @@ export function NotebookControls({
   const stopping = stop.isPending || notebook.status === "TERMINATING"
   const starting = notebook.status === "PENDING" || (running && !ready)
   const spinning = starting || stopping
-  const uptime =
-    notebook.started_at !== null
-      ? // oxlint-disable-next-line react/purity -- live uptime; re-renders on the notebook probe tick
-        Math.max(0, (Date.now() - Date.parse(notebook.started_at)) / 1000)
-      : undefined
+  const uptime = started === undefined ? undefined : Math.max(0, ((now ?? started) - started) / 1000)
   const showingUptime = running && ready && uptime !== undefined
 
   const label = stopping
