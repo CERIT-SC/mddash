@@ -212,6 +212,16 @@ describe("RunStep running job", () => {
     expect(spies.onStepChange).toHaveBeenCalledWith(3)
   })
 
+  it("keeps Analyze disabled until the run reports progress", async () => {
+    // A just-started pod has no engine log yet — nsteps_done unknown means the
+    // trajectory does not exist either, so Analyze would have nothing to show.
+    mockRun({ initial: gmxJob({ nsteps: null, nsteps_done: null, estimated_time: null }) })
+    renderRun()
+
+    expect(await screen.findByText("Preparing")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /analyze/i })).toBeDisabled()
+  })
+
   it("shows estimates and badges from the tuner trial matching the job config", async () => {
     const rerunOfSameConfig: TunerTrial = { ...FAST_TRIAL, id: "t1b", status: "RUNNING", performance: null }
     mockRun({ trials: [rerunOfSameConfig, FAST_TRIAL, ECO_TRIAL] })

@@ -744,13 +744,38 @@ class TestStepStatus:
             assert sim.step == 2
             assert sim.status == "simulating"
 
-    def test_running_sim_job_activates_analyze(self, app: Flask, tmp_path: Path) -> None:
-        """A running job counts the launched run as done: Analyze activates (partial trajectories analyzable mid-run)."""
+    def test_running_sim_job_stays_at_step_two_until_progress_is_known(self, app: Flask, tmp_path: Path) -> None:
+        """A just-started run has no engine log yet: Analyze waits for parsed progress (implies the trajectory exists)."""
         exp_id = _seed_experiment(app)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
         _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
         _add_gmx_job(app, exp_id, "protein.simulation.json", _last_known_status=JobStatus.RUNNING)
+
+        with app.app_context():
+            sim = Simulation.get(exp_id, "protein.simulation.json")
+            assert sim.step == 2
+            assert sim.status == "simulating"
+
+    def test_running_sim_job_activates_analyze_once_progress_is_known(
+        self, app: Flask, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A running job with parsed nsteps_done counts the run as done: Analyze activates (partial trajectories analyzable mid-run)."""
+        monkeypatch.setattr("models.gromacs_job.DATA_DIR", tmp_path)
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        _add_gmx_job(app, exp_id, "protein.simulation.json", _last_known_status=JobStatus.RUNNING)
+
+        production = exp_dir / "production"
+        production.mkdir()
+        (production / "protein.log").write_text(
+            "header\n"
+            "nsteps = 50000\n"
+            "Started mdrun on rank 0 Thu Aug 21 09:00:00 2026\n"
+            "           40000     800.00000    Thu Aug 21 09:10:00 2026\n"
+        )
 
         with app.app_context():
             sim = Simulation.get(exp_id, "protein.simulation.json")

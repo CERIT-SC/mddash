@@ -304,9 +304,9 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         (step, status) from jobs referencing this ``simulation_path``.
 
         Step is the wizard phase index: Setup 0, Tune 1, Run 2, Analyze 3.
-        A running job already counts as Run done, so Analyze activates once
-        the run starts and partial trajectories can be analyzed mid-run.
-        Publish is experiment-level, not part of this ladder.
+        A running job counts as Run done once nsteps_done parses from its
+        engine log — before that, the run's files (trajectory included)
+        don't exist. Publish is experiment-level, not part of this ladder.
 
         Returns:
             A tuple of (step, status) where step is an integer (0-3) and status
@@ -316,7 +316,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         if any(j.status == JobStatus.FINISHED for j in jobs.simulation):
             return 3, "analyzing"
-        if any(j.status == JobStatus.RUNNING for j in jobs.simulation):
+        if any(j.status == JobStatus.RUNNING and j.nsteps_done is not None for j in jobs.simulation):
             return 3, "simulating"
         if jobs.simulation:
             return 2, "simulating"
