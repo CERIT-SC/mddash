@@ -2,6 +2,7 @@ import type { JupyterFrontEnd } from '@jupyterlab/application';
 import { NotebookPanel } from '@jupyterlab/notebook';
 import { BoxLayout, Widget } from '@lumino/widgets';
 
+import { showCompletionDialog } from './completion-dialog';
 import { discoverSteps } from './discovery';
 import { isDebugEnabled, logDebug, logError, logInfo } from './logging';
 import {
@@ -171,6 +172,7 @@ export class PipelineSession {
     this.markNextPendingStepRunning();
     if (this.running && this.steps.length > 0 && this.steps.every(step => step.status === 'done')) {
       this.running = false;
+      showCompletionDialog();
     }
     this.render();
   }
