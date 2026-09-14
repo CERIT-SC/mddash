@@ -6,6 +6,7 @@ import {
   getListSimulationsQueryKey,
   useCreateSimulation,
   useUpdateSimulation,
+  type ListSimulationsQueryResult,
 } from "@/api/generated/client"
 import { Engine } from "@/api/generated/models"
 import type { Simulation, SimulationWrite } from "@/api/generated/models"
@@ -183,11 +184,24 @@ export function SimulationForm({ experimentId, engine, simulation, onSaved }: Si
     void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experimentId) })
   }
 
+  // The wizard resolves an adopted tab against the cached list before the
+  // invalidate-refetch lands; without the seed it renders another manifest instead.
+  const seed = (saved: Simulation) =>
+    queryClient.setQueryData<ListSimulationsQueryResult>(getListSimulationsQueryKey(experimentId), (old) =>
+      old?.status === 200
+        ? {
+            ...old,
+            data: [...old.data.filter((entry) => entry.simulation_path !== saved.simulation_path), saved],
+          }
+        : old
+    )
+
   const create = useCreateSimulation({
     mutation: {
       onSuccess: (response) => {
         const created = response.status === 201 ? response.data : undefined
         toast.success(`Simulation “${created?.name ?? form.getValues("name")}” created`)
+        if (created) seed(created)
         invalidate()
         if (created) {
           form.reset(defaultValues(engine, created))
@@ -203,6 +217,7 @@ export function SimulationForm({ experimentId, engine, simulation, onSaved }: Si
       onSuccess: (response) => {
         const saved = response.status === 200 ? response.data : undefined
         toast.success(`Simulation “${saved?.name ?? ""}” saved`)
+        if (saved) seed(saved)
         invalidate()
         if (saved) {
           form.reset(defaultValues(engine, saved))
