@@ -187,6 +187,18 @@ describe("SetupStep", () => {
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument()
   })
 
+  it("keeps the guide past step 2 when the notebook stops", async () => {
+    const existing = simulation("protein.simulation.json", { name: "protein", valid: true, step: 1 })
+    mockSetup({ notebooks: notebook({ status: "DOWN" }), sims: [existing] })
+    renderSetup({ simulation: existing, creating: false })
+
+    const guide = screen.getByRole("region", { name: "Setup guide" })
+    expect(await within(guide).findByLabelText("Step 1 done")).toBeInTheDocument()
+    expect(await within(guide).findByLabelText("Step 2 done")).toBeInTheDocument()
+    expect(within(guide).getByText("Check the validity of data below and move on to tune.")).toBeVisible()
+    expect(within(guide).queryByLabelText("Notebook launcher")).not.toBeInTheDocument()
+  })
+
   it("disables Go to Tune while no simulation exists", async () => {
     mockSetup()
     renderSetup()

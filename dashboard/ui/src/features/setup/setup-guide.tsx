@@ -15,7 +15,8 @@ type SetupGuideProps = {
   manifestExists: boolean
 }
 
-/** A step is done as soon as its outcome holds; the first unmet one claims "active". */
+/** A step is done as soon as its outcome holds; the first unmet one claims "active".
+ * A manifest implies the pipeline already ran, so stopping the notebook never rewinds the guide. */
 export function SetupGuide({
   experimentId,
   notebook,
@@ -24,9 +25,9 @@ export function SetupGuide({
   openHref,
   manifestExists,
 }: SetupGuideProps) {
-  const step1: GuideState = ready ? "done" : "active"
+  const step1: GuideState = ready || manifestExists ? "done" : "active"
   const step2: GuideState = manifestExists ? "done" : ready ? "active" : "pending"
-  const step3: GuideState = ready && manifestExists ? "active" : "pending"
+  const step3: GuideState = manifestExists ? "active" : "pending"
 
   const steps: { title: React.ReactNode; body: React.ReactNode; state: GuideState }[] = [
     {
