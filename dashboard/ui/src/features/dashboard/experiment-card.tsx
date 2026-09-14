@@ -1,10 +1,9 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 import { toApiError } from "@/api/errors"
 import {
   getListExperimentsQueryKey,
   useDeleteExperiment,
-  useListAnalysisJobs,
   useListAnalysisResults,
   useListAnalysisTypes,
   useStartNotebook,
@@ -12,6 +11,7 @@ import {
   useUpdateExperiment,
 } from "@/api/generated/client"
 import type { Experiment } from "@/api/generated/models"
+import { getAnalysisLabel } from "@/features/analyze"
 import {
   isNotebookQuotaError,
   NotebookQuotaDialog,
@@ -102,18 +102,25 @@ function subtitle(experiment: Experiment): string {
   return `${experiment.module_name ?? "Custom"} · ${ENGINE_LABELS[experiment.engine]}`
 }
 
+// Jobs decide the label, not the status string: a publish draft masks running
+// work, and "analyzing" outlives the last analysis job.
+const latest = <T extends { created_at: string }>(jobs: T[]) =>
+  jobs.reduce<T | undefined>((best, job) => (!best || job.created_at > best.created_at ? job : best), undefined)
+
 // PENDING covers queued — the API has no QUEUED status.
 const ACTIVE_JOB_STATUSES = new Set(["PENDING", "RUNNING"])
 
-// Jobs decide the label, not the status string: a publish draft masks running
-// work, and "analyzing" outlives the last analysis job.
 function liveLabel(experiment: Experiment): string | null {
   if (experiment.simulation_jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.status))) {
-    const job = experiment.simulation_jobs.find((candidate) => candidate.status === "RUNNING")
-    const done = job?.nsteps_done
-    return job?.nsteps && done ? `Simulating · ${Math.round((done / job.nsteps) * 100)}%` : "Simulating"
+    // Queued jobs have no log yet; steps-done defaults to 0%.
+    const job =
+      experiment.simulation_jobs.find((candidate) => candidate.status === "RUNNING") ??
+      latest(experiment.simulation_jobs.filter((candidate) => ACTIVE_JOB_STATUSES.has(candidate.status)))
+    const nsteps = job?.nsteps
+    return nsteps ? `Simulating · ${Math.round(((job?.nsteps_done ?? 0) / nsteps) * 100)}%` : "Simulating"
   }
-  if (experiment.analysis_jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.status))) return "Analyzing"
+  const analysis = latest(experiment.analysis_jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)))
+  if (analysis) return `Analyzing ${getAnalysisLabel(analysis.analysis_name)}`
   if (experiment.tuner_jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.tuner_status))) return "Tuning"
   return null
 }
@@ -130,9 +137,6 @@ function DetailRow({ label, value }: DetailRowProps) {
 }
 
 type DetailsProps = { experiment: Experiment }
-
-const latest = <T extends { created_at: string }>(jobs: T[]) =>
-  jobs.reduce<T | undefined>((best, job) => (!best || job.created_at > best.created_at ? job : best), undefined)
 
 function SetupDetails({ experiment }: DetailsProps) {
   // Index 0 is only ever paired with status "setup" (backend tuple invariant),
@@ -172,13 +176,27 @@ function RunDetails({ experiment }: DetailsProps) {
 // step/status, so analysis rows are scoped to that simulation.
 function AnalyzeDetails({ experiment }: DetailsProps) {
   const simulationPath = experiment.latest_simulation_path ?? ""
-  const params = { simulation_path: simulationPath }
-  const queries = { query: { enabled: simulationPath !== "", retry: false } }
-  const jobs = useListAnalysisJobs(experiment.id, params, queries)
-  const models = useListAnalysisResults(experiment.id, params, queries)
+  // Jobs ride the polled experiments list — no separate query to go stale.
+  const jobs = experiment.analysis_jobs.filter((job) => job.simulation_path === simulationPath)
+  const analyzing = jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.status))
+  const models = useListAnalysisResults(
+    experiment.id,
+    { simulation_path: simulationPath },
+    {
+      query: { enabled: simulationPath !== "", retry: false },
+    }
+  )
   // The pool is the hard MDDB workflow set, not the jobs submitted so far — it is
   // experiment-independent, so it needs no simulation_path gate and never goes stale.
   const types = useListAnalysisTypes(experiment.id, { query: { retry: false, staleTime: Number.POSITIVE_INFINITY } })
+
+  // Results land when a calculation settles — refetch the Models count on that edge.
+  const wasAnalyzing = useRef(false)
+  const refetchModels = models.refetch
+  useEffect(() => {
+    if (wasAnalyzing.current && !analyzing) void refetchModels()
+    wasAnalyzing.current = analyzing
+  }, [analyzing, refetchModels])
 
   if (!simulationPath) {
     return (
@@ -189,17 +207,12 @@ function AnalyzeDetails({ experiment }: DetailsProps) {
     )
   }
 
-  const ready = (jobs.data?.status === 200 ? jobs.data.data : undefined)?.filter(
-    (job) => job.status === "FINISHED"
-  ).length
+  const ready = jobs.filter((job) => job.status === "FINISHED").length
   const total = types.data?.status === 200 ? types.data.data.length : undefined
   return (
     <>
       <DetailRow label="Models" value={models.data?.status === 200 ? String(models.data.data.length) : "…"} />
-      <DetailRow
-        label="Analyses"
-        value={ready === undefined || total === undefined ? "…" : `${ready} of ${total} ready`}
-      />
+      <DetailRow label="Analyses" value={total === undefined ? "…" : `${ready} of ${total} ready`} />
     </>
   )
 }

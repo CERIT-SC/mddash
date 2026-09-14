@@ -70,6 +70,30 @@ describe("ExperimentCard", () => {
     expect(container.querySelector(".animate-spin")).not.toBeNull()
   })
 
+  it("shows Simulating · 0% before any step parses from the log", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    await renderCard(
+      analyze({
+        step: 2,
+        status: "simulating",
+        simulation_jobs: [simulationJob("RUNNING", { nsteps: 100 })],
+      })
+    )
+    expect(screen.getByText("Simulating · 0%")).toBeVisible()
+  })
+
+  it("shows Simulating · 0% while the job sits queued", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    await renderCard(
+      analyze({
+        step: 2,
+        status: "simulating",
+        simulation_jobs: [simulationJob("PENDING", { nsteps: 100 })],
+      })
+    )
+    expect(screen.getByText("Simulating · 0%")).toBeVisible()
+  })
+
   it("shows last activity when no job is running", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
     const { container } = await renderCard(
@@ -90,8 +114,21 @@ describe("ExperimentCard", () => {
         analysis_jobs: [analysisJob("RUNNING")],
       })
     )
-    expect(screen.getByText("Analyzing")).toBeVisible()
+    expect(screen.getByText("Analyzing RMSD")).toBeVisible()
     expect(container.querySelector(".animate-spin")).not.toBeNull()
+  })
+
+  it("names the analysis being calculated", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    await renderCard(
+      analyze({
+        step: 3,
+        status: "analyzing",
+        simulation_jobs: [simulationJob("FINISHED", { is_live: false })],
+        analysis_jobs: [analysisJob("RUNNING", { analysis_name: "clusters" })],
+      })
+    )
+    expect(screen.getByText("Analyzing Clusters")).toBeVisible()
   })
 
   it("a running simulation outranks the publish state", async () => {
@@ -117,7 +154,7 @@ describe("ExperimentCard", () => {
         analysis_jobs: [analysisJob("RUNNING")],
       })
     )
-    expect(screen.getByText("Analyzing")).toBeVisible()
+    expect(screen.getByText("Analyzing RMSD")).toBeVisible()
     expect(container.querySelector(".animate-spin")).not.toBeNull()
   })
 
@@ -314,12 +351,6 @@ describe("ExperimentCard", () => {
       if (url.includes("/analysis/types")) {
         return Response.json(["rmsds", "clusters", "sas", "hbonds"])
       }
-      if (url.includes("/analysis")) {
-        return Response.json([
-          { id: "a1", status: "FINISHED" },
-          { id: "a2", status: "RUNNING" },
-        ])
-      }
       return new Response(null, { status: 404 })
     })
     await renderCard(
@@ -339,6 +370,13 @@ describe("ExperimentCard", () => {
             status: "FINISHED",
             is_live: false,
           },
+        ],
+        // The polled experiments list embeds the same rows the scoped jobs
+        // endpoint returns — the ready count rides the card's own refresh.
+        analysis_jobs: [
+          analysisJob("FINISHED", { simulation_path: "md.simulation.json" }),
+          analysisJob("RUNNING", { simulation_path: "md.simulation.json" }),
+          analysisJob("FINISHED", { simulation_path: "other.simulation.json" }),
         ],
       })
     )
