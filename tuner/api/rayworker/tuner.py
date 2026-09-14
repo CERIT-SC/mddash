@@ -267,8 +267,7 @@ def _process_trial_results(
             res: dict[str, Any] = ray.get(done[0])
             if res:
                 early_stopped = res.get("early_stopped", False)
-                perf_value = None if early_stopped else res.get("performance")
-                update_trial_result(trial_id, res.get("status", JobStatus.ERROR), perf_value)
+                update_trial_result(trial_id, res.get("status", JobStatus.ERROR), res.get("performance"))
                 steps_per_sec = res.get("steps_per_sec", 0.0)
                 cost_per_step = res.get("cost_per_step", 0.0)
                 if steps_per_sec > best[0] and not early_stopped:

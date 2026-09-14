@@ -4,7 +4,8 @@ from unittest.mock import MagicMock
 import pytest
 from api.config import EARLY_STOP_COST_RATIO, EARLY_STOP_THRESHOLD, EARLY_STOP_WARMUP_STEPS
 from api.engines.gmx import runner
-from api.engines.gmx.runner import _should_early_stop
+from api.engines.gmx.config import GmxTrialConfig
+from api.engines.gmx.runner import _should_early_stop, run_mdrun
 
 
 class TestShouldEarlyStop:
@@ -41,6 +42,30 @@ class TestShouldEarlyStop:
 
     def test_no_prune_without_best_reference(self) -> None:
         assert not _should_early_stop(EARLY_STOP_WARMUP_STEPS + 1, 120.0, 50.0, 0.0, 0.05, 0.0)
+
+
+class TestEarlyStopPerformance:
+    def _run_pruned(self, tmp_path, monkeypatch, dt) -> tuple[float, float, bool]:
+        monkeypatch.setattr(runner, "JOBS_DIR", tmp_path / "jobs")
+        monkeypatch.setattr(runner, "INPUTS_DIR", tmp_path)
+        monkeypatch.setattr(
+            runner,
+            "_run_command_with_monitoring",
+            MagicMock(return_value=(True, 100.0)),  # pruned at 100 steps/s
+        )
+        monkeypatch.setattr(runner, "delta_t_ps", MagicMock(return_value=dt))
+        return run_mdrun(GmxTrialConfig(), "t1", "job1")
+
+    def test_pruned_trial_keeps_measured_performance(self, tmp_path, monkeypatch) -> None:
+        performance, steps_per_sec, early_stopped = self._run_pruned(tmp_path, monkeypatch, 0.002)
+        assert performance == pytest.approx(100.0 * 0.002 * 86.4)
+        assert steps_per_sec == 100.0
+        assert early_stopped
+
+    def test_pruned_trial_without_timestep_reports_zero(self, tmp_path, monkeypatch) -> None:
+        performance, _, early_stopped = self._run_pruned(tmp_path, monkeypatch, None)
+        assert performance == 0.0
+        assert early_stopped
 
 
 def test_monitor_interruption_terminates_native_process_group(tmp_path, monkeypatch) -> None:

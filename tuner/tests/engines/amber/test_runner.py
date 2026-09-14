@@ -95,6 +95,46 @@ def test_monitor_interruption_terminates_native_process_group(tmp_path, monkeypa
     process.wait.assert_called_once_with(timeout=30)
 
 
+class TestEarlyStopPerformance:
+    def _run_pruned(self, tmp_path, monkeypatch, mdin: str) -> tuple[float, float, bool]:
+        monkeypatch.setattr(runner, "JOBS_DIR", tmp_path / "jobs")
+        monkeypatch.setattr(runner, "INPUTS_DIR", tmp_path)
+        (tmp_path / "job1_md.prmtop").write_text("")
+        (tmp_path / "job1_md.inpcrd").write_text("")
+        (tmp_path / "job1_md.mdin").write_text(mdin)
+        monkeypatch.setattr(
+            runner,
+            "_run_command_with_monitoring",
+            MagicMock(return_value=(True, 50.0)),  # pruned at 50 steps/s
+        )
+        config = AmberTrialConfig(binary=AmberBinary.PMEMD_MPI, np=1, ewald=EwaldPreset.DEFAULT, ntomp=2)
+        return run_pmemd(config, "t1", "job1", nsteps=100)
+
+    def test_pruned_trial_keeps_measured_performance(self, tmp_path, monkeypatch) -> None:
+        mdin = " &cntrl\n  nstlim = 1000,\n  dt = 0.002,\n /\n"
+        performance, steps_per_sec, early_stopped = self._run_pruned(tmp_path, monkeypatch, mdin)
+        assert performance == pytest.approx(50.0 * 0.002 * 86.4)
+        assert steps_per_sec == 50.0
+        assert early_stopped
+
+    def test_pruned_trial_without_timestep_reports_zero(self, tmp_path, monkeypatch) -> None:
+        mdin = " &cntrl\n  nstlim = 1000,\n /\n"
+        performance, _, early_stopped = self._run_pruned(tmp_path, monkeypatch, mdin)
+        assert performance == 0.0
+        assert early_stopped
+
+    def test_pruned_trial_with_unfloatable_timestep_reports_zero(self, tmp_path, monkeypatch) -> None:
+        mdin = " &cntrl\n  nstlim = 1000,\n  dt = 1.2.3,\n /\n"
+        performance, _, early_stopped = self._run_pruned(tmp_path, monkeypatch, mdin)
+        assert performance == 0.0
+        assert early_stopped
+
+    def test_pruned_trial_ignores_timestep_outside_cntrl(self, tmp_path, monkeypatch) -> None:
+        mdin = "title dt = 0.001,\n &cntrl\n  nstlim = 1000,\n  dt = 0.002,\n /\n"
+        performance, _, _ = self._run_pruned(tmp_path, monkeypatch, mdin)
+        assert performance == pytest.approx(50.0 * 0.002 * 86.4)
+
+
 def test_parse_progress_returns_step() -> None:
     result = _parse_amber_progress(SAMPLE_MDINFO)
     assert result == 5000

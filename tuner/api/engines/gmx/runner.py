@@ -14,6 +14,8 @@ from pathlib import Path
 from api.config import EARLY_STOP_CHECK_INTERVAL, EARLY_STOP_COST_RATIO, INPUTS_DIR, JOBS_DIR
 from api.engines.early_stop import _should_early_stop
 from api.engines.gmx.config import GmxTrialConfig, PMEMode
+from api.engines.gmx.tprinfo import delta_t_ps
+from api.engines.protocol import steps_to_ns_per_day
 from api.utils import tail
 
 logger = logging.getLogger(__name__)
@@ -74,10 +76,12 @@ def run_mdrun(
 
     early_stopped, final_steps_per_sec = result
     if early_stopped:
+        # Pruned trials write no end-of-run summary; derive ns/day from measured steps/s.
+        performance = steps_to_ns_per_day(final_steps_per_sec, delta_t_ps(tpr_path))
         logger.info(
             "Trial %s early stopped (%.1f steps/s vs best %.1f)", trial_id, final_steps_per_sec, best_steps_per_sec
         )
-        return 0.0, final_steps_per_sec, True
+        return performance, final_steps_per_sec, True
 
     performance = _parse_performance(stdout_log, stderr_log)
     return performance, final_steps_per_sec, False

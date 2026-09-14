@@ -91,6 +91,10 @@ def test_simulation_length_ns_missing_params() -> None:
     assert simulation_length_ns("nothing here") is None
 
 
+def test_simulation_length_ns_unfloatable_param() -> None:
+    assert simulation_length_ns(" &cntrl\n  nstlim = 100,\n  dt = 1.2.3,\n /\n") is None
+
+
 DENSE_MDIN = """\
 Explicit solvent molecular dynamics constant pressure 50 ns MD
  &cntrl

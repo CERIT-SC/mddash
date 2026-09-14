@@ -18,7 +18,7 @@ def simulation_length_ns(content: str) -> float | None:
 def _read_param(content: str, key: str) -> float | None:
     """Read a numeric `key = value,` namelist parameter anywhere in a line (case-insensitive)."""
     match = re.search(
-        rf"(?:^|[\s,]){re.escape(key)}\s*=\s*([+-]?[\d.]+(?:[eE][+-]?\d+)?)\s*,?",
+        rf"(?:^|[\s,]){re.escape(key)}\s*=\s*([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(?![\d.eE+-])",
         content,
         flags=re.IGNORECASE | re.MULTILINE,
     )

@@ -187,6 +187,24 @@ class TestProcessTrialResultsWatchdog:
 
         assert tuner._process_trial_results("j1", {future: 7}, 20.0, 0.3) == (20.0, 0.3)
 
+    def test_pruned_trial_keeps_measured_performance_but_never_champions(self, job_context, monkeypatch) -> None:
+        future = Mock()
+        ray_mock = Mock()
+        ray_mock.wait.side_effect = [([future], [])]
+        ray_mock.get.return_value = {
+            "trial_id": "7",
+            "status": JobStatus.FINISHED,
+            "performance": 3.2,
+            "steps_per_sec": 10.0,
+            "early_stopped": True,
+            "cost_per_step": 0.5,
+        }
+        monkeypatch.setattr(tuner, "ray", ray_mock)
+        monkeypatch.setattr(tuner, "update_trial_result", Mock())
+
+        assert tuner._process_trial_results("j1", {future: 7}, 20.0, 0.3) == (20.0, 0.3)
+        tuner.update_trial_result.assert_called_once_with(7, JobStatus.FINISHED, 3.2)
+
     def test_state_api_outage_extends_the_window(self, job_context, monkeypatch) -> None:
         """A failed query must never false-kill a progressing job."""
         future = Mock()

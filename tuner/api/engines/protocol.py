@@ -24,6 +24,13 @@ class TrialResult:
     cost_per_step: float = 0.0  # footprint hourly rate / steps_per_sec; 0.0 if steps unknown
 
 
+def steps_to_ns_per_day(steps_per_sec: float, dt_ps: float | None) -> float:
+    """ns/day for a measured steps/sec at timestep dt (ps); 0.0 when either is unknown."""
+    if dt_ps is None or dt_ps <= 0 or steps_per_sec <= 0:
+        return 0.0
+    return steps_per_sec * dt_ps * 86400.0 / 1000.0
+
+
 class Engine(Protocol):
     """Structural protocol that every MD engine must satisfy."""
 
