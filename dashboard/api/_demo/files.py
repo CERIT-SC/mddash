@@ -301,6 +301,13 @@ def _gmx_log_template_lines() -> list[str]:
     return list(_gmx_log_template_tuple())
 
 
+def write_gmx_checkpoint(experiment_id: str, deffnm: str) -> None:
+    """Materialize the .cpt checkpoint a finished/stopped GMX run leaves for extension."""
+    cpt_path = DATA_DIR / experiment_id / f"{deffnm}.cpt"
+    cpt_path.parent.mkdir(parents=True, exist_ok=True)
+    cpt_path.write_bytes(b"Demo GROMACS checkpoint (stands in for the binary cpt).\n")
+
+
 def write_running_amber_log(experiment_id: str, deffnm: str) -> None:
     """Write a partial mdout (no final performance block) and a live mdinfo."""
     lines = _amber_out_template_lines()

@@ -61,6 +61,20 @@ def _delete_job(job_id: str) -> ResponseReturnValue:
     return "", HTTPStatus.NO_CONTENT
 
 
+def _stop_job(job_id: str) -> ResponseReturnValue:
+    """
+    Stop a job gracefully, preserving its data and DB record.
+
+    Returns:
+        Response: An empty JSON success response with HTTP 204.
+    """
+    job: MdrunJob = MdrunJob.query.get_or_404(job_id, description=f"Job {job_id} not found")
+
+    job.stop()
+
+    return "", HTTPStatus.NO_CONTENT
+
+
 # Health endpoints
 @health_bp.route("", methods=["GET"])
 @health_bp.route("/health", methods=["GET"])
@@ -138,6 +152,17 @@ def delete_gmx_job(job_id: str) -> ResponseReturnValue:
     return _delete_job(job_id)
 
 
+@gmx_bp.route("/<job_id>/stop", methods=["POST"])
+def stop_gmx_job(job_id: str) -> ResponseReturnValue:
+    """
+    Stop a GROMACS job gracefully, preserving its data.
+
+    Returns:
+        Empty success response with HTTP 204.
+    """
+    return _stop_job(job_id)
+
+
 # AMBER routes
 @amber_bp.route("/<job_id>", methods=["GET"])
 def get_amber_job(job_id: str) -> Response:
@@ -203,3 +228,14 @@ def delete_amber_job(job_id: str) -> ResponseReturnValue:
         Empty success response with HTTP 204.
     """
     return _delete_job(job_id)
+
+
+@amber_bp.route("/<job_id>/stop", methods=["POST"])
+def stop_amber_job(job_id: str) -> ResponseReturnValue:
+    """
+    Stop an AMBER job gracefully, preserving its data.
+
+    Returns:
+        Empty success response with HTTP 204.
+    """
+    return _stop_job(job_id)

@@ -91,13 +91,14 @@ export function suggest(rows: TrialRow[]): Suggestions {
   return { fastestId: fastest?.id ?? null, ecoId: eco?.id ?? null }
 }
 
-/** Result-less trials grouped by outcome: finished > error > running > pending (unknown last). */
+/** Result-less trials grouped by outcome: finished > error > stopped > running > pending (unknown last). */
 const STATUS_RANK: Record<JobStatus, number> = {
   [JobStatus.FINISHED]: 0,
   [JobStatus.ERROR]: 1,
-  [JobStatus.RUNNING]: 2,
-  [JobStatus.PENDING]: 3,
-  [JobStatus.UNKNOWN]: 4,
+  [JobStatus.STOPPED]: 2,
+  [JobStatus.RUNNING]: 3,
+  [JobStatus.PENDING]: 4,
+  [JobStatus.UNKNOWN]: 5,
 }
 
 /** Performance first (best on top); result-less trials trail by status, equal ranks keep arrival order (stable sort). */

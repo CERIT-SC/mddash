@@ -72,10 +72,7 @@ class SimulationJob(db.Model):  # type: ignore
             The current JobStatus of the simulation.
         """
         # Terminal states never change — skip fetch
-        if self._last_known_status is not None and self._last_known_status in {
-            JobStatus.FINISHED,
-            JobStatus.ERROR,
-        }:
+        if self._last_known_status is not None and self._last_known_status.is_terminal:
             return self._last_known_status
 
         try:
@@ -136,6 +133,31 @@ class SimulationJob(db.Model):  # type: ignore
                 mdrun.delete_amber_job(self.id)
 
         self._cleanup_files()
+
+    def stop(self) -> None:
+        """
+        Stop the simulation job gracefully, preserving all data.
+
+        MDRun gives the pod an extended grace period so the simulation can write its
+        final state and the s3-sync sidecar can upload it. No files are cleaned up and
+        the DB row is kept, so the job can later be extended (GMX) or analyzed as-is.
+        The outcome is re-read from MDRun rather than assumed: if the run finished
+        first, it stays FINISHED (a finished run is not a stopped run).
+        """
+        match self.engine:
+            case Engine.GMX:
+                mdrun.stop_gmx_job(self.id)
+                get = mdrun.get_gmx_job
+            case Engine.AMBER:
+                mdrun.stop_amber_job(self.id)
+                get = mdrun.get_amber_job
+
+        try:
+            self._last_known_status = JobStatus.from_string(get(self.id)["status"])
+        except Exception:
+            logger.exception(f"Could not re-read status of job {self.id} after stop; assuming STOPPED")
+            self._last_known_status = JobStatus.STOPPED
+        db.session.commit()
 
     def _cleanup_files(self) -> None:
         """

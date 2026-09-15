@@ -85,7 +85,11 @@ type MockRunOptions = {
 }
 
 function mockRun(options: MockRunOptions = {}) {
-  const state = { job: options.initial === undefined ? gmxJob() : options.initial }
+  const state = {
+    job: options.initial === undefined ? gmxJob() : options.initial,
+    jobs: [] as (GromacsJob | AmberJob)[],
+  }
+  if (state.job !== null) state.jobs.push(state.job)
   const logs = options.logs ?? {
     gmx: "gmx log contents\n",
     mdout: "mdout log contents\n",
@@ -108,18 +112,43 @@ function mockRun(options: MockRunOptions = {}) {
         const text = logs[type]
         return text === undefined ? new Response(null, { status: 404 }) : Response.json(text)
       }
+      if (url.endsWith(`${one}/stop`) && method === "POST") {
+        if (state.job === null) return new Response(null, { status: 404 })
+        state.job = gmxJob({ ...(state.job as GromacsJob), status: "STOPPED", is_live: false })
+        state.jobs = state.jobs.map((j) => (j.id === (state.job as GromacsJob).id ? (state.job as GromacsJob) : j))
+        return new Response(null, { status: 204 })
+      }
+      if (url.endsWith(`${GMX_ONE}/extend`) && method === "POST") {
+        const body = (typeof init?.body === "string" ? JSON.parse(init.body) : {}) as { nsteps?: number }
+        const prev = state.job as GromacsJob | null
+        const segment = gmxJob({
+          id: `job${String(state.jobs.length + 1)}`,
+          status: "RUNNING",
+          is_live: true,
+          nsteps: (prev?.nsteps ?? 0) + (body.nsteps ?? 0),
+          nsteps_done: prev?.nsteps_done ?? 0,
+        })
+        state.jobs.push(segment)
+        state.job = segment
+        return Response.json(segment, { status: 201 })
+      }
       if (url.endsWith(one)) {
         if (method === "DELETE") {
           state.job = null
+          state.jobs = []
           return new Response(null, { status: 204 })
         }
         if (method === "POST") {
           const body = (typeof init?.body === "string" ? JSON.parse(init.body) : {}) as Partial<GromacsJob>
           state.job = gmxJob({ ...body, id: "job2", status: "RUNNING" }) as GromacsJob | AmberJob
+          state.jobs = [state.job]
           return Response.json(state.job, { status: 201 })
         }
         return state.job === null ? new Response(null, { status: 404 }) : Response.json(state.job)
       }
+    }
+    if (url.endsWith("/experiments/exp1/gmx") || url.endsWith("/experiments/exp1/amber")) {
+      return Response.json(state.jobs)
     }
     if (url.endsWith(TUNER_ONE)) {
       return trials.length === 0 ? new Response(null, { status: 404 }) : Response.json(tunerJob(trials))
@@ -242,10 +271,12 @@ describe("RunStep finished job", () => {
     })
     const spies = renderRun()
 
-    expect(await screen.findByText("Finished")).toBeInTheDocument()
+    const progress = await screen.findByRole("region", { name: /run progress/i })
+    expect(await within(progress).findByText("Finished")).toBeInTheDocument()
     expect(screen.getByText("10,000 / 10,000 steps")).toBeInTheDocument()
     expect(screen.queryByText(/remaining/)).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /re-run/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /extend/i })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /stop run/i })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole("button", { name: /analyze/i }))
@@ -288,19 +319,37 @@ describe("RunStep error job", () => {
 })
 
 describe("RunStep stop flow", () => {
-  it("deletes the job after confirmation and navigates back to Tune", async () => {
+  it("stops the job without deleting it — data stays analyzable and extendable", async () => {
     const { calls } = mockRun()
     const spies = renderRun({ pollMs: 25 })
 
     await userEvent.click(await screen.findByRole("button", { name: /stop run/i }))
     const dialog = await screen.findByRole("alertdialog")
+    // The dialog promises the non-destructive semantics.
+    expect(within(dialog).getByText(/is kept/)).toBeInTheDocument()
     await userEvent.click(within(dialog).getByRole("button", { name: /stop run/i }))
 
-    expect(calls.some((call) => call.method === "DELETE" && call.url.endsWith(GMX_ONE))).toBe(true)
-    await waitFor(() => expect(spies.onStepChange).toHaveBeenCalledWith(1))
+    // Stopping is a POST to /stop, never the destructive DELETE.
+    await waitFor(() => {
+      expect(calls.some((call) => call.method === "POST" && call.url.endsWith(`${GMX_ONE}/stop`))).toBe(true)
+    })
+    expect(calls.some((call) => call.method === "DELETE")).toBe(false)
+    expect(spies.onStepChange).not.toHaveBeenCalled()
+
+    // The stopped run stays visible, analyzable, and extendable.
+    const progress = await screen.findByRole("region", { name: /run progress/i })
+    expect(await within(progress).findByText("Stopped")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /analyze/i })).toBeEnabled()
+    expect(screen.getByRole("button", { name: /extend/i })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /re-run/i })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /stop run/i })).not.toBeInTheDocument()
+
+    // The stop lands in the run history as a Stopped segment (after the refetch).
+    const history = await screen.findByRole("region", { name: /run history/i })
+    expect(await within(history).findByText("Stopped")).toBeInTheDocument()
   })
 
-  it("cancelling the stop dialog keeps the job", async () => {
+  it("cancelling the stop dialog keeps the run going", async () => {
     const { calls } = mockRun()
     renderRun()
 
@@ -308,8 +357,48 @@ describe("RunStep stop flow", () => {
     const dialog = await screen.findByRole("alertdialog")
     await userEvent.click(within(dialog).getByRole("button", { name: /keep running/i }))
 
+    expect(calls.some((call) => call.method === "POST" && call.url.includes("/stop"))).toBe(false)
     expect(calls.some((call) => call.method === "DELETE")).toBe(false)
     expect(await screen.findByText("20%")).toBeInTheDocument()
+  })
+})
+
+describe("RunStep extend flow", () => {
+  it("extends a finished GMX run from its checkpoint as a new segment", async () => {
+    const { calls } = mockRun({
+      initial: gmxJob({ status: "FINISHED", is_live: false, nsteps_done: 10000, performance: 62.5, estimated_time: 0 }),
+    })
+    renderRun({ pollMs: 25 })
+
+    await userEvent.click(await screen.findByRole("button", { name: /extend/i }))
+    const dialog = await screen.findByRole("alertdialog")
+    await userEvent.type(within(dialog).getByLabelText(/additional steps/i), "50000")
+    expect(within(dialog).getByText(/from 10,000 to 60,000 total steps/)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole("button", { name: /^extend$/i }))
+
+    await waitFor(() => {
+      const post = calls.find((call) => call.method === "POST" && call.url.endsWith(`${GMX_ONE}/extend`))
+      expect(post?.body).toEqual({ nsteps: 50000 })
+    })
+
+    // The new segment is live again…
+    expect(await screen.findByRole("button", { name: /stop run/i })).toBeInTheDocument()
+    // …and the history lists the finished initial segment plus the running extension.
+    const history = await screen.findByRole("region", { name: /run history/i })
+    expect(within(history).getByText("Finished")).toBeInTheDocument()
+    expect(within(history).getByText("Running")).toBeInTheDocument()
+  })
+
+  it("disables Extend until a positive step count is entered", async () => {
+    mockRun({ initial: gmxJob({ status: "STOPPED", is_live: false }) })
+    renderRun()
+
+    await userEvent.click(await screen.findByRole("button", { name: /extend/i }))
+    const dialog = await screen.findByRole("alertdialog")
+    expect(within(dialog).getByRole("button", { name: /^extend$/i })).toBeDisabled()
+
+    await userEvent.type(within(dialog).getByLabelText(/additional steps/i), "25000")
+    expect(within(dialog).getByRole("button", { name: /^extend$/i })).toBeEnabled()
   })
 })
 
@@ -390,6 +479,25 @@ describe("RunStep logs", () => {
 })
 
 describe("RunStep AMBER", () => {
+  it("hides Extend for a finished AMBER run and keeps Re-run", async () => {
+    mockRun({
+      initial: {
+        ...gmxJob({ status: "FINISHED", is_live: false, nsteps_done: 10000, performance: 62.5 }),
+        engine: "AMBER",
+        binary: "pmemd.cuda",
+        ewald: "default",
+        log_lines: { mdout: 41, stdout: 3, stderr: 0 },
+      } as AmberJob,
+    })
+    renderRun({ engine: "AMBER" })
+
+    const progress = await screen.findByRole("region", { name: /run progress/i })
+    expect(await within(progress).findByText("Finished")).toBeInTheDocument()
+    // AMBER has no extension support — the action must not be offered.
+    expect(screen.queryByRole("button", { name: /extend/i })).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /re-run/i })).toBeInTheDocument()
+  })
+
   it("shows the engine config and mdout tab", async () => {
     mockRun({
       initial: {

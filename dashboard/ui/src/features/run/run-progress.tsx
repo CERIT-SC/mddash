@@ -1,22 +1,26 @@
 import { JobStatus, type SimulationJob } from "@/api/generated/models"
 import { formatTime } from "@/shared/format"
 import { Button, Progress } from "@e-infra/design-system"
-import { Clock, LoaderCircle, RotateCcw, Square } from "lucide-react"
+import { Clock, FastForward, LoaderCircle, RotateCcw, Square } from "lucide-react"
 
 import { jobProgressPercent } from "./use-simulation-job"
 
 type RunProgressProps = {
   job: SimulationJob
-  /** A stop/re-run mutation is in flight — buttons stay disabled meanwhile. */
+  /** A stop/extend/re-run mutation is in flight — buttons stay disabled meanwhile. */
   busy: boolean
+  /** GMX runs in a terminal state can be continued from the checkpoint. */
+  canExtend: boolean
   onStop: () => void
+  onExtend: () => void
   onRestart: () => void
 }
 
-/** State headline + progress bar, with the destructive action alongside. */
-export function RunProgress({ job, busy, onStop, onRestart }: RunProgressProps) {
+/** State headline + progress bar, with the run actions alongside. */
+export function RunProgress({ job, busy, canExtend, onStop, onExtend, onRestart }: RunProgressProps) {
   const finished = job.status === JobStatus.FINISHED
   const failed = job.status === JobStatus.ERROR
+  const stopped = job.status === JobStatus.STOPPED
   const live = job.is_live
 
   const total = job.nsteps !== null && job.nsteps !== undefined && job.nsteps > 0 ? job.nsteps : null
@@ -29,6 +33,8 @@ export function RunProgress({ job, busy, onStop, onRestart }: RunProgressProps) 
     headline = "Finished"
   } else if (failed) {
     headline = "Failed"
+  } else if (stopped) {
+    headline = "Stopped"
   } else if (percent !== null) {
     headline = `${String(percent)}%`
   } else {
@@ -73,10 +79,18 @@ export function RunProgress({ job, busy, onStop, onRestart }: RunProgressProps) 
               Stop run
             </Button>
           ) : (
-            <Button type="button" variant="outline" onClick={onRestart} disabled={busy}>
-              {busy ? <LoaderCircle className="animate-spin" aria-hidden /> : <RotateCcw aria-hidden />}
-              Re-run
-            </Button>
+            <div className="flex items-center gap-2">
+              {canExtend && (
+                <Button type="button" variant="outline" onClick={onExtend} disabled={busy}>
+                  {busy ? <LoaderCircle className="animate-spin" aria-hidden /> : <FastForward aria-hidden />}
+                  Extend
+                </Button>
+              )}
+              <Button type="button" variant="outline" onClick={onRestart} disabled={busy}>
+                {busy ? <LoaderCircle className="animate-spin" aria-hidden /> : <RotateCcw aria-hidden />}
+                Re-run
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -95,6 +109,11 @@ export function RunProgress({ job, busy, onStop, onRestart }: RunProgressProps) 
           <p className="text-text-muted text-sm tabular-nums">{`${(done as number).toLocaleString("en-US")} / ${(total as number).toLocaleString("en-US")} steps`}</p>
         )}
         {failed && <p className="text-text-muted text-sm">The run failed — check the logs below for details.</p>}
+        {stopped && (
+          <p className="text-text-muted text-sm">
+            The run was stopped — results so far are kept{canExtend ? ", ready to extend from its checkpoint" : ""}.
+          </p>
+        )}
         {live && percent !== null && job.estimated_time !== null && job.estimated_time !== undefined && (
           <p className="text-text-muted inline-flex items-center gap-1 text-sm">
             <Clock className="h-3.5 w-3.5" aria-hidden />
