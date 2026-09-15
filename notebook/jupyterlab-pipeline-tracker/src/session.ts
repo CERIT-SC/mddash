@@ -149,6 +149,8 @@ export class PipelineSession {
       return;
     }
 
+    const wasComplete = this.steps.length > 0 && this.steps.every(step => step.status === 'done');
+
     const success = args.success !== false;
     for (const step of affectedSteps) {
       if (step.status === 'pending') {
@@ -170,8 +172,11 @@ export class PipelineSession {
     }
 
     this.markNextPendingStepRunning();
-    if (this.running && this.steps.length > 0 && this.steps.every(step => step.status === 'done')) {
+    const isComplete = this.steps.length > 0 && this.steps.every(step => step.status === 'done');
+    if (this.running && isComplete) {
       this.running = false;
+    }
+    if (isComplete && !wasComplete) {
       showCompletionDialog();
     }
     this.render();
