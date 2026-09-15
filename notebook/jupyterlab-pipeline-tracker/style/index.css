@@ -380,7 +380,13 @@
   margin: 24px;
   max-width: 420px;
   padding: 24px;
-  text-align: center;
+  text-align: left;
+}
+
+.jp-PipelineTracker-dialogHeader {
+  align-items: center;
+  display: flex;
+  gap: 10px;
 }
 
 .jp-PipelineTracker-dialogIcon {
@@ -389,12 +395,12 @@
   border-radius: 999px;
   color: white;
   display: flex;
-  font-size: 19px;
+  flex: 0 0 20px;
+  font-size: 11px;
   font-weight: 700;
-  height: 42px;
+  height: 20px;
   justify-content: center;
-  margin: 0 auto 14px;
-  width: 42px;
+  width: 20px;
 }
 
 .jp-PipelineTracker-dialogIcon::after {
@@ -412,7 +418,7 @@
   color: var(--jp-ui-font-color2);
   font-size: 13px;
   line-height: 1.5;
-  margin: 8px 0 18px;
+  margin: 10px 0 18px;
 }
 
 .jp-PipelineTracker-dialogButton {
@@ -421,9 +427,11 @@
   border-radius: 7px;
   color: white;
   cursor: pointer;
+  display: block;
   font-size: 13px;
   font-weight: 700;
   line-height: 1;
+  margin-left: auto;
   min-height: 34px;
   padding: 9px 16px;
 }

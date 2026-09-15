@@ -2,7 +2,7 @@ import { logDebug } from './logging';
 
 const DIALOG_TITLE = 'Workflow complete';
 const DIALOG_BODY = 'You can head back to MDDash or keep working in this notebook.';
-const DIALOG_ACTION = 'Continue in notebook';
+const DIALOG_ACTION = 'Got it';
 
 export function showCompletionDialog(): void {
   const previouslyFocused = document.activeElement instanceof HTMLElement
@@ -26,6 +26,10 @@ export function showCompletionDialog(): void {
   title.className = 'jp-PipelineTracker-dialogTitle';
   title.textContent = DIALOG_TITLE;
 
+  const header = document.createElement('div');
+  header.className = 'jp-PipelineTracker-dialogHeader';
+  header.append(icon, title);
+
   const body = document.createElement('p');
   body.className = 'jp-PipelineTracker-dialogBody';
   body.textContent = DIALOG_BODY;
@@ -35,7 +39,7 @@ export function showCompletionDialog(): void {
   button.className = 'jp-PipelineTracker-dialogButton';
   button.textContent = DIALOG_ACTION;
 
-  dialog.append(icon, title, body, button);
+  dialog.append(header, body, button);
   overlay.append(dialog);
 
   const close = (): void => {
