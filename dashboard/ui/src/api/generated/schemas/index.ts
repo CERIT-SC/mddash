@@ -78,6 +78,7 @@ export const ListExperimentsResponseItem = zod.object({
   "updated_at": zod.iso.datetime({"offset":true}),
   "name": zod.string(),
   "module_name": zod.string().nullish(),
+  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']),zod.null()]).optional(),
   "latest_simulation_path": zod.string().nullable(),
   "source": zod.union([zod.object({
   "type": zod.enum(['pdb', 'repo', 'file']),
@@ -196,6 +197,7 @@ export const CreateExperimentResponse = zod.object({
   "updated_at": zod.iso.datetime({"offset":true}),
   "name": zod.string(),
   "module_name": zod.string().nullish(),
+  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']),zod.null()]).optional(),
   "latest_simulation_path": zod.string().nullable(),
   "source": zod.union([zod.object({
   "type": zod.enum(['pdb', 'repo', 'file']),
@@ -305,6 +307,7 @@ export const GetExperimentResponse = zod.object({
   "updated_at": zod.iso.datetime({"offset":true}),
   "name": zod.string(),
   "module_name": zod.string().nullish(),
+  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']),zod.null()]).optional(),
   "latest_simulation_path": zod.string().nullable(),
   "source": zod.union([zod.object({
   "type": zod.enum(['pdb', 'repo', 'file']),
@@ -418,6 +421,7 @@ export const UpdateExperimentResponse = zod.object({
   "updated_at": zod.iso.datetime({"offset":true}),
   "name": zod.string(),
   "module_name": zod.string().nullish(),
+  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']),zod.null()]).optional(),
   "latest_simulation_path": zod.string().nullable(),
   "source": zod.union([zod.object({
   "type": zod.enum(['pdb', 'repo', 'file']),

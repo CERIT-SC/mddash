@@ -1,9 +1,8 @@
 import type { NotebookModule } from "@/api/generated/models"
 import { ENGINE_LABELS } from "@/shared/engine"
+import { ModuleIconTile } from "@/shared/module-icon"
 import { CATEGORY_LABELS } from "@/shared/notebook-module"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@e-infra/design-system"
-
-import { ModuleIconTile } from "./module-icon"
 
 type WorkflowCardProps = {
   module: NotebookModule

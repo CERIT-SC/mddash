@@ -20,6 +20,7 @@ import {
 } from "@/features/notebook"
 import { ENGINE_LABELS } from "@/shared/engine"
 import { formatBytes, formatTime, relativeTime } from "@/shared/format"
+import { ModuleIconTile } from "@/shared/module-icon"
 import { isNotebookActive } from "@/shared/pod-status"
 import { sourceLabel } from "@/shared/source"
 import { InfoBanner } from "@/shared/ui/info-banner"
@@ -59,24 +60,7 @@ import {
 } from "@e-infra/design-system"
 import { useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import {
-  Activity,
-  Archive,
-  Award,
-  Copy,
-  Database,
-  Ellipsis,
-  FlaskConical,
-  LoaderCircle,
-  Pencil,
-  Play,
-  Rocket,
-  SlidersHorizontal,
-  Square,
-  Trash2,
-  Upload,
-  type LucideIcon,
-} from "lucide-react"
+import { Archive, Copy, Database, Ellipsis, LoaderCircle, Pencil, Play, Square, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 const STEP_LABELS = ["Setup", "Tune", "Run", "Analyze", "Publish"] as const
@@ -87,16 +71,6 @@ function stepParts(experiment: Experiment): { shownStep: number; stepIndex: numb
   const step = Math.max(0, Math.min(experiment.step ?? 0, STEP_LABELS.length - 1))
   return { shownStep: step + 1, stepIndex: step }
 }
-
-// Icon/color keyed by the workflow step (mock: flask=setup, sliders=tune,
-// rocket=run, pulse=analyze, award=publish); module/engine stay text in the subtitle.
-const STEP_ICONS: { Icon: LucideIcon; className: string }[] = [
-  { Icon: FlaskConical, className: "bg-surface-raised text-text-muted" },
-  { Icon: SlidersHorizontal, className: "bg-info text-info-foreground" },
-  { Icon: Rocket, className: "bg-success text-success-foreground" },
-  { Icon: Activity, className: "bg-warning text-warning-foreground" },
-  { Icon: Award, className: "bg-primary text-primary-foreground" },
-]
 
 function subtitle(experiment: Experiment): string {
   return `${experiment.module_name ?? "Custom"} · ${ENGINE_LABELS[experiment.engine]}`
@@ -308,13 +282,6 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
   const label = liveLabel(experiment)
 
   const { shownStep, stepIndex } = stepParts(experiment)
-  // The publish step has a distinct icon per state (upload while publishing, award once published).
-  const { Icon: StepIcon, className: stepIconClass } =
-    stepIndex === 4
-      ? experiment.status === "published"
-        ? { Icon: Award, className: "bg-primary text-primary-foreground" }
-        : { Icon: Upload, className: "bg-info text-info-foreground" }
-      : STEP_ICONS[stepIndex]
 
   function toggleNotebook() {
     if (active) stop.mutate({ experimentId: experiment.id })
@@ -344,12 +311,8 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
     <Card className="relative pb-0 transition-shadow hover:shadow-md">
       <CardHeader>
         <div className="flex min-w-0 items-center gap-3">
-          <span
-            className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-lg", stepIconClass)}
-            aria-hidden="true"
-          >
-            <StepIcon size={20} />
-          </span>
+          {/* Workflow icon, not progress — the step label and bar below carry progress. */}
+          <ModuleIconTile category={experiment.module_category} />
           <div className="min-w-0">
             <CardTitle className="truncate leading-tight">
               <Link

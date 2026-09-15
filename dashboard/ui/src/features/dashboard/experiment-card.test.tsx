@@ -391,14 +391,30 @@ describe("ExperimentCard", () => {
     expect(screen.getAllByText("N/A")).toHaveLength(2)
   })
 
-  it("shows different icons for the publishing and published states", async () => {
+  it("shows the workflow category tile on every step, including publish", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    const { container, unmount } = await renderCard(analyze({ step: 4, status: "publishing", mdrepo_published: false }))
-    expect(container.querySelector("span.bg-info.text-info-foreground")).not.toBeNull()
-    expect(container.querySelector("span.bg-primary.text-primary-foreground")).toBeNull()
+    // step 1 (Tune) used to render the sliders/info step tile — the category wins now
+    const { container, unmount } = await renderCard(analyze({ module_category: "nucleic-acids" }))
+    expect(container.querySelector("span.bg-success.text-success-foreground")).not.toBeNull()
     unmount()
-    const published = await renderCard(analyze({ step: 4, status: "published", mdrepo_published: true }))
-    expect(published.container.querySelector("span.bg-primary.text-primary-foreground")).not.toBeNull()
+    const published = await renderCard(
+      analyze({ step: 4, status: "published", mdrepo_published: true, module_category: "nucleic-acids" })
+    )
+    // publish no longer swaps in its own icon — progress stays on the label and progress bar
+    expect(published.container.querySelector("span.bg-success.text-success-foreground")).not.toBeNull()
+    expect(published.container.querySelector("span.bg-primary.text-primary-foreground")).toBeNull()
+  })
+
+  it("shows the custom-workflow fallback tile when no category is known", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(analyze())
+    expect(container.querySelector("span.bg-surface-raised.text-text-muted")).not.toBeNull()
+  })
+
+  it("falls back instead of crashing on a category this build does not know", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(analyze({ module_category: "superfluid" as Experiment["module_category"] }))
+    expect(container.querySelector("span.bg-surface-raised.text-text-muted")).not.toBeNull()
   })
 
   it("shows publish details on a publish-step card", async () => {

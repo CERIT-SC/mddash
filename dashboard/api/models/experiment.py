@@ -104,6 +104,8 @@ class Experiment(db.Model):  # type: ignore
     name: Mapped[str] = mapped_column(db.String(255), nullable=False)
     # display name of the curated notebook module used at creation; None = custom workflow
     module_name: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
+    # category snapshot of the curated module at creation (drives the card icon); None = custom workflow
+    module_category: Mapped[str | None] = mapped_column(db.String(32), nullable=True)
     source_type: Mapped[SourceType | None] = mapped_column(db.Enum(SourceType), nullable=True)
     # RCSB accession, or the resolved download URL for URL/repo sources
     source_ref: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
@@ -327,6 +329,7 @@ class Experiment(db.Model):  # type: ignore
                 notebooks_repo=notebooks_repo,
                 engine=engine,
                 module_name=notebook_module.name if notebook_module else None,
+                module_category=notebook_module.category if notebook_module else None,
                 source_type=SourceType.PDB,
                 source_ref=source_ref,
             )
@@ -378,6 +381,7 @@ class Experiment(db.Model):  # type: ignore
                 notebooks_repo=notebooks_repo,
                 engine=engine,
                 module_name=notebook_module.name if notebook_module else None,
+                module_category=notebook_module.category if notebook_module else None,
                 source_type=SourceType.REPO,
                 source_ref=resolved_repo_link,
             )
@@ -437,6 +441,7 @@ class Experiment(db.Model):  # type: ignore
                 notebooks_repo=notebooks_repo,
                 engine=engine,
                 module_name=notebook_module.name if notebook_module else None,
+                module_category=notebook_module.category if notebook_module else None,
                 source_type=SourceType.FILE,
                 source_files=filenames,
             )

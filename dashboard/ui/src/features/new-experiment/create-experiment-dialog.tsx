@@ -5,6 +5,7 @@ import { getListExperimentsQueryKey, useCreateExperiment } from "@/api/generated
 import type { CreateExperimentForm, NotebookModule } from "@/api/generated/models"
 import { ENGINE_LABELS } from "@/shared/engine"
 import { formatBytes } from "@/shared/format"
+import { CustomWorkflowIcon, ModuleIcon } from "@/shared/module-icon"
 import { CATEGORY_LABELS } from "@/shared/notebook-module"
 import { HintTooltip } from "@/shared/ui/hint-tooltip"
 import {
@@ -36,8 +37,6 @@ import { useDropzone, type FileRejection } from "react-dropzone"
 import { useForm, useWatch } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
-
-import { CustomWorkflowIcon, ModuleIcon } from "./module-icon"
 
 /** SSH (git@host:owner/repo.git) or HTTP(S) with a host. */
 function isGitUrl(url: string): boolean {

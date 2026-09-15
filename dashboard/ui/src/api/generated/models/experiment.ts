@@ -9,6 +9,7 @@ import type { AnalysisJob } from './analysisJob.ts';
 import type { Engine } from './engine.ts';
 import type { ExperimentSource } from './experimentSource.ts';
 import type { Notebook } from './notebook.ts';
+import type { NotebookModuleCategory } from './notebookModuleCategory.ts';
 import type { NullableString } from './nullableString.ts';
 import type { SimulationJob } from './simulationJob.ts';
 import type { TunerJob } from './tunerJob.ts';
@@ -19,6 +20,7 @@ export interface Experiment {
   updated_at: string;
   name: string;
   module_name?: NullableString | null;
+  module_category?: NotebookModuleCategory | null;
   /** @nullable */
   latest_simulation_path: string | null;
   source?: ExperimentSource | null;

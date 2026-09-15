@@ -917,6 +917,11 @@ components:
         updated_at: {type: string, format: date-time}
         name: {type: string}
         module_name: {$ref: '#/components/schemas/NullableString'}
+        # Category snapshot of the curated module; null = custom workflow.
+        module_category:
+          oneOf:
+            - {$ref: '#/components/schemas/NotebookModuleCategory'}
+            - {type: 'null'}
         # Manifest path of the most recently active simulation; the experiment's
         # step/status and dashboard detail rows always inherit from it.
         latest_simulation_path: {type: [string, 'null']}

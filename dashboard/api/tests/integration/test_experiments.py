@@ -36,6 +36,7 @@ class TestListExperiments:
         exp = Experiment()
         exp.id = "testx"
         exp.name = "Test Experiment"
+        exp.module_category = "membrane-protein"
         db_session.add(exp)
         db_session.flush()
 
@@ -51,6 +52,10 @@ class TestListExperiments:
         assert len(data) == 1
         assert data[0]["id"] == "testx"
         assert data[0]["name"] == "Test Experiment"
+        # persisted module identity round-trips (covers rows backfilled by migration 011)
+        assert data[0]["module_category"] == "membrane-protein"
+        # decentralized workflows carry no module identity beyond the category
+        assert "module_id" not in data[0]
 
 
 class TestGetExperiment:
@@ -467,6 +472,9 @@ class TestCreateExperiment:
             assert response.status_code == HTTPStatus.CREATED
             data = json.loads(response.data)
             assert data["name"] == "Test File Experiment"
+            # custom workflow: no curated module identity to snapshot
+            assert data["module_category"] is None
+            assert "module_id" not in data
             mock_clone.assert_called_once()
 
             # Verify files were saved
@@ -550,6 +558,9 @@ class TestCreateExperimentCuratedModule:
             mock_module.assert_called_once()
             data = json.loads(response.data)
             assert data["notebooks_repo"] == "https://github.com/default/repo.git"
+            # the curated module's category snapshots onto the experiment (card icon)
+            assert data["module_category"] == "protein"
+            assert "module_id" not in data
 
     def test_curated_rejects_invalid_module(self, client: FlaskClient, tmp_path: Path) -> None:
         """Curated creation should reject an unknown or engine-incompatible module ID."""
