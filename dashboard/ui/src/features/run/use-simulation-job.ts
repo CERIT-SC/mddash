@@ -1,10 +1,13 @@
 import {
   useDeleteAmberJob,
   useDeleteGromacsJob,
+  useExtendGromacsJob,
   useGetAmberJob,
   useGetAmberJobLog,
   useGetGromacsJob,
   useGetGromacsJobLog,
+  useStopAmberJob,
+  useStopGromacsJob,
   useSubmitAmberJob,
   useSubmitGromacsJob,
 } from "@/api/generated/client"
@@ -12,6 +15,7 @@ import {
   Engine,
   type AmberJob,
   type AmberJobRequest,
+  type ExtendGromacsJobRequest,
   type GromacsJob,
   type GromacsJobRequest,
   type SimulationJob,
@@ -93,6 +97,8 @@ export function useSimulationJobQuery(
 
 type SubmitVars = { experimentId: string; simulationPath: string; data?: GromacsJobRequest | AmberJobRequest }
 type DeleteVars = { experimentId: string; simulationPath: string }
+type StopVars = { experimentId: string; simulationPath: string }
+type ExtendVars = { experimentId: string; simulationPath: string; data: ExtendGromacsJobRequest }
 
 type JobMutation<Vars> = {
   mutate: (
@@ -105,23 +111,36 @@ type JobMutation<Vars> = {
 export type JobMutations = {
   submit: JobMutation<SubmitVars>
   remove: JobMutation<DeleteVars>
+  /** Graceful, data-preserving stop (both engines). Unlike remove, the job and its files survive. */
+  stop: JobMutation<StopVars>
+  /** Checkpoint resume with more steps — GMX only; callers guard by engine. */
+  extend: JobMutation<ExtendVars>
 }
 
 /**
- * Engine-picked submit/delete. The union cast is sound: callers pair the GMX
- * request body with engine GMX (and AMBER with AMBER) via toJobRequest /
- * jobConfigRequest.
+ * Engine-picked submit/delete/stop (+ GMX-only extend). The union casts are
+ * sound: callers pair request bodies with the right engine via toJobRequest /
+ * jobConfigRequest and never invoke extend for AMBER.
  */
 export function useJobMutations(engine: Engine): JobMutations {
   const gmxSubmit = useSubmitGromacsJob()
   const amberSubmit = useSubmitAmberJob()
   const gmxDelete = useDeleteGromacsJob()
   const amberDelete = useDeleteAmberJob()
+  const gmxStop = useStopGromacsJob()
+  const amberStop = useStopAmberJob()
+  const gmxExtend = useExtendGromacsJob()
   const submit = engine === Engine.AMBER ? amberSubmit : gmxSubmit
   const remove = engine === Engine.AMBER ? amberDelete : gmxDelete
+  const stop = engine === Engine.AMBER ? amberStop : gmxStop
   return {
     submit: { mutate: submit.mutate as unknown as JobMutation<SubmitVars>["mutate"], isPending: submit.isPending },
     remove: { mutate: remove.mutate as unknown as JobMutation<DeleteVars>["mutate"], isPending: remove.isPending },
+    stop: { mutate: stop.mutate as unknown as JobMutation<StopVars>["mutate"], isPending: stop.isPending },
+    extend: {
+      mutate: gmxExtend.mutate as unknown as JobMutation<ExtendVars>["mutate"],
+      isPending: gmxExtend.isPending,
+    },
   }
 }
 

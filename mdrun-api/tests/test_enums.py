@@ -9,7 +9,7 @@ class TestJobStatus:
 
     def test_all_statuses_exist(self) -> None:
         """Verify all expected status values exist."""
-        expected = ["PENDING", "RUNNING", "FINISHED", "ERROR", "UNKNOWN"]
+        expected = ["PENDING", "RUNNING", "FINISHED", "ERROR", "STOPPED", "UNKNOWN"]
         for status in expected:
             assert hasattr(JobStatus, status)
 
@@ -19,6 +19,7 @@ class TestJobStatus:
         assert JobStatus.RUNNING.value == "running"
         assert JobStatus.FINISHED.value == "finished"
         assert JobStatus.ERROR.value == "error"
+        assert JobStatus.STOPPED.value == "stopped"
         assert JobStatus.UNKNOWN.value == "unknown"
 
 

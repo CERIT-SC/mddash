@@ -158,12 +158,37 @@ def get_files_with_extensions(
 
 
 _NSTEPS_RE = re.compile(r"-nsteps(?:=|\s+)['\"]?(\d+)")
+_NSTEPS_ARG_RE = re.compile(r"-nsteps(?:=|\s+)['\"]?\d+['\"]?")
+_CPI_ARG_RE = re.compile(r"-cpi(?:[=\s]|$)")
 
 
 def nsteps_override(extra_args: str) -> int | None:
     """Extract the effective GROMACS ``-nsteps`` override from extra_args (last occurrence wins), or None."""
     value = int(matches[-1]) if (matches := _NSTEPS_RE.findall(extra_args or "")) else 0
     return value if value > 0 else None
+
+
+def strip_run_control_args(extra_args: str) -> str:
+    """
+    Remove run-control flags owned by the GROMACS extend flow from ``extra_args``.
+
+    ``-nsteps`` is dropped (the extend flow re-adds it with a cumulative value);
+    ``-cpi`` is rejected outright because the extend flow manages checkpoint input.
+
+    Args:
+        extra_args: The simulation manifest's raw extra_args.
+
+    Returns:
+        The remaining extra_args, whitespace-normalized.
+
+    Raises:
+        ValueError: If extra_args contains ``-cpi``.
+    """
+    if _CPI_ARG_RE.search(extra_args or ""):
+        raise ValueError(
+            "Simulation extra_args must not contain '-cpi'; checkpoint input is managed by the extend flow."
+        )
+    return " ".join(_NSTEPS_ARG_RE.sub("", extra_args or "").split())
 
 
 def is_excluded_path(path: Path, base_dir: Path) -> bool:

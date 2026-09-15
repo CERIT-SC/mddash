@@ -314,10 +314,14 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         jobs = self._cached_jobs()
 
-        if any(j.status == JobStatus.FINISHED for j in jobs.simulation):
-            return 3, "analyzing"
+        # Segments: live ones dominate the ladder; a stopped segment keeps data
+        # analyzable exactly like a finished one.
         if any(j.status == JobStatus.RUNNING for j in jobs.simulation):
             return 3, "simulating"
+        if any(j.status == JobStatus.FINISHED for j in jobs.simulation):
+            return 3, "analyzing"
+        if any(j.status == JobStatus.STOPPED for j in jobs.simulation):
+            return 3, "analyzing"
         if jobs.simulation:
             return 2, "simulating"
 

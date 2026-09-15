@@ -362,11 +362,11 @@ paths:
       - {$ref: '#/components/parameters/SimulationPath'}
     get:
       tags: [GROMACS]
-      summary: Get a GROMACS job
+      summary: Get the latest segment of a GROMACS job
       operationId: getGromacsJob
       responses:
         '200':
-          description: GROMACS job
+          description: Latest segment of the GROMACS job
           content:
             application/json:
               schema: {$ref: '#/components/schemas/GromacsJob'}
@@ -399,13 +399,49 @@ paths:
         '204': {$ref: '#/components/responses/NoContent'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/Problem'}
+  /dash/api/experiments/{experiment_id}/gmx/{simulation_path}/stop:
+    parameters:
+      - {$ref: '#/components/parameters/ExperimentId'}
+      - {$ref: '#/components/parameters/SimulationPath'}
+    post:
+      tags: [GROMACS]
+      summary: Stop the latest GROMACS run segment, preserving its data
+      operationId: stopGromacsJob
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/Problem'}
+  /dash/api/experiments/{experiment_id}/gmx/{simulation_path}/extend:
+    parameters:
+      - {$ref: '#/components/parameters/ExperimentId'}
+      - {$ref: '#/components/parameters/SimulationPath'}
+    post:
+      tags: [GROMACS]
+      summary: Extend a finished or stopped GROMACS run from its checkpoint
+      operationId: extendGromacsJob
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ExtendGromacsJobRequest'}
+          application/x-www-form-urlencoded:
+            schema: {$ref: '#/components/schemas/ExtendGromacsJobRequest'}
+      responses:
+        '201':
+          description: Created extension segment of the GROMACS job
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GromacsJob'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/Problem'}
   /dash/api/experiments/{experiment_id}/gmx/{simulation_path}/log:
     parameters:
       - {$ref: '#/components/parameters/ExperimentId'}
       - {$ref: '#/components/parameters/SimulationPath'}
     get:
       tags: [GROMACS]
-      summary: Get a GROMACS job log
+      summary: Get a GROMACS job log (latest segment)
       operationId: getGromacsJobLog
       parameters:
         - {name: type, in: query, schema: {type: string, default: gmx}}
@@ -470,6 +506,19 @@ paths:
       operationId: deleteAmberJob
       responses:
         '204': {$ref: '#/components/responses/NoContent'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/Problem'}
+  /dash/api/experiments/{experiment_id}/amber/{simulation_path}/stop:
+    parameters:
+      - {$ref: '#/components/parameters/ExperimentId'}
+      - {$ref: '#/components/parameters/SimulationPath'}
+    post:
+      tags: [AMBER]
+      summary: Stop the latest AMBER run segment, preserving its data
+      operationId: stopAmberJob
+      responses:
+        '204': {$ref: '#/components/responses/NoContent'}
+        '400': {$ref: '#/components/responses/BadRequest'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/Problem'}
   /dash/api/experiments/{experiment_id}/amber/{simulation_path}/log:
@@ -851,7 +900,7 @@ components:
         solution: {type: string, minLength: 1}
       additionalProperties: false
     Engine: {type: string, enum: [GMX, AMBER]}
-    JobStatus: {type: string, enum: [UNKNOWN, PENDING, RUNNING, FINISHED, ERROR]}
+    JobStatus: {type: string, enum: [UNKNOWN, PENDING, RUNNING, FINISHED, ERROR, STOPPED]}
     PodStatus: {type: string, enum: [UNKNOWN, PENDING, RUNNING, ERROR, DOWN, TERMINATING, TERMINATED]}
     NullableString: {type: [string, 'null']}
     Message:
@@ -1079,6 +1128,13 @@ components:
         ewald: {type: string}
         np: {type: integer, minimum: 1}
         ntomp: {type: integer, minimum: 1}
+      additionalProperties: false
+    ExtendGromacsJobRequest:
+      type: object
+      required: [nsteps]
+      properties:
+        # Steps to add on top of the current cumulative total (not the new total).
+        nsteps: {type: integer, minimum: 1}
       additionalProperties: false
     TunerTrial:
       type: object

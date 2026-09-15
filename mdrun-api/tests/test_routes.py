@@ -8,6 +8,7 @@ import json
 from http import HTTPStatus
 from typing import Any
 
+import k8s_client
 from enums import JobStatus
 from flask.testing import FlaskClient
 from models import MdrunJob
@@ -125,6 +126,118 @@ class TestCreateGmxJob:
         assert response.status_code == HTTPStatus.BAD_REQUEST
         data = json.loads(response.data)
         assert "detail" in data
+
+
+class TestStopGmxJob:
+    """Tests for POST /api/jobs/gmx/<job_id>/stop."""
+
+    def _create_job(self, db_session: Session, job_id: str, status: JobStatus) -> MdrunJob:
+        job = MdrunJob()
+        job.id = job_id
+        job.job_name = f"mdrun-{job_id}"
+        job.experiment_id = "exp123"
+        job.last_status = status
+        db_session.add(job)
+        db_session.commit()
+        return job
+
+    def test_stop_running_job(self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]) -> None:
+        """Stopping a running job deletes the K8s job with an extended grace and marks it stopped."""
+        self._create_job(db_session, "stop-me", JobStatus.RUNNING)
+        mock_k8s_client["get_job_status"].return_value = JobStatus.RUNNING
+
+        response = client.post("/api/jobs/gmx/stop-me/stop")
+
+        assert response.status_code == HTTPStatus.NO_CONTENT
+        delete_call = mock_k8s_client["delete_job"].call_args
+        assert delete_call.kwargs["grace_period_seconds"] == k8s_client.STOP_GRACE_PERIOD_SECONDS
+
+        job = db_session.get(MdrunJob, "stop-me")
+        assert job is not None  # row is kept, unlike DELETE
+        assert job.last_status == JobStatus.STOPPED
+
+    def test_stopped_job_reports_stopped_after_k8s_gone(
+        self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]
+    ) -> None:
+        """A stopped job keeps reporting stopped once Kubernetes no longer knows it."""
+        self._create_job(db_session, "stopped-job", JobStatus.STOPPED)
+        mock_k8s_client["get_job_status"].return_value = JobStatus.UNKNOWN
+
+        response = client.get("/api/jobs/gmx/stopped-job")
+
+        assert response.status_code == HTTPStatus.OK
+        assert json.loads(response.data)["status"] == "stopped"
+
+    def test_stop_terminal_job_is_noop(
+        self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]
+    ) -> None:
+        """Stopping an already-terminal job must not flip a genuine outcome to stopped."""
+        self._create_job(db_session, "done-job", JobStatus.FINISHED)
+        mock_k8s_client["get_job_status"].return_value = JobStatus.UNKNOWN
+
+        response = client.post("/api/jobs/gmx/done-job/stop")
+
+        assert response.status_code == HTTPStatus.NO_CONTENT
+        mock_k8s_client["delete_job"].assert_not_called()
+        job = db_session.get(MdrunJob, "done-job")
+        assert job is not None
+        assert job.last_status == JobStatus.FINISHED
+
+    def test_stop_already_stopped_job_is_idempotent(
+        self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]
+    ) -> None:
+        """Repeated stops are a no-op."""
+        self._create_job(db_session, "already-stopped", JobStatus.STOPPED)
+        mock_k8s_client["get_job_status"].return_value = JobStatus.UNKNOWN
+
+        response = client.post("/api/jobs/gmx/already-stopped/stop")
+
+        assert response.status_code == HTTPStatus.NO_CONTENT
+        mock_k8s_client["delete_job"].assert_not_called()
+
+    def test_stop_keeps_finished_when_the_job_beats_the_stop(
+        self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]
+    ) -> None:
+        """If the simulation completes before the deletion takes effect, keep FINISHED."""
+        self._create_job(db_session, "fast-job", JobStatus.RUNNING)
+        # First read (guard): still running; outcome re-read after delete: finished.
+        mock_k8s_client["get_job_status"].side_effect = [JobStatus.RUNNING, JobStatus.FINISHED]
+
+        response = client.post("/api/jobs/gmx/fast-job/stop")
+
+        assert response.status_code == HTTPStatus.NO_CONTENT
+        job = db_session.get(MdrunJob, "fast-job")
+        assert job is not None
+        assert job.last_status == JobStatus.FINISHED
+
+    def test_stop_nonexistent_job(self, client: FlaskClient) -> None:
+        """Should return 404 for non-existent job."""
+        response = client.post("/api/jobs/gmx/not-found/stop")
+
+        assert response.status_code == HTTPStatus.NOT_FOUND
+
+
+class TestStopAmberJob:
+    """Tests for POST /api/jobs/amber/<job_id>/stop."""
+
+    def test_stop_running_job(self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]) -> None:
+        """Stopping an AMBER job marks it stopped and keeps the row."""
+        job = MdrunJob()
+        job.id = "amber-stop"
+        job.job_name = "mdrun-amber-stop"
+        job.experiment_id = "exp123"
+        job.last_status = JobStatus.RUNNING
+        db_session.add(job)
+        db_session.commit()
+        mock_k8s_client["get_job_status"].return_value = JobStatus.RUNNING
+
+        response = client.post("/api/jobs/amber/amber-stop/stop")
+
+        assert response.status_code == HTTPStatus.NO_CONTENT
+        mock_k8s_client["delete_job"].assert_called_once()
+        job = db_session.get(MdrunJob, "amber-stop")
+        assert job is not None
+        assert job.last_status == JobStatus.STOPPED
 
 
 class TestDeleteGmxJob:

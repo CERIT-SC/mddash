@@ -17,6 +17,7 @@ from .files import (
     write_amber_simulation,
     write_finished_amber_log,
     write_finished_gmx_log,
+    write_gmx_checkpoint,
     write_gmx_simulation,
     write_mdrun_stdio,
     write_running_gmx_log,
@@ -260,6 +261,32 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "experiment_id": enzyme.id,
         "tpr_name": "npt_equilibration.tpr",
         "nsteps": 100000,
+    }
+
+    # Second segment of the same simulation: extended by 50k steps, then stopped —
+    # exercises segment history, the non-destructive stop, and Extend from checkpoint.
+    stopped_gmx = build_model(
+        GromacsJob,
+        id="demo-gmx-stopped",
+        experiment=enzyme,
+        simulation_path="npt_equilibration.simulation.json",
+        pme=DeviceType.CPU,
+        nb=DeviceType.GPU,
+        np=8,
+        ntomp=1,
+        _nsteps=150000,
+        _init_step=100000,
+        _start_timestamp=int((now - timedelta(hours=19)).timestamp()),
+        _finish_timestamp=None,
+        _performance=None,
+        _last_known_status=JobStatus.STOPPED,
+        created_at=now - timedelta(hours=19),
+    )
+    demo_state.mdrun_jobs[stopped_gmx.id] = {
+        "status": JobStatus.STOPPED.value,
+        "experiment_id": enzyme.id,
+        "tpr_name": "npt_equilibration.tpr",
+        "nsteps": 150000,
     }
 
     # Experiment 3: Published study (already completed and published to MDRepo)
@@ -603,6 +630,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     write_running_gmx_log(enzyme.id, "production/md")
     write_finished_gmx_log(enzyme.id, "npt_equilibration", nsteps=100000, performance=68.5)
     write_mdrun_stdio(enzyme.id, "production", running_gmx.id)
+    # The stopped second segment of npt_equilibration resumable via its checkpoint.
+    write_gmx_checkpoint(enzyme.id, "npt_equilibration")
 
     # Published study: simple structure
     ensure_demo_files(published.id, ["lysozyme_hewl.tpr", "structure.pdb", "trajectory.xtc", "input.pdb"])
