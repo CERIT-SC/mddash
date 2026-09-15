@@ -306,7 +306,10 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         Step is the wizard phase index: Setup 0, Tune 1, Run 2, Analyze 3.
         A running job counts as Run done once nsteps_done parses from its
         engine log — before that, the run's files (trajectory included)
-        don't exist. Publish is experiment-level, not part of this ladder.
+        don't exist (earlier finished/stopped segments still count, since
+        their data stays analyzable). A stopped segment keeps data
+        analyzable exactly like a finished one. Publish is
+        experiment-level, not part of this ladder.
 
         Returns:
             A tuple of (step, status) where step is an integer (0-3) and status
@@ -314,10 +317,17 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         jobs = self._cached_jobs()
 
+        # Segments: live ones dominate the ladder; a stopped segment keeps data
+        # analyzable exactly like a finished one.
+        running = [j for j in jobs.simulation if j.status == JobStatus.RUNNING]
+        if running:
+            progressed = any(j.nsteps_done is not None for j in running)
+            has_prior_data = any(j.status in {JobStatus.FINISHED, JobStatus.STOPPED} for j in jobs.simulation)
+            return (3, "simulating") if progressed or has_prior_data else (2, "simulating")
         if any(j.status == JobStatus.FINISHED for j in jobs.simulation):
             return 3, "analyzing"
-        if any(j.status == JobStatus.RUNNING and j.nsteps_done is not None for j in jobs.simulation):
-            return 3, "simulating"
+        if any(j.status == JobStatus.STOPPED for j in jobs.simulation):
+            return 3, "analyzing"
         if jobs.simulation:
             return 2, "simulating"
 

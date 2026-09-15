@@ -60,6 +60,29 @@ class MdrunJob(db.Model):  # type: ignore
         """Delete the Kubernetes job resource."""
         k8s_client.delete_job(ns=NAMESPACE, name=self.job_name)
 
+    def stop(self) -> None:
+        """
+        Stop the Kubernetes job gracefully, preserving its data.
+
+        The pod gets an extended grace period so the simulation can write its final
+        checkpoint and the s3-sync sidecar can upload it to S3 before teardown
+        (see ``_sim_guard_block``/``_s3_sync_command`` in ``k8s_client``). The DB row is
+        kept with status STOPPED — after the K8s job is gone, ``status`` falls back to
+        ``last_status`` so the job keeps reporting ``stopped``. Terminal jobs (FINISHED,
+        ERROR, STOPPED) are not flipped: a finished run is not a stopped run. The job
+        may also finish between the check above and the deletion taking effect, so the
+        outcome is re-read once before stamping.
+        """
+        if self.status in {JobStatus.FINISHED, JobStatus.ERROR, JobStatus.STOPPED}:
+            return
+
+        k8s_client.delete_job(
+            ns=NAMESPACE, name=self.job_name, grace_period_seconds=k8s_client.STOP_GRACE_PERIOD_SECONDS
+        )
+        outcome = k8s_client.get_job_status(ns=NAMESPACE, name=self.job_name)
+        self.last_status = JobStatus.FINISHED if outcome == JobStatus.FINISHED else JobStatus.STOPPED
+        db.session.commit()
+
     def handle_status_change(self, old: JobStatus, new: JobStatus) -> None:
         """Handle job status transitions and cleanup finalized jobs."""
         logger.info(f"MDRun job {self.job_name} status changed from {old} to {new}")

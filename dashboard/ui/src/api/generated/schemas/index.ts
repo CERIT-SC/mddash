@@ -116,12 +116,12 @@ export const ListExperimentsResponseItem = zod.object({
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']).optional(),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
   "performance": zod.number().nullish()
 }))
 })),
@@ -133,7 +133,7 @@ export const ListExperimentsResponseItem = zod.object({
   "engine": zod.enum(['GMX', 'AMBER']),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
@@ -154,7 +154,7 @@ export const ListExperimentsResponseItem = zod.object({
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })),
   "step": zod.int().optional(),
@@ -235,12 +235,12 @@ export const CreateExperimentResponse = zod.object({
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']).optional(),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
   "performance": zod.number().nullish()
 }))
 })),
@@ -252,7 +252,7 @@ export const CreateExperimentResponse = zod.object({
   "engine": zod.enum(['GMX', 'AMBER']),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
@@ -273,7 +273,7 @@ export const CreateExperimentResponse = zod.object({
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })),
   "step": zod.int().optional(),
@@ -345,12 +345,12 @@ export const GetExperimentResponse = zod.object({
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']).optional(),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
   "performance": zod.number().nullish()
 }))
 })),
@@ -362,7 +362,7 @@ export const GetExperimentResponse = zod.object({
   "engine": zod.enum(['GMX', 'AMBER']),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
@@ -383,7 +383,7 @@ export const GetExperimentResponse = zod.object({
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })),
   "step": zod.int().optional(),
@@ -459,12 +459,12 @@ export const UpdateExperimentResponse = zod.object({
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']).optional(),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
   "performance": zod.number().nullish()
 }))
 })),
@@ -476,7 +476,7 @@ export const UpdateExperimentResponse = zod.object({
   "engine": zod.enum(['GMX', 'AMBER']),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
@@ -497,7 +497,7 @@ export const UpdateExperimentResponse = zod.object({
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })),
   "step": zod.int().optional(),
@@ -882,7 +882,7 @@ export const ListGromacsJobsResponseItem = zod.object({
   "engine": zod.enum(['GMX', 'AMBER']),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
@@ -904,7 +904,7 @@ export const ListGromacsJobsResponse = zod.array(ListGromacsJobsResponseItem)
 
 
 /**
- * @summary Get a GROMACS job
+ * @summary Get the latest segment of a GROMACS job
  */
 
 
@@ -927,7 +927,7 @@ export const GetGromacsJobResponse = zod.object({
   "engine": zod.enum(['GMX', 'AMBER']),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
@@ -982,7 +982,7 @@ export const SubmitGromacsJobResponse = zod.object({
   "engine": zod.enum(['GMX', 'AMBER']),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
@@ -1018,7 +1018,73 @@ export const DeleteGromacsJobResponse = zod.void()
 
 
 /**
- * @summary Get a GROMACS job log
+ * @summary Stop the latest GROMACS run segment, preserving its data
+ */
+
+
+
+
+export const StopGromacsJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "simulation_path": zod.string().min(1)
+})
+
+export const StopGromacsJobResponse = zod.void()
+
+
+/**
+ * @summary Extend a finished or stopped GROMACS run from its checkpoint
+ */
+
+
+
+
+export const ExtendGromacsJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "simulation_path": zod.string().min(1)
+})
+
+
+
+
+export const ExtendGromacsJobBody = zod.object({
+  "nsteps": zod.int().min(1)
+})
+
+
+
+
+
+export const ExtendGromacsJobResponse = zod.object({
+  "id": zod.string(),
+  "experiment_id": zod.string(),
+  "simulation_path": zod.string(),
+  "created_at": zod.iso.datetime({"offset":true}),
+  "engine": zod.enum(['GMX', 'AMBER']),
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
+  "start_timestamp": zod.int().nullish(),
+  "finish_timestamp": zod.int().nullish(),
+  "nsteps": zod.int().nullish(),
+  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.number().nullish(),
+  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
+  "log_lines": zod.object({
+  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
+  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
+  "stdout": zod.int().nullish(),
+  "stderr": zod.int().nullish()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
+}).and(zod.object({
+  "pme": zod.enum(['cpu', 'gpu']),
+  "nb": zod.enum(['cpu', 'gpu'])
+}))
+
+
+/**
+ * @summary Get a GROMACS job log (latest segment)
  */
 
 
@@ -1065,7 +1131,7 @@ export const ListAmberJobsResponseItem = zod.object({
   "engine": zod.enum(['GMX', 'AMBER']),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
@@ -1110,7 +1176,7 @@ export const GetAmberJobResponse = zod.object({
   "engine": zod.enum(['GMX', 'AMBER']),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
@@ -1165,7 +1231,7 @@ export const SubmitAmberJobResponse = zod.object({
   "engine": zod.enum(['GMX', 'AMBER']),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "start_timestamp": zod.int().nullish(),
   "finish_timestamp": zod.int().nullish(),
   "nsteps": zod.int().nullish(),
@@ -1198,6 +1264,21 @@ export const DeleteAmberJobParams = zod.object({
 })
 
 export const DeleteAmberJobResponse = zod.void()
+
+
+/**
+ * @summary Stop the latest AMBER run segment, preserving its data
+ */
+
+
+
+
+export const StopAmberJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "simulation_path": zod.string().min(1)
+})
+
+export const StopAmberJobResponse = zod.void()
 
 
 /**
@@ -1245,12 +1326,12 @@ export const ListTunerJobsResponseItem = zod.object({
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']).optional(),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
   "performance": zod.number().nullish()
 }))
 })
@@ -1293,12 +1374,12 @@ export const StartTunerJobResponse = zod.object({
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']).optional(),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
   "performance": zod.number().nullish()
 }))
 })
@@ -1325,12 +1406,12 @@ export const GetTunerJobResponse = zod.object({
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
   "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "is_live": zod.boolean(),
   "sim_length_ns": zod.number().nullish(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']).optional(),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
   "performance": zod.number().nullish()
 }))
 })
@@ -1487,7 +1568,7 @@ export const ListAnalysisJobsResponseItem = zod.object({
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })
 export const ListAnalysisJobsResponse = zod.array(ListAnalysisJobsResponseItem)
@@ -1518,7 +1599,7 @@ export const SubmitAnalysisJobResponse = zod.object({
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })
 
@@ -1707,7 +1788,7 @@ export const GetAnalysisJobResponse = zod.object({
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR']),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
   "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
 })
 

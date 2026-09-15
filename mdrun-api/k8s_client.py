@@ -22,6 +22,9 @@ batch_v1 = client.BatchV1Api()
 
 _S3_SYNC_IMAGE = "rclone/rclone:1.74.4"
 _SHARED_VOLUME_NAME = "shared-data"
+# Grace period for stop deletions: mdrun needs time to write its final checkpoint
+# and the s3-sync sidecar to upload it before the pod is torn down.
+STOP_GRACE_PERIOD_SECONDS = 60
 _RUN_AS = {"runAsUser": 1000, "runAsGroup": 1000, "runAsNonRoot": True}
 _SECURITY_CONTEXT = {
     **_RUN_AS,
@@ -62,13 +65,30 @@ def _s3_init_command(exp_dir: str, remote: str) -> str:
 
 
 def _s3_sync_command(local_dir: str, remote: str) -> str:
+    # On pod deletion (e.g. job stop) the sidecar receives TERM immediately; without a trap
+    # it would die before the final copy, losing the simulation's last checkpoint. The trap
+    # waits (bounded) for the sim container's completion marker, then uploads a final copy.
     return (
-        f'echo "Starting continuous rclone copy process..." && '
+        "final_copy() {\n"
+        '    echo "Performing final copy to S3..." &&\n'
+        f"    rclone copy {_q(local_dir + '/')} {_q(remote)} --checksum --progress &&\n"
+        '    echo "Final copy completed."\n'
+        "}\n"
+        "on_term() {\n"
+        '    echo "Termination requested, waiting for simulation to finish..."\n'
+        "    i=0\n"
+        '    while [ ! -f /data/job_completed ] && [ "$i" -lt 30 ]; do\n'
+        "        sleep 5\n"
+        "        i=$((i + 5))\n"
+        "    done\n"
+        "    final_copy\n"
+        "    exit 0\n"
+        "}\n"
+        "trap on_term TERM INT\n"
+        'echo "Starting continuous rclone copy process..."\n'
         "while true; do\n"
         "    if [ -f /data/job_completed ]; then\n"
-        '        echo "Job completed, performing final copy to S3..." &&\n'
-        f"        rclone copy {_q(local_dir + '/')} {_q(remote)} --checksum --progress &&\n"
-        '        echo "Final copy completed, exiting..." &&\n'
+        "        final_copy\n"
         "        break\n"
         "    fi\n"
         f"    rclone copy {_q(local_dir + '/')} {_q(remote)} --ignore-checksum --retries 1 --quiet || "
@@ -76,6 +96,31 @@ def _s3_sync_command(local_dir: str, remote: str) -> str:
         "    sleep 10\n"
         "done\n"
     )
+
+
+def _sim_guard_block() -> str:
+    """
+    Shell block guarding the backgrounded simulation workload.
+
+    Kubernetes signals only PID 1 (this script's shell) on pod deletion, so TERM must be
+    forwarded explicitly — ``gmx mdrun`` writes its final checkpoint on TERM. The workload
+    runs in the background so ``$!`` captures its PID and the script can wait for its
+    graceful exit within the pod's grace period. The completion marker is touched on every
+    exit path (success, failure, termination) to trigger the s3-sync sidecar's final copy.
+    """
+    return "\n".join([
+        "MD_PID=$!",
+        "on_term() {",
+        '    echo "Termination requested, signaling simulation to checkpoint..."',
+        '    kill -TERM "$MD_PID" 2>/dev/null || true',
+        '    wait "$MD_PID" || true',
+        "    exit 0",
+        "}",
+        "trap on_term TERM INT",
+        "trap 'touch /data/job_completed' EXIT",
+        'wait "$MD_PID"',
+        "echo 'Simulation completed.'",
+    ])
 
 
 def _volume_mount(path: str = "/data") -> dict[str, str]:
@@ -220,17 +265,17 @@ def _amber_command(
     if binary == "pmemd.cuda":
         command = "\n".join([
             "set -euo pipefail",
-            "trap 'touch /data/job_completed' EXIT TERM INT",
             patch_step,
-            " ".join(["pmemd.cuda", base_flags]).rstrip() + extra_part + tee_redirect,
+            " ".join(["pmemd.cuda", base_flags]).rstrip() + extra_part + tee_redirect + " &",
+            _sim_guard_block(),
         ])
         return command, True
 
     command = "\n".join([
         "set -euo pipefail",
-        "trap 'touch /data/job_completed' EXIT TERM INT",
         patch_step,
-        " ".join(["mpirun", "-np", str(np), "pmemd.MPI", base_flags]) + extra_part + tee_redirect,
+        " ".join(["mpirun", "-np", str(np), "pmemd.MPI", base_flags]) + extra_part + tee_redirect + " &",
+        _sim_guard_block(),
     ])
     return command, False
 
@@ -276,7 +321,6 @@ def create_gromacs_job(
 
     gromacs_command = "\n".join([
         "set -euo pipefail",
-        "trap 'touch /data/job_completed' EXIT TERM INT",
         (
             " ".join([
                 "mpirun",
@@ -294,9 +338,9 @@ def create_gromacs_job(
                 _q(deffnm_arg),
             ])
             + extra_part
-            + f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2)"
+            + f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2) &"
         ),
-        "echo 'Simulation completed.'",
+        _sim_guard_block(),
     ])
 
     manifest = _build_job_manifest(
@@ -388,7 +432,7 @@ def create_amber_job(
     logger.info(f"Created AMBER job {name} in namespace {ns}")
 
 
-def delete_job(ns: str, name: str) -> None:
+def delete_job(ns: str, name: str, grace_period_seconds: int = 5) -> None:
     """Delete a Kubernetes job by name."""
     if not ping_resource("job", name, ns):
         logger.warning(f"Job {name} does not exist in namespace {ns}. Skipping deletion.")
@@ -399,7 +443,7 @@ def delete_job(ns: str, name: str) -> None:
         namespace=ns,
         body=client.V1DeleteOptions(
             propagation_policy="Background",
-            grace_period_seconds=5,
+            grace_period_seconds=grace_period_seconds,
         ),
     )
     logger.info(f"Deleted job {name} from namespace {ns}")

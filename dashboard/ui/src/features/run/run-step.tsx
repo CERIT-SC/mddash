@@ -5,6 +5,8 @@ import {
   getGetAmberJobQueryKey,
   getGetExperimentQueryKey,
   getGetGromacsJobQueryKey,
+  getListAmberJobsQueryKey,
+  getListGromacsJobsQueryKey,
   getListSimulationsQueryKey,
   useGetTunerJob,
 } from "@/api/generated/client"
@@ -31,8 +33,10 @@ import { ArrowLeft, ArrowRight, RotateCcw, Square } from "lucide-react"
 import { toast } from "sonner"
 
 import { ConfigUsed } from "./config-used"
+import { ExtendDialog } from "./extend-dialog"
 import { RunLogs } from "./run-logs"
 import { RunProgress } from "./run-progress"
+import { SegmentsList } from "./segments-list"
 import { jobConfigRequest, useJobMutations, useSimulationJobQuery } from "./use-simulation-job"
 
 const RUN_POLL_MS = 5000
@@ -46,11 +50,12 @@ type RunStepProps = {
   pollMs?: number
 }
 
-/** Run wizard step: submit, watch, stop, or re-run the production simulation. */
+/** Run wizard step: watch, stop, extend, or re-run the production simulation. */
 export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs = RUN_POLL_MS }: RunStepProps) {
   const queryClient = useQueryClient()
   const [confirmStop, setConfirmStop] = useState(false)
   const [confirmRestart, setConfirmRestart] = useState(false)
+  const [confirmExtend, setConfirmExtend] = useState(false)
   // Suppresses the gone-job auto-navigation during the re-run delete→submit chain.
   const [restarting, setRestarting] = useState(false)
 
@@ -59,8 +64,11 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
   const live = job !== undefined && job.is_live
   const failed = job?.status === JobStatus.ERROR
   // The ladder in props is the single source — the same value the stepper
-  // consumes; the server holds it at Run until progress parses from the log.
+  // consumes; the server holds it at Run until progress parses from the log
+  // (or earlier segments keep data analyzable — STOPPED counts as step 3 too).
   const analyzable = simulation.step >= 3
+  // A terminal GMX run can be resumed from its checkpoint (AMBER has no extension yet).
+  const canExtend = engine !== Engine.AMBER && job !== undefined && !job.is_live
 
   // Tuner trials power the config table's estimates; a 404 just means "no tuning".
   const tunerQuery = useGetTunerJob(experimentId, simulation.simulation_path, { query: { retry: false } })
@@ -72,26 +80,43 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
       engine === Engine.AMBER
         ? getGetAmberJobQueryKey(experimentId, simulation.simulation_path)
         : getGetGromacsJobQueryKey(experimentId, simulation.simulation_path)
+    const jobsKey =
+      engine === Engine.AMBER ? getListAmberJobsQueryKey(experimentId) : getListGromacsJobsQueryKey(experimentId)
     void queryClient.invalidateQueries({ queryKey: jobKey })
+    void queryClient.invalidateQueries({ queryKey: jobsKey })
     void queryClient.invalidateQueries({ queryKey: getListSimulationsQueryKey(experimentId) })
     void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experimentId) })
   }
 
   const mutations = useJobMutations(engine)
-  const stopping = mutations.remove.isPending && !restarting
-  const busy = mutations.remove.isPending || mutations.submit.isPending
+  const stopping = mutations.stop.isPending
+  const busy =
+    mutations.remove.isPending || mutations.submit.isPending || mutations.stop.isPending || mutations.extend.isPending
 
   const vars = { experimentId, simulationPath: simulation.simulation_path }
 
   const stopRun = () =>
-    mutations.remove.mutate(vars, {
+    mutations.stop.mutate(vars, {
       onSuccess: () => {
         setConfirmStop(false)
-        toast.success("Run stopped")
+        toast.success("Run stopped — results so far are kept")
         invalidate()
       },
       onError: (error) => toast.error(toApiError(error).message),
     })
+
+  const extendRun = (nsteps: number) =>
+    mutations.extend.mutate(
+      { ...vars, data: { nsteps } },
+      {
+        onSuccess: () => {
+          setConfirmExtend(false)
+          toast.success(`Run extended by ${nsteps.toLocaleString("en-US")} steps`)
+          invalidate()
+        },
+        onError: (error) => toast.error(toApiError(error).message),
+      }
+    )
 
   const restartRun = () => {
     if (job === undefined) return
@@ -153,9 +178,12 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
           <RunProgress
             job={job}
             busy={busy}
+            canExtend={canExtend}
             onStop={() => setConfirmStop(true)}
+            onExtend={() => setConfirmExtend(true)}
             onRestart={() => setConfirmRestart(true)}
           />
+          <SegmentsList experimentId={experimentId} simulationPath={simulation.simulation_path} engine={engine} />
           {/* A pending pod has produced nothing — every stream 404s, so there is
               nothing to show and no reason to hit the log endpoint. */}
           {job.status !== JobStatus.PENDING && (
@@ -200,7 +228,8 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
               Stop this run?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Stopping deletes the run, its progress so far, and its logs. This cannot be undone.
+              The simulation stops at its next checkpoint. Everything produced so far — results, trajectory, and logs —
+              is kept, so you can analyze it{engine !== Engine.AMBER ? " or extend the run later" : ""}.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -221,8 +250,8 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
               Re-run the simulation?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The current results and logs will be deleted, and the run starts again with the same configuration. This
-              cannot be undone.
+              The whole run history — all segments, results, and logs — will be deleted, and the run starts over with
+              the same configuration. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -234,6 +263,15 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {confirmExtend && job !== undefined && (
+        <ExtendDialog
+          currentTotal={job.nsteps ?? null}
+          pending={mutations.extend.isPending}
+          onExtend={extendRun}
+          onCancel={() => setConfirmExtend(false)}
+        />
+      )}
     </div>
   )
 }
