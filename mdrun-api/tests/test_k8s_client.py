@@ -10,6 +10,8 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import k8s_client
+from enums import JobStatus
+from kubernetes.client.rest import ApiException
 from pytest_mock import MockerFixture
 
 
@@ -219,3 +221,77 @@ class TestAmberManifest:
         sync = _s3_sync_command(manifest)
         assert "s3remote:bucket/exp123/" in sync
         assert "exp123/sub" not in sync
+
+
+def _stub_status(
+    mocker: MockerFixture,
+    *,
+    conditions: list[MagicMock] | None = None,
+    active: int | None = 1,
+    succeeded: int | None = None,
+    failed: int | None = None,
+    pod_phase: str | None = "Running",
+    pod_error: Exception | None = None,
+) -> MagicMock:
+    """Patch the K8s clients for one get_job_status call; returns the core_v1 mock."""
+    batch_v1 = mocker.patch.object(k8s_client, "batch_v1")
+    core_v1 = mocker.patch.object(k8s_client, "core_v1")
+
+    job = MagicMock()
+    job.status.conditions = conditions
+    job.status.active = active
+    job.status.succeeded = succeeded
+    job.status.failed = failed
+    batch_v1.read_namespaced_job.return_value = job
+
+    if pod_error is not None:
+        core_v1.list_namespaced_pod.side_effect = pod_error
+    else:
+        pod = MagicMock()
+        pod.status.phase = pod_phase
+        core_v1.list_namespaced_pod.return_value = MagicMock(items=[pod])
+    return core_v1
+
+
+class TestGetJobStatus:
+    """Pod-phase translation for jobs the controller hasn't stamped yet."""
+
+    def test_succeeded_pod_reports_finished(self, mocker: MockerFixture) -> None:
+        """A Succeeded pod is FINISHED even before the Job object is stamped Complete."""
+        _stub_status(mocker, pod_phase="Succeeded")
+
+        assert k8s_client.get_job_status(ns="ns", name="mdrun-job") is JobStatus.FINISHED
+
+    def test_failed_pod_reports_error(self, mocker: MockerFixture) -> None:
+        """A Failed pod is ERROR, not PENDING (backoffLimit 0 makes the phase terminal)."""
+        _stub_status(mocker, pod_phase="Failed")
+
+        assert k8s_client.get_job_status(ns="ns", name="mdrun-job") is JobStatus.ERROR
+
+    def test_running_pod_reports_running(self, mocker: MockerFixture) -> None:
+        """A Running pod keeps the job RUNNING."""
+        _stub_status(mocker, pod_phase="Running")
+
+        assert k8s_client.get_job_status(ns="ns", name="mdrun-job") is JobStatus.RUNNING
+
+    def test_pre_start_pod_reports_pending(self, mocker: MockerFixture) -> None:
+        """Pre-start phases (Pending, ContainerCreating) stay PENDING."""
+        _stub_status(mocker, pod_phase="Pending")
+
+        assert k8s_client.get_job_status(ns="ns", name="mdrun-job") is JobStatus.PENDING
+
+    def test_job_conditions_short_circuit_the_pod_lookup(self, mocker: MockerFixture) -> None:
+        """A stamped Complete condition answers without listing pods."""
+        complete = MagicMock()
+        complete.type = "Complete"
+        complete.status = "True"
+        core_v1 = _stub_status(mocker, conditions=[complete], pod_phase="Succeeded")
+
+        assert k8s_client.get_job_status(ns="ns", name="mdrun-job") is JobStatus.FINISHED
+        core_v1.list_namespaced_pod.assert_not_called()
+
+    def test_phase_lookup_failure_falls_back_to_running(self, mocker: MockerFixture) -> None:
+        """An active job whose pod phase can't be read stays RUNNING."""
+        _stub_status(mocker, pod_error=ApiException(status=500))
+
+        assert k8s_client.get_job_status(ns="ns", name="mdrun-job") is JobStatus.RUNNING
