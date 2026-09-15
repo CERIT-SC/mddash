@@ -60,11 +60,11 @@ Frequently asked questions and common issues in MDDash (production deployment).
 
 **Why don't I see the imaging preprocessing options?** "Image Only" / "Image and Fit" require a GROMACS `.tpr`; AMBER only supports "Use Files As-Is".
 
-**Publishing asks me to connect to MDRepo again.** The MDRepo OAuth token lives in the browser session; a new session needs a new one-time authorization.
+**Publishing asks me to sign in to MDRepo again.** The MDRepo OAuth token lives in the browser session; a new session needs a new one-time authorization.
 
 **My upload to MDRepo failed.** The draft and already-uploaded files are preserved — inspect the failed-files list and click **"Retry upload"**.
 
-**Where is my DOI?** MDDash only creates an MDRepo **draft** and uploads files. Open the draft (button "View in MDRepo"), fill/review metadata in MDRepo, and publish there to mint the DOI.
+**Where is my DOI?** MDDash only creates an MDRepo **draft** and uploads files. Open the draft (button "Finish in MDRepo"), fill/review metadata in MDRepo, and publish there to mint the DOI.
 
 ## Storage and quota
 

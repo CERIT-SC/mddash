@@ -20,12 +20,11 @@ import {
 } from "@/api/generated/models"
 import { formatBytes } from "@/shared/format"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
-import { InfoBanner } from "@/shared/ui/info-banner"
+import { StepGuide, type StepGuideState, type StepGuideStep } from "@/shared/ui/step-guide"
 import {
   Alert,
   AlertDescription,
   AlertTitle,
-  Badge,
   Button,
   H4,
   Label,
@@ -38,13 +37,28 @@ import {
   SelectValue,
   Separator,
   Skeleton,
+  Small,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from "@e-infra/design-system"
 import { useQueryClient } from "@tanstack/react-query"
-import { ArrowLeft, CloudUpload, Download, ExternalLink, Folder, HardDrive, LoaderCircle, LogIn } from "lucide-react"
+import {
+  ArrowLeft,
+  CloudUpload,
+  Copy,
+  Download,
+  ExternalLink,
+  Folder,
+  HardDrive,
+  LoaderCircle,
+  LogIn,
+  Plus,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { mdpositUnavailableReason } from "./mdposit-unavailable"
-import { pollWhileUploadActive, uploadActive, uploadFailureReason, uploadStateLabel } from "./upload-state"
+import { pollWhileUploadActive, uploadActive, uploadFailureReason } from "./upload-state"
 
 const PUBLISH_POLL_MS = 3000
 const BACK_STEP = 3
@@ -113,13 +127,25 @@ export function PublishStep({ experiment, simulation, onStepChange, onOAuthHandl
   )
 }
 
-/** Badge styled by upload state; completed needs the success tokens the DS Badge variants don't cover. */
-function UploadStateBadge({ state }: { state: string }) {
-  const variant = state === "failed" ? "error" : state === "queued" ? "secondary" : "default"
+/** Dataset totals; only known once the upload status document exists. */
+function PublishStats({ upload }: { upload: PublishStatus }) {
   return (
-    <Badge variant={variant} className={state === "completed" ? "bg-success text-success-foreground" : undefined}>
-      {uploadStateLabel(state)}
-    </Badge>
+    <div className="flex flex-wrap gap-x-12 gap-y-2">
+      <div>
+        <p className="text-text-muted flex items-center gap-2 text-sm">
+          <Folder className="h-4 w-4" aria-hidden />
+          Files
+        </p>
+        <p className="text-sm font-medium">{upload.total_files}</p>
+      </div>
+      <div>
+        <p className="text-text-muted flex items-center gap-2 text-sm">
+          <HardDrive className="h-4 w-4" aria-hidden />
+          Total size
+        </p>
+        <p className="text-sm font-medium">{formatBytes(upload.total_bytes)}</p>
+      </div>
+    </div>
   )
 }
 
@@ -138,6 +164,7 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
 
   // mdrepo_id is NullableString — treat both null and undefined as absent.
   const hasDraft = experiment.mdrepo_id !== null && experiment.mdrepo_id !== undefined
+  const published = experiment.mdrepo_published === true
   const authenticated = mdrepoStatus.data?.status === 200 && mdrepoStatus.data.data.authenticated
 
   // The upload status document only exists once a draft has been created.
@@ -152,10 +179,6 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
 
   const recordUrl = upload?.draft_url ?? experiment.mdrepo_record_url ?? null
   const failureReason = uploadFailureReason(upload?.reason)
-  // Unauthenticated: sign-in replaces each banner's state copy (OAuth round trip back here; metadata is a later step).
-  const description = authenticated
-    ? null
-    : "You'll be redirected to MDRepo to sign in with your e-INFRA CZ account, then returned here to publish."
   // Captured at render; the wizard URL (simulation + step) round-trips through the
   // OAuth callback. Must stay a relative path — the API rejects absolute return_urls.
   const authHref = getAuthorizeMDRepoUrl({ return_url: `${window.location.pathname}${window.location.search}` })
@@ -173,6 +196,20 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
         },
         onError: (error) => toast.error(toApiError(error).message),
       }
+    )
+  }
+
+  // A published record has no actionable steps left — the status card stands alone
+  // and doesn't gate on the MDRepo connection check below.
+  if (published) {
+    return (
+      <PublishedRecord
+        recordUrl={recordUrl}
+        upload={upload}
+        uploadError={hasDraft && uploadQuery.isError ? uploadQuery.error : undefined}
+        onRetryStats={() => void uploadQuery.refetch()}
+        onBack={() => onStepChange(BACK_STEP)}
+      />
     )
   }
 
@@ -203,133 +240,211 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
     )
   }
 
+  // A completed upload voids sign-in: nothing in-app needs the token afterwards.
+  const signIn: StepGuideState = authenticated || completed ? "done" : "active"
+  const uploadStep: StepGuideState = completed ? "done" : authenticated ? "active" : "pending"
+  const finish: StepGuideState = completed ? "active" : "pending"
+
+  const steps: StepGuideStep[] = [
+    {
+      title: "Sign-in to MDRepo",
+      state: signIn,
+      body:
+        signIn === "active" ? (
+          <>
+            <Small>First you need to sign-in with your account.</Small>
+            <div>
+              <Button type="button" asChild>
+                <a href={authHref}>
+                  <LogIn aria-hidden />
+                  Sign-in
+                </a>
+              </Button>
+            </div>
+          </>
+        ) : null,
+    },
+    {
+      title: "Upload your dataset",
+      state: uploadStep,
+      body:
+        uploadStep === "active" ? (
+          <>
+            {failed ? (
+              <>
+                <Alert variant="error" role="alert">
+                  <AlertTitle>Upload failed</AlertTitle>
+                  <AlertDescription>
+                    <p>Your draft and uploaded files are preserved. Retry the upload to continue.</p>
+                    {failureReason !== null && <p className="mt-1">{failureReason}</p>}
+                  </AlertDescription>
+                </Alert>
+                {(upload?.failed_files?.length ?? 0) > 0 && (
+                  <div className="border-border space-y-1 rounded-md border p-4 text-sm">
+                    <p className="font-medium">{upload?.failed_files?.length} file(s) failed to upload:</p>
+                    <ul className="text-text-muted space-y-0.5">
+                      {upload?.failed_files?.slice(0, MAX_FAILED_LISTED).map((file) => (
+                        <li key={file.key} className="truncate" title={file.error}>
+                          {file.key}
+                        </li>
+                      ))}
+                      {(upload?.failed_files?.length ?? 0) > MAX_FAILED_LISTED && (
+                        <li className="italic">…and {(upload?.failed_files?.length ?? 0) - MAX_FAILED_LISTED} more</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </>
+            ) : active && upload !== undefined ? (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">
+                  {uploadState === "queued"
+                    ? "Upload queued. Waiting for the upload job…"
+                    : `Uploading files… (${upload.completed_files}/${upload.total_files})`}
+                </p>
+                {upload.total_files > 0 && <Progress value={(upload.completed_files / upload.total_files) * 100} />}
+                <p className="text-text-muted text-xs">
+                  {formatBytes(upload.completed_bytes)} / {formatBytes(upload.total_bytes)}
+                </p>
+              </div>
+            ) : (
+              <Small>
+                {hasDraft
+                  ? "A draft exists in MDRepo — retry the upload to update it, or finish the deposition there."
+                  : "This step is going to upload your data to MDRepo server."}
+              </Small>
+            )}
+
+            {hasDraft && recordUrl !== null && (
+              <p className="text-sm">
+                <Link href={recordUrl} target="_blank" rel="noreferrer">
+                  {active ? "View the draft in MDRepo while files upload." : "View the draft in MDRepo."}
+                </Link>
+              </p>
+            )}
+
+            <div>
+              {active || publish.isPending ? (
+                <Button type="button" disabled>
+                  <LoaderCircle className="animate-spin" aria-hidden />
+                  {active ? "Uploading…" : "Publishing…"}
+                </Button>
+              ) : (
+                <Button type="button" onClick={handlePublish}>
+                  <CloudUpload aria-hidden />
+                  {hasDraft ? "Retry upload" : "Upload"}
+                </Button>
+              )}
+            </div>
+          </>
+        ) : null,
+    },
+    {
+      title: "Finish deposition in MDRepo",
+      state: finish,
+      body:
+        finish === "active" ? (
+          <>
+            <Small>
+              Your files are uploaded and waiting in a draft. Fill in the metadata there to publish — you don&apos;t
+              need to come back here.
+            </Small>
+            <div>
+              {recordUrl !== null ? (
+                <Button type="button" asChild>
+                  <a href={recordUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink aria-hidden />
+                    Finish in MDRepo
+                  </a>
+                </Button>
+              ) : (
+                <Button type="button" disabled>
+                  Finish in MDRepo
+                </Button>
+              )}
+            </div>
+          </>
+        ) : null,
+    },
+  ]
+
   return (
     <>
-      {completed ? (
-        <Alert variant="success">
-          <AlertTitle>Upload complete</AlertTitle>
-          <AlertDescription>
-            {description ?? "Open MDRepo to complete the metadata and finalize the publication."}
-          </AlertDescription>
-        </Alert>
-      ) : failed ? (
-        <Alert variant="error" role="alert">
-          <AlertTitle>Upload failed</AlertTitle>
-          <AlertDescription>
-            <p>Your draft and uploaded files are preserved. {description ?? "Retry the upload to continue."}</p>
-            {failureReason !== null && <p className="mt-1">{failureReason}</p>}
-          </AlertDescription>
-        </Alert>
-      ) : active ? (
-        <InfoBanner>
-          <AlertTitle>Upload in progress</AlertTitle>
-          <AlertDescription>
-            {description ?? "The MDRepo draft is available, but incomplete until the upload finishes."}
-          </AlertDescription>
-        </InfoBanner>
-      ) : hasDraft ? (
-        <InfoBanner>
-          <AlertTitle>A draft exists in MDRepo</AlertTitle>
-          <AlertDescription>{description ?? "View the draft in MDRepo, or retry the upload."}</AlertDescription>
-        </InfoBanner>
-      ) : (
-        <InfoBanner>
-          <AlertTitle>Publish to MDRepo</AlertTitle>
-          <AlertDescription>
-            {description ??
-              "Files upload in the background. The MDRepo draft opens in a new tab, where you complete the metadata and finalize the publication."}
-          </AlertDescription>
-        </InfoBanner>
-      )}
+      {upload !== undefined && <PublishStats upload={upload} />}
+      <StepGuide title="Step by step" label="Publish steps" steps={steps} />
+      <Separator />
+      <PublishFooter onBack={() => onStepChange(BACK_STEP)} />
+    </>
+  )
+}
 
-      {upload !== undefined && (
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-          <span className="flex items-center gap-2">
-            <Folder className="text-text-muted h-4 w-4" aria-hidden />
-            <span className="text-text-muted">Files:</span>
-            {upload.total_files}
-          </span>
-          <span className="flex items-center gap-2">
-            <HardDrive className="text-text-muted h-4 w-4" aria-hidden />
-            <span className="text-text-muted">Total size:</span>
-            {formatBytes(upload.total_bytes)}
-          </span>
-          {uploadState !== null && <UploadStateBadge state={uploadState} />}
+type PublishedRecordProps = {
+  recordUrl: string | null
+  upload: PublishStatus | undefined
+  /** Set when the status document can't be read; replaces the stats it would feed. */
+  uploadError?: unknown
+  onRetryStats?: () => void
+  onBack: () => void
+}
+
+/** The terminal state: the record is public on MDRepo, so nothing here is actionable. */
+function PublishedRecord({ recordUrl, upload, uploadError, onRetryStats, onBack }: PublishedRecordProps) {
+  const copyRecordLink = () => {
+    if (recordUrl === null) return
+    void navigator.clipboard.writeText(recordUrl).then(
+      () => toast.success("Record link copied."),
+      () => toast.error("Couldn't copy the record link.")
+    )
+  }
+
+  return (
+    <>
+      <Alert variant="success">
+        <AlertTitle>Published</AlertTitle>
+        <AlertDescription>This experiment is published on MDRepo and can be cited from there.</AlertDescription>
+      </Alert>
+
+      <div className="border-border space-y-4 rounded-md border p-4">
+        <div className="space-y-1">
+          <p className="text-text-muted text-sm">MDRepo record</p>
+          {recordUrl !== null ? (
+            <div className="flex items-center gap-2">
+              <Link href={recordUrl} target="_blank" rel="noreferrer" className="truncate">
+                {recordUrl}
+              </Link>
+              <Button type="button" variant="ghost" size="icon" aria-label="Copy record link" onClick={copyRecordLink}>
+                <Copy aria-hidden />
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm">The record URL isn&apos;t available.</p>
+          )}
         </div>
-      )}
-
-      {active && upload !== undefined && (
-        <div className="space-y-2">
-          <p className="text-sm font-medium">
-            {uploadState === "queued"
-              ? "Upload queued. Waiting for the upload job…"
-              : `Uploading files… (${upload.completed_files}/${upload.total_files})`}
-          </p>
-          {upload.total_files > 0 && <Progress value={(upload.completed_files / upload.total_files) * 100} />}
-          <p className="text-text-muted text-xs">
-            {formatBytes(upload.completed_bytes)} / {formatBytes(upload.total_bytes)}
-          </p>
-        </div>
-      )}
-
-      {failed && (upload?.failed_files?.length ?? 0) > 0 && (
-        <div className="border-border space-y-1 rounded-md border p-4 text-sm">
-          <p className="font-medium">{upload?.failed_files?.length} file(s) failed to upload:</p>
-          <ul className="text-text-muted space-y-0.5">
-            {upload?.failed_files?.slice(0, MAX_FAILED_LISTED).map((file) => (
-              <li key={file.key} className="truncate" title={file.error}>
-                {file.key}
-              </li>
-            ))}
-            {(upload?.failed_files?.length ?? 0) > MAX_FAILED_LISTED && (
-              <li className="italic">…and {(upload?.failed_files?.length ?? 0) - MAX_FAILED_LISTED} more</li>
-            )}
-          </ul>
-        </div>
-      )}
-
-      {hasDraft && !completed && authenticated && recordUrl !== null && (
-        <p className="text-sm">
-          <Link href={recordUrl} target="_blank" rel="noreferrer">
-            View the draft in MDRepo while files upload.
-          </Link>
-        </p>
-      )}
+        {uploadError !== undefined ? (
+          <ApiErrorAlert error={uploadError} onRetry={onRetryStats} />
+        ) : upload !== undefined ? (
+          <>
+            <Separator />
+            <PublishStats upload={upload} />
+          </>
+        ) : null}
+      </div>
 
       <Separator />
 
-      <PublishFooter onBack={() => onStepChange(BACK_STEP)}>
-        {!authenticated ? (
-          <Button type="button" asChild>
-            <a href={authHref}>
-              <LogIn aria-hidden />
-              Connect to MDRepo
-            </a>
-          </Button>
-        ) : completed ? (
-          recordUrl !== null ? (
-            <Button type="button" asChild>
-              <a href={recordUrl} target="_blank" rel="noreferrer">
-                <ExternalLink aria-hidden />
-                View in MDRepo
-              </a>
-            </Button>
-          ) : (
-            <Button type="button" disabled>
-              View in MDRepo
-            </Button>
-          )
-        ) : active || publish.isPending ? (
-          <Button type="button" disabled>
-            <LoaderCircle className="animate-spin" aria-hidden />
-            {active ? "Uploading…" : "Publishing…"}
-          </Button>
-        ) : (
-          <Button type="button" onClick={handlePublish}>
-            <CloudUpload aria-hidden />
-            {hasDraft ? "Retry upload" : "Publish to MDRepo"}
-          </Button>
-        )}
+      <PublishFooter onBack={onBack}>
+        {/* Disabled: the API rejects re-publishing a published record; span keeps the tooltip reachable. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex cursor-not-allowed" tabIndex={0}>
+              <Button type="button" disabled className="pointer-events-none">
+                <Plus aria-hidden />
+                Publish a new version
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>Publishing a new version of a published record isn&apos;t supported yet.</TooltipContent>
+        </Tooltip>
       </PublishFooter>
     </>
   )
@@ -347,6 +462,7 @@ type MdpositPublishProps = {
   onStepChange: (step: number) => void
 }
 
+/** MDPosit handoff is stateless: once the package is prepared, download and finish are both open (off-platform). */
 function MdpositPublish({ experiment, simulation, onStepChange }: MdpositPublishProps) {
   const prepare = usePublishExperiment()
   const handoff: MDPositPublication | undefined = prepare.data?.status === 201 ? prepare.data.data : undefined
@@ -375,69 +491,93 @@ function MdpositPublish({ experiment, simulation, onStepChange }: MdpositPublish
     )
   }
 
-  return (
-    <>
-      <InfoBanner>
-        <AlertTitle>Stateless MDPosit handoff</AlertTitle>
-        <AlertDescription>
-          This prepares a handoff package for the selected simulation. It does not change the experiment&apos;s
-          publication status or wizard progress.
-        </AlertDescription>
-      </InfoBanner>
+  const packageStep: StepGuideState = handoff !== undefined ? "done" : "active"
+  const afterPrepare: StepGuideState = handoff !== undefined ? "active" : "pending"
+  const vreLiteUrl = handoff?.vre_lite_url
 
-      {unavailableReason !== null ? (
-        <Alert variant="warning">
-          <AlertTitle>Handoff unavailable</AlertTitle>
-          <AlertDescription>{unavailableReason}</AlertDescription>
-        </Alert>
-      ) : (
-        <div className="text-sm">
-          <p className="font-medium">MDPosit publishing workflow</p>
-          <ol className="text-text-muted mt-2 list-decimal space-y-1 pl-5">
-            <li>Prepare the handoff package using the button below.</li>
-            <li>Download all files and open VRE Lite.</li>
-            <li>Upload the metadata file (inputs.yaml) first.</li>
-            <li>Review the imported form and fill in the missing fields.</li>
-            <li>Upload the selected structure, topology, and trajectory files.</li>
-          </ol>
-        </div>
-      )}
-
-      {handoff !== undefined && (
-        <div className="border-border space-y-3 rounded-md border p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium">Handoff downloads</p>
-            {handoff.vre_lite_url !== null && handoff.vre_lite_url !== undefined && handoff.vre_lite_url !== "" && (
-              <Button variant="outline" size="sm" asChild>
-                <a href={handoff.vre_lite_url} target="_blank" rel="noreferrer">
-                  <ExternalLink aria-hidden />
-                  Open VRE Lite
-                </a>
-              </Button>
+  const steps: StepGuideStep[] = [
+    {
+      title: "Prepare the handoff package",
+      state: packageStep,
+      body:
+        packageStep === "active" ? (
+          <>
+            <Small>
+              Packages the selected simulation&apos;s files for MDPosit. This doesn&apos;t change the experiment&apos;s
+              publication status or wizard progress.
+            </Small>
+            {unavailableReason !== null && (
+              <Alert variant="warning">
+                <AlertTitle>Handoff unavailable</AlertTitle>
+                <AlertDescription>{unavailableReason}</AlertDescription>
+              </Alert>
             )}
-          </div>
+            <div>
+              <Button
+                type="button"
+                onClick={handlePrepare}
+                disabled={unavailableReason !== null || prepare.isPending}
+                title={unavailableReason ?? undefined}
+              >
+                {prepare.isPending ? (
+                  <LoaderCircle className="animate-spin" aria-hidden />
+                ) : (
+                  <CloudUpload aria-hidden />
+                )}
+                Prepare MDPosit handoff
+              </Button>
+            </div>
+          </>
+        ) : null,
+    },
+    {
+      title: "Download the handoff files",
+      state: afterPrepare,
+      body:
+        handoff !== undefined ? (
           <div className="grid gap-2 sm:grid-cols-2">
             <HandoffDownload label="Metadata file (inputs.yaml)" file={handoff.metadata_file} />
             {handoff.files.map((file) => (
               <HandoffDownload key={file.path} label={MDPOSIT_FILE_LABELS[file.role ?? ""] ?? file.path} file={file} />
             ))}
           </div>
-        </div>
-      )}
+        ) : null,
+    },
+    {
+      title: "Finish deposition in VRE Lite",
+      state: afterPrepare,
+      body:
+        handoff !== undefined ? (
+          <>
+            <Small>
+              Open VRE Lite, upload the metadata file (inputs.yaml) first, review the imported form, then upload the
+              structure, topology, and trajectory files. The deposition finishes outside MDDash — you don&apos;t need to
+              come back here.
+            </Small>
+            <div>
+              {typeof vreLiteUrl === "string" && vreLiteUrl !== "" ? (
+                <Button type="button" asChild>
+                  <a href={vreLiteUrl} target="_blank" rel="noreferrer">
+                    <ExternalLink aria-hidden />
+                    Open VRE Lite
+                  </a>
+                </Button>
+              ) : (
+                <Button type="button" disabled>
+                  Open VRE Lite
+                </Button>
+              )}
+            </div>
+          </>
+        ) : null,
+    },
+  ]
 
+  return (
+    <>
+      <StepGuide title="Step by step" label="MDPosit steps" steps={steps} />
       <Separator />
-
-      <PublishFooter onBack={() => onStepChange(BACK_STEP)}>
-        <Button
-          type="button"
-          onClick={handlePrepare}
-          disabled={unavailableReason !== null || prepare.isPending}
-          title={unavailableReason ?? undefined}
-        >
-          {prepare.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <CloudUpload aria-hidden />}
-          Prepare MDPosit handoff
-        </Button>
-      </PublishFooter>
+      <PublishFooter onBack={() => onStepChange(BACK_STEP)} />
     </>
   )
 }

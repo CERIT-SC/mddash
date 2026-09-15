@@ -8,22 +8,6 @@ export function uploadActive(state: string | null | undefined): boolean {
   return state === "queued" || state === "running"
 }
 
-/** Short human-readable label for the upload state chip; unknown states pass through. */
-export function uploadStateLabel(state: string): string {
-  switch (state) {
-    case "queued":
-      return "Queued"
-    case "running":
-      return "Uploading"
-    case "completed":
-      return "Completed"
-    case "failed":
-      return "Failed"
-    default:
-      return state
-  }
-}
-
 /** TanStack Query refetchInterval: poll only while the status doc reports an active upload. */
 export function pollWhileUploadActive(pollMs: number) {
   return (query: { state: { data: unknown } }): number | false => {
