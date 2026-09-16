@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useMemo, useState } from "react"
+import { lazy, memo, Suspense, useEffect, useMemo, useState } from "react"
 
 import { Engine, JobStatus, type Simulation } from "@/api/generated/models"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
@@ -66,16 +66,25 @@ type AnalysisPanelProps = {
   experimentId: string
   engine: Engine
   simulation: Simulation
+  /** URL-owned picked analysis; only the user's picker changes it. */
+  selectedAnalysis: string | undefined
+  onSelectedAnalysisChange: (analysis: string | undefined) => void
   /** Test seam; production callers omit it. */
   pollMs?: number
 }
 
 /** Analysis picker + runner: choose an analysis, track its job, render its graph.
  * Empty, running, failed, and no-data states are durable — never toast-only. */
-export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: AnalysisPanelProps) {
+export function AnalysisPanel({
+  experimentId,
+  engine,
+  simulation,
+  selectedAnalysis,
+  onSelectedAnalysisChange,
+  pollMs,
+}: AnalysisPanelProps) {
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
-  const [selectedAnalysis, setSelectedAnalysis] = useState<string | null>(null)
   const [preprocessingMode, setPreprocessingMode] = useState(PREPROCESSING_OPTIONS[0].value)
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null)
 
@@ -92,12 +101,11 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
 
   const simulationPath = simulation.simulation_path
 
-  // Steps stay mounted across simulation tab switches, so per-simulation picks
-  // reset explicitly or B inherits A's analysis/variant. (PublishStep pattern.)
+  // Steps stay mounted across simulation tab switches, so a stale variant
+  // resets explicitly or B inherits A's.
   const [prevSimulationPath, setPrevSimulationPath] = useState(simulationPath)
   if (prevSimulationPath !== simulationPath) {
     setPrevSimulationPath(simulationPath)
-    setSelectedAnalysis(null)
     setSelectedVariant(null)
   }
 
@@ -115,21 +123,30 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
 
   const mutations = useAnalysisMutations(experimentId)
 
-  // Resolve the picker value: explicit choice wins, then a running job's, then
-  // the first analysis that already has results.
-  const resolvedAnalysis = useMemo(() => {
-    if (selectedAnalysis) return selectedAnalysis
+  // Default before any pick: the running job's analysis, else the first with results.
+  const defaultAnalysis = useMemo(() => {
     if (activeJob) return activeJob.analysis_name
     const analysisWithResults = AVAILABLE_ANALYSES.find(
       (a) => availableResults.has(a.resultName) || [...availableResults].some((r) => r.startsWith(`${a.resultName}-`))
     )
     return analysisWithResults?.value ?? null
-  }, [selectedAnalysis, activeJob, availableResults])
+  }, [activeJob, availableResults])
+
+  // The pick is user-owned: seeded once, then only the picker changes it —
+  // job failures or appearing results never move the selection.
+  useEffect(() => {
+    if (selectedAnalysis === undefined) {
+      if (defaultAnalysis !== null) onSelectedAnalysisChange(defaultAnalysis)
+    } else if (!AVAILABLE_ANALYSES.some((a) => a.value === selectedAnalysis)) {
+      onSelectedAnalysisChange(undefined)
+    }
+  }, [selectedAnalysis, defaultAnalysis, onSelectedAnalysisChange])
+
+  const resolvedAnalysis = selectedAnalysis ?? defaultAnalysis
 
   const analysisConfig = useMemo(() => AVAILABLE_ANALYSES.find((a) => a.value === resolvedAnalysis), [resolvedAnalysis])
   const selectedResultName = analysisConfig?.resultName ?? null
-  const submissionAnalysis = (selectedAnalysis ?? resolvedAnalysis) as
-    (typeof AVAILABLE_ANALYSES)[number]["value"] | null
+  const submissionAnalysis = resolvedAnalysis as (typeof AVAILABLE_ANALYSES)[number]["value"] | undefined
 
   const variantResults = useMemo(() => {
     if (!analysisConfig?.hasVariants || !selectedResultName) return []
@@ -229,9 +246,8 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
             value={resolvedAnalysis ?? SELECT_NONE}
             onValueChange={(value) => {
               if (value === SELECT_NONE) return
-              setSelectedAnalysis(value)
-              // Reset synchronously (same batched event): a stale variant from
-              // the previous analysis must never become the fetched result.
+              onSelectedAnalysisChange(value)
+              // Same batched event: a stale variant must never become the fetched result.
               setSelectedVariant(null)
             }}
           >

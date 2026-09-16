@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react"
+
 import type { AnalysisJob } from "@/api/generated/models"
 import type { FetchCall } from "@/shared/fixtures/mock-fetch"
 import { requestUrl } from "@/shared/fixtures/mock-fetch"
@@ -163,12 +165,36 @@ function mockAnalyze(options: MockAnalyzeOptions = {}) {
 function renderAnalyze(props: Partial<React.ComponentProps<typeof AnalyzeStep>> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const spies = { onStepChange: props.onStepChange ?? vi.fn() }
-  render(
-    <QueryClientProvider client={client}>
-      <AnalyzeStep experimentId="exp1" engine="GMX" simulation={READY_SIM} canPublish {...spies} {...props} />
-    </QueryClientProvider>
-  )
-  return spies
+  const { selectedAnalysis, onSelectedAnalysisChange, tab, onTabChange, ...rest } = props
+  const pick = { current: selectedAnalysis }
+  // The pick and tab are URL-owned in production; the harness holds them
+  // across panel remounts (trajectory tab switches) exactly like the router
+  // search would.
+  function Harness() {
+    const [analysis, setAnalysis] = useState(selectedAnalysis)
+    const [view, setView] = useState(tab ?? "trajectory")
+    useEffect(() => {
+      pick.current = analysis
+    }, [analysis])
+    return (
+      <QueryClientProvider client={client}>
+        <AnalyzeStep
+          experimentId="exp1"
+          engine="GMX"
+          simulation={READY_SIM}
+          canPublish
+          selectedAnalysis={analysis}
+          onSelectedAnalysisChange={onSelectedAnalysisChange ?? setAnalysis}
+          tab={view}
+          onTabChange={onTabChange ?? setView}
+          {...spies}
+          {...rest}
+        />
+      </QueryClientProvider>
+    )
+  }
+  render(<Harness />)
+  return { spies, pick }
 }
 
 /** The panel lives on the second tab; the trajectory viewer is the default. */
@@ -182,7 +208,7 @@ afterEach(() => vi.unstubAllGlobals())
 describe("AnalyzeStep layout", () => {
   it("renders the heading, tabs, and Back/Publish navigation", async () => {
     mockAnalyze()
-    const spies = renderAnalyze()
+    const { spies } = renderAnalyze()
 
     expect(await screen.findByText("Analyze the results")).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "View Trajectories" })).toBeInTheDocument()
@@ -390,5 +416,84 @@ describe("AnalyzeStep failed job", () => {
     expect(await screen.findByText("Previous analysis run failed.")).toBeInTheDocument()
     await userEvent.click(screen.getByRole("button", { name: /view logs/i }))
     expect(await screen.findByText(/analysis log output/)).toBeInTheDocument()
+  })
+})
+
+describe("AnalyzeStep selection stability", () => {
+  it("keeps the user-picked analysis selected when its job fails", async () => {
+    const { state } = mockAnalyze()
+    renderAnalyze({ pollMs: 50 })
+
+    await openAnalyzeTab()
+    await screen.findByText("Select an analysis to view or calculate.")
+    await userEvent.click(screen.getByRole("combobox", { name: /analysis/i }))
+    await userEvent.click(await screen.findByRole("option", { name: /^RMSD$/ }))
+    await userEvent.click(screen.getByRole("button", { name: /calculate/i }))
+    await screen.findByText("Results are being calculated…")
+
+    state.jobs = [job({ status: "ERROR" })]
+    await screen.findByText("Previous analysis run failed.")
+
+    expect(screen.getByRole("combobox", { name: /analysis/i })).toHaveTextContent("RMSD")
+    expect(screen.queryByText("Select an analysis to view or calculate.")).not.toBeInTheDocument()
+  })
+
+  it("keeps the auto-shown analysis when a running job fails without results", async () => {
+    const { state } = mockAnalyze({ jobs: [job()] })
+    renderAnalyze({ pollMs: 50 })
+
+    await openAnalyzeTab()
+    await screen.findByText("Results are being calculated…")
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /analysis/i })).toHaveTextContent("RMSD"))
+
+    state.jobs = [job({ status: "ERROR" })]
+    await screen.findByText("Previous analysis run failed.")
+
+    expect(screen.getByRole("combobox", { name: /analysis/i })).toHaveTextContent("RMSD")
+    expect(screen.queryByText("Select an analysis to view or calculate.")).not.toBeInTheDocument()
+  })
+
+  it("keeps the picked analysis after switching to the trajectory tab and back", async () => {
+    mockAnalyze()
+    renderAnalyze()
+
+    await openAnalyzeTab()
+    await screen.findByText("Select an analysis to view or calculate.")
+    await userEvent.click(screen.getByRole("combobox", { name: /analysis/i }))
+    await userEvent.click(await screen.findByRole("option", { name: /^SASA$/ }))
+
+    // No results and no job — only the pick itself keeps SASA selected.
+    expect(screen.getByRole("combobox", { name: /analysis/i })).toHaveTextContent("SASA")
+
+    await userEvent.click(screen.getByRole("tab", { name: "View Trajectories" }))
+    await userEvent.click(screen.getByRole("tab", { name: "Analyze" }))
+
+    expect(await screen.findByText("No results yet.")).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: /analysis/i })).toHaveTextContent("SASA")
+    expect(screen.queryByText("Select an analysis to view or calculate.")).not.toBeInTheDocument()
+  })
+
+  it("drops an analysis value that is not in the catalog", async () => {
+    mockAnalyze()
+    const { pick } = renderAnalyze({ selectedAnalysis: "bogus" })
+
+    await openAnalyzeTab()
+    await waitFor(() => expect(pick.current).toBeUndefined())
+    expect(await screen.findByText("Select an analysis to view or calculate.")).toBeInTheDocument()
+  })
+})
+
+describe("AnalyzeStep tab", () => {
+  it("opens on the URL tab and reports tab switches", async () => {
+    mockAnalyze()
+    const onTabChange = vi.fn()
+    renderAnalyze({ tab: "analysis", onTabChange })
+
+    expect(await screen.findByText("Analyze the results")).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "Analyze" })).toHaveAttribute("aria-selected", "true")
+    expect(screen.getByRole("tab", { name: "View Trajectories" })).toHaveAttribute("aria-selected", "false")
+
+    await userEvent.click(screen.getByRole("tab", { name: "View Trajectories" }))
+    expect(onTabChange).toHaveBeenCalledWith("trajectory")
   })
 })

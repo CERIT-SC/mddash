@@ -432,6 +432,38 @@ describe("ExperimentWizard", () => {
     expect(changes.every((change) => change.step === undefined)).toBe(true)
   })
 
+  it("rides the analysis pick and tab through step navigation", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha]),
+      "/experiments/exp1": okExperiment(),
+      [`/experiments/exp1/gmx/${alpha.simulation_path}`]: runningGmxJob(alpha.simulation_path),
+    })
+    const changes: WizardSearch[] = []
+    const user = userEvent.setup()
+    renderWizard({ simulation: simulationParam(alpha.simulation_path), analysis: "sas", tab: "analysis" }, (next) =>
+      changes.push(next)
+    )
+
+    await user.click(await screen.findByRole("button", { name: "Go to section 2: Tune" }))
+    expect(changes[changes.length - 1]).toMatchObject({ step: 1, analysis: "sas", tab: "analysis" })
+  })
+
+  it("drops the analysis pick when switching simulation tabs", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([alpha, beta]),
+      "/experiments/exp1": okExperiment(),
+    })
+    const changes: WizardSearch[] = []
+    const user = userEvent.setup()
+    renderWizard({ simulation: simulationParam(alpha.simulation_path), step: 1, analysis: "rmsds" }, (next) =>
+      changes.push(next)
+    )
+
+    await user.click(await screen.findByRole("tab", { name: "Beta" }))
+    expect(changes[changes.length - 1]?.simulation).toBe(simulationParam(beta.simulation_path))
+    expect(changes[changes.length - 1]?.analysis).toBeUndefined()
+  })
+
   it("shows only the unnamed tab, selected, when the experiment has no simulations", async () => {
     mockApi({
       "/experiments/exp1/simulations": Response.json([]),

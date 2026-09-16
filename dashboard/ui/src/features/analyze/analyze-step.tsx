@@ -34,6 +34,12 @@ type AnalyzeStepProps = {
   experimentId: string
   engine: Engine
   simulation: Simulation
+  /** URL-owned picked analysis. */
+  selectedAnalysis: string | undefined
+  onSelectedAnalysisChange: (analysis: string | undefined) => void
+  /** URL-owned tab view. */
+  tab: "trajectory" | "analysis"
+  onTabChange: (tab: "trajectory" | "analysis") => void
   onStepChange: (step: number) => void
   /** Publish wizard step unlocked (server-reported ladder). */
   canPublish: boolean
@@ -46,12 +52,15 @@ export function AnalyzeStep({
   experimentId,
   engine,
   simulation,
+  selectedAnalysis,
+  onSelectedAnalysisChange,
+  tab,
+  onTabChange,
   onStepChange,
   canPublish,
   pollMs = SIMULATION_POLL_MS,
 }: AnalyzeStepProps) {
   const [reloadKey, setReloadKey] = useState(0)
-  const [activeTab, setActiveTab] = useState("trajectory")
 
   // The simulation may still be running — results keep changing while it is.
   const jobQuery = useSimulationJobQuery(experimentId, simulation.simulation_path, engine, pollMs)
@@ -107,7 +116,7 @@ export function AnalyzeStep({
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={tab} onValueChange={(next) => onTabChange(next as "trajectory" | "analysis")}>
         <div className="flex flex-wrap items-center gap-3">
           <TabsList>
             <TabsTrigger value="trajectory">View Trajectories</TabsTrigger>
@@ -121,7 +130,7 @@ export function AnalyzeStep({
             probeFailures={probeFailures}
             openHref={openHref ?? ""}
           />
-          {activeTab === "trajectory" && viewer !== null && (
+          {tab === "trajectory" && viewer !== null && (
             <Button size="sm" variant="outline" className="ml-auto" onClick={() => setReloadKey((key) => key + 1)}>
               <RotateCcw aria-hidden />
               Reload Models
@@ -130,7 +139,14 @@ export function AnalyzeStep({
         </div>
 
         <TabsContent value="analysis" className="mt-4">
-          <AnalysisPanel experimentId={experimentId} engine={engine} simulation={simulation} pollMs={pollMs} />
+          <AnalysisPanel
+            experimentId={experimentId}
+            engine={engine}
+            simulation={simulation}
+            selectedAnalysis={selectedAnalysis}
+            onSelectedAnalysisChange={onSelectedAnalysisChange}
+            pollMs={pollMs}
+          />
         </TabsContent>
 
         <TabsContent value="trajectory" className="mt-4">
