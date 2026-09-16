@@ -207,16 +207,23 @@ export function AnalysisPanel({
       </Badge>
     ) : null
 
-  // The logs pane hides itself only while a live job has nothing to show yet.
-  const logsVisible = showLogs && activeJob?.status !== JobStatus.PENDING
-  const logJobId = logsVisible ? (activeJob?.id ?? lastJobForAnalysis?.id ?? null) : null
+  // The pane hides itself while a live job has nothing to show yet or no job remains.
+  const logJobId = activeJob?.status === JobStatus.PENDING ? null : (activeJob?.id ?? lastJobForAnalysis?.id ?? null)
+  const logsVisible = showLogs && logJobId !== null
   const logsQuery = useAnalysisLogs(
     experimentId,
-    logJobId,
+    logsVisible ? logJobId : null,
     activeJob !== undefined && activeJob.status !== JobStatus.PENDING,
     pollMs
   )
   const jobLogs = logsQuery.data?.status === 200 ? logsQuery.data.data : undefined
+
+  const logsToggle = (
+    <Button size="sm" variant="ghost" onClick={() => setShowLogs((value) => !value)}>
+      <Terminal aria-hidden />
+      {logsVisible ? "Hide logs" : "View logs"}
+    </Button>
+  )
 
   const handleCalculate = () => {
     if (unavailableReason || !submissionAnalysis) return
@@ -340,14 +347,10 @@ export function AnalysisPanel({
                 <Square fill="currentColor" aria-hidden />
                 Stop calculation
               </Button>
-              {activeJob.status !== JobStatus.PENDING && (
-                <Button size="sm" variant="ghost" onClick={() => setShowLogs((value) => !value)}>
-                  <Terminal aria-hidden />
-                  {logsVisible ? "Hide logs" : "View logs"}
-                </Button>
-              )}
             </>
           )}
+          {/* The failure alert owns the failed case; otherwise the toggle outlives the run. */}
+          {logJobId !== null && !failedForAnalysis && logsToggle}
         </div>
       </div>
 
@@ -359,10 +362,7 @@ export function AnalysisPanel({
           <AlertTitle>Previous analysis run failed.</AlertTitle>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
             <span>Inspect the logs to understand the failure before retrying.</span>
-            <Button size="sm" variant="ghost" onClick={() => setShowLogs((value) => !value)}>
-              <Terminal aria-hidden />
-              {logsVisible ? "Hide logs" : "View logs"}
-            </Button>
+            {logsToggle}
           </AlertDescription>
         </Alert>
       )}

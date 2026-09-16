@@ -402,6 +402,55 @@ describe("AnalyzeStep analysis switching", () => {
   })
 })
 
+describe("AnalyzeStep analysis logs", () => {
+  it("keeps the logs hideable after the job finishes", async () => {
+    const { state } = mockAnalyze({ jobs: [job()], results: [], payloads: { rmsds: RMSDS_RESULT } })
+    renderAnalyze({ pollMs: 50 })
+
+    await openAnalyzeTab()
+    await screen.findByText("Results are being calculated…")
+    await userEvent.click(screen.getByRole("button", { name: /view logs/i }))
+    expect(await screen.findByText(/analysis log output/)).toBeInTheDocument()
+
+    state.jobs = [job({ status: "FINISHED" })]
+    state.results = ["rmsds"]
+
+    // Run controls are gone; the still-open pane must keep a toggle.
+    await screen.findByText("Re-calculate")
+    await userEvent.click(screen.getByRole("button", { name: /hide logs/i }))
+    await waitFor(() => expect(screen.queryByText(/analysis log output/)).not.toBeInTheDocument())
+  })
+
+  it("shows the logs of a finished job on demand", async () => {
+    mockAnalyze({ jobs: [job({ status: "FINISHED" })], results: ["rmsds"], payloads: { rmsds: RMSDS_RESULT } })
+    renderAnalyze()
+
+    await openAnalyzeTab()
+    await screen.findByText("Re-calculate")
+
+    await userEvent.click(screen.getByRole("button", { name: /view logs/i }))
+    expect(await screen.findByText(/analysis log output/)).toBeInTheDocument()
+  })
+
+  it("hides the logs pane when the running job is cancelled", async () => {
+    mockAnalyze({ jobs: [job()] })
+    renderAnalyze({ pollMs: 50 })
+
+    await openAnalyzeTab()
+    await screen.findByText("Results are being calculated…")
+    await userEvent.click(screen.getByRole("button", { name: /view logs/i }))
+    expect(await screen.findByText(/analysis log output/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole("button", { name: /stop calculation/i }))
+    const dialog = await screen.findByRole("alertdialog")
+    await userEvent.click(within(dialog).getByRole("button", { name: /cancel job/i }))
+
+    // The pane must unmount, not linger as an empty "(no output)" block.
+    await waitFor(() => expect(screen.queryByText(/analysis log output/)).not.toBeInTheDocument())
+    expect(screen.queryByText("(no output)")).not.toBeInTheDocument()
+  })
+})
+
 describe("AnalyzeStep failed job", () => {
   it("shows the failure placeholder and fetches logs on demand", async () => {
     mockAnalyze({ jobs: [job({ status: "ERROR" })] })
