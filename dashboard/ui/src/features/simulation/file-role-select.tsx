@@ -24,10 +24,10 @@ import type { RoleSpec } from "./simulation-roles"
 // Radix Select items can't be empty strings; the "None" sentinel maps back to "".
 const SELECT_NONE = "__none__"
 
-export function RolePresenceBadge({ presence }: { presence: boolean }) {
+export function PresentBadge() {
   return (
-    <Badge variant={presence ? "outline" : "error"} className={presence ? "border-success text-success" : undefined}>
-      {presence ? "present" : "missing"}
+    <Badge variant="outline" className="border-success text-success">
+      present
     </Badge>
   )
 }
@@ -48,11 +48,10 @@ function FileLabel({ file }: { file: FileInfo }) {
 type FileRoleSelectProps = {
   experimentId: string
   spec: RoleSpec
-  /** Presence of the selected file per the manifest's server-side check. */
-  present?: boolean | null
+  /** The selected file is declared by the manifest and still exists per the server-side check. */
+  present: boolean
   disabled?: boolean
-  /** Create clears a vanished pick; edit keeps manifest data, showing it as
-      "(missing)" so a save re-validates server-side instead of silently dropping it. */
+  /** Create drops a vanished pick; edit keeps manifest data to re-validate on save. */
   clearVanished: boolean
 }
 
@@ -80,7 +79,7 @@ export function FileRoleSelect({ experimentId, spec, present, disabled, clearVan
         <FormItem>
           <div className="flex items-center gap-2">
             <FormLabel>{spec.label}</FormLabel>
-            {present !== undefined && present !== null && <RolePresenceBadge presence={present} />}
+            {present && <PresentBadge />}
           </div>
           <Select
             value={value}
@@ -106,7 +105,7 @@ export function FileRoleSelect({ experimentId, spec, present, disabled, clearVan
               ))}
               {!clearVanished && files !== undefined && value !== "" && !found && (
                 <SelectItem value={value}>
-                  <em className="text-text-muted truncate">{value} (missing)</em>
+                  <em className="text-text-muted truncate">{value}</em>
                 </SelectItem>
               )}
             </SelectContent>

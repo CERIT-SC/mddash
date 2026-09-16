@@ -38,7 +38,7 @@ import { useForm, useWatch, type UseFormReturn } from "react-hook-form"
 import { toast } from "sonner"
 import { z } from "zod"
 
-import { FileRoleSelect, RolePresenceBadge } from "./file-role-select"
+import { FileRoleSelect, PresentBadge } from "./file-role-select"
 import {
   dirname,
   DRIVER_ROLE,
@@ -240,7 +240,7 @@ export function SimulationForm({ experimentId, engine, simulation, onSaved }: Si
     }
   }
 
-  const roleBadge = (key: string): boolean | null => (simulation === undefined ? null : rolePresence(simulation, key))
+  const roleBadge = (key: string): boolean => simulation !== undefined && rolePresence(simulation, key) === true
   const inputRoles = ROLE_SPECS[engine].filter((role) => role.section === "input")
   const outputRoles = ROLE_SPECS[engine].filter((role) => role.section === "output")
   const canSubmit = form.formState.isValid && !pending && (!editing || form.formState.isDirty)
@@ -321,7 +321,7 @@ export function SimulationForm({ experimentId, engine, simulation, onSaved }: Si
                         <FormItem>
                           <div className="flex items-center gap-2">
                             <FormLabel>{role.label}</FormLabel>
-                            {presence !== null && <RolePresenceBadge presence={presence} />}
+                            {presence && <PresentBadge />}
                           </div>
                           <FormControl>
                             <Input

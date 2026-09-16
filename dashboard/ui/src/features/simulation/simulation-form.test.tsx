@@ -196,10 +196,9 @@ describe("SimulationForm (existing manifest)", () => {
     expect(screen.getByText("files.run_input is required")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument()
     // Edit mode never destroys manifest data: the vanished path stays visible as
-    // a pickable "(missing)" entry, flagged by the chip, until the server says otherwise.
+    // a pickable entry until the server says otherwise.
     const runInput = await screen.findByRole("combobox", { name: "Run input (.tpr)" })
     await vi.waitFor(() => expect(within(runInput).getByText(/gone\.tpr/)).toBeInTheDocument())
-    expect(screen.getByText("missing")).toBeInTheDocument()
   })
 })
 
