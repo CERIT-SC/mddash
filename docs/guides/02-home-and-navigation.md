@@ -35,7 +35,7 @@ Each experiment card represents one experiment and shows:
 
 - A **step icon tile** (flask/sliders/rocket/pulse/award) reflecting the experiment's current workflow step.
 - The **name** (the whole card links to the wizard) and a subtitle `<workflow module or "Custom"> · <GROMACS|AMBER>`.
-- A step line like **"Tune · 2 of 5"** plus a status line: "Active 12 min ago" when idle, or the live phase ("Simulating · 34%", "Tuning", "Analyzing", "Publishing") with a spinner while work is in flight.
+- A step line like **"Tune · 2 of 5"** plus a status line: "Active 12 min ago" when idle, or the live phase ("Simulating · 34%", "Tuning", "Analyzing <analysis name>") with a spinner while work is in flight. A running analysis outranks "Simulating · NN%" (mid-run analyses run alongside the simulation and are the shorter job) — the percentage returns when the analysis settles.
 - A **five-segment progress ladder** (one segment per workflow step; filled = completed, tinted = current).
 - **Step-specific details**, e.g. Setup: "Setup ready" + "Workflow"; Tune: "Configurations — N of M explored" + "Steps"; Run: "Time remaining" + "Steps"; Analyze: "Models" + "Analyses — N of M ready"; Publish: "Published" Yes/No + "Target".
 - A footer with the **source label** (e.g. "RCSB PDB (1BNA)", "Uploaded 2 files", or the notebooks repository), the **size** of the experiment data, and a **Notebook** indicator (green dot = notebook running, grey = stopped).

@@ -1130,8 +1130,7 @@ components:
         created_at: {type: string, format: date-time}
         status: {$ref: '#/components/schemas/JobStatus'}
         sim_progress:
-          type: number
-          nullable: true
+          type: [number, 'null']
           description: Fraction (0-1) of the simulation's steps available when the analysis inputs were snapshotted; null when unknown.
       additionalProperties: true
     AnalysisJobRequest:

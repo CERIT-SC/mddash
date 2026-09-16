@@ -158,11 +158,24 @@ def test_empty_experiment_list_response_matches_contract(client: FlaskClient, co
 def test_populated_experiment_list_response_matches_contract(
     client: FlaskClient, contract: dict[str, Any], db_session: Any
 ) -> None:
-    from enums import SourceType
-    from models import Experiment
+    from enums import AnalysisType, JobStatus, SourceType
+    from models import AnalysisJob, Experiment
 
     experiment = Experiment(id="slice", name="Vertical slice", source_type=SourceType.PDB, source_ref="1LYZ")
     db_session.add(experiment)
+    db_session.flush()
+    # A seeded job makes the contract see the embedded analysis_jobs shape —
+    # a primary-key list would pass an empty-jobs payload but fail here.
+    db_session.add(
+        AnalysisJob(
+            id="job1",
+            experiment_id="slice",
+            simulation_path="run.simulation.json",
+            analysis_name=AnalysisType.RMSDS,
+            trajectory_file="traj.xtc",
+            _last_known_status=JobStatus.FINISHED,
+        )
+    )
     db_session.commit()
 
     response = client.get("/dash/api/experiments")

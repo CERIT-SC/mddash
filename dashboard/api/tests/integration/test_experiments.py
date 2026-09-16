@@ -57,6 +57,40 @@ class TestListExperiments:
         # decentralized workflows carry no module identity beyond the category
         assert "module_id" not in data[0]
 
+    def test_embeds_analysis_jobs_as_objects(self, client: FlaskClient, db_session: Session) -> None:
+        """Should embed full analysis job objects, not primary-key strings."""
+        from enums import AnalysisType, JobStatus
+        from models import AnalysisJob
+
+        exp = Experiment()
+        exp.id = "testx"
+        exp.name = "Test Experiment"
+        db_session.add(exp)
+        db_session.flush()
+
+        db_session.add(
+            AnalysisJob(
+                id="job1",
+                experiment_id="testx",
+                simulation_path="md.simulation.json",
+                analysis_name=AnalysisType.RMSDS,
+                trajectory_file="traj.xtc",
+                _last_known_status=JobStatus.FINISHED,
+            )
+        )
+        db_session.commit()
+
+        response = client.get("/dash/api/experiments")
+
+        assert response.status_code == HTTPStatus.OK
+        data = json.loads(response.data)
+        jobs = data[0]["analysis_jobs"]
+        assert len(jobs) == 1
+        assert isinstance(jobs[0], dict)
+        assert jobs[0]["id"] == "job1"
+        assert jobs[0]["analysis_name"] == "rmsds"
+        assert jobs[0]["status"] == "FINISHED"
+
 
 class TestGetExperiment:
     """Tests for GET /api/experiments/<id>."""

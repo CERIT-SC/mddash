@@ -84,7 +84,11 @@ const latest = <T extends { created_at: string }>(jobs: T[]) =>
 // PENDING covers queued — the API has no QUEUED status.
 const ACTIVE_JOB_STATUSES = new Set(["PENDING", "RUNNING"])
 
+// A running analysis outranks the simulating phase: it is the shorter job,
+// so the card flips back to the simulation's percentage once it settles.
 function liveLabel(experiment: Experiment): string | null {
+  const analysis = latest(experiment.analysis_jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)))
+  if (analysis) return `Analyzing ${getAnalysisLabel(analysis.analysis_name)}`
   if (experiment.simulation_jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.status))) {
     // Queued jobs have no log yet; steps-done defaults to 0%.
     const job =
@@ -93,8 +97,6 @@ function liveLabel(experiment: Experiment): string | null {
     const nsteps = job?.nsteps
     return nsteps ? `Simulating · ${Math.round(((job?.nsteps_done ?? 0) / nsteps) * 100)}%` : "Simulating"
   }
-  const analysis = latest(experiment.analysis_jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)))
-  if (analysis) return `Analyzing ${getAnalysisLabel(analysis.analysis_name)}`
   if (experiment.tuner_jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.tuner_status))) return "Tuning"
   return null
 }

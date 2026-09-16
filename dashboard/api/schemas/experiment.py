@@ -15,6 +15,7 @@ class ExperimentSchema(BaseAutoSchema):
     notebook = fields.Nested("NotebookSchema", allow_none=False)
     tuner_jobs = fields.Nested("TunerJobSchema", many=True)
     simulation_jobs = fields.Nested("SimulationJobSchema", many=True)
+    analysis_jobs = fields.Nested("AnalysisJobSchema", many=True)
 
     class Meta:
         """Schema configuration."""

@@ -158,6 +158,33 @@ describe("ExperimentCard", () => {
     expect(container.querySelector(".animate-spin")).not.toBeNull()
   })
 
+  it("a running analysis outranks the simulating phase, which returns when the analysis settles", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { unmount } = await renderCard(
+      analyze({
+        step: 3,
+        status: "simulating",
+        simulation_jobs: [simulationJob("RUNNING", { nsteps: 100, nsteps_done: 40 })],
+        analysis_jobs: [analysisJob("RUNNING")],
+      })
+    )
+    expect(screen.getByText("Analyzing RMSD")).toBeVisible()
+    expect(screen.queryByText("Simulating · 40%")).not.toBeInTheDocument()
+
+    // Mid-run analysis settles → the simulation's percentage takes over again.
+    unmount()
+    await renderCard(
+      analyze({
+        step: 3,
+        status: "simulating",
+        simulation_jobs: [simulationJob("RUNNING", { nsteps: 100, nsteps_done: 40 })],
+        analysis_jobs: [analysisJob("FINISHED")],
+      })
+    )
+    expect(screen.getByText("Simulating · 40%")).toBeVisible()
+    expect(screen.queryByText("Analyzing RMSD")).not.toBeInTheDocument()
+  })
+
   it("shows last activity for a publishing experiment — upload progress lives in the wizard", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
     const { container } = await renderCard(analyze({ step: 4, status: "publishing" }))
