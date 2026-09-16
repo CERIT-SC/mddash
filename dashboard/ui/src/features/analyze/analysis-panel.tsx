@@ -181,6 +181,15 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
     lastJobForAnalysis?.status === JobStatus.FINISHED ? (lastJobForAnalysis.sim_progress ?? null) : null
   const calculatedPercent = simProgress !== null && simProgress < 1 ? Math.round(simProgress * 100) : null
 
+  // Labels the rendered results, so it lives in the results header, not the run row.
+  const calculatedBadge =
+    !activeJob && calculatedPercent !== null ? (
+      <Badge variant="outline" className="bg-warning-200 border-warning-500 text-warning-800">
+        <TriangleAlert aria-hidden />
+        Calculated at {calculatedPercent}%
+      </Badge>
+    ) : null
+
   // The logs pane hides itself only while a live job has nothing to show yet.
   const logsVisible = showLogs && activeJob?.status !== JobStatus.PENDING
   const logJobId = logsVisible ? (activeJob?.id ?? lastJobForAnalysis?.id ?? null) : null
@@ -290,13 +299,6 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
 
         {/* Run controls share the `ml-auto` rail so they always sit flush right. */}
         <div className="ml-auto flex items-center gap-3">
-          {!activeJob && calculatedPercent !== null && (
-            <Badge variant="outline" className="border-warning text-warning gap-1">
-              <TriangleAlert className="h-3 w-3" aria-hidden />
-              Calculated at {calculatedPercent}%
-            </Badge>
-          )}
-
           {activeJob && (
             <>
               {/* Status unit the same height as the sm buttons keeps the row on
@@ -354,23 +356,27 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
       {logsVisible && <LogPane logs={jobLogs ?? ""} isLoading={logsQuery.isLoading} />}
 
       <div>
-        {/* View concern, not a run concern: picks which computed variant the
-            chart below shows, so it lives with the results, not the run row. */}
-        {resolvedAnalysis && hasResult && variantResults.length > 0 && (
-          <div className="mb-3 flex items-center justify-end gap-2">
-            <span className="text-text-muted text-sm">Variant</span>
-            <Select value={activeVariant ?? undefined} onValueChange={setSelectedVariant}>
-              <SelectTrigger className="w-64" aria-label="Variant">
-                <SelectValue placeholder="Select variant..." />
-              </SelectTrigger>
-              <SelectContent>
-                {variantResults.map((v) => (
-                  <SelectItem key={v} value={v}>
-                    {variantLabelMap.get(v) ?? getAnalysisLabel(v)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {/* Variant picker is a view concern, not a run concern — it lives with the results. */}
+        {resolvedAnalysis && hasResult && (calculatedBadge !== null || variantResults.length > 0) && (
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            {calculatedBadge}
+            {variantResults.length > 0 && (
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-text-muted text-sm">Variant</span>
+                <Select value={activeVariant ?? undefined} onValueChange={setSelectedVariant}>
+                  <SelectTrigger className="w-64" aria-label="Variant">
+                    <SelectValue placeholder="Select variant..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {variantResults.map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {variantLabelMap.get(v) ?? getAnalysisLabel(v)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         )}
 
