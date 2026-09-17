@@ -21,17 +21,13 @@ The design therefore:
 | Fact | Consequence |
 |---|---|
 | Bisync runs with `--force`; user-initiated local deletes propagate to S3. | Archive data must live outside the synced namespace: the filter-excluded prefix `_archives/`. |
-| All experiment files (incl. heavy binaries) are already on S3 within ~one sync cycle. | Archive ≈ server-side copy + small delta; no tarball re-upload. |
+| All experiment files (incl. heavy binaries) are already on S3 within ~one sync cycle (the `**/*.xtc/**` patterns intentionally exclude GROMACS temp *directories*, not files, per `682c12b7`). | Archive ≈ server-side copy + small delta; no tarball re-upload. |
 | Bisync syncs the whole bucket ↔ `/mddash`. | Any unfiltered S3 prefix would be downloaded to the PVC — hence the mandatory filter line. |
 | MDRepo upload already implements: status doc on PVC + deterministic Job + worker image + API reconciliation. | Archive/restore/purge mirror that pattern (`archive/` package mirrors `upload/`). |
 | The API container already receives `S3_BUCKET`, `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` via `_API_PASSTHROUGH_ENV`. | No new credential plumbing. |
 | DB changes require an Alembic migration; fresh DBs are created by the same migrations. | One new migration file in `dashboard/api/migrations/versions/`. |
 | The UI already has a disabled **Archive** menu item and a disabled **Archived** tab with TODOs. | UI work is enabling + extending stubs, not new structure. |
 | The card menu's **Duplicate** is disabled (no API endpoint). | Stays disabled on both tabs; duplication is out of scope. |
-
-### Incidental finding (out of scope, reported to maintainers)
-
-The `**/*.xtc/**`-style patterns in `rclone-filters.txt` (both copies) only exclude contents of directories ending in `.xtc`/`.edr`/etc. If the intent was to exclude the heavy files *themselves*, the lines would need to be `- **/*.xtc` (no trailing `/**`). Nothing in this spec depends on that either way — archive correctness always verifies against the PVC before deleting and pulls any delta from local.
 
 ## Lifecycle & state semantics
 
