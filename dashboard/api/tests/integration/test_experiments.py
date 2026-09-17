@@ -91,6 +91,70 @@ class TestListExperiments:
         assert jobs[0]["analysis_name"] == "rmsds"
         assert jobs[0]["status"] == "FINISHED"
 
+    def test_eager_loads_relations_without_n_plus_one(self, client: FlaskClient, db_session: Session) -> None:
+        """The 5s dashboard poll dumps every experiment — job relations must not lazy-load per row."""
+        from enums import AnalysisType, DeviceType, JobStatus
+        from models import AnalysisJob, GromacsJob, TunerJob
+        from sqlalchemy import event
+
+        for exp_id in ("exp01", "exp02"):
+            exp = Experiment()
+            exp.id = exp_id
+            exp.name = f"Test {exp_id}"
+            db_session.add(exp)
+            db_session.flush()
+            db_session.add(Notebook(experiment_id=exp_id))
+            db_session.add(
+                GromacsJob(
+                    id=f"gmx-{exp_id}",
+                    experiment_id=exp_id,
+                    simulation_path="md.simulation.json",
+                    np=1,
+                    ntomp=1,
+                    pme=DeviceType.CPU,
+                    nb=DeviceType.CPU,
+                    _last_known_status=JobStatus.FINISHED,
+                )
+            )
+            db_session.add(
+                TunerJob(
+                    id=f"tun-{exp_id}",
+                    experiment_id=exp_id,
+                    simulation_path="md.simulation.json",
+                    nsteps=25000,
+                    is_stopped=True,
+                )
+            )
+            db_session.add(
+                AnalysisJob(
+                    id=f"ana-{exp_id}",
+                    experiment_id=exp_id,
+                    simulation_path="md.simulation.json",
+                    analysis_name=AnalysisType.RMSDS,
+                    trajectory_file="traj.xtc",
+                    _last_known_status=JobStatus.FINISHED,
+                )
+            )
+        db_session.commit()
+
+        statements: list[str] = []
+        engine = db_session.get_bind()
+
+        def count_selects(_conn, _cursor, statement: str, _parameters, _context, _executemany) -> None:
+            if statement.lstrip().upper().startswith("SELECT"):
+                statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", count_selects)
+        try:
+            response = client.get("/dash/api/experiments")
+        finally:
+            event.remove(engine, "before_cursor_execute", count_selects)
+
+        assert response.status_code == HTTPStatus.OK
+        assert len(json.loads(response.data)) == 2
+        # Eager ceiling: 1 root query + 1 selectin per relation (notebook, tuner, simulation, analysis).
+        assert len(statements) <= 6, "lazy per-experiment loads detected:\n" + "\n---\n".join(statements)
+
 
 class TestGetExperiment:
     """Tests for GET /api/experiments/<id>."""
