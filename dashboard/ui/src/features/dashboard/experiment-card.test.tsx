@@ -94,6 +94,35 @@ describe("ExperimentCard", () => {
     expect(screen.getByText("Simulating · 0%")).toBeVisible()
   })
 
+  it("keeps the live phase while the sim status is transiently unknown", async () => {
+    // UNKNOWN is live server-side (transient upstream failure) — the card must not freeze.
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(
+      analyze({
+        step: 2,
+        status: "simulating",
+        simulation_jobs: [simulationJob("UNKNOWN", { is_live: true, nsteps: 100, nsteps_done: 40 })],
+      })
+    )
+    expect(screen.getByText("Simulating · 40%")).toBeVisible()
+    expect(container.querySelector(".animate-spin")).not.toBeNull()
+  })
+
+  it("shows Analyzing while the analysis status is transiently unknown", async () => {
+    // Analysis payloads carry no is_live flag — the card treats UNKNOWN as in-flight.
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(
+      analyze({
+        step: 3,
+        status: "analyzing",
+        simulation_jobs: [simulationJob("FINISHED", { is_live: false })],
+        analysis_jobs: [analysisJob("UNKNOWN")],
+      })
+    )
+    expect(screen.getByText("Analyzing RMSD")).toBeVisible()
+    expect(container.querySelector(".animate-spin")).not.toBeNull()
+  })
+
   it("shows last activity when no job is running", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
     const { container } = await renderCard(

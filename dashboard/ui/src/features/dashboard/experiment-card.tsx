@@ -63,6 +63,8 @@ import { Link } from "@tanstack/react-router"
 import { Archive, Copy, Database, Ellipsis, LoaderCircle, Pencil, Play, Square, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { isAnalysisJobLive } from "./live-work"
+
 const STEP_LABELS = ["Setup", "Tune", "Run", "Analyze", "Publish"] as const
 
 // The API step IS the phase index (Setup 0 .. Analyze 3, publish states 4) —
@@ -81,23 +83,20 @@ function subtitle(experiment: Experiment): string {
 const latest = <T extends { created_at: string }>(jobs: T[]) =>
   jobs.reduce<T | undefined>((best, job) => (!best || job.created_at > best.created_at ? job : best), undefined)
 
-// PENDING covers queued — the API has no QUEUED status.
-const ACTIVE_JOB_STATUSES = new Set(["PENDING", "RUNNING"])
-
 // A running analysis outranks the simulating phase: it is the shorter job,
 // so the card flips back to the simulation's percentage once it settles.
 function liveLabel(experiment: Experiment): string | null {
-  const analysis = latest(experiment.analysis_jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)))
+  const analysis = latest(experiment.analysis_jobs.filter(isAnalysisJobLive))
   if (analysis) return `Analyzing ${getAnalysisLabel(analysis.analysis_name)}`
-  if (experiment.simulation_jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.status))) {
+  if (experiment.simulation_jobs.some((job) => job.is_live)) {
     // Queued jobs have no log yet; steps-done defaults to 0%.
     const job =
       experiment.simulation_jobs.find((candidate) => candidate.status === "RUNNING") ??
-      latest(experiment.simulation_jobs.filter((candidate) => ACTIVE_JOB_STATUSES.has(candidate.status)))
+      latest(experiment.simulation_jobs.filter((candidate) => candidate.is_live))
     const nsteps = job?.nsteps
     return nsteps ? `Simulating · ${Math.round(((job?.nsteps_done ?? 0) / nsteps) * 100)}%` : "Simulating"
   }
-  if (experiment.tuner_jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.tuner_status))) return "Tuning"
+  if (experiment.tuner_jobs.some((job) => job.is_live)) return "Tuning"
   return null
 }
 
@@ -154,7 +153,7 @@ function AnalyzeDetails({ experiment }: DetailsProps) {
   const simulationPath = experiment.latest_simulation_path ?? ""
   // Jobs ride the polled experiments list — no separate query to go stale.
   const jobs = experiment.analysis_jobs.filter((job) => job.simulation_path === simulationPath)
-  const analyzing = jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.status))
+  const analyzing = jobs.some(isAnalysisJobLive)
   const models = useListAnalysisResults(
     experiment.id,
     { simulation_path: simulationPath },
@@ -218,9 +217,9 @@ type ExperimentCardProps = { experiment: Experiment }
 
 function activeJobCount(experiment: Experiment): number {
   return (
-    experiment.simulation_jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length +
-    experiment.tuner_jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.tuner_status)).length +
-    experiment.analysis_jobs.filter((job) => ACTIVE_JOB_STATUSES.has(job.status)).length
+    experiment.simulation_jobs.filter((job) => job.is_live).length +
+    experiment.tuner_jobs.filter((job) => job.is_live).length +
+    experiment.analysis_jobs.filter(isAnalysisJobLive).length
   )
 }
 
