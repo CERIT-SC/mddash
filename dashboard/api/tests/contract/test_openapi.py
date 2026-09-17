@@ -164,8 +164,7 @@ def test_populated_experiment_list_response_matches_contract(
     experiment = Experiment(id="slice", name="Vertical slice", source_type=SourceType.PDB, source_ref="1LYZ")
     db_session.add(experiment)
     db_session.flush()
-    # A seeded job makes the contract see the embedded analysis_jobs shape —
-    # a primary-key list would pass an empty-jobs payload but fail here.
+    # A seeded job exposes the embedded analysis_jobs shape — an empty list passes either way.
     db_session.add(
         AnalysisJob(
             id="job1",

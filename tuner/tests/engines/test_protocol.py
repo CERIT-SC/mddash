@@ -25,8 +25,7 @@ class TestStepsToNsPerDay:
         [(100.0, None), (100.0, 0.0), (100.0, -0.002), (0.0, 0.002), (-1.0, 0.002)],
     )
     def test_unknown_or_nonpositive_yields_none(self, steps_per_sec, dt_ps) -> None:
-        # None, not a numeric 0.0 sentinel: a pruned trial with an unknown timestep
-        # must keep no-result semantics (NULL in DB, "—" in the UI, unselectable).
+        # NULL, not a 0.0 sentinel: the trial keeps no-result semantics (DB NULL, UI "—", unselectable).
         assert steps_to_ns_per_day(steps_per_sec, dt_ps) is None
 
 

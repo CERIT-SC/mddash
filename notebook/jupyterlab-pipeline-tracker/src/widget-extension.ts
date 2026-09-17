@@ -16,7 +16,7 @@ export class PipelineWidgetExtension implements DocumentRegistry.WidgetExtension
   createNew(widget: Widget): IDisposable {
     if (!(widget instanceof NotebookPanel)) {
       return new DisposableDelegate(() => {
-        // This extension is registered for notebooks, but keep the guard cheap.
+        // Not a notebook panel — nothing created, nothing to dispose.
       });
     }
 

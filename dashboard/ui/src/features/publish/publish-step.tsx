@@ -199,8 +199,7 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
     )
   }
 
-  // A published record has no actionable steps left — the status card stands alone
-  // and doesn't gate on the MDRepo connection check below.
+  // A published record skips the guide and never gates on the connection check below.
   if (published) {
     return (
       <PublishedRecord

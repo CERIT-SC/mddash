@@ -427,8 +427,7 @@ describe("ExperimentCard", () => {
             is_live: false,
           },
         ],
-        // The polled experiments list embeds the same rows the scoped jobs
-        // endpoint returns — the ready count rides the card's own refresh.
+        // Analysis jobs ride the polled list payload — no scoped jobs endpoint to mock.
         analysis_jobs: [
           analysisJob("FINISHED", { simulation_path: "md.simulation.json" }),
           analysisJob("RUNNING", { simulation_path: "md.simulation.json" }),
@@ -449,14 +448,13 @@ describe("ExperimentCard", () => {
 
   it("shows the workflow category tile on every step, including publish", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    // step 1 (Tune) used to render the sliders/info step tile — the category wins now
     const { container, unmount } = await renderCard(analyze({ module_category: "nucleic-acids" }))
     expect(container.querySelector("span.bg-success.text-success-foreground")).not.toBeNull()
     unmount()
     const published = await renderCard(
       analyze({ step: 4, status: "published", mdrepo_published: true, module_category: "nucleic-acids" })
     )
-    // publish no longer swaps in its own icon — progress stays on the label and progress bar
+    // No publish-specific tile: publish progress lives on the label and progress bar.
     expect(published.container.querySelector("span.bg-success.text-success-foreground")).not.toBeNull()
     expect(published.container.querySelector("span.bg-primary.text-primary-foreground")).toBeNull()
   })

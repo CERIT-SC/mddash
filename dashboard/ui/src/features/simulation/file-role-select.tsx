@@ -48,7 +48,7 @@ function FileLabel({ file }: { file: FileInfo }) {
 type FileRoleSelectProps = {
   experimentId: string
   spec: RoleSpec
-  /** The selected file is declared by the manifest and still exists per the server-side check. */
+  /** Selected file exists per the manifest's server-side check. */
   present: boolean
   disabled?: boolean
   /** Create drops a vanished pick; edit keeps manifest data to re-validate on save. */

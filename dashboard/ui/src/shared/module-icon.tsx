@@ -42,7 +42,6 @@ export function ModuleIcon({ category, size = 20 }: { category: NotebookModuleCa
   return <Icon size={size} aria-hidden="true" />
 }
 
-/** The user's own git repository of notebooks, as opposed to a curated workflow. */
 export function CustomWorkflowIcon({ size = 20 }: { size?: number }) {
   return <GitFork size={size} aria-hidden="true" />
 }

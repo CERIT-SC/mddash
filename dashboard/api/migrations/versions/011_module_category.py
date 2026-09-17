@@ -1,10 +1,8 @@
 """
-Persist the curated notebook module's category on experiments.
+Add module_category: creation snapshot of the curated module's category.
 
-Experiments gain module_category (creation snapshot driving the card icon).
-Existing rows backfill by module_name + engine against the bundled catalog —
-the engine disambiguates curated names that repeat across engines. Custom
-workflows (NULL module_name) and unknown names keep NULL.
+Existing rows backfill by (module_name, engine) — the engine disambiguates
+curated names repeated across engines; custom and unknown keep NULL.
 
 Revision ID: 011
 Revises: 010

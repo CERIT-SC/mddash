@@ -168,8 +168,7 @@ function renderAnalyze(props: Partial<React.ComponentProps<typeof AnalyzeStep>> 
   const { selectedAnalysis, onSelectedAnalysisChange, tab, onTabChange, ...rest } = props
   const pick = { current: selectedAnalysis }
   // The pick and tab are URL-owned in production; the harness holds them
-  // across panel remounts (trajectory tab switches) exactly like the router
-  // search would.
+  // across panel remounts like the router search would.
   function Harness() {
     const [analysis, setAnalysis] = useState(selectedAnalysis)
     const [view, setView] = useState(tab ?? "trajectory")

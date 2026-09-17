@@ -269,7 +269,6 @@ describe("PublishStep published record", () => {
     expect(screen.getByRole("link", { name: DRAFT_URL })).toHaveAttribute("href", DRAFT_URL)
     expect(screen.getByRole("button", { name: "Publish a new version" })).toBeDisabled()
     expect(screen.queryByRole("region", { name: "Publish steps" })).not.toBeInTheDocument()
-    // Status query resolves async.
     expect(await screen.findByText("Files")).toBeInTheDocument()
     expect(screen.getByText("Total size")).toBeInTheDocument()
 

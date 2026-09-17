@@ -96,7 +96,7 @@ def test_simulation_length_ns_unfloatable_param() -> None:
 
 
 def test_simulation_length_ns_accepts_fortran_real_forms() -> None:
-    # Hand-written mdin files use legal Fortran reals without both digits around the dot.
+    # Fortran reals may omit digits around the dot.
     assert simulation_length_ns(" &cntrl\n  nstlim = 500000,\n  dt = .002,\n /\n") == 1.0
     assert simulation_length_ns(" &cntrl\n  nstlim = 500000,\n  dt = 2.,\n /\n") == 1000.0
 

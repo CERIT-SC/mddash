@@ -265,7 +265,7 @@ def test_migration_011_backfills_module_category(tmp_path: Path) -> None:
     assert rows["gmxpro"] == "protein"
     assert rows["ambpro"] == "protein"
     assert rows["memb"] == "membrane-protein"
-    # custom workflows and unknown names keep NULL (custom fallback icon)
+    # custom workflows and unknown names keep NULL
     assert rows["custo"] is None
     assert rows["ghost"] is None
 

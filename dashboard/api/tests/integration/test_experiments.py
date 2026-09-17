@@ -54,7 +54,7 @@ class TestListExperiments:
         assert data[0]["name"] == "Test Experiment"
         # persisted module identity round-trips (covers rows backfilled by migration 011)
         assert data[0]["module_category"] == "membrane-protein"
-        # decentralized workflows carry no module identity beyond the category
+        # curated module identity is a name+category snapshot, never an FK
         assert "module_id" not in data[0]
 
     def test_embeds_analysis_jobs_as_objects(self, client: FlaskClient, db_session: Session) -> None:
@@ -570,7 +570,6 @@ class TestCreateExperiment:
             assert response.status_code == HTTPStatus.CREATED
             data = json.loads(response.data)
             assert data["name"] == "Test File Experiment"
-            # custom workflow: no curated module identity to snapshot
             assert data["module_category"] is None
             assert "module_id" not in data
             mock_clone.assert_called_once()
@@ -656,7 +655,6 @@ class TestCreateExperimentCuratedModule:
             mock_module.assert_called_once()
             data = json.loads(response.data)
             assert data["notebooks_repo"] == "https://github.com/default/repo.git"
-            # the curated module's category snapshots onto the experiment (card icon)
             assert data["module_category"] == "protein"
             assert "module_id" not in data
 

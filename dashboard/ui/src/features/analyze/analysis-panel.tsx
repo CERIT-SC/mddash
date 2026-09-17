@@ -198,7 +198,6 @@ export function AnalysisPanel({
     lastJobForAnalysis?.status === JobStatus.FINISHED ? (lastJobForAnalysis.sim_progress ?? null) : null
   const calculatedPercent = simProgress !== null && simProgress < 1 ? Math.round(simProgress * 100) : null
 
-  // Labels the rendered results, so it lives in the results header, not the run row.
   const calculatedBadge =
     !activeJob && calculatedPercent !== null ? (
       <Badge variant="outline" className="bg-warning-200 border-warning-500 text-warning-800">
@@ -372,7 +371,6 @@ export function AnalysisPanel({
       {logsVisible && <LogPane logs={jobLogs ?? ""} isLoading={logsQuery.isLoading} />}
 
       <div>
-        {/* Variant picker is a view concern, not a run concern — it lives with the results. */}
         {resolvedAnalysis && hasResult && (calculatedBadge !== null || variantResults.length > 0) && (
           <div className="mb-3 flex flex-wrap items-center gap-3">
             {calculatedBadge}

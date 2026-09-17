@@ -359,8 +359,7 @@ export class PipelineSession {
   private applyStripHeight(): void {
     const headerNode = this.panel.contentHeader.node;
     const measuredStripHeight = this.measureStripContentHeight() + STRIP_BOTTOM_GAP;
-    // Runs 3x per render (syncStripHeight); the fit/update relayout is only
-    // meaningful when the measured height actually moved.
+    // fit/update forces a lumino relayout — skip when the height didn't move.
     if (measuredStripHeight === this.stripHeight) return;
 
     this.stripHeight = measuredStripHeight;
