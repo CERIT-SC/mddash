@@ -12,16 +12,16 @@ so a second concurrent extension of the same simulation inserts a second NULL ro
 and is rejected instead of spawning two pods that append to one trajectory.
 ENUM comparisons use member names (db.Enum convention, cf. 006).
 
-Revision ID: 011
-Revises: 010
+Revision ID: 012
+Revises: 011
 Create Date: 2026-09-17
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "011"
-down_revision = "010"
+revision = "012"
+down_revision = "011"
 branch_labels = None
 depends_on = None
 

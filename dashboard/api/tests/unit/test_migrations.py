@@ -309,7 +309,7 @@ def test_models_match_migrated_schema(tmp_path: Path) -> None:
         assert not extra, f"Columns in migrations but not in models for '{table}': {extra}"
 
 
-def test_migration_011_adds_segment_progress_and_live_uniqueness(tmp_path: Path) -> None:
+def test_migration_012_adds_segment_progress_and_live_uniqueness(tmp_path: Path) -> None:
     """nsteps_done column and the partial live-segment unique index exist at head."""
     app = _make_app(tmp_path / "test.db")
     _upgrade_to(app, "head")
