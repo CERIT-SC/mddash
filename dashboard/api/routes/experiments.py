@@ -27,8 +27,7 @@ def list_experiments() -> Response:
     experiments: list[Experiment] = Experiment.query.options(
         selectinload(Experiment.notebook),
         selectinload(Experiment.tuner_jobs),
-        # JTI subclass rows need their own batched select, else each dump
-        # lazy-loads one row per experiment job (N+1 in disguise).
+        # JTI subclass rows need a batched select, else each dump lazy-loads one row per job.
         selectinload(Experiment.simulation_jobs).selectin_polymorphic([GromacsJob, AmberJob]),
         selectinload(Experiment.analysis_jobs),
     ).all()
