@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from archive import submission
+from archive.status import STATUS_FILENAME
 from archive.submission import (
     ARCHIVE_APP_LABEL,
     SubmissionError,
@@ -124,6 +125,33 @@ class TestSubmitJob:
     def test_missing_image_raises(self, mock_active: Mock, tmp_path: Path) -> None:
         with pytest.raises(SubmissionError, match="ARCHIVE_WORKER_IMAGE"):
             submission.submit_job("archive", "abcde", tmp_path)
+
+    @patch("archive.submission.k8s")
+    @patch("archive.submission.ARCHIVE_WORKER_IMAGE", "registry/mddash-archive-worker:dev")
+    @patch("archive.submission.is_job_active", return_value=False)
+    @patch("archive.submission.read_status", return_value=None)
+    @patch("archive.submission.delete_jobs")
+    def test_create_failure_removes_queued_doc(
+        self, mock_delete: Mock, mock_read: Mock, mock_active: Mock, mock_k8s: Mock, tmp_path: Path
+    ) -> None:
+        """A dead Job with a surviving queued doc would freeze the experiment at archiving."""
+        mock_k8s.create_job_raw.side_effect = RuntimeError("boom")
+        with pytest.raises(SubmissionError):
+            submission.submit_job("archive", "abcde", tmp_path)
+        assert not (tmp_path / "abcde" / STATUS_FILENAME).exists()
+
+    @patch("archive.submission.k8s")
+    @patch("archive.submission.ARCHIVE_WORKER_IMAGE", "registry/mddash-archive-worker:dev")
+    @patch("archive.submission.is_job_active", return_value=False)
+    @patch("archive.submission.read_status", return_value=None)
+    @patch("archive.submission.delete_jobs")
+    def test_admission_timeout_removes_queued_doc(
+        self, mock_delete: Mock, mock_read: Mock, mock_active: Mock, mock_k8s: Mock, tmp_path: Path
+    ) -> None:
+        mock_k8s.wait_for_pod_admission.return_value = False
+        with pytest.raises(SubmissionError, match="not admitted"):
+            submission.submit_job("archive", "abcde", tmp_path)
+        assert not (tmp_path / "abcde" / STATUS_FILENAME).exists()
 
     @patch("archive.submission.k8s")
     @patch("archive.submission.ARCHIVE_WORKER_IMAGE", "registry/mddash-archive-worker:dev")

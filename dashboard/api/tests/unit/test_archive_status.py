@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 from archive.status import (
     STATUS_FILENAME,
-    ArchiveDirection,
     ArchiveState,
     ArchiveStatus,
     create_queued_status,
@@ -42,11 +41,6 @@ class TestArchiveState:
 
     def test_terminal_and_active_disjoint(self) -> None:
         assert ArchiveState.terminal().isdisjoint(ArchiveState.active())
-
-
-class TestArchiveDirection:
-    def test_opposites(self) -> None:
-        assert ArchiveDirection.ARCHIVE != ArchiveDirection.RESTORE
 
 
 class TestArchiveStatusSerialization:

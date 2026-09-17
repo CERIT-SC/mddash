@@ -137,3 +137,9 @@ def write_status(
 def create_queued_status(attempt_id: str, direction: str) -> ArchiveStatus:
     """Build the initial status the API writes at Job submission."""
     return ArchiveStatus(attempt_id=attempt_id, state=ArchiveState.QUEUED.value, direction=direction)
+
+
+def delete_status(experiment_id: str, data_dir: Path) -> None:
+    """Best-effort removal of the status doc, e.g. when Job submission fails after writing it."""
+    with contextlib.suppress(OSError):
+        status_path(experiment_id, data_dir).unlink()

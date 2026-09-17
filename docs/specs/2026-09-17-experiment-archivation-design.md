@@ -49,7 +49,7 @@ The design therefore:
 
 ### Restore flow
 
-1. **Gate checks:** experiment is archived, no job in flight, S3 configured, and the local experiment dir **does not exist** (409 otherwise — protects partial-restore leftovers from silent clobbering).
+1. **Gate checks:** experiment is archived, no job in flight, S3 configured, and the local experiment dir either **does not exist** or contains only a previous `failed` restore status doc (the retry sentinel — a failed restore always leaves its doc behind, so its own leftover must be re-submittable; any other dir contents → 409, protecting against clobbering foreign files).
 2. Job: verify `_archives/{id}` non-empty → `rclone copy` back to `/mddash/{id}` → `rclone check --size-only` → status `completed`. This is the one inherently slow direction (real download); it is why durable Jobs are used for all operations uniformly.
 3. On success `archived_at` is cleared; card returns to Active; `step`/`status` recompute from real files on next poll. Bisync re-syncs the restored files to the live prefix naturally.
 
@@ -58,10 +58,10 @@ The design therefore:
 `archive_state` (derived, serialized): `null | archiving | archived | restoring | archive_failed | restore_failed`
 
 - `null` — normal active experiment (`archived_at IS NULL`, snapshot columns NULL).
-- `archiving` — snapshots set, `archived_at` NULL, archive Job live or doc active.
+- `archiving` — snapshots set, `archived_at` NULL, archive Job live.
 - `archived` — `archived_at IS NOT NULL` and no restore job activity.
 - `restoring` — `archived_at IS NOT NULL`, restore Job live or doc active.
-- `archive_failed` — snapshots set, `archived_at` NULL, local dir still present, and (doc terminal `failed`, or no doc and no live Job — the `job_missing` analogue from `_read_upload_state`).
+- `archive_failed` — snapshots set, `archived_at` NULL, local dir still present, and (doc terminal `failed`, doc active without live Job, or no doc and no live Job — the `job_missing` analogue from `_read_upload_state`; an evicted pod leaves an unretried dead Job, `backoffLimit: 0`, so a doc alone must never pin the state).
 - `restore_failed` — `archived_at IS NOT NULL` and (restore doc terminal `failed`, or no doc and no live restore Job).
 
 Reconciliation runs in the read paths (list/detail/status), same as upload; the only DB mutations are: snapshots at archive-submit, `archived_at` set/cleared by reconciliation, and snapshots cleared when `archived_at` is cleared.
@@ -120,7 +120,7 @@ New worker image `dashboard/archive-worker/`:
 - **Quiescence race:** a user can edit files via Jupyter mid-archive. `rclone check` gates deletion on what was verified; accepted — the confirm dialog warns that archiving freezes the experiment. Remounting RO is rejected as overkill.
 - **API pod restart mid-archive:** status doc + live Job reconcile on next read; the worker is the only mutator and it is idempotent per attempt (fenced status writes).
 - **Job killed (eviction/culling):** `preserve-on-stop` label protects from the notebook culler; otherwise reconciliation reports `failed` (`job_missing` analogue); retry resubmits under the deterministic name (existing terminal Job is deleted first, as in upload).
-- **Restore into existing dir:** 409; user must resolve manually (defense against clobbering leftovers of a failed restore).
+- **Restore into existing dir:** 409 unless the dir holds only a `failed` restore status doc (retry sentinel) — defense against clobbering foreign leftovers while keeping failed restores re-submittable. A failed Job submission (`create` raises or admission timeout) deletes the queued status doc it wrote, so a submitted-but-never-started archive can't freeze at `archiving`.
 - **S3 unreachable/misconfigured:** worker fails with `reason`; surface as durable alert; no local deletion ever happens before a successful `check`.
 - **Purge orphans:** logged only; no sweeping/reconciliation loop (YAGNI).
 - **Local-only deployments (no `S3_BUCKET`):** endpoints return 400; the UI keeps menu items enabled but surfaces the durable error (capability is server-enforced; no runtime-config plumbing added).

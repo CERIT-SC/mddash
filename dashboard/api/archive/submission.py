@@ -18,7 +18,7 @@ from config import (
     S3_SECRET_KEY,
 )
 
-from archive.status import ArchiveDirection, create_queued_status, read_status, write_status
+from archive.status import ArchiveDirection, create_queued_status, delete_status, read_status, write_status
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -128,6 +128,7 @@ def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
         if not k8s.wait_for_pod_admission(f"{EXPERIMENT_LABEL}={experiment_id}", timeout=ADMISSION_TIMEOUT):
             logger.error("Pod admission timeout for Job %s", name)
             delete_jobs(experiment_id)
+            delete_status(experiment_id, data_dir)
             raise SubmissionError(f"Archive pod not admitted within {ADMISSION_TIMEOUT}s")
 
         logger.info("Job %s admitted for experiment %s (attempt %s)", name, experiment_id, attempt_id)
@@ -137,6 +138,7 @@ def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
     except Exception as e:
         logger.error("Failed to submit Job %s: %s", name, e)
         delete_jobs(experiment_id)
+        delete_status(experiment_id, data_dir)
         raise SubmissionError(f"Failed to submit archive Job: {e}") from e
 
 

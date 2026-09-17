@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 from archive.status import ArchiveDirection, ArchiveState, ArchiveStatus, write_status
+from cache import archive_status_cache
 from enums import Engine
 from extensions import db
 from models import Experiment, Notebook
@@ -19,6 +20,7 @@ EXP_ID = "abcde"
 
 @pytest.fixture
 def experiment(app, tmp_path: Path) -> Generator:
+    archive_status_cache.clear()
     with patch("models.experiment.DATA_DIR", tmp_path):
         exp = Experiment(id=EXP_ID, name="test", engine=Engine.GMX)  # type: ignore[call-arg]
         db.session.add(exp)
@@ -26,6 +28,7 @@ def experiment(app, tmp_path: Path) -> Generator:
         db.session.commit()
         (tmp_path / EXP_ID).mkdir()
         yield exp
+        archive_status_cache.clear()
         db.session.rollback()
 
 
@@ -126,6 +129,35 @@ class TestRestoreGates:
         ):
             experiment.restore()
 
+    def test_retry_after_failed_restore(self, experiment: Experiment, s3, tmp_path: Path) -> None:
+        """A failed restore leaves dir + FAILED doc; that doc is the retry sentinel."""
+        experiment.archived_at = datetime.now(UTC)
+        write_status(
+            ArchiveStatus(attempt_id="a", state=ArchiveState.FAILED.value, direction="restore", reason="check"),
+            EXP_ID,
+            tmp_path,
+        )
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("archive.submission.is_job_active", return_value=False),
+            patch("models.experiment.archive_submission.submit_job", side_effect=_submit_ok) as mock_submit,
+        ):
+            assert experiment.restore() == "attempt-1"
+        mock_submit.assert_called_once()
+
+    def test_non_failed_doc_409(self, experiment: Experiment, s3, tmp_path: Path) -> None:
+        """Dir with an in-flight restore doc is inconsistent with a dead Job — keep clobber gate."""
+        experiment.archived_at = datetime.now(UTC)
+        write_status(
+            ArchiveStatus(attempt_id="a", state=ArchiveState.RUNNING.value, direction="restore"), EXP_ID, tmp_path
+        )
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("archive.submission.is_job_active", return_value=False),
+            pytest.raises(Conflict),
+        ):
+            experiment.restore()
+
     def test_happy_path(self, experiment: Experiment, s3, tmp_path: Path) -> None:
         experiment.archived_at = datetime.now(UTC)
         (tmp_path / EXP_ID).rmdir()
@@ -191,6 +223,29 @@ class TestArchiveStateReconciliation:
             patch("archive.submission.is_job_active", return_value=False),
         ):
             assert experiment.archive_state == "archive_failed"
+
+    def test_dead_job_with_running_doc_is_failed(self, experiment: Experiment, tmp_path: Path) -> None:
+        """Job evicted after writing running (backoffLimit 0): must not freeze at archiving."""
+        self._snap(experiment)
+        write_status(
+            ArchiveStatus(attempt_id="a", state=ArchiveState.RUNNING.value, direction="archive"), EXP_ID, tmp_path
+        )
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("archive.submission.is_job_active", return_value=False),
+        ):
+            assert experiment.archive_state == "archive_failed"
+
+    def test_job_liveness_cached_across_reads(self, experiment: Experiment, tmp_path: Path) -> None:
+        """List serialization must not fan out K8s reads per experiment per request."""
+        self._snap(experiment)
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("archive.submission.is_job_active", return_value=False) as mock_active,
+        ):
+            assert experiment.archive_state == "archive_failed"
+            assert experiment.archive_state == "archive_failed"
+        assert mock_active.call_count == 1
 
     def test_archived_baseline(self, experiment: Experiment, tmp_path: Path) -> None:
         experiment.archived_at = datetime.now(UTC)

@@ -11,7 +11,7 @@ import yaml
 from archive import submission as archive_submission
 from archive.status import ArchiveDirection, ArchiveState
 from archive.status import read_status as read_archive_status
-from cache import mdrepo_status_cache, step_status_cache
+from cache import archive_status_cache, mdrepo_status_cache, step_status_cache
 from cachetools import cached
 from clients import mdposit, mdrepo, metadump
 from config import (
@@ -775,6 +775,16 @@ class Experiment(db.Model):  # type: ignore
             return None
         return self._read_archive_state()
 
+    def _is_archive_job_live(self, direction: str) -> bool:
+        """Job liveness with a short lookup cache (list serialization fan-out)."""
+        key = (direction, self.id)
+        try:
+            return archive_status_cache[key]
+        except KeyError:
+            live = archive_submission.is_job_active(direction, self.id)
+            archive_status_cache[key] = live
+            return live
+
     def _read_archive_state(self) -> str | None:
         """
         Reconcile archive state from DB markers, the status doc, and live Jobs.
@@ -782,12 +792,27 @@ class Experiment(db.Model):  # type: ignore
         The durable markers are DB-side (snapshot columns = submitted, archived_at =
         completed); the status doc disappears with the directory on successful archive,
         and Jobs TTL-expire, so completion is inferred: snapshots set + local dir gone +
-        archive Job not live. Mutates the row only on those terminal transitions.
+        archive Job not live. A doc claiming in-flight work with no live Job (Job
+        evicted, backoffLimit 0) reconciles to the direction's failed state, like the
+        MDRepo upload path. Mutates the row only on those terminal transitions.
         """
-        archive_live = archive_submission.is_job_active(ArchiveDirection.ARCHIVE.value, self.id)
-        restore_live = archive_submission.is_job_active(ArchiveDirection.RESTORE.value, self.id)
         doc = read_archive_status(self.id, DATA_DIR)
         dir_exists = (DATA_DIR / self.id).exists()
+        # Liveness checked lazily — each branch below needs only its own direction.
+        archive_live: bool | None = None
+        restore_live: bool | None = None
+
+        def _archive_live() -> bool:
+            nonlocal archive_live
+            if archive_live is None:
+                archive_live = self._is_archive_job_live(ArchiveDirection.ARCHIVE.value)
+            return archive_live
+
+        def _restore_live() -> bool:
+            nonlocal restore_live
+            if restore_live is None:
+                restore_live = self._is_archive_job_live(ArchiveDirection.RESTORE.value)
+            return restore_live
 
         if self.archived_at is not None:
             # Restore lifecycle; a non-restore doc is stale from the archive attempt.
@@ -801,11 +826,11 @@ class Experiment(db.Model):  # type: ignore
                     return None
                 if doc.state == ArchiveState.FAILED.value:
                     return "restore_failed"
-            return "restoring" if restore_live else "archived"
+            return "restoring" if _restore_live() else "archived"
 
         # Archive lifecycle (archived_at None, snapshots set).
         if not dir_exists:
-            if not archive_live:
+            if not _archive_live():
                 self.archived_at = datetime.now(UTC)
                 db.session.commit()
                 return "archived"
@@ -814,9 +839,9 @@ class Experiment(db.Model):  # type: ignore
         if doc is not None and doc.direction == ArchiveDirection.ARCHIVE.value:
             if doc.state == ArchiveState.FAILED.value:
                 return "archive_failed"
-            return "archiving"
+            return "archiving" if _archive_live() else "archive_failed"
 
-        return "archiving" if archive_live else "archive_failed"
+        return "archiving" if _archive_live() else "archive_failed"
 
     def archive(self) -> str:
         """
@@ -886,10 +911,20 @@ class Experiment(db.Model):  # type: ignore
         if state not in {"archived", "restore_failed"}:
             raise Conflict(description=f"Experiment cannot be restored now (state: {state}).")
         if (DATA_DIR / self.id).exists():
-            raise Conflict(
-                description="Local experiment directory already exists; refusing to overwrite it. "
-                "Remove the leftover directory manually and retry."
+            # Mirror the worker gate: a failed restore doc is the retry sentinel
+            # (the dir then holds only our status doc / partial copies); anything
+            # else in a present dir is genuine clobber protection.
+            doc = read_archive_status(self.id, DATA_DIR)
+            retryable = (
+                doc is not None
+                and doc.direction == ArchiveDirection.RESTORE.value
+                and doc.state == ArchiveState.FAILED.value
             )
+            if not retryable:
+                raise Conflict(
+                    description="Local experiment directory already exists; refusing to overwrite it. "
+                    "Remove the leftover directory manually and retry."
+                )
 
         attempt_id = archive_submission.submit_job(ArchiveDirection.RESTORE.value, self.id, DATA_DIR)
         logger.info("Restore Job submitted for experiment %s (attempt %s)", self.id, attempt_id)

@@ -2,8 +2,8 @@ import type { Experiment } from "@/api/generated/models"
 import { relativeTime } from "@/shared/format"
 
 // Archive work is Job-driven: while a direction is in flight the card shows a
-// spinner, and the experiments list keeps polling (see hasLiveWork).
-const IN_FLIGHT: ReadonlySet<Experiment["archive_state"]> = new Set(["archiving", "restoring"])
+// spinner, and the experiments list keeps polling (hasLiveWork imports this set).
+export const IN_FLIGHT: ReadonlySet<Experiment["archive_state"]> = new Set(["archiving", "restoring"])
 const FAILED: ReadonlySet<Experiment["archive_state"]> = new Set(["archive_failed", "restore_failed"])
 
 export function isArchived(experiment: Experiment): boolean {

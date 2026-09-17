@@ -1,5 +1,7 @@
 import type { AnalysisJob, Experiment } from "@/api/generated/models"
 
+import { IN_FLIGHT as IN_FLIGHT_ARCHIVE_STATES } from "./archive"
+
 // UNKNOWN is live server-side (transient upstream failure) — don't freeze on
 // it. Sim/tuner payloads embed is_live; analysis carries only a plain status.
 const LIVE_ANALYSIS_STATUSES = new Set<AnalysisJob["status"]>(["PENDING", "RUNNING", "UNKNOWN"])
@@ -7,9 +9,6 @@ const LIVE_ANALYSIS_STATUSES = new Set<AnalysisJob["status"]>(["PENDING", "RUNNI
 export function isAnalysisJobLive(job: AnalysisJob): boolean {
   return LIVE_ANALYSIS_STATUSES.has(job.status)
 }
-
-// Archive/restore Jobs complete server-side — poll until the state settles.
-const IN_FLIGHT_ARCHIVE_STATES = new Set<Experiment["archive_state"]>(["archiving", "restoring"])
 
 export function hasLiveWork(experiment: Experiment): boolean {
   return (
