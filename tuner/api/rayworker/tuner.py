@@ -175,7 +175,7 @@ def _run_single_trial(
     """Execute a single trial on a Ray worker."""
     logger.info("Running trial %s: params=%s, nsteps=%d", trial_id, config.params, nsteps)
     result = engine.run_trial(config, trial_id, job_id, nsteps, extra_args, best_steps_per_sec, best_cost_per_step)
-    status = JobStatus.FINISHED if result.performance > 0 or result.early_stopped else JobStatus.ERROR
+    status = JobStatus.FINISHED if (result.performance or 0.0) > 0 or result.early_stopped else JobStatus.ERROR
     logger.info(
         "Trial %s completed: status=%s, performance=%.2f ns/day, steps/sec=%.1f",
         trial_id,

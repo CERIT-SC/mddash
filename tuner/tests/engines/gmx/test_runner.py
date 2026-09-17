@@ -62,9 +62,9 @@ class TestEarlyStopPerformance:
         assert steps_per_sec == 100.0
         assert early_stopped
 
-    def test_pruned_trial_without_timestep_reports_zero(self, tmp_path, monkeypatch) -> None:
+    def test_pruned_trial_without_timestep_reports_none(self, tmp_path, monkeypatch) -> None:
         performance, _, early_stopped = self._run_pruned(tmp_path, monkeypatch, None)
-        assert performance == 0.0
+        assert performance is None
         assert early_stopped
 
 

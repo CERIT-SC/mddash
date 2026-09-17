@@ -117,16 +117,16 @@ class TestEarlyStopPerformance:
         assert steps_per_sec == 50.0
         assert early_stopped
 
-    def test_pruned_trial_without_timestep_reports_zero(self, tmp_path, monkeypatch) -> None:
+    def test_pruned_trial_without_timestep_reports_none(self, tmp_path, monkeypatch) -> None:
         mdin = " &cntrl\n  nstlim = 1000,\n /\n"
         performance, _, early_stopped = self._run_pruned(tmp_path, monkeypatch, mdin)
-        assert performance == 0.0
+        assert performance is None
         assert early_stopped
 
-    def test_pruned_trial_with_unfloatable_timestep_reports_zero(self, tmp_path, monkeypatch) -> None:
+    def test_pruned_trial_with_unfloatable_timestep_reports_none(self, tmp_path, monkeypatch) -> None:
         mdin = " &cntrl\n  nstlim = 1000,\n  dt = 1.2.3,\n /\n"
         performance, _, early_stopped = self._run_pruned(tmp_path, monkeypatch, mdin)
-        assert performance == 0.0
+        assert performance is None
         assert early_stopped
 
     def test_pruned_trial_ignores_timestep_outside_cntrl(self, tmp_path, monkeypatch) -> None:

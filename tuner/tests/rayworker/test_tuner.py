@@ -3,6 +3,7 @@ from unittest.mock import Mock
 import pytest
 from api.db.models import init_db
 from api.db.operations import create_job, create_trial_result, get_trial, get_trials_by_job_id, update_job_status
+from api.engines.protocol import TrialConfig, TrialResult
 from api.rayworker import tuner
 from api.schemas.common import JobStatus, MDEngine
 
@@ -116,6 +117,26 @@ class TestSubmitTrials:
         assert job_context.get_futures("j1") == {future: 7}
 
 
+class TestRunSingleTrialStatus:
+    """The remote task's status rule must tolerate an underivable (None) performance."""
+
+    def _call(self, result: TrialResult) -> dict:
+        engine = Mock()
+        engine.run_trial.return_value = result
+        config = TrialConfig(num_cpus=1, num_gpus=0, params={})
+        return tuner._run_single_trial._function("j1", "7", config, engine, "", 1000)
+
+    def test_early_stopped_with_unknown_performance_finishes_with_none(self) -> None:
+        res = self._call(TrialResult(performance=None, steps_per_sec=10.0, early_stopped=True, cost_per_step=0.5))
+        assert res["status"] == JobStatus.FINISHED
+        assert res["performance"] is None
+
+    def test_early_stopped_with_measured_performance_finishes_with_value(self) -> None:
+        res = self._call(TrialResult(performance=3.2, steps_per_sec=10.0, early_stopped=True, cost_per_step=0.5))
+        assert res["status"] == JobStatus.FINISHED
+        assert res["performance"] == 3.2
+
+
 class TestProcessTrialResultsWatchdog:
     def test_stall_fails_and_cancels_when_nothing_is_running(self, job_context, monkeypatch) -> None:
         """Successful query + no RUNNING trials after the window => unschedulable."""
@@ -204,6 +225,25 @@ class TestProcessTrialResultsWatchdog:
 
         assert tuner._process_trial_results("j1", {future: 7}, 20.0, 0.3) == (20.0, 0.3)
         tuner.update_trial_result.assert_called_once_with(7, JobStatus.FINISHED, 3.2)
+
+    def test_pruned_trial_with_unknown_timestep_persists_none(self, job_context, monkeypatch) -> None:
+        """Measured-but-underivable keeps no-result semantics: FINISHED + NULL, not a numeric 0.0."""
+        future = Mock()
+        ray_mock = Mock()
+        ray_mock.wait.side_effect = [([future], [])]
+        ray_mock.get.return_value = {
+            "trial_id": "7",
+            "status": JobStatus.FINISHED,
+            "performance": None,
+            "steps_per_sec": 10.0,
+            "early_stopped": True,
+            "cost_per_step": 0.5,
+        }
+        monkeypatch.setattr(tuner, "ray", ray_mock)
+        monkeypatch.setattr(tuner, "update_trial_result", Mock())
+
+        assert tuner._process_trial_results("j1", {future: 7}, 20.0, 0.3) == (20.0, 0.3)
+        tuner.update_trial_result.assert_called_once_with(7, JobStatus.FINISHED, None)
 
     def test_state_api_outage_extends_the_window(self, job_context, monkeypatch) -> None:
         """A failed query must never false-kill a progressing job."""

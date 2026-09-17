@@ -18,16 +18,18 @@ class TrialConfig:
 class TrialResult:
     """Result returned by every engine after a trial."""
 
-    performance: float  # ns/day; 0.0 on failure
+    # ns/day; 0.0 on failure, None when a pruned trial's timestep is unknown —
+    # NULL must survive to the UI so the trial keeps no-result semantics.
+    performance: float | None
     steps_per_sec: float  # used for early stopping comparison
     early_stopped: bool
     cost_per_step: float = 0.0  # footprint hourly rate / steps_per_sec; 0.0 if steps unknown
 
 
-def steps_to_ns_per_day(steps_per_sec: float, dt_ps: float | None) -> float:
-    """ns/day for a measured steps/sec at timestep dt (ps); 0.0 when either is unknown."""
+def steps_to_ns_per_day(steps_per_sec: float, dt_ps: float | None) -> float | None:
+    """ns/day for a measured steps/sec at timestep dt (ps); None when either is unknown."""
     if dt_ps is None or dt_ps <= 0 or steps_per_sec <= 0:
-        return 0.0
+        return None
     return steps_per_sec * dt_ps * 86400.0 / 1000.0
 
 

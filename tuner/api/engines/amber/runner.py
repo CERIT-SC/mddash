@@ -29,11 +29,11 @@ def run_pmemd(
     nsteps: int = 25_000,
     best_steps_per_sec: float = 0.0,
     best_cost_per_step: float = 0.0,
-) -> tuple[float, float, bool]:
+) -> tuple[float | None, float, bool]:
     """
     Execute pmemd with the given config and return (performance_ns_day, steps_per_sec, early_stopped).
 
-    Returns (0.0, 0.0, False) on failure.
+    Returns (0.0, 0.0, False) on failure; performance is None when a pruned trial's dt is unparsable.
     """
     trial_dir = JOBS_DIR / job_id / trial_id
     trial_dir.mkdir(parents=True, exist_ok=True)

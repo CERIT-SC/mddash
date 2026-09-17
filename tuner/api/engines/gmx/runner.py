@@ -29,7 +29,7 @@ def run_mdrun(
     nsteps: int = 25_000,
     best_steps_per_sec: float = 0.0,
     best_cost_per_step: float = 0.0,
-) -> tuple[float, float, bool]:
+) -> tuple[float | None, float, bool]:
     """
     Execute GROMACS mdrun with the given config and return performance.
 
@@ -44,7 +44,8 @@ def run_mdrun(
 
     Returns:
         Tuple of (performance_ns_day, steps_per_sec, early_stopped).
-        Returns (0.0, 0.0, False) on failure.
+        Returns (0.0, 0.0, False) on failure; performance is None when a pruned
+        trial's timestep is unparsable.
     """
     tpr_path = str(INPUTS_DIR / f"{job_id}_md.tpr")
     trial_dir = JOBS_DIR / job_id / trial_id
