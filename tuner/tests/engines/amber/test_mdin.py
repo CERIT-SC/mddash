@@ -91,6 +91,16 @@ def test_simulation_length_ns_missing_params() -> None:
     assert simulation_length_ns("nothing here") is None
 
 
+def test_simulation_length_ns_unfloatable_param() -> None:
+    assert simulation_length_ns(" &cntrl\n  nstlim = 100,\n  dt = 1.2.3,\n /\n") is None
+
+
+def test_simulation_length_ns_accepts_fortran_real_forms() -> None:
+    # Fortran reals may omit digits around the dot.
+    assert simulation_length_ns(" &cntrl\n  nstlim = 500000,\n  dt = .002,\n /\n") == 1.0
+    assert simulation_length_ns(" &cntrl\n  nstlim = 500000,\n  dt = 2.,\n /\n") == 1000.0
+
+
 DENSE_MDIN = """\
 Explicit solvent molecular dynamics constant pressure 50 ns MD
  &cntrl

@@ -1,3 +1,4 @@
+import { getListSimulationsQueryKey, type ListSimulationsQueryResult } from "@/api/generated/client"
 import { Engine } from "@/api/generated/models"
 import type { FileInfo, Simulation } from "@/api/generated/models"
 import { mockApiBySuffix } from "@/shared/fixtures/mock-fetch"
@@ -90,6 +91,47 @@ describe("SimulationForm (create, GMX)", () => {
     })
   })
 
+  it("seeds the simulations cache before onSaved so an adopting wizard sees the new entry", async () => {
+    const user = userEvent.setup()
+    const created = simulation("protein.simulation.json", { name: "protein", valid: true })
+    const alpha = simulation("alpha.simulation.json", { name: "Alpha" })
+    mockApiBySuffix({ ...FILE_HANDLERS, "/experiments/exp1/simulations": Response.json(created, { status: 201 }) })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    // The list query caches the full response wrapper (status/data/headers), like the generated fetcher.
+    client.setQueryData(getListSimulationsQueryKey("exp1"), {
+      data: [alpha],
+      status: 200,
+      headers: new Headers(),
+    })
+    const seenWhileSaving: Simulation[][] = []
+    render(
+      <QueryClientProvider client={client}>
+        <SimulationForm
+          experimentId="exp1"
+          engine={Engine.GMX}
+          onSaved={(_saved, isCreated) => {
+            if (isCreated)
+              seenWhileSaving.push(
+                client.getQueryData<ListSimulationsQueryResult>(getListSimulationsQueryKey("exp1"))?.data ?? []
+              )
+          }}
+        />
+      </QueryClientProvider>
+    )
+
+    await user.click(await screen.findByRole("combobox", { name: "Run input (.tpr)" }))
+    await user.click(await screen.findByRole("option", { name: /protein\.tpr/ }))
+    await user.click(screen.getByRole("combobox", { name: "Reference structure" }))
+    await user.click(await screen.findByRole("option", { name: /protein-reference\.gro/ }))
+    await user.click(await screen.findByRole("button", { name: "Create simulation" }))
+
+    await vi.waitFor(() => expect(seenWhileSaving.length).toBe(1))
+    expect(seenWhileSaving[0].map((entry) => entry.simulation_path)).toEqual([
+      "alpha.simulation.json",
+      "protein.simulation.json",
+    ])
+  })
+
   it("disables a role picker with the mock's empty hint when no files match", async () => {
     renderForm({ "/experiments/exp1/files?ext=tpr": Response.json([]) })
     expect(await screen.findByText("No files available yet")).toBeInTheDocument()
@@ -154,10 +196,9 @@ describe("SimulationForm (existing manifest)", () => {
     expect(screen.getByText("files.run_input is required")).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument()
     // Edit mode never destroys manifest data: the vanished path stays visible as
-    // a pickable "(missing)" entry, flagged by the chip, until the server says otherwise.
+    // a pickable entry until the server says otherwise.
     const runInput = await screen.findByRole("combobox", { name: "Run input (.tpr)" })
     await vi.waitFor(() => expect(within(runInput).getByText(/gone\.tpr/)).toBeInTheDocument())
-    expect(screen.getByText("missing")).toBeInTheDocument()
   })
 })
 

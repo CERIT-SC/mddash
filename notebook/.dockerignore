@@ -1,0 +1,4 @@
+jupyterlab-pipeline-tracker/*
+!jupyterlab-pipeline-tracker/pyproject.toml
+!jupyterlab-pipeline-tracker/setup.py
+!jupyterlab-pipeline-tracker/jupyterlab_pipeline_tracker

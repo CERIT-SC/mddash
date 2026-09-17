@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
 import pytest
-from api.engines.gmx.tprinfo import _read_sim_length_ns, parse_dump_output
+from api.engines.gmx.tprinfo import _read_sim_length_ns, delta_t_ps, parse_dump_output
 
 DUMP_SNIPPET = """\
                init-step                  = 0
@@ -57,3 +57,21 @@ def test_read_sim_length_ns_from_tpr(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_read_sim_length_ns_nsteps_override_wins(monkeypatch: pytest.MonkeyPatch) -> None:
     _mock_gmx_dump(monkeypatch)
     assert _read_sim_length_ns("x.tpr", nsteps_override=500000) == pytest.approx(500000 * 0.002 / 1000)
+
+
+def test_delta_t_ps_from_tpr(monkeypatch: pytest.MonkeyPatch) -> None:
+    _mock_gmx_dump(monkeypatch)
+    assert delta_t_ps("x.tpr") == pytest.approx(0.002)
+
+
+def test_delta_t_ps_none_when_dump_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("subprocess.run", MagicMock(return_value=MagicMock(returncode=1, stdout="", stderr="boom")))
+    assert delta_t_ps("x.tpr") is None
+
+
+def test_delta_t_ps_none_when_unparsable(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "subprocess.run",
+        MagicMock(return_value=MagicMock(returncode=0, stdout="nothing useful here", stderr="")),
+    )
+    assert delta_t_ps("x.tpr") is None

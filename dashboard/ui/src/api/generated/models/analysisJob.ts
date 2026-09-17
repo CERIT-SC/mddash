@@ -15,7 +15,10 @@ export interface AnalysisJob {
   analysis_name: AnalysisJobAnalysisName;
   created_at: string;
   status: JobStatus;
-  /** Fraction (0-1) of the simulation's steps available when the analysis inputs were snapshotted; null when unknown. */
+  /**
+     * Fraction (0-1) of the simulation's steps available when the analysis inputs were snapshotted; null when unknown.
+     * @nullable
+     */
   sim_progress?: number | null;
   [key: string]: unknown;
  }

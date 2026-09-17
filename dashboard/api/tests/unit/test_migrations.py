@@ -233,6 +233,43 @@ def test_migration_010_adds_structured_source_columns(tmp_path: Path) -> None:
         assert len(Experiment.query.all()) == 5
 
 
+def test_migration_011_backfills_module_category(tmp_path: Path) -> None:
+    """module_category snapshots the curated module; rows backfill by (module_name, engine)."""
+    import sqlalchemy as sa
+
+    app = _make_app(tmp_path / "test.db")
+    _upgrade_to(app, "010")
+    with app.app_context(), db.engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                "INSERT INTO experiments (id, created_at, updated_at, name, module_name, engine) VALUES "
+                "('gmxpro', '2026-01-01', '2026-01-01', 'a', 'Protein', 'GMX'), "
+                "('ambpro', '2026-01-01', '2026-01-01', 'b', 'Protein', 'AMBER'), "
+                "('memb', '2026-01-01', '2026-01-01', 'c', 'Membrane protein (BioBB)', 'GMX'), "
+                "('custo', '2026-01-01', '2026-01-01', 'd', NULL, 'GMX'), "
+                "('ghost', '2026-01-01', '2026-01-01', 'e', 'Nonexistent module', 'GMX')"
+            )
+        )
+
+    _upgrade_to(app, "head")
+    with app.app_context():
+        cols = _column_names(db.engine, "experiments")
+        assert "module_category" in cols
+        assert "module_id" not in cols
+        with db.engine.connect() as conn:
+            rows = {
+                row.id: row.module_category
+                for row in conn.execute(sa.text("SELECT id, module_category FROM experiments"))
+            }
+    # engine disambiguates the repeated 'Protein' name
+    assert rows["gmxpro"] == "protein"
+    assert rows["ambpro"] == "protein"
+    assert rows["memb"] == "membrane-protein"
+    # custom workflows and unknown names keep NULL
+    assert rows["custo"] is None
+    assert rows["ghost"] is None
+
+
 def test_all_migrations_reach_head(tmp_path: Path) -> None:
     app = _make_app(tmp_path / "test.db")
     with app.app_context():

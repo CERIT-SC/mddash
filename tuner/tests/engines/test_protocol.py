@@ -1,4 +1,5 @@
-from api.engines.protocol import Engine, TrialConfig, TrialResult
+import pytest
+from api.engines.protocol import Engine, TrialConfig, TrialResult, steps_to_ns_per_day
 
 
 def test_trial_config_stores_params() -> None:
@@ -12,6 +13,20 @@ def test_trial_result_fields() -> None:
     r = TrialResult(performance=12.5, steps_per_sec=1500.0, early_stopped=False)
     assert r.performance == 12.5
     assert not r.early_stopped
+
+
+class TestStepsToNsPerDay:
+    def test_converts(self) -> None:
+        # 100 steps/s * 0.002 ps = 0.2 ps/s -> 17.28 ns/day
+        assert steps_to_ns_per_day(100.0, 0.002) == pytest.approx(17.28)
+
+    @pytest.mark.parametrize(
+        ("steps_per_sec", "dt_ps"),
+        [(100.0, None), (100.0, 0.0), (100.0, -0.002), (0.0, 0.002), (-1.0, 0.002)],
+    )
+    def test_unknown_or_nonpositive_yields_none(self, steps_per_sec, dt_ps) -> None:
+        # NULL, not a 0.0 sentinel: the trial keeps no-result semantics (DB NULL, UI "—", unselectable).
+        assert steps_to_ns_per_day(steps_per_sec, dt_ps) is None
 
 
 def test_engine_protocol_is_structural() -> None:

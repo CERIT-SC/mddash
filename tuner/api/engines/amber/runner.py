@@ -13,8 +13,9 @@ from pathlib import Path
 
 from api.config import EARLY_STOP_CHECK_INTERVAL, EARLY_STOP_COST_RATIO, INPUTS_DIR, JOBS_DIR
 from api.engines.amber.config import AmberBinary, AmberTrialConfig
-from api.engines.amber.mdin import patch_mdin_for_benchmark
+from api.engines.amber.mdin import _read_param, patch_mdin_for_benchmark
 from api.engines.early_stop import _should_early_stop
+from api.engines.protocol import steps_to_ns_per_day
 from api.utils import tail
 
 logger = logging.getLogger(__name__)
@@ -28,11 +29,11 @@ def run_pmemd(
     nsteps: int = 25_000,
     best_steps_per_sec: float = 0.0,
     best_cost_per_step: float = 0.0,
-) -> tuple[float, float, bool]:
+) -> tuple[float | None, float, bool]:
     """
     Execute pmemd with the given config and return (performance_ns_day, steps_per_sec, early_stopped).
 
-    Returns (0.0, 0.0, False) on failure.
+    Returns (0.0, 0.0, False) on failure; performance is None when a pruned trial's dt is unparsable.
     """
     trial_dir = JOBS_DIR / job_id / trial_id
     trial_dir.mkdir(parents=True, exist_ok=True)
@@ -76,13 +77,15 @@ def run_pmemd(
 
     early_stopped, final_steps_per_sec = result
     if early_stopped:
+        # Pruned trials write no end-of-run summary; derive ns/day from measured steps/s.
+        performance = steps_to_ns_per_day(final_steps_per_sec, _timestep_ps(mdin_source))
         logger.info(
             "Trial %s early stopped (%.1f steps/s vs best %.1f)",
             trial_id,
             final_steps_per_sec,
             best_steps_per_sec,
         )
-        return 0.0, final_steps_per_sec, True
+        return performance, final_steps_per_sec, True
 
     performance = _parse_amber_performance(tail(mdout, n=50))
     return performance, final_steps_per_sec, False
@@ -119,6 +122,16 @@ def _build_command(
     if config.binary == AmberBinary.PMEMD_MPI:
         return ["mpirun", "-np", str(config.np), *base]
     return base
+
+
+def _timestep_ps(mdin_path: Path) -> float | None:
+    """Timestep (ps) from the &cntrl namelist of an mdin file; None if unreadable or absent."""
+    try:
+        content = mdin_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    cntrl = re.search(r"&cntrl\b(.*?)(?:^\s*/|&end)", content, re.IGNORECASE | re.DOTALL | re.MULTILINE)
+    return _read_param(cntrl.group(1) if cntrl else content, "dt")
 
 
 def _parse_amber_performance(content: str) -> float:

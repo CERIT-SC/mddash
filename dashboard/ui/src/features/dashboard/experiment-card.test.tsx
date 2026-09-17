@@ -70,6 +70,59 @@ describe("ExperimentCard", () => {
     expect(container.querySelector(".animate-spin")).not.toBeNull()
   })
 
+  it("shows Simulating · 0% before any step parses from the log", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    await renderCard(
+      analyze({
+        step: 2,
+        status: "simulating",
+        simulation_jobs: [simulationJob("RUNNING", { nsteps: 100 })],
+      })
+    )
+    expect(screen.getByText("Simulating · 0%")).toBeVisible()
+  })
+
+  it("shows Simulating · 0% while the job sits queued", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    await renderCard(
+      analyze({
+        step: 2,
+        status: "simulating",
+        simulation_jobs: [simulationJob("PENDING", { nsteps: 100 })],
+      })
+    )
+    expect(screen.getByText("Simulating · 0%")).toBeVisible()
+  })
+
+  it("keeps the live phase while the sim status is transiently unknown", async () => {
+    // UNKNOWN is live server-side (transient upstream failure) — the card must not freeze.
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(
+      analyze({
+        step: 2,
+        status: "simulating",
+        simulation_jobs: [simulationJob("UNKNOWN", { is_live: true, nsteps: 100, nsteps_done: 40 })],
+      })
+    )
+    expect(screen.getByText("Simulating · 40%")).toBeVisible()
+    expect(container.querySelector(".animate-spin")).not.toBeNull()
+  })
+
+  it("shows Analyzing while the analysis status is transiently unknown", async () => {
+    // Analysis payloads carry no is_live flag — the card treats UNKNOWN as in-flight.
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(
+      analyze({
+        step: 3,
+        status: "analyzing",
+        simulation_jobs: [simulationJob("FINISHED", { is_live: false })],
+        analysis_jobs: [analysisJob("UNKNOWN")],
+      })
+    )
+    expect(screen.getByText("Analyzing RMSD")).toBeVisible()
+    expect(container.querySelector(".animate-spin")).not.toBeNull()
+  })
+
   it("shows last activity when no job is running", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
     const { container } = await renderCard(
@@ -90,8 +143,21 @@ describe("ExperimentCard", () => {
         analysis_jobs: [analysisJob("RUNNING")],
       })
     )
-    expect(screen.getByText("Analyzing")).toBeVisible()
+    expect(screen.getByText("Analyzing RMSD")).toBeVisible()
     expect(container.querySelector(".animate-spin")).not.toBeNull()
+  })
+
+  it("names the analysis being calculated", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    await renderCard(
+      analyze({
+        step: 3,
+        status: "analyzing",
+        simulation_jobs: [simulationJob("FINISHED", { is_live: false })],
+        analysis_jobs: [analysisJob("RUNNING", { analysis_name: "clusters" })],
+      })
+    )
+    expect(screen.getByText("Analyzing Clusters")).toBeVisible()
   })
 
   it("a running simulation outranks the publish state", async () => {
@@ -117,8 +183,35 @@ describe("ExperimentCard", () => {
         analysis_jobs: [analysisJob("RUNNING")],
       })
     )
-    expect(screen.getByText("Analyzing")).toBeVisible()
+    expect(screen.getByText("Analyzing RMSD")).toBeVisible()
     expect(container.querySelector(".animate-spin")).not.toBeNull()
+  })
+
+  it("a running analysis outranks the simulating phase, which returns when the analysis settles", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { unmount } = await renderCard(
+      analyze({
+        step: 3,
+        status: "simulating",
+        simulation_jobs: [simulationJob("RUNNING", { nsteps: 100, nsteps_done: 40 })],
+        analysis_jobs: [analysisJob("RUNNING")],
+      })
+    )
+    expect(screen.getByText("Analyzing RMSD")).toBeVisible()
+    expect(screen.queryByText("Simulating · 40%")).not.toBeInTheDocument()
+
+    // Mid-run analysis settles → the simulation's percentage takes over again.
+    unmount()
+    await renderCard(
+      analyze({
+        step: 3,
+        status: "simulating",
+        simulation_jobs: [simulationJob("RUNNING", { nsteps: 100, nsteps_done: 40 })],
+        analysis_jobs: [analysisJob("FINISHED")],
+      })
+    )
+    expect(screen.getByText("Simulating · 40%")).toBeVisible()
+    expect(screen.queryByText("Analyzing RMSD")).not.toBeInTheDocument()
   })
 
   it("shows last activity for a publishing experiment — upload progress lives in the wizard", async () => {
@@ -314,12 +407,6 @@ describe("ExperimentCard", () => {
       if (url.includes("/analysis/types")) {
         return Response.json(["rmsds", "clusters", "sas", "hbonds"])
       }
-      if (url.includes("/analysis")) {
-        return Response.json([
-          { id: "a1", status: "FINISHED" },
-          { id: "a2", status: "RUNNING" },
-        ])
-      }
       return new Response(null, { status: 404 })
     })
     await renderCard(
@@ -340,6 +427,12 @@ describe("ExperimentCard", () => {
             is_live: false,
           },
         ],
+        // Analysis jobs ride the polled list payload — no scoped jobs endpoint to mock.
+        analysis_jobs: [
+          analysisJob("FINISHED", { simulation_path: "md.simulation.json" }),
+          analysisJob("RUNNING", { simulation_path: "md.simulation.json" }),
+          analysisJob("FINISHED", { simulation_path: "other.simulation.json" }),
+        ],
       })
     )
     expect(await screen.findByText("Models")).toBeVisible()
@@ -353,14 +446,29 @@ describe("ExperimentCard", () => {
     expect(screen.getAllByText("N/A")).toHaveLength(2)
   })
 
-  it("shows different icons for the publishing and published states", async () => {
+  it("shows the workflow category tile on every step, including publish", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    const { container, unmount } = await renderCard(analyze({ step: 4, status: "publishing", mdrepo_published: false }))
-    expect(container.querySelector("span.bg-info.text-info-foreground")).not.toBeNull()
-    expect(container.querySelector("span.bg-primary.text-primary-foreground")).toBeNull()
+    const { container, unmount } = await renderCard(analyze({ module_category: "nucleic-acids" }))
+    expect(container.querySelector("span.bg-success.text-success-foreground")).not.toBeNull()
     unmount()
-    const published = await renderCard(analyze({ step: 4, status: "published", mdrepo_published: true }))
-    expect(published.container.querySelector("span.bg-primary.text-primary-foreground")).not.toBeNull()
+    const published = await renderCard(
+      analyze({ step: 4, status: "published", mdrepo_published: true, module_category: "nucleic-acids" })
+    )
+    // No publish-specific tile: publish progress lives on the label and progress bar.
+    expect(published.container.querySelector("span.bg-success.text-success-foreground")).not.toBeNull()
+    expect(published.container.querySelector("span.bg-primary.text-primary-foreground")).toBeNull()
+  })
+
+  it("shows the custom-workflow fallback tile when no category is known", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(analyze())
+    expect(container.querySelector("span.bg-surface-raised.text-text-muted")).not.toBeNull()
+  })
+
+  it("falls back instead of crashing on a category this build does not know", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const { container } = await renderCard(analyze({ module_category: "superfluid" as Experiment["module_category"] }))
+    expect(container.querySelector("span.bg-surface-raised.text-text-muted")).not.toBeNull()
   })
 
   it("shows publish details on a publish-step card", async () => {

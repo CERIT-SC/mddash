@@ -36,6 +36,7 @@ class TestListExperiments:
         exp = Experiment()
         exp.id = "testx"
         exp.name = "Test Experiment"
+        exp.module_category = "membrane-protein"
         db_session.add(exp)
         db_session.flush()
 
@@ -51,6 +52,108 @@ class TestListExperiments:
         assert len(data) == 1
         assert data[0]["id"] == "testx"
         assert data[0]["name"] == "Test Experiment"
+        # persisted module identity round-trips (covers rows backfilled by migration 011)
+        assert data[0]["module_category"] == "membrane-protein"
+        # curated module identity is a name+category snapshot, never an FK
+        assert "module_id" not in data[0]
+
+    def test_embeds_analysis_jobs_as_objects(self, client: FlaskClient, db_session: Session) -> None:
+        """Should embed full analysis job objects, not primary-key strings."""
+        from enums import AnalysisType, JobStatus
+        from models import AnalysisJob
+
+        exp = Experiment()
+        exp.id = "testx"
+        exp.name = "Test Experiment"
+        db_session.add(exp)
+        db_session.flush()
+
+        db_session.add(
+            AnalysisJob(
+                id="job1",
+                experiment_id="testx",
+                simulation_path="md.simulation.json",
+                analysis_name=AnalysisType.RMSDS,
+                trajectory_file="traj.xtc",
+                _last_known_status=JobStatus.FINISHED,
+            )
+        )
+        db_session.commit()
+
+        response = client.get("/dash/api/experiments")
+
+        assert response.status_code == HTTPStatus.OK
+        data = json.loads(response.data)
+        jobs = data[0]["analysis_jobs"]
+        assert len(jobs) == 1
+        assert isinstance(jobs[0], dict)
+        assert jobs[0]["id"] == "job1"
+        assert jobs[0]["analysis_name"] == "rmsds"
+        assert jobs[0]["status"] == "FINISHED"
+
+    def test_eager_loads_relations_without_n_plus_one(self, client: FlaskClient, db_session: Session) -> None:
+        """The 5s dashboard poll dumps every experiment — job relations must not lazy-load per row."""
+        from enums import AnalysisType, DeviceType, JobStatus
+        from models import AnalysisJob, GromacsJob, TunerJob
+        from sqlalchemy import event
+
+        for exp_id in ("exp01", "exp02"):
+            exp = Experiment()
+            exp.id = exp_id
+            exp.name = f"Test {exp_id}"
+            db_session.add(exp)
+            db_session.flush()
+            db_session.add(Notebook(experiment_id=exp_id))
+            db_session.add(
+                GromacsJob(
+                    id=f"gmx-{exp_id}",
+                    experiment_id=exp_id,
+                    simulation_path="md.simulation.json",
+                    np=1,
+                    ntomp=1,
+                    pme=DeviceType.CPU,
+                    nb=DeviceType.CPU,
+                    _last_known_status=JobStatus.FINISHED,
+                )
+            )
+            db_session.add(
+                TunerJob(
+                    id=f"tun-{exp_id}",
+                    experiment_id=exp_id,
+                    simulation_path="md.simulation.json",
+                    nsteps=25000,
+                    is_stopped=True,
+                )
+            )
+            db_session.add(
+                AnalysisJob(
+                    id=f"ana-{exp_id}",
+                    experiment_id=exp_id,
+                    simulation_path="md.simulation.json",
+                    analysis_name=AnalysisType.RMSDS,
+                    trajectory_file="traj.xtc",
+                    _last_known_status=JobStatus.FINISHED,
+                )
+            )
+        db_session.commit()
+
+        statements: list[str] = []
+        engine = db_session.get_bind()
+
+        def count_selects(_conn, _cursor, statement: str, _parameters, _context, _executemany) -> None:
+            if statement.lstrip().upper().startswith("SELECT"):
+                statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", count_selects)
+        try:
+            response = client.get("/dash/api/experiments")
+        finally:
+            event.remove(engine, "before_cursor_execute", count_selects)
+
+        assert response.status_code == HTTPStatus.OK
+        assert len(json.loads(response.data)) == 2
+        # Eager ceiling: 1 root query + 1 selectin per relation (notebook, tuner, simulation, analysis).
+        assert len(statements) <= 6, "lazy per-experiment loads detected:\n" + "\n---\n".join(statements)
 
 
 class TestGetExperiment:
@@ -467,6 +570,8 @@ class TestCreateExperiment:
             assert response.status_code == HTTPStatus.CREATED
             data = json.loads(response.data)
             assert data["name"] == "Test File Experiment"
+            assert data["module_category"] is None
+            assert "module_id" not in data
             mock_clone.assert_called_once()
 
             # Verify files were saved
@@ -550,6 +655,8 @@ class TestCreateExperimentCuratedModule:
             mock_module.assert_called_once()
             data = json.loads(response.data)
             assert data["notebooks_repo"] == "https://github.com/default/repo.git"
+            assert data["module_category"] == "protein"
+            assert "module_id" not in data
 
     def test_curated_rejects_invalid_module(self, client: FlaskClient, tmp_path: Path) -> None:
         """Curated creation should reject an unknown or engine-incompatible module ID."""

@@ -917,6 +917,11 @@ components:
         updated_at: {type: string, format: date-time}
         name: {type: string}
         module_name: {$ref: '#/components/schemas/NullableString'}
+        # Category snapshot of the curated module; null = custom workflow.
+        module_category:
+          oneOf:
+            - {$ref: '#/components/schemas/NotebookModuleCategory'}
+            - {type: 'null'}
         # Manifest path of the most recently active simulation; the experiment's
         # step/status and dashboard detail rows always inherit from it.
         latest_simulation_path: {type: [string, 'null']}
@@ -1125,8 +1130,7 @@ components:
         created_at: {type: string, format: date-time}
         status: {$ref: '#/components/schemas/JobStatus'}
         sim_progress:
-          type: number
-          nullable: true
+          type: [number, 'null']
           description: Fraction (0-1) of the simulation's steps available when the analysis inputs were snapshotted; null when unknown.
       additionalProperties: true
     AnalysisJobRequest:

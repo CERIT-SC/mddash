@@ -1,9 +1,8 @@
 import type { NotebookModule } from "@/api/generated/models"
 import { ENGINE_LABELS } from "@/shared/engine"
+import { ModuleIconTile } from "@/shared/module-icon"
 import { CATEGORY_LABELS } from "@/shared/notebook-module"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@e-infra/design-system"
-
-import { ModuleIconTile } from "./module-icon"
 
 type WorkflowCardProps = {
   module: NotebookModule
@@ -29,7 +28,7 @@ export function WorkflowCard({ module, onSelect }: WorkflowCardProps) {
                 type="button"
                 onClick={onSelect}
                 aria-label={`${module.name} · ${ENGINE_LABELS[module.engine]}`}
-                className="focus-visible:ring-border-focus/50 block w-full rounded-sm text-left after:absolute after:inset-0 focus-visible:ring-[3px] focus-visible:outline-none"
+                className="focus-visible:ring-border-focus/50 block w-full cursor-pointer rounded-sm text-left after:absolute after:inset-0 focus-visible:ring-[3px] focus-visible:outline-none"
               >
                 <span className="block truncate" title={module.name}>
                   {module.name}

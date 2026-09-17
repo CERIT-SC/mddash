@@ -3,13 +3,13 @@ import { useState } from "react"
 import { useListNotebookModules } from "@/api/generated/client"
 import type { NotebookModule } from "@/api/generated/models"
 import { asEngineFilter, ENGINE_LABELS, ENGINE_ORDER, ENGINE_TAB_VALUES, type EngineFilter } from "@/shared/engine"
+import { CustomWorkflowIcon } from "@/shared/module-icon"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Button, H1, H3, Skeleton, Tabs, TabsList, TabsTrigger } from "@e-infra/design-system"
 import { Link } from "@tanstack/react-router"
 import { ArrowLeft } from "lucide-react"
 
 import { CreateExperimentDialog } from "./create-experiment-dialog"
-import { CustomWorkflowIcon } from "./module-icon"
 import { WorkflowCard } from "./workflow-card"
 
 export type NewExperimentSearch = { engine?: EngineFilter }

@@ -1,10 +1,8 @@
 import type { Notebook } from "@/api/generated/models"
 import { NotebookLauncher } from "@/features/notebook"
-import { InfoBanner } from "@/shared/ui/info-banner"
-import { Button, cn, Small } from "@e-infra/design-system"
-import { Check, ExternalLink } from "lucide-react"
-
-type GuideState = "done" | "active" | "pending"
+import { StepGuide, type StepGuideState, type StepGuideStep } from "@/shared/ui/step-guide"
+import { Button, Small } from "@e-infra/design-system"
+import { ExternalLink } from "lucide-react"
 
 type SetupGuideProps = {
   experimentId: string
@@ -15,7 +13,7 @@ type SetupGuideProps = {
   manifestExists: boolean
 }
 
-/** A step is done as soon as its outcome holds; the first unmet one claims "active". */
+/** A manifest implies the pipeline already ran, so a stopped notebook never rewinds the guide. */
 export function SetupGuide({
   experimentId,
   notebook,
@@ -24,11 +22,11 @@ export function SetupGuide({
   openHref,
   manifestExists,
 }: SetupGuideProps) {
-  const step1: GuideState = ready ? "done" : "active"
-  const step2: GuideState = manifestExists ? "done" : ready ? "active" : "pending"
-  const step3: GuideState = ready && manifestExists ? "active" : "pending"
+  const step1: StepGuideState = ready || manifestExists ? "done" : "active"
+  const step2: StepGuideState = manifestExists ? "done" : ready ? "active" : "pending"
+  const step3: StepGuideState = manifestExists ? "active" : "pending"
 
-  const steps: { title: React.ReactNode; body: React.ReactNode; state: GuideState }[] = [
+  const steps: StepGuideStep[] = [
     {
       title: "Start the notebook",
       state: step1,
@@ -75,55 +73,5 @@ export function SetupGuide({
     },
   ]
 
-  return (
-    <InfoBanner role="region" aria-label="Setup guide" className="border-info-600 flex flex-col gap-3 border-l-8">
-      <p className="font-medium tracking-tight">Step by step</p>
-      <ol className="space-y-4">
-        {steps.map((step, index) => (
-          <li key={index} className="relative flex gap-3">
-            {index < steps.length - 1 && (
-              <span className="bg-border absolute top-7 left-3.5 h-[calc(100%-1.75rem)] w-px" aria-hidden="true" />
-            )}
-            <StepMarker state={step.state} index={index} />
-            <div className="min-w-0 flex-1 space-y-2 pt-0.5">
-              <p
-                className={cn(
-                  "text-sm font-semibold",
-                  step.state === "done" && "text-text-muted line-through",
-                  step.state === "pending" && "text-text-muted"
-                )}
-              >
-                {step.title}
-              </p>
-              {step.body}
-            </div>
-          </li>
-        ))}
-      </ol>
-    </InfoBanner>
-  )
-}
-
-function StepMarker({ state, index }: { state: GuideState; index: number }) {
-  if (state === "done") {
-    return (
-      <span
-        aria-label={`Step ${index + 1} done`}
-        className="bg-success text-success-foreground flex size-7 shrink-0 items-center justify-center rounded-full"
-      >
-        <Check className="size-4" aria-hidden="true" />
-      </span>
-    )
-  }
-  return (
-    <span
-      aria-current={state === "active" ? "step" : undefined}
-      className={cn(
-        "flex size-7 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
-        state === "active" ? "bg-primary text-primary-foreground" : "border-border text-text-muted border"
-      )}
-    >
-      {index + 1}
-    </span>
-  )
+  return <StepGuide title="Step by step" label="Setup guide" steps={steps} />
 }

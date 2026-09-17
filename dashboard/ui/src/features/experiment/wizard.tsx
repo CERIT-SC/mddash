@@ -46,6 +46,10 @@ export type WizardSearch = {
   trial?: string
   /** Tune step view; only the non-default "manual" is worth a param. */
   mode?: "manual"
+  /** Picked analysis on the Analyze step; dropped when switching simulations. */
+  analysis?: string
+  /** Analyze step tab; only the non-default "analysis" is worth a param. */
+  tab?: "analysis"
 }
 
 type ExperimentWizardProps = {
@@ -117,14 +121,16 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
   const requestedStep = search.step ?? (ownStep > 1 ? ownStep : 0)
   const unlocked = requestedStep <= maxStep || (publishUnlocked && requestedStep === LAST_STEP)
   const step = selected === undefined ? 0 : unlocked ? requestedStep : ownStep
-  const tab = selected?.simulation_path ?? CREATE_TAB
+  const simTab = selected?.simulation_path ?? CREATE_TAB
 
-  // Setup/Tune params ride along on every navigation so remounts keep user context.
+  // Wizard-step params ride along on every navigation so remounts keep user context.
   const updateSearch = (next: WizardSearch) =>
     onSearchChange({
       source: search.source,
       trial: search.trial,
       mode: search.mode,
+      analysis: search.analysis,
+      tab: search.tab,
       ...next,
       simulation:
         next.simulation === undefined || next.simulation === CREATE_TAB
@@ -142,9 +148,9 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
       simulation={selected}
       creating={creating}
       source={search.source ?? "notebook"}
-      onSourceChange={(source) => updateSearch({ simulation: tab, step: search.step, source })}
+      onSourceChange={(source) => updateSearch({ simulation: simTab, step: search.step, source })}
       onOpenSimulation={(simulation) => updateSearch({ simulation })}
-      onContinue={() => updateSearch({ simulation: tab, step: 1 })}
+      onContinue={() => updateSearch({ simulation: simTab, step: 1 })}
     />,
     ...(selected === undefined
       ? []
@@ -156,38 +162,44 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
             simulation={selected}
             trialId={search.trial}
             mode={search.mode ?? "tuning"}
-            onTrialIdChange={(trial) => updateSearch({ simulation: tab, step: search.step, trial })}
+            onTrialIdChange={(trial) => updateSearch({ simulation: simTab, step: search.step, trial })}
             onModeChange={(mode) =>
               updateSearch({
-                simulation: tab,
+                simulation: simTab,
                 step: search.step,
                 mode: mode === "manual" ? "manual" : undefined,
               })
             }
-            onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
+            onStepChange={(next) => updateSearch({ simulation: simTab, step: next })}
           />,
           <RunStep
             key="run"
             experimentId={experimentId}
             engine={data.engine}
             simulation={selected}
-            onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
+            onStepChange={(next) => updateSearch({ simulation: simTab, step: next })}
           />,
           <AnalyzeStep
             key="analyze"
             experimentId={experimentId}
             engine={data.engine}
             simulation={selected}
+            selectedAnalysis={search.analysis}
+            onSelectedAnalysisChange={(analysis) => updateSearch({ simulation: simTab, step: search.step, analysis })}
+            tab={search.tab ?? "trajectory"}
+            onTabChange={(next) =>
+              updateSearch({ simulation: simTab, step: search.step, tab: next === "analysis" ? "analysis" : undefined })
+            }
             canPublish={publishUnlocked}
-            onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
+            onStepChange={(next) => updateSearch({ simulation: simTab, step: next })}
           />,
           <PublishStep
             key="publish"
             experiment={data}
             simulation={selected}
-            onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
+            onStepChange={(next) => updateSearch({ simulation: simTab, step: next })}
             // Re-asserting the typed search drops the MDRepo OAuth params from the URL.
-            onOAuthHandled={() => updateSearch({ simulation: tab, step })}
+            onOAuthHandled={() => updateSearch({ simulation: simTab, step })}
           />,
         ]),
   ]
@@ -200,8 +212,8 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         <SimulationTabs
           experimentId={experimentId}
           simulations={list}
-          value={tab}
-          onValueChange={(simulation) => updateSearch({ simulation })}
+          value={simTab}
+          onValueChange={(simulation) => updateSearch({ simulation, analysis: undefined })}
           onDeleted={(deleted) => {
             // The URL still points at the deleted manifest; {} resets to the default tab.
             if (
@@ -221,7 +233,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
             <Stepper
               step={step}
               totalSteps={STEPS.length}
-              onStepChange={(next) => updateSearch({ simulation: tab, step: next })}
+              onStepChange={(next) => updateSearch({ simulation: simTab, step: next })}
             >
               <WizardStepperHeader
                 experimentId={experimentId}

@@ -1,0 +1,446 @@
+.jp-PipelineTracker-strip {
+  --pt-brand: var(--jp-brand-color1);
+  --pt-brand-hover: var(--jp-brand-color0);
+  --pt-success: var(--jp-success-color1);
+  --pt-error: var(--jp-error-color1);
+  --pt-border: var(--jp-border-color2);
+  --pt-muted: var(--jp-ui-font-color2);
+  --pt-radius: 7px;
+  --pt-ring: 0 0 0 2px color-mix(in srgb, var(--pt-brand) 28%, transparent);
+
+  background: var(--jp-layout-color1);
+  border-block: 1px solid color-mix(in srgb, var(--pt-border) 78%, transparent);
+  box-sizing: border-box;
+  color: var(--jp-ui-font-color1);
+  display: block;
+  flex: 0 0 auto;
+  font-family: var(--jp-ui-font-family);
+  min-height: 56px;
+  min-width: 100%;
+  overflow: visible;
+  position: relative;
+  width: 100%;
+  z-index: 1;
+}
+
+.jp-PipelineTracker-stripInner {
+  box-sizing: border-box;
+  padding: 14px 18px 12px;
+  width: 100%;
+}
+
+.jp-PipelineTracker-stripMain,
+.jp-PipelineTracker-stripActions,
+.jp-PipelineTracker-current,
+.jp-PipelineTracker-step,
+.jp-PipelineTracker-dot,
+.jp-PipelineTracker-primaryButton,
+.jp-PipelineTracker-toggleButton {
+  align-items: center;
+  display: flex;
+}
+
+.jp-PipelineTracker-stripMain {
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 2px;
+  min-width: 0;
+}
+
+.jp-PipelineTracker-stripCopy,
+.jp-PipelineTracker-stepBody,
+.jp-PipelineTracker-currentText {
+  min-width: 0;
+}
+
+.jp-PipelineTracker-stripTitle {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.jp-PipelineTracker-summary {
+  color: var(--pt-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 2px 0 0;
+}
+
+.jp-PipelineTracker-stripActions {
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.jp-PipelineTracker-percent,
+.jp-PipelineTracker-primaryButton,
+.jp-PipelineTracker-toggleButton {
+  border-radius: var(--pt-radius);
+  box-sizing: border-box;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  min-height: 32px;
+}
+
+.jp-PipelineTracker-percent {
+  background: var(--jp-layout-color2);
+  border: 1px solid var(--pt-border);
+  color: var(--jp-ui-font-color1);
+  min-width: 52px;
+  padding: 9px 11px;
+  text-align: center;
+}
+
+.jp-PipelineTracker-primaryButton,
+.jp-PipelineTracker-toggleButton {
+  border: 1px solid transparent;
+  cursor: pointer;
+  gap: 7px;
+  padding: 8px 12px;
+}
+
+.jp-PipelineTracker-primaryButton {
+  background: var(--pt-brand);
+  color: white;
+}
+
+.jp-PipelineTracker-primaryButton:hover {
+  background: var(--pt-brand-hover);
+}
+
+.jp-PipelineTracker-toggleButton {
+  background: var(--jp-layout-color2);
+  border-color: var(--pt-border);
+  color: var(--jp-ui-font-color1);
+}
+
+.jp-PipelineTracker-toggleButton:hover {
+  background: var(--jp-layout-color3);
+}
+
+.jp-PipelineTracker-primaryButton:focus-visible,
+.jp-PipelineTracker-toggleButton:focus-visible {
+  box-shadow: var(--pt-ring);
+  outline: none;
+}
+
+.jp-PipelineTracker-primaryButton:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.jp-PipelineTracker-playIcon {
+  border-block: 5px solid transparent;
+  border-left: 8px solid currentColor;
+  display: inline-block;
+  height: 0;
+  width: 0;
+}
+
+.jp-PipelineTracker-toggleIcon {
+  border: solid currentColor;
+  border-width: 0 2px 2px 0;
+  height: 6px;
+  transform: rotate(45deg);
+  width: 6px;
+}
+
+.jp-PipelineTracker-strip[data-collapsed="true"] .jp-PipelineTracker-toggleIcon {
+  transform: rotate(-135deg);
+}
+
+.jp-PipelineTracker-bar {
+  background: color-mix(in srgb, var(--pt-border) 70%, transparent);
+  border-radius: 999px;
+  height: 8px;
+  margin: 12px 0 10px;
+  overflow: hidden;
+}
+
+.jp-PipelineTracker-fill {
+  background: linear-gradient(90deg, var(--pt-brand), #23896f);
+  height: 100%;
+  transition: width 160ms ease;
+}
+
+.jp-PipelineTracker-current {
+  background: var(--jp-layout-color0);
+  border: 1px solid var(--pt-border);
+  border-left: 4px solid var(--pt-border);
+  border-radius: var(--pt-radius);
+  box-sizing: border-box;
+  gap: 8px;
+  line-height: 1.35;
+  margin: 0 0 12px;
+  overflow: hidden;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+.jp-PipelineTracker-currentLabel {
+  color: var(--pt-muted);
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.jp-PipelineTracker-currentText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jp-PipelineTracker-current[data-status="running"] {
+  border-left-color: var(--pt-brand);
+}
+
+.jp-PipelineTracker-current[data-status="error"] {
+  background: color-mix(in srgb, var(--pt-error) 10%, var(--jp-layout-color0));
+  border-color: color-mix(in srgb, var(--pt-error) 48%, var(--pt-border));
+  border-left-color: var(--pt-error);
+  color: var(--pt-error);
+  font-weight: 600;
+}
+
+.jp-PipelineTracker-current[data-status="complete"] {
+  background: color-mix(in srgb, var(--pt-success) 9%, var(--jp-layout-color0));
+  border-color: color-mix(in srgb, var(--pt-success) 42%, var(--pt-border));
+  border-left-color: var(--pt-success);
+}
+
+.jp-PipelineTracker-stripSteps {
+  display: grid;
+  gap: 13px 0;
+  grid-template-columns: repeat(auto-fit, minmax(178px, 1fr));
+  overflow: visible;
+  padding: 4px 0 2px;
+}
+
+.jp-PipelineTracker-step {
+  align-items: flex-start;
+  background: transparent;
+  border: 0;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 18px;
+}
+
+.jp-PipelineTracker-dot {
+  background: var(--jp-layout-color1);
+  border: 2px solid var(--pt-border);
+  border-radius: 999px;
+  box-sizing: border-box;
+  color: var(--pt-muted);
+  flex: 0 0 28px;
+  font-size: 11px;
+  font-weight: 700;
+  height: 28px;
+  justify-content: center;
+  width: 28px;
+}
+
+.jp-PipelineTracker-stepNumber {
+  color: var(--pt-muted);
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+}
+
+.jp-PipelineTracker-label {
+  color: var(--pt-muted);
+  display: -webkit-box;
+  font-size: 12px;
+  line-height: 1.25;
+  max-height: 32px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.jp-PipelineTracker-step[data-status="done"] .jp-PipelineTracker-dot {
+  background: var(--pt-success);
+  border-color: var(--pt-success);
+  color: white;
+}
+
+.jp-PipelineTracker-step[data-status="done"] .jp-PipelineTracker-label,
+.jp-PipelineTracker-step[data-status="running"] .jp-PipelineTracker-label {
+  color: var(--jp-ui-font-color1);
+}
+
+.jp-PipelineTracker-step[data-status="done"] .jp-PipelineTracker-stepNumber {
+  color: color-mix(in srgb, var(--pt-success) 75%, var(--jp-ui-font-color1));
+}
+
+.jp-PipelineTracker-step[data-status="running"] .jp-PipelineTracker-dot {
+  border-color: var(--pt-brand);
+  color: var(--pt-brand);
+  font-size: 0;
+}
+
+.jp-PipelineTracker-step[data-status="running"] .jp-PipelineTracker-dot::after {
+  animation: jp-PipelineTracker-spin 700ms linear infinite;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  border-top-color: transparent;
+  content: "";
+  height: 12px;
+  width: 12px;
+}
+
+.jp-PipelineTracker-step[data-status="running"] .jp-PipelineTracker-stepNumber {
+  color: var(--pt-brand);
+}
+
+.jp-PipelineTracker-step[data-status="error"] .jp-PipelineTracker-dot {
+  background: var(--pt-error);
+  border-color: var(--pt-error);
+  color: white;
+}
+
+.jp-PipelineTracker-step[data-status="error"] .jp-PipelineTracker-label,
+.jp-PipelineTracker-step[data-status="error"] .jp-PipelineTracker-stepNumber {
+  color: var(--pt-error);
+  font-weight: 700;
+}
+
+.jp-PipelineTracker-strip[data-status="error"] {
+  border-bottom-color: color-mix(in srgb, var(--pt-error) 45%, var(--pt-border));
+}
+
+.jp-PipelineTracker-strip[data-status="error"] .jp-PipelineTracker-fill {
+  background: linear-gradient(90deg, var(--pt-error), #b42318);
+}
+
+.jp-PipelineTracker-strip[data-status="complete"] {
+  border-bottom-color: color-mix(in srgb, var(--pt-success) 45%, var(--pt-border));
+}
+
+.jp-PipelineTracker-strip[data-status="complete"] .jp-PipelineTracker-fill {
+  background: linear-gradient(90deg, var(--pt-success), #1f8f5f);
+}
+
+.jp-PipelineTracker-strip[data-status="complete"] .jp-PipelineTracker-percent {
+  border-color: color-mix(in srgb, var(--pt-success) 35%, var(--pt-border));
+  color: color-mix(in srgb, var(--pt-success) 80%, var(--jp-ui-font-color1));
+}
+
+.jp-PipelineTracker-strip[data-collapsed="true"] .jp-PipelineTracker-current {
+  margin: 10px 0 0;
+}
+
+.jp-PipelineTracker-empty {
+  color: var(--pt-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  margin-top: 10px;
+}
+
+@keyframes jp-PipelineTracker-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 720px) {
+  .jp-PipelineTracker-stripMain {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .jp-PipelineTracker-stripActions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+
+.jp-PipelineTracker-dialogOverlay {
+  align-items: center;
+  background: var(--jp-dialog-background, rgba(0, 0, 0, 0.4));
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  position: fixed;
+  z-index: 10000;
+}
+
+.jp-PipelineTracker-dialog {
+  background: var(--jp-layout-color1);
+  border: 1px solid var(--jp-border-color2);
+  border-radius: 10px;
+  box-shadow: var(--jp-elevation-z20, 0 10px 40px rgba(0, 0, 0, 0.3));
+  box-sizing: border-box;
+  color: var(--jp-ui-font-color1);
+  font-family: var(--jp-ui-font-family);
+  margin: 24px;
+  max-width: 420px;
+  padding: 24px;
+  text-align: left;
+}
+
+.jp-PipelineTracker-dialogHeader {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.jp-PipelineTracker-dialogIcon {
+  align-items: center;
+  background: var(--jp-success-color1);
+  border-radius: 999px;
+  color: white;
+  display: flex;
+  flex: 0 0 20px;
+  font-size: 11px;
+  font-weight: 700;
+  height: 20px;
+  justify-content: center;
+  width: 20px;
+}
+
+.jp-PipelineTracker-dialogIcon::after {
+  content: "\2713";
+}
+
+.jp-PipelineTracker-dialogTitle {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 0;
+}
+
+.jp-PipelineTracker-dialogBody {
+  color: var(--jp-ui-font-color2);
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 10px 0 18px;
+}
+
+.jp-PipelineTracker-dialogButton {
+  background: var(--jp-brand-color1);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: white;
+  cursor: pointer;
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  margin-left: auto;
+  min-height: 34px;
+  padding: 9px 16px;
+}
+
+.jp-PipelineTracker-dialogButton:hover {
+  background: var(--jp-brand-color0);
+}
+
+.jp-PipelineTracker-dialogButton:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--jp-brand-color1) 28%, transparent);
+  outline: none;
+}

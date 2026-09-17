@@ -1,4 +1,5 @@
 import { useGetNotebookConfig, useListExperiments } from "@/api/generated/client"
+import type { Experiment } from "@/api/generated/models"
 import { isNotebookActive } from "@/shared/pod-status"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import {
@@ -21,6 +22,19 @@ import { Link } from "@tanstack/react-router"
 import { Plus } from "lucide-react"
 
 import { ExperimentCard } from "./experiment-card"
+import { hasLiveWork } from "./live-work"
+
+// Matches the wizard's simulations heartbeat.
+const EXPERIMENTS_POLL_MS = 5000
+
+// Card statuses and detail rows only move when the list refetches — poll
+// while any experiment has live work, rest when idle.
+const pollWhileAnyJobActive =
+  (pollMs: number) =>
+  (query: { state: { data: unknown } }): number | false => {
+    const data = query.state.data as { status: number; data: Experiment[] } | undefined
+    return data?.status === 200 && data.data.some(hasLiveWork) ? pollMs : false
+  }
 
 export type DashboardSearch = {
   q?: string
@@ -56,7 +70,9 @@ function EmptyExperimentsCard() {
 }
 
 export function Dashboard({ search, onSearchChange }: DashboardProps) {
-  const query = useListExperiments({ query: { retry: false } })
+  const query = useListExperiments({
+    query: { retry: false, refetchInterval: pollWhileAnyJobActive(EXPERIMENTS_POLL_MS) },
+  })
   const config = useGetNotebookConfig({ query: { retry: false } })
 
   if (query.isError) {

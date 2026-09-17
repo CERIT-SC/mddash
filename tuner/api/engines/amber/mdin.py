@@ -16,9 +16,13 @@ def simulation_length_ns(content: str) -> float | None:
 
 
 def _read_param(content: str, key: str) -> float | None:
-    """Read a numeric `key = value,` namelist parameter anywhere in a line (case-insensitive)."""
+    """
+    Read a numeric `key = value,` namelist parameter anywhere in a line (case-insensitive).
+
+    Accepts Fortran reals (`2.`, `.002`, `1e-3`); rejects digit soup like `1.2.3`.
+    """
     match = re.search(
-        rf"(?:^|[\s,]){re.escape(key)}\s*=\s*([+-]?[\d.]+(?:[eE][+-]?\d+)?)\s*,?",
+        rf"(?:^|[\s,]){re.escape(key)}\s*=\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)(?![\d.eE+-])",
         content,
         flags=re.IGNORECASE | re.MULTILINE,
     )

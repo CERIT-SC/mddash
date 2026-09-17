@@ -11,6 +11,8 @@ export const Route = createFileRoute("/experiments/$experimentId")({
     source: search.source === "manual" ? "manual" : undefined,
     trial: typeof search.trial === "string" && search.trial !== "" ? search.trial : undefined,
     mode: search.mode === "manual" ? "manual" : undefined,
+    analysis: typeof search.analysis === "string" && search.analysis !== "" ? search.analysis : undefined,
+    tab: search.tab === "analysis" ? "analysis" : undefined,
   }),
   component: function WizardRoute() {
     const { experimentId } = Route.useParams()

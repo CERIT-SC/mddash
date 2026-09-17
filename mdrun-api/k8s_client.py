@@ -29,6 +29,13 @@ _SECURITY_CONTEXT = {
     "allowPrivilegeEscalation": False,
     "capabilities": {"drop": ["ALL"]},
 }
+# With backoffLimit 0 a terminal pod phase (Succeeded/Failed) is the final outcome
+# even before the job controller stamps the Job object; other phases are pre-start.
+_POD_PHASE_STATUS = {
+    "Running": JobStatus.RUNNING,
+    "Succeeded": JobStatus.FINISHED,
+    "Failed": JobStatus.ERROR,
+}
 
 
 def _q(value: str) -> str:
@@ -465,11 +472,7 @@ def get_job_status(ns: str, name: str) -> JobStatus:
             try:
                 pods = core_v1.list_namespaced_pod(namespace=ns, label_selector=f"job-name={name}", limit=1)
                 if pods.items:
-                    phase = pods.items[0].status.phase
-                    if phase == "Running":
-                        return JobStatus.RUNNING
-                    # Pod exists but not running yet (Pending, ContainerCreating, etc.)
-                    return JobStatus.PENDING
+                    return _POD_PHASE_STATUS.get(pods.items[0].status.phase, JobStatus.PENDING)
             except ApiException:
                 pass
             # Can't determine pod phase — fall back to RUNNING since job is active

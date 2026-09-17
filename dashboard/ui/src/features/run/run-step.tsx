@@ -58,8 +58,9 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
   const job = jobQuery.job
   const live = job !== undefined && job.is_live
   const failed = job?.status === JobStatus.ERROR
-  // Mirrors the server ladder: a running job already unlocks Analyze (partial trajectories).
-  const analyzable = job !== undefined && (job.status === JobStatus.RUNNING || job.status === JobStatus.FINISHED)
+  // The ladder in props is the single source — the same value the stepper
+  // consumes; the server holds it at Run until progress parses from the log.
+  const analyzable = simulation.step >= 3
 
   // Tuner trials power the config table's estimates; a 404 just means "no tuning".
   const tunerQuery = useGetTunerJob(experimentId, simulation.simulation_path, { query: { retry: false } })
@@ -178,7 +179,12 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
           <ArrowLeft aria-hidden />
           Back
         </Button>
-        <Button type="button" disabled={!analyzable} onClick={() => onStepChange(3)}>
+        <Button
+          type="button"
+          disabled={!analyzable}
+          title={analyzable ? undefined : "Available once the run reports progress"}
+          onClick={() => onStepChange(3)}
+        >
           Analyze
           <ArrowRight aria-hidden />
         </Button>

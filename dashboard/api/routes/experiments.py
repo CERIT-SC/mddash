@@ -5,9 +5,10 @@ from enums import Engine
 from extensions import db
 from flask import Blueprint, Response, jsonify, request, session
 from flask.typing import ResponseReturnValue
-from models import Experiment
+from models import AmberJob, Experiment, GromacsJob
 from notebook_modules import load_catalog
 from schemas import ExperimentSchema, PublishSchema
+from sqlalchemy.orm import selectinload
 from token_manager import MDRepoTokenManager
 from validators import validate_git_url
 from werkzeug.exceptions import BadRequest, Conflict, Unauthorized
@@ -20,10 +21,16 @@ def list_experiments() -> Response:
     """
     List all experiments.
 
-    Returns:
-        Response: JSON response with the list of all experiments.
+    The dashboard polls this every 5s while any job is live — job relations
+    load eagerly so the dump costs a flat query set regardless of row count.
     """
-    experiments: list[Experiment] = Experiment.query.all()
+    experiments: list[Experiment] = Experiment.query.options(
+        selectinload(Experiment.notebook),
+        selectinload(Experiment.tuner_jobs),
+        # JTI subclass rows need a batched select, else each dump lazy-loads one row per job.
+        selectinload(Experiment.simulation_jobs).selectin_polymorphic([GromacsJob, AmberJob]),
+        selectinload(Experiment.analysis_jobs),
+    ).all()
     schema = ExperimentSchema(many=True)
     return jsonify(schema.dump(experiments))
 

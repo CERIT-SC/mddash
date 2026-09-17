@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useMemo, useState } from "react"
+import { lazy, memo, Suspense, useEffect, useMemo, useState } from "react"
 
 import { Engine, JobStatus, type Simulation } from "@/api/generated/models"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
@@ -66,16 +66,25 @@ type AnalysisPanelProps = {
   experimentId: string
   engine: Engine
   simulation: Simulation
+  /** URL-owned picked analysis; only the user's picker changes it. */
+  selectedAnalysis: string | undefined
+  onSelectedAnalysisChange: (analysis: string | undefined) => void
   /** Test seam; production callers omit it. */
   pollMs?: number
 }
 
 /** Analysis picker + runner: choose an analysis, track its job, render its graph.
  * Empty, running, failed, and no-data states are durable — never toast-only. */
-export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: AnalysisPanelProps) {
+export function AnalysisPanel({
+  experimentId,
+  engine,
+  simulation,
+  selectedAnalysis,
+  onSelectedAnalysisChange,
+  pollMs,
+}: AnalysisPanelProps) {
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [showLogs, setShowLogs] = useState(false)
-  const [selectedAnalysis, setSelectedAnalysis] = useState<string | null>(null)
   const [preprocessingMode, setPreprocessingMode] = useState(PREPROCESSING_OPTIONS[0].value)
   const [selectedVariant, setSelectedVariant] = useState<string | null>(null)
 
@@ -92,12 +101,11 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
 
   const simulationPath = simulation.simulation_path
 
-  // Steps stay mounted across simulation tab switches, so per-simulation picks
-  // reset explicitly or B inherits A's analysis/variant. (PublishStep pattern.)
+  // Steps stay mounted across simulation tab switches, so a stale variant
+  // resets explicitly or B inherits A's.
   const [prevSimulationPath, setPrevSimulationPath] = useState(simulationPath)
   if (prevSimulationPath !== simulationPath) {
     setPrevSimulationPath(simulationPath)
-    setSelectedAnalysis(null)
     setSelectedVariant(null)
   }
 
@@ -115,21 +123,30 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
 
   const mutations = useAnalysisMutations(experimentId)
 
-  // Resolve the picker value: explicit choice wins, then a running job's, then
-  // the first analysis that already has results.
-  const resolvedAnalysis = useMemo(() => {
-    if (selectedAnalysis) return selectedAnalysis
+  // Default before any pick: the running job's analysis, else the first with results.
+  const defaultAnalysis = useMemo(() => {
     if (activeJob) return activeJob.analysis_name
     const analysisWithResults = AVAILABLE_ANALYSES.find(
       (a) => availableResults.has(a.resultName) || [...availableResults].some((r) => r.startsWith(`${a.resultName}-`))
     )
     return analysisWithResults?.value ?? null
-  }, [selectedAnalysis, activeJob, availableResults])
+  }, [activeJob, availableResults])
+
+  // The pick is user-owned: seeded once, then only the picker changes it —
+  // job failures or appearing results never move the selection.
+  useEffect(() => {
+    if (selectedAnalysis === undefined) {
+      if (defaultAnalysis !== null) onSelectedAnalysisChange(defaultAnalysis)
+    } else if (!AVAILABLE_ANALYSES.some((a) => a.value === selectedAnalysis)) {
+      onSelectedAnalysisChange(undefined)
+    }
+  }, [selectedAnalysis, defaultAnalysis, onSelectedAnalysisChange])
+
+  const resolvedAnalysis = selectedAnalysis ?? defaultAnalysis
 
   const analysisConfig = useMemo(() => AVAILABLE_ANALYSES.find((a) => a.value === resolvedAnalysis), [resolvedAnalysis])
   const selectedResultName = analysisConfig?.resultName ?? null
-  const submissionAnalysis = (selectedAnalysis ?? resolvedAnalysis) as
-    (typeof AVAILABLE_ANALYSES)[number]["value"] | null
+  const submissionAnalysis = resolvedAnalysis as (typeof AVAILABLE_ANALYSES)[number]["value"] | undefined
 
   const variantResults = useMemo(() => {
     if (!analysisConfig?.hasVariants || !selectedResultName) return []
@@ -181,16 +198,31 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
     lastJobForAnalysis?.status === JobStatus.FINISHED ? (lastJobForAnalysis.sim_progress ?? null) : null
   const calculatedPercent = simProgress !== null && simProgress < 1 ? Math.round(simProgress * 100) : null
 
-  // The logs pane hides itself only while a live job has nothing to show yet.
-  const logsVisible = showLogs && activeJob?.status !== JobStatus.PENDING
-  const logJobId = logsVisible ? (activeJob?.id ?? lastJobForAnalysis?.id ?? null) : null
+  const calculatedBadge =
+    !activeJob && calculatedPercent !== null ? (
+      <Badge variant="outline" className="bg-warning-200 border-warning-500 text-warning-800">
+        <TriangleAlert aria-hidden />
+        Calculated at {calculatedPercent}%
+      </Badge>
+    ) : null
+
+  // The pane hides itself while a live job has nothing to show yet or no job remains.
+  const logJobId = activeJob?.status === JobStatus.PENDING ? null : (activeJob?.id ?? lastJobForAnalysis?.id ?? null)
+  const logsVisible = showLogs && logJobId !== null
   const logsQuery = useAnalysisLogs(
     experimentId,
-    logJobId,
+    logsVisible ? logJobId : null,
     activeJob !== undefined && activeJob.status !== JobStatus.PENDING,
     pollMs
   )
   const jobLogs = logsQuery.data?.status === 200 ? logsQuery.data.data : undefined
+
+  const logsToggle = (
+    <Button size="sm" variant="ghost" onClick={() => setShowLogs((value) => !value)}>
+      <Terminal aria-hidden />
+      {logsVisible ? "Hide logs" : "View logs"}
+    </Button>
+  )
 
   const handleCalculate = () => {
     if (unavailableReason || !submissionAnalysis) return
@@ -220,9 +252,8 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
             value={resolvedAnalysis ?? SELECT_NONE}
             onValueChange={(value) => {
               if (value === SELECT_NONE) return
-              setSelectedAnalysis(value)
-              // Reset synchronously (same batched event): a stale variant from
-              // the previous analysis must never become the fetched result.
+              onSelectedAnalysisChange(value)
+              // Same batched event: a stale variant must never become the fetched result.
               setSelectedVariant(null)
             }}
           >
@@ -290,13 +321,6 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
 
         {/* Run controls share the `ml-auto` rail so they always sit flush right. */}
         <div className="ml-auto flex items-center gap-3">
-          {!activeJob && calculatedPercent !== null && (
-            <Badge variant="outline" className="border-warning text-warning gap-1">
-              <TriangleAlert className="h-3 w-3" aria-hidden />
-              Calculated at {calculatedPercent}%
-            </Badge>
-          )}
-
           {activeJob && (
             <>
               {/* Status unit the same height as the sm buttons keeps the row on
@@ -322,14 +346,10 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
                 <Square fill="currentColor" aria-hidden />
                 Stop calculation
               </Button>
-              {activeJob.status !== JobStatus.PENDING && (
-                <Button size="sm" variant="ghost" onClick={() => setShowLogs((value) => !value)}>
-                  <Terminal aria-hidden />
-                  {logsVisible ? "Hide logs" : "View logs"}
-                </Button>
-              )}
             </>
           )}
+          {/* The failure alert owns the failed case; otherwise the toggle outlives the run. */}
+          {logJobId !== null && !failedForAnalysis && logsToggle}
         </div>
       </div>
 
@@ -341,10 +361,7 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
           <AlertTitle>Previous analysis run failed.</AlertTitle>
           <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
             <span>Inspect the logs to understand the failure before retrying.</span>
-            <Button size="sm" variant="ghost" onClick={() => setShowLogs((value) => !value)}>
-              <Terminal aria-hidden />
-              {logsVisible ? "Hide logs" : "View logs"}
-            </Button>
+            {logsToggle}
           </AlertDescription>
         </Alert>
       )}
@@ -354,23 +371,26 @@ export function AnalysisPanel({ experimentId, engine, simulation, pollMs }: Anal
       {logsVisible && <LogPane logs={jobLogs ?? ""} isLoading={logsQuery.isLoading} />}
 
       <div>
-        {/* View concern, not a run concern: picks which computed variant the
-            chart below shows, so it lives with the results, not the run row. */}
-        {resolvedAnalysis && hasResult && variantResults.length > 0 && (
-          <div className="mb-3 flex items-center justify-end gap-2">
-            <span className="text-text-muted text-sm">Variant</span>
-            <Select value={activeVariant ?? undefined} onValueChange={setSelectedVariant}>
-              <SelectTrigger className="w-64" aria-label="Variant">
-                <SelectValue placeholder="Select variant..." />
-              </SelectTrigger>
-              <SelectContent>
-                {variantResults.map((v) => (
-                  <SelectItem key={v} value={v}>
-                    {variantLabelMap.get(v) ?? getAnalysisLabel(v)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        {resolvedAnalysis && hasResult && (calculatedBadge !== null || variantResults.length > 0) && (
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            {calculatedBadge}
+            {variantResults.length > 0 && (
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-text-muted text-sm">Variant</span>
+                <Select value={activeVariant ?? undefined} onValueChange={setSelectedVariant}>
+                  <SelectTrigger className="w-64" aria-label="Variant">
+                    <SelectValue placeholder="Select variant..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {variantResults.map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {variantLabelMap.get(v) ?? getAnalysisLabel(v)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         )}
 

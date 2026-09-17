@@ -202,9 +202,31 @@ describe("RunStep running job", () => {
 
   it("enables Analyze mid-run (partial trajectories are analyzable)", async () => {
     mockRun()
-    const spies = renderRun()
+    const spies = renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: 3 }) })
 
     await screen.findByText("20%")
+    const button = screen.getByRole("button", { name: /analyze/i })
+    expect(button).toBeEnabled()
+
+    await userEvent.click(button)
+    expect(spies.onStepChange).toHaveBeenCalledWith(3)
+  })
+
+  it("keeps Analyze disabled while the ladder holds the run at step 2, even with progress parsed", async () => {
+    // The button follows the same ladder value the stepper consumes — no
+    // second client-side copy of the unlock rule from a different query.
+    mockRun({ initial: gmxJob({ nsteps_done: 5000 }) })
+    renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: 2 }) })
+
+    expect(await screen.findByText("50%")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /analyze/i })).toBeDisabled()
+  })
+
+  it("enables Analyze once the ladder reaches step 3, even before the job payload carries progress", async () => {
+    mockRun({ initial: gmxJob({ nsteps: null, nsteps_done: null, estimated_time: null }) })
+    const spies = renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: 3 }) })
+
+    expect(await screen.findByText("Preparing")).toBeInTheDocument()
     const button = screen.getByRole("button", { name: /analyze/i })
     expect(button).toBeEnabled()
 
@@ -240,7 +262,7 @@ describe("RunStep finished job", () => {
     mockRun({
       initial: gmxJob({ status: "FINISHED", is_live: false, nsteps_done: 10000, estimated_time: 0, performance: 62.5 }),
     })
-    const spies = renderRun()
+    const spies = renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: 3 }) })
 
     expect(await screen.findByText("Finished")).toBeInTheDocument()
     expect(screen.getByText("10,000 / 10,000 steps")).toBeInTheDocument()
@@ -278,7 +300,7 @@ describe("RunStep error job", () => {
       initial: gmxJob({ status: "ERROR", is_live: false }),
       logs: { stderr: "simulation exploded\n" },
     })
-    renderRun()
+    renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: 2 }) })
 
     expect(await screen.findByText("Failed")).toBeInTheDocument()
     expect(await screen.findByText("simulation exploded")).toBeInTheDocument()

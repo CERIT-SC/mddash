@@ -48,8 +48,8 @@ def _simulation_length_ns_remote(tpr_path: str, nsteps_override: int | None = No
     return _read_sim_length_ns(tpr_path, nsteps_override)
 
 
-def _read_sim_length_ns(tpr_path: str, nsteps_override: int | None = None) -> float | None:
-    """Read the simulation length via `gmx dump -s`; override wins over the .tpr's step count."""
+def _read_dump(tpr_path: str) -> tuple[int, float] | None:
+    """(nsteps, delta_t in ps) from a local `gmx dump -s`; None on failure."""
     try:
         proc = subprocess.run(
             ["gmx", "dump", "-s", tpr_path],
@@ -64,10 +64,22 @@ def _read_sim_length_ns(tpr_path: str, nsteps_override: int | None = None) -> fl
     if proc.returncode != 0:
         logger.warning("gmx dump failed for %s (rc=%d): %s", tpr_path, proc.returncode, proc.stderr.strip())
         return None
-
     parsed = parse_dump_output(proc.stdout)
     if parsed is None:
         logger.warning("Could not parse nsteps/delta_t from gmx dump output for %s", tpr_path)
+    return parsed
+
+
+def delta_t_ps(tpr_path: str) -> float | None:
+    """Timestep (ps) of a .tpr via local `gmx dump` (never dispatched remotely — safe on workers); None on failure."""
+    parsed = _read_dump(tpr_path)
+    return parsed[1] if parsed else None
+
+
+def _read_sim_length_ns(tpr_path: str, nsteps_override: int | None = None) -> float | None:
+    """Read the simulation length via `gmx dump -s`; override wins over the .tpr's step count."""
+    parsed = _read_dump(tpr_path)
+    if parsed is None:
         return None
     nsteps, delta_t = parsed
     if nsteps_override is not None:
