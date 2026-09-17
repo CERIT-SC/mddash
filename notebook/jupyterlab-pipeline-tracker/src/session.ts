@@ -20,6 +20,12 @@ import type { NotebookViewSnapshot, PipelineStep } from './types';
 const MIN_STRIP_HEIGHT = 56;
 const STRIP_BOTTOM_GAP = 15;
 
+// Step ids embed cell indices, which shift on cell insert/remove — statuses
+// carry over by source+label (positional among duplicates) instead.
+function statusKey(step: PipelineStep): string {
+  return `${step.source}:${step.label}`;
+}
+
 export class PipelineSession {
   readonly panel: NotebookPanel;
 
@@ -28,6 +34,10 @@ export class PipelineSession {
   private readonly stripNode: HTMLDivElement;
   private readonly resizeHandler = (): void => {
     this.syncStripHeight();
+  };
+  private readonly onCellsChanged = (): void => {
+    this.refreshStepsKeepingStatus();
+    this.render();
   };
   private stripHeight = 0;
   private steps: PipelineStep[] = [];
@@ -47,6 +57,7 @@ export class PipelineSession {
     BoxLayout.setStretch(this.stripWidget, 0);
     BoxLayout.setSizeBasis(this.stripWidget, MIN_STRIP_HEIGHT);
     window.addEventListener('resize', this.resizeHandler);
+    this.panel.content.model?.cells.changed.connect(this.onCellsChanged);
     this.insertStrip();
     this.refreshSteps();
     this.render();
@@ -78,6 +89,7 @@ export class PipelineSession {
 
   dispose(): void {
     window.removeEventListener('resize', this.resizeHandler);
+    this.panel.content.model?.cells.changed.disconnect(this.onCellsChanged);
     this.stripWidget.dispose();
     logDebug('Session disposed', { notebook: this.panel.title.label, id: this.panel.id });
   }
@@ -201,9 +213,14 @@ export class PipelineSession {
   }
 
   private refreshStepsKeepingStatus(): void {
-    const previousSteps = new Map(this.steps.map(step => [step.id, step]));
+    const previousByKey = new Map<string, PipelineStep[]>();
+    for (const step of this.steps) {
+      const bucket = previousByKey.get(statusKey(step)) ?? [];
+      bucket.push(step);
+      previousByKey.set(statusKey(step), bucket);
+    }
     this.steps = discoverSteps(this.panel).map(step => {
-      const previousStep = previousSteps.get(step.id);
+      const previousStep = previousByKey.get(statusKey(step))?.shift();
       return previousStep ? { ...step, status: previousStep.status, error: previousStep.error } : step;
     });
     this.rebuildCellMap();
@@ -341,11 +358,10 @@ export class PipelineSession {
 
   private applyStripHeight(): void {
     const headerNode = this.panel.contentHeader.node;
-
-    this.stripNode.style.minHeight = `${MIN_STRIP_HEIGHT}px`;
-
     const measuredStripHeight = this.measureStripContentHeight() + STRIP_BOTTOM_GAP;
-    const heightChanged = measuredStripHeight !== this.stripHeight;
+    // Runs 3x per render (syncStripHeight); the fit/update relayout is only
+    // meaningful when the measured height actually moved.
+    if (measuredStripHeight === this.stripHeight) return;
 
     this.stripHeight = measuredStripHeight;
     this.stripNode.style.minHeight = `${measuredStripHeight}px`;
@@ -359,14 +375,12 @@ export class PipelineSession {
     this.panel.contentHeader.update();
     this.panel.fit();
     this.panel.update();
-    if (heightChanged) {
-      logDebug('Synced strip height', {
-        notebook: this.panel.title.label,
-        measuredStripHeight,
-        contentHeaderSizeBasis: BoxLayout.getSizeBasis(this.panel.contentHeader),
-        stripSizeBasis: BoxLayout.getSizeBasis(this.stripWidget)
-      });
-    }
+    logDebug('Synced strip height', {
+      notebook: this.panel.title.label,
+      measuredStripHeight,
+      contentHeaderSizeBasis: BoxLayout.getSizeBasis(this.panel.contentHeader),
+      stripSizeBasis: BoxLayout.getSizeBasis(this.stripWidget)
+    });
   }
 
   private measureStripContentHeight(): number {

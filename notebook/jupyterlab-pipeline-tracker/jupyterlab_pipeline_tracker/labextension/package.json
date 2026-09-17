@@ -34,7 +34,7 @@
     "extension": true,
     "outputDir": "jupyterlab_pipeline_tracker/labextension",
     "_build": {
-      "load": "static/remoteEntry.7d6e70c0e7ec9acd1f87.js",
+      "load": "static/remoteEntry.fe34ebdf8218ff0bc0ea.js",
       "extension": "./extension",
       "style": "./style"
     }

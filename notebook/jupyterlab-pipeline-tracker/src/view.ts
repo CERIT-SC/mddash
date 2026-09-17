@@ -20,7 +20,7 @@ export function executionErrorMessage(args: any): string {
   return name || value || 'Cell execution failed';
 }
 
-export function doneCount(steps: PipelineStep[]): number {
+function doneCount(steps: PipelineStep[]): number {
   return steps.filter(step => step.status === 'done').length;
 }
 

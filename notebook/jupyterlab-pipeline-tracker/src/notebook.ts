@@ -42,7 +42,7 @@ export function metadataValue(panel: NotebookPanel, key: string): any {
   return model.metadata?.[key];
 }
 
-export function cellMetadataValue(cellModel: any, key: string): any {
+function cellMetadataValue(cellModel: any, key: string): any {
   if (typeof cellModel?.getMetadata === 'function') {
     const value = cellModel.getMetadata(key);
     if (value !== undefined) {
