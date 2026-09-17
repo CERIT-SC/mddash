@@ -44,6 +44,13 @@ class MdrunJob(db.Model):  # type: ignore
     @property
     def status(self) -> JobStatus:
         """The current job status from Kubernetes; the database row is updated as a side effect."""
+        # STOPPED is a user-initiated terminal state and sticky: the row intentionally
+        # outlives its K8s job, and during the deletion grace window Kubernetes still
+        # reports the pod as running — trusting it here would resurrect the row as
+        # RUNNING with nothing left to converge it back.
+        if self.last_status == JobStatus.STOPPED:
+            return JobStatus.STOPPED
+
         job_status = k8s_client.get_job_status(ns=NAMESPACE, name=self.job_name)
 
         if job_status == JobStatus.UNKNOWN:

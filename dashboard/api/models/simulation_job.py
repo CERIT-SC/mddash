@@ -8,6 +8,7 @@ from cachetools import cached
 from clients import mdrun
 from enums import Engine, JobStatus
 from extensions import db
+from sqlalchemy import Index, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from utils import count_lines
 
@@ -27,6 +28,18 @@ class SimulationJob(db.Model):  # type: ignore
     """
 
     __tablename__ = "simulation_jobs"
+    # At most one un-converged (not-yet-or-still-live) segment per simulation: extend
+    # creates its row with NULL last_known_status, so a second concurrent extension
+    # violates this index instead of spawning two pods that append to one trajectory.
+    __table_args__ = (
+        Index(
+            "uq_simulation_jobs_live_segment",
+            "experiment_id",
+            "simulation_path",
+            unique=True,
+            sqlite_where=text("last_known_status IS NULL OR last_known_status IN ('PENDING', 'RUNNING', 'UNKNOWN')"),
+        ),
+    )
     __mapper_args__: ClassVar[dict[str, Any]] = {"polymorphic_on": "engine"}
 
     # ID of the job inside the database
@@ -53,6 +66,10 @@ class SimulationJob(db.Model):  # type: ignore
     _nsteps: Mapped[int | None] = mapped_column("nsteps", db.Integer, nullable=True)
     # Performance (ns/day)
     _performance: Mapped[float | None] = mapped_column("performance", db.Float, nullable=True)
+    # Frozen final progress of a terminal segment — set by the extend flow so the
+    # segment's history row keeps displaying its own step count after the appended
+    # log starts carrying the next segment's rows. Null while live; parsers fill in.
+    _nsteps_done: Mapped[int | None] = mapped_column("nsteps_done", db.Integer, nullable=True)
     # Last successfully-fetched non-UNKNOWN status (fallback when MDRun API is unavailable)
     _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", db.Enum(JobStatus), nullable=True)
 
@@ -133,6 +150,11 @@ class SimulationJob(db.Model):  # type: ignore
                 mdrun.delete_amber_job(self.id)
 
         self._cleanup_files()
+
+    def freeze_nsteps_done(self, value: int) -> None:
+        """Persist a frozen terminal progress value once (extend flow), never overwriting."""
+        if self._nsteps_done is None:
+            self._nsteps_done = value
 
     def stop(self) -> None:
         """

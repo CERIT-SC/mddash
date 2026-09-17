@@ -87,7 +87,10 @@ class AmberJob(SimulationJob):
 
     @property
     def nsteps_done(self) -> int | None:
-        """Number of steps completed so far."""
+        """Number of steps completed so far (persisted for terminal rows once frozen)."""
+        if self._nsteps_done is not None:
+            return self._nsteps_done
+
         if self._performance:
             return self._nsteps
 

@@ -10,6 +10,7 @@ from config import DATA_DIR, S3_BUCKET
 from enums import DeviceType, Engine, JobStatus
 from extensions import db
 from sqlalchemy import ForeignKey
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 from utils import nsteps_override, strip_run_control_args, tail
 from werkzeug.exceptions import (
@@ -124,7 +125,10 @@ class GromacsJob(SimulationJob):
 
     @property
     def nsteps_done(self) -> int | None:
-        """Number of steps completed so far."""
+        """Number of steps completed so far (persisted for terminal rows once frozen)."""
+        if self._nsteps_done is not None:
+            return self._nsteps_done
+
         # If simulation has finished, return total steps
         if self._performance:
             return self._nsteps
@@ -279,7 +283,8 @@ class GromacsJob(SimulationJob):
 
         Raises:
             BadRequest: If no previous segment exists, the latest segment is still live,
-                no checkpoint file is available, or extra_args contains ``-cpi``.
+                no checkpoint file is available, extra_args contains ``-cpi``, or a
+                concurrent extension is already in progress.
         """
         latest: GromacsJob | None = (
             cls.query
@@ -310,12 +315,22 @@ class GromacsJob(SimulationJob):
 
         # Freeze the latest segment's log-derived fields before the appended log adds
         # a new segment block (parsers take the last match, i.e. the newest segment's).
+        # Freezing happens before submission so the old segment's history row keeps
+        # showing its own numbers for the whole extension.
+        _ = latest.init_step, latest.start_timestamp, latest.performance
         previous_total = latest.nsteps
-        _ = latest.init_step, latest.start_timestamp
         if previous_total is None:
             raise BadRequest("Cannot determine the previous run's total step count from its log.")
 
-        total = previous_total + nsteps
+        # Anchor on actual progress, not the previous target: a stopped segment
+        # resumes from where it stood, so "extend by N" must mean N more steps
+        # from that point (the same value is frozen for the history display).
+        progress = latest.nsteps_done
+        if progress is not None:
+            latest.freeze_nsteps_done(progress)
+        base = progress if progress is not None else previous_total
+
+        total = base + nsteps
         cpt_name = f"{Path(tpr_rel_path).name.removesuffix('.tpr')}.cpt"
         extra_args = " ".join(filter(None, [base_args, f"-cpi {cpt_name}", f"-nsteps {total}"]))
 
@@ -342,7 +357,15 @@ class GromacsJob(SimulationJob):
         )
         job._nsteps = total
         db.session.add(job)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # A concurrent extension claimed the live-segment slot first (partial
+            # unique index) — don't leave the just-submitted sibling orphaned on
+            # the cluster, appending to the same trajectory.
+            db.session.rollback()
+            mdrun.delete_gmx_job(mdrun_job["id"])
+            raise BadRequest("Another extension of this simulation is already in progress.") from None
         logger.info(
             f"Extended GROMACS simulation {simulation_path} (experiment {experiment.id}) "
             f"by {nsteps} steps to {total} as job {job.id}"

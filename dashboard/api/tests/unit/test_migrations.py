@@ -307,3 +307,18 @@ def test_models_match_migrated_schema(tmp_path: Path) -> None:
         extra = migrated_tables[table] - create_all_tables[table]
         assert not missing, f"Columns in models but not in migrations for '{table}': {missing}"
         assert not extra, f"Columns in migrations but not in models for '{table}': {extra}"
+
+
+def test_migration_011_adds_segment_progress_and_live_uniqueness(tmp_path: Path) -> None:
+    """nsteps_done column and the partial live-segment unique index exist at head."""
+    app = _make_app(tmp_path / "test.db")
+    _upgrade_to(app, "head")
+    with app.app_context():
+        assert "nsteps_done" in _column_names(db.engine, "simulation_jobs")
+
+        indexes = {ix["name"]: ix for ix in sa_inspect(db.engine).get_indexes("simulation_jobs")}
+        live_index = indexes.get("uq_simulation_jobs_live_segment")
+        assert live_index is not None, "live-segment unique index missing"
+        assert live_index["unique"]  # SQLite reflects 1/0
+        assert set(live_index["column_names"]) == {"experiment_id", "simulation_path"}
+        assert live_index.get("dialect_options", {}).get("sqlite_where") is not None

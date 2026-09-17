@@ -350,6 +350,101 @@ class TestExtend:
         # which is what the old override-first precedence would have produced.
         assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 155000"
 
+    def test_extend_anchors_on_actual_progress_and_freezes_display(
+        self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """A segment stopped short of its target extends from where it stood, not from the target."""
+        mdrun = _mock_mdrun(mocker)
+        sim_path = self._setup_finished_segment(app, experiment_id, tmp_path, _nsteps=150000)
+        # Stopped at 120k out of the 150k target — the log tail holds the truth.
+        with app.app_context():
+            seg = db.session.get(GromacsJob, "seg-1")
+            assert seg is not None
+            seg._last_known_status = JobStatus.STOPPED
+            seg._nsteps_done = None
+            db.session.commit()
+        (tmp_path / experiment_id / "production/protein.log").write_text(
+            "header\n        120000    2400000.0000     1000.0000\n"
+        )
+        self._write_checkpoint(tmp_path / experiment_id)
+
+        response = client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/extend", json={"nsteps": 20000})
+
+        assert response.status_code == HTTPStatus.CREATED
+        kwargs = mdrun["create"].call_args.kwargs
+        # 120000 done + 20000 requested — NOT 150000 (target) + 20000.
+        assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 140000"
+        with app.app_context():
+            old = db.session.get(GromacsJob, "seg-1")
+            assert old is not None
+            # The frozen value pins the history row: it must keep showing 120,000.
+            assert old._nsteps_done == 120000
+            assert old.nsteps_done == 120000
+            new_segment = (
+                GromacsJob.query
+                .filter_by(experiment_id=experiment_id, simulation_path=sim_path)
+                .order_by(GromacsJob.created_at.desc())
+                .first()
+            )
+            assert new_segment._nsteps == 140000
+
+    def test_extend_falls_back_to_target_when_progress_unparseable(
+        self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """With no parseable step rows (e.g. missing log), the anchor falls back to the target."""
+        mdrun = _mock_mdrun(mocker)
+        sim_path = self._setup_finished_segment(app, experiment_id, tmp_path, _nsteps=150000)
+        with app.app_context():
+            seg = db.session.get(GromacsJob, "seg-1")
+            assert seg is not None
+            seg._last_known_status = JobStatus.STOPPED
+            db.session.commit()
+        self._write_checkpoint(tmp_path / experiment_id)
+
+        response = client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/extend", json={"nsteps": 20000})
+
+        assert response.status_code == HTTPStatus.CREATED
+        assert mdrun["create"].call_args.kwargs["extra_args"] == "-cpi protein.cpt -nsteps 170000"
+
+    def test_extend_race_loser_gets_400_and_its_mdrun_job_is_deleted(
+        self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """A concurrent extension winning between the live check and our insert is rejected atomically."""
+        mdrun = _mock_mdrun(mocker)
+        sim_path = self._setup_finished_segment(app, experiment_id, tmp_path, _nsteps=100000, _performance=68.5)
+        self._write_checkpoint(tmp_path / experiment_id)
+
+        def concurrent_winner(**kwargs: object) -> dict:
+            # A rival request commits its segment after our is_live check but
+            # before our insert — exactly the window the unique index closes.
+            rival = GromacsJob(
+                id="rival-segment",
+                experiment_id=experiment_id,
+                simulation_path=sim_path,
+                np=8,
+                ntomp=1,
+                pme=DeviceType.CPU,
+                nb=DeviceType.GPU,
+                engine=Engine.GMX,
+            )
+            db.session.add(rival)
+            db.session.commit()
+            return {"id": "losing-segment", "status": "running"}
+
+        mdrun["create"].side_effect = concurrent_winner
+
+        response = client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/extend", json={"nsteps": 50000})
+
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert "already in progress" in response.get_json()["detail"]
+        # The orphaned cluster job behind the losing insert is torn down.
+        mdrun["delete_gmx"].assert_called_once_with("losing-segment")
+        with app.app_context():
+            ids = {
+                j.id for j in GromacsJob.query.filter_by(experiment_id=experiment_id, simulation_path=sim_path).all()
+            }
+            assert ids == {"seg-1", "rival-segment"}, "the losing segment must be rolled back"
+
     def test_extend_rejects_manifest_with_cpi(
         self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
     ) -> None:
@@ -409,6 +504,25 @@ class TestExtend:
         response = client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/extend", json={"nsteps": nsteps})
 
         assert response.status_code == HTTPStatus.BAD_REQUEST
+
+
+class TestLiveSegmentIndex:
+    """DB-level guarantee: one un-converged/live segment per simulation."""
+
+    @pytest.mark.parametrize("winner_status", [None, JobStatus.PENDING, JobStatus.RUNNING])
+    def test_second_live_segment_is_rejected(
+        self, app: Flask, experiment_id: str, winner_status: JobStatus | None
+    ) -> None:
+        from sqlalchemy.exc import IntegrityError
+
+        _add_gmx_job(app, experiment_id, "protein.simulation.json", "winner", winner_status)
+        with pytest.raises(IntegrityError):
+            _add_gmx_job(app, experiment_id, "protein.simulation.json", "rival", None)
+
+    def test_second_segment_after_finish_is_allowed(self, app: Flask, experiment_id: str) -> None:
+        _add_gmx_job(app, experiment_id, "protein.simulation.json", "winner", JobStatus.FINISHED)
+        _add_gmx_job(app, experiment_id, "protein.simulation.json", "extension", None)
+        _add_gmx_job(app, experiment_id, "protein.simulation.json", "stopped-extension", JobStatus.STOPPED)
 
 
 class TestSegmentHistory:

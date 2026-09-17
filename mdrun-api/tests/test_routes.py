@@ -168,6 +168,23 @@ class TestStopGmxJob:
         assert response.status_code == HTTPStatus.OK
         assert json.loads(response.data)["status"] == "stopped"
 
+    def test_stopped_status_is_sticky_through_the_termination_window(
+        self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]
+    ) -> None:
+        """STOPPED must not resurrect as RUNNING while the K8s pod is still terminating."""
+        self._create_job(db_session, "sticky-job", JobStatus.STOPPED)
+        # The job object is deleted with Background propagation: Kubernetes still
+        # reports RUNNING during the 60s grace. The property must not consult it.
+        mock_k8s_client["get_job_status"].return_value = JobStatus.RUNNING
+
+        response = client.get("/api/jobs/gmx/sticky-job")
+
+        assert response.status_code == HTTPStatus.OK
+        assert json.loads(response.data)["status"] == "stopped"
+        mock_k8s_client["get_job_status"].assert_not_called()
+        row = db_session.get(MdrunJob, "sticky-job")
+        assert row is not None and row.last_status == JobStatus.STOPPED
+
     def test_stop_terminal_job_is_noop(
         self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]
     ) -> None:

@@ -266,7 +266,9 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
 
       {confirmExtend && job !== undefined && (
         <ExtendDialog
-          currentTotal={job.nsteps ?? null}
+          // The server anchors the cumulative total on actual progress, so the hint
+          // must too: a stopped run resumes from where it stood, not its target.
+          currentTotal={job.nsteps_done ?? job.nsteps ?? null}
           pending={mutations.extend.isPending}
           onExtend={extendRun}
           onCancel={() => setConfirmExtend(false)}
