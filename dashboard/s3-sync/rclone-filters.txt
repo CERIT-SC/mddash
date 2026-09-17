@@ -3,6 +3,7 @@
 - **/.storage_size
 - .storage_size.tmp*
 - **/.storage_size.tmp*
+- /_archives/**
 - #*#
 - *.swp
 - *.tmp

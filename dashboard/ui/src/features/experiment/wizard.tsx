@@ -13,6 +13,7 @@ import { Stepper, StepperContent } from "@/shared/ui/stepper"
 import { Card, CardContent, Separator, Skeleton } from "@e-infra/design-system"
 import { Atom, ChartColumn, Play, SlidersHorizontal, Upload } from "lucide-react"
 
+import { ArchivedNotice } from "./archived-notice"
 import { WizardStepperHeader } from "./stepper-header"
 import { TitleRow } from "./title-row"
 
@@ -95,6 +96,11 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         <Skeleton className="h-16 w-full" />
       </section>
     )
+  }
+
+  // Archived experiments are frozen: the wizard's steps all need local files.
+  if (data.archived_at !== null) {
+    return <ArchivedNotice experiment={data} />
   }
 
   // The unnamed create tab doubles as the empty state when there are no manifests to select.

@@ -89,6 +89,9 @@ if not all(v for r in (NOTEBOOK_RESOURCES, ANALYSIS_RESOURCES) for d in r.values
 
 
 S3_BUCKET = os.environ.get("S3_BUCKET", "")
+S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "")
+S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "")
+S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "")
 
 if not S3_BUCKET:
     logger.warning("One or more S3 configuration environment variables are not set. S3 functionality may be limited.")
@@ -125,3 +128,9 @@ MDREPO_UPLOADER_IMAGE = os.environ.get("MDREPO_UPLOADER_IMAGE", "")
 
 if not MDREPO_UPLOADER_IMAGE:
     logger.warning("MDREPO_UPLOADER_IMAGE is not set. Durable MDRepo uploads will not work.")
+
+# Archive worker Job image — injected from Helm like other sidecar images.
+ARCHIVE_WORKER_IMAGE = os.environ.get("ARCHIVE_WORKER_IMAGE", "")
+
+if not ARCHIVE_WORKER_IMAGE:
+    logger.warning("ARCHIVE_WORKER_IMAGE is not set. Experiment archiving will not work.")

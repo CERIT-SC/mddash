@@ -20,6 +20,7 @@ auth_image := $(registry)/$(shell yq '.sidecars.auth.image' $(config))
 api_image := $(registry)/$(shell yq '.sidecars.api.image' $(config))
 s3sync_image := $(registry)/$(shell yq '.sidecars.s3sync.image' $(config))
 mdrepo_uploader_image := $(registry)/$(shell yq '.sidecars.mdrepoUploader.image' $(config))
+archive_worker_image := $(registry)/$(shell yq '.sidecars.archiveWorker.image' $(config))
 
 tag := $(IMAGE_TAG)
 
@@ -51,7 +52,7 @@ test-auth: ## Run auth tests
 
 # Build targets
 .PHONY: build
-build: build-proxy build-auth build-api build-s3sync build-mdrepo-uploader ## Build all sidecar images
+build: build-proxy build-auth build-api build-s3sync build-mdrepo-uploader build-archive-worker ## Build all sidecar images
 
 .PHONY: build-ui
 build-ui: ## Build Dashboard UI image
@@ -79,9 +80,13 @@ build-s3sync: ## Build s3-sync image
 build-mdrepo-uploader: ## Build mdrepo-uploader image
 	docker build $(platform) -f mdrepo-uploader/Dockerfile -t $(mdrepo_uploader_image):$(tag) .
 
+.PHONY: build-archive-worker
+build-archive-worker: ## Build archive-worker image
+	docker build $(platform) -f archive-worker/Dockerfile -t $(archive_worker_image):$(tag) .
+
 # Push targets
 .PHONY: push
-push: push-ui push-proxy push-auth push-api push-s3sync push-mdrepo-uploader ## Build and push all sidecar images
+push: push-ui push-proxy push-auth push-api push-s3sync push-mdrepo-uploader push-archive-worker ## Build and push all sidecar images
 
 .PHONY: push-ui
 push-ui: build-ui ## Build and push UI image
@@ -107,6 +112,10 @@ push-s3sync: build-s3sync ## Build and push s3-sync image
 push-mdrepo-uploader: build-mdrepo-uploader ## Build and push mdrepo-uploader image
 	docker push $(mdrepo_uploader_image):$(tag)
 
+.PHONY: push-archive-worker
+push-archive-worker: build-archive-worker ## Build and push archive-worker image
+	docker push $(archive_worker_image):$(tag)
+
 # Clean targets
 .PHONY: clean
 clean: ## Remove all Docker images
@@ -116,3 +125,4 @@ clean: ## Remove all Docker images
 	docker rmi $(api_image):$(tag) 2>/dev/null || true
 	docker rmi $(s3sync_image):$(tag) 2>/dev/null || true
 	docker rmi $(mdrepo_uploader_image):$(tag) 2>/dev/null || true
+	docker rmi $(archive_worker_image):$(tag) 2>/dev/null || true

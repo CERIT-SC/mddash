@@ -21,6 +21,7 @@ import {
 import { Link } from "@tanstack/react-router"
 import { Plus } from "lucide-react"
 
+import { groupByArchiveRecency, isArchived } from "./archive"
 import { ExperimentCard } from "./experiment-card"
 import { hasLiveWork } from "./live-work"
 
@@ -39,6 +40,7 @@ const pollWhileAnyJobActive =
 export type DashboardSearch = {
   q?: string
   sort?: "oldest"
+  tab?: "archived"
 }
 
 type DashboardProps = {
@@ -83,14 +85,20 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
   const concurrentLimit = config.data?.status === 200 ? config.data.data.concurrentLimit : undefined
   const q = search.q?.trim().toLowerCase() ?? ""
 
+  const tab = search.tab === "archived" ? "archived" : "active"
+
   const filtered = (experiments ?? [])
     .filter((experiment) => !q || experiment.name.toLowerCase().includes(q))
     .sort((a, b) =>
       search.sort === "oldest" ? a.created_at.localeCompare(b.created_at) : b.created_at.localeCompare(a.created_at)
     )
 
-  const running = filtered.filter((experiment) => isNotebookActive(experiment.notebook?.status))
-  const stopped = filtered.filter((experiment) => !isNotebookActive(experiment.notebook?.status))
+  const active = filtered.filter((experiment) => !isArchived(experiment))
+  const archived = filtered.filter(isArchived)
+  const archivedGroups = groupByArchiveRecency(archived)
+
+  const running = active.filter((experiment) => isNotebookActive(experiment.notebook?.status))
+  const stopped = active.filter((experiment) => !isNotebookActive(experiment.notebook?.status))
 
   return (
     <section className="space-y-6 md:space-y-8">
@@ -104,19 +112,26 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <Tabs value="active">
+        <Tabs
+          value={tab}
+          onValueChange={(value) => onSearchChange({ ...search, tab: value === "archived" ? "archived" : undefined })}
+        >
           <TabsList>
             <TabsTrigger value="active">
               Active{" "}
               {experiments !== undefined && (
                 <Badge variant="secondary" className="ml-2">
-                  {experiments.length}
+                  {active.length}
                 </Badge>
               )}
             </TabsTrigger>
-            {/* TODO: archived experiments are not available in the API yet */}
-            <TabsTrigger value="archived" disabled>
-              Archived
+            <TabsTrigger value="archived">
+              Archived{" "}
+              {experiments !== undefined && archived.length > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {archived.length}
+                </Badge>
+              )}
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -156,6 +171,23 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
         <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
           <EmptyExperimentsCard />
         </div>
+      ) : tab === "archived" ? (
+        archived.length === 0 ? (
+          <p className="text-text-muted py-12 text-center">No archived experiments.</p>
+        ) : (
+          <div className="space-y-8">
+            {archivedGroups.map((group) => (
+              <div key={group.label} className="space-y-4">
+                <SectionHeading count={group.experiments.length}>{group.label}</SectionHeading>
+                <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {group.experiments.map((experiment) => (
+                    <ExperimentCard key={experiment.id} experiment={experiment} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       ) : filtered.length === 0 ? (
         <p className="text-text-muted py-12 text-center">{`No experiments match “${search.q}”.`}</p>
       ) : (

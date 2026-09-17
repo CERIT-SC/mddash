@@ -35,6 +35,8 @@ import type {
   AnalysisJobRequest,
   AnalysisResult,
   AnalysisVariant,
+  ArchiveAttempt,
+  ArchiveStatus,
   AuthorizeMDRepoParams,
   BadRequestResponse,
   CompleteMDRepoAuthorizationParams,
@@ -1678,6 +1680,388 @@ export function useGetPublishStatus<TData = Awaited<ReturnType<typeof getPublish
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getGetPublishStatusQueryOptions(experimentId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type archiveExperimentResponse202 = {
+  data: ArchiveAttempt
+  status: 202
+}
+
+export type archiveExperimentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type archiveExperimentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type archiveExperimentResponse409 = {
+  data: ConflictResponse
+  status: 409
+}
+
+export type archiveExperimentResponseDefault = {
+  data: ProblemResponse
+  status: Exclude<HTTPStatusCodes, 202 | 400 | 404 | 409>
+}
+
+export type archiveExperimentResponseSuccess = (archiveExperimentResponse202) & {
+  headers: Headers;
+};
+export type archiveExperimentResponseError = (archiveExperimentResponse400 | archiveExperimentResponse404 | archiveExperimentResponse409 | archiveExperimentResponseDefault) & {
+  headers: Headers;
+};
+
+export const getArchiveExperimentUrl = (experimentId: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/archive`
+}
+
+/**
+ * Mirror the experiment to S3 at _archives/<id>/ and free the local PVC (verified before deletion).
+ * @summary Archive an experiment
+ */
+export const archiveExperiment = async (experimentId: string, options?: RequestInit): Promise<archiveExperimentResponseSuccess> => {
+
+  const res = await fetch(getArchiveExperimentUrl(experimentId),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: archiveExperimentResponseError['data'], status?: number} = new globalThis.Error();
+    const data : archiveExperimentResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: archiveExperimentResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as archiveExperimentResponseSuccess
+}
+
+
+
+
+
+export const getArchiveExperimentMutationKey = () => ['archiveExperiment'] as const;
+
+export const getArchiveExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveExperiment>>, TError,ArchiveExperimentMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveExperiment>>, TError,ArchiveExperimentMutationVariables, TContext> => {
+
+const mutationKey = getArchiveExperimentMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveExperiment>>, ArchiveExperimentMutationVariables> = (props) => {
+          const {experimentId} = props ?? {};
+
+          return  archiveExperiment(experimentId,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchiveExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof archiveExperiment>>>
+
+    export type ArchiveExperimentMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number }
+    export type ArchiveExperimentMutationVariables = {experimentId: string}
+
+    /**
+ * @summary Archive an experiment
+ */
+export const useArchiveExperiment = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveExperiment>>, TError,ArchiveExperimentMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof archiveExperiment>>,
+        TError,
+        ArchiveExperimentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getArchiveExperimentMutationOptions(options), queryClient);
+    }
+
+export type restoreExperimentResponse202 = {
+  data: ArchiveAttempt
+  status: 202
+}
+
+export type restoreExperimentResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type restoreExperimentResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type restoreExperimentResponse409 = {
+  data: ConflictResponse
+  status: 409
+}
+
+export type restoreExperimentResponseDefault = {
+  data: ProblemResponse
+  status: Exclude<HTTPStatusCodes, 202 | 400 | 404 | 409>
+}
+
+export type restoreExperimentResponseSuccess = (restoreExperimentResponse202) & {
+  headers: Headers;
+};
+export type restoreExperimentResponseError = (restoreExperimentResponse400 | restoreExperimentResponse404 | restoreExperimentResponse409 | restoreExperimentResponseDefault) & {
+  headers: Headers;
+};
+
+export const getRestoreExperimentUrl = (experimentId: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/restore`
+}
+
+/**
+ * Copy the S3 archive back onto the local PVC and unfreeze the experiment.
+ * @summary Restore an archived experiment
+ */
+export const restoreExperiment = async (experimentId: string, options?: RequestInit): Promise<restoreExperimentResponseSuccess> => {
+
+  const res = await fetch(getRestoreExperimentUrl(experimentId),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: restoreExperimentResponseError['data'], status?: number} = new globalThis.Error();
+    const data : restoreExperimentResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: restoreExperimentResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as restoreExperimentResponseSuccess
+}
+
+
+
+
+
+export const getRestoreExperimentMutationKey = () => ['restoreExperiment'] as const;
+
+export const getRestoreExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreExperiment>>, TError,RestoreExperimentMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreExperiment>>, TError,RestoreExperimentMutationVariables, TContext> => {
+
+const mutationKey = getRestoreExperimentMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreExperiment>>, RestoreExperimentMutationVariables> = (props) => {
+          const {experimentId} = props ?? {};
+
+          return  restoreExperiment(experimentId,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestoreExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof restoreExperiment>>>
+
+    export type RestoreExperimentMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number }
+    export type RestoreExperimentMutationVariables = {experimentId: string}
+
+    /**
+ * @summary Restore an archived experiment
+ */
+export const useRestoreExperiment = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreExperiment>>, TError,RestoreExperimentMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof restoreExperiment>>,
+        TError,
+        RestoreExperimentMutationVariables,
+        TContext
+      > => {
+      return useMutation(getRestoreExperimentMutationOptions(options), queryClient);
+    }
+
+export type getArchiveStatusResponse200 = {
+  data: ArchiveStatus
+  status: 200
+}
+
+export type getArchiveStatusResponse404 = {
+  data: NotFoundResponse
+  status: 404
+}
+
+export type getArchiveStatusResponseDefault = {
+  data: ProblemResponse
+  status: Exclude<HTTPStatusCodes, 200 | 404>
+}
+
+export type getArchiveStatusResponseSuccess = (getArchiveStatusResponse200) & {
+  headers: Headers;
+};
+export type getArchiveStatusResponseError = (getArchiveStatusResponse404 | getArchiveStatusResponseDefault) & {
+  headers: Headers;
+};
+
+export const getGetArchiveStatusUrl = (experimentId: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/archive/status`
+}
+
+/**
+ * @summary Get archive/restore status
+ */
+export const getArchiveStatus = async (experimentId: string, options?: RequestInit): Promise<getArchiveStatusResponseSuccess> => {
+
+  const res = await fetch(getGetArchiveStatusUrl(experimentId),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: getArchiveStatusResponseError['data'], status?: number} = new globalThis.Error();
+    const data : getArchiveStatusResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: getArchiveStatusResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getArchiveStatusResponseSuccess
+}
+
+
+
+
+
+export const getGetArchiveStatusQueryKey = (experimentId: string,) => {
+    return [
+    `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/archive/status`
+    ] as const;
+    }
+
+
+export const getGetArchiveStatusQueryOptions = <TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getArchiveStatus>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetArchiveStatusQueryKey(experimentId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getArchiveStatus>>> = ({ signal }) => getArchiveStatus(experimentId, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: experimentId !== null && experimentId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getArchiveStatus>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetArchiveStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getArchiveStatus>>>
+export type GetArchiveStatusQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+
+
+export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+ experimentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getArchiveStatus>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getArchiveStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getArchiveStatus>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+ experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getArchiveStatus>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getArchiveStatus>>,
+          TError,
+          Awaited<ReturnType<typeof getArchiveStatus>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+ experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getArchiveStatus>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get archive/restore status
+ */
+
+export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+ experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getArchiveStatus>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetArchiveStatusQueryOptions(experimentId,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 

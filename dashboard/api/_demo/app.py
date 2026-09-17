@@ -61,6 +61,7 @@ _DEMO_ENV_DEFAULTS = {
     "MDREPO_CLIENT_ID": "demo-client",
     "MDREPO_CLIENT_SECRET": "demo-secret",
     "MDREPO_UPLOADER_IMAGE": "demo-mdrepo-uploader",
+    "ARCHIVE_WORKER_IMAGE": "demo-archive-worker",
     "DEFAULT_NOTEBOOKS_REPO": "https://github.com/CERIT-SC/mddash-notebooks.git",
     "MDPOSIT_URL": "https://mdposit.mddbr.eu",
 }

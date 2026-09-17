@@ -15,6 +15,8 @@ export function experiment(id: string, overrides: Partial<Experiment> = {}): Exp
     analysis_jobs: [],
     step: 1,
     status: "setup complete",
+    archived_at: null,
+    archive_state: null,
     ...overrides,
   }
 }

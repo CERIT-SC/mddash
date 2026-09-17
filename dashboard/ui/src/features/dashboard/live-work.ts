@@ -8,10 +8,14 @@ export function isAnalysisJobLive(job: AnalysisJob): boolean {
   return LIVE_ANALYSIS_STATUSES.has(job.status)
 }
 
+// Archive/restore Jobs complete server-side — poll until the state settles.
+const IN_FLIGHT_ARCHIVE_STATES = new Set<Experiment["archive_state"]>(["archiving", "restoring"])
+
 export function hasLiveWork(experiment: Experiment): boolean {
   return (
     experiment.simulation_jobs.some((job) => job.is_live) ||
     experiment.tuner_jobs.some((job) => job.is_live) ||
-    experiment.analysis_jobs.some(isAnalysisJobLive)
+    experiment.analysis_jobs.some(isAnalysisJobLive) ||
+    (experiment.archive_state !== null && IN_FLIGHT_ARCHIVE_STATES.has(experiment.archive_state))
   )
 }

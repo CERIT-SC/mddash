@@ -23,7 +23,15 @@ class ExperimentSchema(BaseAutoSchema):
         model = Experiment
         load_instance = True
         include_relationships = True
-        exclude = ("source_type", "source_ref", "source_files")
+        exclude = (
+            "source_type",
+            "source_ref",
+            "source_files",
+            # Archive snapshots stay internal; step/status/size_bytes serialize the snapshot values.
+            "archived_step",
+            "archived_status",
+            "archived_size_bytes",
+        )
 
     def get_source(self, data: Experiment) -> dict | None:
         """Serialize the structured experiment source."""
@@ -38,4 +46,16 @@ class ExperimentSchema(BaseAutoSchema):
             Experiment: The same experiment instance after syncing its MDRepo status.
         """
         data._sync_mdrepo_status()  # ruff:ignore[private-member-access]
+        return data
+
+    @pre_dump
+    def sync_archive(self, data: Experiment, **kwargs: dict) -> Experiment:  # ruff:ignore[unused-method-argument]
+        """
+        Reconcile archive state before field extraction so archived_at and archive_state never disagree in a payload.
+
+        Returns:
+            Experiment: The same experiment instance after reconciling its archive state.
+        """
+        if data.archived_at is not None or data.archived_step is not None:
+            data._read_archive_state()  # ruff:ignore[private-member-access]
         return data

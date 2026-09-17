@@ -11,7 +11,7 @@ from enums import NotebookTier, PodStatus
 from errors import ApiError
 from extensions import db
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError
+from werkzeug.exceptions import BadRequest, Conflict, Forbidden, InternalServerError
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -113,9 +113,13 @@ class Notebook(db.Model):  # type: ignore
 
         Raises:
             BadRequest: If the tier is not a valid NotebookTier value.
+            Conflict: If the experiment is archived — its files only exist in S3 until restored.
             Forbidden: If the resource quota is exceeded when creating the pod.
             InternalServerError: If the pod creation fails or the proxy route cannot be created.
         """
+        if self.experiment and self.experiment.archived_at is not None:
+            raise Conflict(description="Experiment is archived. Restore it before starting the notebook.")
+
         pod_name = f"notebook-{self.experiment_id}"
         svc_name = f"svc-{self.experiment_id}"
 

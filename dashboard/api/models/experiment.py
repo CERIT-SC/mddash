@@ -8,6 +8,9 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import yaml
+from archive import submission as archive_submission
+from archive.status import ArchiveDirection, ArchiveState
+from archive.status import read_status as read_archive_status
 from cache import mdrepo_status_cache, step_status_cache
 from cachetools import cached
 from clients import mdposit, mdrepo, metadump
@@ -21,6 +24,7 @@ from config import (
     MDREPO_RECORD_NAME,
     MDREPO_TOKEN_URL,
     MDREPO_URL,
+    S3_BUCKET,
 )
 from enums import Engine, JobStatus, PodStatus, SourceType
 from errors import ApiError
@@ -120,6 +124,13 @@ class Experiment(db.Model):  # type: ignore
     # Molecular dynamics engine (GMX or AMBER)
     engine: Mapped[Engine] = mapped_column(db.Enum(Engine), nullable=False, default=Engine.GMX)
 
+    # Archive state: archived_at is the durable flag (NULL = active); the other three
+    # snapshot card state at archive-submit time and double as "archive submitted" markers.
+    archived_at: Mapped[datetime | None] = mapped_column(db.DateTime, nullable=True)
+    archived_size_bytes: Mapped[int | None] = mapped_column(db.Integer, nullable=True)
+    archived_step: Mapped[int | None] = mapped_column(db.Integer, nullable=True)
+    archived_status: Mapped[str | None] = mapped_column(db.String(32), nullable=True)
+
     # Setup notebook status
     notebook: Mapped["Notebook"] = relationship(
         "Notebook", back_populates="experiment", cascade="all, delete-orphan", uselist=False
@@ -204,6 +215,8 @@ class Experiment(db.Model):  # type: ignore
     @property
     def size_bytes(self) -> int | None:
         """Last size of the experiment directory measured by the du monitor, in bytes."""
+        if self.archived_at is not None:
+            return self.archived_size_bytes
         return get_du_size(DATA_DIR / self.id)
 
     @classmethod
@@ -488,6 +501,10 @@ class Experiment(db.Model):  # type: ignore
             A tuple of (step, status) where step is the phase index (0-4, with
             publish 4) and status is a string describing the current phase.
         """
+        if self.archived_at is not None and self.archived_step is not None:
+            # Files are gone; serve the snapshot taken at archive-submit time.
+            return self.archived_step, self.archived_status or "archived"
+
         if self.mdrepo_published is True:
             return 4, "published"
 
@@ -538,6 +555,9 @@ class Experiment(db.Model):  # type: ignore
                 description="Cannot delete experiment during active MDRepo upload. "
                 "Wait for completion or retry after failure."
             )
+        # Delete wins over in-flight archive/restore work; the archive prefix is purged after.
+        archive_submission.delete_jobs(self.id)
+        needs_purge = self.archived_at is not None or self.archived_step is not None
         # Delete notebook pod if it exists
         if self.notebook and self.notebook.status == PodStatus.RUNNING:
             self.notebook.stop()
@@ -566,6 +586,9 @@ class Experiment(db.Model):  # type: ignore
         thread = threading.Thread(target=del_dir, args=(DATA_DIR / self.id,), daemon=True)
         thread.start()
 
+        if needs_purge:
+            archive_submission.submit_purge_job(self.id)
+
     def publish(
         self,
         community: str = "ceitec",
@@ -580,7 +603,10 @@ class Experiment(db.Model):  # type: ignore
 
         Raises:
             BadRequest: If the publish target is unknown.
+            Conflict: If the experiment is archived — restore it before publishing.
         """
+        if self.archived_at is not None:
+            raise Conflict(description="Experiment is archived. Restore it before publishing.")
         if target == "invenio":
             return self._publish_invenio(community)
         if target == "mdposit":
@@ -741,6 +767,144 @@ class Experiment(db.Model):  # type: ignore
             result["failed_files"] = [{"key": f.key, "error": f.error} for f in status.failed_files]
 
         return result
+
+    @property
+    def archive_state(self) -> str | None:
+        """One of: None, archiving, archived, restoring, archive_failed, restore_failed."""
+        if self.archived_at is None and self.archived_step is None:
+            return None
+        return self._read_archive_state()
+
+    def _read_archive_state(self) -> str | None:
+        """
+        Reconcile archive state from DB markers, the status doc, and live Jobs.
+
+        The durable markers are DB-side (snapshot columns = submitted, archived_at =
+        completed); the status doc disappears with the directory on successful archive,
+        and Jobs TTL-expire, so completion is inferred: snapshots set + local dir gone +
+        archive Job not live. Mutates the row only on those terminal transitions.
+        """
+        archive_live = archive_submission.is_job_active(ArchiveDirection.ARCHIVE.value, self.id)
+        restore_live = archive_submission.is_job_active(ArchiveDirection.RESTORE.value, self.id)
+        doc = read_archive_status(self.id, DATA_DIR)
+        dir_exists = (DATA_DIR / self.id).exists()
+
+        if self.archived_at is not None:
+            # Restore lifecycle; a non-restore doc is stale from the archive attempt.
+            if doc is not None and doc.direction == ArchiveDirection.RESTORE.value:
+                if doc.state == ArchiveState.COMPLETED.value:
+                    self.archived_at = None
+                    self.archived_step = None
+                    self.archived_status = None
+                    self.archived_size_bytes = None
+                    db.session.commit()
+                    return None
+                if doc.state == ArchiveState.FAILED.value:
+                    return "restore_failed"
+            return "restoring" if restore_live else "archived"
+
+        # Archive lifecycle (archived_at None, snapshots set).
+        if not dir_exists:
+            if not archive_live:
+                self.archived_at = datetime.now(UTC)
+                db.session.commit()
+                return "archived"
+            return "archiving"
+
+        if doc is not None and doc.direction == ArchiveDirection.ARCHIVE.value:
+            if doc.state == ArchiveState.FAILED.value:
+                return "archive_failed"
+            return "archiving"
+
+        return "archiving" if archive_live else "archive_failed"
+
+    def archive(self) -> str:
+        """
+        Submit a durable archive Job after gating and snapshotting card state.
+
+        Returns:
+            The archive attempt ID.
+
+        Raises:
+            ApiError: If S3 is not configured on this deployment (400).
+            Conflict: If already archived/in flight, jobs are live, or an upload is active.
+        """
+        if not S3_BUCKET:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "S3 storage is not configured on this deployment; archiving is unavailable.",
+                "urn:mddash:s3-not-configured",
+            )
+        state = self.archive_state
+        if state not in {None, "archive_failed"}:
+            raise Conflict(description=f"Experiment cannot be archived now (state: {state}).")
+        if self._read_upload_state() in UploadState.active():
+            raise Conflict(
+                description="Cannot archive during an active MDRepo upload. Wait for completion or retry after failure."
+            )
+        live = (
+            [j for j in self.tuner_jobs if j.is_live]
+            + [j for j in self.simulation_jobs if j.is_live]
+            # AnalysisJob exposes only .status, no is_live shortcut.
+            + [j for j in self.analysis_jobs if j.status.is_live]
+        )
+        if live:
+            raise Conflict(description="Cannot archive while tuner, simulation, or analysis jobs are running.")
+
+        # Stopping the notebook matches delete(): archiving freezes the files under it.
+        if self.notebook and self.notebook.status == PodStatus.RUNNING:
+            self.notebook.stop()
+
+        step, status = self._step_status()
+        self.archived_step = step
+        self.archived_status = status
+        self.archived_size_bytes = self.size_bytes
+        db.session.commit()
+
+        attempt_id = archive_submission.submit_job(ArchiveDirection.ARCHIVE.value, self.id, DATA_DIR)
+        logger.info("Archive Job submitted for experiment %s (attempt %s)", self.id, attempt_id)
+        return attempt_id
+
+    def restore(self) -> str:
+        """
+        Submit a durable restore Job for an archived experiment.
+
+        Returns:
+            The restore attempt ID.
+
+        Raises:
+            ApiError: If S3 is not configured on this deployment (400).
+            Conflict: If not archived, in flight, or the local directory already exists.
+        """
+        if not S3_BUCKET:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "S3 storage is not configured on this deployment; restoring is unavailable.",
+                "urn:mddash:s3-not-configured",
+            )
+        state = self.archive_state
+        if state not in {"archived", "restore_failed"}:
+            raise Conflict(description=f"Experiment cannot be restored now (state: {state}).")
+        if (DATA_DIR / self.id).exists():
+            raise Conflict(
+                description="Local experiment directory already exists; refusing to overwrite it. "
+                "Remove the leftover directory manually and retry."
+            )
+
+        attempt_id = archive_submission.submit_job(ArchiveDirection.RESTORE.value, self.id, DATA_DIR)
+        logger.info("Restore Job submitted for experiment %s (attempt %s)", self.id, attempt_id)
+        return attempt_id
+
+    def get_archive_status(self) -> dict:
+        """Archive/restore status for the status endpoint: reconciliation result + status doc fields."""
+        doc = read_archive_status(self.id, DATA_DIR)
+        return {
+            "experiment_id": self.id,
+            "archive_state": self.archive_state,
+            "attempt_id": doc.attempt_id if doc else None,
+            "direction": doc.direction if doc else None,
+            "reason": doc.reason if doc else None,
+        }
 
     def _publish_mdposit(self, simulation_path: str) -> dict:
         """

@@ -84,6 +84,10 @@ jobs:
             context: dashboard
             dockerfile: dashboard/mdrepo-uploader/Dockerfile
             image-suffix: mddash-mdrepo-uploader
+          - name: archive-worker
+            context: dashboard
+            dockerfile: dashboard/archive-worker/Dockerfile
+            image-suffix: mddash-archive-worker
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:

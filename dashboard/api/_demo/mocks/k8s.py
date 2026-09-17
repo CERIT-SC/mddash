@@ -12,6 +12,7 @@ import re
 import threading
 import time
 from datetime import datetime, timezone
+from shutil import rmtree
 from types import SimpleNamespace
 
 from clients import k8s
@@ -54,19 +55,60 @@ def install_k8s_mocks() -> None:
 
 
 def _create_job_raw(manifest: dict) -> None:
-    """Simulate the MDRepo upload worker: mark done after a short delay."""
+    """Simulate the MDRepo upload and archive workers: mark done after a short delay."""
     try:
         from upload.submission import EXPERIMENT_LABEL  # ruff:ignore[import-outside-top-level]
 
         experiment_id = manifest["metadata"]["labels"][EXPERIMENT_LABEL]
         job_name = manifest["metadata"]["name"]
         args = manifest["spec"]["template"]["spec"]["containers"][0]["args"]
-        mdrepo_id = args[args.index("--mdrepo-id") + 1]
     except (KeyError, IndexError, ValueError, ImportError):
         return
 
+    # Archive worker args start with the mode; the upload worker's with --experiment-id.
+    if args and args[0] in {"archive", "restore", "purge"}:
+        mode, attempt_id = args[0], args[args.index("--attempt-id") + 1]
+        demo_state.upload_jobs[job_name] = experiment_id
+        threading.Thread(
+            target=_finish_archive_job, args=(job_name, mode, experiment_id, attempt_id), daemon=True
+        ).start()
+        return
+
+    try:
+        mdrepo_id = args[args.index("--mdrepo-id") + 1]
+    except (IndexError, ValueError):
+        return
     demo_state.upload_jobs[job_name] = experiment_id
     threading.Thread(target=_finish_upload_job, args=(job_name, experiment_id, mdrepo_id), daemon=True).start()
+
+
+ARCHIVE_JOB_DURATION_SEC = 4.0
+
+
+def _finish_archive_job(job_name: str, mode: str, experiment_id: str, attempt_id: str) -> None:
+    """
+    Stand-in for the archive worker.
+
+    Archive deletes the dir like a verified worker would; restore fabricates a
+    minimal dir (there is no demo S3 to fetch from).
+    """
+    from archive.status import ArchiveStatus, write_status  # ruff:ignore[import-outside-top-level]
+
+    time.sleep(ARCHIVE_JOB_DURATION_SEC)
+    demo_state.upload_jobs.pop(job_name, None)
+
+    exp_dir = DATA_DIR / experiment_id
+    if mode == "archive":
+        write_status(
+            ArchiveStatus(attempt_id=attempt_id, state="completed", direction="archive"), experiment_id, DATA_DIR
+        )
+        rmtree(exp_dir, ignore_errors=True)
+    elif mode == "restore":
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        (exp_dir / "RESTORED.txt").write_text("Restored from the demo archive (contents simulated).\n")
+        write_status(
+            ArchiveStatus(attempt_id=attempt_id, state="completed", direction="restore"), experiment_id, DATA_DIR
+        )
 
 
 def _finish_upload_job(job_name: str, experiment_id: str, mdrepo_id: str) -> None:
