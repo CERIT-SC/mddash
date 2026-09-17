@@ -183,7 +183,8 @@ class TestStopGmxJob:
         assert json.loads(response.data)["status"] == "stopped"
         mock_k8s_client["get_job_status"].assert_not_called()
         row = db_session.get(MdrunJob, "sticky-job")
-        assert row is not None and row.last_status == JobStatus.STOPPED
+        assert row is not None
+        assert row.last_status == JobStatus.STOPPED
 
     def test_stop_terminal_job_is_noop(
         self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]
