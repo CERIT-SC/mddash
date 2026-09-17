@@ -1,8 +1,7 @@
 import type { AnalysisJob, Experiment } from "@/api/generated/models"
 
-// UNKNOWN is live server-side (transient upstream failure): cards and the list
-// poll must not freeze on it. Sim/tuner payloads embed the server's is_live;
-// analysis payloads carry only a plain status, so the set lives here.
+// UNKNOWN is live server-side (transient upstream failure) — don't freeze on
+// it. Sim/tuner payloads embed is_live; analysis carries only a plain status.
 const LIVE_ANALYSIS_STATUSES = new Set<AnalysisJob["status"]>(["PENDING", "RUNNING", "UNKNOWN"])
 
 export function isAnalysisJobLive(job: AnalysisJob): boolean {

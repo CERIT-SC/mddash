@@ -4,19 +4,40 @@ import { describe, expect, it } from "vitest"
 
 import { hasLiveWork, isAnalysisJobLive } from "./live-work"
 
-const simJob = (status: SimulationJob["status"], isLive: boolean): SimulationJob =>
-  ({ status, is_live: isLive, created_at: "2026-08-13T00:00:00Z" }) as SimulationJob
+const simJob = (status: SimulationJob["status"], isLive: boolean): SimulationJob => ({
+  id: "s1",
+  experiment_id: "e1",
+  simulation_path: "md.simulation.json",
+  created_at: "2026-08-13T00:00:00Z",
+  engine: "GMX",
+  np: 1,
+  ntomp: 1,
+  status,
+  is_live: isLive,
+})
 
-const tunerJob = (isLive: boolean): TunerJob =>
-  ({
-    is_live: isLive,
-    tuner_status: isLive ? "RUNNING" : "FINISHED",
-    created_at: "2026-08-13T00:00:00Z",
-    trials: [],
-  }) as TunerJob
+const tunerJob = (isLive: boolean): TunerJob => ({
+  id: "t1",
+  experiment_id: "e1",
+  simulation_path: "md.simulation.json",
+  nsteps: 25000,
+  created_at: "2026-08-13T00:00:00Z",
+  is_stopped: !isLive,
+  engine: "GMX",
+  tuner_status: isLive ? "RUNNING" : "FINISHED",
+  is_live: isLive,
+  sim_length_ns: 100,
+  trials: [],
+})
 
-const analysisJob = (status: AnalysisJob["status"]): AnalysisJob =>
-  ({ status, created_at: "2026-08-13T00:00:00Z" }) as AnalysisJob
+const analysisJob = (status: AnalysisJob["status"]): AnalysisJob => ({
+  id: "a1",
+  experiment_id: "e1",
+  simulation_path: "md.simulation.json",
+  analysis_name: "rmsds",
+  created_at: "2026-08-13T00:00:00Z",
+  status,
+})
 
 describe("hasLiveWork", () => {
   it("is false with no jobs and with only terminal jobs", () => {
@@ -33,8 +54,8 @@ describe("hasLiveWork", () => {
   })
 
   it("follows the server is_live flag on simulation and tuner jobs, including UNKNOWN", () => {
-    // Server-side UNKNOWN counts as live (transient upstream failures) — the
-    // payloads already say so; the client must not re-decide from the status.
+    // The payload already encodes liveness — the client must not re-decide
+    // from a status set (UNKNOWN is live server-side on transient failures).
     expect(hasLiveWork(experiment("e1", { simulation_jobs: [simJob("UNKNOWN", true)] }))).toBe(true)
     expect(hasLiveWork(experiment("e1", { tuner_jobs: [tunerJob(true)] }))).toBe(true)
     expect(hasLiveWork(experiment("e1", { simulation_jobs: [simJob("UNKNOWN", false)] }))).toBe(false)
