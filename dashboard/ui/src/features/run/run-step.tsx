@@ -58,12 +58,9 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
   const job = jobQuery.job
   const live = job !== undefined && job.is_live
   const failed = job?.status === JobStatus.ERROR
-  // Mirrors the server ladder: Analyze unlocks once progress is parsed from the
-  // engine log — before that the run's files (trajectory included) don't exist.
-  const analyzable =
-    job !== undefined &&
-    (job.status === JobStatus.FINISHED ||
-      (job.status === JobStatus.RUNNING && job.nsteps_done !== null && job.nsteps_done !== undefined))
+  // The ladder in props is the single source — the same value the stepper
+  // consumes; the server holds it at Run until progress parses from the log.
+  const analyzable = simulation.step >= 3
 
   // Tuner trials power the config table's estimates; a 404 just means "no tuning".
   const tunerQuery = useGetTunerJob(experimentId, simulation.simulation_path, { query: { retry: false } })
