@@ -25,7 +25,7 @@ type ExtendDialogProps = {
 
 /**
  * Extend a finished/stopped GMX run by additional steps. The server resumes from
- * the latest checkpoint and mdrun appends — outputs and logs are never deleted.
+ * the latest checkpoint and mdrun appends, so outputs and logs are never deleted.
  */
 export function ExtendDialog({ currentTotal, pending, onExtend, onCancel }: ExtendDialogProps) {
   const [text, setText] = useState("")
