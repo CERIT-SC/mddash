@@ -76,6 +76,9 @@ class AmberJob(SimulationJob):
     @property
     def nsteps(self) -> int | None:
         """Total number of steps for the job."""
+        if self._archived:
+            return self._nsteps
+
         if self._nsteps:
             return self._nsteps
 
@@ -88,6 +91,9 @@ class AmberJob(SimulationJob):
     @property
     def estimated_time(self) -> int | None:
         """Estimated time until completion in seconds."""
+        if self._archived:
+            return None
+
         if self.start_timestamp is None or self.nsteps is None or self.nsteps_done is None or self.nsteps_done == 0:
             return None
 

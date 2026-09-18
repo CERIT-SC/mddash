@@ -113,7 +113,7 @@ class Notebook(db.Model):  # type: ignore
 
         Raises:
             BadRequest: If the tier is not a valid NotebookTier value.
-            Conflict: If the experiment is archived — its files only exist in S3 until restored.
+            Conflict: If the experiment is archived; its files only exist in S3 until restored.
             Forbidden: If the resource quota is exceeded when creating the pod.
             InternalServerError: If the pod creation fails or the proxy route cannot be created.
         """

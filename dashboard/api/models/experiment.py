@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 from shutil import rmtree
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from urllib.parse import urlparse
 
 import yaml
@@ -64,6 +64,11 @@ if TYPE_CHECKING:
     from .simulation import Simulation
     from .simulation_job import SimulationJob
     from .tuner_job import TunerJob
+
+
+# Stash key for the schema's per-dump reconciliation (consumed by archive_state).
+_DUMP_ARCHIVE_STATE = "_dump_archive_state"
+_STASH_UNSET = object()
 
 
 logger = logging.getLogger(__name__)
@@ -603,7 +608,7 @@ class Experiment(db.Model):  # type: ignore
 
         Raises:
             BadRequest: If the publish target is unknown.
-            Conflict: If the experiment is archived — restore it before publishing.
+            Conflict: If the experiment is archived; restore it before publishing.
         """
         if self.archived_at is not None:
             raise Conflict(description="Experiment is archived. Restore it before publishing.")
@@ -768,11 +773,25 @@ class Experiment(db.Model):  # type: ignore
 
         return result
 
+    if TYPE_CHECKING:
+        # Transient per-dump stash set by ExperimentSchema.sync_archive; never mapped.
+        _dump_archive_state: str | None
+
     @property
     def archive_state(self) -> str | None:
-        """One of: None, archiving, archived, restoring, archive_failed, restore_failed."""
+        """
+        One of: None, archiving, archived, restoring, archive_failed, restore_failed.
+
+        A schema dump reconciles once in pre_dump and stashes its answer on the
+        instance; consuming it here keeps archived_at and archive_state consistent
+        within one payload (a re-check could flip mid-dump). Direct callers
+        reconcile fresh.
+        """
         if self.archived_at is None and self.archived_step is None:
             return None
+        stashed = self.__dict__.pop(_DUMP_ARCHIVE_STATE, _STASH_UNSET)
+        if stashed is not _STASH_UNSET:
+            return cast("str | None", stashed)
         return self._read_archive_state()
 
     def _is_archive_job_live(self, direction: str) -> bool:
@@ -798,7 +817,7 @@ class Experiment(db.Model):  # type: ignore
         """
         doc = read_archive_status(self.id, DATA_DIR)
         dir_exists = (DATA_DIR / self.id).exists()
-        # Liveness checked lazily — each branch below needs only its own direction.
+        # Liveness is checked lazily; each branch below needs only its own direction.
         archive_live: bool | None = None
         restore_live: bool | None = None
 
@@ -824,8 +843,11 @@ class Experiment(db.Model):  # type: ignore
                     self.archived_size_bytes = None
                     db.session.commit()
                     return None
-                if doc.state == ArchiveState.FAILED.value:
-                    return "restore_failed"
+                # A live Job outranks the stale FAILED sentinel of the attempt it
+                # replaces (a retry read as restoring immediately, clearing the
+                # failure banner); a doc claiming in-flight work with no live Job
+                # (evicted, backoffLimit 0) failed like the archive direction does.
+                return "restoring" if _restore_live() else "restore_failed"
             return "restoring" if _restore_live() else "archived"
 
         # Archive lifecycle (archived_at None, snapshots set).
@@ -851,7 +873,7 @@ class Experiment(db.Model):  # type: ignore
             The archive attempt ID.
 
         Raises:
-            ApiError: If S3 is not configured on this deployment (400).
+            ApiError: If S3 is not configured on this deployment (400), or the archive Job could not be submitted (409).
             Conflict: If already archived/in flight, jobs are live, or an upload is active.
         """
         if not S3_BUCKET:
@@ -886,7 +908,15 @@ class Experiment(db.Model):  # type: ignore
         self.archived_size_bytes = self.size_bytes
         db.session.commit()
 
-        attempt_id = archive_submission.submit_job(ArchiveDirection.ARCHIVE.value, self.id, DATA_DIR)
+        try:
+            attempt_id = archive_submission.submit_job(ArchiveDirection.ARCHIVE.value, self.id, DATA_DIR)
+        except archive_submission.SubmissionError as e:
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "The archive job could not be started right now.",
+                "urn:mddash:archive-submission-failed",
+                "Try again in a moment; if the problem persists, contact support.",
+            ) from e
         logger.info("Archive Job submitted for experiment %s (attempt %s)", self.id, attempt_id)
         return attempt_id
 
@@ -898,7 +928,7 @@ class Experiment(db.Model):  # type: ignore
             The restore attempt ID.
 
         Raises:
-            ApiError: If S3 is not configured on this deployment (400).
+            ApiError: If S3 is not configured on this deployment (400), or the restore Job could not be submitted (409).
             Conflict: If not archived, in flight, or the local directory already exists.
         """
         if not S3_BUCKET:
@@ -911,14 +941,15 @@ class Experiment(db.Model):  # type: ignore
         if state not in {"archived", "restore_failed"}:
             raise Conflict(description=f"Experiment cannot be restored now (state: {state}).")
         if (DATA_DIR / self.id).exists():
-            # Mirror the worker gate: a failed restore doc is the retry sentinel
-            # (the dir then holds only our status doc / partial copies); anything
-            # else in a present dir is genuine clobber protection.
+            # Mirror the worker gate: any non-completed restore doc is the retry
+            # sentinel (the dir then holds only the status doc / partial copies of
+            # the interrupted attempt); anything else in a present dir is genuine
+            # clobber protection.
             doc = read_archive_status(self.id, DATA_DIR)
             retryable = (
                 doc is not None
                 and doc.direction == ArchiveDirection.RESTORE.value
-                and doc.state == ArchiveState.FAILED.value
+                and doc.state != ArchiveState.COMPLETED.value
             )
             if not retryable:
                 raise Conflict(
@@ -926,7 +957,15 @@ class Experiment(db.Model):  # type: ignore
                     "Remove the leftover directory manually and retry."
                 )
 
-        attempt_id = archive_submission.submit_job(ArchiveDirection.RESTORE.value, self.id, DATA_DIR)
+        try:
+            attempt_id = archive_submission.submit_job(ArchiveDirection.RESTORE.value, self.id, DATA_DIR)
+        except archive_submission.SubmissionError as e:
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "The restore job could not be started right now.",
+                "urn:mddash:archive-submission-failed",
+                "Try again in a moment; if the problem persists, contact support.",
+            ) from e
         logger.info("Restore Job submitted for experiment %s (attempt %s)", self.id, attempt_id)
         return attempt_id
 

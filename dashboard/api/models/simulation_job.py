@@ -124,6 +124,16 @@ class SimulationJob(db.Model):  # type: ignore
         """Non-terminal states — the job may still advance without user action."""
         return self.status.is_live
 
+    @property
+    def _archived(self) -> bool:
+        """
+        The parent experiment is archived and its files are gone.
+
+        File-derived values must serve persisted columns instead of touching
+        manifests/logs that no longer exist.
+        """
+        return self.experiment is not None and self.experiment.archived_at is not None
+
     # Key by job id: ORM instances are rebuilt per request, so the default
     # instance-hash key would never hit and every dump would stream whole logs.
     @property
@@ -136,6 +146,8 @@ class SimulationJob(db.Model):  # type: ignore
         None while a stream's file does not exist yet. The counts ride the job
         payload, so they stay fresh on the existing status polls.
         """
+        if self._archived:
+            return {}
         return {name: count_lines(path) for name, path in self._log_files().items()}
 
     def _log_files(self) -> dict[str, Path]:
@@ -152,6 +164,9 @@ class SimulationJob(db.Model):  # type: ignore
         if self._nsteps_done is not None:
             return self._nsteps_done
 
+        if self._archived:
+            return self._nsteps if self._performance else None
+
         # Only a genuinely finished run may shortcut to its target: a stopped run
         # prints a performance trailer too, so cached performance proves nothing.
         if self._performance and self.status == JobStatus.FINISHED:
@@ -167,6 +182,9 @@ class SimulationJob(db.Model):  # type: ignore
     @property
     def start_timestamp(self) -> int | None:
         """Unix timestamp when the job started."""
+        if self._archived:
+            return self._start_timestamp
+
         if self._start_timestamp:
             return self._start_timestamp
 
@@ -179,6 +197,9 @@ class SimulationJob(db.Model):  # type: ignore
     @property
     def finish_timestamp(self) -> int | None:
         """Unix timestamp when the job finished."""
+        if self._archived:
+            return self._finish_timestamp
+
         if self._finish_timestamp:
             return self._finish_timestamp
 
@@ -194,6 +215,9 @@ class SimulationJob(db.Model):  # type: ignore
     @property
     def performance(self) -> float | None:
         """Performance of the job in ns/day (only once the run itself finished)."""
+        if self._archived:
+            return self._performance
+
         if self._performance:
             return self._performance
 

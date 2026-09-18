@@ -145,8 +145,12 @@ class TestRestoreGates:
             assert experiment.restore() == "attempt-1"
         mock_submit.assert_called_once()
 
-    def test_non_failed_doc_409(self, experiment: Experiment, s3, tmp_path: Path) -> None:
-        """Dir with an in-flight restore doc is inconsistent with a dead Job — keep clobber gate."""
+    def test_stale_running_doc_retryable(self, experiment: Experiment, s3, tmp_path: Path) -> None:
+        """
+        An in-flight restore doc with a dead Job is retryable like a FAILED one.
+
+        The leftover of an evicted (unretried) attempt is continuation, not clobber.
+        """
         experiment.archived_at = datetime.now(UTC)
         write_status(
             ArchiveStatus(attempt_id="a", state=ArchiveState.RUNNING.value, direction="restore"), EXP_ID, tmp_path
@@ -154,9 +158,10 @@ class TestRestoreGates:
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("archive.submission.is_job_active", return_value=False),
-            pytest.raises(Conflict),
+            patch("models.experiment.archive_submission.submit_job", side_effect=_submit_ok) as mock_submit,
         ):
-            experiment.restore()
+            assert experiment.restore() == "attempt-1"
+        mock_submit.assert_called_once()
 
     def test_happy_path(self, experiment: Experiment, s3, tmp_path: Path) -> None:
         experiment.archived_at = datetime.now(UTC)
@@ -299,6 +304,118 @@ class TestArchiveStateReconciliation:
         ):
             assert experiment.archive_state == "restore_failed"
 
+    def test_live_job_outranks_failed_sentinel(self, experiment: Experiment, tmp_path: Path) -> None:
+        """
+        A retried restore must read as restoring the moment its Job exists.
+
+        Waiting for the worker to rewrite the doc would keep the failure banner up.
+        """
+        experiment.archived_at = datetime.now(UTC)
+        write_status(
+            ArchiveStatus(attempt_id="a", state=ArchiveState.FAILED.value, direction="restore", reason="copy"),
+            EXP_ID,
+            tmp_path,
+        )
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("archive.submission.is_job_active", return_value=True),
+        ):
+            assert experiment.archive_state == "restoring"
+
+    def test_stale_running_restore_doc_is_failed(self, experiment: Experiment, tmp_path: Path) -> None:
+        """
+        An in-flight restore doc with no live Job reconciles to restore_failed.
+
+        Eviction is unretried (backoffLimit 0), same rule as the archive direction.
+        """
+        experiment.archived_at = datetime.now(UTC)
+        write_status(
+            ArchiveStatus(attempt_id="a", state=ArchiveState.RUNNING.value, direction="restore"), EXP_ID, tmp_path
+        )
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("archive.submission.is_job_active", return_value=False),
+        ):
+            assert experiment.archive_state == "restore_failed"
+
+    def test_archive_state_consumed_from_pre_dump_stash(self, experiment: Experiment, tmp_path: Path) -> None:
+        """
+        The property serves the pre_dump reconciliation, not a mid-dump re-check.
+
+        A world flip between pre_dump and the property pass must not produce an
+        archived_at/archive_state mismatch within one payload.
+        """
+        self._snap(experiment)
+        calls = 0
+
+        def flip_after_first(_self: Experiment) -> str:
+            nonlocal calls
+            calls += 1
+            if calls > 1:  # any mid-dump re-check flips the world
+                _self.archived_at = datetime.now(UTC)
+                return "archived"
+            return "archiving"
+
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch.object(Experiment, "_read_archive_state", flip_after_first),
+        ):
+            data = ExperimentSchema().dump(experiment)
+
+        assert calls == 1  # the property did not re-reconcile
+        assert data["archive_state"] == "archiving"
+        assert data["archived_at"] is None  # consistent pair from one reconciliation
+
+    def test_direct_access_reconciles_fresh(self, experiment: Experiment, tmp_path: Path) -> None:
+        """Without a dump, the property reconciles on every access (no stash)."""
+        experiment.archived_at = datetime.now(UTC)
+        (tmp_path / EXP_ID).rmdir()
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("archive.submission.is_job_active", return_value=False),
+            patch.object(Experiment, "_read_archive_state", return_value="archived") as mock_read,
+        ):
+            assert experiment.archive_state == "archived"
+            assert experiment.archive_state == "archived"
+        assert mock_read.call_count == 2
+
+
+class TestSubmissionFailure:
+    def test_archive_submit_failure_409_problem(self, experiment: Experiment, s3, tmp_path: Path) -> None:
+        from archive.submission import SubmissionError
+        from errors import ApiError
+
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch(
+                "models.experiment.archive_submission.submit_job",
+                side_effect=SubmissionError("object is being deleted"),
+            ),
+            pytest.raises(ApiError) as exc_info,
+        ):
+            experiment.archive()
+        assert exc_info.value.code == 409
+        assert exc_info.value.problem_type == "urn:mddash:archive-submission-failed"
+
+    def test_restore_submit_failure_409_problem(self, experiment: Experiment, s3, tmp_path: Path) -> None:
+        from archive.submission import SubmissionError
+        from errors import ApiError
+
+        experiment.archived_at = datetime.now(UTC)
+        (tmp_path / EXP_ID).rmdir()
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("archive.submission.is_job_active", return_value=False),
+            patch(
+                "models.experiment.archive_submission.submit_job",
+                side_effect=SubmissionError("object is being deleted"),
+            ),
+            pytest.raises(ApiError) as exc_info,
+        ):
+            experiment.restore()
+        assert exc_info.value.code == 409
+        assert exc_info.value.problem_type == "urn:mddash:archive-submission-failed"
+
 
 class TestDeleteWithArchive:
     def test_archived_delete_purges(self, experiment: Experiment, tmp_path: Path) -> None:
@@ -321,6 +438,77 @@ class TestDeleteWithArchive:
         ):
             experiment.delete()
         mock_purge.assert_not_called()
+
+
+class TestArchivedJobSerialization:
+    def test_archived_job_serves_persisted_columns_without_manifest_io(
+        self, experiment: Experiment, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """
+        Archived experiments keep their job rows after the files are gone.
+
+        Serializing them must serve persisted columns, not resolve manifests
+        (the NotFound warning spam from the demo E2E review).
+        """
+        import logging
+
+        from enums import AmberBinary, DeviceType, EwaldPreset, JobStatus
+        from models import AmberJob, GromacsJob
+
+        gmx = GromacsJob(
+            id="job-gmx",
+            experiment_id=EXP_ID,
+            engine=Engine.GMX,
+            simulation_path="x.simulation.json",
+            np=1,
+            ntomp=1,
+            pme=DeviceType.CPU,
+            nb=DeviceType.CPU,
+        )  # type: ignore[call-arg]
+        gmx._nsteps = 50000
+        gmx._start_timestamp = 111
+        gmx._finish_timestamp = 222
+        gmx._performance = 12.5
+        gmx._last_known_status = JobStatus.FINISHED
+        amber = AmberJob(
+            id="job-amber",
+            experiment_id=EXP_ID,
+            engine=Engine.AMBER,
+            simulation_path="y.simulation.json",
+            np=1,
+            ntomp=1,
+            binary=AmberBinary.PMEMD_MPI,
+            ewald=EwaldPreset.DEFAULT,
+        )  # type: ignore[call-arg]
+        amber._nsteps = 10000
+        amber._performance = 40.0
+        amber._last_known_status = JobStatus.FINISHED
+        db.session.add_all([gmx, amber])
+        experiment.archived_at = datetime.now(UTC)
+        db.session.commit()
+        (tmp_path / EXP_ID).rmdir()
+
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("archive.submission.is_job_active", return_value=False),
+            caplog.at_level(logging.WARNING, logger="schemas.base"),
+        ):
+            data = ExperimentSchema().dump(experiment)
+
+        assert not [r for r in caplog.records if "Failed to compute property" in r.message]
+        jobs = {job["engine"]: job for job in data["simulation_jobs"]}
+        assert jobs["GMX"]["nsteps"] == 50000
+        assert jobs["GMX"]["nsteps_done"] == 50000
+        assert jobs["GMX"]["performance"] == 12.5
+        assert jobs["GMX"]["start_timestamp"] == 111
+        assert jobs["GMX"]["finish_timestamp"] == 222
+        assert jobs["GMX"]["estimated_time"] is None
+        assert jobs["GMX"]["init_step"] == 0
+        assert jobs["GMX"]["log_lines"] == {}
+        assert jobs["AMBER"]["nsteps"] == 10000
+        assert jobs["AMBER"]["nsteps_done"] == 10000
+        assert jobs["AMBER"]["performance"] == 40.0
+        assert jobs["AMBER"]["estimated_time"] is None
 
 
 class TestArchivedSerialization:

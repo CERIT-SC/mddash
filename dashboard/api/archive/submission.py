@@ -6,6 +6,7 @@ import logging
 import secrets
 from typing import TYPE_CHECKING, Any
 
+from cache import archive_status_cache
 from clients import k8s
 from config import (
     ARCHIVE_WORKER_IMAGE,
@@ -32,6 +33,7 @@ EXPERIMENT_LABEL = "mddash.io/experiment"
 ACTIVE_DEADLINE_SECONDS = 86400
 JOB_TTL_SECONDS = 300
 ADMISSION_TIMEOUT = 30
+JOB_DELETION_TIMEOUT = 30
 JOB_RESOURCES = {
     "requests": {"cpu": "100m", "memory": "128Mi"},
     "limits": {"cpu": "500m", "memory": "512Mi"},
@@ -110,10 +112,17 @@ def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
 
     if is_job_active(direction, experiment_id):
         logger.info("Job %s already active for experiment %s", name, experiment_id)
+        archive_status_cache[direction, experiment_id] = True
         status = read_status(experiment_id, data_dir)
         return status.attempt_id if status else ""
 
     delete_jobs(experiment_id)
+    # A foreground deletion returns before the object is actually gone; recreating
+    # under the same deterministic name right away races termination (the API
+    # server rejects the create with "object is being deleted"). Mirror the upload
+    # flow and wait for the old Job to disappear first.
+    if not k8s.wait_for_resource_absence("job", name, timeout=JOB_DELETION_TIMEOUT):
+        raise SubmissionError(f"Previous archive Job {name} is still terminating; retry shortly.")
 
     attempt_id = secrets.token_hex(8)
     # The queued doc lives inside the experiment dir: archive's dir exists, but writing
@@ -128,18 +137,33 @@ def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
         if not k8s.wait_for_pod_admission(f"{EXPERIMENT_LABEL}={experiment_id}", timeout=ADMISSION_TIMEOUT):
             logger.error("Pod admission timeout for Job %s", name)
             delete_jobs(experiment_id)
-            delete_status(experiment_id, data_dir)
+            _cleanup_own_status(direction, experiment_id, data_dir)
             raise SubmissionError(f"Archive pod not admitted within {ADMISSION_TIMEOUT}s")
 
         logger.info("Job %s admitted for experiment %s (attempt %s)", name, experiment_id, attempt_id)
+        # Write through the short liveness cache: the first poll after the 202
+        # must see this Job live, not the terminal one it replaced.
+        archive_status_cache[direction, experiment_id] = True
         return attempt_id
     except SubmissionError:
         raise
     except Exception as e:
         logger.error("Failed to submit Job %s: %s", name, e)
         delete_jobs(experiment_id)
-        delete_status(experiment_id, data_dir)
+        _cleanup_own_status(direction, experiment_id, data_dir)
         raise SubmissionError(f"Failed to submit archive Job: {e}") from e
+
+
+def _cleanup_own_status(direction: str, experiment_id: str, data_dir: Path) -> None:
+    """
+    Roll back a failed submission: only archive has a queued doc written by this call.
+
+    Restore never writes one; the doc in its leftover dir is the previous attempt's
+    retry sentinel and must survive submission failures, or a partially-restored dir
+    loses the marker that makes it re-submittable.
+    """
+    if direction == ArchiveDirection.ARCHIVE.value:
+        delete_status(experiment_id, data_dir)
 
 
 def submit_job(direction: str, experiment_id: str, data_dir: Path) -> str:
@@ -156,6 +180,7 @@ def submit_purge_job(experiment_id: str) -> None:
     name = job_name("purge", experiment_id)
     try:
         k8s.delete_job_foreground(name)
+        k8s.wait_for_resource_absence("job", name, timeout=JOB_DELETION_TIMEOUT)
         k8s.create_job_raw(_job_manifest(name, "purge", experiment_id, secrets.token_hex(8)))
         logger.info("Purge Job %s submitted for experiment %s", name, experiment_id)
     except Exception:
@@ -164,12 +189,21 @@ def submit_purge_job(experiment_id: str) -> None:
 
 
 def is_job_active(direction: str, experiment_id: str) -> bool:
+    """
+    Live until a terminal condition lands; a Pending pod (scheduling, image pull) counts.
+
+    Counting the pre-start window as dead would flash failed states right after
+    submission and stop the UI polling that reports progress.
+    """
     job_obj = k8s.read_job(job_name(direction, experiment_id))
     if job_obj is None:
         return False
     status = getattr(job_obj, "status", None)
-    active = getattr(status, "active", None) if status else None
-    return (active or 0) > 0
+    conditions = getattr(status, "conditions", None) if status else None
+    for condition in conditions or []:
+        if getattr(condition, "type", None) in {"Complete", "Failed"} and getattr(condition, "status", None) == "True":
+            return False
+    return True
 
 
 def delete_jobs(experiment_id: str) -> None:

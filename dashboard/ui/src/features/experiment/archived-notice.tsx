@@ -15,7 +15,7 @@ export function ArchivedNotice({ experiment }: { experiment: Experiment }) {
   const restore = useRestoreExperiment({
     mutation: {
       onSuccess: () => {
-        toast.success(`Restoring “${experiment.name}” — this can take a while`)
+        toast.success(`Restoring “${experiment.name}” (this can take a while)`)
         void queryClient.invalidateQueries({ queryKey: getListExperimentsQueryKey() })
         void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experiment.id) })
       },
@@ -32,7 +32,7 @@ export function ArchivedNotice({ experiment }: { experiment: Experiment }) {
           {experiment.size_bytes !== null &&
             experiment.size_bytes !== undefined &&
             ` · ${formatBytes(experiment.size_bytes)}`}
-          . Its data lives only in S3 storage — restore it to keep working with it.
+          . Its data lives only in S3 storage; restore it to keep working with it.
         </P>
       </div>
       {restore.isError ? (

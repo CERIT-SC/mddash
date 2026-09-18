@@ -129,7 +129,7 @@ MDREPO_UPLOADER_IMAGE = os.environ.get("MDREPO_UPLOADER_IMAGE", "")
 if not MDREPO_UPLOADER_IMAGE:
     logger.warning("MDREPO_UPLOADER_IMAGE is not set. Durable MDRepo uploads will not work.")
 
-# Archive worker Job image — injected from Helm like other sidecar images.
+# Archive worker Job image, injected from Helm like other sidecar images.
 ARCHIVE_WORKER_IMAGE = os.environ.get("ARCHIVE_WORKER_IMAGE", "")
 
 if not ARCHIVE_WORKER_IMAGE:

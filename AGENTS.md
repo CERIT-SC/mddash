@@ -46,6 +46,8 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - A `.s3-init` marker file (non-excluded) keeps both paths non-empty so bisync's empty-path safety check doesn't abort every cycle on a fresh PVC.
 - Do NOT add `--create-empty-src-dirs`: S3 can't durably hold truly-empty dirs, so the flag records a phantom dir on S3 and the next cycle deletes it from the PVC (symptom: empty dirs vanish). Without it, empty dirs are left untouched on each side (never deleted, not propagated to S3).
 - The image pins `rclone/rclone:1.74.4` via multi-stage (alpine's `apk` package ships a stale `-DEV` build).
+- Two rclone filter files exist and are NOT interchangeable: `dashboard/rclone-filters.txt` (mdrepo-uploader) and `dashboard/s3-sync/rclone-filters.txt` (bisync sidecar + archive worker, includes the `/_archives/**` exclusion). The Docker build context for both images is `dashboard/`, so the sidecar's COPY must spell out `s3-sync/rclone-filters.txt`; a bare `rclone-filters.txt` silently bakes the mdrepo list into the sidecar (bisync then downloads `_archives` back onto the PVC and resurrects purged prefixes).
+- A local `/mddash/_archives` tree is never legitimate (the archive worker mirrors server-side); the sidecar startup removes any stray copy (`sync.sh`), restoring the write bit first since bisync-downloaded dirs are owner-read-only.
 
 ### Database
 - **Dashboard API**: runs `flask_migrate.upgrade()` on startup against versioned migrations in `dashboard/api/migrations/versions/` (fresh databases are created by the same migrations — no `db.create_all()` fallback; details in `dashboard/api/AGENTS.md`). Add a new migration file when adding columns — do NOT manually run `flask db upgrade`.

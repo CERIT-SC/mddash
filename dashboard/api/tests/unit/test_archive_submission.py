@@ -1,17 +1,19 @@
 """Unit tests for archive Job submission."""
 
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
 from archive import submission
-from archive.status import STATUS_FILENAME
+from archive.status import STATUS_FILENAME, ArchiveStatus, write_status
 from archive.submission import (
     ARCHIVE_APP_LABEL,
     SubmissionError,
     is_job_active,
     job_name,
 )
+from cache import archive_status_cache
 
 
 class TestNaming:
@@ -31,9 +33,17 @@ class TestNaming:
 
 
 class TestIsJobActive:
+    """Liveness means "no terminal condition": Pending pods must read as live."""
+
     @patch("archive.submission.k8s.read_job")
     def test_true_when_active(self, mock_read: Mock) -> None:
-        mock_read.return_value = Mock(status=Mock(active=1))
+        mock_read.return_value = SimpleNamespace(status=SimpleNamespace(active=1, conditions=None))
+        assert is_job_active("archive", "abcde") is True
+
+    @patch("archive.submission.k8s.read_job")
+    def test_true_when_pending(self, mock_read: Mock) -> None:
+        """active=0 with no conditions is a pod still scheduling/pulling, not a dead Job."""
+        mock_read.return_value = SimpleNamespace(status=SimpleNamespace(active=0, conditions=None))
         assert is_job_active("archive", "abcde") is True
 
     @patch("archive.submission.k8s.read_job")
@@ -42,8 +52,15 @@ class TestIsJobActive:
         assert is_job_active("archive", "abcde") is False
 
     @patch("archive.submission.k8s.read_job")
-    def test_false_when_finished(self, mock_read: Mock) -> None:
-        mock_read.return_value = Mock(status=Mock(active=0))
+    def test_false_when_complete(self, mock_read: Mock) -> None:
+        conditions = [SimpleNamespace(type="Complete", status="True")]
+        mock_read.return_value = SimpleNamespace(status=SimpleNamespace(active=0, conditions=conditions))
+        assert is_job_active("archive", "abcde") is False
+
+    @patch("archive.submission.k8s.read_job")
+    def test_false_when_failed(self, mock_read: Mock) -> None:
+        conditions = [SimpleNamespace(type="Failed", status="True")]
+        mock_read.return_value = SimpleNamespace(status=SimpleNamespace(active=0, conditions=conditions))
         assert is_job_active("archive", "abcde") is False
 
 
@@ -172,6 +189,109 @@ class TestSubmitJob:
         submission.submit_job("restore", "abcde", tmp_path)
         manifest = mock_k8s.create_job_raw.call_args[0][0]
         assert manifest["spec"]["template"]["spec"]["containers"][0]["args"][0] == "restore"
+
+    @patch("archive.submission.k8s")
+    @patch("archive.submission.ARCHIVE_WORKER_IMAGE", "registry/mddash-archive-worker:dev")
+    @patch("archive.submission.is_job_active", return_value=False)
+    @patch("archive.submission.read_status", return_value=None)
+    @patch("archive.submission.write_status")
+    @patch("archive.submission.delete_jobs")
+    def test_waits_for_old_job_deletion_before_create(
+        self,
+        mock_delete: Mock,
+        mock_write: Mock,
+        mock_read: Mock,
+        mock_active: Mock,
+        mock_k8s: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """A retry races the foreground-deleted terminal Job (409 "object is being deleted")."""
+        mock_k8s.wait_for_pod_admission.return_value = True
+        submission.submit_job("archive", "abcde", tmp_path)
+        mock_k8s.wait_for_resource_absence.assert_called_once()
+        args, kwargs = mock_k8s.wait_for_resource_absence.call_args
+        assert args[:2] == ("job", "archive-abcde")
+        assert kwargs["timeout"] > 0
+
+    @patch("archive.submission.k8s")
+    @patch("archive.submission.ARCHIVE_WORKER_IMAGE", "registry/mddash-archive-worker:dev")
+    @patch("archive.submission.is_job_active", return_value=False)
+    @patch("archive.submission.read_status", return_value=None)
+    @patch("archive.submission.write_status")
+    @patch("archive.submission.delete_jobs")
+    def test_still_terminating_old_job_raises_before_doc_write(
+        self,
+        mock_delete: Mock,
+        mock_write: Mock,
+        mock_read: Mock,
+        mock_active: Mock,
+        mock_k8s: Mock,
+        tmp_path: Path,
+    ) -> None:
+        mock_k8s.wait_for_resource_absence.return_value = False
+        with pytest.raises(SubmissionError, match="still terminating"):
+            submission.submit_job("archive", "abcde", tmp_path)
+        mock_k8s.create_job_raw.assert_not_called()
+        mock_write.assert_not_called()
+
+    @patch("archive.submission.k8s")
+    @patch("archive.submission.ARCHIVE_WORKER_IMAGE", "registry/mddash-archive-worker:dev")
+    @patch("archive.submission.is_job_active", return_value=False)
+    @patch("archive.submission.read_status", return_value=None)
+    @patch("archive.submission.delete_jobs")
+    def test_restore_create_failure_keeps_sentinel_doc(
+        self, mock_delete: Mock, mock_read: Mock, mock_active: Mock, mock_k8s: Mock, tmp_path: Path
+    ) -> None:
+        """The previous attempt's FAILED restore sentinel must survive submission failures."""
+        sentinel = tmp_path / "abcde"
+        sentinel.mkdir()
+        write_status(
+            ArchiveStatus(attempt_id="old", state="failed", direction="restore", reason="copy"), "abcde", tmp_path
+        )
+        mock_k8s.create_job_raw.side_effect = RuntimeError("boom")
+        with pytest.raises(SubmissionError):
+            submission.submit_job("restore", "abcde", tmp_path)
+        assert (tmp_path / "abcde" / STATUS_FILENAME).exists()
+
+    @patch("archive.submission.k8s")
+    @patch("archive.submission.ARCHIVE_WORKER_IMAGE", "registry/mddash-archive-worker:dev")
+    @patch("archive.submission.is_job_active", return_value=False)
+    @patch("archive.submission.read_status", return_value=None)
+    @patch("archive.submission.delete_jobs")
+    def test_restore_admission_timeout_keeps_sentinel_doc(
+        self, mock_delete: Mock, mock_read: Mock, mock_active: Mock, mock_k8s: Mock, tmp_path: Path
+    ) -> None:
+        sentinel = tmp_path / "abcde"
+        sentinel.mkdir()
+        write_status(
+            ArchiveStatus(attempt_id="old", state="failed", direction="restore", reason="copy"), "abcde", tmp_path
+        )
+        mock_k8s.wait_for_pod_admission.return_value = False
+        with pytest.raises(SubmissionError, match="not admitted"):
+            submission.submit_job("restore", "abcde", tmp_path)
+        assert (tmp_path / "abcde" / STATUS_FILENAME).exists()
+
+    @patch("archive.submission.k8s")
+    @patch("archive.submission.ARCHIVE_WORKER_IMAGE", "registry/mddash-archive-worker:dev")
+    @patch("archive.submission.is_job_active", return_value=False)
+    @patch("archive.submission.read_status", return_value=None)
+    @patch("archive.submission.write_status")
+    @patch("archive.submission.delete_jobs")
+    def test_successful_submit_writes_through_liveness_cache(
+        self,
+        mock_delete: Mock,
+        mock_write: Mock,
+        mock_read: Mock,
+        mock_active: Mock,
+        mock_k8s: Mock,
+        tmp_path: Path,
+    ) -> None:
+        """The first reconciliation after the 202 must see the new Job live."""
+        archive_status_cache.clear()
+        mock_k8s.wait_for_pod_admission.return_value = True
+        submission.submit_job("restore", "abcde", tmp_path)
+        assert archive_status_cache["restore", "abcde"] is True
+        archive_status_cache.clear()
 
     @patch("archive.submission.ARCHIVE_WORKER_IMAGE", "registry/mddash-archive-worker:dev")
     @patch("archive.submission.k8s")

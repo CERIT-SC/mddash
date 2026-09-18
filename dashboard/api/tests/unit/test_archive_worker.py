@@ -170,6 +170,45 @@ class TestRestore:
         assert status["state"] == "completed"
         assert status["direction"] == "restore"
 
+    def _write_sentinel(self, harness: dict, state: str, direction: str) -> None:
+        (harness["exp_dir"] / ".archive-status.json").write_text(
+            f'{{"attempt_id": "old", "state": "{state}", "direction": "{direction}", "reason": "copy"}}\n'
+        )
+
+    def test_failed_sentinel_continues_restore(self, harness: dict) -> None:
+        """
+        A failed restore leaves its doc plus partial files.
+
+        The retry must resume into that dir, not refuse it as clobber.
+        """
+        self._write_sentinel(harness, "failed", "restore")
+        result, calls = run(harness, "restore", lsf="md.xtc")
+        assert result.returncode == 0, result.stderr
+        assert any(c.startswith("copy s3remote:bucket/_archives/exp1") for c in calls)
+        status = read_status(harness)
+        assert status["state"] == "completed"
+        assert status["attempt_id"] == "a1a1"
+
+    def test_running_sentinel_continues_restore(self, harness: dict) -> None:
+        """An evicted attempt leaves a running doc; it is the same resumable leftover."""
+        self._write_sentinel(harness, "running", "restore")
+        result, _calls = run(harness, "restore", lsf="md.xtc")
+        assert result.returncode == 0, result.stderr
+
+    def test_completed_doc_refuses_to_clobber(self, harness: dict) -> None:
+        """A completed restore doc marks a dir that must not be overwritten."""
+        self._write_sentinel(harness, "completed", "restore")
+        result, _calls = run(harness, "restore", lsf="md.xtc")
+        assert result.returncode == 1
+        assert read_status(harness)["reason"] == "target-exists"
+
+    def test_archive_direction_doc_refuses_to_clobber(self, harness: dict) -> None:
+        """An archive doc in a present dir is foreign to restore: clobber protection."""
+        self._write_sentinel(harness, "failed", "archive")
+        result, _calls = run(harness, "restore", lsf="md.xtc")
+        assert result.returncode == 1
+        assert read_status(harness)["reason"] == "target-exists"
+
 
 class TestPurge:
     def test_purge_calls_rclone_purge(self, harness: dict) -> None:

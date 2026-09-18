@@ -102,7 +102,18 @@ run_archive() {
 }
 
 run_restore() {
-    [ -e "$EXP_DIR" ] && fail "target-exists"
+    if [ -e "$EXP_DIR" ]; then
+        # Continuation gate: the API never writes restore docs, so a doc already
+        # here belongs to a previous attempt. A non-completed restore doc is the
+        # retry sentinel (rclone copy resumes into the partial dir); anything
+        # else in a present dir is clobber protection.
+        if [ ! -f "$STATUS_PATH" ] \
+            || ! grep -q '"direction": *"restore"' "$STATUS_PATH" \
+            || grep -q '"state": *"completed"' "$STATUS_PATH"; then
+            fail "target-exists"
+        fi
+        log "Continuing incomplete restore (retry sentinel found)"
+    fi
 
     if [ -z "$($RCLONE lsf "$ARCHIVE_PREFIX" 2>/dev/null)" ]; then
         fail "archive-empty"

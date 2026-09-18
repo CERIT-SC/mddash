@@ -53,9 +53,13 @@ class ExperimentSchema(BaseAutoSchema):
         """
         Reconcile archive state before field extraction so archived_at and archive_state never disagree in a payload.
 
+        The archive_state property consumes the stashed answer instead of
+        re-reconciling mid-dump (the world can flip between pre_dump and the
+        post_dump property pass).
+
         Returns:
             Experiment: The same experiment instance after reconciling its archive state.
         """
         if data.archived_at is not None or data.archived_step is not None:
-            data._read_archive_state()  # ruff:ignore[private-member-access]
+            data._dump_archive_state = data._read_archive_state()  # ruff:ignore[private-member-access]
         return data

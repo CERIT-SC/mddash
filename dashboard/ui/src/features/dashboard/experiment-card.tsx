@@ -284,7 +284,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
   const archive = useArchiveExperiment({
     mutation: {
       onSuccess: () => {
-        toast.success(`Archiving “${experiment.name}” — this can take a moment`)
+        toast.success(`Archiving “${experiment.name}” (this can take a moment)`)
         invalidate()
       },
       onError: onMutationError,
@@ -293,7 +293,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
   const restore = useRestoreExperiment({
     mutation: {
       onSuccess: () => {
-        toast.success(`Restoring “${experiment.name}” — this can take a while`)
+        toast.success(`Restoring “${experiment.name}” (this can take a while)`)
         invalidate()
       },
       onError: onMutationError,
@@ -349,7 +349,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
           <div className="min-w-0">
             <CardTitle className="truncate leading-tight">
               {archived ? (
-                // Archived experiments have no local files — the wizard stays closed until restored.
+                // Archived experiments have no local files, so the wizard stays closed until restored.
                 <span>{experiment.name}</span>
               ) : (
                 <Link
@@ -430,8 +430,8 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
             </AlertTitle>
             <AlertDescription>
               {experiment.archive_state === "archive_failed"
-                ? "Your files are unchanged on this drive — you can retry archiving."
-                : "The archived copy is intact — you can retry restoring."}
+                ? "Your files are unchanged on this drive; you can retry archiving."
+                : "The archived copy is intact; you can retry restoring."}
             </AlertDescription>
           </Alert>
         )}
