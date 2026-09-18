@@ -5,10 +5,6 @@ ENV ?= dev
 
 ifeq ($(ENV),dev)
   IMAGE_TAG ?= dev
-else
-  ifeq ($(IMAGE_TAG),)
-    $(error IMAGE_TAG is required for ENV=$(ENV) (e.g. IMAGE_TAG=0.1.0))
-  endif
 endif
 export IMAGE_TAG
 
@@ -149,11 +145,17 @@ test-pre-spawn-hook: ## Run pre-spawn hook unit tests
 
 # ==================== BUILD ====================
 
+.PHONY: require-image-tag
+require-image-tag:
+ifeq ($(IMAGE_TAG),)
+	@echo "IMAGE_TAG is required for ENV=$(ENV) (e.g. IMAGE_TAG=0.1.0)" >&2; exit 1
+endif
+
 .PHONY: build
 build: build-dashboard build-notebook build-mdrun-api build-tuner-api build-landing build-hub ## Build all automated images
 
 .PHONY: build-dashboard
-build-dashboard: ## Build dashboard sidecar images (ui, proxy, auth, api, s3sync)
+build-dashboard: require-image-tag ## Build dashboard sidecar images (ui, proxy, auth, api, s3sync)
 	@$(MAKE) -C dashboard build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: build-ui
@@ -161,50 +163,50 @@ build-ui: ## Build Dashboard UI static bundle
 	pnpm --filter dash build
 
 .PHONY: build-notebook
-build-notebook: ## Build notebook image
+build-notebook: require-image-tag ## Build notebook image
 	@$(MAKE) -C notebook build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: build-mdrun-api
-build-mdrun-api: ## Build mdrun-api image
+build-mdrun-api: require-image-tag ## Build mdrun-api image
 	@$(MAKE) -C mdrun-api build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: build-tuner-api
-build-tuner-api: ## Build Tuner API image (worker image remains manual)
+build-tuner-api: require-image-tag ## Build Tuner API image (worker image remains manual)
 	@$(MAKE) -C tuner build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: build-landing
-build-landing: ## Build landing page image
+build-landing: require-image-tag ## Build landing page image
 	@$(MAKE) -C landing build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: build-hub
-build-hub: ## Build JupyterHub image (hub + custom UI)
+build-hub: require-image-tag ## Build JupyterHub image (hub + custom UI)
 	@$(MAKE) -C hub build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push
 push: push-dashboard push-notebook push-mdrun-api push-tuner-api push-landing push-hub ## Build and push all automated images
 
 .PHONY: push-dashboard
-push-dashboard: ## Build and push dashboard sidecar images
+push-dashboard: require-image-tag ## Build and push dashboard sidecar images
 	@$(MAKE) -C dashboard push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push-notebook
-push-notebook: ## Build and push notebook image
+push-notebook: require-image-tag ## Build and push notebook image
 	@$(MAKE) -C notebook push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push-mdrun-api
-push-mdrun-api: ## Build and push mdrun-api image
+push-mdrun-api: require-image-tag ## Build and push mdrun-api image
 	@$(MAKE) -C mdrun-api push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push-tuner-api
-push-tuner-api: ## Build and push Tuner API image (worker image remains manual)
+push-tuner-api: require-image-tag ## Build and push Tuner API image (worker image remains manual)
 	@$(MAKE) -C tuner push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push-landing
-push-landing: ## Build and push landing page image
+push-landing: require-image-tag ## Build and push landing page image
 	@$(MAKE) -C landing push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push-hub
-push-hub: ## Build and push JupyterHub image (hub + custom UI)
+push-hub: require-image-tag ## Build and push JupyterHub image (hub + custom UI)
 	@$(MAKE) -C hub push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 # ==================== HELM CHART PACKAGING ====================
@@ -239,7 +241,7 @@ push-mddash-chart: push-mdrun-api-chart push-tuner-chart ## Package and push umb
 		helm push "$$tmpdir/mddash-jupyterhub-$(CHART_VERSION).tgz" oci://$(chart_registry)
 
 .PHONY: deploy
-deploy: ## Deploy via Helm
+deploy: require-image-tag ## Deploy via Helm
 	@$(MAKE) -C helm deploy ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: release
