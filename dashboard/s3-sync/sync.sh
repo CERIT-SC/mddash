@@ -24,11 +24,8 @@ RESYNC_FLAGS="--resync --resync-mode newer $COMMON_FLAGS --max-lock 2m --resilie
 setup_rclone() {
     [ -n "$S3_BUCKET" ] || { log "No S3_BUCKET configured, local-only mode"; exit 0; }
 
-    # /_archives/** is bisync-excluded, so a local copy can only be a leftover a
-    # misfiltered image once downloaded (bisync will never remove it now). The
-    # archive worker mirrors server-side and never writes the prefix locally, so
-    # deleting is always safe. rclone downloads dirs owner-read-only, so restore
-    # the write bit first or rm cannot recurse.
+    # /_archives/** is bisync-excluded and the worker mirrors server-side, so a
+    # local copy is never legitimate; delete it (dirs arrive owner-read-only).
     if [ -d /mddash/_archives ]; then
         log "Removing stray _archives tree from the PVC (bisync-excluded prefix)"
         chmod -R u+w /mddash/_archives 2>/dev/null || true

@@ -146,11 +146,7 @@ class TestRestoreGates:
         mock_submit.assert_called_once()
 
     def test_stale_running_doc_retryable(self, experiment: Experiment, s3, tmp_path: Path) -> None:
-        """
-        An in-flight restore doc with a dead Job is retryable like a FAILED one.
-
-        The leftover of an evicted (unretried) attempt is continuation, not clobber.
-        """
+        """An in-flight restore doc with a dead Job is retryable like a FAILED one."""
         experiment.archived_at = datetime.now(UTC)
         write_status(
             ArchiveStatus(attempt_id="a", state=ArchiveState.RUNNING.value, direction="restore"), EXP_ID, tmp_path
@@ -305,11 +301,7 @@ class TestArchiveStateReconciliation:
             assert experiment.archive_state == "restore_failed"
 
     def test_live_job_outranks_failed_sentinel(self, experiment: Experiment, tmp_path: Path) -> None:
-        """
-        A retried restore must read as restoring the moment its Job exists.
-
-        Waiting for the worker to rewrite the doc would keep the failure banner up.
-        """
+        """A retried restore reads as restoring once its Job exists, not when the worker rewrites the doc."""
         experiment.archived_at = datetime.now(UTC)
         write_status(
             ArchiveStatus(attempt_id="a", state=ArchiveState.FAILED.value, direction="restore", reason="copy"),
@@ -323,11 +315,7 @@ class TestArchiveStateReconciliation:
             assert experiment.archive_state == "restoring"
 
     def test_stale_running_restore_doc_is_failed(self, experiment: Experiment, tmp_path: Path) -> None:
-        """
-        An in-flight restore doc with no live Job reconciles to restore_failed.
-
-        Eviction is unretried (backoffLimit 0), same rule as the archive direction.
-        """
+        """An in-flight restore doc with no live Job (evicted, backoffLimit 0) is failed, as in the archive direction."""
         experiment.archived_at = datetime.now(UTC)
         write_status(
             ArchiveStatus(attempt_id="a", state=ArchiveState.RUNNING.value, direction="restore"), EXP_ID, tmp_path
@@ -339,12 +327,7 @@ class TestArchiveStateReconciliation:
             assert experiment.archive_state == "restore_failed"
 
     def test_archive_state_consumed_from_pre_dump_stash(self, experiment: Experiment, tmp_path: Path) -> None:
-        """
-        The property serves the pre_dump reconciliation, not a mid-dump re-check.
-
-        A world flip between pre_dump and the property pass must not produce an
-        archived_at/archive_state mismatch within one payload.
-        """
+        """The property serves the pre_dump reconciliation, so no mid-dump flip can split archived_at from archive_state."""
         self._snap(experiment)
         calls = 0
 
@@ -444,12 +427,7 @@ class TestArchivedJobSerialization:
     def test_archived_job_serves_persisted_columns_without_manifest_io(
         self, experiment: Experiment, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """
-        Archived experiments keep their job rows after the files are gone.
-
-        Serializing them must serve persisted columns, not resolve manifests
-        (the NotFound warning spam from the demo E2E review).
-        """
+        """Archived experiments keep job rows after files are gone; serialize columns, not manifests."""
         import logging
 
         from enums import AmberBinary, DeviceType, EwaldPreset, JobStatus

@@ -117,17 +117,14 @@ def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
         return status.attempt_id if status else ""
 
     delete_jobs(experiment_id)
-    # A foreground deletion returns before the object is actually gone; recreating
-    # under the same deterministic name right away races termination (the API
-    # server rejects the create with "object is being deleted"). Mirror the upload
-    # flow and wait for the old Job to disappear first.
+    # Foreground deletion returns before the object is gone; recreating the same name
+    # right away races termination ("object is being deleted"). Same wait as the upload flow.
     if not k8s.wait_for_resource_absence("job", name, timeout=JOB_DELETION_TIMEOUT):
         raise SubmissionError(f"Previous archive Job {name} is still terminating; retry shortly.")
 
     attempt_id = secrets.token_hex(8)
-    # The queued doc lives inside the experiment dir: archive's dir exists, but writing
-    # one for restore would re-create the dir the worker must (a) copy into and
-    # (b) refuse to overwrite. Restore in-flight is reconstituted from the live Job.
+    # Restore gets no queued doc: writing one would re-create the dir the worker
+    # refuses to overwrite. Restore in-flight is reconstituted from the live Job.
     if direction == ArchiveDirection.ARCHIVE.value:
         write_status(create_queued_status(attempt_id, direction), experiment_id, data_dir)
 
@@ -141,8 +138,7 @@ def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
             raise SubmissionError(f"Archive pod not admitted within {ADMISSION_TIMEOUT}s")
 
         logger.info("Job %s admitted for experiment %s (attempt %s)", name, experiment_id, attempt_id)
-        # Write through the short liveness cache: the first poll after the 202
-        # must see this Job live, not the terminal one it replaced.
+        # Write through the 1s liveness cache: the first poll after the 202 sees this Job live.
         archive_status_cache[direction, experiment_id] = True
         return attempt_id
     except SubmissionError:
@@ -156,11 +152,9 @@ def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
 
 def _cleanup_own_status(direction: str, experiment_id: str, data_dir: Path) -> None:
     """
-    Roll back a failed submission: only archive has a queued doc written by this call.
+    Only archive's own queued doc is this call's to roll back.
 
-    Restore never writes one; the doc in its leftover dir is the previous attempt's
-    retry sentinel and must survive submission failures, or a partially-restored dir
-    loses the marker that makes it re-submittable.
+    A restore doc is the previous attempt's retry sentinel and must survive.
     """
     if direction == ArchiveDirection.ARCHIVE.value:
         delete_status(experiment_id, data_dir)
@@ -190,10 +184,9 @@ def submit_purge_job(experiment_id: str) -> None:
 
 def is_job_active(direction: str, experiment_id: str) -> bool:
     """
-    Live until a terminal condition lands; a Pending pod (scheduling, image pull) counts.
+    Live until a Complete/Failed condition lands; Pending pods (scheduling, image pull) count.
 
-    Counting the pre-start window as dead would flash failed states right after
-    submission and stop the UI polling that reports progress.
+    Counting the pre-start window as dead would flash failed states and stop UI polling.
     """
     job_obj = k8s.read_job(job_name(direction, experiment_id))
     if job_obj is None:

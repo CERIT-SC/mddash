@@ -176,11 +176,7 @@ class TestRestore:
         )
 
     def test_failed_sentinel_continues_restore(self, harness: dict) -> None:
-        """
-        A failed restore leaves its doc plus partial files.
-
-        The retry must resume into that dir, not refuse it as clobber.
-        """
+        """A failed restore leaves doc plus partial files; the retry resumes into that dir."""
         self._write_sentinel(harness, "failed", "restore")
         result, calls = run(harness, "restore", lsf="md.xtc")
         assert result.returncode == 0, result.stderr

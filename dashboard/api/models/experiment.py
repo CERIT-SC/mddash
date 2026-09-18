@@ -782,10 +782,8 @@ class Experiment(db.Model):  # type: ignore
         """
         One of: None, archiving, archived, restoring, archive_failed, restore_failed.
 
-        A schema dump reconciles once in pre_dump and stashes its answer on the
-        instance; consuming it here keeps archived_at and archive_state consistent
-        within one payload (a re-check could flip mid-dump). Direct callers
-        reconcile fresh.
+        A schema dump reconciles once in pre_dump and stashes the answer here, so
+        archived_at and archive_state agree within one payload; direct callers reconcile fresh.
         """
         if self.archived_at is None and self.archived_step is None:
             return None
@@ -808,12 +806,9 @@ class Experiment(db.Model):  # type: ignore
         """
         Reconcile archive state from DB markers, the status doc, and live Jobs.
 
-        The durable markers are DB-side (snapshot columns = submitted, archived_at =
-        completed); the status doc disappears with the directory on successful archive,
-        and Jobs TTL-expire, so completion is inferred: snapshots set + local dir gone +
-        archive Job not live. A doc claiming in-flight work with no live Job (Job
-        evicted, backoffLimit 0) reconciles to the direction's failed state, like the
-        MDRepo upload path. Mutates the row only on those terminal transitions.
+        DB markers are durable (snapshots = submitted, archived_at = completed); the
+        doc dies with the dir and Jobs TTL-expire, so completion is inferred. An
+        in-flight doc with no live Job failed. Mutates the row only on terminal transitions.
         """
         doc = read_archive_status(self.id, DATA_DIR)
         dir_exists = (DATA_DIR / self.id).exists()
@@ -843,10 +838,8 @@ class Experiment(db.Model):  # type: ignore
                     self.archived_size_bytes = None
                     db.session.commit()
                     return None
-                # A live Job outranks the stale FAILED sentinel of the attempt it
-                # replaces (a retry read as restoring immediately, clearing the
-                # failure banner); a doc claiming in-flight work with no live Job
-                # (evicted, backoffLimit 0) failed like the archive direction does.
+                # A live Job outranks a stale FAILED sentinel; an in-flight doc with
+                # no live Job failed (evicted, backoffLimit 0), as in the archive direction.
                 return "restoring" if _restore_live() else "restore_failed"
             return "restoring" if _restore_live() else "archived"
 
@@ -941,10 +934,8 @@ class Experiment(db.Model):  # type: ignore
         if state not in {"archived", "restore_failed"}:
             raise Conflict(description=f"Experiment cannot be restored now (state: {state}).")
         if (DATA_DIR / self.id).exists():
-            # Mirror the worker gate: any non-completed restore doc is the retry
-            # sentinel (the dir then holds only the status doc / partial copies of
-            # the interrupted attempt); anything else in a present dir is genuine
-            # clobber protection.
+            # The worker gates the same way: only a non-completed restore doc marks a
+            # resumable leftover; anything else in a present dir is clobber protection.
             doc = read_archive_status(self.id, DATA_DIR)
             retryable = (
                 doc is not None

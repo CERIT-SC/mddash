@@ -1,9 +1,7 @@
 #!/bin/sh
-# Mirror one experiment between the PVC (/mddash/<id>) and the bisync-excluded
-# S3 prefix _archives/<id>/, or purge that prefix.
+# Mirror one experiment between the PVC (/mddash/<id>) and the bisync-excluded S3 prefix _archives/<id>/.
 # Usage: worker.sh <archive|restore|purge> --experiment-id <id> --attempt-id <hex>
-# Status failures use fixed reason tokens: rclone stderr may carry credentials
-# and stays in Job logs, never in the status document.
+# Status failures use fixed reason tokens: rclone stderr may carry credentials and stays in Job logs.
 set -eu
 
 DATA_DIR=${DATA_DIR:-/mddash}
@@ -103,10 +101,8 @@ run_archive() {
 
 run_restore() {
     if [ -e "$EXP_DIR" ]; then
-        # Continuation gate: the API never writes restore docs, so a doc already
-        # here belongs to a previous attempt. A non-completed restore doc is the
-        # retry sentinel (rclone copy resumes into the partial dir); anything
-        # else in a present dir is clobber protection.
+        # The API never writes restore docs, so any doc here is a previous attempt's:
+        # non-completed marks a resumable leftover, anything else is clobber protection.
         if [ ! -f "$STATUS_PATH" ] \
             || ! grep -q '"direction": *"restore"' "$STATUS_PATH" \
             || grep -q '"state": *"completed"' "$STATUS_PATH"; then

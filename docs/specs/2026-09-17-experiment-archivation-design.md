@@ -62,9 +62,9 @@ The design therefore:
 - `null`: normal active experiment (`archived_at IS NULL`, snapshot columns NULL).
 - `archiving`: snapshots set, `archived_at` NULL, archive Job live.
 - `archived`: `archived_at IS NOT NULL`, no restore doc, and no live restore Job.
-- `restoring`: `archived_at IS NOT NULL` and the restore Job is live. A live Job outranks even a stale `failed` sentinel from the attempt it replaces, so a retry flips to `restoring` (and clears the failure banner) immediately.
+- `restoring`: `archived_at IS NOT NULL` and the restore Job is live. A live Job outranks even a stale `failed` sentinel from the attempt it replaces.
 - `archive_failed`: snapshots set, `archived_at` NULL, local dir still present, and (doc terminal `failed`, doc active without live Job, or no doc and no live Job; the `job_missing` analogue from `_read_upload_state`. An evicted pod leaves an unretried dead Job, `backoffLimit: 0`, so a doc alone must never pin the state).
-- `restore_failed`: `archived_at IS NOT NULL` and a restore doc exists (terminal `failed`, or active without a live Job) with no live restore Job.
+- `restore_failed`: `archived_at IS NOT NULL`, restore doc present (terminal `failed` or active), and no live restore Job.
 
 Reconciliation runs in the read paths (list/detail/status), same as upload; the only DB mutations are: snapshots at archive-submit, `archived_at` set/cleared by reconciliation, and snapshots cleared when `archived_at` is cleared.
 

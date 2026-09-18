@@ -51,11 +51,7 @@ class ExperimentSchema(BaseAutoSchema):
     @pre_dump
     def sync_archive(self, data: Experiment, **kwargs: dict) -> Experiment:  # ruff:ignore[unused-method-argument]
         """
-        Reconcile archive state before field extraction so archived_at and archive_state never disagree in a payload.
-
-        The archive_state property consumes the stashed answer instead of
-        re-reconciling mid-dump (the world can flip between pre_dump and the
-        post_dump property pass).
+        Reconcile archive state before field extraction; archive_state consumes the stash.
 
         Returns:
             Experiment: The same experiment instance after reconciling its archive state.

@@ -126,12 +126,7 @@ class SimulationJob(db.Model):  # type: ignore
 
     @property
     def _archived(self) -> bool:
-        """
-        The parent experiment is archived and its files are gone.
-
-        File-derived values must serve persisted columns instead of touching
-        manifests/logs that no longer exist.
-        """
+        """Parent experiment is archived: files are gone, so derived values serve persisted columns."""
         return self.experiment is not None and self.experiment.archived_at is not None
 
     # Key by job id: ORM instances are rebuilt per request, so the default
