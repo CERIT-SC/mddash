@@ -4651,6 +4651,114 @@ export const useDeleteAmberJob = <TError = globalThis.Error & { info?: NotFoundR
       return useMutation(getDeleteAmberJobMutationOptions(options), queryClient);
     }
 
+export type extendAmberJobResponse400 = {
+  data: BadRequestResponse
+  status: 400
+}
+
+export type extendAmberJobResponseDefault = {
+  data: ProblemResponse
+  status: Exclude<HTTPStatusCodes, 400>
+}
+
+;
+export type extendAmberJobResponseError = (extendAmberJobResponse400 | extendAmberJobResponseDefault) & {
+  headers: Headers;
+};
+
+export type extendAmberJobResponse = (extendAmberJobResponseError)
+
+export const getExtendAmberJobUrl = (experimentId: string,
+    simulationPath: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/amber/${simulationPath}/extend`
+}
+
+/**
+ * @summary Extend an AMBER run (extension is GROMACS-only)
+ */
+export const extendAmberJob = async (experimentId: string,
+    simulationPath: string, options?: RequestInit): Promise<extendAmberJobResponse> => {
+
+  const res = await fetch(getExtendAmberJobUrl(experimentId,simulationPath),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: extendAmberJobResponseError['data'], status?: number} = new globalThis.Error();
+    const data : extendAmberJobResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: extendAmberJobResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as extendAmberJobResponse
+}
+
+
+
+
+
+export const getExtendAmberJobMutationKey = () => ['extendAmberJob'] as const;
+
+export const getExtendAmberJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extendAmberJob>>, TError,ExtendAmberJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof extendAmberJob>>, TError,ExtendAmberJobMutationVariables, TContext> => {
+
+const mutationKey = getExtendAmberJobMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof extendAmberJob>>, ExtendAmberJobMutationVariables> = (props) => {
+          const {experimentId,simulationPath} = props ?? {};
+
+          return  extendAmberJob(experimentId,simulationPath,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExtendAmberJobMutationResult = NonNullable<Awaited<ReturnType<typeof extendAmberJob>>>
+
+    export type ExtendAmberJobMutationError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }
+    export type ExtendAmberJobMutationVariables = {experimentId: string;simulationPath: string}
+
+    /**
+ * @summary Extend an AMBER run (extension is GROMACS-only)
+ */
+export const useExtendAmberJob = <TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extendAmberJob>>, TError,ExtendAmberJobMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof extendAmberJob>>,
+        TError,
+        ExtendAmberJobMutationVariables,
+        TContext
+      > => {
+      return useMutation(getExtendAmberJobMutationOptions(options), queryClient);
+    }
+
 export type stopAmberJobResponse204 = {
   data: NoContentResponse
   status: 204
