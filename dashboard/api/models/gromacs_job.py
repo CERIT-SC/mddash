@@ -12,7 +12,7 @@ from extensions import db
 from sqlalchemy import ForeignKey
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
-from utils import nsteps_override, strip_run_control_args, tail
+from utils import nsteps_override, strip_run_control_args, tail, tail_bytes
 from werkzeug.exceptions import (
     BadRequest,
     Forbidden,
@@ -129,8 +129,9 @@ class GromacsJob(SimulationJob):
         if self._nsteps_done is not None:
             return self._nsteps_done
 
-        # If simulation has finished, return total steps
-        if self._performance:
+        # Only a genuinely finished run may shortcut to its target: a stopped run
+        # prints a Performance block too, so cached performance proves nothing.
+        if self._performance and self.status == JobStatus.FINISHED:
             return self._nsteps
 
         return self._parse_nsteps_done()
@@ -188,9 +189,15 @@ class GromacsJob(SimulationJob):
 
     @property
     def performance(self) -> float | None:
-        """Performance of the job in ns/day."""
+        """Performance of the job in ns/day (only once the run itself finished)."""
         if self._performance:
             return self._performance
+
+        # Only finished runs get a performance reading of their own: a live or
+        # stopped segment's parse would inherit the previous segment's trailer
+        # block from the shared appended log.
+        if self.status != JobStatus.FINISHED:
+            return None
 
         if val := self._parse_performance():
             self._performance = val
@@ -250,6 +257,10 @@ class GromacsJob(SimulationJob):
             ntomp=ntomp,  # type: ignore[call-arg]
             experiment_id=experiment.id,  # type: ignore[call-arg]
             engine=Engine.GMX,  # type: ignore[call-arg]
+            # Rows are born PENDING (matching MDRun's own creation status): the
+            # live-segment index only covers committed live statuses, so a NULL
+            # here would leave the slot unguarded.
+            _last_known_status=JobStatus.PENDING,  # type: ignore[call-arg]
         )
         db.session.add(job)
 
@@ -354,6 +365,7 @@ class GromacsJob(SimulationJob):
             ntomp=latest.ntomp,  # type: ignore[call-arg]
             experiment_id=experiment.id,  # type: ignore[call-arg]
             engine=Engine.GMX,  # type: ignore[call-arg]
+            _last_known_status=JobStatus.PENDING,  # type: ignore[call-arg]
         )
         job._nsteps = total
         db.session.add(job)
@@ -509,7 +521,7 @@ class GromacsJob(SimulationJob):
             return None
 
         try:
-            log = tail(self._gmx_log, 20)
+            log = tail_bytes(self._gmx_log)
             pattern = r"^\s*\d+\s+\d+\.\d+\s*"
             for line in reversed(log.splitlines()):
                 # "Finished mdrun" means the run reached its total — but the marker may
@@ -573,7 +585,7 @@ class GromacsJob(SimulationJob):
             return None
 
         try:
-            log = tail(self._gmx_log, 10)
+            log = tail_bytes(self._gmx_log)
             for line in reversed(log.splitlines()):
                 if "Finished mdrun" not in line:
                     continue
@@ -599,7 +611,7 @@ class GromacsJob(SimulationJob):
             return None
 
         try:
-            log = tail(self._gmx_log, 20)
+            log = tail_bytes(self._gmx_log)
             for line in reversed(log.splitlines()):
                 if "Performance:" not in line:
                     continue

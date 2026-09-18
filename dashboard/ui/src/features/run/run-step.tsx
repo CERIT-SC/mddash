@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 
 import { toApiError } from "@/api/errors"
 import {
@@ -65,7 +65,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
   const failed = job?.status === JobStatus.ERROR
   // The ladder in props is the single source — the same value the stepper
   // consumes; the server holds it at Run until progress parses from the log
-  // (or earlier segments keep data analyzable — STOPPED counts as step 3 too).
+  // (or earlier segments keep data analyzable; STOPPED counts as step 3 too).
   const analyzable = simulation.step >= 3
   // A terminal GMX run can be resumed from its checkpoint (AMBER has no extension yet).
   const canExtend = engine !== Engine.AMBER && job !== undefined && !job.is_live
@@ -88,6 +88,15 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
     void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experimentId) })
   }
 
+  // When the polled run settles (finished/failed), this is the last fetch the
+  // job query ever makes — nothing else would refresh the run history, wizard
+  // lists, or header pill without a reload. Flush them once on the edge.
+  const wasLiveRef = useRef(false)
+  useEffect(() => {
+    if (wasLiveRef.current && !live) invalidate()
+    wasLiveRef.current = live
+  })
+
   const mutations = useJobMutations(engine)
   const stopping = mutations.stop.isPending
   const busy =
@@ -99,7 +108,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
     mutations.stop.mutate(vars, {
       onSuccess: () => {
         setConfirmStop(false)
-        toast.success("Run stopped — results so far are kept")
+        toast.success("Run stopped. Results so far are kept")
         invalidate()
       },
       onError: (error) => toast.error(toApiError(error).message),
@@ -183,7 +192,13 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
             onExtend={() => setConfirmExtend(true)}
             onRestart={() => setConfirmRestart(true)}
           />
-          <SegmentsList experimentId={experimentId} simulationPath={simulation.simulation_path} engine={engine} />
+          <SegmentsList
+            experimentId={experimentId}
+            simulationPath={simulation.simulation_path}
+            engine={engine}
+            live={live}
+            pollMs={pollMs}
+          />
           {/* A pending pod has produced nothing — every stream 404s, so there is
               nothing to show and no reason to hit the log endpoint. */}
           {job.status !== JobStatus.PENDING && (
@@ -228,8 +243,8 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
               Stop this run?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The simulation stops at its next checkpoint. Everything produced so far — results, trajectory, and logs —
-              is kept, so you can analyze it{engine !== Engine.AMBER ? " or extend the run later" : ""}.
+              The simulation stops at its next checkpoint. Everything produced so far (results, trajectory, and logs) is
+              kept, so you can analyze it{engine !== Engine.AMBER ? " or extend the run later" : ""}.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -250,8 +265,8 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
               Re-run the simulation?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The whole run history — all segments, results, and logs — will be deleted, and the run starts over with
-              the same configuration. This cannot be undone.
+              The whole run history (all segments, results, and logs) will be deleted, and the run starts over with the
+              same configuration. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

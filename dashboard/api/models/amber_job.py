@@ -11,7 +11,7 @@ from enums import AmberBinary, Engine, EwaldPreset, JobStatus
 from extensions import db
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
-from utils import tail
+from utils import tail, tail_bytes
 from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError, NotFound, UnprocessableEntity
 
 from models.simulation import Simulation
@@ -91,7 +91,9 @@ class AmberJob(SimulationJob):
         if self._nsteps_done is not None:
             return self._nsteps_done
 
-        if self._performance:
+        # Only a genuinely finished run may shortcut to its target: a stopped run
+        # prints performance timings too, so cached performance proves nothing.
+        if self._performance and self.status == JobStatus.FINISHED:
             return self._nsteps
 
         return self._parse_nsteps_done()
@@ -145,9 +147,14 @@ class AmberJob(SimulationJob):
 
     @property
     def performance(self) -> float | None:
-        """Performance of the job in ns/day."""
+        """Performance of the job in ns/day (only once the run itself finished)."""
         if self._performance:
             return self._performance
+
+        # Only finished runs get a performance reading of their own: pmemd writes
+        # timing summaries on any termination, so a stopped run must not cache one.
+        if self.status != JobStatus.FINISHED:
+            return None
 
         if val := self._parse_performance():
             self._performance = val
@@ -201,6 +208,9 @@ class AmberJob(SimulationJob):
             ntomp=ntomp,
             experiment_id=experiment.id,
             engine=Engine.AMBER,
+            # Rows are born PENDING (matching MDRun's own creation status): the
+            # live-segment index only covers committed live statuses.
+            _last_known_status=JobStatus.PENDING,
         )
         db.session.add(job)
 
@@ -352,7 +362,7 @@ class AmberJob(SimulationJob):
             return None
 
         try:
-            log = tail(self._mdout_log, 50)
+            log = tail_bytes(self._mdout_log)
             pattern = r"ns/day\s*=\s*([\d.]+)"
             for line in reversed(log.splitlines()):
                 match = re.search(pattern, line)
@@ -411,7 +421,7 @@ class AmberJob(SimulationJob):
             return None
 
         try:
-            log = tail(self._mdout_log, 30)
+            log = tail_bytes(self._mdout_log)
             for line in reversed(log.splitlines()):
                 if "Master Total wall time" not in line:
                     continue

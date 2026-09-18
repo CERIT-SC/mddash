@@ -11,6 +11,7 @@ from models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook, Tune
 from .analysis_data import materialize_analysis, start_analysis_thread
 from .files import (
     MDPOSIT_DEMO_PROJECT_URL,
+    append_gmx_stopped_segment,
     ensure_amber_demo_files,
     ensure_demo_files,
     ensure_mdposit_demo_files,
@@ -20,6 +21,7 @@ from .files import (
     write_gmx_checkpoint,
     write_gmx_simulation,
     write_mdrun_stdio,
+    write_running_amber_log,
     write_running_gmx_log,
 )
 from .state import build_model, demo_state
@@ -378,10 +380,11 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "nsteps": 500000,
     }
 
-    # Finished AMBER job (equilibration complete)
-    finished_amber = build_model(
+    # Running AMBER job (equilibration in progress) — exercises the AMBER stop
+    # flow in the demo, mirroring the live GMX job of the enzyme study.
+    running_amber = build_model(
         AmberJob,
-        id="demo-amber-finished",
+        id="demo-amber-running",
         experiment=amber_folding,
         simulation_path="equilibration.simulation.json",
         binary=AmberBinary.PMEMD_MPI,
@@ -389,14 +392,12 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         np=4,
         ntomp=2,
         _nsteps=100000,
-        _start_timestamp=int((now - timedelta(hours=5)).timestamp()),
-        _finish_timestamp=int((now - timedelta(hours=3)).timestamp()),
-        _performance=28.7,
-        created_at=now - timedelta(hours=5),
+        _start_timestamp=int((now - timedelta(minutes=30)).timestamp()),
+        created_at=now - timedelta(minutes=40),
         engine=Engine.AMBER,
     )
-    demo_state.mdrun_jobs[finished_amber.id] = {
-        "status": JobStatus.FINISHED.value,
+    demo_state.mdrun_jobs[running_amber.id] = {
+        "status": JobStatus.RUNNING.value,
         "experiment_id": amber_folding.id,
         "prmtop_name": "villin.prmtop",
         "inpcrd_name": "villin.inpcrd",
@@ -559,7 +560,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         amber_folding,
         amber_folding_notebook,
         production_amber,
-        finished_amber,
+        running_amber,
         amber_dna,
         amber_dna_notebook,
         dna_rmsd_analysis,
@@ -637,6 +638,16 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     write_mdrun_stdio(enzyme.id, "production", running_gmx.id)
     # The stopped second segment of npt_equilibration resumable via its checkpoint.
     write_gmx_checkpoint(enzyme.id, "npt_equilibration")
+    # The stopped second segment's own partial log block (stopped at 120k of 150k);
+    # a TERM-stopped run always leaves a Performance line the parsers must not trust.
+    append_gmx_stopped_segment(
+        enzyme.id,
+        "npt_equilibration",
+        init_step=100000,
+        nsteps=150000,
+        done_steps=120000,
+        started=now - timedelta(hours=19),
+    )
 
     # Published study: simple structure
     ensure_demo_files(published.id, ["lysozyme_hewl.tpr", "structure.pdb", "trajectory.xtc", "input.pdb"])
@@ -650,7 +661,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         mdin_names=["production.mdin", "equilibration.mdin"],
     )
     write_finished_amber_log(amber_folding.id, "production")
-    write_finished_amber_log(amber_folding.id, "equilibration")
+    write_running_amber_log(amber_folding.id, "equilibration")
+    write_mdrun_stdio(amber_folding.id, "", running_amber.id)
 
     # AMBER DNA study: uses AMBER file format
     ensure_amber_demo_files(

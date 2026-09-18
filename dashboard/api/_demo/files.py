@@ -308,6 +308,30 @@ def write_gmx_checkpoint(experiment_id: str, deffnm: str) -> None:
     cpt_path.write_bytes(b"Demo GROMACS checkpoint (stands in for the binary cpt).\n")
 
 
+def append_gmx_stopped_segment(
+    experiment_id: str, deffnm: str, init_step: int, nsteps: int, done_steps: int, started: datetime
+) -> None:
+    """
+    Append a TERM-stopped extension segment block to a GMX log.
+
+    A real TERM-stopped mdrun always prints a ``Performance:`` line (but never
+    ``Finished mdrun``) — seeding it keeps the demo honest about what progress
+    parsers must ignore for stopped rows.
+    """
+    log_path = DATA_DIR / experiment_id / f"{deffnm}.log"
+    wall = started.strftime("%a %b %d %H:%M:%S %Y")
+    with log_path.open("a") as f:
+        f.write(
+            f"Started mdrun on rank 0 {wall}\n"
+            f"            init-step = {init_step}\n"
+            f"              nsteps = {nsteps}\n"
+            f"        {init_step}    5000000.0000\n"
+            f"        {done_steps}    6000000.0000\n"
+            f"\n"
+            f"Performance:        61.2     1994.771    332.462\n"
+        )
+
+
 def write_running_amber_log(experiment_id: str, deffnm: str) -> None:
     """Write a partial mdout (no final performance block) and a live mdinfo."""
     lines = _amber_out_template_lines()

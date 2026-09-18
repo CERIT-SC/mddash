@@ -28,16 +28,17 @@ class SimulationJob(db.Model):  # type: ignore
     """
 
     __tablename__ = "simulation_jobs"
-    # At most one un-converged (not-yet-or-still-live) segment per simulation: extend
-    # creates its row with NULL last_known_status, so a second concurrent extension
-    # violates this index instead of spawning two pods that append to one trajectory.
+    # At most one live segment per simulation: rows are born PENDING and a second
+    # concurrent extension violates this index instead of spawning two pods that
+    # append to one trajectory. NULL (never-yet-polled legacy rows) is deliberately
+    # excluded — status fetches converge them before any extend can insert.
     __table_args__ = (
         Index(
             "uq_simulation_jobs_live_segment",
             "experiment_id",
             "simulation_path",
             unique=True,
-            sqlite_where=text("last_known_status IS NULL OR last_known_status IN ('PENDING', 'RUNNING', 'UNKNOWN')"),
+            sqlite_where=text("last_known_status IN ('PENDING', 'RUNNING', 'UNKNOWN')"),
         ),
     )
     __mapper_args__: ClassVar[dict[str, Any]] = {"polymorphic_on": "engine"}

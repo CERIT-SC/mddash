@@ -388,6 +388,35 @@ class TestExtend:
             )
             assert new_segment._nsteps == 140000
 
+    def test_extend_anchors_on_step_rows_despite_stop_performance_block(
+        self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """A real TERM-stopped run prints Performance: too — it must neither shortcut the row nor be cached."""
+        mdrun = _mock_mdrun(mocker)
+        sim_path = self._setup_finished_segment(app, experiment_id, tmp_path, _nsteps=150000)
+        with app.app_context():
+            seg = db.session.get(GromacsJob, "seg-1")
+            assert seg is not None
+            seg._last_known_status = JobStatus.STOPPED
+            db.session.commit()
+        # Real TERM-stop trailer: step rows up to 120k, then a Performance: line.
+        (tmp_path / experiment_id / "production/protein.log").write_text(
+            "header\n        120000    2400000.0000     1000.0000\nPerformance:        61.2\n"
+        )
+        self._write_checkpoint(tmp_path / experiment_id)
+
+        response = client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/extend", json={"nsteps": 20000})
+
+        assert response.status_code == HTTPStatus.CREATED
+        assert mdrun["create"].call_args.kwargs["extra_args"] == "-cpi protein.cpt -nsteps 140000"
+        with app.app_context():
+            old = db.session.get(GromacsJob, "seg-1")
+            assert old is not None
+            # Stopped: not a proven 150k completion, and no inherited performance either.
+            assert old.nsteps_done == 120000
+            assert old.performance is None
+            assert old._performance is None
+
     def test_extend_falls_back_to_target_when_progress_unparseable(
         self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
     ) -> None:
@@ -426,6 +455,7 @@ class TestExtend:
                 pme=DeviceType.CPU,
                 nb=DeviceType.GPU,
                 engine=Engine.GMX,
+                _last_known_status=JobStatus.PENDING,
             )
             db.session.add(rival)
             db.session.commit()
@@ -507,9 +537,9 @@ class TestExtend:
 
 
 class TestLiveSegmentIndex:
-    """DB-level guarantee: one un-converged/live segment per simulation."""
+    """DB-level guarantee: one segment with a committed live status per simulation."""
 
-    @pytest.mark.parametrize("winner_status", [None, JobStatus.PENDING, JobStatus.RUNNING])
+    @pytest.mark.parametrize("winner_status", [JobStatus.PENDING, JobStatus.RUNNING, JobStatus.UNKNOWN])
     def test_second_live_segment_is_rejected(
         self, app: Flask, experiment_id: str, winner_status: JobStatus | None
     ) -> None:
@@ -517,12 +547,17 @@ class TestLiveSegmentIndex:
 
         _add_gmx_job(app, experiment_id, "protein.simulation.json", "winner", winner_status)
         with pytest.raises(IntegrityError):
-            _add_gmx_job(app, experiment_id, "protein.simulation.json", "rival", None)
+            _add_gmx_job(app, experiment_id, "protein.simulation.json", "rival", JobStatus.PENDING)
 
     def test_second_segment_after_finish_is_allowed(self, app: Flask, experiment_id: str) -> None:
         _add_gmx_job(app, experiment_id, "protein.simulation.json", "winner", JobStatus.FINISHED)
         _add_gmx_job(app, experiment_id, "protein.simulation.json", "extension", None)
         _add_gmx_job(app, experiment_id, "protein.simulation.json", "stopped-extension", JobStatus.STOPPED)
+
+    def test_legacy_null_status_rows_are_not_blocked(self, app: Flask, experiment_id: str) -> None:
+        """NULL (never-converged) rows stay outside the index so cold-extends are not rejected."""
+        _add_gmx_job(app, experiment_id, "protein.simulation.json", "legacy-a", None)
+        _add_gmx_job(app, experiment_id, "protein.simulation.json", "legacy-b", None)
 
 
 class TestSegmentHistory:
@@ -631,6 +666,36 @@ class TestAppendedLogParsing:
         expected = int(datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC).timestamp())
         with app.app_context():
             assert job._parse_start_timestamp() == expected
+
+
+class TestRoutePathGuards:
+    """Unknown verb suffixes must not fall into the greedy submit routes."""
+
+    def test_amber_extend_is_explicitly_gmx_only(
+        self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        mdrun = _mock_mdrun(mocker)
+        sim_path = _write_amber_simulation(tmp_path / experiment_id)
+        _add_amber_job(app, experiment_id, sim_path, "amber-done", JobStatus.FINISHED)
+
+        response = client.post(f"/dash/api/experiments/{experiment_id}/amber/{sim_path}/extend", json={"nsteps": 5000})
+
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert "GROMACS" in response.get_json()["detail"]
+        mdrun["create"].assert_not_called()
+
+    def test_typo_verb_suffix_gets_404_on_submit(
+        self, client: FlaskClient, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        _mock_mdrun(mocker)
+        _write_gmx_simulation(tmp_path / experiment_id)
+
+        response = client.post(
+            f"/dash/api/experiments/{experiment_id}/gmx/protein.simulation.json/stoppe",
+            json={"np": 4, "ntomp": 2, "pme": "cpu", "nb": "gpu"},
+        )
+
+        assert response.status_code == HTTPStatus.NOT_FOUND
 
 
 class TestStripRunControlArgs:

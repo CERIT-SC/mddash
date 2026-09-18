@@ -46,8 +46,8 @@ export function ExtendDialog({ currentTotal, pending, onExtend, onCancel }: Exte
             Extend the run?
           </AlertDialogTitle>
           <AlertDialogDescription>
-            The simulation continues from its latest checkpoint and appends to the existing results — nothing is
-            deleted. The operation is recorded as a new segment in the run history.
+            The simulation continues from its latest checkpoint and appends to the existing results. Nothing is deleted.
+            The operation is recorded as a new segment in the run history.
           </AlertDialogDescription>
         </AlertDialogHeader>
 

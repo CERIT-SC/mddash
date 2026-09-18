@@ -6,11 +6,26 @@ from extensions import db
 from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import AmberJob, Experiment
+from models.simulation import SIMULATION_SUFFIX
 from schemas import AmberJobSchema
 from validators import check_positive_int
 from werkzeug.exceptions import BadRequest, NotFound
 
 amber_bp = Blueprint("amber", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/amber")
+
+
+def _check_simulation_path(simulation_path: str) -> None:
+    """
+    Reject unknown verb suffixes swallowed by the greedy <path:> submit route.
+
+    ``POST .../amber/x.simulation.json/typo`` would otherwise validate the request
+    body and 400 with "invalid compute parameters" instead of a clean 404.
+
+    Raises:
+        NotFound: If the path is not a simulation manifest path.
+    """
+    if not simulation_path.endswith(SIMULATION_SUFFIX):
+        raise NotFound(f"Simulation {simulation_path} not found.")
 
 
 def _latest_job_or_404(experiment_id: str, simulation_path: str) -> AmberJob:
@@ -66,6 +81,8 @@ def submit_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturn
     Raises:
         BadRequest: If compute parameters are invalid.
     """
+    _check_simulation_path(simulation_path)
+
     schema = AmberJobSchema()
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
@@ -116,6 +133,19 @@ def delete_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturn
         db.session.delete(job)
     db.session.commit()
     return "", HTTPStatus.NO_CONTENT
+
+
+@amber_bp.route("/<path:simulation_path>/extend", methods=["POST"])
+def extend_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
+    """
+    Reject AMBER extension requests; extension is only available for GROMACS.
+
+    Exists so that ``POST .../extend`` is a clear 400 instead of falling into the
+    greedy submit route with confusing parameter errors.
+    """
+    _check_simulation_path(simulation_path)
+    _ = experiment_id
+    raise BadRequest("Simulation extension is only available for GROMACS.")
 
 
 @amber_bp.route("/<path:simulation_path>/stop", methods=["POST"])

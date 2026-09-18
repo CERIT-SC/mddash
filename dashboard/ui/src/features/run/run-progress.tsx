@@ -7,7 +7,7 @@ import { jobProgressPercent } from "./use-simulation-job"
 
 type RunProgressProps = {
   job: SimulationJob
-  /** A stop/extend/re-run mutation is in flight — buttons stay disabled meanwhile. */
+  /** A stop/extend/re-run mutation is in flight, so buttons stay disabled meanwhile. */
   busy: boolean
   /** GMX runs in a terminal state can be continued from the checkpoint. */
   canExtend: boolean
@@ -111,7 +111,7 @@ export function RunProgress({ job, busy, canExtend, onStop, onExtend, onRestart 
         {failed && <p className="text-text-muted text-sm">The run failed — check the logs below for details.</p>}
         {stopped && (
           <p className="text-text-muted text-sm">
-            The run was stopped — results so far are kept{canExtend ? ", ready to extend from its checkpoint" : ""}.
+            The run was stopped. Results so far are kept{canExtend ? ", ready to extend from its checkpoint" : ""}.
           </p>
         )}
         {live && percent !== null && job.estimated_time !== null && job.estimated_time !== undefined && (

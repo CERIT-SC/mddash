@@ -7,6 +7,9 @@ type SegmentsListProps = {
   experimentId: string
   simulationPath: string
   engine: Engine
+  /** While the active segment is live, the list re-polls on this interval. */
+  live?: boolean
+  pollMs?: number
 }
 
 type Segment = GromacsJob | AmberJob
@@ -23,17 +26,22 @@ function formatTimestamp(ts: number | null | undefined): string {
 
 function formatSteps(job: Segment): string {
   if (job.nsteps === null || job.nsteps === undefined) return "—"
-  const done = job.nsteps_done ?? 0
-  return `${done.toLocaleString("en-US")} / ${job.nsteps.toLocaleString("en-US")}`
+  if (job.nsteps_done === null || job.nsteps_done === undefined) return `— / ${job.nsteps.toLocaleString("en-US")}`
+  return `${job.nsteps_done.toLocaleString("en-US")} / ${job.nsteps.toLocaleString("en-US")}`
 }
 
 /**
  * One row per run segment: the initial run plus every extension. The trajectory
  * itself stays append-continuous; this lists the submission history behind it.
  */
-export function SegmentsList({ experimentId, simulationPath, engine }: SegmentsListProps) {
-  const gmx = useListGromacsJobs(experimentId, { query: { retry: false, enabled: engine !== Engine.AMBER } })
-  const amber = useListAmberJobs(experimentId, { query: { retry: false, enabled: engine === Engine.AMBER } })
+export function SegmentsList({ experimentId, simulationPath, engine, live, pollMs = 5000 }: SegmentsListProps) {
+  const refetchInterval = live ? pollMs : false
+  const gmx = useListGromacsJobs(experimentId, {
+    query: { retry: false, enabled: engine !== Engine.AMBER, refetchInterval },
+  })
+  const amber = useListAmberJobs(experimentId, {
+    query: { retry: false, enabled: engine === Engine.AMBER, refetchInterval },
+  })
   const active = engine === Engine.AMBER ? amber : gmx
 
   const jobs: Segment[] = (active.data?.status === 200 ? active.data.data : [])

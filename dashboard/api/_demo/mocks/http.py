@@ -274,7 +274,14 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
 
         job_data["status"] = "STOPPED"
         deffnm = str(job_data.get("tpr_name", "md.tpr")).removesuffix(".tpr")
-        write_gmx_checkpoint(str(job_data.get("experiment_id", "")), deffnm)
+        experiment_id = str(job_data.get("experiment_id", ""))
+        write_gmx_checkpoint(experiment_id, deffnm)
+        # A real TERM-stopped mdrun always prints a Performance: line (but never
+        # "Finished mdrun") — append it so the demo exercises the guarded parsers.
+        log_path = DATA_DIR / experiment_id / f"{deffnm}.log"
+        if log_path.exists():
+            with log_path.open("a") as f:
+                f.write("\nPerformance:        62.5     1994.771    332.462\n")
         return (HTTPStatus.NO_CONTENT, {}, "")
 
     def stop_amber_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:

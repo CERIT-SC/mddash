@@ -284,6 +284,36 @@ def tail(file: Path | str, n: int = 10) -> str:
         return b"\n".join(result_lines).decode("utf-8", "replace")
 
 
+_TAIL_BUDGET_BYTES = 65536
+
+
+def tail_bytes(file: Path | str, budget: int = _TAIL_BUDGET_BYTES) -> str:
+    """
+    Read the last ``budget`` bytes of a file as text (first partial line dropped).
+
+    Line-count tails miss GROMACS trailers: the M-E-G-A-F-L-O-P-S/wallcycle block
+    alone can span hundreds of lines, pushing `Finished mdrun` and `Performance:`
+    beyond any reasonable line window. A byte budget covers the whole trailer at a
+    fixed cost.
+
+    Args:
+        file: Path to the file.
+        budget: Number of bytes to read from the end of the file.
+
+    Returns:
+        str: Last ``budget`` bytes decoded as text (errors replaced).
+    """
+    file_path = Path(file) if isinstance(file, str) else file
+    size = file_path.stat().st_size
+    with file_path.open("rb") as f:
+        f.seek(max(0, size - budget))
+        data = f.read()
+    text = data.decode("utf-8", errors="replace")
+    if size > budget and "\n" in text:
+        text = text.split("\n", 1)[1]
+    return text
+
+
 DU_SIZE_FILENAME = ".storage_size"
 DU_INTERVAL = 30 * 60  # 30 minutes
 

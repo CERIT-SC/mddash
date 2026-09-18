@@ -80,6 +80,8 @@ function tunerJob(trials: TunerTrial[]): TunerJob {
 type MockRunOptions = {
   /** undefined = default running job; null = no job (404). */
   initial?: GromacsJob | AmberJob | null
+  /** Flip the live job to FINISHED after this many single-job GETs (poll ticks). */
+  settleAfter?: number
   trials?: TunerTrial[]
   logs?: Record<string, string>
 }
@@ -88,6 +90,7 @@ function mockRun(options: MockRunOptions = {}) {
   const state = {
     job: options.initial === undefined ? gmxJob() : options.initial,
     jobs: [] as (GromacsJob | AmberJob)[],
+    jobGets: 0,
   }
   if (state.job !== null) state.jobs.push(state.job)
   const logs = options.logs ?? {
@@ -133,6 +136,20 @@ function mockRun(options: MockRunOptions = {}) {
         return Response.json(segment, { status: 201 })
       }
       if (url.endsWith(one)) {
+        if (options.settleAfter !== undefined && method === "GET") {
+          state.jobGets += 1
+          if (state.jobGets > options.settleAfter && state.job !== null && state.job.is_live) {
+            state.job = gmxJob({
+              ...(state.job as GromacsJob),
+              status: "FINISHED",
+              is_live: false,
+              nsteps_done: 10000,
+              performance: 62.5,
+              estimated_time: 0,
+            })
+            state.jobs = state.jobs.map((j) => (j.id === (state.job as GromacsJob).id ? (state.job as GromacsJob) : j))
+          }
+        }
         if (method === "DELETE") {
           state.job = null
           state.jobs = []
@@ -341,7 +358,7 @@ describe("RunStep error job", () => {
 })
 
 describe("RunStep stop flow", () => {
-  it("stops the job without deleting it — data stays analyzable and extendable", async () => {
+  it("stops the job without deleting it, data stays analyzable and extendable", async () => {
     const { calls } = mockRun()
     // The mock job has parsed progress, so the server ladder is already at
     // step 3; stopping keeps it there (STOPPED counts as analyzable) and the
@@ -385,6 +402,21 @@ describe("RunStep stop flow", () => {
     expect(calls.some((call) => call.method === "POST" && call.url.includes("/stop"))).toBe(false)
     expect(calls.some((call) => call.method === "DELETE")).toBe(false)
     expect(await screen.findByText("20%")).toBeInTheDocument()
+  })
+})
+
+describe("RunStep settle-refresh edge", () => {
+  it("flips the headline and refreshes the run history when a live run settles", async () => {
+    mockRun({ settleAfter: 2 })
+    renderRun({ pollMs: 25 })
+
+    const progress = await screen.findByRole("region", { name: /run progress/i })
+    await waitFor(() => expect(within(progress).getByText("Finished")).toBeInTheDocument())
+
+    // The run history refetched without a reload and shows the settled segment.
+    const history = await screen.findByRole("region", { name: /run history/i })
+    expect(await within(history).findByText("Finished")).toBeInTheDocument()
+    expect(within(progress).getByText("10,000 / 10,000 steps")).toBeInTheDocument()
   })
 })
 

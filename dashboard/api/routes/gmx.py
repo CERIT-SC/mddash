@@ -6,11 +6,26 @@ from extensions import db
 from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import Experiment, GromacsJob
+from models.simulation import SIMULATION_SUFFIX
 from schemas import GromacsJobSchema
 from validators import check_log_type, check_positive_int
 from werkzeug.exceptions import BadRequest, NotFound
 
 gmx_bp = Blueprint("gmx", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/gmx")
+
+
+def _check_simulation_path(simulation_path: str) -> None:
+    """
+    Reject unknown verb suffixes swallowed by the greedy <path:> submit route.
+
+    ``POST .../gmx/x.simulation.json/typo`` would otherwise validate the request
+    body and 400 with "invalid compute parameters" instead of a clean 404.
+
+    Raises:
+        NotFound: If the path is not a simulation manifest path.
+    """
+    if not simulation_path.endswith(SIMULATION_SUFFIX):
+        raise NotFound(f"Simulation {simulation_path} not found.")
 
 
 def _latest_job_or_404(experiment_id: str, simulation_path: str) -> GromacsJob:
@@ -68,6 +83,8 @@ def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
     Raises:
         BadRequest: If compute parameters are invalid.
     """
+    _check_simulation_path(simulation_path)
+
     schema = GromacsJobSchema()
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"

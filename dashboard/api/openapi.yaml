@@ -508,6 +508,17 @@ paths:
         '204': {$ref: '#/components/responses/NoContent'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/Problem'}
+  /dash/api/experiments/{experiment_id}/amber/{simulation_path}/extend:
+    parameters:
+      - {$ref: '#/components/parameters/ExperimentId'}
+      - {$ref: '#/components/parameters/SimulationPath'}
+    post:
+      tags: [AMBER]
+      summary: Extend an AMBER run (extension is GROMACS-only)
+      operationId: extendAmberJob
+      responses:
+        '400': {$ref: '#/components/responses/BadRequest'}
+        default: {$ref: '#/components/responses/Problem'}
   /dash/api/experiments/{experiment_id}/amber/{simulation_path}/stop:
     parameters:
       - {$ref: '#/components/parameters/ExperimentId'}
