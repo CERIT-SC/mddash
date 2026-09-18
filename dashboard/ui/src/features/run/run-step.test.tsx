@@ -518,7 +518,7 @@ describe("RunStep AMBER", () => {
 
     const progress = await screen.findByRole("region", { name: /run progress/i })
     expect(await within(progress).findByText("Finished")).toBeInTheDocument()
-    // AMBER has no extension support — the action must not be offered.
+    // AMBER has no extension support, so the action must not be offered.
     expect(screen.queryByRole("button", { name: /extend/i })).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /re-run/i })).toBeInTheDocument()
   })
