@@ -172,7 +172,7 @@ def strip_run_control_args(extra_args: str) -> str:
     """
     Return extra_args with GROMACS run-control flags removed; whitespace-normalized.
 
-    ``-nsteps`` is dropped (re-added with a cumulative value by the extend flow);
+    ``-nsteps`` is dropped (the extend flow re-adds its delta: ``mdrun -cpi`` counts additional steps);
     ``-cpi`` raises ``ValueError``.
     """
     if _CPI_ARG_RE.search(extra_args or ""):

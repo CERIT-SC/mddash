@@ -208,7 +208,7 @@ class GromacsJob(SimulationJob):
     @classmethod
     def extend(cls, experiment: "Experiment", simulation_path: str, nsteps: int) -> "GromacsJob":
         """
-        Extend the latest segment by ``nsteps`` (a delta added to the previous cumulative total).
+        Extend the latest segment by ``nsteps`` additional steps, resuming from its checkpoint.
 
         Raises:
             BadRequest: No prior segment, live segment, missing checkpoint, manifest contains ``-cpi``, or concurrent extend.
@@ -250,9 +250,11 @@ class GromacsJob(SimulationJob):
             latest.nsteps_done = progress
         base = progress if progress is not None else previous_total
 
+        # mdrun -cpi counts -nsteps as ADDITIONAL steps from the checkpoint step —
+        # a cumulative total here would over-run by all previous progress.
         total = base + nsteps
         cpt_name = f"{Path(tpr_rel_path).name.removesuffix('.tpr')}.cpt"
-        extra_args = " ".join(filter(None, [base_args, f"-cpi {cpt_name}", f"-nsteps {total}"]))
+        extra_args = " ".join(filter(None, [base_args, f"-cpi {cpt_name}", f"-nsteps {nsteps}"]))
 
         mdrun_job = mdrun.create_job(
             experiment_id=experiment.id,
@@ -277,6 +279,7 @@ class GromacsJob(SimulationJob):
             _last_known_status=JobStatus.PENDING,  # type: ignore[call-arg]
         )
         job._nsteps = total
+        job._init_step = base
         db.session.add(job)
         try:
             db.session.commit()

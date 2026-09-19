@@ -242,7 +242,7 @@ class TestStop:
 
 
 class TestExtend:
-    """GMX extension resumes from the checkpoint with cumulative -nsteps."""
+    """mdrun -cpi counts ADDITIONAL steps: commands carry the delta, rows persist the absolute target."""
 
     def _setup_finished_segment(
         self, app: Flask, exp_id: str, tmp_path: Path, extra_args: str = "", **job_kwargs: object
@@ -266,7 +266,8 @@ class TestExtend:
         assert response.status_code == HTTPStatus.CREATED
         kwargs = mdrun["create"].call_args.kwargs
         assert kwargs["tpr_name"] == "production/protein.tpr"
-        assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 150000"
+        # The command carries the delta…
+        assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 50000"
         # Hardware inherited from the previous segment.
         assert (kwargs["pme"], kwargs["nb"], kwargs["np"], kwargs["ntomp"]) == ("cpu", "gpu", 8, 1)
         # Manifest itself stays untouched.
@@ -277,6 +278,7 @@ class TestExtend:
             jobs = GromacsJob.query.filter_by(experiment_id=experiment_id, simulation_path=sim_path).all()
             assert len(jobs) == 2, "extension keeps segment history"
             new_segment = next(j for j in jobs if j.id != "seg-1")
+            # …while the row persists the absolute end target for the display.
             assert new_segment._nsteps == 150000
 
     def test_extend_respects_manifest_nsteps_override(
@@ -290,12 +292,13 @@ class TestExtend:
 
         assert response.status_code == HTTPStatus.CREATED
         kwargs = mdrun["create"].call_args.kwargs
-        # The stale override is stripped and replaced with the cumulative total.
-        assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 130000"
+        # The stale override is stripped; mdrun gets only the requested delta.
+        assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 50000"
 
     def test_extend_chains_cumulative_totals(
         self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
     ) -> None:
+        """Each segment persists its absolute end target; each command carries just its delta."""
         mdrun = _mock_mdrun(mocker)
         sim_path = self._setup_finished_segment(app, experiment_id, tmp_path, _nsteps=100000, _performance=68.5)
         self._write_checkpoint(tmp_path / experiment_id)
@@ -316,7 +319,15 @@ class TestExtend:
 
         assert response.status_code == HTTPStatus.CREATED
         kwargs = mdrun["create"].call_args.kwargs
-        assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 175000"
+        assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 25000"
+        with app.app_context():
+            seg3 = (
+                GromacsJob.query
+                .filter_by(experiment_id=experiment_id, simulation_path=sim_path)
+                .order_by(GromacsJob.created_at.desc())
+                .first()
+            )
+            assert seg3._nsteps == 175000
 
     def test_extend_chains_persisted_total_over_stale_manifest_override(
         self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
@@ -344,9 +355,17 @@ class TestExtend:
 
         assert second.status_code == HTTPStatus.CREATED
         kwargs = mdrun["create"].call_args.kwargs
-        # 130000 (first extension's persisted total) + 25000 — NOT 80000 + 25000,
-        # which is what the old override-first precedence would have produced.
-        assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 155000"
+        # The command carries the delta; the row's base remains the first
+        # extension's persisted 130000 — NOT the manifest's stale 80000 override.
+        assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 25000"
+        with app.app_context():
+            seg3 = (
+                GromacsJob.query
+                .filter_by(experiment_id=experiment_id, simulation_path=sim_path)
+                .order_by(GromacsJob.created_at.desc())
+                .first()
+            )
+            assert seg3._nsteps == 155000
 
     def test_extend_anchors_on_actual_progress_and_freezes_display(
         self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
@@ -370,8 +389,9 @@ class TestExtend:
 
         assert response.status_code == HTTPStatus.CREATED
         kwargs = mdrun["create"].call_args.kwargs
-        # 120000 done + 20000 requested — NOT 150000 (target) + 20000.
-        assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 140000"
+        # The command carries the delta; the new row's base is 120000 done,
+        # NOT the 150000 target.
+        assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 20000"
         with app.app_context():
             old = db.session.get(GromacsJob, "seg-1")
             assert old is not None
@@ -385,6 +405,35 @@ class TestExtend:
                 .first()
             )
             assert new_segment._nsteps == 140000
+
+    def test_extend_persists_resume_point_as_init_step(
+        self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """The appended log never re-dumps init-step, so ETA math needs the resume point persisted."""
+        _mock_mdrun(mocker)
+        sim_path = self._setup_finished_segment(app, experiment_id, tmp_path, _nsteps=150000)
+        with app.app_context():
+            seg = db.session.get(GromacsJob, "seg-1")
+            assert seg is not None
+            seg._last_known_status = JobStatus.STOPPED
+            db.session.commit()
+        (tmp_path / experiment_id / "production/protein.log").write_text(
+            "header\n        120000    2400000.0000     1000.0000\n"
+        )
+        self._write_checkpoint(tmp_path / experiment_id)
+
+        response = client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/extend", json={"nsteps": 20000})
+
+        assert response.status_code == HTTPStatus.CREATED
+        with app.app_context():
+            new_segment = (
+                GromacsJob.query
+                .filter_by(experiment_id=experiment_id, simulation_path=sim_path)
+                .order_by(GromacsJob.created_at.desc())
+                .first()
+            )
+            assert new_segment._init_step == 120000
+            assert new_segment.init_step == 120000
 
     def test_extend_anchors_on_step_rows_despite_stop_performance_block(
         self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
@@ -406,7 +455,7 @@ class TestExtend:
         response = client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/extend", json={"nsteps": 20000})
 
         assert response.status_code == HTTPStatus.CREATED
-        assert mdrun["create"].call_args.kwargs["extra_args"] == "-cpi protein.cpt -nsteps 140000"
+        assert mdrun["create"].call_args.kwargs["extra_args"] == "-cpi protein.cpt -nsteps 20000"
         with app.app_context():
             old = db.session.get(GromacsJob, "seg-1")
             assert old is not None
@@ -431,7 +480,37 @@ class TestExtend:
         response = client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/extend", json={"nsteps": 20000})
 
         assert response.status_code == HTTPStatus.CREATED
-        assert mdrun["create"].call_args.kwargs["extra_args"] == "-cpi protein.cpt -nsteps 170000"
+        assert mdrun["create"].call_args.kwargs["extra_args"] == "-cpi protein.cpt -nsteps 20000"
+        with app.app_context():
+            new_segment = (
+                GromacsJob.query
+                .filter_by(experiment_id=experiment_id, simulation_path=sim_path)
+                .order_by(GromacsJob.created_at.desc())
+                .first()
+            )
+            assert new_segment._nsteps == 170000
+
+    def test_extend_finished_50k_by_10_runs_exactly_10_more_steps(
+        self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """A finished run extended by N runs exactly N more steps, ending at base + N."""
+        mdrun = _mock_mdrun(mocker)
+        sim_path = self._setup_finished_segment(app, experiment_id, tmp_path, _nsteps=50000, _performance=68.5)
+        self._write_checkpoint(tmp_path / experiment_id)
+
+        response = client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/extend", json={"nsteps": 10})
+
+        assert response.status_code == HTTPStatus.CREATED
+        kwargs = mdrun["create"].call_args.kwargs
+        assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 10"
+        with app.app_context():
+            new_segment = (
+                GromacsJob.query
+                .filter_by(experiment_id=experiment_id, simulation_path=sim_path)
+                .order_by(GromacsJob.created_at.desc())
+                .first()
+            )
+            assert new_segment.nsteps == 50010
 
     def test_extend_race_loser_gets_400_and_its_mdrun_job_is_deleted(
         self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
