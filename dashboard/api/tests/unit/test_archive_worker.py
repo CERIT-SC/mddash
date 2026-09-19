@@ -110,9 +110,8 @@ class TestArchive:
         result, calls = run(harness, "archive")
         assert result.returncode == 0, result.stderr
 
-        # Server-side seed first, filtered sync second (sync, not copy: deletion
-        # of stale archive objects is what makes re-archive pass the check),
-        # check before any deletion.
+        # Server-side seed → filtered sync (sync's deletions make re-archive
+        # pass) → check before local deletion.
         assert calls[0].startswith("copy s3remote:bucket/exp1 s3remote:bucket/_archives/exp1")
         assert "--filter-from" in calls[0]
         assert calls[1].startswith("sync ")
@@ -220,13 +219,7 @@ class TestRestore:
 
 class TestFilters:
     def test_status_doc_excluded_from_sync_and_archive(self) -> None:
-        """
-        Regression: archived-era status docs must not ride into archives or the live prefix.
-
-        A doc in the archive overwrites the live restore sentinel on restore. rclone
-        glob '**/' does not match root level, so root + nested pair lines must both
-        exist (verified against rclone 1.74.4).
-        """
+        """Rclone '**/' skips root level, so both root and nested lines must exist (1.74.4)."""
         lines = [line.strip() for line in FILTERS.read_text().splitlines() if not line.startswith("#")]
         for expected in (
             "- .archive-status.json",

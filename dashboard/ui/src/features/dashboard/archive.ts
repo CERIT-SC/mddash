@@ -1,8 +1,6 @@
 import type { Experiment } from "@/api/generated/models"
 import { relativeTime } from "@/shared/format"
 
-// Archive work is Job-driven: while a direction is in flight the card shows a
-// spinner, and the experiments list keeps polling (hasLiveWork imports this set).
 export const IN_FLIGHT: ReadonlySet<Experiment["archive_state"]> = new Set(["archiving", "restoring"])
 const FAILED: ReadonlySet<Experiment["archive_state"]> = new Set(["archive_failed", "restore_failed"])
 
@@ -18,8 +16,7 @@ export function isArchivedFailed(experiment: Experiment): boolean {
   return experiment.archive_state !== null && FAILED.has(experiment.archive_state)
 }
 
-// Worker failure reason tokens → user-facing cause (kept terse; the detail
-// copy around it says what happens next).
+// Worker reason tokens → user-facing cause for the failure alert.
 const REASON_LABELS: Record<string, string> = {
   "seed-copy": "initial copy failed",
   "delta-sync": "syncing changes failed",
@@ -34,9 +31,8 @@ export function archiveReasonLabel(reason: string | null | undefined): string | 
   return reason ? (REASON_LABELS[reason] ?? null) : null
 }
 
-// Status line for the card: transitional and archived states replace the
-// "Active … ago" idle label; active experiments fall through to null.
-// restore_failed still means "data lives only in S3", so it labels as archived.
+// Status line: transitional and archived states replace the "Active … ago"
+// idle label (restore_failed's data lives only in S3); active experiments → null.
 export function archiveStateLabel(experiment: Experiment): string | null {
   switch (experiment.archive_state) {
     case "archiving":

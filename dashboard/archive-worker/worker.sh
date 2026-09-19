@@ -54,13 +54,11 @@ endpoint = ${S3_ENDPOINT}
 EOF
 }
 
-# Atomic status write: single-writer tmp name + rename, matching the sync/upload
-# filter exclusions. JSON fields are fixed tokens/hex from the API, never rclone stderr.
+# Atomic status write (tmp + rename); fields are fixed tokens, never rclone stderr.
 write_status() {
     state="$1"
     reason="${2:-}"
     tmp="$STATUS_PATH.tmp"
-    # Restore writes before the dir exists; archive's dir is already there.
     mkdir -p "$(dirname "$tmp")"
     if [ -n "$reason" ]; then
         printf '%s\n' "{\"attempt_id\": \"$ATTEMPT_ID\", \"state\": \"$state\", \"direction\": \"$MODE\", \"reason\": \"$reason\"}" > "$tmp"
@@ -77,9 +75,8 @@ fail() {
     exit 1
 }
 
-# Refusing to write into a foreign dir must leave no trace: a failed restore
-# doc here would make the API/worker sentinel gate treat the dir as OUR
-# resumable leftover and merge the archive into foreign data on retry.
+# No status write on refusal: a failed doc here would read as our retry
+# sentinel and unlock clobbering foreign data on the next attempt.
 reject() {
     reason="$1"
     log "REFUSED ($reason)"
@@ -91,13 +88,12 @@ run_archive() {
 
     write_status running
 
-    # Seed from S3 (server-side, no egress); absent live prefix is fine.
+    # Server-side seed; an absent live prefix is fine.
     log "Server-side copy $LIVE_PREFIX -> $ARCHIVE_PREFIX"
     $RCLONE copy "$LIVE_PREFIX" "$ARCHIVE_PREFIX" --filter-from "$FILTERS" || fail "seed-copy"
 
-    # sync (not copy): a previous archive/restore cycle can leave stale objects
-    # under the archive prefix (files since deleted locally); only sync deletes
-    # them so the symmetric check below passes on re-archive.
+    # sync, not copy: stale objects from an earlier archive/restore cycle must
+    # be deleted for re-archive to pass the symmetric check.
     log "Syncing top-up from $EXP_DIR"
     $RCLONE sync "$EXP_DIR" "$ARCHIVE_PREFIX" --filter-from "$FILTERS" || fail "delta-sync"
 
@@ -129,9 +125,7 @@ run_restore() {
 
     write_status running
 
-    # Filters keep our own status doc out on both sides of the copy/check: the
-    # archive never stores it, and without exclusions the local running doc
-    # would read as a dest-side extra and fail every symmetric check.
+    # Filtered so the local status doc can't read as a dest-side extra in check.
     log "Copying $ARCHIVE_PREFIX -> $EXP_DIR"
     $RCLONE copy "$ARCHIVE_PREFIX" "$EXP_DIR" --filter-from "$FILTERS" || fail "copy"
 

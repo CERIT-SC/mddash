@@ -49,8 +49,6 @@ class SubmissionError(Exception):
 
 
 def job_name(direction: str, experiment_id: str) -> str:
-    # Experiment IDs are 5 lowercase alnum chars, so plain names stay DNS-1123-safe;
-    # the shared helper keeps that invariant enforced rather than documented.
     return dns1123_name(direction, experiment_id, fallback_prefix=direction)
 
 
@@ -112,8 +110,7 @@ def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
     if not ARCHIVE_WORKER_IMAGE:
         raise SubmissionError("ARCHIVE_WORKER_IMAGE is not set. Redeploy the Helm chart and restart the server.")
 
-    # Pre-create K8s steps fail as SubmissionError too: the model surfaces them
-    # as archive-submission-failed 409s, not naked 500s.
+    # Pre-create failures surface as SubmissionError → 409, not a naked 500.
     try:
         if is_job_active(direction, experiment_id):
             logger.info("Job %s already active for experiment %s", name, experiment_id)

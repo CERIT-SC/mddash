@@ -8,8 +8,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Archive, LoaderCircle } from "lucide-react"
 import { toast } from "sonner"
 
-// Deep links to an archived experiment land here instead of the wizard: the
-// files only exist in S3 until the restore Job copies them back.
+// Deep-link destination for archived experiments: data lives in S3 until restored.
 export function ArchivedNotice({ experiment }: { experiment: Experiment }) {
   const queryClient = useQueryClient()
   const restore = useRestoreExperiment({
@@ -22,8 +21,7 @@ export function ArchivedNotice({ experiment }: { experiment: Experiment }) {
     },
   })
 
-  // In-flight and failed restore are durable notice states, not just a mutation
-  // result: a deep link can land mid-restore or after a failed attempt.
+  // Durable states, not mutation-only: a deep link can land mid-restore or after a failure.
   const restoring = experiment.archive_state === "restoring" || restore.isPending
   const restoreFailed = experiment.archive_state === "restore_failed"
 
