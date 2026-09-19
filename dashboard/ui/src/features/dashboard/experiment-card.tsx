@@ -332,13 +332,11 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
 
   const archived = isArchived(experiment)
   const archiveInFlight = isArchiving(experiment)
-  // Failed states are terminal: fetch the failure cause once, no polling.
   const failed = isArchivedFailed(experiment)
   const archiveStatus = useGetArchiveStatus(experiment.id, { query: { enabled: failed } })
   const reasonLabel = archiveStatus.data?.status === 200 ? archiveReasonLabel(archiveStatus.data.data.reason) : null
   const canArchive = !archived && !archiveInFlight && deleteActiveJobs === 0
   const canRestore = experiment.archive_state === "archived" || experiment.archive_state === "restore_failed"
-  // Busy labels (live job, archive in flight) get the spinner; archived/failed are static text.
   const stateLabel = archiveStateLabel(experiment)
   const busyLabel = label ?? (archiveInFlight ? stateLabel : null)
 

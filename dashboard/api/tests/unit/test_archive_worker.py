@@ -110,8 +110,6 @@ class TestArchive:
         result, calls = run(harness, "archive")
         assert result.returncode == 0, result.stderr
 
-        # Server-side seed → filtered sync (sync's deletions make re-archive
-        # pass) → check before local deletion.
         assert calls[0].startswith("copy s3remote:bucket/exp1 s3remote:bucket/_archives/exp1")
         assert "--filter-from" in calls[0]
         assert calls[1].startswith("sync ")
@@ -136,8 +134,7 @@ class TestArchive:
         assert (harness["exp_dir"] / "md.xtc").exists()
 
     def test_delta_sync_failure_keeps_local_dir(self, harness: dict) -> None:
-        # Only the local->S3 sync carries the PVC path as its FIRST rclone arg
-        # (seed starts from S3, check runs later, so this fails the sync leg).
+        # Only the delta sync leg (pre-check) carries the PVC path.
         result, _calls = run(harness, "archive", fail="/mddash/exp1")
         assert result.returncode == 1
         status = read_status(harness)

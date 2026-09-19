@@ -36,7 +36,6 @@ const pollWhileAnyLive =
     return data?.status === 200 && data.data.some((simulation) => simulation.live) ? pollMs : false
   }
 
-// Poll so the deep-link archived notice flips back to the wizard when the restore Job finishes.
 const pollWhileRestoring = (query: { state: { data: unknown } }): number | false => {
   const data = query.state.data as { status: number; data: Experiment } | undefined
   return data?.status === 200 && data.data.archive_state === "restoring" ? SIMULATIONS_POLL_MS : false

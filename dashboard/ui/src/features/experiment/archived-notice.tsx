@@ -8,7 +8,6 @@ import { useQueryClient } from "@tanstack/react-query"
 import { Archive, LoaderCircle } from "lucide-react"
 import { toast } from "sonner"
 
-// Deep-link destination for archived experiments: data lives in S3 until restored.
 export function ArchivedNotice({ experiment }: { experiment: Experiment }) {
   const queryClient = useQueryClient()
   const restore = useRestoreExperiment({

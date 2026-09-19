@@ -110,7 +110,6 @@ def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
     if not ARCHIVE_WORKER_IMAGE:
         raise SubmissionError("ARCHIVE_WORKER_IMAGE is not set. Redeploy the Helm chart and restart the server.")
 
-    # Pre-create failures surface as SubmissionError → 409, not a naked 500.
     try:
         if is_job_active(direction, experiment_id):
             logger.info("Job %s already active for experiment %s", name, experiment_id)
@@ -119,8 +118,7 @@ def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
             return status.attempt_id if status else ""
 
         delete_jobs(experiment_id)
-        # Foreground deletion returns before the object is gone; recreating the same name
-        # right away races termination ("object is being deleted"). Same wait as the upload flow.
+        # Foreground deletion races a same-name recreate ("object is being deleted"); wait it out.
         if not k8s.wait_for_resource_absence("job", name, timeout=JOB_DELETION_TIMEOUT):
             raise SubmissionError(f"Previous archive Job {name} is still terminating; retry shortly.")
 

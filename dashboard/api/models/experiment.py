@@ -816,7 +816,6 @@ class Experiment(db.Model):  # type: ignore
         """
         doc = read_archive_status(self.id, DATA_DIR)
         dir_exists = (DATA_DIR / self.id).exists()
-        # Liveness is checked lazily; each branch below needs only its own direction.
         archive_live: bool | None = None
         restore_live: bool | None = None
 
@@ -847,7 +846,6 @@ class Experiment(db.Model):  # type: ignore
                 return "restoring" if _restore_live() else "restore_failed"
             return "restoring" if _restore_live() else "archived"
 
-        # Archive lifecycle (archived_at None, snapshots set).
         if not dir_exists:
             if not _archive_live():
                 self.archived_at = datetime.now(UTC)
@@ -956,8 +954,7 @@ class Experiment(db.Model):  # type: ignore
                 "urn:mddash:archive-conflict",
             )
         if (DATA_DIR / self.id).exists():
-            # The worker gates the same way: only a non-completed restore doc marks a
-            # resumable leftover; anything else in a present dir is clobber protection.
+            # Worker-gate mirror: non-completed restore doc = our resumable leftover; else clobber protection.
             doc = read_archive_status(self.id, DATA_DIR)
             retryable = (
                 doc is not None

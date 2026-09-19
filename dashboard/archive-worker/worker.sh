@@ -1,7 +1,5 @@
 #!/bin/sh
 # Mirror one experiment between the PVC (/mddash/<id>) and the bisync-excluded S3 prefix _archives/<id>/.
-# Usage: worker.sh <archive|restore|purge> --experiment-id <id> --attempt-id <hex>
-# Status failures use fixed reason tokens: rclone stderr may carry credentials and stays in Job logs.
 set -eu
 
 DATA_DIR=${DATA_DIR:-/mddash}
@@ -54,7 +52,6 @@ endpoint = ${S3_ENDPOINT}
 EOF
 }
 
-# Atomic status write (tmp + rename); fields are fixed tokens, never rclone stderr.
 write_status() {
     state="$1"
     reason="${2:-}"
@@ -75,8 +72,7 @@ fail() {
     exit 1
 }
 
-# No status write on refusal: a failed doc here would read as our retry
-# sentinel and unlock clobbering foreign data on the next attempt.
+# No status write on refusal: a failed doc here would read as our retry sentinel.
 reject() {
     reason="$1"
     log "REFUSED ($reason)"
@@ -88,12 +84,10 @@ run_archive() {
 
     write_status running
 
-    # Server-side seed; an absent live prefix is fine.
     log "Server-side copy $LIVE_PREFIX -> $ARCHIVE_PREFIX"
     $RCLONE copy "$LIVE_PREFIX" "$ARCHIVE_PREFIX" --filter-from "$FILTERS" || fail "seed-copy"
 
-    # sync, not copy: stale objects from an earlier archive/restore cycle must
-    # be deleted for re-archive to pass the symmetric check.
+    # sync, not copy: stale leftovers from an earlier cycle must be deleted or check fails.
     log "Syncing top-up from $EXP_DIR"
     $RCLONE sync "$EXP_DIR" "$ARCHIVE_PREFIX" --filter-from "$FILTERS" || fail "delta-sync"
 
@@ -125,7 +119,6 @@ run_restore() {
 
     write_status running
 
-    # Filtered so the local status doc can't read as a dest-side extra in check.
     log "Copying $ARCHIVE_PREFIX -> $EXP_DIR"
     $RCLONE copy "$ARCHIVE_PREFIX" "$EXP_DIR" --filter-from "$FILTERS" || fail "copy"
 

@@ -16,7 +16,6 @@ export function isArchivedFailed(experiment: Experiment): boolean {
   return experiment.archive_state !== null && FAILED.has(experiment.archive_state)
 }
 
-// Worker reason tokens → user-facing cause for the failure alert.
 const REASON_LABELS: Record<string, string> = {
   "seed-copy": "initial copy failed",
   "delta-sync": "syncing changes failed",
@@ -31,8 +30,7 @@ export function archiveReasonLabel(reason: string | null | undefined): string | 
   return reason ? (REASON_LABELS[reason] ?? null) : null
 }
 
-// Status line: transitional and archived states replace the "Active … ago"
-// idle label (restore_failed's data lives only in S3); active experiments → null.
+// Transitional/archived states replace the "Active …" idle label; restore_failed counts as archived.
 export function archiveStateLabel(experiment: Experiment): string | null {
   switch (experiment.archive_state) {
     case "archiving":

@@ -514,7 +514,6 @@ class TestArchivedSerialization:
         assert data["step"] == 4
         assert data["status"] == "published"
         assert data["size_bytes"] == 9000
-        # snapshot columns stay internal
         assert "archived_step" not in data
         assert "archived_status" not in data
         assert "archived_size_bytes" not in data

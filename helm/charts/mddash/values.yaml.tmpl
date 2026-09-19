@@ -107,9 +107,8 @@ jupyterhub:
         value: "{{ $cfg.resources.pvcStorageSize }}"
       PVC_STORAGE_CLASS:
         value: "{{ $cfg.storageClassName }}"
-      # Container images for the user pod - pre_spawn_hook.py wires the sidecars
-      # (proxy/auth/api/s3-sync) into extra_containers; the two *_IMAGE entries
-      # named *WORKER/UPLOADER are one-shot durable Job images the API submits.
+      # User-pod container images — sidecars (proxy/auth/api/s3-sync) are wired by
+      # pre_spawn_hook.py; WORKER/UPLOADER entries are one-shot durable Job images.
       PROXY_IMAGE:
         value: "{{ $registry }}/{{ $cfg.sidecars.proxy.image }}:{{ $imageTag }}"
       AUTH_IMAGE:

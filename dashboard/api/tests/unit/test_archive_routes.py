@@ -21,7 +21,6 @@ class TestArchiveRoute:
         assert response.get_json()["detail"] == "live jobs running"
 
     def test_gate_conflicts_carry_the_contract_token(self, client: FlaskClient) -> None:
-        """Gate failures render urn:mddash:archive-conflict (support-reportable code)."""
         from errors import ApiError
 
         with patch("models.Experiment.query") as mock_query:

@@ -477,8 +477,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     )
     mdposit_demo_notebook = build_model(Notebook, experiment_id=mdposit_demo.id, token="demo-token-mdposit")
 
-    # Experiment 7: archived study. Snapshots stand in for the deleted local dir,
-    # so no files are written for this one; Restore is exercised via the UI.
+    # Archived study: snapshot columns stand in for the deleted local dir (no files seeded).
     archived = build_model(
         Experiment,
         id="ggggg",
