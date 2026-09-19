@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import shlex
 from http import HTTPStatus
 from pathlib import Path
@@ -98,18 +99,19 @@ def _s3_sync_command(local_dir: str, remote: str) -> str:
     )
 
 
-def _sim_guard_block() -> str:
+def _sim_guard_block(sim_process: str) -> str:
     """
-    Shell guard for the backgrounded workload.
+    Guard for the backgrounded sim.
 
-    K8s signals only PID 1, so TERM must be forwarded (mdrun checkpoints on TERM).
-    Marker touched on every exit path to trigger the s3-sync sidecar's final copy.
+    TERM goes to the sim process by name (an MPI launcher kills ranks on TERM
+    before mdrun checkpoints); $MD_PID is the fallback. Marker on every exit
+    path triggers the s3-sync sidecar's final copy.
     """
     return "\n".join([
         "MD_PID=$!",
         "on_term() {",
         '    echo "Termination requested, signaling simulation to checkpoint..."',
-        '    kill -TERM "$MD_PID" 2>/dev/null || true',
+        f"    pkill -TERM -x '{re.escape(sim_process)}' 2>/dev/null || kill -TERM \"$MD_PID\" 2>/dev/null || true",
         '    wait "$MD_PID" || true',
         "    exit 0",
         "}",
@@ -264,7 +266,7 @@ def _amber_command(
             "set -euo pipefail",
             patch_step,
             " ".join(["pmemd.cuda", base_flags]).rstrip() + extra_part + tee_redirect + " &",
-            _sim_guard_block(),
+            _sim_guard_block("pmemd.cuda"),
         ])
         return command, True
 
@@ -272,7 +274,7 @@ def _amber_command(
         "set -euo pipefail",
         patch_step,
         " ".join(["mpirun", "-np", str(np), "pmemd.MPI", base_flags]) + extra_part + tee_redirect + " &",
-        _sim_guard_block(),
+        _sim_guard_block("pmemd.MPI"),
     ])
     return command, False
 
@@ -337,7 +339,7 @@ def create_gromacs_job(
             + extra_part
             + f" > >(tee {_q(f'{name}.out')}) 2> >(tee {_q(f'{name}.err')} >&2) &"
         ),
-        _sim_guard_block(),
+        _sim_guard_block("gmx"),
     ])
 
     manifest = _build_job_manifest(

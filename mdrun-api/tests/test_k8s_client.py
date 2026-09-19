@@ -131,7 +131,7 @@ class TestGromacsManifest:
 class TestSimGuardAndSyncTraps:
     """Commands survive pod deletion: TERM reaches the workload and the sidecar does a final copy."""
 
-    def test_gmx_sim_command_forwards_term_and_always_marks_completion(self, mocker: MockerFixture) -> None:
+    def test_gmx_sim_command_signals_mdrun_by_name_and_always_marks_completion(self, mocker: MockerFixture) -> None:
         batch_v1 = _create(mocker)
         k8s_client.create_gromacs_job(
             ns="ns",
@@ -147,11 +147,12 @@ class TestSimGuardAndSyncTraps:
         )
         command = _sim_command(_manifest(batch_v1))
 
-        # Workload runs in background so its PID can be signaled.
         assert "MD_PID=$!" in command
         assert "trap on_term TERM INT" in command
+        # TERM must hit mdrun itself: orterun kills ranks on TERM before they checkpoint.
+        assert "pkill -TERM -x 'gmx'" in command
+        # Launcher TERM is only the fallback when no sim process matched.
         assert 'kill -TERM "$MD_PID"' in command
-        # Completion marker on every exit path triggers the sidecar's final copy.
         assert "trap 'touch /data/job_completed' EXIT" in command
 
     def test_amber_sim_command_uses_sim_guard(self, mocker: MockerFixture) -> None:
@@ -174,7 +175,29 @@ class TestSimGuardAndSyncTraps:
 
         assert "MD_PID=$!" in command
         assert "trap on_term TERM INT" in command
+        assert "pkill -TERM -x 'pmemd\\.cuda'" in command
         assert "trap 'touch /data/job_completed' EXIT" in command
+
+    def test_amber_mpi_sim_command_signals_pmemd_by_name(self, mocker: MockerFixture) -> None:
+        batch_v1 = _create(mocker)
+        k8s_client.create_amber_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            prmtop_name="villin.prmtop",
+            inpcrd_name="villin.rst7",
+            mdin_name="prod.mdin",
+            binary="pmemd.mpi",
+            np=2,
+            ntomp=2,
+            ewald="default",
+            extra_args="",
+        )
+        command = _sim_command(_manifest(batch_v1))
+
+        assert "mpirun" in command
+        assert "pkill -TERM -x 'pmemd\\.MPI'" in command
 
     def test_s3_sync_traps_term_and_waits_for_completion_marker(self, mocker: MockerFixture) -> None:
         batch_v1 = _create(mocker)
