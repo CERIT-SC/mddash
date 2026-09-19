@@ -18,6 +18,7 @@ from config import (
     S3_ENDPOINT,
     S3_SECRET_KEY,
 )
+from upload.submission import dns1123_name
 
 from archive.status import ArchiveDirection, create_queued_status, delete_status, read_status, write_status
 
@@ -48,8 +49,9 @@ class SubmissionError(Exception):
 
 
 def job_name(direction: str, experiment_id: str) -> str:
-    # Experiment IDs are 5 chars, so plain names stay under the 63-char DNS-1123 limit.
-    return f"{direction}-{experiment_id}"
+    # Experiment IDs are 5 lowercase alnum chars, so plain names stay DNS-1123-safe;
+    # the shared helper keeps that invariant enforced rather than documented.
+    return dns1123_name(direction, experiment_id, fallback_prefix=direction)
 
 
 def _job_manifest(name: str, direction: str, experiment_id: str, attempt_id: str) -> dict[str, Any]:
@@ -110,23 +112,31 @@ def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
     if not ARCHIVE_WORKER_IMAGE:
         raise SubmissionError("ARCHIVE_WORKER_IMAGE is not set. Redeploy the Helm chart and restart the server.")
 
-    if is_job_active(direction, experiment_id):
-        logger.info("Job %s already active for experiment %s", name, experiment_id)
-        archive_status_cache[direction, experiment_id] = True
-        status = read_status(experiment_id, data_dir)
-        return status.attempt_id if status else ""
+    # Pre-create K8s steps fail as SubmissionError too: the model surfaces them
+    # as archive-submission-failed 409s, not naked 500s.
+    try:
+        if is_job_active(direction, experiment_id):
+            logger.info("Job %s already active for experiment %s", name, experiment_id)
+            archive_status_cache[direction, experiment_id] = True
+            status = read_status(experiment_id, data_dir)
+            return status.attempt_id if status else ""
 
-    delete_jobs(experiment_id)
-    # Foreground deletion returns before the object is gone; recreating the same name
-    # right away races termination ("object is being deleted"). Same wait as the upload flow.
-    if not k8s.wait_for_resource_absence("job", name, timeout=JOB_DELETION_TIMEOUT):
-        raise SubmissionError(f"Previous archive Job {name} is still terminating; retry shortly.")
+        delete_jobs(experiment_id)
+        # Foreground deletion returns before the object is gone; recreating the same name
+        # right away races termination ("object is being deleted"). Same wait as the upload flow.
+        if not k8s.wait_for_resource_absence("job", name, timeout=JOB_DELETION_TIMEOUT):
+            raise SubmissionError(f"Previous archive Job {name} is still terminating; retry shortly.")
 
-    attempt_id = secrets.token_hex(8)
-    # Restore gets no queued doc: writing one would re-create the dir the worker
-    # refuses to overwrite. Restore in-flight is reconstituted from the live Job.
-    if direction == ArchiveDirection.ARCHIVE.value:
-        write_status(create_queued_status(attempt_id, direction), experiment_id, data_dir)
+        attempt_id = secrets.token_hex(8)
+        # Restore gets no queued doc: writing one would re-create the dir the worker
+        # refuses to overwrite. Restore in-flight is reconstituted from the live Job.
+        if direction == ArchiveDirection.ARCHIVE.value:
+            write_status(create_queued_status(attempt_id, direction), experiment_id, data_dir)
+    except SubmissionError:
+        raise
+    except Exception as e:
+        logger.error("Failed to prepare Job %s: %s", name, e)
+        raise SubmissionError(f"Failed to prepare archive Job: {e}") from e
 
     try:
         k8s.create_job_raw(_job_manifest(name, direction, experiment_id, attempt_id))

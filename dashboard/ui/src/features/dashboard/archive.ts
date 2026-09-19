@@ -18,8 +18,25 @@ export function isArchivedFailed(experiment: Experiment): boolean {
   return experiment.archive_state !== null && FAILED.has(experiment.archive_state)
 }
 
+// Worker failure reason tokens → user-facing cause (kept terse; the detail
+// copy around it says what happens next).
+const REASON_LABELS: Record<string, string> = {
+  "seed-copy": "initial copy failed",
+  "delta-sync": "syncing changes failed",
+  check: "verification failed",
+  copy: "copying failed",
+  "archive-empty": "the archive was empty",
+  "target-exists": "a local folder was in the way",
+  "source-missing": "the local folder was missing",
+}
+
+export function archiveReasonLabel(reason: string | null | undefined): string | null {
+  return reason ? (REASON_LABELS[reason] ?? null) : null
+}
+
 // Status line for the card: transitional and archived states replace the
 // "Active … ago" idle label; active experiments fall through to null.
+// restore_failed still means "data lives only in S3", so it labels as archived.
 export function archiveStateLabel(experiment: Experiment): string | null {
   switch (experiment.archive_state) {
     case "archiving":
@@ -27,6 +44,7 @@ export function archiveStateLabel(experiment: Experiment): string | null {
     case "restoring":
       return "Restoring…"
     case "archived":
+    case "restore_failed":
       return `Archived ${relativeTime(experiment.archived_at ?? experiment.updated_at)}`
     default:
       return null

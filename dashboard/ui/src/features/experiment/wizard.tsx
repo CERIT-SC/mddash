@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 
 import { useGetExperiment, useListSimulations } from "@/api/generated/client"
-import type { Simulation } from "@/api/generated/models"
+import type { Experiment, Simulation } from "@/api/generated/models"
 import { AnalyzeStep } from "@/features/analyze"
 import { PublishStep } from "@/features/publish"
 import { RunStep } from "@/features/run"
@@ -36,6 +36,13 @@ const pollWhileAnyLive =
     return data?.status === 200 && data.data.some((simulation) => simulation.live) ? pollMs : false
   }
 
+// Deep links land on the archived notice while the restore Job runs; poll so the
+// notice flips back to the wizard when the files are local again.
+const pollWhileRestoring = (query: { state: { data: unknown } }): number | false => {
+  const data = query.state.data as { status: number; data: Experiment } | undefined
+  return data?.status === 200 && data.data.archive_state === "restoring" ? SIMULATIONS_POLL_MS : false
+}
+
 export type WizardSearch = {
   /** Selected simulation tab — simulation_path minus the ".simulation.json" suffix (may still contain slashes). */
   simulation?: string
@@ -60,7 +67,7 @@ type ExperimentWizardProps = {
 }
 
 export function ExperimentWizard({ experimentId, search, onSearchChange }: ExperimentWizardProps) {
-  const experiment = useGetExperiment(experimentId, { query: { retry: false } })
+  const experiment = useGetExperiment(experimentId, { query: { retry: false, refetchInterval: pollWhileRestoring } })
   // The wizard heartbeat: the step ladder advances server-side, so the stepper
   // must follow. Refetches scan manifests + job states, so it pauses when idle.
   const simulations = useListSimulations(experimentId, {

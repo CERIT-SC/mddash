@@ -3,6 +3,12 @@
 - **/.storage_size
 - .storage_size.tmp*
 - **/.storage_size.tmp*
+# archive status docs are API/worker-private: syncing one into an archive
+# (or the live prefix) would shadow the live restore sentinel on restore
+- .archive-status.json
+- .archive-status.json.*
+- **/.archive-status.json
+- **/.archive-status.json.*
 - /_archives/**
 - #*#
 - *.swp

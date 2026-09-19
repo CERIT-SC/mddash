@@ -93,6 +93,10 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
       search.sort === "oldest" ? a.created_at.localeCompare(b.created_at) : b.created_at.localeCompare(a.created_at)
     )
 
+  // Badge counts come from the full list: filtering must not shrink them.
+  const activeCount = (experiments ?? []).filter((experiment) => !isArchived(experiment)).length
+  const archivedCount = (experiments ?? []).length - activeCount
+
   const active = filtered.filter((experiment) => !isArchived(experiment))
   const archived = filtered.filter(isArchived)
   const archivedGroups = groupByArchiveRecency(archived)
@@ -121,15 +125,15 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
               Active{" "}
               {experiments !== undefined && (
                 <Badge variant="secondary" className="ml-2">
-                  {active.length}
+                  {activeCount}
                 </Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="archived">
               Archived{" "}
-              {experiments !== undefined && archived.length > 0 && (
+              {experiments !== undefined && archivedCount > 0 && (
                 <Badge variant="secondary" className="ml-2">
-                  {archived.length}
+                  {archivedCount}
                 </Badge>
               )}
             </TabsTrigger>
@@ -173,7 +177,9 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
         </div>
       ) : tab === "archived" ? (
         archived.length === 0 ? (
-          <p className="text-text-muted py-12 text-center">No archived experiments.</p>
+          <p className="text-text-muted py-12 text-center">
+            {q ? `No experiments match “${search.q}”.` : "No archived experiments."}
+          </p>
         ) : (
           <div className="space-y-8">
             {archivedGroups.map((group) => (

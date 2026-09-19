@@ -46,8 +46,9 @@ The design therefore:
 
 - Frozen row: `step`/`status`/`size_bytes` serialize from the snapshot columns (`_step_status()` early-returns the snapshot when `archived_at` is set; manifests are gone). File-derived job properties likewise serve persisted columns only, so list serialization of archived experiments does not spawn `NotFound` warnings from manifest lookups.
 - Allowed actions: **Rename** (existing PATCH), **Duplicate** (remains disabled), **Restore**, **Delete**.
-- Card navigation into the wizard is disabled; a deep-link to an archived experiment renders an archived notice with a Restore action.
+- Card navigation into the wizard is disabled; a deep-link to an archived experiment renders an archived notice with a Restore action (the notice is a durable state: it polls while `restoring` and surfaces `restore_failed` with retry).
 - **Delete** removes the DB row and submits a best-effort purge Job for `s3://{bucket}/_archives/{id}/` (no local dir exists). Purge failure is logged only; residual objects are a cost issue, not a correctness issue.
+- **Freeze covers publish, not just reads:** `publish()` 409s for any non-NULL `archive_state`, including the archiving window — a publish submitted mid-archive would race an MDRepo draft + upload Job against the worker's `rm -rf`. (Notebook start keeps the narrower existing `archived_at` check: archive submission already auto-stops running notebooks, and the wizard/card UI blocks starts during archiving.)
 
 ### Restore flow
 
@@ -91,13 +92,13 @@ New worker image `dashboard/archive-worker/`:
 
 - `Dockerfile`: `FROM rclone/rclone:1.74.4` + `COPY worker.sh /worker.sh` (POSIX sh; entrypoint runs `sh /worker.sh <archive|restore|purge> --experiment-id … --attempt-id …`).
 - `archive` mode:
-  1. `rclone copy s3remote:{bucket}/{id} s3remote:{bucket}/_archives/{id}` (server-side; no egress).
-  2. `rclone copy --filter-from /rclone-filters.txt /mddash/{id} s3remote:{bucket}/_archives/{id}` (delta only).
-  3. `rclone check s3remote:{bucket}/_archives/{id} /mddash/{id} --filter-from /rclone-filters.txt --size-only` (size-only because multipart S3 ETags are not MD5s).
+  1. `rclone copy --filter-from … s3remote:{bucket}/{id} s3remote:{bucket}/_archives/{id}` (server-side; no egress).
+  2. `rclone sync --filter-from … /mddash/{id} s3remote:{bucket}/_archives/{id}`. Sync, not copy: after archive → restore → local deletes → re-archive, stale objects from the first archive still sit under the prefix — only sync deletes them, and without it the symmetric check fails every retry with no in-product recovery.
+  3. `rclone check s3remote:{bucket}/_archives/{id} /mddash/{id} --filter-from … --size-only` (size-only because multipart S3 ETags are not MD5s).
   4. Write status `completed`, then `rm -rf /mddash/{id}`.
-- `restore` mode: fail if `_archives/{id}` empty or a leftover dir holds anything but a non-completed restore doc (continuation of the interrupted attempt) → `rclone copy s3remote:{bucket}/_archives/{id} /mddash/{id}` → `rclone check --size-only` → status `completed`.
+- `restore` mode: refuse (no status write — see below) if a leftover dir holds anything but a non-completed restore doc (continuation of the interrupted attempt); fail if `_archives/{id}` empty → `rclone copy --filter-from … s3remote:{bucket}/_archives/{id} /mddash/{id}` → `rclone check --filter-from … --size-only` → status `completed`.
 - `purge` mode: `rclone purge s3remote:{bucket}/_archives/{id}` (best-effort).
-- Status writes via printf JSON; failures write `failed` with a short sanitized `reason` (no secrets, fixed tokens).
+- Status writes via printf JSON; failures write `failed` with a short sanitized `reason` (no secrets, fixed tokens: `seed-copy | delta-sync | check | copy | archive-empty | source-missing | target-exists`). **Status docs are excluded from every copy/check and from bisync** (`- .archive-status.json` + `- **/.archive-status.json` paired lines in `s3-sync/rclone-filters.txt` — bare `**/` globs do not match root level in rclone, verified against 1.74.4): otherwise an archived-era doc rides into the archive and restores over the live restore sentinel, wedging the sentinel machinery. **A `target-exists` refusal writes no status doc at all**: logging and exiting are enough — a `failed` doc in the refused dir would read as *our* retry sentinel to both the API and worker gates and would unlock clobbering foreign data on the next attempt.
 
 ## API & schema deltas
 
@@ -131,8 +132,8 @@ New worker image `dashboard/archive-worker/`:
 
 ## Testing
 
-- **API pytest:** gate matrix for archive/restore (live job → 409, active upload → 409, running notebook → auto-stop + job submitted, already archived → 409, missing `S3_BUCKET` → 400, restore with existing dir → 409); status-doc round-trip + reconciliation (killed Job → `*_failed`; stale sentinel vs live Job → `restoring`; fencing); terminal-condition Job liveness; submission deletion-wait + sentinel preservation; schema serialization of `archived_at`/`archive_state`/snapshot fields incl. per-payload consistency of the stashed reconciliation; `DELETE` on archived submits purge. Migration additions follow the existing migration pattern (no `db.create_all`).
-- **Worker:** script-level argument/state validation and the restore continuation matrix (failed/running sentinel resumes, completed/foreign doc refuses); rclone behavior is an integration concern and is exercised manually via `make demo` (seed an archived experiment + status doc in `_demo`, following existing demo seeding patterns).
+- **API pytest:** gate matrix for archive/restore (live job → 409, active upload → 409, running notebook → auto-stop + job submitted, already archived → 409, missing `S3_BUCKET` → 400, restore with existing dir → 409, publish while archived/archiving → 409); status-doc round-trip + reconciliation (killed Job → `*_failed`; stale sentinel vs live Job → `restoring`; fencing); terminal-condition Job liveness; submission deletion-wait + sentinel preservation; schema serialization of `archived_at`/`archive_state`/snapshot fields incl. per-payload consistency of the stashed reconciliation; `DELETE` on archived submits purge. Migration additions follow the existing migration pattern (no `db.create_all`).
+- **Worker:** script-level argument/state validation and the restore continuation matrix (failed/running sentinel resumes, completed/foreign doc refuses without writing a doc); delta **sync** call shape (regression: copy would leave re-archive unrecoverable) and status-doc filter lines (regression: archived-era docs must not ride into archives); rclone behavior is an integration concern and is exercised manually via `make demo` (seed an archived experiment in `_demo` — deliberately without a status doc: one would misread as `restore_failed`, and a real archived state carries none — following existing demo seeding patterns).
 - **UI vitest:** tab split/counts, archived card menu contents, confirm dialogs, transitional/failed states, deep-link archived notice.
 - Repo gates before implementation is considered done: `make fix`, `make type-check`, `make knip`, `make test`, `make validate-charts`.
 

@@ -20,6 +20,21 @@ class TestArchiveRoute:
         assert response.content_type == "application/problem+json"
         assert response.get_json()["detail"] == "live jobs running"
 
+    def test_gate_conflicts_carry_the_contract_token(self, client: FlaskClient) -> None:
+        """Gate failures render urn:mddash:archive-conflict (support-reportable code)."""
+        from errors import ApiError
+
+        with patch("models.Experiment.query") as mock_query:
+            experiment = Mock()
+            experiment.archive.side_effect = ApiError(409, "live jobs running", "urn:mddash:archive-conflict")
+            mock_query.get_or_404.return_value = experiment
+            response = client.post("/dash/api/experiments/abcde/archive")
+
+        assert response.status_code == 409
+        body = response.get_json()
+        assert body["type"] == "urn:mddash:archive-conflict"
+        assert "solution" not in body  # conflict details already imply the fix
+
     def test_success_returns_202(self, client: FlaskClient) -> None:
         with patch("models.Experiment.query") as mock_query:
             experiment = Mock()

@@ -3,9 +3,9 @@ import { getGetExperimentQueryKey, getListExperimentsQueryKey, useRestoreExperim
 import type { Experiment } from "@/api/generated/models"
 import { formatBytes, relativeTime } from "@/shared/format"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
-import { Button, H1, P } from "@e-infra/design-system"
+import { Alert, AlertDescription, AlertTitle, Button, H1, P } from "@e-infra/design-system"
 import { useQueryClient } from "@tanstack/react-query"
-import { Archive } from "lucide-react"
+import { Archive, LoaderCircle } from "lucide-react"
 import { toast } from "sonner"
 
 // Deep links to an archived experiment land here instead of the wizard: the
@@ -22,6 +22,11 @@ export function ArchivedNotice({ experiment }: { experiment: Experiment }) {
     },
   })
 
+  // In-flight and failed restore are durable notice states, not just a mutation
+  // result: a deep link can land mid-restore or after a failed attempt.
+  const restoring = experiment.archive_state === "restoring" || restore.isPending
+  const restoreFailed = experiment.archive_state === "restore_failed"
+
   return (
     <section className="mx-auto flex max-w-lg flex-col items-center gap-6 pt-12 text-center">
       <Archive className="text-text-muted h-10 w-10" aria-hidden="true" />
@@ -35,15 +40,23 @@ export function ArchivedNotice({ experiment }: { experiment: Experiment }) {
           . Its data lives only in S3 storage; restore it to keep working with it.
         </P>
       </div>
-      {restore.isError ? (
+      {restoreFailed && (
+        <Alert variant="error" className="text-left">
+          <AlertTitle>Restoring failed</AlertTitle>
+          <AlertDescription>The archived copy is intact; you can retry restoring.</AlertDescription>
+        </Alert>
+      )}
+      {restoring ? (
+        <Button disabled>
+          <LoaderCircle className="animate-spin" aria-hidden="true" /> Restoring…
+        </Button>
+      ) : restore.isError ? (
         <ApiErrorAlert
           error={toApiError(restore.error)}
           onRetry={() => restore.mutate({ experimentId: experiment.id })}
         />
       ) : (
-        <Button onClick={() => restore.mutate({ experimentId: experiment.id })} disabled={restore.isPending}>
-          {restore.isPending ? "Starting…" : "Restore"}
-        </Button>
+        <Button onClick={() => restore.mutate({ experimentId: experiment.id })}>Restore</Button>
       )}
     </section>
   )

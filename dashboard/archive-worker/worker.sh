@@ -77,6 +77,15 @@ fail() {
     exit 1
 }
 
+# Refusing to write into a foreign dir must leave no trace: a failed restore
+# doc here would make the API/worker sentinel gate treat the dir as OUR
+# resumable leftover and merge the archive into foreign data on retry.
+reject() {
+    reason="$1"
+    log "REFUSED ($reason)"
+    exit 1
+}
+
 run_archive() {
     [ -d "$EXP_DIR" ] || fail "source-missing"
 
@@ -84,10 +93,13 @@ run_archive() {
 
     # Seed from S3 (server-side, no egress); absent live prefix is fine.
     log "Server-side copy $LIVE_PREFIX -> $ARCHIVE_PREFIX"
-    $RCLONE copy "$LIVE_PREFIX" "$ARCHIVE_PREFIX" || fail "seed-copy"
+    $RCLONE copy "$LIVE_PREFIX" "$ARCHIVE_PREFIX" --filter-from "$FILTERS" || fail "seed-copy"
 
-    log "Delta top-up from $EXP_DIR"
-    $RCLONE copy "$EXP_DIR" "$ARCHIVE_PREFIX" --filter-from "$FILTERS" || fail "delta-copy"
+    # sync (not copy): a previous archive/restore cycle can leave stale objects
+    # under the archive prefix (files since deleted locally); only sync deletes
+    # them so the symmetric check below passes on re-archive.
+    log "Syncing top-up from $EXP_DIR"
+    $RCLONE sync "$EXP_DIR" "$ARCHIVE_PREFIX" --filter-from "$FILTERS" || fail "delta-sync"
 
     # size-only: multipart ETags are not MD5s.
     log "Verifying archive against PVC"
@@ -106,7 +118,7 @@ run_restore() {
         if [ ! -f "$STATUS_PATH" ] \
             || ! grep -q '"direction": *"restore"' "$STATUS_PATH" \
             || grep -q '"state": *"completed"' "$STATUS_PATH"; then
-            fail "target-exists"
+            reject "target-exists"
         fi
         log "Continuing incomplete restore (retry sentinel found)"
     fi
@@ -117,11 +129,14 @@ run_restore() {
 
     write_status running
 
+    # Filters keep our own status doc out on both sides of the copy/check: the
+    # archive never stores it, and without exclusions the local running doc
+    # would read as a dest-side extra and fail every symmetric check.
     log "Copying $ARCHIVE_PREFIX -> $EXP_DIR"
-    $RCLONE copy "$ARCHIVE_PREFIX" "$EXP_DIR" || fail "copy"
+    $RCLONE copy "$ARCHIVE_PREFIX" "$EXP_DIR" --filter-from "$FILTERS" || fail "copy"
 
     log "Verifying restore"
-    $RCLONE check "$ARCHIVE_PREFIX" "$EXP_DIR" --size-only || fail "check"
+    $RCLONE check "$ARCHIVE_PREFIX" "$EXP_DIR" --filter-from "$FILTERS" --size-only || fail "check"
 
     write_status completed
     log "Restore complete"

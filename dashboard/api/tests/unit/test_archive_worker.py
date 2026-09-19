@@ -51,13 +51,16 @@ def harness(tmp_path: Path) -> dict:
     (exp_dir / "notes.txt").write_text("notes")
 
     log = tmp_path / "rclone.log"
+    # Neutral path: FAIL patterns match substrings, and the repo path contains "s3-sync".
+    filters_copy = tmp_path / "rclone-filters.txt"
+    filters_copy.write_text(FILTERS.read_text())
     env = {
         **os.environ,
         **S3_ENV,
         "PATH": f"{stub_dir}:{os.environ['PATH']}",
         "HOME": str(tmp_path),
         "DATA_DIR": str(data_dir),
-        "FILTERS_FILE": str(FILTERS),
+        "FILTERS_FILE": str(filters_copy),
         "RCLONE_CONFIG": str(tmp_path / "rclone.conf"),
         "RCLONE_STUB_LOG": str(log),
         "RCLONE_STUB_FAIL": "",
@@ -107,20 +110,24 @@ class TestArchive:
         result, calls = run(harness, "archive")
         assert result.returncode == 0, result.stderr
 
-        # Server-side seed first, filtered delta second, check before any deletion.
+        # Server-side seed first, filtered sync second (sync, not copy: deletion
+        # of stale archive objects is what makes re-archive pass the check),
+        # check before any deletion.
         assert calls[0].startswith("copy s3remote:bucket/exp1 s3remote:bucket/_archives/exp1")
-        assert calls[1].startswith("copy ")
+        assert "--filter-from" in calls[0]
+        assert calls[1].startswith("sync ")
         assert "/mddash/exp1" in calls[1]
         assert "_archives/exp1" in calls[1]
         assert "--filter-from" in calls[1]
         assert calls[2].startswith("check s3remote:bucket/_archives/exp1")
+        assert "--filter-from" in calls[2]
         assert "--size-only" in calls[2]
 
         # The local dir is gone; the completed status doc went with it.
         assert not harness["exp_dir"].exists()
 
     def test_check_failure_keeps_local_dir(self, harness: dict) -> None:
-        # Distinctive check-only marker: " --size-only" appears in no copy call.
+        # Distinctive check-only marker: " --size-only" appears in no copy/sync call.
         result, _calls = run(harness, "archive", fail="--size-only")
         assert result.returncode == 1
         status = read_status(harness)
@@ -129,12 +136,13 @@ class TestArchive:
         assert status["direction"] == "archive"
         assert (harness["exp_dir"] / "md.xtc").exists()
 
-    def test_delta_copy_failure_keeps_local_dir(self, harness: dict) -> None:
-        # Distinctive delta marker: only the local->S3 copy carries --filter-from.
-        result, _calls = run(harness, "archive", fail="--filter-from")
+    def test_delta_sync_failure_keeps_local_dir(self, harness: dict) -> None:
+        # Only the local->S3 sync carries the PVC path as its FIRST rclone arg
+        # (seed starts from S3, check runs later, so this fails the sync leg).
+        result, _calls = run(harness, "archive", fail="/mddash/exp1")
         assert result.returncode == 1
         status = read_status(harness)
-        assert status["reason"] == "delta-copy"
+        assert status["reason"] == "delta-sync"
         assert (harness["exp_dir"] / "md.xtc").exists()
 
     def test_seed_copy_failure_keeps_local_dir(self, harness: dict) -> None:
@@ -150,10 +158,13 @@ class TestArchive:
 
 
 class TestRestore:
-    def test_refuses_existing_dir(self, harness: dict) -> None:
+    def test_refuses_existing_dir_without_poisoning_it(self, harness: dict) -> None:
+        # No status doc may be written: one would read as our retry sentinel
+        # to the API/worker gates and unlock clobbering on the next attempt.
         result, _calls = run(harness, "restore", lsf="all/keys")
         assert result.returncode == 1
-        assert read_status(harness)["reason"] == "target-exists"
+        assert "target-exists" in result.stdout
+        assert not (harness["exp_dir"] / ".archive-status.json").exists()
 
     def test_refuses_empty_archive(self, harness: dict) -> None:
         harness["exp_dir"].rename(harness["data_dir"] / "elsewhere")
@@ -165,7 +176,8 @@ class TestRestore:
         harness["exp_dir"].rename(harness["data_dir"] / "elsewhere")
         result, calls = run(harness, "restore", lsf="md.xtc")
         assert result.returncode == 0, result.stderr
-        assert any(c.startswith("copy s3remote:bucket/_archives/exp1") for c in calls)
+        assert any(c.startswith("copy s3remote:bucket/_archives/exp1") and "--filter-from" in c for c in calls)
+        assert any(c.startswith("check s3remote:bucket/_archives/exp1") and "--filter-from" in c for c in calls)
         status = read_status(harness)
         assert status["state"] == "completed"
         assert status["direction"] == "restore"
@@ -192,18 +204,37 @@ class TestRestore:
         assert result.returncode == 0, result.stderr
 
     def test_completed_doc_refuses_to_clobber(self, harness: dict) -> None:
-        """A completed restore doc marks a dir that must not be overwritten."""
+        """A completed restore doc marks a dir that must not be overwritten (and stays untouched)."""
         self._write_sentinel(harness, "completed", "restore")
         result, _calls = run(harness, "restore", lsf="md.xtc")
         assert result.returncode == 1
-        assert read_status(harness)["reason"] == "target-exists"
+        assert read_status(harness)["state"] == "completed"
 
     def test_archive_direction_doc_refuses_to_clobber(self, harness: dict) -> None:
         """An archive doc in a present dir is foreign to restore: clobber protection."""
         self._write_sentinel(harness, "failed", "archive")
         result, _calls = run(harness, "restore", lsf="md.xtc")
         assert result.returncode == 1
-        assert read_status(harness)["reason"] == "target-exists"
+        assert read_status(harness)["direction"] == "archive"
+
+
+class TestFilters:
+    def test_status_doc_excluded_from_sync_and_archive(self) -> None:
+        """
+        Regression: archived-era status docs must not ride into archives or the live prefix.
+
+        A doc in the archive overwrites the live restore sentinel on restore. rclone
+        glob '**/' does not match root level, so root + nested pair lines must both
+        exist (verified against rclone 1.74.4).
+        """
+        lines = [line.strip() for line in FILTERS.read_text().splitlines() if not line.startswith("#")]
+        for expected in (
+            "- .archive-status.json",
+            "- .archive-status.json.*",
+            "- **/.archive-status.json",
+            "- **/.archive-status.json.*",
+        ):
+            assert expected in lines
 
 
 class TestPurge:

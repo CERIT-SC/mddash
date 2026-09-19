@@ -67,7 +67,10 @@ def _create_job_raw(manifest: dict) -> None:
 
     # Archive worker args start with the mode; the upload worker's with --experiment-id.
     if args and args[0] in {"archive", "restore", "purge"}:
-        mode, attempt_id = args[0], args[args.index("--attempt-id") + 1]
+        try:
+            mode, attempt_id = args[0], args[args.index("--attempt-id") + 1]
+        except (IndexError, ValueError):
+            return
         demo_state.upload_jobs[job_name] = experiment_id
         threading.Thread(
             target=_finish_archive_job, args=(job_name, mode, experiment_id, attempt_id), daemon=True

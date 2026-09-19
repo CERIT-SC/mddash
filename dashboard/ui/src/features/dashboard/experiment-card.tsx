@@ -5,6 +5,7 @@ import {
   getListExperimentsQueryKey,
   useArchiveExperiment,
   useDeleteExperiment,
+  useGetArchiveStatus,
   useListAnalysisResults,
   useListAnalysisTypes,
   useRestoreExperiment,
@@ -66,7 +67,7 @@ import { Link } from "@tanstack/react-router"
 import { Archive, Copy, Database, Ellipsis, LoaderCircle, Pencil, Play, Square, Trash2, Undo2 } from "lucide-react"
 import { toast } from "sonner"
 
-import { archiveStateLabel, isArchived, isArchivedFailed, isArchiving } from "./archive"
+import { archiveReasonLabel, archiveStateLabel, isArchived, isArchivedFailed, isArchiving } from "./archive"
 import { isAnalysisJobLive } from "./live-work"
 
 const STEP_LABELS = ["Setup", "Tune", "Run", "Analyze", "Publish"] as const
@@ -331,6 +332,10 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
 
   const archived = isArchived(experiment)
   const archiveInFlight = isArchiving(experiment)
+  // Failure cause for the durable alert; failed states are terminal, so no polling.
+  const failed = isArchivedFailed(experiment)
+  const archiveStatus = useGetArchiveStatus(experiment.id, { query: { enabled: failed } })
+  const reasonLabel = archiveStatus.data?.status === 200 ? archiveReasonLabel(archiveStatus.data.data.reason) : null
   const canArchive = !archived && !archiveInFlight && deleteActiveJobs === 0
   const canRestore = experiment.archive_state === "archived" || experiment.archive_state === "restore_failed"
   // Busy labels (live job, archive in flight) get the spinner; archived/failed are static text.
@@ -432,6 +437,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
               {experiment.archive_state === "archive_failed"
                 ? "Your files are unchanged on this drive; you can retry archiving."
                 : "The archived copy is intact; you can retry restoring."}
+              {reasonLabel ? ` (${reasonLabel})` : ""}
             </AlertDescription>
           </Alert>
         )}
@@ -610,6 +616,10 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
                   the archive is verified.
                 </p>
                 <p>The experiment stays listed under Archived and can be restored anytime.</p>
+                <p>
+                  The experiment is frozen until archiving finishes — don’t modify or add files in the meantime; changes
+                  made during archiving can be lost.
+                </p>
                 {active && <p>The running notebook will be stopped.</p>}
               </div>
             </AlertDialogDescription>

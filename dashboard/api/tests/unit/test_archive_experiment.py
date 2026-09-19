@@ -9,6 +9,7 @@ import pytest
 from archive.status import ArchiveDirection, ArchiveState, ArchiveStatus, write_status
 from cache import archive_status_cache
 from enums import Engine
+from errors import ApiError
 from extensions import db
 from models import Experiment, Notebook
 from pytest_mock import MockerFixture
@@ -69,23 +70,26 @@ class TestArchiveGates:
         mocker.patch("models.simulation_job.mdrun").get_gmx_job.return_value = {"status": "RUNNING"}
         with (
             patch("models.experiment.S3_BUCKET", "test-bucket"),
-            pytest.raises(Conflict),
+            pytest.raises(ApiError) as exc_info,
         ):
             experiment.archive()
+        assert exc_info.value.problem_type == "urn:mddash:archive-conflict"
 
     def test_active_upload_409(self, experiment: Experiment) -> None:
         with (
             patch("models.experiment.S3_BUCKET", "test-bucket"),
             patch("models.experiment.read_status", return_value=Mock(state="running")),
             patch("models.experiment.is_upload_active", return_value=True),
-            pytest.raises(Conflict),
+            pytest.raises(ApiError) as exc_info,
         ):
             experiment.archive()
+        assert exc_info.value.problem_type == "urn:mddash:archive-conflict"
 
     def test_already_archived_409(self, experiment: Experiment, s3) -> None:
         experiment.archived_at = datetime.now(UTC)
-        with patch("archive.submission.is_job_active", return_value=False), pytest.raises(Conflict):
+        with patch("archive.submission.is_job_active", return_value=False), pytest.raises(ApiError) as exc_info:
             experiment.archive()
+        assert exc_info.value.problem_type == "urn:mddash:archive-conflict"
 
     def test_running_notebook_is_stopped(self, experiment: Experiment, s3) -> None:
         with (
@@ -117,17 +121,19 @@ class TestArchiveSubmit:
 
 class TestRestoreGates:
     def test_not_archived_409(self, experiment: Experiment, s3) -> None:
-        with pytest.raises(Conflict):
+        with pytest.raises(ApiError) as exc_info:
             experiment.restore()
+        assert exc_info.value.problem_type == "urn:mddash:archive-conflict"
 
     def test_existing_dir_409(self, experiment: Experiment, s3, tmp_path: Path) -> None:
         experiment.archived_at = datetime.now(UTC)
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("archive.submission.is_job_active", return_value=False),
-            pytest.raises(Conflict),
+            pytest.raises(ApiError) as exc_info,
         ):
             experiment.restore()
+        assert exc_info.value.problem_type == "urn:mddash:archive-conflict"
 
     def test_retry_after_failed_restore(self, experiment: Experiment, s3, tmp_path: Path) -> None:
         """A failed restore leaves dir + FAILED doc; that doc is the retry sentinel."""
@@ -518,6 +524,18 @@ class TestFrozenGates:
     def test_publish_while_archived_409(self, experiment: Experiment) -> None:
         experiment.archived_at = datetime.now(UTC)
         with pytest.raises(Conflict):
+            experiment.publish(target="mdposit", simulation_path="x")
+
+    def test_publish_while_archiving_409(self, experiment: Experiment, tmp_path: Path) -> None:
+        """A publish racing the archiving window would read files the worker is about to delete."""
+        experiment.archived_step = 3
+        experiment.archived_status = "ready"
+        db.session.commit()
+        with (
+            patch("models.experiment.DATA_DIR", tmp_path),
+            patch("archive.submission.is_job_active", return_value=True),
+            pytest.raises(Conflict),
+        ):
             experiment.publish(target="mdposit", simulation_path="x")
 
     def test_notebook_start_while_archived_409(self, experiment: Experiment) -> None:

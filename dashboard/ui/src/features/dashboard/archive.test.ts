@@ -1,7 +1,14 @@
 import { experiment } from "@/shared/fixtures/experiment"
 import { describe, expect, it } from "vitest"
 
-import { archiveStateLabel, groupByArchiveRecency, isArchived, isArchivedFailed, isArchiving } from "./archive"
+import {
+  archiveReasonLabel,
+  archiveStateLabel,
+  groupByArchiveRecency,
+  isArchived,
+  isArchivedFailed,
+  isArchiving,
+} from "./archive"
 
 const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString()
 
@@ -38,7 +45,25 @@ describe("archiveStateLabel", () => {
     expect(archiveStateLabel(experiment("c", { archived_at: daysAgo(2), archive_state: "archived" }))).toBe(
       "Archived 2 days ago"
     )
+    // restore_failed still means "data lives only in S3" — never "Active … ago".
+    expect(archiveStateLabel(experiment("e", { archived_at: daysAgo(2), archive_state: "restore_failed" }))).toBe(
+      "Archived 2 days ago"
+    )
     expect(archiveStateLabel(experiment("d"))).toBeNull()
+  })
+})
+
+describe("archiveReasonLabel", () => {
+  it("maps worker reason tokens to user-facing causes", () => {
+    expect(archiveReasonLabel("check")).toBe("verification failed")
+    expect(archiveReasonLabel("delta-sync")).toBe("syncing changes failed")
+    expect(archiveReasonLabel("target-exists")).toBe("a local folder was in the way")
+  })
+
+  it("keeps unknown or absent reasons out of the UI copy", () => {
+    expect(archiveReasonLabel("some-new-token")).toBeNull()
+    expect(archiveReasonLabel(null)).toBeNull()
+    expect(archiveReasonLabel(undefined)).toBeNull()
   })
 })
 

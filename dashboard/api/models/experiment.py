@@ -608,10 +608,14 @@ class Experiment(db.Model):  # type: ignore
 
         Raises:
             BadRequest: If the publish target is unknown.
-            Conflict: If the experiment is archived; restore it before publishing.
+            Conflict: If the experiment is archived or an archive/restore is in flight
+                (publishing reads local files; restore it / wait for the Job to settle first).
         """
-        if self.archived_at is not None:
-            raise Conflict(description="Experiment is archived. Restore it before publishing.")
+        if self.archive_state is not None:
+            raise Conflict(
+                description="Experiment is archived or an archive/restore is in flight. "
+                "Publishing reads the local files; restore the experiment (or wait) first."
+            )
         if target == "invenio":
             return self._publish_invenio(community)
         if target == "mdposit":
@@ -866,21 +870,29 @@ class Experiment(db.Model):  # type: ignore
             The archive attempt ID.
 
         Raises:
-            ApiError: If S3 is not configured on this deployment (400), or the archive Job could not be submitted (409).
-            Conflict: If already archived/in flight, jobs are live, or an upload is active.
+            ApiError: S3 unconfigured (400 `urn:mddash:s3-not-configured`); gate
+                failures (409 `urn:mddash:archive-conflict`); submission failure
+                (409 `urn:mddash:archive-submission-failed`).
         """
         if not S3_BUCKET:
             raise ApiError(
                 HTTPStatus.BAD_REQUEST,
                 "S3 storage is not configured on this deployment; archiving is unavailable.",
                 "urn:mddash:s3-not-configured",
+                "S3 storage isn't enabled on this deployment; contact the administrator.",
             )
         state = self.archive_state
         if state not in {None, "archive_failed"}:
-            raise Conflict(description=f"Experiment cannot be archived now (state: {state}).")
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                f"Experiment cannot be archived now (state: {state}).",
+                "urn:mddash:archive-conflict",
+            )
         if self._read_upload_state() in UploadState.active():
-            raise Conflict(
-                description="Cannot archive during an active MDRepo upload. Wait for completion or retry after failure."
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "Cannot archive during an active MDRepo upload. Wait for completion or retry after failure.",
+                "urn:mddash:archive-conflict",
             )
         live = (
             [j for j in self.tuner_jobs if j.is_live]
@@ -889,7 +901,11 @@ class Experiment(db.Model):  # type: ignore
             + [j for j in self.analysis_jobs if j.status.is_live]
         )
         if live:
-            raise Conflict(description="Cannot archive while tuner, simulation, or analysis jobs are running.")
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "Cannot archive while tuner, simulation, or analysis jobs are running.",
+                "urn:mddash:archive-conflict",
+            )
 
         # Stopping the notebook matches delete(): archiving freezes the files under it.
         if self.notebook and self.notebook.status == PodStatus.RUNNING:
@@ -921,18 +937,24 @@ class Experiment(db.Model):  # type: ignore
             The restore attempt ID.
 
         Raises:
-            ApiError: If S3 is not configured on this deployment (400), or the restore Job could not be submitted (409).
-            Conflict: If not archived, in flight, or the local directory already exists.
+            ApiError: S3 unconfigured (400 `urn:mddash:s3-not-configured`); gate
+                failures (409 `urn:mddash:archive-conflict`); submission failure
+                (409 `urn:mddash:archive-submission-failed`).
         """
         if not S3_BUCKET:
             raise ApiError(
                 HTTPStatus.BAD_REQUEST,
                 "S3 storage is not configured on this deployment; restoring is unavailable.",
                 "urn:mddash:s3-not-configured",
+                "S3 storage isn't enabled on this deployment; contact the administrator.",
             )
         state = self.archive_state
         if state not in {"archived", "restore_failed"}:
-            raise Conflict(description=f"Experiment cannot be restored now (state: {state}).")
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                f"Experiment cannot be restored now (state: {state}).",
+                "urn:mddash:archive-conflict",
+            )
         if (DATA_DIR / self.id).exists():
             # The worker gates the same way: only a non-completed restore doc marks a
             # resumable leftover; anything else in a present dir is clobber protection.
@@ -943,9 +965,11 @@ class Experiment(db.Model):  # type: ignore
                 and doc.state != ArchiveState.COMPLETED.value
             )
             if not retryable:
-                raise Conflict(
-                    description="Local experiment directory already exists; refusing to overwrite it. "
-                    "Remove the leftover directory manually and retry."
+                raise ApiError(
+                    HTTPStatus.CONFLICT,
+                    "Local experiment directory already exists; refusing to overwrite it. "
+                    "Remove the leftover directory manually and retry.",
+                    "urn:mddash:archive-conflict",
                 )
 
         try:
