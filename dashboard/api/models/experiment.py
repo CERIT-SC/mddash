@@ -816,20 +816,6 @@ class Experiment(db.Model):  # type: ignore
         """
         doc = read_archive_status(self.id, DATA_DIR)
         dir_exists = (DATA_DIR / self.id).exists()
-        archive_live: bool | None = None
-        restore_live: bool | None = None
-
-        def _archive_live() -> bool:
-            nonlocal archive_live
-            if archive_live is None:
-                archive_live = self._is_archive_job_live(ArchiveDirection.ARCHIVE.value)
-            return archive_live
-
-        def _restore_live() -> bool:
-            nonlocal restore_live
-            if restore_live is None:
-                restore_live = self._is_archive_job_live(ArchiveDirection.RESTORE.value)
-            return restore_live
 
         if self.archived_at is not None:
             # Restore lifecycle; a non-restore doc is stale from the archive attempt.
@@ -843,11 +829,11 @@ class Experiment(db.Model):  # type: ignore
                     return None
                 # A live Job outranks a stale FAILED sentinel; an in-flight doc with
                 # no live Job failed (evicted, backoffLimit 0), as in the archive direction.
-                return "restoring" if _restore_live() else "restore_failed"
-            return "restoring" if _restore_live() else "archived"
+                return "restoring" if self._is_archive_job_live(ArchiveDirection.RESTORE.value) else "restore_failed"
+            return "restoring" if self._is_archive_job_live(ArchiveDirection.RESTORE.value) else "archived"
 
         if not dir_exists:
-            if not _archive_live():
+            if not self._is_archive_job_live(ArchiveDirection.ARCHIVE.value):
                 self.archived_at = datetime.now(UTC)
                 db.session.commit()
                 return "archived"
@@ -856,9 +842,9 @@ class Experiment(db.Model):  # type: ignore
         if doc is not None and doc.direction == ArchiveDirection.ARCHIVE.value:
             if doc.state == ArchiveState.FAILED.value:
                 return "archive_failed"
-            return "archiving" if _archive_live() else "archive_failed"
+            return "archiving" if self._is_archive_job_live(ArchiveDirection.ARCHIVE.value) else "archive_failed"
 
-        return "archiving" if _archive_live() else "archive_failed"
+        return "archiving" if self._is_archive_job_live(ArchiveDirection.ARCHIVE.value) else "archive_failed"
 
     def archive(self) -> str:
         """

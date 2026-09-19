@@ -68,7 +68,7 @@ write_status() {
 fail() {
     reason="$1"
     log "FAILED ($reason)"
-    [ "$MODE" = "purge" ] || write_status failed "$reason"
+    write_status failed "$reason"
     exit 1
 }
 

@@ -1,6 +1,7 @@
 import { toApiError } from "@/api/errors"
 import { getGetExperimentQueryKey, getListExperimentsQueryKey, useRestoreExperiment } from "@/api/generated/client"
 import type { Experiment } from "@/api/generated/models"
+import { archiveTimestamp } from "@/features/dashboard"
 import { formatBytes, relativeTime } from "@/shared/format"
 import { ApiErrorAlert } from "@/shared/ui/api-error-alert"
 import { Alert, AlertDescription, AlertTitle, Button, H1, P } from "@e-infra/design-system"
@@ -30,7 +31,7 @@ export function ArchivedNotice({ experiment }: { experiment: Experiment }) {
       <div className="space-y-2">
         <H1>This experiment is archived</H1>
         <P className="text-text-muted">
-          “{experiment.name}” was archived {relativeTime(experiment.archived_at ?? experiment.updated_at)}
+          “{experiment.name}” was archived {relativeTime(archiveTimestamp(experiment))}
           {experiment.size_bytes !== null &&
             experiment.size_bytes !== undefined &&
             ` · ${formatBytes(experiment.size_bytes)}`}

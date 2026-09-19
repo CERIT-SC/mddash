@@ -30,7 +30,6 @@ export function archiveReasonLabel(reason: string | null | undefined): string | 
   return reason ? (REASON_LABELS[reason] ?? null) : null
 }
 
-// Transitional/archived states replace the "Active …" idle label; restore_failed counts as archived.
 export function archiveStateLabel(experiment: Experiment): string | null {
   switch (experiment.archive_state) {
     case "archiving":
@@ -39,7 +38,7 @@ export function archiveStateLabel(experiment: Experiment): string | null {
       return "Restoring…"
     case "archived":
     case "restore_failed":
-      return `Archived ${relativeTime(experiment.archived_at ?? experiment.updated_at)}`
+      return `Archived ${relativeTime(archiveTimestamp(experiment))}`
     default:
       return null
   }
@@ -47,7 +46,11 @@ export function archiveStateLabel(experiment: Experiment): string | null {
 
 const DAY_MS = 86_400_000
 
-// Mock-grouped buckets: the archived tab reads as a retention timeline.
+export function archiveTimestamp(experiment: Experiment): string {
+  return experiment.archived_at ?? experiment.updated_at
+}
+
+// Fixed time-boundary buckets; the archived tab reads as a retention timeline.
 export function groupByArchiveRecency(experiments: Experiment[]): { label: string; experiments: Experiment[] }[] {
   const now = Date.now()
   const buckets: { label: string; cutoffMs: number; experiments: Experiment[] }[] = [
@@ -56,7 +59,7 @@ export function groupByArchiveRecency(experiments: Experiment[]): { label: strin
   ]
   const older: Experiment[] = []
   for (const experiment of experiments) {
-    const age = now - new Date(experiment.archived_at ?? experiment.updated_at).getTime()
+    const age = now - new Date(archiveTimestamp(experiment)).getTime()
     const bucket = buckets.find((candidate) => age <= candidate.cutoffMs)
     if (bucket) bucket.experiments.push(experiment)
     else older.push(experiment)

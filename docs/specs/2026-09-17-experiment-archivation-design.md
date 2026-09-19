@@ -27,7 +27,6 @@ The design therefore:
 | The API container already receives `S3_BUCKET`, `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY` via `_API_PASSTHROUGH_ENV`. | No new credential plumbing. |
 | DB changes require an Alembic migration; fresh DBs are created by the same migrations. | One new migration file in `dashboard/api/migrations/versions/`. |
 | The UI already has a disabled **Archive** menu item and a disabled **Archived** tab with TODOs. | UI work is enabling + extending stubs, not new structure. |
-| The card menu's **Duplicate** is disabled (no API endpoint). | Stays disabled on both tabs; duplication is out of scope. |
 
 ## Lifecycle & state semantics
 
@@ -83,17 +82,13 @@ Reconciliation runs in the read paths (list/detail/status), same as upload; the 
 
 New API package `dashboard/api/archive/` mirroring `dashboard/api/upload/`:
 
-- `status.py`: status doc at `DATA_DIR/{id}/.archive-status.json`, attempt-fenced atomic writes (same shape as upload's): `{attempt_id, state, direction ∈ {archive, restore}, reason?}`. The doc lives inside the experiment dir; archive's final `completed` is written *before* the local `rm -rf`, and DB-flag reconciliation makes the terminal state durable after the doc is gone. **Restore never gets an API-side queued doc**: writing it would recreate the very directory the worker checks for and copies into; restore in-flight is reconstructed from the live Job, and the worker writes the doc (which its `write_status` creates the parent dir for).
+- `status.py`: status doc at `DATA_DIR/{id}/.archive-status.json`, atomic writes (same shape as upload's): `{attempt_id, state, direction ∈ {archive, restore}, reason?}`. The doc lives inside the experiment dir; archive's final `completed` is written *before* the local `rm -rf`, and DB-flag reconciliation makes the terminal state durable after the doc is gone. **Restore never gets an API-side queued doc**: writing it would recreate the very directory the worker checks for and copies into; restore in-flight is reconstructed from the live Job, and the worker writes the doc (which its `write_status` creates the parent dir for).
 - `submission.py`: deterministic Job names `archive-{id}` / `restore-{id}` / `purge-{id}` (same `_dns1123_name` hashing), labels `mddash.io/experiment={id}` + `mddash.io/preserve-on-stop=true` (so the culler preserves them), non-root security context (UID 1000, drop all caps), `backoffLimit: 0`, `activeDeadlineSeconds: 86400`, `ttlSecondsAfterFinished: 300`, PVC mounted at `/mddash`, S3 env from the API's own environment. A retry foreground-deletes the previous terminal Job and **waits for it to disappear** before creating the new one (the API server rejects creates with "object is being deleted" while the old object terminates); a failed submission removes only archive's own queued doc (the restore sentinel must survive) and surfaces to the client as a 409 with a retry-later solution, never a generic 500.
 
 New worker image `dashboard/archive-worker/`:
 
 - `Dockerfile`: `FROM rclone/rclone:1.74.4` + `COPY worker.sh /worker.sh` (POSIX sh; entrypoint runs `sh /worker.sh <archive|restore|purge> --experiment-id … --attempt-id …`).
-- `archive` mode:
-  1. `rclone copy --filter-from … s3remote:{bucket}/{id} s3remote:{bucket}/_archives/{id}` (server-side; no egress).
-  2. `rclone sync --filter-from … /mddash/{id} s3remote:{bucket}/_archives/{id}`. Sync, not copy: after archive → restore → local deletes → re-archive, stale objects from the first archive still sit under the prefix — only sync deletes them, and without it the symmetric check fails every retry with no in-product recovery.
-  3. `rclone check s3remote:{bucket}/_archives/{id} /mddash/{id} --filter-from … --size-only` (size-only because multipart S3 ETags are not MD5s).
-  4. Write status `completed`, then `rm -rf /mddash/{id}`.
+- `archive` mode: server-side seed copy, filtered `rclone sync` delta, symmetric `rclone check --size-only` gate, status `completed`, then `rm -rf` — exact invocations live in `worker.sh`. Sync, not copy, for the delta: after archive → restore → local deletes → re-archive, stale objects from the first archive still sit under the prefix — only sync deletes them, and without it the check fails every retry with no in-product recovery. Size-only because multipart S3 ETags are not MD5s.
 - `restore` mode: refuse (no status write — see below) if a leftover dir holds anything but a non-completed restore doc (continuation of the interrupted attempt); fail if `_archives/{id}` empty → `rclone copy --filter-from … s3remote:{bucket}/_archives/{id} /mddash/{id}` → `rclone check --filter-from … --size-only` → status `completed`.
 - `purge` mode: `rclone purge s3remote:{bucket}/_archives/{id}` (best-effort).
 - Status writes via printf JSON; failures write `failed` with a short sanitized `reason` (no secrets, fixed tokens: `seed-copy | delta-sync | check | copy | archive-empty | source-missing | target-exists`). **Status docs are excluded from every copy/check and from bisync** (paired root + `**/` lines in `rclone-filters.txt` — bare `**/` globs do not match root level in rclone, verified against 1.74.4): otherwise an archived-era doc rides into the archive and restores over the live restore sentinel, wedging the sentinel machinery. **A `target-exists` refusal writes no status doc at all**: logging and exiting are enough — a `failed` doc in the refused dir would read as *our* retry sentinel to both the API and worker gates and would unlock clobbering foreign data on the next attempt.

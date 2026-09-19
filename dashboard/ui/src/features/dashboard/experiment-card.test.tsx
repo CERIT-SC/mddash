@@ -580,18 +580,17 @@ describe("ExperimentCard", () => {
     expect(screen.getByRole("menuitem", { name: /^archive$/i })).toHaveAttribute("aria-disabled", "true")
   })
 
-  it("shows a durable error banner when archiving failed", async () => {
+  it.each([
+    { state: "archive_failed" as const, banner: /archiving failed/i },
+    {
+      state: "restore_failed" as const,
+      banner: /restoring failed/i,
+      archivedAt: new Date(Date.now() - 86_400_000).toISOString(),
+    },
+  ])("shows a durable error banner for $state", async ({ state, banner, archivedAt }) => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    await renderCard(analyze({ archive_state: "archive_failed" }))
-    expect(screen.getByRole("alert")).toHaveTextContent(/archiving failed/i)
-  })
-
-  it("shows a durable error banner when restoring failed", async () => {
-    vi.stubGlobal("fetch", () => new Promise(() => undefined))
-    await renderCard(
-      analyze({ archived_at: new Date(Date.now() - 86_400_000).toISOString(), archive_state: "restore_failed" })
-    )
-    expect(screen.getByRole("alert")).toHaveTextContent(/restoring failed/i)
+    await renderCard(analyze({ archived_at: archivedAt, archive_state: state }))
+    expect(screen.getByRole("alert")).toHaveTextContent(banner)
   })
 
   it("archived card: restore menu, archived label, no notebook or wizard link", async () => {

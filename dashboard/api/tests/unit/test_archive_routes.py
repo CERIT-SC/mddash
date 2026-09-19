@@ -2,7 +2,6 @@
 
 from unittest.mock import Mock, patch
 
-import pytest  # ruff:ignore[unused-import]
 from flask.testing import FlaskClient
 
 

@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 from archive.status import (
     STATUS_FILENAME,
-    ArchiveState,
     ArchiveStatus,
     create_queued_status,
     read_status,
@@ -28,19 +27,6 @@ def experiment_dir(data_dir: Path) -> Path:
 
 def _queued(attempt: str = "att-1", direction: str = "archive") -> ArchiveStatus:
     return create_queued_status(attempt, direction)
-
-
-class TestArchiveState:
-    def test_terminal_states(self) -> None:
-        assert ArchiveState.COMPLETED in ArchiveState.terminal()
-        assert ArchiveState.FAILED in ArchiveState.terminal()
-
-    def test_active_states(self) -> None:
-        assert ArchiveState.QUEUED in ArchiveState.active()
-        assert ArchiveState.RUNNING in ArchiveState.active()
-
-    def test_terminal_and_active_disjoint(self) -> None:
-        assert ArchiveState.terminal().isdisjoint(ArchiveState.active())
 
 
 class TestArchiveStatusSerialization:
@@ -89,23 +75,3 @@ class TestStatusReadWrite:
     def test_write_creates_parent_dir(self, data_dir: Path) -> None:
         write_status(_queued(), "newexp", data_dir)
         assert status_path("newexp", data_dir).exists()
-
-
-class TestAttemptFencing:
-    def test_fence_blocks_mismatched_attempt(self, experiment_dir: Path, data_dir: Path) -> None:
-        write_status(_queued("att-1"), "abcde", data_dir)
-        result = write_status(_queued("att-2"), "abcde", data_dir, expected_attempt_id="att-2")
-        assert result is False
-        restored = read_status("abcde", data_dir)
-        assert restored is not None
-        assert restored.attempt_id == "att-1"
-
-    def test_fence_allows_matching_attempt(self, experiment_dir: Path, data_dir: Path) -> None:
-        write_status(_queued("att-1"), "abcde", data_dir)
-        status = _queued("att-1")
-        status.state = ArchiveState.RUNNING.value
-        result = write_status(status, "abcde", data_dir, expected_attempt_id="att-1")
-        assert result is True
-        restored = read_status("abcde", data_dir)
-        assert restored is not None
-        assert restored.state == "running"

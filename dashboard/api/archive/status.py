@@ -26,16 +26,6 @@ class ArchiveState(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
 
-    @classmethod
-    def terminal(cls) -> frozenset["ArchiveState"]:
-        """COMPLETED and FAILED."""
-        return frozenset({cls.COMPLETED, cls.FAILED})
-
-    @classmethod
-    def active(cls) -> frozenset["ArchiveState"]:
-        """QUEUED and RUNNING."""
-        return frozenset({cls.QUEUED, cls.RUNNING})
-
 
 class ArchiveDirection(str, Enum):
     """Status document directions."""
@@ -91,25 +81,9 @@ def read_status(experiment_id: str, data_dir: Path) -> ArchiveStatus | None:
         return None
 
 
-def write_status(
-    status: ArchiveStatus,
-    experiment_id: str,
-    data_dir: Path,
-    *,
-    expected_attempt_id: str | None = None,
-) -> bool:
-    """Atomic write via temp file, fsync, rename; returns False if attempt-fenced."""
+def write_status(status: ArchiveStatus, experiment_id: str, data_dir: Path) -> bool:
+    """Atomic write via temp file, fsync, rename."""
     path = status_path(experiment_id, data_dir)
-
-    if expected_attempt_id is not None:
-        existing = read_status(experiment_id, data_dir)
-        if existing is not None and existing.attempt_id != expected_attempt_id:
-            logger.warning(
-                "Attempt fence: on-disk attempt %s != writer attempt %s, skipping status write",
-                existing.attempt_id,
-                expected_attempt_id,
-            )
-            return False
 
     path.parent.mkdir(parents=True, exist_ok=True)
     content = json.dumps(status.to_dict(), indent=2)
