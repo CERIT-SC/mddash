@@ -124,46 +124,6 @@ class GromacsJob(SimulationJob):
         return self._init_step or 0
 
     @property
-    def nsteps_done(self) -> int | None:
-        """Number of steps completed so far (persisted for terminal rows once frozen)."""
-        if self._nsteps_done is not None:
-            return self._nsteps_done
-
-        # Only a genuinely finished run may shortcut to its target: a stopped run
-        # prints a Performance block too, so cached performance proves nothing.
-        if self._performance and self.status == JobStatus.FINISHED:
-            return self._nsteps
-
-        return self._parse_nsteps_done()
-
-    @property
-    def start_timestamp(self) -> int | None:
-        """Unix timestamp when the job started."""
-        if self._start_timestamp:
-            return self._start_timestamp
-
-        if val := self._parse_start_timestamp():
-            self._start_timestamp = val
-            db.session.commit()
-
-        return self._start_timestamp
-
-    @property
-    def finish_timestamp(self) -> int | None:
-        """Unix timestamp when the job finished."""
-        if self._finish_timestamp:
-            return self._finish_timestamp
-
-        if self.status != JobStatus.FINISHED:
-            return None
-
-        if val := self._parse_finish_timestamp():
-            self._finish_timestamp = val
-            db.session.commit()
-
-        return self._finish_timestamp
-
-    @property
     def estimated_time(self) -> int | None:
         """Estimated time until completion in seconds."""
         if self.start_timestamp is None or self.nsteps is None or self.nsteps_done is None:
@@ -186,24 +146,6 @@ class GromacsJob(SimulationJob):
         base_estimate = remaining_steps * time_per_step
         time_since_update = datetime.now(UTC).timestamp() - last_updated
         return max(0, int(base_estimate - time_since_update))
-
-    @property
-    def performance(self) -> float | None:
-        """Performance of the job in ns/day (only once the run itself finished)."""
-        if self._performance:
-            return self._performance
-
-        # Only finished runs get a performance reading of their own: a live or
-        # stopped segment's parse would inherit the previous segment's trailer
-        # block from the shared appended log.
-        if self.status != JobStatus.FINISHED:
-            return None
-
-        if val := self._parse_performance():
-            self._performance = val
-            db.session.commit()
-
-        return self._performance
 
     @classmethod
     def start(
@@ -257,9 +199,6 @@ class GromacsJob(SimulationJob):
             ntomp=ntomp,  # type: ignore[call-arg]
             experiment_id=experiment.id,  # type: ignore[call-arg]
             engine=Engine.GMX,  # type: ignore[call-arg]
-            # Rows are born PENDING (matching MDRun's own creation status): the
-            # live-segment index only covers committed live statuses, so a NULL
-            # here would leave the slot unguarded.
             _last_known_status=JobStatus.PENDING,  # type: ignore[call-arg]
         )
         db.session.add(job)
@@ -277,13 +216,6 @@ class GromacsJob(SimulationJob):
         """
         Extend the simulation by ``nsteps`` additional steps, resuming from the latest checkpoint.
 
-        A new segment job is submitted with ``-cpi <deffnm>.cpt -nsteps <cumulative>``
-        (GROMACS ``-nsteps`` counts from zero when a checkpoint is given) on top of the
-        manifest's extra_args — the manifest itself stays untouched. Compute settings are
-        inherited from the latest segment; changing them is what Re-run is for. Output
-        files are kept: ``mdrun -cpi`` appends, so the trajectory stays one continuous
-        timeline across segments.
-
         Args:
             experiment: The experiment the simulation belongs to.
             simulation_path: Experiment-relative path to the ``.simulation.json``.
@@ -297,12 +229,7 @@ class GromacsJob(SimulationJob):
                 no checkpoint file is available, extra_args contains ``-cpi``, or a
                 concurrent extension is already in progress.
         """
-        latest: GromacsJob | None = (
-            cls.query
-            .filter_by(experiment_id=experiment.id, simulation_path=simulation_path)
-            .order_by(cls.created_at.desc())
-            .first()
-        )
+        latest = cls.latest_for(experiment.id, simulation_path)
         if latest is None:
             raise BadRequest("No run exists for this simulation yet; extend requires a finished or stopped run.")
         if latest.is_live:
@@ -338,7 +265,7 @@ class GromacsJob(SimulationJob):
         # from that point (the same value is frozen for the history display).
         progress = latest.nsteps_done
         if progress is not None:
-            latest.freeze_nsteps_done(progress)
+            latest.nsteps_done = progress
         base = progress if progress is not None else previous_total
 
         total = base + nsteps

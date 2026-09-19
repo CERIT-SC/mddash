@@ -145,7 +145,7 @@ def delete_gmx_job(job_id: str) -> None:
         raise requests.HTTPError(response.json().get("detail", response.text), request=None, response=response)
 
 
-def _stop_job(job_id: str, engine: str) -> None:
+def stop_job(job_id: str, engine: str) -> None:
     """
     Stop a job by job ID, preserving its data (checkpoint reaches S3 before teardown).
 
@@ -154,46 +154,16 @@ def _stop_job(job_id: str, engine: str) -> None:
         engine: Engine route segment ('gmx' or 'amber').
 
     Raises:
-        requests.HTTPError: If the request fails, or when MDRun cannot confirm the job
-            is gone after a 404 (e.g. rolling skew with an MDRun that has no stop route).
+        requests.HTTPError: If the request fails.
     """
     response = requests.post(f"{MDRUN_API_URL}/jobs/{engine}/{job_id}/stop", timeout=10)
 
+    # 404 = job already gone (success), same convention as the delete calls
     if response.status_code == HTTPStatus.NOT_FOUND:
-        # A 404 conflates "job row already gone" (a real no-op) with "route missing"
-        # (older MDRun without stop support). Disambiguate with a GET: only a job
-        # that is actually gone is a safe success.
-        check = requests.get(f"{MDRUN_API_URL}/jobs/{engine}/{job_id}", timeout=5)
-        if check.status_code == HTTPStatus.NOT_FOUND:
-            return
-        raise requests.HTTPError(
-            f"MDRun API could not confirm job {job_id} is gone after stop (it may not support stopping yet).",
-            request=None,
-            response=check,
-        )
+        return
 
     if not response.ok:
         raise requests.HTTPError(response.json().get("detail", response.text), request=None, response=response)
-
-
-def stop_gmx_job(job_id: str) -> None:
-    """
-    Stop a GROMACS job by job ID, preserving its data.
-
-    Args:
-        job_id: The ID of the job to stop.
-    """
-    _stop_job(job_id, "gmx")
-
-
-def stop_amber_job(job_id: str) -> None:
-    """
-    Stop an AMBER job by job ID, preserving its data.
-
-    Args:
-        job_id: The ID of the job to stop.
-    """
-    _stop_job(job_id, "amber")
 
 
 # AMBER-specific functions

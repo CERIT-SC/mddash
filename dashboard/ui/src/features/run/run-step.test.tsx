@@ -93,6 +93,10 @@ function mockRun(options: MockRunOptions = {}) {
     jobGets: 0,
   }
   if (state.job !== null) state.jobs.push(state.job)
+  const replaceActiveJob = (next: GromacsJob | AmberJob) => {
+    state.job = next
+    state.jobs = state.jobs.map((j) => (j.id === next.id ? next : j))
+  }
   const logs = options.logs ?? {
     gmx: "gmx log contents\n",
     mdout: "mdout log contents\n",
@@ -117,8 +121,7 @@ function mockRun(options: MockRunOptions = {}) {
       }
       if (url.endsWith(`${one}/stop`) && method === "POST") {
         if (state.job === null) return new Response(null, { status: 404 })
-        state.job = gmxJob({ ...(state.job as GromacsJob), status: "STOPPED", is_live: false })
-        state.jobs = state.jobs.map((j) => (j.id === (state.job as GromacsJob).id ? (state.job as GromacsJob) : j))
+        replaceActiveJob(gmxJob({ ...(state.job as GromacsJob), status: "STOPPED", is_live: false }))
         return new Response(null, { status: 204 })
       }
       if (url.endsWith(`${GMX_ONE}/extend`) && method === "POST") {
@@ -139,15 +142,16 @@ function mockRun(options: MockRunOptions = {}) {
         if (options.settleAfter !== undefined && method === "GET") {
           state.jobGets += 1
           if (state.jobGets > options.settleAfter && state.job !== null && state.job.is_live) {
-            state.job = gmxJob({
-              ...(state.job as GromacsJob),
-              status: "FINISHED",
-              is_live: false,
-              nsteps_done: 10000,
-              performance: 62.5,
-              estimated_time: 0,
-            })
-            state.jobs = state.jobs.map((j) => (j.id === (state.job as GromacsJob).id ? (state.job as GromacsJob) : j))
+            replaceActiveJob(
+              gmxJob({
+                ...(state.job as GromacsJob),
+                status: "FINISHED",
+                is_live: false,
+                nsteps_done: 10000,
+                performance: 62.5,
+                estimated_time: 0,
+              })
+            )
           }
         }
         if (method === "DELETE") {

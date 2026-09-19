@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import time
+from functools import partial
 from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -253,17 +254,16 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             demo_state.mdrun_jobs.pop(match.group("job_id"), None)
         return (HTTPStatus.NO_CONTENT, {}, "")
 
-    def stop_gmx_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def stop_job(request: "ResponsesProxy", engine: str) -> tuple[int, dict[str, str], str]:
         """
-        Stop a GROMACS job gracefully, mirroring MDRun's stop semantics.
+        Stop a job gracefully, mirroring MDRun's stop semantics (kept, marked STOPPED).
 
-        The mock marks the job STOPPED (it is kept, not popped) and materializes the
-        final checkpoint a later extend resumes from.
+        GMX also materializes the final checkpoint a later extend resumes from.
 
         Returns:
             Tuple of (status_code, headers, body) for the response.
         """
-        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/(?P<job_id>[^/]+)/stop", request.url)
+        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/{engine}/(?P<job_id>[^/]+)/stop", request.url)
         job_data = demo_state.mdrun_jobs.get(match.group("job_id")) if match else None
         if job_data is None:
             return (
@@ -273,34 +273,16 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             )
 
         job_data["status"] = "STOPPED"
-        deffnm = str(job_data.get("tpr_name", "md.tpr")).removesuffix(".tpr")
-        experiment_id = str(job_data.get("experiment_id", ""))
-        write_gmx_checkpoint(experiment_id, deffnm)
-        # A real TERM-stopped mdrun always prints a Performance: line (but never
-        # "Finished mdrun") — append it so the demo exercises the guarded parsers.
-        log_path = DATA_DIR / experiment_id / f"{deffnm}.log"
-        if log_path.exists():
-            with log_path.open("a") as f:
-                f.write("\nPerformance:        62.5     1994.771    332.462\n")
-        return (HTTPStatus.NO_CONTENT, {}, "")
-
-    def stop_amber_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
-        """
-        Stop an AMBER job gracefully (data is preserved; the job keeps existing).
-
-        Returns:
-            Tuple of (status_code, headers, body) for the response.
-        """
-        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/(?P<job_id>[^/]+)/stop", request.url)
-        job_data = demo_state.mdrun_jobs.get(match.group("job_id")) if match else None
-        if job_data is None:
-            return (
-                HTTPStatus.NOT_FOUND,
-                {},
-                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": "Job not found"}),
-            )
-
-        job_data["status"] = "STOPPED"
+        if engine == "gmx":
+            deffnm = str(job_data.get("tpr_name", "md.tpr")).removesuffix(".tpr")
+            experiment_id = str(job_data.get("experiment_id", ""))
+            write_gmx_checkpoint(experiment_id, deffnm)
+            # A real TERM-stopped mdrun always prints a Performance: line (but never
+            # "Finished mdrun") — append it so the demo exercises the guarded parsers.
+            log_path = DATA_DIR / experiment_id / f"{deffnm}.log"
+            if log_path.exists():
+                with log_path.open("a") as f:
+                    f.write("\nPerformance:        62.5     1994.771    332.462\n")
         return (HTTPStatus.NO_CONTENT, {}, "")
 
     # GROMACS-specific endpoints
@@ -310,7 +292,9 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+"), callback=delete_gmx_job
     )
     rsps.add_callback(
-        responses.POST, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+/stop"), callback=stop_gmx_job
+        responses.POST,
+        re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+/stop"),
+        callback=partial(stop_job, engine="gmx"),
     )
 
     # AMBER-specific endpoints
@@ -322,7 +306,9 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=delete_amber_job
     )
     rsps.add_callback(
-        responses.POST, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+/stop"), callback=stop_amber_job
+        responses.POST,
+        re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+/stop"),
+        callback=partial(stop_job, engine="amber"),
     )
 
 

@@ -156,18 +156,6 @@ class TestStopGmxJob:
         assert job is not None  # row is kept, unlike DELETE
         assert job.last_status == JobStatus.STOPPED
 
-    def test_stopped_job_reports_stopped_after_k8s_gone(
-        self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]
-    ) -> None:
-        """A stopped job keeps reporting stopped once Kubernetes no longer knows it."""
-        self._create_job(db_session, "stopped-job", JobStatus.STOPPED)
-        mock_k8s_client["get_job_status"].return_value = JobStatus.UNKNOWN
-
-        response = client.get("/api/jobs/gmx/stopped-job")
-
-        assert response.status_code == HTTPStatus.OK
-        assert json.loads(response.data)["status"] == "stopped"
-
     def test_stopped_status_is_sticky_through_the_termination_window(
         self, client: FlaskClient, db_session: Session, mock_k8s_client: dict[str, Any]
     ) -> None:

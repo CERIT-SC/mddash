@@ -1,4 +1,4 @@
-"""Unit tests for the MDRun HTTP client — focused on the stop endpoint's 404 handling."""
+"""Unit tests for the MDRun HTTP client's stop endpoint handling."""
 
 from http import HTTPStatus
 from unittest.mock import MagicMock
@@ -19,44 +19,30 @@ def _response(status_code: int, json_data: dict | None = None) -> MagicMock:
 
 
 class TestStopJob:
-    """POST /stop 404 conflates 'job gone' with 'route missing' — only the former is a no-op."""
+    """POST /stop treats 404 as success (job already gone), like the delete calls."""
 
     def test_204_is_plain_success(self, mocker: MockerFixture) -> None:
         post = mocker.patch("requests.post", return_value=_response(HTTPStatus.NO_CONTENT))
-        get = mocker.patch("requests.get")
 
-        mdrun.stop_gmx_job("job-1")
+        mdrun.stop_job("job-1", "gmx")
 
         post.assert_called_once()
         assert post.call_args.args[0].endswith("/jobs/gmx/job-1/stop")
-        get.assert_not_called()
 
     def test_404_with_gone_job_is_noop(self, mocker: MockerFixture) -> None:
-        """A real 404 (job already gone) is verified with a GET that also 404s."""
         mocker.patch("requests.post", return_value=_response(HTTPStatus.NOT_FOUND))
-        mocker.patch("requests.get", return_value=_response(HTTPStatus.NOT_FOUND))
 
-        mdrun.stop_gmx_job("job-2")  # no exception
-
-    def test_404_with_existing_job_raises(self, mocker: MockerFixture) -> None:
-        """404 from an MDRun that lacks the stop route (job still exists) must not pass silently."""
-        mocker.patch("requests.post", return_value=_response(HTTPStatus.NOT_FOUND))
-        mocker.patch("requests.get", return_value=_response(HTTPStatus.OK, {"id": "job-3", "status": "running"}))
-
-        with pytest.raises(requests.HTTPError, match="may not support stopping"):
-            mdrun.stop_gmx_job("job-3")
+        mdrun.stop_job("job-2", "gmx")  # no exception
 
     def test_amber_route(self, mocker: MockerFixture) -> None:
         post = mocker.patch("requests.post", return_value=_response(HTTPStatus.NO_CONTENT))
-        mocker.patch("requests.get")
 
-        mdrun.stop_amber_job("job-4")
+        mdrun.stop_job("job-4", "amber")
 
         assert post.call_args.args[0].endswith("/jobs/amber/job-4/stop")
 
     def test_http_error_propagates(self, mocker: MockerFixture) -> None:
         mocker.patch("requests.post", return_value=_response(HTTPStatus.INTERNAL_SERVER_ERROR, {"detail": "boom"}))
-        mocker.patch("requests.get")
 
         with pytest.raises(requests.HTTPError):
-            mdrun.stop_gmx_job("job-5")
+            mdrun.stop_job("job-5", "gmx")

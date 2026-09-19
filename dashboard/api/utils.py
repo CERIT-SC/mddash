@@ -291,10 +291,8 @@ def tail_bytes(file: Path | str, budget: int = _TAIL_BUDGET_BYTES) -> str:
     """
     Read the last ``budget`` bytes of a file as text (first partial line dropped).
 
-    Line-count tails miss GROMACS trailers: the M-E-G-A-F-L-O-P-S/wallcycle block
-    alone can span hundreds of lines, pushing `Finished mdrun` and `Performance:`
-    beyond any reasonable line window. A byte budget covers the whole trailer at a
-    fixed cost.
+    A byte budget, not a line window: engine trailers span hundreds of lines,
+    pushing markers past any fixed line count.
 
     Args:
         file: Path to the file.

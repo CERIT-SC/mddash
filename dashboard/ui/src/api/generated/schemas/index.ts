@@ -1267,21 +1267,6 @@ export const DeleteAmberJobResponse = zod.void()
 
 
 /**
- * @summary Extend an AMBER run (extension is GROMACS-only)
- */
-
-
-
-
-export const ExtendAmberJobParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "simulation_path": zod.string().min(1)
-})
-
-export const ExtendAmberJobResponse = zod.void()
-
-
-/**
  * @summary Stop the latest AMBER run segment, preserving its data
  */
 
@@ -1294,6 +1279,21 @@ export const StopAmberJobParams = zod.object({
 })
 
 export const StopAmberJobResponse = zod.void()
+
+
+/**
+ * @summary Extend an AMBER run (extension is GROMACS-only)
+ */
+
+
+
+
+export const ExtendAmberJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "simulation_path": zod.string().min(1)
+})
+
+export const ExtendAmberJobResponse = zod.void()
 
 
 /**

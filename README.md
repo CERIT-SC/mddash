@@ -92,8 +92,6 @@ UPDATE simulation_jobs SET last_known_status = 'ERROR' WHERE last_known_status =
 UPDATE mdrun_jobs SET last_status = 'FINISHED' WHERE last_status = 'STOPPED';
 ```
 
-Related upgrade note: simulation pods started *before* the stop feature shipped lack the TERM-forwarding guard and the sidecar's final-copy trap. Stopping such a pod still works, but its freshest checkpoint may not reach object storage — extending it resumes from the last periodically-synced checkpoint, duplicating that tail of the trajectory. Pods started after the upgrade are unaffected.
-
 
 ## Configuration
 

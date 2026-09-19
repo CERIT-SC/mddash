@@ -146,8 +146,7 @@ def _mock_mdrun(mocker: MockerFixture, status: str = "finished") -> dict:
         ),
         "delete_gmx": mocker.patch("clients.mdrun.delete_gmx_job"),
         "delete_amber": mocker.patch("clients.mdrun.delete_amber_job"),
-        "stop_gmx": mocker.patch("clients.mdrun.stop_gmx_job"),
-        "stop_amber": mocker.patch("clients.mdrun.stop_amber_job"),
+        "stop": mocker.patch("clients.mdrun.stop_job"),
     }
 
 
@@ -156,11 +155,10 @@ _ONE_HOUR_AGO = datetime.now(UTC) - timedelta(hours=1)
 
 def _stop_mocks(mocker: MockerFixture, engine: str = "gmx") -> dict:
     """MDRun mocks where a successful stop reports "stopped" on subsequent reads."""
-    stop_key = "stop_gmx" if engine == "gmx" else "stop_amber"
     get_key = "get_gmx" if engine == "gmx" else "get_amber"
 
     def get_status(_job_id: str) -> dict:
-        return {"id": _job_id, "status": "stopped" if mdrun[stop_key].called else "running"}
+        return {"id": _job_id, "status": "stopped" if mdrun["stop"].called else "running"}
 
     mdrun = _mock_mdrun(mocker, status="running")
     mdrun[get_key].side_effect = get_status
@@ -182,7 +180,7 @@ class TestStop:
         response = client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/stop")
 
         assert response.status_code == HTTPStatus.NO_CONTENT
-        mdrun["stop_gmx"].assert_called_once_with(job.id)
+        mdrun["stop"].assert_called_once_with(job.id, "gmx")
         with app.app_context():
             stopped = db.session.get(GromacsJob, job.id)
             assert stopped is not None, "row must be kept"
@@ -196,7 +194,7 @@ class TestStop:
         mdrun = _stop_mocks(mocker)
 
         def finished_outcome(_job_id: str) -> dict:
-            return {"id": _job_id, "status": "finished" if mdrun["stop_gmx"].called else "running"}
+            return {"id": _job_id, "status": "finished" if mdrun["stop"].called else "running"}
 
         mdrun["get_gmx"].side_effect = finished_outcome
         sim_path = _write_gmx_simulation(tmp_path / experiment_id)
@@ -236,7 +234,7 @@ class TestStop:
         response = client.post(f"/dash/api/experiments/{experiment_id}/amber/{sim_path}/stop")
 
         assert response.status_code == HTTPStatus.NO_CONTENT
-        mdrun["stop_amber"].assert_called_once_with(job.id)
+        mdrun["stop"].assert_called_once_with(job.id, "amber")
         with app.app_context():
             stopped = db.session.get(AmberJob, job.id)
             assert stopped is not None

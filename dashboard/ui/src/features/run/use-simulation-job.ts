@@ -111,9 +111,7 @@ type JobMutation<Vars> = {
 export type JobMutations = {
   submit: JobMutation<SubmitVars>
   remove: JobMutation<DeleteVars>
-  /** Graceful, data-preserving stop (both engines). Unlike remove, the job and its files survive. */
   stop: JobMutation<StopVars>
-  /** Checkpoint resume with more steps (GMX only); callers guard by engine. */
   extend: JobMutation<ExtendVars>
 }
 

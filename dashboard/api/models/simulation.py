@@ -26,6 +26,21 @@ SIMULATION_SUFFIX = ".simulation.json"
 READONLY_MODE = 0o444
 WRITABLE_MODE = 0o644
 
+
+def check_simulation_path(simulation_path: str) -> None:
+    """
+    Reject unknown verb suffixes swallowed by the greedy <path:> submit routes.
+
+    ``POST .../gmx/x.simulation.json/typo`` would otherwise validate the request
+    body and 400 with "invalid compute parameters" instead of a clean 404.
+
+    Raises:
+        NotFound: If the path is not a simulation manifest path.
+    """
+    if not simulation_path.endswith(SIMULATION_SUFFIX):
+        raise NotFound(f"Simulation {simulation_path} not found.")
+
+
 ROLE_LABELS: dict[str, str] = {
     "run_input": "Run input",
     "run_structure": "Final run structure",

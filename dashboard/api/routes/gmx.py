@@ -6,7 +6,7 @@ from extensions import db
 from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import Experiment, GromacsJob
-from models.simulation import SIMULATION_SUFFIX
+from models.simulation import check_simulation_path
 from schemas import GromacsJobSchema
 from validators import check_log_type, check_positive_int
 from werkzeug.exceptions import BadRequest, NotFound
@@ -14,35 +14,12 @@ from werkzeug.exceptions import BadRequest, NotFound
 gmx_bp = Blueprint("gmx", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/gmx")
 
 
-def _check_simulation_path(simulation_path: str) -> None:
-    """
-    Reject unknown verb suffixes swallowed by the greedy <path:> submit route.
-
-    ``POST .../gmx/x.simulation.json/typo`` would otherwise validate the request
-    body and 400 with "invalid compute parameters" instead of a clean 404.
-
-    Raises:
-        NotFound: If the path is not a simulation manifest path.
-    """
-    if not simulation_path.endswith(SIMULATION_SUFFIX):
-        raise NotFound(f"Simulation {simulation_path} not found.")
-
-
 def _latest_job_or_404(experiment_id: str, simulation_path: str) -> GromacsJob:
-    """
-    Latest (most recently created) segment of the simulation's run history.
-
-    A simulation accumulates one job row per run/extension; every segment-scoped
-    operation acts on the latest one.
-    """
-    return (
-        GromacsJob.query
-        .filter_by(experiment_id=experiment_id, simulation_path=simulation_path)
-        .order_by(GromacsJob.created_at.desc())
-        .first_or_404(
-            description=f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found"
-        )
-    )
+    """Latest (most recently created) segment of the simulation's run history."""
+    job = GromacsJob.latest_for(experiment_id, simulation_path)
+    if job is None:
+        raise NotFound(f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
+    return job
 
 
 @gmx_bp.route("", methods=["GET"])
@@ -83,18 +60,13 @@ def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
     Raises:
         BadRequest: If compute parameters are invalid.
     """
-    _check_simulation_path(simulation_path)
+    check_simulation_path(simulation_path)
 
     schema = GromacsJobSchema()
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
-    job: GromacsJob | None = (
-        GromacsJob.query
-        .filter_by(experiment_id=experiment_id, simulation_path=simulation_path)
-        .order_by(GromacsJob.created_at.desc())
-        .first()
-    )
+    job = GromacsJob.latest_for(experiment_id, simulation_path)
 
     if not job:
         data = request.get_json(silent=True) or {}
