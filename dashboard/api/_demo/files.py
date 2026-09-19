@@ -311,13 +311,7 @@ def write_gmx_checkpoint(experiment_id: str, deffnm: str) -> None:
 def append_gmx_stopped_segment(
     experiment_id: str, deffnm: str, init_step: int, nsteps: int, done_steps: int, started: datetime
 ) -> None:
-    """
-    Append a TERM-stopped extension segment block to a GMX log.
-
-    A real TERM-stopped mdrun always prints a ``Performance:`` line (but never
-    ``Finished mdrun``) — seeding it keeps the demo honest about what progress
-    parsers must ignore for stopped rows.
-    """
+    """Append a TERM-stopped segment block. A real stopped mdrun prints ``Performance:`` (never ``Finished mdrun``); parsers must ignore it here."""
     log_path = DATA_DIR / experiment_id / f"{deffnm}.log"
     wall = started.strftime("%a %b %d %H:%M:%S %Y")
     with log_path.open("a") as f:

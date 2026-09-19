@@ -322,13 +322,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         A running job counts as Run done once nsteps_done parses from its
         engine log — before that, the run's files (trajectory included)
         don't exist (earlier finished/stopped segments still count, since
-        their data stays analyzable). A stopped segment keeps data
-        analyzable exactly like a finished one. Publish is
-        experiment-level, not part of this ladder.
-
-        Returns:
-            A tuple of (step, status) where step is an integer (0-3) and status
-            is a string describing the current phase.
+        their data stays analyzable). Publish is experiment-level,
+        not part of this ladder.
         """
         jobs = self._cached_jobs()
 

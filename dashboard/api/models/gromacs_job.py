@@ -90,13 +90,7 @@ class GromacsJob(SimulationJob):
 
     @property
     def nsteps(self) -> int | None:
-        """
-        Total number of steps for the job.
-
-        A persisted value (set on extension to the cumulative target, or cached from the
-        log) wins over the manifest's ``-nsteps`` override, which only describes the
-        first segment.
-        """
+        """Total steps; a persisted value (extension target or log cache) outranks the manifest ``-nsteps`` override."""
         if self._nsteps:
             return self._nsteps
 
@@ -214,20 +208,10 @@ class GromacsJob(SimulationJob):
     @classmethod
     def extend(cls, experiment: "Experiment", simulation_path: str, nsteps: int) -> "GromacsJob":
         """
-        Extend the simulation by ``nsteps`` additional steps, resuming from the latest checkpoint.
-
-        Args:
-            experiment: The experiment the simulation belongs to.
-            simulation_path: Experiment-relative path to the ``.simulation.json``.
-            nsteps: Number of steps to add on top of the previous cumulative total.
-
-        Returns:
-            The created GromacsJob instance (the new segment).
+        Extend the latest segment by ``nsteps`` (a delta added to the previous cumulative total).
 
         Raises:
-            BadRequest: If no previous segment exists, the latest segment is still live,
-                no checkpoint file is available, extra_args contains ``-cpi``, or a
-                concurrent extension is already in progress.
+            BadRequest: No prior segment, live segment, missing checkpoint, manifest contains ``-cpi``, or concurrent extend.
         """
         latest = cls.latest_for(experiment.id, simulation_path)
         if latest is None:
@@ -251,10 +235,8 @@ class GromacsJob(SimulationJob):
         except ValueError as exc:
             raise BadRequest(str(exc)) from exc
 
-        # Freeze the latest segment's log-derived fields before the appended log adds
-        # a new segment block (parsers take the last match, i.e. the newest segment's).
-        # Freezing happens before submission so the old segment's history row keeps
-        # showing its own numbers for the whole extension.
+        # Freeze log-derived fields before appending: parsers take the last match,
+        # so the old segment's row must be locked before the new block is written.
         _ = latest.init_step, latest.start_timestamp, latest.performance
         previous_total = latest.nsteps
         if previous_total is None:
@@ -299,9 +281,7 @@ class GromacsJob(SimulationJob):
         try:
             db.session.commit()
         except IntegrityError:
-            # A concurrent extension claimed the live-segment slot first (partial
-            # unique index) — don't leave the just-submitted sibling orphaned on
-            # the cluster, appending to the same trajectory.
+            # Concurrent extend won the partial-unique-index race; clean up the orphaned cluster job.
             db.session.rollback()
             mdrun.delete_gmx_job(mdrun_job["id"])
             raise BadRequest("Another extension of this simulation is already in progress.") from None
@@ -375,15 +355,7 @@ class GromacsJob(SimulationJob):
         self._stderr_log.unlink(missing_ok=True)
 
     def _parse_nsteps(self) -> int | None:
-        """
-        Get the total number of steps for the job.
-
-        Last match wins: the log is appended across extensions and each segment
-        dumps its own input parameters, so the newest segment's value is last.
-
-        Returns:
-            Total number of steps or None if not available.
-        """
+        """Last match wins — the log is appended across extensions, each segment dumps its own nsteps."""
         if not self._gmx_log.exists():
             return None
 
@@ -407,14 +379,7 @@ class GromacsJob(SimulationJob):
         return result
 
     def _parse_init_step(self) -> int | None:
-        """
-        Get the initial step of the job (non-zero when resuming from a checkpoint).
-
-        Last match wins (the log is appended across extensions).
-
-        Returns:
-            Initial step or None if not available.
-        """
+        """Return the initial step; last match wins since the log is appended across extensions."""
         if not self._gmx_log.exists():
             return None
 
@@ -438,12 +403,7 @@ class GromacsJob(SimulationJob):
         return result
 
     def _parse_nsteps_done(self) -> int | None:
-        """
-        Get the number of steps completed so far.
-
-        Returns:
-            Number of steps completed or None if not available.
-        """
+        """Return the steps completed so far, read from the tail of the engine log."""
         if not self._gmx_log.exists():
             return None
 
@@ -451,9 +411,8 @@ class GromacsJob(SimulationJob):
             log = tail_bytes(self._gmx_log)
             pattern = r"^\s*\d+\s+\d+\.\d+\s*"
             for line in reversed(log.splitlines()):
-                # "Finished mdrun" means the run reached its total — but the marker may
-                # belong to a previous segment of this appended log, so only trust it
-                # when THIS job is finished; otherwise fall through to the step rows.
+                # "Finished mdrun" may be from a prior segment; only trust it when
+                # THIS job is FINISHED, else fall through to step rows.
                 if "Finished mdrun" in line:
                     if self.status == JobStatus.FINISHED:
                         return self.nsteps
@@ -471,16 +430,7 @@ class GromacsJob(SimulationJob):
         return None
 
     def _parse_start_timestamp(self) -> int | None:
-        """
-        Get the start timestamp of the job.
-
-        Last match wins: the log is appended across extensions and each segment has
-        its own "Started mdrun" line — the newest segment's start is what runtime
-        estimates need.
-
-        Returns:
-            Start timestamp or None if not available.
-        """
+        """Start timestamp; last match wins (newest segment's 'Started mdrun' line)."""
         if not self._gmx_log.exists():
             return None
 
@@ -502,12 +452,7 @@ class GromacsJob(SimulationJob):
         return result
 
     def _parse_finish_timestamp(self) -> int | None:
-        """
-        Get the finish timestamp of the job.
-
-        Returns:
-            Finish timestamp or None if not available.
-        """
+        """Finish timestamp; last match in the appended log."""
         if not self._gmx_log.exists():
             return None
 
@@ -528,12 +473,7 @@ class GromacsJob(SimulationJob):
         return None
 
     def _parse_performance(self) -> float | None:
-        """
-        Get the performance of the job in ns/day.
-
-        Returns:
-            Performance in ns/day or None if not available.
-        """
+        """Return performance in ns/day; last match wins (appended log)."""
         if not self._gmx_log.exists():
             return None
 

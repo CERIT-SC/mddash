@@ -44,10 +44,8 @@ class MdrunJob(db.Model):  # type: ignore
     @property
     def status(self) -> JobStatus:
         """The current job status from Kubernetes; the database row is updated as a side effect."""
-        # STOPPED is a user-initiated terminal state and sticky: the row intentionally
-        # outlives its K8s job, and during the deletion grace window Kubernetes still
-        # reports the pod as running — trusting it here would resurrect the row as
-        # RUNNING with nothing left to converge it back.
+        # STOPPED is sticky: the row outlives its K8s job, which K8s still reports
+        # RUNNING through the graceful-deletion window — trusting it would resurrect the row.
         if self.last_status == JobStatus.STOPPED:
             return JobStatus.STOPPED
 
@@ -69,16 +67,9 @@ class MdrunJob(db.Model):  # type: ignore
 
     def stop(self) -> None:
         """
-        Stop the Kubernetes job gracefully, preserving its data.
+        Stop the job with extended grace (checkpoint + s3-sync upload), keeping the DB row.
 
-        The pod gets an extended grace period so the simulation can write its final
-        checkpoint and the s3-sync sidecar can upload it to S3 before teardown
-        (see ``_sim_guard_block``/``_s3_sync_command`` in ``k8s_client``). The DB row is
-        kept with status STOPPED — after the K8s job is gone, ``status`` falls back to
-        ``last_status`` so the job keeps reporting ``stopped``. Terminal jobs (FINISHED,
-        ERROR, STOPPED) are not flipped: a finished run is not a stopped run. The job
-        may also finish between the check above and the deletion taking effect, so the
-        outcome is re-read once before stamping.
+        Outcome is re-read after deletion: a run that finishes before teardown stays FINISHED.
         """
         if self.status in {JobStatus.FINISHED, JobStatus.ERROR, JobStatus.STOPPED}:
             return

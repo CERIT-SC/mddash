@@ -256,12 +256,9 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
 
     def stop_job(request: "ResponsesProxy", engine: str) -> tuple[int, dict[str, str], str]:
         """
-        Stop a job gracefully, mirroring MDRun's stop semantics (kept, marked STOPPED).
+        Mirrors MDRun stop: marks job STOPPED, keeps the row.
 
         GMX also materializes the final checkpoint a later extend resumes from.
-
-        Returns:
-            Tuple of (status_code, headers, body) for the response.
         """
         match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/{engine}/(?P<job_id>[^/]+)/stop", request.url)
         job_data = demo_state.mdrun_jobs.get(match.group("job_id")) if match else None

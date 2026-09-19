@@ -32,7 +32,7 @@ class TestStopJob:
     def test_404_with_gone_job_is_noop(self, mocker: MockerFixture) -> None:
         mocker.patch("requests.post", return_value=_response(HTTPStatus.NOT_FOUND))
 
-        mdrun.stop_job("job-2", "gmx")  # no exception
+        mdrun.stop_job("job-2", "gmx")
 
     def test_amber_route(self, mocker: MockerFixture) -> None:
         post = mocker.patch("requests.post", return_value=_response(HTTPStatus.NO_CONTENT))

@@ -67,9 +67,8 @@ class SimulationJob(db.Model):  # type: ignore
     _nsteps: Mapped[int | None] = mapped_column("nsteps", db.Integer, nullable=True)
     # Performance (ns/day)
     _performance: Mapped[float | None] = mapped_column("performance", db.Float, nullable=True)
-    # Frozen final progress of a terminal segment — set by the extend flow so the
-    # segment's history row keeps displaying its own step count after the appended
-    # log starts carrying the next segment's rows. Null while live; parsers fill in.
+    # Frozen progress for terminal segments (set by extend so appended log
+    # can't overwrite this row's display). Null while live; parsers fill in.
     _nsteps_done: Mapped[int | None] = mapped_column("nsteps_done", db.Integer, nullable=True)
     # Last successfully-fetched non-UNKNOWN status (fallback when MDRun API is unavailable)
     _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", db.Enum(JobStatus), nullable=True)
@@ -198,9 +197,7 @@ class SimulationJob(db.Model):  # type: ignore
         if self._performance:
             return self._performance
 
-        # Only finished runs get a performance reading of their own: a live or
-        # stopped segment's parse would inherit the previous segment's trailer
-        # block from the shared appended log.
+        # Live/stopped segments would inherit the previous segment's Performance line from the appended log.
         if self.status != JobStatus.FINISHED:
             return None
 
@@ -239,13 +236,9 @@ class SimulationJob(db.Model):  # type: ignore
 
     def stop(self) -> None:
         """
-        Stop the simulation job gracefully, preserving all data.
+        Stop the job gracefully, preserving all data and the DB row (row later extends, GMX, or analyzes as-is).
 
-        MDRun gives the pod an extended grace period so the simulation can write its
-        final state and the s3-sync sidecar can upload it. No files are cleaned up and
-        the DB row is kept, so the job can later be extended (GMX) or analyzed as-is.
-        The outcome is re-read from MDRun rather than assumed: if the run finished
-        first, it stays FINISHED (a finished run is not a stopped run).
+        Outcome re-read after deletion: a run that finishes first stays FINISHED, not STOPPED.
         """
         match self.engine:
             case Engine.GMX:

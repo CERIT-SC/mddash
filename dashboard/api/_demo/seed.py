@@ -267,8 +267,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "nsteps": 100000,
     }
 
-    # Second segment of the same simulation: extended by 50k steps, then stopped —
-    # exercises segment history, the non-destructive stop, and Extend from checkpoint.
+    # Exercises segment history, non-destructive stop, and extend-from-checkpoint.
     stopped_gmx = build_model(
         GromacsJob,
         id="demo-gmx-stopped",
@@ -380,8 +379,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "nsteps": 500000,
     }
 
-    # Running AMBER job (equilibration in progress) — exercises the AMBER stop
-    # flow in the demo, mirroring the live GMX job of the enzyme study.
+    # Exercises the AMBER stop flow (mirrors the enzyme study's live GMX job).
     running_amber = build_model(
         AmberJob,
         id="demo-amber-running",
@@ -638,8 +636,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     write_mdrun_stdio(enzyme.id, "production", running_gmx.id)
     # The stopped second segment of npt_equilibration resumable via its checkpoint.
     write_gmx_checkpoint(enzyme.id, "npt_equilibration")
-    # The stopped second segment's own partial log block (stopped at 120k of 150k);
-    # a TERM-stopped run always leaves a Performance line the parsers must not trust.
+    # TERM-stopped runs leave a Performance line the parsers must not trust.
     append_gmx_stopped_segment(
         enzyme.id,
         "npt_equilibration",

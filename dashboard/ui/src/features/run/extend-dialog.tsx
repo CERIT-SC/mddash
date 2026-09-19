@@ -16,7 +16,7 @@ import {
 import { FastForward, LoaderCircle } from "lucide-react"
 
 type ExtendDialogProps = {
-  /** Current cumulative step total; shown in the resulting-total hint when known. */
+  /** Cumulative steps so far, for the resulting-total hint. */
   currentTotal: number | null
   pending: boolean
   onExtend: (nsteps: number) => void
@@ -24,8 +24,8 @@ type ExtendDialogProps = {
 }
 
 /**
- * Extend a finished/stopped GMX run by additional steps. The server resumes from
- * the latest checkpoint and mdrun appends, so outputs and logs are never deleted.
+ * Extend a finished/stopped GMX run. The server resumes from its latest
+ * checkpoint and appends, so outputs and logs are never deleted.
  */
 export function ExtendDialog({ currentTotal, pending, onExtend, onCancel }: ExtendDialogProps) {
   const [text, setText] = useState("")

@@ -170,19 +170,10 @@ def nsteps_override(extra_args: str) -> int | None:
 
 def strip_run_control_args(extra_args: str) -> str:
     """
-    Remove run-control flags owned by the GROMACS extend flow from ``extra_args``.
+    Return extra_args with GROMACS run-control flags removed; whitespace-normalized.
 
-    ``-nsteps`` is dropped (the extend flow re-adds it with a cumulative value);
-    ``-cpi`` is rejected outright because the extend flow manages checkpoint input.
-
-    Args:
-        extra_args: The simulation manifest's raw extra_args.
-
-    Returns:
-        The remaining extra_args, whitespace-normalized.
-
-    Raises:
-        ValueError: If extra_args contains ``-cpi``.
+    ``-nsteps`` is dropped (re-added with a cumulative value by the extend flow);
+    ``-cpi`` raises ``ValueError``.
     """
     if _CPI_ARG_RE.search(extra_args or ""):
         raise ValueError(

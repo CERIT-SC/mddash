@@ -64,8 +64,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
   const live = job !== undefined && job.is_live
   const failed = job?.status === JobStatus.ERROR
   // The ladder in props is the single source — the same value the stepper
-  // consumes; the server holds it at Run until progress parses from the log
-  // (or earlier segments keep data analyzable; STOPPED counts as step 3 too).
+  // consumes; the server holds it at Run until progress parses (STOPPED counts as step 3 too).
   const analyzable = simulation.step >= 3
   // A terminal GMX run can be resumed from its checkpoint (AMBER has no extension yet).
   const canExtend = engine !== Engine.AMBER && job !== undefined && !job.is_live
@@ -88,9 +87,8 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
     void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experimentId) })
   }
 
-  // When the polled run settles (finished/failed), this is the last fetch the
-  // job query ever makes — nothing else would refresh the run history, wizard
-  // lists, or header pill without a reload. Flush them once on the edge.
+  // When the polled run settles (finished/failed), this is the job query's last
+  // fetch — nothing else refreshes run history, wizard lists, or header without a reload.
   const wasLiveRef = useRef(false)
   useEffect(() => {
     if (wasLiveRef.current && !live) invalidate()

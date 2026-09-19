@@ -52,7 +52,7 @@ def experiment_id(app: Flask) -> str:
 
 
 def _write_gmx_simulation(exp_dir: Path, extra_args: str = "", name: str = "protein") -> str:
-    """Write a valid GMX manifest plus its input files; returns the simulation_path."""
+    """Write a valid GMX manifest plus its input files."""
     exp_dir.mkdir(parents=True, exist_ok=True)
     simulation_path = "protein.simulation.json"
     content = {

@@ -65,9 +65,9 @@ def _s3_init_command(exp_dir: str, remote: str) -> str:
 
 
 def _s3_sync_command(local_dir: str, remote: str) -> str:
-    # On pod deletion (e.g. job stop) the sidecar receives TERM immediately; without a trap
-    # it would die before the final copy, losing the simulation's last checkpoint. The trap
-    # waits (bounded) for the sim container's completion marker, then uploads a final copy.
+    # On pod deletion the sidecar gets TERM immediately; without the trap it would die
+    # before the final copy, losing the last checkpoint. Trap waits (bounded) for the
+    # sim's completion marker, then uploads.
     return (
         "final_copy() {\n"
         '    echo "Performing final copy to S3..." &&\n'
@@ -100,13 +100,10 @@ def _s3_sync_command(local_dir: str, remote: str) -> str:
 
 def _sim_guard_block() -> str:
     """
-    Shell block guarding the backgrounded simulation workload.
+    Shell guard for the backgrounded workload.
 
-    Kubernetes signals only PID 1 (this script's shell) on pod deletion, so TERM must be
-    forwarded explicitly — ``gmx mdrun`` writes its final checkpoint on TERM. The workload
-    runs in the background so ``$!`` captures its PID and the script can wait for its
-    graceful exit within the pod's grace period. The completion marker is touched on every
-    exit path (success, failure, termination) to trigger the s3-sync sidecar's final copy.
+    K8s signals only PID 1, so TERM must be forwarded (mdrun checkpoints on TERM).
+    Marker touched on every exit path to trigger the s3-sync sidecar's final copy.
     """
     return "\n".join([
         "MD_PID=$!",

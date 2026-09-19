@@ -364,9 +364,8 @@ describe("RunStep error job", () => {
 describe("RunStep stop flow", () => {
   it("stops the job without deleting it, data stays analyzable and extendable", async () => {
     const { calls } = mockRun()
-    // The mock job has parsed progress, so the server ladder is already at
-    // step 3; stopping keeps it there (STOPPED counts as analyzable) and the
-    // wizard's refetch after invalidate() delivers that value back as a prop.
+    // The mock has parsed progress, so the ladder is already at step 3; STOPPED
+    // stays analyzable, so the refetch after invalidate() delivers step 3 back.
     const spies = renderRun({ pollMs: 25, simulation: simulation(SIM, { valid: true, missing_files: [], step: 3 }) })
 
     await userEvent.click(await screen.findByRole("button", { name: /stop run/i }))
