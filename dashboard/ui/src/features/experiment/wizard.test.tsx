@@ -57,7 +57,7 @@ describe("ExperimentWizard", () => {
       "/experiments/exp1": okExperiment({
         source: { type: "pdb", pdb_id: "1L2Y", files: [] },
         created_at: "2026-07-20T13:43:20Z",
-        notebooks_repo: "https://github.com/sb-ncbr/mddash-notebooks.git",
+        notebooks_repo: "https://github.com/CERIT-SC/mddash-notebooks.git",
       }),
     })
     renderWizard({})
@@ -65,7 +65,7 @@ describe("ExperimentWizard", () => {
     expect(screen.getByRole("button", { name: "Rename experiment" })).toHaveTextContent("Membrane study")
     expect(screen.getByText("RCSB PDB (1L2Y)")).toBeVisible()
     expect(screen.getByText("Jul 20, 2026")).toBeVisible()
-    expect(screen.getByText("sb-ncbr/mddash-notebooks.git")).toBeVisible()
+    expect(screen.getByText("CERIT-SC/mddash-notebooks.git")).toBeVisible()
   })
 
   it("hides metadata items the API has no values for", async () => {

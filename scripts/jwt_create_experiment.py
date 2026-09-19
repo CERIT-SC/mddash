@@ -61,7 +61,7 @@ def create_experiment():
     # Experiment configuration
     EXPERIMENT_NAME = "test-experiment-1L2Y"
     PDB_ID = "1L2Y"
-    NOTEBOOKS_REPO = "https://github.com/sb-ncbr/mddash-notebooks.git"
+    NOTEBOOKS_REPO = "https://github.com/CERIT-SC/mddash-notebooks.git"
 
     # Passwordless access configuration
     GENERATE_PASSWORDLESS_URL = True  # Set to False to skip passwordless URL generation

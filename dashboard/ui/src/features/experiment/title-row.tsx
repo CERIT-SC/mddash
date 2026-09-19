@@ -22,7 +22,7 @@ import { toast } from "sonner"
 
 import { SourceItem } from "./source-metadata"
 
-/** "sb-ncbr/mddash-notebooks.git" from a full git URL (https or git@). */
+/** "CERIT-SC/mddash-notebooks.git" from a full git URL (https or git@). */
 function shortRepo(repo: string): string {
   const ssh = /^git@[^:]+:(.+)$/.exec(repo)
   if (ssh) return ssh[1]

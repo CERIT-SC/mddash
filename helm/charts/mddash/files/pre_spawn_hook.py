@@ -379,7 +379,7 @@ def _proxy_container(service_prefix: str, username: str, security_context: dict)
             {"name": "NOTEBOOK_HOST", "value": "localhost"},
             {
                 "name": "DEFAULT_NOTEBOOKS_REPO",
-                "value": getenv("DEFAULT_NOTEBOOKS_REPO", "https://github.com/sb-ncbr/mddash-notebooks.git"),
+                "value": getenv("DEFAULT_NOTEBOOKS_REPO", "https://github.com/CERIT-SC/mddash-notebooks.git"),
             },
             {"name": "MDPOSIT_URL", "value": getenv("MDPOSIT_URL", "")},
         ],
