@@ -26,6 +26,21 @@ SIMULATION_SUFFIX = ".simulation.json"
 READONLY_MODE = 0o444
 WRITABLE_MODE = 0o644
 
+
+def check_simulation_path(simulation_path: str) -> None:
+    """
+    Reject unknown verb suffixes swallowed by the greedy <path:> submit routes.
+
+    ``POST .../gmx/x.simulation.json/typo`` would otherwise validate the request
+    body and 400 with "invalid compute parameters" instead of a clean 404.
+
+    Raises:
+        NotFound: If the path is not a simulation manifest path.
+    """
+    if not simulation_path.endswith(SIMULATION_SUFFIX):
+        raise NotFound(f"Simulation {simulation_path} not found.")
+
+
 ROLE_LABELS: dict[str, str] = {
     "run_input": "Run input",
     "run_structure": "Final run structure",
@@ -306,18 +321,23 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         Step is the wizard phase index: Setup 0, Tune 1, Run 2, Analyze 3.
         A running job counts as Run done once nsteps_done parses from its
         engine log — before that, the run's files (trajectory included)
-        don't exist. Publish is experiment-level, not part of this ladder.
-
-        Returns:
-            A tuple of (step, status) where step is an integer (0-3) and status
-            is a string describing the current phase.
+        don't exist (earlier finished/stopped segments still count, since
+        their data stays analyzable). Publish is experiment-level,
+        not part of this ladder.
         """
         jobs = self._cached_jobs()
 
+        # Segments: live ones dominate the ladder; a stopped segment keeps data
+        # analyzable exactly like a finished one.
+        running = [j for j in jobs.simulation if j.status == JobStatus.RUNNING]
+        if running:
+            progressed = any(j.nsteps_done is not None for j in running)
+            has_prior_data = any(j.status in {JobStatus.FINISHED, JobStatus.STOPPED} for j in jobs.simulation)
+            return (3, "simulating") if progressed or has_prior_data else (2, "simulating")
         if any(j.status == JobStatus.FINISHED for j in jobs.simulation):
             return 3, "analyzing"
-        if any(j.status == JobStatus.RUNNING and j.nsteps_done is not None for j in jobs.simulation):
-            return 3, "simulating"
+        if any(j.status == JobStatus.STOPPED for j in jobs.simulation):
+            return 3, "analyzing"
         if jobs.simulation:
             return 2, "simulating"
 

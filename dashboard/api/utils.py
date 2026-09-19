@@ -158,12 +158,28 @@ def get_files_with_extensions(
 
 
 _NSTEPS_RE = re.compile(r"-nsteps(?:=|\s+)['\"]?(\d+)")
+_NSTEPS_ARG_RE = re.compile(r"-nsteps(?:=|\s+)['\"]?\d+['\"]?")
+_CPI_ARG_RE = re.compile(r"-cpi(?:[=\s]|$)")
 
 
 def nsteps_override(extra_args: str) -> int | None:
     """Extract the effective GROMACS ``-nsteps`` override from extra_args (last occurrence wins), or None."""
     value = int(matches[-1]) if (matches := _NSTEPS_RE.findall(extra_args or "")) else 0
     return value if value > 0 else None
+
+
+def strip_run_control_args(extra_args: str) -> str:
+    """
+    Return extra_args with GROMACS run-control flags removed; whitespace-normalized.
+
+    ``-nsteps`` is dropped (the extend flow re-adds its delta: ``mdrun -cpi`` counts additional steps);
+    ``-cpi`` raises ``ValueError``.
+    """
+    if _CPI_ARG_RE.search(extra_args or ""):
+        raise ValueError(
+            "Simulation extra_args must not contain '-cpi'; checkpoint input is managed by the extend flow."
+        )
+    return " ".join(_NSTEPS_ARG_RE.sub("", extra_args or "").split())
 
 
 def is_excluded_path(path: Path, base_dir: Path) -> bool:
@@ -257,6 +273,34 @@ def tail(file: Path | str, n: int = 10) -> str:
 
         result_lines = list(lines_found)[-n:]
         return b"\n".join(result_lines).decode("utf-8", "replace")
+
+
+_TAIL_BUDGET_BYTES = 65536
+
+
+def tail_bytes(file: Path | str, budget: int = _TAIL_BUDGET_BYTES) -> str:
+    """
+    Read the last ``budget`` bytes of a file as text (first partial line dropped).
+
+    A byte budget, not a line window: engine trailers span hundreds of lines,
+    pushing markers past any fixed line count.
+
+    Args:
+        file: Path to the file.
+        budget: Number of bytes to read from the end of the file.
+
+    Returns:
+        str: Last ``budget`` bytes decoded as text (errors replaced).
+    """
+    file_path = Path(file) if isinstance(file, str) else file
+    size = file_path.stat().st_size
+    with file_path.open("rb") as f:
+        f.seek(max(0, size - budget))
+        data = f.read()
+    text = data.decode("utf-8", errors="replace")
+    if size > budget and "\n" in text:
+        text = text.split("\n", 1)[1]
+    return text
 
 
 DU_SIZE_FILENAME = ".storage_size"

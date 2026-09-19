@@ -1,13 +1,14 @@
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from cache import simulation_log_lines_cache, simulation_status_cache
 from cachetools import cached
 from clients import mdrun
 from enums import Engine, JobStatus
 from extensions import db
+from sqlalchemy import Index, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from utils import count_lines
 
@@ -27,6 +28,19 @@ class SimulationJob(db.Model):  # type: ignore
     """
 
     __tablename__ = "simulation_jobs"
+    # At most one live segment per simulation: rows are born PENDING and a second
+    # concurrent extension violates this index instead of spawning two pods that
+    # append to one trajectory. NULL (never-yet-polled legacy rows) is deliberately
+    # excluded — status fetches converge them before any extend can insert.
+    __table_args__ = (
+        Index(
+            "uq_simulation_jobs_live_segment",
+            "experiment_id",
+            "simulation_path",
+            unique=True,
+            sqlite_where=text("last_known_status IN ('PENDING', 'RUNNING', 'UNKNOWN')"),
+        ),
+    )
     __mapper_args__: ClassVar[dict[str, Any]] = {"polymorphic_on": "engine"}
 
     # ID of the job inside the database
@@ -53,11 +67,24 @@ class SimulationJob(db.Model):  # type: ignore
     _nsteps: Mapped[int | None] = mapped_column("nsteps", db.Integer, nullable=True)
     # Performance (ns/day)
     _performance: Mapped[float | None] = mapped_column("performance", db.Float, nullable=True)
+    # Frozen progress for terminal segments (set by extend so appended log
+    # can't overwrite this row's display). Null while live; parsers fill in.
+    _nsteps_done: Mapped[int | None] = mapped_column("nsteps_done", db.Integer, nullable=True)
     # Last successfully-fetched non-UNKNOWN status (fallback when MDRun API is unavailable)
     _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", db.Enum(JobStatus), nullable=True)
 
     # Back-reference to the parent experiment
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="simulation_jobs")
+
+    @classmethod
+    def latest_for(cls, experiment_id: str, simulation_path: str) -> Self | None:
+        """Latest (most recently created) segment of the simulation's run history, or None."""
+        return (
+            cls.query
+            .filter_by(experiment_id=experiment_id, simulation_path=simulation_path)
+            .order_by(cls.created_at.desc())
+            .first()
+        )
 
     @property
     @cached(cache=simulation_status_cache)
@@ -72,10 +99,7 @@ class SimulationJob(db.Model):  # type: ignore
             The current JobStatus of the simulation.
         """
         # Terminal states never change — skip fetch
-        if self._last_known_status is not None and self._last_known_status in {
-            JobStatus.FINISHED,
-            JobStatus.ERROR,
-        }:
+        if self._last_known_status is not None and self._last_known_status.is_terminal:
             return self._last_known_status
 
         try:
@@ -122,6 +146,79 @@ class SimulationJob(db.Model):  # type: ignore
         """
         raise NotImplementedError
 
+    @property
+    def nsteps_done(self) -> int | None:
+        """Number of steps completed so far (persisted for terminal rows once frozen)."""
+        if self._nsteps_done is not None:
+            return self._nsteps_done
+
+        # Only a genuinely finished run may shortcut to its target: a stopped run
+        # prints a performance trailer too, so cached performance proves nothing.
+        if self._performance and self.status == JobStatus.FINISHED:
+            return self._nsteps
+
+        return self._parse_nsteps_done()
+
+    @nsteps_done.setter
+    def nsteps_done(self, value: int) -> None:
+        """Freeze a terminal segment's progress (extend flow) so later appends can't rewrite it."""
+        self._nsteps_done = value
+
+    @property
+    def start_timestamp(self) -> int | None:
+        """Unix timestamp when the job started."""
+        if self._start_timestamp:
+            return self._start_timestamp
+
+        if val := self._parse_start_timestamp():
+            self._start_timestamp = val
+            db.session.commit()
+
+        return self._start_timestamp
+
+    @property
+    def finish_timestamp(self) -> int | None:
+        """Unix timestamp when the job finished."""
+        if self._finish_timestamp:
+            return self._finish_timestamp
+
+        if self.status != JobStatus.FINISHED:
+            return None
+
+        if val := self._parse_finish_timestamp():
+            self._finish_timestamp = val
+            db.session.commit()
+
+        return self._finish_timestamp
+
+    @property
+    def performance(self) -> float | None:
+        """Performance of the job in ns/day (only once the run itself finished)."""
+        if self._performance:
+            return self._performance
+
+        # Live/stopped segments would inherit the previous segment's Performance line from the appended log.
+        if self.status != JobStatus.FINISHED:
+            return None
+
+        if val := self._parse_performance():
+            self._performance = val
+            db.session.commit()
+
+        return self._performance
+
+    def _parse_nsteps_done(self) -> int | None:
+        raise NotImplementedError
+
+    def _parse_performance(self) -> float | None:
+        raise NotImplementedError
+
+    def _parse_start_timestamp(self) -> int | None:
+        raise NotImplementedError
+
+    def _parse_finish_timestamp(self) -> int | None:
+        raise NotImplementedError
+
     def delete(self) -> None:
         """
         Delete the simulation job and its associated resources.
@@ -136,6 +233,27 @@ class SimulationJob(db.Model):  # type: ignore
                 mdrun.delete_amber_job(self.id)
 
         self._cleanup_files()
+
+    def stop(self) -> None:
+        """
+        Stop the job gracefully, preserving all data and the DB row (row later extends, GMX, or analyzes as-is).
+
+        Outcome re-read after deletion: a run that finishes first stays FINISHED, not STOPPED.
+        """
+        match self.engine:
+            case Engine.GMX:
+                mdrun.stop_job(self.id, "gmx")
+                get = mdrun.get_gmx_job
+            case Engine.AMBER:
+                mdrun.stop_job(self.id, "amber")
+                get = mdrun.get_amber_job
+
+        try:
+            self._last_known_status = JobStatus.from_string(get(self.id)["status"])
+        except Exception:
+            logger.exception(f"Could not re-read status of job {self.id} after stop; assuming STOPPED")
+            self._last_known_status = JobStatus.STOPPED
+        db.session.commit()
 
     def _cleanup_files(self) -> None:
         """

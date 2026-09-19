@@ -83,6 +83,15 @@ Configure in Harbor UI (Project → Policy → Tag Retention):
 
 Prod SemVer tags are immutable and must be retained indefinitely: `make rollback ENV=prod REVISION=N` restores a Helm release revision whose values reference a specific image tag, so evicting a live or recently-live tag makes the rollback pod fail to pull. A count-based rule on push time (e.g. "last 10 pushed") can evict the currently-running tag during fast hotfix cycles, since push order diverges from deploy order. Release cadence bounds the count naturally at this project's scale.
 
+### Rollback Data Compatibility
+
+Image tags are not the only rollback hazard: enum additions are forward-safe but not rollback-safe. The release that adds simulation **stop** (`JobStatus.STOPPED` on `simulation_jobs.last_known_status` and `mdrun_jobs.last_status`) writes status strings a pre-STOPPED binary cannot decode (SQLAlchemy raises `LookupError` when loading such rows → 500s). Before rolling back across that release boundary, normalize the data in both databases (dashboard SQLite in the user pod at `/mddash/experiments.db`, MDRun SQLite at `/data/mdrun.db`):
+
+```sql
+UPDATE simulation_jobs SET last_known_status = 'ERROR' WHERE last_known_status = 'STOPPED';
+UPDATE mdrun_jobs SET last_status = 'FINISHED' WHERE last_status = 'STOPPED';
+```
+
 
 ## Configuration
 

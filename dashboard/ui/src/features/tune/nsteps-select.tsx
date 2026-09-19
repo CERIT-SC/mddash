@@ -1,5 +1,6 @@
 import { useState } from "react"
 
+import { parsePositiveInt } from "@/shared/parse"
 import { Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@e-infra/design-system"
 import { PenLine, Undo2 } from "lucide-react"
 
@@ -30,8 +31,8 @@ export function NstepsSelect({ value, onValueChange, disabled = false, id }: Nst
   if (custom) {
     const commit = (raw: string) => {
       setText(raw)
-      const parsed = Number.parseInt(raw, 10)
-      if (Number.isInteger(parsed) && parsed >= 1) onValueChange(parsed)
+      const parsed = parsePositiveInt(raw)
+      if (parsed !== null) onValueChange(parsed)
     }
     return (
       <div className="flex w-full max-w-72 items-center gap-1">

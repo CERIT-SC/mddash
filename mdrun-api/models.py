@@ -44,6 +44,11 @@ class MdrunJob(db.Model):  # type: ignore
     @property
     def status(self) -> JobStatus:
         """The current job status from Kubernetes; the database row is updated as a side effect."""
+        # STOPPED is sticky: the row outlives its K8s job, which K8s still reports
+        # RUNNING through the graceful-deletion window — trusting it would resurrect the row.
+        if self.last_status == JobStatus.STOPPED:
+            return JobStatus.STOPPED
+
         job_status = k8s_client.get_job_status(ns=NAMESPACE, name=self.job_name)
 
         if job_status == JobStatus.UNKNOWN:
@@ -59,6 +64,22 @@ class MdrunJob(db.Model):  # type: ignore
     def delete(self) -> None:
         """Delete the Kubernetes job resource."""
         k8s_client.delete_job(ns=NAMESPACE, name=self.job_name)
+
+    def stop(self) -> None:
+        """
+        Stop the job with extended grace (checkpoint + s3-sync upload), keeping the DB row.
+
+        Outcome is re-read after deletion: a run that finishes before teardown stays FINISHED.
+        """
+        if self.status in {JobStatus.FINISHED, JobStatus.ERROR, JobStatus.STOPPED}:
+            return
+
+        k8s_client.delete_job(
+            ns=NAMESPACE, name=self.job_name, grace_period_seconds=k8s_client.STOP_GRACE_PERIOD_SECONDS
+        )
+        outcome = k8s_client.get_job_status(ns=NAMESPACE, name=self.job_name)
+        self.last_status = JobStatus.FINISHED if outcome == JobStatus.FINISHED else JobStatus.STOPPED
+        db.session.commit()
 
     def handle_status_change(self, old: JobStatus, new: JobStatus) -> None:
         """Handle job status transitions and cleanup finalized jobs."""

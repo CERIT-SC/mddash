@@ -301,6 +301,31 @@ def _gmx_log_template_lines() -> list[str]:
     return list(_gmx_log_template_tuple())
 
 
+def write_gmx_checkpoint(experiment_id: str, deffnm: str) -> None:
+    """Materialize the .cpt checkpoint a finished/stopped GMX run leaves for extension."""
+    cpt_path = DATA_DIR / experiment_id / f"{deffnm}.cpt"
+    cpt_path.parent.mkdir(parents=True, exist_ok=True)
+    cpt_path.write_bytes(b"Demo GROMACS checkpoint (stands in for the binary cpt).\n")
+
+
+def append_gmx_stopped_segment(
+    experiment_id: str, deffnm: str, init_step: int, nsteps: int, done_steps: int, started: datetime
+) -> None:
+    """Append a TERM-stopped segment block. A real stopped mdrun prints ``Performance:`` (never ``Finished mdrun``); parsers must ignore it here."""
+    log_path = DATA_DIR / experiment_id / f"{deffnm}.log"
+    wall = started.strftime("%a %b %d %H:%M:%S %Y")
+    with log_path.open("a") as f:
+        f.write(
+            f"Started mdrun on rank 0 {wall}\n"
+            f"            init-step = {init_step}\n"
+            f"              nsteps = {nsteps}\n"
+            f"        {init_step}    5000000.0000\n"
+            f"        {done_steps}    6000000.0000\n"
+            f"\n"
+            f"Performance:        61.2     1994.771    332.462\n"
+        )
+
+
 def write_running_amber_log(experiment_id: str, deffnm: str) -> None:
     """Write a partial mdout (no final performance block) and a live mdinfo."""
     lines = _amber_out_template_lines()

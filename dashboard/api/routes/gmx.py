@@ -6,11 +6,20 @@ from extensions import db
 from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import Experiment, GromacsJob
+from models.simulation import check_simulation_path
 from schemas import GromacsJobSchema
 from validators import check_log_type, check_positive_int
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, NotFound
 
 gmx_bp = Blueprint("gmx", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/gmx")
+
+
+def _latest_job_or_404(experiment_id: str, simulation_path: str) -> GromacsJob:
+    """Latest (most recently created) segment of the simulation's run history."""
+    job = GromacsJob.latest_for(experiment_id, simulation_path)
+    if job is None:
+        raise NotFound(f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
+    return job
 
 
 @gmx_bp.route("", methods=["GET"])
@@ -35,10 +44,7 @@ def get_gmx_job(experiment_id: str, simulation_path: str) -> Response:
         Response: JSON response with the GROMACS job data.
     """
     schema = GromacsJobSchema()
-    job: GromacsJob = GromacsJob.query.filter_by(
-        experiment_id=experiment_id, simulation_path=simulation_path
-    ).first_or_404(description=f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
-    return jsonify(schema.dump(job))
+    return jsonify(schema.dump(_latest_job_or_404(experiment_id, simulation_path)))
 
 
 @gmx_bp.route("/<path:simulation_path>", methods=["POST"])
@@ -54,13 +60,13 @@ def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
     Raises:
         BadRequest: If compute parameters are invalid.
     """
+    check_simulation_path(simulation_path)
+
     schema = GromacsJobSchema()
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
-    job: GromacsJob | None = GromacsJob.query.filter_by(
-        experiment_id=experiment_id, simulation_path=simulation_path
-    ).first()
+    job = GromacsJob.latest_for(experiment_id, simulation_path)
 
     if not job:
         data = request.get_json(silent=True) or {}
@@ -87,31 +93,81 @@ def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
 @gmx_bp.route("/<path:simulation_path>", methods=["DELETE"])
 def delete_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
-    Delete a GROMACS job and its associated Kubernetes resources.
+    Delete the whole run history: every segment's MDRun job, DB row, and result files.
 
     Returns:
         Response: Empty JSON response with 204 No Content on success.
     """
-    job: GromacsJob = GromacsJob.query.filter_by(
+    jobs: list[GromacsJob] = GromacsJob.query.filter_by(
         experiment_id=experiment_id, simulation_path=simulation_path
-    ).first_or_404(description=f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
-    job.delete()
-    db.session.delete(job)
+    ).all()
+    if not jobs:
+        raise NotFound(f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
+
+    for job in jobs:
+        job.delete()
+        db.session.delete(job)
     db.session.commit()
     return "", HTTPStatus.NO_CONTENT
+
+
+@gmx_bp.route("/<path:simulation_path>/stop", methods=["POST"])
+def stop_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
+    """
+    Stop the latest run segment gracefully, keeping all data and job history.
+
+    Returns:
+        Response: Empty JSON response with 204 No Content on success.
+
+    Raises:
+        BadRequest: If the latest segment is not live.
+    """
+    job = _latest_job_or_404(experiment_id, simulation_path)
+    if not job.is_live:
+        raise BadRequest("Only a live run can be stopped.")
+    job.stop()
+    return "", HTTPStatus.NO_CONTENT
+
+
+@gmx_bp.route("/<path:simulation_path>/extend", methods=["POST"])
+def extend_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
+    """
+    Extend a finished or stopped run by additional steps, resuming from its checkpoint.
+
+    Body: ``{"nsteps": 100000}`` — steps to add on top of the current total.
+
+    Returns:
+        Response: JSON response with the created GROMACS job (the new segment), HTTP 201.
+
+    Raises:
+        BadRequest: If nsteps is invalid or the run cannot be extended.
+    """
+    schema = GromacsJobSchema()
+    experiment: Experiment = Experiment.query.get_or_404(
+        experiment_id, description=f"Experiment {experiment_id} not found"
+    )
+
+    data = request.get_json(silent=True) or {}
+    try:
+        nsteps = int(data.get("nsteps", request.form.get("nsteps", "")))
+        if nsteps < 1:
+            raise ValueError
+    except (ValueError, TypeError) as exc:
+        raise BadRequest("Invalid nsteps: must be a positive integer.") from exc
+
+    job = GromacsJob.extend(experiment=experiment, simulation_path=simulation_path, nsteps=nsteps)
+    return jsonify(schema.dump(job)), HTTPStatus.CREATED
 
 
 @gmx_bp.route("/<path:simulation_path>/log", methods=["GET"])
 def get_gmx_job_log(experiment_id: str, simulation_path: str) -> Response:
     """
-    Get log output for a GROMACS job.
+    Get log output for the latest segment of a GROMACS job.
 
     Returns:
         Response: JSON response with the requested log content.
     """
-    job: GromacsJob = GromacsJob.query.filter_by(
-        experiment_id=experiment_id, simulation_path=simulation_path
-    ).first_or_404(description=f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
+    job = _latest_job_or_404(experiment_id, simulation_path)
 
     log_type = request.args.get("type", "gmx").lower()
     tail_lines = request.args.get("tail", "10000")

@@ -6,11 +6,20 @@ from extensions import db
 from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import AmberJob, Experiment
+from models.simulation import check_simulation_path
 from schemas import AmberJobSchema
 from validators import check_positive_int
-from werkzeug.exceptions import BadRequest
+from werkzeug.exceptions import BadRequest, NotFound
 
 amber_bp = Blueprint("amber", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/amber")
+
+
+def _latest_job_or_404(experiment_id: str, simulation_path: str) -> AmberJob:
+    """Latest (most recently created) segment of the simulation's run history."""
+    job = AmberJob.latest_for(experiment_id, simulation_path)
+    if job is None:
+        raise NotFound(f"AMBER job for simulation {simulation_path} in experiment {experiment_id} not found")
+    return job
 
 
 @amber_bp.route("", methods=["GET"])
@@ -35,10 +44,7 @@ def get_amber_job(experiment_id: str, simulation_path: str) -> Response:
         Response: JSON response with the AMBER job data.
     """
     schema = AmberJobSchema()
-    job: AmberJob = AmberJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first_or_404(
-        description=f"AMBER job for simulation {simulation_path} in experiment {experiment_id} not found"
-    )
-    return jsonify(schema.dump(job))
+    return jsonify(schema.dump(_latest_job_or_404(experiment_id, simulation_path)))
 
 
 @amber_bp.route("/<path:simulation_path>", methods=["POST"])
@@ -54,13 +60,13 @@ def submit_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturn
     Raises:
         BadRequest: If compute parameters are invalid.
     """
+    check_simulation_path(simulation_path)
+
     schema = AmberJobSchema()
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
-    job: AmberJob | None = AmberJob.query.filter_by(
-        experiment_id=experiment_id, simulation_path=simulation_path
-    ).first()
+    job = AmberJob.latest_for(experiment_id, simulation_path)
 
     if not job:
         data = request.get_json(silent=True) or {}
@@ -87,31 +93,62 @@ def submit_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturn
 @amber_bp.route("/<path:simulation_path>", methods=["DELETE"])
 def delete_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
-    Delete an AMBER job and its associated Kubernetes resources.
+    Delete the whole run history: every segment's MDRun job, DB row, and result files.
 
     Returns:
         Response: Empty JSON response with 204 No Content on success.
     """
-    job: AmberJob = AmberJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first_or_404(
-        description=f"AMBER job for simulation {simulation_path} in experiment {experiment_id} not found"
-    )
-    job.delete()
-    db.session.delete(job)
+    jobs: list[AmberJob] = AmberJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).all()
+    if not jobs:
+        raise NotFound(f"AMBER job for simulation {simulation_path} in experiment {experiment_id} not found")
+
+    for job in jobs:
+        job.delete()
+        db.session.delete(job)
     db.session.commit()
     return "", HTTPStatus.NO_CONTENT
+
+
+@amber_bp.route("/<path:simulation_path>/stop", methods=["POST"])
+def stop_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
+    """
+    Stop the latest run segment gracefully, keeping all data and job history.
+
+    Returns:
+        Response: Empty JSON response with 204 No Content on success.
+
+    Raises:
+        BadRequest: If the latest segment is not live.
+    """
+    job = _latest_job_or_404(experiment_id, simulation_path)
+    if not job.is_live:
+        raise BadRequest("Only a live run can be stopped.")
+    job.stop()
+    return "", HTTPStatus.NO_CONTENT
+
+
+@amber_bp.route("/<path:simulation_path>/extend", methods=["POST"])
+def extend_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
+    """
+    Reject AMBER extension requests; extension is only available for GROMACS.
+
+    Exists so that ``POST .../extend`` is a clear 400 instead of falling into the
+    greedy submit route with confusing parameter errors.
+    """
+    check_simulation_path(simulation_path)
+    _ = experiment_id
+    raise BadRequest("Simulation extension is only available for GROMACS.")
 
 
 @amber_bp.route("/<path:simulation_path>/log", methods=["GET"])
 def get_amber_log(experiment_id: str, simulation_path: str) -> Response:
     """
-    Get log output for an AMBER job.
+    Get log output for the latest segment of an AMBER job.
 
     Returns:
         Response: JSON response with the requested log content.
     """
-    job: AmberJob = AmberJob.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first_or_404(
-        description=f"AMBER job for simulation {simulation_path} in experiment {experiment_id} not found"
-    )
+    job = _latest_job_or_404(experiment_id, simulation_path)
 
     log_type = request.args.get("type", "mdout").lower()
     tail_lines = request.args.get("tail", "10000")

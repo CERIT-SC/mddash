@@ -145,6 +145,18 @@ def delete_gmx_job(job_id: str) -> None:
         raise requests.HTTPError(response.json().get("detail", response.text), request=None, response=response)
 
 
+def stop_job(job_id: str, engine: str) -> None:
+    """Stop a job, preserving its data (checkpoint reaches S3 before teardown)."""
+    response = requests.post(f"{MDRUN_API_URL}/jobs/{engine}/{job_id}/stop", timeout=10)
+
+    # 404 = job already gone (success), same convention as the delete calls
+    if response.status_code == HTTPStatus.NOT_FOUND:
+        return
+
+    if not response.ok:
+        raise requests.HTTPError(response.json().get("detail", response.text), request=None, response=response)
+
+
 # AMBER-specific functions
 def get_amber_job(job_id: str) -> dict:
     """

@@ -73,6 +73,7 @@ class JobStatus(str, Enum):
     RUNNING = "running"
     FINISHED = "finished"
     ERROR = "error"
+    STOPPED = "stopped"
     UNKNOWN = "unknown"
 
     def __str__(self) -> str:

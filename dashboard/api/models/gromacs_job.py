@@ -10,8 +10,9 @@ from config import DATA_DIR, S3_BUCKET
 from enums import DeviceType, Engine, JobStatus
 from extensions import db
 from sqlalchemy import ForeignKey
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
-from utils import nsteps_override, tail
+from utils import nsteps_override, strip_run_control_args, tail, tail_bytes
 from werkzeug.exceptions import (
     BadRequest,
     Forbidden,
@@ -89,12 +90,12 @@ class GromacsJob(SimulationJob):
 
     @property
     def nsteps(self) -> int | None:
-        """Total number of steps for the job (``-nsteps`` from extra_args overrides the TPR value)."""
-        if override := self._nsteps_override:
-            return override
-
+        """Total steps; a persisted value (extension target or log cache) outranks the manifest ``-nsteps`` override."""
         if self._nsteps:
             return self._nsteps
+
+        if override := self._nsteps_override:
+            return override
 
         if val := self._parse_nsteps():
             self._nsteps = val
@@ -108,47 +109,13 @@ class GromacsJob(SimulationJob):
         if self._init_step is not None:
             return self._init_step
 
-        if val := self._parse_init_step():
+        # 0 is a legitimate parse result — persist it so the full-log scan happens
+        # only once per row instead of on every dump.
+        if (val := self._parse_init_step()) is not None:
             self._init_step = val
             db.session.commit()
 
         return self._init_step or 0
-
-    @property
-    def nsteps_done(self) -> int | None:
-        """Number of steps completed so far."""
-        # If simulation has finished, return total steps
-        if self._performance:
-            return self._nsteps
-
-        return self._parse_nsteps_done()
-
-    @property
-    def start_timestamp(self) -> int | None:
-        """Unix timestamp when the job started."""
-        if self._start_timestamp:
-            return self._start_timestamp
-
-        if val := self._parse_start_timestamp():
-            self._start_timestamp = val
-            db.session.commit()
-
-        return self._start_timestamp
-
-    @property
-    def finish_timestamp(self) -> int | None:
-        """Unix timestamp when the job finished."""
-        if self._finish_timestamp:
-            return self._finish_timestamp
-
-        if self.status != JobStatus.FINISHED:
-            return None
-
-        if val := self._parse_finish_timestamp():
-            self._finish_timestamp = val
-            db.session.commit()
-
-        return self._finish_timestamp
 
     @property
     def estimated_time(self) -> int | None:
@@ -173,18 +140,6 @@ class GromacsJob(SimulationJob):
         base_estimate = remaining_steps * time_per_step
         time_since_update = datetime.now(UTC).timestamp() - last_updated
         return max(0, int(base_estimate - time_since_update))
-
-    @property
-    def performance(self) -> float | None:
-        """Performance of the job in ns/day."""
-        if self._performance:
-            return self._performance
-
-        if val := self._parse_performance():
-            self._performance = val
-            db.session.commit()
-
-        return self._performance
 
     @classmethod
     def start(
@@ -238,6 +193,7 @@ class GromacsJob(SimulationJob):
             ntomp=ntomp,  # type: ignore[call-arg]
             experiment_id=experiment.id,  # type: ignore[call-arg]
             engine=Engine.GMX,  # type: ignore[call-arg]
+            _last_known_status=JobStatus.PENDING,  # type: ignore[call-arg]
         )
         db.session.add(job)
 
@@ -246,6 +202,96 @@ class GromacsJob(SimulationJob):
         db.session.commit()
         simulation.mark_readonly()
         logger.info(f"Started GROMACS job {job.id} for experiment {experiment.id} (simulation {simulation_path})")
+
+        return job
+
+    @classmethod
+    def extend(cls, experiment: "Experiment", simulation_path: str, nsteps: int) -> "GromacsJob":
+        """
+        Extend the latest segment by ``nsteps`` additional steps, resuming from its checkpoint.
+
+        Raises:
+            BadRequest: No prior segment, live segment, missing checkpoint, manifest contains ``-cpi``, or concurrent extend.
+        """
+        latest = cls.latest_for(experiment.id, simulation_path)
+        if latest is None:
+            raise BadRequest("No run exists for this simulation yet; extend requires a finished or stopped run.")
+        if latest.is_live:
+            raise BadRequest("The run is still active; stop it before extending.")
+
+        simulation = Simulation.get(experiment.id, simulation_path)
+        simulation.require_files(["run_input"])
+        tpr_rel_path = simulation.resolved_files["run_input"]
+        deffnm = tpr_rel_path.removesuffix(".tpr")
+
+        checkpoint = DATA_DIR / experiment.id / f"{deffnm}.cpt"
+        if not checkpoint.exists():
+            raise BadRequest(
+                f"No checkpoint file ({checkpoint.name}) found to resume from; it may still be syncing — try again shortly."
+            )
+
+        try:
+            base_args = strip_run_control_args(simulation.extra_args)
+        except ValueError as exc:
+            raise BadRequest(str(exc)) from exc
+
+        # Freeze log-derived fields before appending: parsers take the last match,
+        # so the old segment's row must be locked before the new block is written.
+        _ = latest.init_step, latest.start_timestamp, latest.performance
+        previous_total = latest.nsteps
+        if previous_total is None:
+            raise BadRequest("Cannot determine the previous run's total step count from its log.")
+
+        # Anchor on actual progress, not the previous target: a stopped segment
+        # resumes from where it stood, so "extend by N" must mean N more steps
+        # from that point (the same value is frozen for the history display).
+        progress = latest.nsteps_done
+        if progress is not None:
+            latest.nsteps_done = progress
+        base = progress if progress is not None else previous_total
+
+        # mdrun -cpi counts -nsteps as ADDITIONAL steps from the checkpoint step —
+        # a cumulative total here would over-run by all previous progress.
+        total = base + nsteps
+        cpt_name = f"{Path(tpr_rel_path).name.removesuffix('.tpr')}.cpt"
+        extra_args = " ".join(filter(None, [base_args, f"-cpi {cpt_name}", f"-nsteps {nsteps}"]))
+
+        mdrun_job = mdrun.create_job(
+            experiment_id=experiment.id,
+            tpr_name=tpr_rel_path,
+            bucket_name=S3_BUCKET,
+            pme=latest.pme.value,
+            nb=latest.nb.value,
+            np=latest.np,
+            ntomp=latest.ntomp,
+            extra_args=extra_args,
+        )
+
+        job = GromacsJob(
+            id=mdrun_job["id"],  # type: ignore[call-arg]
+            simulation_path=simulation_path,  # type: ignore[call-arg]
+            pme=latest.pme,  # type: ignore[call-arg]
+            nb=latest.nb,  # type: ignore[call-arg]
+            np=latest.np,  # type: ignore[call-arg]
+            ntomp=latest.ntomp,  # type: ignore[call-arg]
+            experiment_id=experiment.id,  # type: ignore[call-arg]
+            engine=Engine.GMX,  # type: ignore[call-arg]
+            _last_known_status=JobStatus.PENDING,  # type: ignore[call-arg]
+        )
+        job._nsteps = total
+        job._init_step = base
+        db.session.add(job)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Concurrent extend won the partial-unique-index race; clean up the orphaned cluster job.
+            db.session.rollback()
+            mdrun.delete_gmx_job(mdrun_job["id"])
+            raise BadRequest("Another extension of this simulation is already in progress.") from None
+        logger.info(
+            f"Extended GROMACS simulation {simulation_path} (experiment {experiment.id}) "
+            f"by {nsteps} steps to {total} as job {job.id}"
+        )
 
         return job
 
@@ -312,15 +358,11 @@ class GromacsJob(SimulationJob):
         self._stderr_log.unlink(missing_ok=True)
 
     def _parse_nsteps(self) -> int | None:
-        """
-        Get the total number of steps for the job.
-
-        Returns:
-            Total number of steps or None if not available.
-        """
+        """Last match wins — the log is appended across extensions, each segment dumps its own nsteps."""
         if not self._gmx_log.exists():
             return None
 
+        result = None
         try:
             with self._gmx_log.open("r") as f:
                 for line in f:
@@ -330,25 +372,21 @@ class GromacsJob(SimulationJob):
                     parts = line.split("=")
                     value = parts[-1].strip()
                     try:
-                        return int(value)
+                        result = int(value)
                     except ValueError:
                         continue
 
         except (FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
             logger.exception("Error reading nsteps from log file.")
 
-        return None
+        return result
 
     def _parse_init_step(self) -> int | None:
-        """
-        Get the initial step of the job (non-zero when resuming from a checkpoint).
-
-        Returns:
-            Initial step or None if not available.
-        """
+        """Return the initial step; last match wins since the log is appended across extensions."""
         if not self._gmx_log.exists():
             return None
 
+        result = None
         try:
             with self._gmx_log.open("r") as f:
                 for line in f:
@@ -358,32 +396,30 @@ class GromacsJob(SimulationJob):
                     parts = line.split("=")
                     value = parts[-1].strip()
                     try:
-                        return int(value)
+                        result = int(value)
                     except ValueError:
                         continue
 
         except (FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
             logger.exception("Error reading init-step from log file.")
 
-        return None
+        return result
 
     def _parse_nsteps_done(self) -> int | None:
-        """
-        Get the number of steps completed so far.
-
-        Returns:
-            Number of steps completed or None if not available.
-        """
+        """Return the steps completed so far, read from the tail of the engine log."""
         if not self._gmx_log.exists():
             return None
 
         try:
-            log = tail(self._gmx_log, 20)
+            log = tail_bytes(self._gmx_log)
             pattern = r"^\s*\d+\s+\d+\.\d+\s*"
             for line in reversed(log.splitlines()):
-                # if the simulation has finished, return the total steps
+                # "Finished mdrun" may be from a prior segment; only trust it when
+                # THIS job is FINISHED, else fall through to step rows.
                 if "Finished mdrun" in line:
-                    return self.nsteps
+                    if self.status == JobStatus.FINISHED:
+                        return self.nsteps
+                    continue
 
                 if not re.match(pattern, line):
                     continue
@@ -397,15 +433,11 @@ class GromacsJob(SimulationJob):
         return None
 
     def _parse_start_timestamp(self) -> int | None:
-        """
-        Get the start timestamp of the job.
-
-        Returns:
-            Start timestamp or None if not available.
-        """
+        """Start timestamp; last match wins (newest segment's 'Started mdrun' line)."""
         if not self._gmx_log.exists():
             return None
 
+        result = None
         try:
             with self._gmx_log.open("r") as f:
                 for line in f:
@@ -415,25 +447,20 @@ class GromacsJob(SimulationJob):
                     parts = line.split()
                     date_str = " ".join(parts[-5:])
                     dt = datetime.strptime(date_str, "%a %b %d %H:%M:%S %Y").replace(tzinfo=UTC)
-                    return int(dt.timestamp())
+                    result = int(dt.timestamp())
 
         except (ValueError, FileNotFoundError, PermissionError, OSError, UnicodeDecodeError):
             logger.exception("Error reading start time from log file.")
 
-        return None
+        return result
 
     def _parse_finish_timestamp(self) -> int | None:
-        """
-        Get the finish timestamp of the job.
-
-        Returns:
-            Finish timestamp or None if not available.
-        """
+        """Finish timestamp; last match in the appended log."""
         if not self._gmx_log.exists():
             return None
 
         try:
-            log = tail(self._gmx_log, 10)
+            log = tail_bytes(self._gmx_log)
             for line in reversed(log.splitlines()):
                 if "Finished mdrun" not in line:
                     continue
@@ -449,17 +476,12 @@ class GromacsJob(SimulationJob):
         return None
 
     def _parse_performance(self) -> float | None:
-        """
-        Get the performance of the job in ns/day.
-
-        Returns:
-            Performance in ns/day or None if not available.
-        """
+        """Return performance in ns/day; last match wins (appended log)."""
         if not self._gmx_log.exists():
             return None
 
         try:
-            log = tail(self._gmx_log, 20)
+            log = tail_bytes(self._gmx_log)
             for line in reversed(log.splitlines()):
                 if "Performance:" not in line:
                     continue

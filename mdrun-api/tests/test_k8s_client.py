@@ -128,6 +128,119 @@ class TestGromacsManifest:
         assert "exp123/production" not in sync
 
 
+class TestSimGuardAndSyncTraps:
+    """Commands survive pod deletion: TERM reaches the workload and the sidecar does a final copy."""
+
+    def test_gmx_sim_command_signals_mdrun_by_name_and_always_marks_completion(self, mocker: MockerFixture) -> None:
+        batch_v1 = _create(mocker)
+        k8s_client.create_gromacs_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            deffnm="production/md",
+            np=2,
+            ntomp=4,
+            nb="gpu",
+            pme="gpu",
+            extra_args="",
+        )
+        command = _sim_command(_manifest(batch_v1))
+
+        assert "MD_PID=$!" in command
+        assert "trap on_term TERM INT" in command
+        # TERM must hit mdrun itself: orterun kills ranks on TERM before they checkpoint.
+        assert "pkill -TERM -x 'gmx'" in command
+        # Launcher TERM is only the fallback when no sim process matched.
+        assert 'kill -TERM "$MD_PID"' in command
+        assert "trap 'touch /data/job_completed' EXIT" in command
+
+    def test_amber_sim_command_uses_sim_guard(self, mocker: MockerFixture) -> None:
+        batch_v1 = _create(mocker)
+        k8s_client.create_amber_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            prmtop_name="villin.prmtop",
+            inpcrd_name="villin.rst7",
+            mdin_name="prod.mdin",
+            binary="pmemd.cuda",
+            np=1,
+            ntomp=4,
+            ewald="default",
+            extra_args="",
+        )
+        command = _sim_command(_manifest(batch_v1))
+
+        assert "MD_PID=$!" in command
+        assert "trap on_term TERM INT" in command
+        assert "pkill -TERM -x 'pmemd\\.cuda'" in command
+        assert "trap 'touch /data/job_completed' EXIT" in command
+
+    def test_amber_mpi_sim_command_signals_pmemd_by_name(self, mocker: MockerFixture) -> None:
+        batch_v1 = _create(mocker)
+        k8s_client.create_amber_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            prmtop_name="villin.prmtop",
+            inpcrd_name="villin.rst7",
+            mdin_name="prod.mdin",
+            binary="pmemd.mpi",
+            np=2,
+            ntomp=2,
+            ewald="default",
+            extra_args="",
+        )
+        command = _sim_command(_manifest(batch_v1))
+
+        assert "mpirun" in command
+        assert "pkill -TERM -x 'pmemd\\.MPI'" in command
+
+    def test_s3_sync_traps_term_and_waits_for_completion_marker(self, mocker: MockerFixture) -> None:
+        batch_v1 = _create(mocker)
+        k8s_client.create_gromacs_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            deffnm="production/md",
+            np=2,
+            ntomp=4,
+            nb="gpu",
+            pme="gpu",
+            extra_args="",
+        )
+        sync = _s3_sync_command(_manifest(batch_v1))
+
+        assert "trap on_term TERM INT" in sync
+        # Bounded wait for the sim's completion marker, then a final checksummed copy.
+        assert "[ ! -f /data/job_completed ]" in sync
+        assert "--checksum" in sync
+
+
+class TestDeleteJobGrace:
+    """The pod grace period is parameterizable so stops can outlive plain deletes."""
+
+    def _delete(self, mocker: MockerFixture, **kwargs: Any) -> MagicMock:
+        batch_v1 = mocker.patch.object(k8s_client, "batch_v1")
+        mocker.patch("k8s_client.ping_resource", return_value=True)
+        k8s_client.delete_job(ns="ns", name="mdrun-job", **kwargs)
+        return batch_v1
+
+    def test_default_grace_period(self, mocker: MockerFixture) -> None:
+        batch_v1 = self._delete(mocker)
+        body = batch_v1.delete_namespaced_job.call_args.kwargs["body"]
+        assert body.grace_period_seconds == 5
+
+    def test_custom_grace_period(self, mocker: MockerFixture) -> None:
+        batch_v1 = self._delete(mocker, grace_period_seconds=k8s_client.STOP_GRACE_PERIOD_SECONDS)
+        body = batch_v1.delete_namespaced_job.call_args.kwargs["body"]
+        assert body.grace_period_seconds == k8s_client.STOP_GRACE_PERIOD_SECONDS
+
+
 class TestAmberManifest:
     """AMBER jobs run in the mdin directory with relative input references."""
 

@@ -15,4 +15,5 @@ export const JobStatus = {
   RUNNING: 'RUNNING',
   FINISHED: 'FINISHED',
   ERROR: 'ERROR',
+  STOPPED: 'STOPPED',
 } as const;

@@ -11,7 +11,7 @@ from enums import AmberBinary, Engine, EwaldPreset, JobStatus
 from extensions import db
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
-from utils import tail
+from utils import tail, tail_bytes
 from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError, NotFound, UnprocessableEntity
 
 from models.simulation import Simulation
@@ -86,41 +86,6 @@ class AmberJob(SimulationJob):
         return self._nsteps
 
     @property
-    def nsteps_done(self) -> int | None:
-        """Number of steps completed so far."""
-        if self._performance:
-            return self._nsteps
-
-        return self._parse_nsteps_done()
-
-    @property
-    def start_timestamp(self) -> int | None:
-        """Unix timestamp when the job started."""
-        if self._start_timestamp:
-            return self._start_timestamp
-
-        if val := self._parse_start_timestamp():
-            self._start_timestamp = val
-            db.session.commit()
-
-        return self._start_timestamp
-
-    @property
-    def finish_timestamp(self) -> int | None:
-        """Unix timestamp when the job finished."""
-        if self._finish_timestamp:
-            return self._finish_timestamp
-
-        if self.status != JobStatus.FINISHED:
-            return None
-
-        if val := self._parse_finish_timestamp():
-            self._finish_timestamp = val
-            db.session.commit()
-
-        return self._finish_timestamp
-
-    @property
     def estimated_time(self) -> int | None:
         """Estimated time until completion in seconds."""
         if self.start_timestamp is None or self.nsteps is None or self.nsteps_done is None or self.nsteps_done == 0:
@@ -139,18 +104,6 @@ class AmberJob(SimulationJob):
         base_estimate = remaining_steps * time_per_step
         time_since_update = datetime.now(UTC).timestamp() - last_updated
         return max(0, int(base_estimate - time_since_update))
-
-    @property
-    def performance(self) -> float | None:
-        """Performance of the job in ns/day."""
-        if self._performance:
-            return self._performance
-
-        if val := self._parse_performance():
-            self._performance = val
-            db.session.commit()
-
-        return self._performance
 
     @classmethod
     def start(
@@ -198,6 +151,7 @@ class AmberJob(SimulationJob):
             ntomp=ntomp,
             experiment_id=experiment.id,
             engine=Engine.AMBER,
+            _last_known_status=JobStatus.PENDING,
         )
         db.session.add(job)
 
@@ -349,7 +303,7 @@ class AmberJob(SimulationJob):
             return None
 
         try:
-            log = tail(self._mdout_log, 50)
+            log = tail_bytes(self._mdout_log)
             pattern = r"ns/day\s*=\s*([\d.]+)"
             for line in reversed(log.splitlines()):
                 match = re.search(pattern, line)
@@ -408,7 +362,7 @@ class AmberJob(SimulationJob):
             return None
 
         try:
-            log = tail(self._mdout_log, 30)
+            log = tail_bytes(self._mdout_log)
             for line in reversed(log.splitlines()):
                 if "Master Total wall time" not in line:
                     continue
