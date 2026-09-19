@@ -125,14 +125,57 @@ describe("Dashboard", () => {
     expect(await screen.findByText("Experiment recovered")).toBeVisible()
   })
 
-  it("disables unimplemented features", async () => {
+  it("splits experiments across Active and Archived tabs with counts", async () => {
+    mockApiBySuffix({
+      [EXPERIMENTS_URL]: Response.json([
+        experiment("one"),
+        experiment("two"),
+        experiment("old", {
+          name: "Old study",
+          archived_at: new Date(Date.now() - 40 * 86_400_000).toISOString(),
+          archive_state: "archived",
+        }),
+      ]),
+      [NOTEBOOK_CONFIG_URL]: notebookConfigResponse(),
+    })
+    await renderDashboard()
+    expect(await screen.findByRole("tab", { name: /^active 2$/i })).toBeVisible()
+    expect(screen.getByRole("tab", { name: /^archived 1$/i })).toBeVisible()
+    expect(screen.queryByText("Old study")).not.toBeInTheDocument()
+  })
+
+  it("lists archived experiments by recency on the Archived tab", async () => {
+    mockApiBySuffix({
+      [EXPERIMENTS_URL]: Response.json([
+        experiment("one"),
+        experiment("recent", {
+          name: "Recent study",
+          archived_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+          archive_state: "archived",
+        }),
+        experiment("old", {
+          name: "Old study",
+          archived_at: new Date(Date.now() - 40 * 86_400_000).toISOString(),
+          archive_state: "archived",
+        }),
+      ]),
+      [NOTEBOOK_CONFIG_URL]: notebookConfigResponse(),
+    })
+    await renderDashboard({ tab: "archived" })
+    expect(await screen.findByRole("heading", { name: /last 7 days/i })).toBeVisible()
+    expect(screen.getByRole("heading", { name: /older/i })).toBeVisible()
+    expect(screen.getByText("Recent study")).toBeVisible()
+    expect(screen.getByText("Old study")).toBeVisible()
+    expect(screen.queryByText("Experiment one")).not.toBeInTheDocument()
+  })
+
+  it("shows a dedicated empty state on the Archived tab", async () => {
     mockApiBySuffix({
       [EXPERIMENTS_URL]: Response.json([experiment("one")]),
       [NOTEBOOK_CONFIG_URL]: notebookConfigResponse(),
     })
-    await renderDashboard()
-    expect(await screen.findByRole("link", { name: /new/i })).toBeVisible()
-    expect(screen.getByRole("tab", { name: /archived/i })).toBeDisabled()
+    await renderDashboard({ tab: "archived" })
+    expect(await screen.findByText("No archived experiments.")).toBeVisible()
   })
 
   it("writes live job progress through to the cards while work runs", async () => {

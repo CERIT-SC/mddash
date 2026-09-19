@@ -159,6 +159,8 @@ export const ListExperimentsResponseItem = zod.object({
 })),
   "step": zod.int().optional(),
   "status": zod.string().optional(),
+  "archived_at": zod.iso.datetime({"offset":true}).nullable(),
+  "archive_state": zod.union([zod.literal('archiving'),zod.literal('archived'),zod.literal('restoring'),zod.literal('archive_failed'),zod.literal('restore_failed'),zod.literal(null)]).nullable(),
   "can_publish": zod.boolean().optional(),
   "mdrepo_record_url": zod.string().nullish()
 })
@@ -278,6 +280,8 @@ export const CreateExperimentResponse = zod.object({
 })),
   "step": zod.int().optional(),
   "status": zod.string().optional(),
+  "archived_at": zod.iso.datetime({"offset":true}).nullable(),
+  "archive_state": zod.union([zod.literal('archiving'),zod.literal('archived'),zod.literal('restoring'),zod.literal('archive_failed'),zod.literal('restore_failed'),zod.literal(null)]).nullable(),
   "can_publish": zod.boolean().optional(),
   "mdrepo_record_url": zod.string().nullish()
 })
@@ -388,6 +392,8 @@ export const GetExperimentResponse = zod.object({
 })),
   "step": zod.int().optional(),
   "status": zod.string().optional(),
+  "archived_at": zod.iso.datetime({"offset":true}).nullable(),
+  "archive_state": zod.union([zod.literal('archiving'),zod.literal('archived'),zod.literal('restoring'),zod.literal('archive_failed'),zod.literal('restore_failed'),zod.literal(null)]).nullable(),
   "can_publish": zod.boolean().optional(),
   "mdrepo_record_url": zod.string().nullish()
 })
@@ -502,6 +508,8 @@ export const UpdateExperimentResponse = zod.object({
 })),
   "step": zod.int().optional(),
   "status": zod.string().optional(),
+  "archived_at": zod.iso.datetime({"offset":true}).nullable(),
+  "archive_state": zod.union([zod.literal('archiving'),zod.literal('archived'),zod.literal('restoring'),zod.literal('archive_failed'),zod.literal('restore_failed'),zod.literal(null)]).nullable(),
   "can_publish": zod.boolean().optional(),
   "mdrepo_record_url": zod.string().nullish()
 })
@@ -589,6 +597,57 @@ export const GetPublishStatusResponse = zod.object({
   "key": zod.string(),
   "error": zod.string()
 })).optional()
+})
+
+
+/**
+ * Mirror the experiment to S3 at _archives/<id>/ and free the local PVC (verified before deletion).
+ * @summary Archive an experiment
+ */
+
+
+
+export const ArchiveExperimentParams = zod.object({
+  "experiment_id": zod.string().min(1)
+})
+
+export const ArchiveExperimentResponse = zod.object({
+  "attempt_id": zod.string()
+})
+
+
+/**
+ * Copy the S3 archive back onto the local PVC and unfreeze the experiment.
+ * @summary Restore an archived experiment
+ */
+
+
+
+export const RestoreExperimentParams = zod.object({
+  "experiment_id": zod.string().min(1)
+})
+
+export const RestoreExperimentResponse = zod.object({
+  "attempt_id": zod.string()
+})
+
+
+/**
+ * @summary Get archive/restore status
+ */
+
+
+
+export const GetArchiveStatusParams = zod.object({
+  "experiment_id": zod.string().min(1)
+})
+
+export const GetArchiveStatusResponse = zod.object({
+  "experiment_id": zod.string(),
+  "archive_state": zod.union([zod.literal('archiving'),zod.literal('archived'),zod.literal('restoring'),zod.literal('archive_failed'),zod.literal('restore_failed'),zod.literal(null)]).nullable(),
+  "attempt_id": zod.string().nullable(),
+  "direction": zod.union([zod.literal('archive'),zod.literal('restore'),zod.literal(null)]).nullable(),
+  "reason": zod.string().nullable()
 })
 
 

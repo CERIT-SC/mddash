@@ -1,4 +1,9 @@
 - .rclone-bisync/**
+- .storage_size
+- **/.storage_size
+- .storage_size.tmp*
+- **/.storage_size.tmp*
+- /_archives/**
 - #*#
 - *.swp
 - *.tmp
@@ -33,5 +38,11 @@
 - .duc.db
 - **/mwf_analyses/**
 - **/mwf_inputs/**
+- .mdrepo-upload.json
+- .mdrepo-upload.json.tmp
 - **/.mdrepo-upload.json
 - **/.mdrepo-upload.json.tmp
+- .archive-status.json
+- .archive-status.json.*
+- **/.archive-status.json
+- **/.archive-status.json.*

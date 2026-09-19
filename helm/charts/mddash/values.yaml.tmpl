@@ -107,7 +107,8 @@ jupyterhub:
         value: "{{ $cfg.resources.pvcStorageSize }}"
       PVC_STORAGE_CLASS:
         value: "{{ $cfg.storageClassName }}"
-      # Sidecar container images - used by pre_spawn_hook.py to configure extra_containers
+      # User-pod container images — sidecars (proxy/auth/api/s3-sync) are wired by
+      # pre_spawn_hook.py; WORKER/UPLOADER entries are one-shot durable Job images.
       PROXY_IMAGE:
         value: "{{ $registry }}/{{ $cfg.sidecars.proxy.image }}:{{ $imageTag }}"
       AUTH_IMAGE:
@@ -118,6 +119,8 @@ jupyterhub:
         value: "{{ $registry }}/{{ $cfg.sidecars.s3sync.image }}:{{ $imageTag }}"
       MDREPO_UPLOADER_IMAGE:
         value: "{{ $registry }}/{{ $cfg.sidecars.mdrepoUploader.image }}:{{ $imageTag }}"
+      ARCHIVE_WORKER_IMAGE:
+        value: "{{ $registry }}/{{ $cfg.sidecars.archiveWorker.image }}:{{ $imageTag }}"
       NOTEBOOK_IMAGE:
         value: "{{ $registry }}/{{ $cfg.notebook.image }}:{{ $imageTag }}"
       ANALYSIS_IMAGE:

@@ -67,4 +67,14 @@ describe("hasLiveWork", () => {
       expect(hasLiveWork(experiment("e1", { analysis_jobs: [analysisJob(status)] }))).toBe(true)
     }
   })
+
+  it("keeps polling while archive work is in flight", () => {
+    expect(hasLiveWork(experiment("e1", { archive_state: "archiving" }))).toBe(true)
+    expect(hasLiveWork(experiment("e1", { archived_at: new Date().toISOString(), archive_state: "restoring" }))).toBe(
+      true
+    )
+    expect(hasLiveWork(experiment("e1", { archived_at: new Date().toISOString(), archive_state: "archived" }))).toBe(
+      false
+    )
+  })
 })

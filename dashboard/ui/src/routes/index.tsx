@@ -5,6 +5,7 @@ export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>): DashboardSearch => ({
     q: typeof search.q === "string" && search.q !== "" ? search.q : undefined,
     sort: search.sort === "oldest" ? "oldest" : undefined,
+    tab: search.tab === "archived" ? "archived" : undefined,
   }),
   component: function DashboardRoute() {
     const search = Route.useSearch()

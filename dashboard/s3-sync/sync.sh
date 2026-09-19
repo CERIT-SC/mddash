@@ -24,6 +24,14 @@ RESYNC_FLAGS="--resync --resync-mode newer $COMMON_FLAGS --max-lock 2m --resilie
 setup_rclone() {
     [ -n "$S3_BUCKET" ] || { log "No S3_BUCKET configured, local-only mode"; exit 0; }
 
+    # /_archives/** is bisync-excluded and the worker mirrors server-side, so a
+    # local copy is never legitimate; delete it (dirs arrive owner-read-only).
+    if [ -d /mddash/_archives ]; then
+        log "Removing stray _archives tree from the PVC (bisync-excluded prefix)"
+        chmod -R u+w /mddash/_archives 2>/dev/null || true
+        rm -rf /mddash/_archives || log "WARNING: failed to remove /mddash/_archives"
+    fi
+
     log "Configuring rclone for bucket: $S3_BUCKET"
     mkdir -p "$HOME/.config/rclone"
     cat > "$HOME/.config/rclone/rclone.conf" << EOF

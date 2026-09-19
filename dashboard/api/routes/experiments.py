@@ -227,3 +227,47 @@ def get_publish_status(experiment_id: str) -> Response:
     )
     status = experiment.get_publish_status()
     return jsonify(status)
+
+
+@experiments_bp.route("/<experiment_id>/archive", methods=["POST"])
+def archive_experiment(experiment_id: str) -> ResponseReturnValue:
+    """
+    Archive an experiment: mirror its data to S3 at _archives/<id>/ and free the local PVC.
+
+    Returns:
+        Response: 202 with the archive attempt ID.
+    """
+    experiment: Experiment = Experiment.query.get_or_404(
+        experiment_id, description=f"Experiment {experiment_id} not found"
+    )
+    attempt_id = experiment.archive()
+    return jsonify({"attempt_id": attempt_id}), HTTPStatus.ACCEPTED
+
+
+@experiments_bp.route("/<experiment_id>/restore", methods=["POST"])
+def restore_experiment(experiment_id: str) -> ResponseReturnValue:
+    """
+    Restore an archived experiment from S3 back onto the local PVC.
+
+    Returns:
+        Response: 202 with the restore attempt ID.
+    """
+    experiment: Experiment = Experiment.query.get_or_404(
+        experiment_id, description=f"Experiment {experiment_id} not found"
+    )
+    attempt_id = experiment.restore()
+    return jsonify({"attempt_id": attempt_id}), HTTPStatus.ACCEPTED
+
+
+@experiments_bp.route("/<experiment_id>/archive/status", methods=["GET"])
+def get_archive_status(experiment_id: str) -> Response:
+    """
+    Get the archive/restore status for an experiment (status doc reconciled with live Jobs).
+
+    Returns:
+        Response: JSON with archive_state, attempt_id, direction, and reason.
+    """
+    experiment: Experiment = Experiment.query.get_or_404(
+        experiment_id, description=f"Experiment {experiment_id} not found"
+    )
+    return jsonify(experiment.get_archive_status())
