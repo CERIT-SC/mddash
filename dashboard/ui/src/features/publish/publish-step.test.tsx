@@ -125,7 +125,7 @@ describe("PublishStep MDRepo connection", () => {
     expect(screen.queryByRole("button", { name: "Upload" })).not.toBeInTheDocument()
   })
 
-  it("publishes and opens the new draft when authenticated", async () => {
+  it("publishes without opening the draft in a new tab", async () => {
     const { calls } = mockPublish()
     const open = vi.spyOn(window, "open").mockImplementation(() => null)
     renderPublish()
@@ -140,7 +140,7 @@ describe("PublishStep MDRepo connection", () => {
         body: { target: "invenio" },
       })
     )
-    await waitFor(() => expect(open).toHaveBeenCalledWith(DRAFT_URL, "_blank", "noopener,noreferrer"))
+    expect(open).not.toHaveBeenCalled()
   })
 })
 
@@ -177,7 +177,6 @@ describe("PublishStep upload states", () => {
         ],
       }),
     })
-    vi.spyOn(window, "open").mockImplementation(() => null)
     renderPublish({ experiment: experiment("exp1", { mdrepo_id: "rec1", mdrepo_record_url: DRAFT_URL }) })
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/Upload failed/)
@@ -303,7 +302,6 @@ describe("PublishStep publication targets", () => {
     mockPublish()
     renderPublish({ experiment: experiment("exp1", { engine: "AMBER" }) })
 
-    // Publishing stays on this page: background upload, draft opens in a new tab.
     expect(await screen.findByRole("button", { name: "Upload" })).toBeInTheDocument()
     expect(screen.queryByRole("combobox", { name: "Publication target" })).not.toBeInTheDocument()
   })

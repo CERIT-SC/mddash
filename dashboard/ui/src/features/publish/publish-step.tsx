@@ -191,8 +191,6 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
           if (response.status !== 202) return
           void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experimentId) })
           void queryClient.invalidateQueries({ queryKey: getGetPublishStatusQueryKey(experimentId) })
-          const url = response.data.draft_url ?? response.data.links["edit_html"] ?? response.data.links["self_html"]
-          if (url !== null && url !== undefined && url !== "") window.open(url, "_blank", "noopener,noreferrer")
         },
         onError: (error) => toast.error(toApiError(error).message),
       }
