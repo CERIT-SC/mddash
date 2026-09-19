@@ -93,7 +93,7 @@ S3_ENDPOINT = os.environ.get("S3_ENDPOINT", "")
 S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "")
 S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "")
 
-if not S3_BUCKET:
+if not all((S3_BUCKET, S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY)):
     logger.warning("One or more S3 configuration environment variables are not set. S3 functionality may be limited.")
 
 MDREPO_URL = os.environ.get("MDREPO_URL", "")

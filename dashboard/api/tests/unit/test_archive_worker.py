@@ -11,7 +11,7 @@ import pytest
 
 API_DIR = Path(__file__).resolve().parents[2]
 WORKER = API_DIR.parent / "archive-worker" / "worker.sh"
-FILTERS = API_DIR.parent / "s3-sync" / "rclone-filters.txt"
+FILTERS = API_DIR.parent / "rclone-filters.txt"
 
 S3_ENV = {
     "S3_BUCKET": "bucket",

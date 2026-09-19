@@ -91,10 +91,7 @@ class GromacsJob(SimulationJob):
     @property
     def nsteps(self) -> int | None:
         """Total steps; a persisted value (extension target or log cache) outranks the manifest ``-nsteps`` override."""
-        if self._archived:
-            return self._nsteps
-
-        if self._nsteps:
+        if self._archived or self._nsteps:
             return self._nsteps
 
         if override := self._nsteps_override:
@@ -109,11 +106,8 @@ class GromacsJob(SimulationJob):
     @property
     def init_step(self) -> int:
         """Step at which the simulation started (0 for fresh runs, non-zero for checkpoint restarts)."""
-        if self._archived:
+        if self._archived or self._init_step is not None:
             return self._init_step or 0
-
-        if self._init_step is not None:
-            return self._init_step
 
         # 0 is a legitimate parse result — persist it so the full-log scan happens
         # only once per row instead of on every dump.
@@ -126,10 +120,7 @@ class GromacsJob(SimulationJob):
     @property
     def estimated_time(self) -> int | None:
         """Estimated time until completion in seconds."""
-        if self._archived:
-            return None
-
-        if self.start_timestamp is None or self.nsteps is None or self.nsteps_done is None:
+        if self._archived or self.start_timestamp is None or self.nsteps is None or self.nsteps_done is None:
             return None
 
         remaining_steps = self.nsteps - self.nsteps_done

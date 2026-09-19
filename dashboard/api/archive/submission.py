@@ -37,7 +37,7 @@ ADMISSION_TIMEOUT = 30
 JOB_DELETION_TIMEOUT = 30
 JOB_RESOURCES = {
     "requests": {"cpu": "100m", "memory": "128Mi"},
-    "limits": {"cpu": "500m", "memory": "512Mi"},
+    "limits": {"cpu": "500m", "memory": "256Mi"},
 }
 
 _TRACKED_DIRECTIONS = (ArchiveDirection.ARCHIVE.value, ArchiveDirection.RESTORE.value)

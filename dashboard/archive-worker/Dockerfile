@@ -1,7 +1,7 @@
 FROM rclone/rclone:1.74.4
 
-# Reuses the s3-sync filter file so "archive-worthy" always means "what bisync syncs".
-COPY archive-worker/worker.sh s3-sync/rclone-filters.txt /
-RUN chmod 755 /worker.sh
+# Bakes the shared filter list so "archive-worthy" always means "what bisync syncs".
+COPY --chmod=755 archive-worker/worker.sh /
+COPY rclone-filters.txt /
 
 ENTRYPOINT ["sh", "/worker.sh"]

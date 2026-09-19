@@ -8,9 +8,8 @@ RUN apk add --no-cache ca-certificates
 RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
 ENV HOME=/home/app
 
-# The build context is dashboard/, so bare file names resolve to the mdrepo-uploader
-# files (dashboard/rclone-filters.txt); the bisync filters live in s3-sync/.
-COPY --chown=app:app s3-sync/sync.sh s3-sync/rclone-filters.txt /
+# Build context is dashboard/, so sync.sh is under s3-sync/.
+COPY --chown=app:app s3-sync/sync.sh rclone-filters.txt /
 RUN chmod +x /sync.sh
 
 USER app
