@@ -570,14 +570,17 @@ describe("ExperimentCard", () => {
     expect(screen.getByRole("menuitem", { name: /^archive$/i })).toHaveAttribute("aria-disabled", "true")
   })
 
-  it("shows Archiving… with a spinner and blocks re-archive while in flight", async () => {
+  it("shows Archiving… with a spinner and disables the card while in flight", async () => {
     vi.stubGlobal("fetch", () => new Promise(() => undefined))
     const user = userEvent.setup()
     const { container } = await renderCard(analyze({ archive_state: "archiving" }))
     expect(screen.getByText("Archiving…")).toBeVisible()
     expect(container.querySelector(".animate-spin")).not.toBeNull()
+    expect(screen.queryByRole("link", { name: "Analyze" })).toBeNull()
     await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
-    expect(screen.getByRole("menuitem", { name: /^archive$/i })).toHaveAttribute("aria-disabled", "true")
+    for (const name of [/^archive$/i, /^rename$/i, /^start notebook$/i, /^delete$/i]) {
+      expect(screen.getByRole("menuitem", { name })).toHaveAttribute("aria-disabled", "true")
+    }
   })
 
   it.each([

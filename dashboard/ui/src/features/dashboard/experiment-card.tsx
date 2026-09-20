@@ -72,8 +72,8 @@ import { isAnalysisJobLive } from "./live-work"
 
 const STEP_LABELS = ["Setup", "Tune", "Run", "Analyze", "Publish"] as const
 
-// The API step IS the phase index (Setup 0 .. Analyze 3, publish states 4) —
-// consumed directly; the shown counter counts from 1.
+// The API step IS the phase index (Setup 0 .. Analyze 3, publish states 4) and
+// is consumed directly; the shown counter counts from 1.
 function stepParts(experiment: Experiment): { shownStep: number; stepIndex: number } {
   const step = Math.max(0, Math.min(experiment.step ?? 0, STEP_LABELS.length - 1))
   return { shownStep: step + 1, stepIndex: step }
@@ -156,7 +156,7 @@ function RunDetails({ experiment }: DetailsProps) {
 // step/status, so analysis rows are scoped to that simulation.
 function AnalyzeDetails({ experiment }: DetailsProps) {
   const simulationPath = experiment.latest_simulation_path ?? ""
-  // Jobs ride the polled experiments list — no separate query to go stale.
+  // Jobs ride the polled experiments list, so no separate query goes stale.
   const jobs = experiment.analysis_jobs.filter((job) => job.simulation_path === simulationPath)
   const analyzing = jobs.some(isAnalysisJobLive)
   const models = useListAnalysisResults(
@@ -166,11 +166,11 @@ function AnalyzeDetails({ experiment }: DetailsProps) {
       query: { enabled: simulationPath !== "", retry: false },
     }
   )
-  // The pool is the hard MDDB workflow set, not the jobs submitted so far — it is
+  // The pool is the hard MDDB workflow set, not the jobs submitted so far. It is
   // experiment-independent, so it needs no simulation_path gate and never goes stale.
   const types = useListAnalysisTypes(experiment.id, { query: { retry: false, staleTime: Number.POSITIVE_INFINITY } })
 
-  // Results land when a calculation settles — refetch the Models count on that edge.
+  // Results land when a calculation settles; refetch the Models count on that edge.
   const wasAnalyzing = useRef(false)
   const refetchModels = models.refetch
   useEffect(() => {
@@ -332,6 +332,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
 
   const archived = isArchived(experiment)
   const archiveInFlight = isArchiving(experiment)
+  const readOnly = archived || archiveInFlight
   const failed = isArchivedFailed(experiment)
   const archiveStatus = useGetArchiveStatus(experiment.id, { query: { enabled: failed } })
   const reasonLabel = archiveStatus.data?.status === 200 ? archiveReasonLabel(archiveStatus.data.data.reason) : null
@@ -347,11 +348,11 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
     <Card className="relative pb-0 transition-shadow hover:shadow-md">
       <CardHeader>
         <div className="flex min-w-0 items-center gap-3">
-          {/* Workflow icon, not progress — the step label and bar below carry progress. */}
+          {/* Workflow icon, not progress; the step label and bar below carry progress. */}
           <ModuleIconTile category={experiment.module_category} />
           <div className="min-w-0">
             <CardTitle className="truncate leading-tight">
-              {archived ? (
+              {readOnly ? (
                 // Archived experiments have no local files, so the wizard stays closed until restored.
                 <span>{experiment.name}</span>
               ) : (
@@ -382,7 +383,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
+              <DropdownMenuItem onSelect={() => setRenameOpen(true)} disabled={readOnly}>
                 <Pencil className="h-4 w-4" /> Rename
               </DropdownMenuItem>
               {/* TODO: duplicate endpoint is not available in the API yet */}
@@ -396,7 +397,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
                 </DropdownMenuItem>
               ) : (
                 <>
-                  <DropdownMenuItem onSelect={toggleNotebook} disabled={notebookBusy}>
+                  <DropdownMenuItem onSelect={toggleNotebook} disabled={notebookBusy || readOnly}>
                     {active ? (
                       <>
                         <Square fill="currentColor" className="h-4 w-4" /> Stop notebook
@@ -417,7 +418,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
                 </>
               )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="error" onSelect={() => setDeleteOpen(true)}>
+              <DropdownMenuItem variant="error" onSelect={() => setDeleteOpen(true)} disabled={readOnly}>
                 <Trash2 className="h-4 w-4" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -475,7 +476,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
 
       {/* pt-3! must outrank the DS rule that pads [.border-t] footers to pt-6. The
           surface-raised + rounded-b footer band is the only legal surface step above
-          the card's bg-surface — bg-background would match the page canvas and read
+          the card's bg-surface. bg-background would match the page canvas and read
           as a hole in dark mode (and reverse the surface order in light). */}
       <CardFooter className="border-border bg-surface-raised gap-3 rounded-b-md border-t pt-3! pb-3 text-sm">
         <span className="text-text-muted truncate">{sourceLabel(experiment.source) ?? ""}</span>
@@ -614,10 +615,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
                   the archive is verified.
                 </p>
                 <p>The experiment stays listed under Archived and can be restored anytime.</p>
-                <p>
-                  The experiment is frozen until archiving finishes — don’t modify or add files in the meantime; changes
-                  made during archiving can be lost.
-                </p>
+                <p>The card is disabled until archiving finishes.</p>
                 {active && <p>The running notebook will be stopped.</p>}
               </div>
             </AlertDialogDescription>
