@@ -52,6 +52,10 @@ updates:
       notebook-requirements:
         patterns:
           - "*"
+    ignore:
+      # 4.x sdists ship a stale nglview-js-widgets labextension vs their 4.0 kernel side
+      - dependency-name: nglview
+        versions: [">=4.0"]
 
   - package-ecosystem: pip
     directory: /tuner/worker
