@@ -6,8 +6,9 @@ version: 0.1.0
 appVersion: "0.1.0"
 
 dependencies:
+  # Keep in lockstep with the k8s-hub base image tag in hub/Dockerfile.
   - name: jupyterhub
-    version: "4.4.0"
+    version: "4.4.2"
     repository: "https://hub.jupyter.org/helm-chart/"
   - name: mdrun-api
     version: "0.1.0"

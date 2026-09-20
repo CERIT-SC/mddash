@@ -27,6 +27,8 @@ CodeQL for Actions, JS/TS, Python on PRs + weekly schedule.
 - **`file://` dependency for mdrun-api**: `Chart.yaml` uses `file://../mdrun-api` so dev deploys resolve the sibling chart from local source instead of OCI. The `push-mddash-chart` Makefile target replaces it in a temporary chart copy with the chart OCI namespace for prod packaging.
 - **Template injection**: inputs/secrets are passed via `env:` blocks, not `${{ }}` interpolation in `run:` scripts.
 - **Actions pinned to SHAs**: all actions use full commit SHAs with version comments. Dependabot updates monthly.
+- **Dependabot covers all dependency surfaces** (`.github/dependabot.yml`); ignored there: Python `>=3.14` (Ray 2.54 from the external gromacs image has no 3.14 support) and jsdom `>=29` (CSSOM breaks Radix overlay tests; pinned `~26.1.0` in `dashboard/ui/package.json`). Manual: the pnpm version (packageManager, devcontainer pnpmVersion, `npm install -g pnpm@X` in three Dockerfiles) and gomplate/actionlint/yq in workflow `run:` steps.
+- **k8s-hub lockstep**: the `quay.io/jupyterhub/k8s-hub` tag in `hub/Dockerfile` must equal the `jupyterhub` dependency version in `helm/charts/mddash/Chart.yaml`; merge the two Dependabot PRs together.
 - **zizmor runs with `--min-severity high`**: medium/warning findings don't fail CI.
 - **Secrets are repo-scoped**: no GitHub Environments (repo lacks admin rights). Created in-namespace during deployment.
 - **Helm v4**: `--atomic` is deprecated; use `--rollback-on-failure` on `helm upgrade` and `--wait` on `helm install`.

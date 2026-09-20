@@ -1,6 +1,6 @@
 FROM cerit.io/mddash/amber:26 AS amber
 
-FROM quay.io/jupyter/base-notebook:2026-06-29 AS base
+FROM quay.io/jupyter/base-notebook:2026-09-18 AS base
 
 # Amber runtime prune (own stage: files deleted here never reach the final image).
 # cuda-12.8 is 2.8 GB but pmemd.cuda NEEDs only 8 lib families; nvrtc kept for JIT.
@@ -30,7 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-ARG KUBECTL_VERSION=v1.34.1
+# Keep within one minor of the cluster's API server (kubectl version skew policy).
+ARG KUBECTL_VERSION=v1.34.11
 RUN curl -fLOsS "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" \
     && install -m 755 kubectl /usr/local/bin/kubectl \
     && rm kubectl

@@ -2,7 +2,7 @@ FROM node:26-slim AS build
 
 WORKDIR /app
 
-RUN npm install -g pnpm@11.13.0 --quiet
+RUN npm install -g pnpm@12.5.1 --quiet
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY dashboard/ui/package.json dashboard/ui/package.json
 COPY landing/package.json landing/package.json

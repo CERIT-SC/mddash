@@ -1049,16 +1049,17 @@ def _advance_gmx_tuner_status(status: dict) -> None:
     now = time.time()
 
     if running_trial is not None:
-        started_at = float(running_trial.get("started_at", now))
+        started_at = float(running_trial.get("started_at") or now)
         if now - started_at >= TUNER_TRIAL_DURATION_SEC:
             # Parity from creation seq, not list index: the rolling window keeps
             # every new trial at index max_trials-1 (odd), which would make all
             # post-fill trials ERROR.
-            trial_idx = int(running_trial.get("seq", trials.index(running_trial)))
+            seq = running_trial.get("seq")
+            trial_idx = int(seq) if seq is not None else trials.index(running_trial)
             if trial_idx % 2 == 0:
                 running_trial["status"] = "FINISHED"
                 base_perf = 55.0
-                np = running_trial.get("np", 2)
+                np = float(running_trial.get("np") or 2)
                 nb = running_trial.get("nb", "cpu")
                 if nb == "gpu":
                     base_perf += 15.0
@@ -1113,9 +1114,10 @@ def _advance_amber_tuner_status(status: dict) -> None:
     now = time.time()
 
     if running_trial is not None:
-        started_at = float(running_trial.get("started_at", now))
+        started_at = float(running_trial.get("started_at") or now)
         if now - started_at >= TUNER_TRIAL_DURATION_SEC:
-            trial_idx = int(running_trial.get("seq", trials.index(running_trial)))
+            seq = running_trial.get("seq")
+            trial_idx = int(seq) if seq is not None else trials.index(running_trial)
             if trial_idx % 2 == 0:
                 running_trial["status"] = "FINISHED"
                 base_perf = 60.0

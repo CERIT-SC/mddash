@@ -1,11 +1,11 @@
 # Proxy container - Caddy reverse proxy with static UI files
-# Build arg UI_IMAGE should point to the pre-built UI image
+# No default UI_IMAGE: bare builds fail instead of silently using :latest.
 
-ARG UI_IMAGE=mddash-ui:latest
+ARG UI_IMAGE
 
 FROM ${UI_IMAGE} AS ui
 
-FROM caddy:2.10-alpine
+FROM caddy:2.11-alpine
 
 # Remove cap_net_bind_service - Caddy won't bind privileged ports
 RUN apk add --no-cache libcap curl jq && setcap -r /usr/bin/caddy

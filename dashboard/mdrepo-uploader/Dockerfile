@@ -1,4 +1,4 @@
-FROM rclone/rclone:1.74.4 AS rclone
+FROM rclone/rclone:1.75.1 AS rclone
 
 FROM python:3.13-alpine
 

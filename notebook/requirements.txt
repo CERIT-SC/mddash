@@ -1,7 +1,9 @@
+# nglview is sdist-only and needs setuptools<70 to build
 setuptools<70
 wheel
-GromacsWrapper
-mdtraj
-nglview<4.0
-pandas
-matplotlib
+GromacsWrapper==0.9.2
+mdtraj==1.11.1.post2
+nglview==4.0.1
+# mdtraj caps pandas<3
+pandas==2.3.3
+matplotlib==3.11.2

@@ -6,7 +6,7 @@ FROM node:26-slim AS build
 
 WORKDIR /app
 
-RUN npm install -g pnpm@11.13.0 --quiet
+RUN npm install -g pnpm@12.5.1 --quiet
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY dashboard/ui/package.json dashboard/ui/package.json
 COPY landing/package.json landing/package.json
@@ -21,7 +21,8 @@ RUN mkdir -p /out/tpl /out/static && \
     cp hub/ui/dist/*.html /out/tpl/ && \
     cp -r hub/ui/dist/assets /out/static/assets
 
-FROM quay.io/jupyterhub/k8s-hub:4.4.0 AS runtime
+# Keep in lockstep with the jupyterhub dependency in helm/charts/mddash/Chart.yaml.
+FROM quay.io/jupyterhub/k8s-hub:4.4.2 AS runtime
 
 ARG EGI_HUB_REF=4ffff9e582b3e0ffb2b41e3ec14087d350402037
 # k8s-hub 4.4.0 defaults to a non-root user; install the package system-wide.

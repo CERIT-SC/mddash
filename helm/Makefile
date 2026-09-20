@@ -25,6 +25,7 @@ help: ## Show this help
 
 .PHONY: render
 render: ## Render Helm values template
+	@if [ -z "$(IMAGE_TAG)" ]; then echo "IMAGE_TAG is required for ENV=$(ENV) (e.g. IMAGE_TAG=0.1.0)" >&2; exit 1; fi
 	@echo "=== Rendering values for $(ENV) environment (tag=$(IMAGE_TAG)) ==="
 	@IMAGE_TAG=$(IMAGE_TAG) gomplate -d config=$(config) \
 		-f $(chart_path)/values.yaml.tmpl \
