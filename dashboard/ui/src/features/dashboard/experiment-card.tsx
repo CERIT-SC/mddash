@@ -383,7 +383,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setRenameOpen(true)} disabled={readOnly}>
+              <DropdownMenuItem onSelect={() => setRenameOpen(true)} disabled={archiveInFlight}>
                 <Pencil className="h-4 w-4" /> Rename
               </DropdownMenuItem>
               {/* TODO: duplicate endpoint is not available in the API yet */}
@@ -418,7 +418,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
                 </>
               )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="error" onSelect={() => setDeleteOpen(true)} disabled={readOnly}>
+              <DropdownMenuItem variant="error" onSelect={() => setDeleteOpen(true)} disabled={archiveInFlight}>
                 <Trash2 className="h-4 w-4" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>

@@ -612,8 +612,9 @@ describe("ExperimentCard", () => {
     expect(screen.queryByText(/notebook/i)).not.toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
-    expect(screen.getByRole("menuitem", { name: /rename/i })).toBeVisible()
+    expect(screen.getByRole("menuitem", { name: /rename/i })).not.toHaveAttribute("aria-disabled")
     expect(screen.getByRole("menuitem", { name: /restore/i })).toBeVisible()
+    expect(screen.getByRole("menuitem", { name: /delete/i })).not.toHaveAttribute("aria-disabled")
     expect(screen.getByRole("menuitem", { name: /duplicate/i })).toHaveAttribute("aria-disabled", "true")
     expect(screen.queryByRole("menuitem", { name: /notebook/i })).not.toBeInTheDocument()
     expect(screen.queryByRole("menuitem", { name: /^archive$/i })).not.toBeInTheDocument()
