@@ -1,7 +1,10 @@
+# nglview is sdist-only and needs setuptools<70 to build
 setuptools<70
 wheel
-GromacsWrapper
-mdtraj
-nglview<4.0
-pandas
-matplotlib
+GromacsWrapper==0.9.2
+mdtraj==1.11.1.post2
+# 4.x sdists ship a stale 3.1.5 labextension vs their 4.0 kernel side; 3.1.4 is the last consistent release
+nglview==3.1.4
+# mdtraj caps pandas<3
+pandas==2.3.3
+matplotlib==3.11.2

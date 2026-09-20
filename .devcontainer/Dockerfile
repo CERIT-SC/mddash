@@ -1,6 +1,6 @@
 FROM hairyhenderson/gomplate:v5.2.0 AS gomplate
 FROM rhysd/actionlint:1.7.12 AS actionlint
-FROM mikefarah/yq:4.53.3 AS yq
+FROM mikefarah/yq:4.53.6 AS yq
 
 FROM mcr.microsoft.com/devcontainers/base:ubuntu26.04
 

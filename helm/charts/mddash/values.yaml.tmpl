@@ -1,7 +1,7 @@
 {{- $cfg := (datasource "config") -}}
 {{- $namespace := $cfg.namespace -}}
 {{- $helmPackage := $cfg.helm.package -}}
-{{- $imageTag := (getenv "IMAGE_TAG" $cfg.imageTag) -}}
+{{- $imageTag := getenv "IMAGE_TAG" -}}
 {{- $registry := $cfg.registry -}}
 jupyterhub:
   hub:
@@ -174,10 +174,10 @@ jupyterhub:
 
   singleuser:
     podNameTemplate: "{{ $helmPackage }}-{username}"
-    # Use stock JupyterHub singleuser image - sidecars handle all custom functionality
+    # Stock image (sidecars carry the customization); pin tracks k8s-hub 4.4.2's JupyterHub 5.5.x line.
     image:
       name: quay.io/jupyterhub/singleuser
-      tag: "5"
+      tag: "5.5.1"
       pullPolicy: IfNotPresent
 
     cmd: ["jupyterhub-singleuser", "--port=8080"]

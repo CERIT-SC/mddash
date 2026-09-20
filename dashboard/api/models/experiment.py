@@ -12,7 +12,7 @@ from archive import submission as archive_submission
 from archive.status import ArchiveDirection, ArchiveState
 from archive.status import read_status as read_archive_status
 from cache import archive_status_cache, mdrepo_status_cache, step_status_cache
-from cachetools import cached
+from cachetools import cachedmethod
 from clients import mdposit, mdrepo, metadump
 from config import (
     DATA_DIR,
@@ -478,7 +478,7 @@ class Experiment(db.Model):  # type: ignore
         latest = self._latest_simulation()
         return latest.simulation_path if latest else None
 
-    @cached(cache=step_status_cache, key=lambda self: ("_latest_simulation", self))
+    @cachedmethod(cache=lambda _: step_status_cache, key=lambda self: ("_latest_simulation", self))
     def _latest_simulation(self) -> "Simulation | None":
         """
         Most recently interacted-with simulation (by ``Simulation.last_activity``).
@@ -495,9 +495,8 @@ class Experiment(db.Model):  # type: ignore
         simulations = Simulation.list(self.id)
         return max(simulations, key=lambda sim: sim.last_activity) if simulations else None
 
-    # Explicit keys: cachetools' default key is args-only, so two methods sharing
-    # a cache would collide on (self,) and return each other's values.
-    @cached(cache=step_status_cache, key=lambda self: ("_step_status", self))
+    # Explicit keys: shared caches would collide on the default (self,) key.
+    @cachedmethod(cache=lambda _: step_status_cache, key=lambda self: ("_step_status", self))
     def _step_status(self) -> tuple[int, str]:
         """
         Publish state overrides; otherwise inherit the latest simulation's (step, status).
@@ -521,7 +520,7 @@ class Experiment(db.Model):  # type: ignore
 
         return 0, "setup"
 
-    @cached(cache=mdrepo_status_cache, key=lambda self: self.mdrepo_id)
+    @cachedmethod(cache=lambda _: mdrepo_status_cache, key=lambda self: self.mdrepo_id)
     def _sync_mdrepo_status(self) -> None:
         """Check if the MDRepo experiment still exists and update local database if deleted."""
         if not self.mdrepo_id:
@@ -1072,11 +1071,11 @@ class Experiment(db.Model):  # type: ignore
         structure_name = selected_paths["structure"].name
         topology_name = selected_paths["topology"].name
         trajectory_name = selected_paths["trajectory"].name
-        program = "GROMACS" if self.engine == Engine.GMX else "AMBER" if self.engine == Engine.AMBER else ""
+        program = "GROMACS" if self.engine == Engine.GMX else "AMBER"
 
         metadata: dict[str, object] = {
             "name": self.name,
-            **({"program": program} if program else {}),
+            "program": program,
             "type": "trajectory",
             "method": "Classical MD",
             "input_structure_filepath": structure_name,

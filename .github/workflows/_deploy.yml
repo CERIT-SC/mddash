@@ -34,14 +34,14 @@ jobs:
       package: ${{ steps.config.outputs.package }}
       hostname: ${{ steps.config.outputs.hostname }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.git-ref }}
           persist-credentials: false
       - name: Install yq
         run: |
           curl -sSL -o /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
+            https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64
           chmod +x /usr/local/bin/yq
       - name: Read config
         id: config
@@ -89,12 +89,12 @@ jobs:
             dockerfile: dashboard/archive-worker/Dockerfile
             image-suffix: mddash-archive-worker
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.git-ref }}
           persist-credentials: false
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ needs.setup.outputs.registry-host }}
           username: ${{ secrets.REGISTRY_USERNAME }}
@@ -114,7 +114,7 @@ jobs:
           tags: |
             type=raw,value=${{ inputs.image-version }}
       - name: Build and push ${{ matrix.name }}
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -129,12 +129,12 @@ jobs:
     needs: [setup, build-sidecars]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.git-ref }}
           persist-credentials: false
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ needs.setup.outputs.registry-host }}
           username: ${{ secrets.REGISTRY_USERNAME }}
@@ -155,7 +155,7 @@ jobs:
           tags: |
             type=raw,value=${{ inputs.image-version }}
       - name: Build and push proxy
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: dashboard/proxy
           file: dashboard/proxy/Dockerfile
@@ -196,12 +196,12 @@ jobs:
             dockerfile: hub/Dockerfile
             image-suffix: mddash-hub
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.git-ref }}
           persist-credentials: false
-      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
-      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ needs.setup.outputs.registry-host }}
           username: ${{ secrets.REGISTRY_USERNAME }}
@@ -221,7 +221,7 @@ jobs:
           tags: |
             type=raw,value=${{ inputs.image-version }}
       - name: Build and push ${{ matrix.name }}
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -237,17 +237,17 @@ jobs:
     needs: setup
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.git-ref }}
           persist-credentials: false
       - name: Install yq
         run: |
           curl -sSL -o /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
+            https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64
           chmod +x /usr/local/bin/yq
       - name: Install Helm
-        uses: azure/setup-helm@59b1c81c6280f5abebb1fb1bc585696daa7dfb42 # v5
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - name: Login to registry
         env:
           REGISTRY_HOST: ${{ needs.setup.outputs.registry-host }}
@@ -275,19 +275,19 @@ jobs:
       (needs.push-charts.result == 'success' || needs.push-charts.result == 'skipped')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.git-ref }}
           persist-credentials: false
       - name: Install yq and gomplate
         run: |
           curl -sSL -o /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
+            https://github.com/mikefarah/yq/releases/download/v4.53.6/yq_linux_amd64
           curl -sSL -o /usr/local/bin/gomplate \
             https://github.com/hairyhenderson/gomplate/releases/download/v5.2.0/gomplate_linux-amd64
           chmod +x /usr/local/bin/yq /usr/local/bin/gomplate
       - name: Install Helm
-        uses: azure/setup-helm@59b1c81c6280f5abebb1fb1bc585696daa7dfb42 # v5
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
       - name: Login to registry
         env:
           REGISTRY_HOST: ${{ needs.setup.outputs.registry-host }}
