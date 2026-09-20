@@ -611,12 +611,10 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
             <AlertDialogDescription asChild>
               <div className="space-y-2">
                 <p>
-                  The data{deleteSize ? ` (${deleteSize})` : ""} moves to S3, and the local copy is deleted only after
-                  the archive is verified.
+                  The data{deleteSize ? ` (${deleteSize})` : ""} moves to S3; the local copy is deleted once verified.
+                  The card stays disabled until archiving finishes.
                 </p>
-                <p>The experiment stays listed under Archived and can be restored anytime.</p>
-                <p>The card is disabled until archiving finishes.</p>
-                {active && <p>The running notebook will be stopped.</p>}
+                {active && <p>The running notebook will be stopped first.</p>}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>

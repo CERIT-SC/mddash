@@ -553,7 +553,7 @@ describe("ExperimentCard", () => {
     await renderCard(analyze({ size_bytes: 2 * 1024 ** 3 }))
     await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
     await user.click(screen.getByRole("menuitem", { name: /^archive$/i }))
-    expect(screen.getByText(/local copy is deleted only after the archive is verified/i)).toBeVisible()
+    expect(screen.getByText(/local copy is deleted once verified/i)).toBeVisible()
     await user.click(screen.getByRole("button", { name: "Archive experiment" }))
     expect(calls).toContainEqual({
       url: expect.stringContaining("/experiments/exp1/archive"),
