@@ -612,7 +612,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
               <div className="space-y-2">
                 <p>
                   The data{deleteSize ? ` (${deleteSize})` : ""} moves to S3; the local copy is deleted once verified.
-                  You cannot edit the experiment until archiving finishes.
+                  You cannot edit the experiment until you restore it.
                 </p>
                 {active && <p>The running notebook will be stopped first.</p>}
               </div>
