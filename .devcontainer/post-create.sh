@@ -9,8 +9,6 @@ uv tool install ruff
 uv tool install ty
 uv tool install zizmor
 
-# playwright-cli for agent-driven browser automation (skill lives in .agents/skills/playwright-cli)
-# Browser + system deps persist in the home volume, so this is a no-op after first create.
 npm install -g @playwright/cli@latest
 playwright-cli install-browser chromium --with-deps
 
