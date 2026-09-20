@@ -7,6 +7,7 @@
  */
 import type { AnalysisJob } from './analysisJob.ts';
 import type { Engine } from './engine.ts';
+import type { ExperimentArchiveState } from './experimentArchiveState.ts';
 import type { ExperimentSource } from './experimentSource.ts';
 import type { Notebook } from './notebook.ts';
 import type { NotebookModuleCategory } from './notebookModuleCategory.ts';
@@ -37,6 +38,10 @@ export interface Experiment {
   analysis_jobs: AnalysisJob[];
   step?: number;
   status?: string;
+  /** @nullable */
+  archived_at: string | null;
+  /** @nullable */
+  archive_state: ExperimentArchiveState;
   can_publish?: boolean;
   mdrepo_record_url?: NullableString | null;
 }

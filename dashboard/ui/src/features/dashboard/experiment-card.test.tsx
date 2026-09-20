@@ -234,7 +234,7 @@ describe("ExperimentCard", () => {
     await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
     expect(screen.getByRole("menuitem", { name: /start notebook/i })).toBeVisible()
     expect(screen.getByRole("menuitem", { name: /duplicate/i })).toHaveAttribute("aria-disabled", "true")
-    expect(screen.getByRole("menuitem", { name: /^archive$/i })).toHaveAttribute("aria-disabled", "true")
+    expect(screen.getByRole("menuitem", { name: /^archive$/i })).not.toHaveAttribute("aria-disabled", "true")
   })
 
   it("renames via dialog", async () => {
@@ -324,7 +324,7 @@ describe("ExperimentCard", () => {
     expect(screen.getByText(/the experiment’s notebook/i)).toBeVisible()
     expect(screen.getByText(/2 running or queued jobs/i)).toBeVisible()
     expect(screen.getByText(/this can’t be undone/i)).toBeVisible()
-    // Archive is offered as a reversible alternative but not implemented in the API yet
+    // Archive is offered as a reversible alternative, but stays gated like the menu: jobs are live here.
     expect(screen.getByText(/want to keep the results/i)).toBeVisible()
     expect(screen.getByRole("button", { name: /archive instead/i })).toBeDisabled()
   })
@@ -545,6 +545,110 @@ describe("ExperimentCard", () => {
     expect(await within(dialog).findByText("Busy A")).toBeVisible()
     // Known-full starts open the dialog without even attempting the request.
     expect(calls.find((call) => call.method === "POST")).toBeUndefined()
+  })
+
+  it("archives from the menu after confirmation", async () => {
+    const calls = mockFetch(new Response('{"attempt_id":"a1"}', { status: 202 }))
+    const user = userEvent.setup()
+    await renderCard(analyze({ size_bytes: 2 * 1024 ** 3 }))
+    await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
+    await user.click(screen.getByRole("menuitem", { name: /^archive$/i }))
+    expect(screen.getByText(/local copy is deleted once verified/i)).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "Archive experiment" }))
+    expect(calls).toContainEqual({
+      url: expect.stringContaining("/experiments/exp1/archive"),
+      method: "POST",
+      body: undefined,
+    })
+  })
+
+  it("keeps Archive unavailable while jobs are live", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const user = userEvent.setup()
+    await renderCard(analyze({ simulation_jobs: [simulationJob("RUNNING")] }))
+    await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
+    expect(screen.getByRole("menuitem", { name: /^archive$/i })).toHaveAttribute("aria-disabled", "true")
+  })
+
+  it("shows Archiving… with a spinner and disables the card while in flight", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const user = userEvent.setup()
+    const { container } = await renderCard(analyze({ archive_state: "archiving" }))
+    expect(screen.getByText("Archiving…")).toBeVisible()
+    expect(container.querySelector(".animate-spin")).not.toBeNull()
+    expect(screen.queryByRole("link", { name: "Analyze" })).toBeNull()
+    await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
+    for (const name of [/^archive$/i, /^rename$/i, /^start notebook$/i, /^delete$/i]) {
+      expect(screen.getByRole("menuitem", { name })).toHaveAttribute("aria-disabled", "true")
+    }
+  })
+
+  it.each([
+    { state: "archive_failed" as const, banner: /archiving failed/i },
+    {
+      state: "restore_failed" as const,
+      banner: /restoring failed/i,
+      archivedAt: new Date(Date.now() - 86_400_000).toISOString(),
+    },
+  ])("shows a durable error banner for $state", async ({ state, banner, archivedAt }) => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    await renderCard(analyze({ archived_at: archivedAt, archive_state: state }))
+    expect(screen.getByRole("alert")).toHaveTextContent(banner)
+  })
+
+  it("archived card: restore menu, archived label, no notebook or wizard link", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const user = userEvent.setup()
+    await renderCard(
+      analyze({
+        archived_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+        archive_state: "archived",
+        size_bytes: 3 * 1024 ** 3,
+      })
+    )
+    expect(screen.getByText("Archived 2 days ago")).toBeVisible()
+    expect(screen.getByText("3.0 GB")).toBeVisible()
+    expect(screen.queryByRole("link", { name: "Analyze" })).not.toBeInTheDocument()
+    expect(screen.queryByText(/notebook/i)).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
+    expect(screen.getByRole("menuitem", { name: /rename/i })).not.toHaveAttribute("aria-disabled")
+    expect(screen.getByRole("menuitem", { name: /restore/i })).toBeVisible()
+    expect(screen.getByRole("menuitem", { name: /delete/i })).not.toHaveAttribute("aria-disabled")
+    expect(screen.getByRole("menuitem", { name: /duplicate/i })).toHaveAttribute("aria-disabled", "true")
+    expect(screen.queryByRole("menuitem", { name: /notebook/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole("menuitem", { name: /^archive$/i })).not.toBeInTheDocument()
+  })
+
+  it("restores an archived experiment after confirmation", async () => {
+    const calls = mockFetch(new Response('{"attempt_id":"r1"}', { status: 202 }))
+    const user = userEvent.setup()
+    await renderCard(
+      analyze({
+        archived_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+        archive_state: "archived",
+        size_bytes: 3 * 1024 ** 3,
+      })
+    )
+    await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
+    await user.click(screen.getByRole("menuitem", { name: /restore/i }))
+    expect(screen.getByText(/downloads the archived copy \(3.0 GB\) back to your drive/i)).toBeVisible()
+    await user.click(screen.getByRole("button", { name: "Restore experiment" }))
+    expect(calls).toContainEqual({
+      url: expect.stringContaining("/experiments/exp1/restore"),
+      method: "POST",
+      body: undefined,
+    })
+  })
+
+  it("moves from the delete dialog's Archive instead to the archive dialog", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => undefined))
+    const user = userEvent.setup()
+    await renderCard(analyze())
+    await user.click(screen.getByRole("button", { name: "Actions for Analyze" }))
+    await user.click(screen.getByRole("menuitem", { name: /^delete$/i }))
+    await user.click(screen.getByRole("button", { name: /archive instead/i }))
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(/archive experiment “analyze”\?/i)
   })
 
   it("opens the quota dialog when the API refuses a start over the limit", async () => {

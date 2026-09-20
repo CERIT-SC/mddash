@@ -476,6 +476,30 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         updated_at=now - timedelta(days=1),
     )
     mdposit_demo_notebook = build_model(Notebook, experiment_id=mdposit_demo.id, token="demo-token-mdposit")
+
+    # Archived study: snapshot columns stand in for the deleted local dir (no files seeded).
+    archived = build_model(
+        Experiment,
+        id="ggggg",
+        name="Finished lipid raft study (archived)",
+        module_name="Membrane protein (BioBB)",
+        module_category="membrane-protein",
+        source_type=SourceType.FILE,
+        source_files=["raft.tpr", "raft.pdb"],
+        notebooks_repo="https://github.com/sb-ncbr/mddash-notebooks.git",
+        created_at=now - timedelta(days=30),
+        updated_at=now - timedelta(days=12),
+        archived_at=now - timedelta(days=12),
+        archived_size_bytes=8 * 1024**3,
+        archived_step=4,
+        archived_status="published",
+        mdrepo_id="demo-archived-record",
+        mdrepo_published=True,
+    )
+    archived_notebook = build_model(Notebook, experiment_id=archived.id, token="demo-token-archived")
+    demo_state.notebook_status[archived.id] = PodStatus.DOWN
+    # The mock record lookup must not report deleted, or pre_dump clears the linkage.
+    demo_state.mdrepo_records["demo-archived-record"] = True
     demo_state.notebook_status[mdposit_demo.id] = PodStatus.DOWN
 
     # Finished AMBER DNA job
@@ -568,6 +592,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         finished_amber_dna,
         mdposit_demo,
         mdposit_demo_notebook,
+        archived,
+        archived_notebook,
     ])
     db.session.commit()
 

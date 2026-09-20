@@ -559,4 +559,42 @@ describe("ExperimentWizard", () => {
     renderWizard({})
     expect(await screen.findByRole("alert")).toHaveTextContent("urn:mddash:not-found")
   })
+
+  it("deep links to an archived experiment show a notice with a restore action instead of the wizard", async () => {
+    mockApi({
+      "/experiments/exp1/simulations": Response.json([]),
+      "/experiments/exp1": okExperiment({
+        archived_at: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+        archive_state: "archived",
+        size_bytes: 3 * 1024 ** 3,
+      }),
+    })
+    renderWizard({})
+    expect(await screen.findByText(/this experiment is archived/i)).toBeVisible()
+    expect(screen.getByRole("button", { name: /^restore$/i })).toBeVisible()
+    expect(screen.queryByRole("heading", { name: "Experiment" })).not.toBeInTheDocument()
+  })
+
+  it("restore on the archived notice posts to the restore endpoint", async () => {
+    const restoreCalls: { url: string; method: string }[] = []
+    vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = requestUrl(input)
+      if (url.endsWith("/experiments/exp1/restore")) {
+        restoreCalls.push({ url, method: init?.method ?? "GET" })
+        return Response.json({ attempt_id: "r1" }, { status: 202 })
+      }
+      if (url.endsWith("/experiments/exp1/simulations")) return Response.json([])
+      if (url.endsWith("/experiments/exp1")) {
+        return okExperiment({
+          archived_at: new Date(Date.now() - 86_400_000).toISOString(),
+          archive_state: "archived",
+        })
+      }
+      return new Response(null, { status: 404 })
+    })
+    const user = userEvent.setup()
+    renderWizard({})
+    await user.click(await screen.findByRole("button", { name: /^restore$/i }))
+    expect(restoreCalls).toEqual([{ url: expect.stringContaining("/experiments/exp1/restore"), method: "POST" }])
+  })
 })

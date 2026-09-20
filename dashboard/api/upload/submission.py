@@ -32,7 +32,7 @@ UPLOAD_RESOURCES = {
 }
 
 
-def _dns1123_name(*parts: str) -> str:
+def dns1123_name(*parts: str, fallback_prefix: str = "mdrepo-upload") -> str:
     """Append a hash suffix if truncation is needed to stay under the 63-char limit."""
     raw = "-".join(p for p in parts if p)
     safe = re.sub(r"[^a-z0-9-]+", "-", raw.lower()).strip("-")
@@ -42,13 +42,13 @@ def _dns1123_name(*parts: str) -> str:
         digest = hashlib.sha256(raw.encode()).hexdigest()[:8]
         safe = safe[:max_base].rstrip("-") + "-" + digest
     if not safe or not re.match(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", safe):
-        safe = "mdrepo-upload-" + hashlib.sha256(raw.encode()).hexdigest()[:8]
+        safe = fallback_prefix + "-" + hashlib.sha256(raw.encode()).hexdigest()[:8]
     return safe
 
 
 def job_name(experiment_id: str) -> str:
     """Deterministic name for an experiment's upload Job."""
-    return _dns1123_name("mdrepo-upload", experiment_id)
+    return dns1123_name("mdrepo-upload", experiment_id)
 
 
 class SubmissionError(Exception):

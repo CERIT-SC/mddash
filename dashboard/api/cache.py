@@ -30,3 +30,7 @@ simulation_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
 
 # Cache for simulation job log line counts keyed by job id (30s TTL — counting streams whole files)
 simulation_log_lines_cache: TTLCache = TTLCache(maxsize=100, ttl=30)
+
+# Cache for archive/restore Job liveness keyed by (direction, experiment_id)
+# (1s TTL for request coalescing only; archive lists serialize every experiment)
+archive_status_cache: TTLCache = TTLCache(maxsize=500, ttl=1)

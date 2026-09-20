@@ -179,6 +179,57 @@ paths:
               schema: {$ref: '#/components/schemas/PublishStatus'}
         '404': {$ref: '#/components/responses/NotFound'}
         default: {$ref: '#/components/responses/Problem'}
+  /dash/api/experiments/{experiment_id}/archive:
+    parameters:
+      - {$ref: '#/components/parameters/ExperimentId'}
+    post:
+      tags: [Experiments]
+      summary: Archive an experiment
+      description: Mirror the experiment to S3 at _archives/<id>/ and free the local PVC (verified before deletion).
+      operationId: archiveExperiment
+      responses:
+        '202':
+          description: Archive accepted
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ArchiveAttempt'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        default: {$ref: '#/components/responses/Problem'}
+  /dash/api/experiments/{experiment_id}/restore:
+    parameters:
+      - {$ref: '#/components/parameters/ExperimentId'}
+    post:
+      tags: [Experiments]
+      summary: Restore an archived experiment
+      description: Copy the S3 archive back onto the local PVC and unfreeze the experiment.
+      operationId: restoreExperiment
+      responses:
+        '202':
+          description: Restore accepted
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ArchiveAttempt'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
+        default: {$ref: '#/components/responses/Problem'}
+  /dash/api/experiments/{experiment_id}/archive/status:
+    parameters:
+      - {$ref: '#/components/parameters/ExperimentId'}
+    get:
+      tags: [Experiments]
+      summary: Get archive/restore status
+      operationId: getArchiveStatus
+      responses:
+        '200':
+          description: Archive status
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ArchiveStatus'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        default: {$ref: '#/components/responses/Problem'}
   /dash/api/mdrepo/status:
     get:
       tags: [MDRepo]
@@ -970,7 +1021,7 @@ components:
       additionalProperties: false
     Experiment:
       type: object
-      required: [id, created_at, updated_at, name, engine, latest_simulation_path, notebook, tuner_jobs, simulation_jobs, analysis_jobs]
+      required: [id, created_at, updated_at, name, engine, latest_simulation_path, archived_at, archive_state, notebook, tuner_jobs, simulation_jobs, analysis_jobs]
       properties:
         id: {type: string}
         created_at: {type: string, format: date-time}
@@ -1003,6 +1054,12 @@ components:
         analysis_jobs: {type: array, items: {$ref: '#/components/schemas/AnalysisJob'}}
         step: {type: integer}
         status: {type: string}
+        # Archive lifecycle: archived_at null = active experiment. While archived,
+        # step/status/size_bytes serve the snapshot taken at archive time.
+        archived_at: {type: [string, 'null'], format: date-time}
+        archive_state:
+          type: [string, 'null']
+          enum: [archiving, archived, restoring, archive_failed, restore_failed, null]
         # Publishing is experiment-level: true once a draft exists or any run finished.
         can_publish: {type: boolean}
         mdrepo_record_url: {$ref: '#/components/schemas/NullableString'}
@@ -1245,6 +1302,26 @@ components:
         metadata_file: {$ref: '#/components/schemas/PublicationFile'}
         files: {type: array, items: {$ref: '#/components/schemas/PublicationFile'}}
         vre_lite_url: {$ref: '#/components/schemas/NullableString'}
+      additionalProperties: false
+    ArchiveAttempt:
+      type: object
+      required: [attempt_id]
+      properties:
+        attempt_id: {type: string}
+      additionalProperties: false
+    ArchiveStatus:
+      type: object
+      required: [experiment_id, archive_state, attempt_id, direction, reason]
+      properties:
+        experiment_id: {type: string}
+        archive_state:
+          type: [string, 'null']
+          enum: [archiving, archived, restoring, archive_failed, restore_failed, null]
+        attempt_id: {$ref: '#/components/schemas/NullableString'}
+        direction:
+          type: [string, 'null']
+          enum: [archive, restore, null]
+        reason: {$ref: '#/components/schemas/NullableString'}
       additionalProperties: false
     PublishStatus:
       type: object

@@ -8,6 +8,7 @@ RUN apk add --no-cache ca-certificates
 RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
 ENV HOME=/home/app
 
+# Build context is dashboard/, so sync.sh is under s3-sync/.
 COPY --chown=app:app s3-sync/sync.sh rclone-filters.txt /
 RUN chmod +x /sync.sh
 

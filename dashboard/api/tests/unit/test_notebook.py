@@ -59,6 +59,7 @@ class TestNotebookStartQuotaCheck:
         nb = MagicMock()
         nb.experiment_id = "exp-test"
         nb.token = "test-token"
+        nb.experiment.archived_at = None
         return nb
 
     def test_raises_forbidden_when_concurrent_limit_reached(self) -> None:
@@ -115,6 +116,7 @@ class TestNotebookStartTierAndGpu:
         nb = MagicMock()
         nb.experiment_id = "exp-test"
         nb.token = "test-token"
+        nb.experiment.archived_at = None
         return nb
 
     def test_default_tier_uses_small(self) -> None:

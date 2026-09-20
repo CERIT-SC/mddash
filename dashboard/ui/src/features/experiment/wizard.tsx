@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 
 import { useGetExperiment, useListSimulations } from "@/api/generated/client"
-import type { Simulation } from "@/api/generated/models"
+import type { Experiment, Simulation } from "@/api/generated/models"
 import { AnalyzeStep } from "@/features/analyze"
 import { PublishStep } from "@/features/publish"
 import { RunStep } from "@/features/run"
@@ -13,6 +13,7 @@ import { Stepper, StepperContent } from "@/shared/ui/stepper"
 import { Card, CardContent, Separator, Skeleton } from "@e-infra/design-system"
 import { Atom, ChartColumn, Play, SlidersHorizontal, Upload } from "lucide-react"
 
+import { ArchivedNotice } from "./archived-notice"
 import { WizardStepperHeader } from "./stepper-header"
 import { TitleRow } from "./title-row"
 
@@ -34,6 +35,11 @@ const pollWhileAnyLive =
     const data = query.state.data as { status: number; data: Simulation[] } | undefined
     return data?.status === 200 && data.data.some((simulation) => simulation.live) ? pollMs : false
   }
+
+const pollWhileRestoring = (query: { state: { data: unknown } }): number | false => {
+  const data = query.state.data as { status: number; data: Experiment } | undefined
+  return data?.status === 200 && data.data.archive_state === "restoring" ? SIMULATIONS_POLL_MS : false
+}
 
 export type WizardSearch = {
   /** Selected simulation tab — simulation_path minus the ".simulation.json" suffix (may still contain slashes). */
@@ -59,7 +65,7 @@ type ExperimentWizardProps = {
 }
 
 export function ExperimentWizard({ experimentId, search, onSearchChange }: ExperimentWizardProps) {
-  const experiment = useGetExperiment(experimentId, { query: { retry: false } })
+  const experiment = useGetExperiment(experimentId, { query: { retry: false, refetchInterval: pollWhileRestoring } })
   // The wizard heartbeat: the step ladder advances server-side, so the stepper
   // must follow. Refetches scan manifests + job states, so it pauses when idle.
   const simulations = useListSimulations(experimentId, {
@@ -95,6 +101,11 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
         <Skeleton className="h-16 w-full" />
       </section>
     )
+  }
+
+  // Archived experiments are frozen: the wizard's steps all need local files.
+  if (data.archived_at !== null) {
+    return <ArchivedNotice experiment={data} />
   }
 
   // The unnamed create tab doubles as the empty state when there are no manifests to select.

@@ -3,9 +3,12 @@ import { useEffect, useRef, useState } from "react"
 import { toApiError } from "@/api/errors"
 import {
   getListExperimentsQueryKey,
+  useArchiveExperiment,
   useDeleteExperiment,
+  useGetArchiveStatus,
   useListAnalysisResults,
   useListAnalysisTypes,
+  useRestoreExperiment,
   useStartNotebook,
   useStopNotebook,
   useUpdateExperiment,
@@ -25,6 +28,7 @@ import { isNotebookActive } from "@/shared/pod-status"
 import { sourceLabel } from "@/shared/source"
 import { InfoBanner } from "@/shared/ui/info-banner"
 import {
+  Alert,
   AlertDescription,
   AlertDialog,
   AlertDialogAction,
@@ -60,15 +64,16 @@ import {
 } from "@e-infra/design-system"
 import { useQueryClient } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
-import { Archive, Copy, Database, Ellipsis, LoaderCircle, Pencil, Play, Square, Trash2 } from "lucide-react"
+import { Archive, Copy, Database, Ellipsis, LoaderCircle, Pencil, Play, Square, Trash2, Undo2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { archiveReasonLabel, archiveStateLabel, isArchived, isArchivedFailed, isArchiving } from "./archive"
 import { isAnalysisJobLive } from "./live-work"
 
 const STEP_LABELS = ["Setup", "Tune", "Run", "Analyze", "Publish"] as const
 
-// The API step IS the phase index (Setup 0 .. Analyze 3, publish states 4) —
-// consumed directly; the shown counter counts from 1.
+// The API step IS the phase index (Setup 0 .. Analyze 3, publish states 4) and
+// is consumed directly; the shown counter counts from 1.
 function stepParts(experiment: Experiment): { shownStep: number; stepIndex: number } {
   const step = Math.max(0, Math.min(experiment.step ?? 0, STEP_LABELS.length - 1))
   return { shownStep: step + 1, stepIndex: step }
@@ -151,7 +156,7 @@ function RunDetails({ experiment }: DetailsProps) {
 // step/status, so analysis rows are scoped to that simulation.
 function AnalyzeDetails({ experiment }: DetailsProps) {
   const simulationPath = experiment.latest_simulation_path ?? ""
-  // Jobs ride the polled experiments list — no separate query to go stale.
+  // Jobs ride the polled experiments list, so no separate query goes stale.
   const jobs = experiment.analysis_jobs.filter((job) => job.simulation_path === simulationPath)
   const analyzing = jobs.some(isAnalysisJobLive)
   const models = useListAnalysisResults(
@@ -161,11 +166,11 @@ function AnalyzeDetails({ experiment }: DetailsProps) {
       query: { enabled: simulationPath !== "", retry: false },
     }
   )
-  // The pool is the hard MDDB workflow set, not the jobs submitted so far — it is
+  // The pool is the hard MDDB workflow set, not the jobs submitted so far. It is
   // experiment-independent, so it needs no simulation_path gate and never goes stale.
   const types = useListAnalysisTypes(experiment.id, { query: { retry: false, staleTime: Number.POSITIVE_INFINITY } })
 
-  // Results land when a calculation settles — refetch the Models count on that edge.
+  // Results land when a calculation settles; refetch the Models count on that edge.
   const wasAnalyzing = useRef(false)
   const refetchModels = models.refetch
   useEffect(() => {
@@ -227,6 +232,8 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
   const queryClient = useQueryClient()
   const [renameOpen, setRenameOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  const [restoreOpen, setRestoreOpen] = useState(false)
   const [quotaOpen, setQuotaOpen] = useState(false)
   const [pendingStart, setPendingStart] = useState<PendingNotebookStart | null>(null)
   const [name, setName] = useState(experiment.name)
@@ -275,6 +282,24 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
       onError: onMutationError,
     },
   })
+  const archive = useArchiveExperiment({
+    mutation: {
+      onSuccess: () => {
+        toast.success(`Archiving “${experiment.name}” (this can take a moment)`)
+        invalidate()
+      },
+      onError: onMutationError,
+    },
+  })
+  const restore = useRestoreExperiment({
+    mutation: {
+      onSuccess: () => {
+        toast.success(`Restoring “${experiment.name}” (this can take a while)`)
+        invalidate()
+      },
+      onError: onMutationError,
+    },
+  })
 
   const active = isNotebookActive(experiment.notebook?.status)
   const stopping = stop.isPending || experiment.notebook?.status === "TERMINATING"
@@ -305,6 +330,17 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
     experiment.size_bytes !== null && experiment.size_bytes !== undefined ? formatBytes(experiment.size_bytes) : null
   const deleteActiveJobs = activeJobCount(experiment)
 
+  const archived = isArchived(experiment)
+  const archiveInFlight = isArchiving(experiment)
+  const readOnly = archived || archiveInFlight
+  const failed = isArchivedFailed(experiment)
+  const archiveStatus = useGetArchiveStatus(experiment.id, { query: { enabled: failed } })
+  const reasonLabel = archiveStatus.data?.status === 200 ? archiveReasonLabel(archiveStatus.data.data.reason) : null
+  const canArchive = !archived && !archiveInFlight && deleteActiveJobs === 0
+  const canRestore = experiment.archive_state === "archived" || experiment.archive_state === "restore_failed"
+  const stateLabel = archiveStateLabel(experiment)
+  const busyLabel = label ?? (archiveInFlight ? stateLabel : null)
+
   return (
     // The whole card links to the wizard: the title anchor stretches an ::after
     // overlay across the card, and interactive elements rise above it with z-10.
@@ -312,17 +348,22 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
     <Card className="relative pb-0 transition-shadow hover:shadow-md">
       <CardHeader>
         <div className="flex min-w-0 items-center gap-3">
-          {/* Workflow icon, not progress — the step label and bar below carry progress. */}
+          {/* Workflow icon, not progress; the step label and bar below carry progress. */}
           <ModuleIconTile category={experiment.module_category} />
           <div className="min-w-0">
             <CardTitle className="truncate leading-tight">
-              <Link
-                to="/experiments/$experimentId"
-                params={{ experimentId: experiment.id }}
-                className="after:absolute after:inset-0"
-              >
-                {experiment.name}
-              </Link>
+              {readOnly ? (
+                // Archived experiments have no local files, so the wizard stays closed until restored.
+                <span>{experiment.name}</span>
+              ) : (
+                <Link
+                  to="/experiments/$experimentId"
+                  params={{ experimentId: experiment.id }}
+                  className="after:absolute after:inset-0"
+                >
+                  {experiment.name}
+                </Link>
+              )}
             </CardTitle>
             <p className="text-text-muted truncate text-sm" title={subtitle(experiment)}>
               {subtitle(experiment)}
@@ -342,7 +383,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
+              <DropdownMenuItem onSelect={() => setRenameOpen(true)} disabled={archiveInFlight}>
                 <Pencil className="h-4 w-4" /> Rename
               </DropdownMenuItem>
               {/* TODO: duplicate endpoint is not available in the API yet */}
@@ -350,23 +391,34 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
                 <Copy className="h-4 w-4" /> Duplicate
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={toggleNotebook} disabled={notebookBusy}>
-                {active ? (
-                  <>
-                    <Square fill="currentColor" className="h-4 w-4" /> Stop notebook
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4" /> Start notebook
-                  </>
-                )}
-              </DropdownMenuItem>
-              {/* TODO: archive support is not implemented in the API yet */}
-              <DropdownMenuItem disabled>
-                <Archive className="h-4 w-4" /> Archive
-              </DropdownMenuItem>
+              {archived ? (
+                <DropdownMenuItem onSelect={() => setRestoreOpen(true)} disabled={!canRestore || restore.isPending}>
+                  <Undo2 className="h-4 w-4" /> Restore
+                </DropdownMenuItem>
+              ) : (
+                <>
+                  <DropdownMenuItem onSelect={toggleNotebook} disabled={notebookBusy || readOnly}>
+                    {active ? (
+                      <>
+                        <Square fill="currentColor" className="h-4 w-4" /> Stop notebook
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4" /> Start notebook
+                      </>
+                    )}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={() => setArchiveOpen(true)}
+                    disabled={!canArchive || archive.isPending}
+                    title={deleteActiveJobs > 0 ? "Available when no jobs are running" : undefined}
+                  >
+                    <Archive className="h-4 w-4" /> Archive
+                  </DropdownMenuItem>
+                </>
+              )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem variant="error" onSelect={() => setDeleteOpen(true)}>
+              <DropdownMenuItem variant="error" onSelect={() => setDeleteOpen(true)} disabled={archiveInFlight}>
                 <Trash2 className="h-4 w-4" /> Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -375,11 +427,24 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
       </CardHeader>
 
       <CardContent className="space-y-2">
+        {isArchivedFailed(experiment) && (
+          <Alert variant="error">
+            <AlertTitle>
+              {experiment.archive_state === "archive_failed" ? "Archiving failed" : "Restoring failed"}
+            </AlertTitle>
+            <AlertDescription>
+              {experiment.archive_state === "archive_failed"
+                ? "Your files are unchanged on this drive; you can retry archiving."
+                : "The archived copy is intact; you can retry restoring."}
+              {reasonLabel ? ` (${reasonLabel})` : ""}
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="flex items-baseline justify-between gap-2 text-sm">
           <span>{`${STEP_LABELS[stepIndex]} · ${shownStep} of ${STEP_LABELS.length}`}</span>
-          <span className={cn("flex items-center gap-1.5", label === null ? "text-text-muted" : undefined)}>
-            {label !== null && <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />}
-            {label ?? `Active ${relativeTime(experiment.updated_at)}`}
+          <span className={cn("flex items-center gap-1.5", busyLabel === null ? "text-text-muted" : undefined)}>
+            {busyLabel !== null && <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />}
+            {label ?? stateLabel ?? `Active ${relativeTime(experiment.updated_at)}`}
           </span>
         </div>
         <div
@@ -411,7 +476,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
 
       {/* pt-3! must outrank the DS rule that pads [.border-t] footers to pt-6. The
           surface-raised + rounded-b footer band is the only legal surface step above
-          the card's bg-surface — bg-background would match the page canvas and read
+          the card's bg-surface. bg-background would match the page canvas and read
           as a hole in dark mode (and reverse the surface order in light). */}
       <CardFooter className="border-border bg-surface-raised gap-3 rounded-b-md border-t pt-3! pb-3 text-sm">
         <span className="text-text-muted truncate">{sourceLabel(experiment.source) ?? ""}</span>
@@ -422,22 +487,24 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
               {formatBytes(experiment.size_bytes)}
             </span>
           )}
-          <span className="flex items-center gap-2">
-            {stopping ? (
-              <>
-                <LoaderCircle size={12} className="text-text-muted animate-spin" aria-hidden="true" />
-                <span>Stopping…</span>
-              </>
-            ) : (
-              <>
-                <span
-                  className={cn("h-2 w-2 rounded-full", active ? "bg-success" : "bg-text-muted/40")}
-                  aria-hidden="true"
-                />
-                Notebook
-              </>
-            )}
-          </span>
+          {!archived && (
+            <span className="flex items-center gap-2">
+              {stopping ? (
+                <>
+                  <LoaderCircle size={12} className="text-text-muted animate-spin" aria-hidden="true" />
+                  <span>Stopping…</span>
+                </>
+              ) : (
+                <>
+                  <span
+                    className={cn("h-2 w-2 rounded-full", active ? "bg-success" : "bg-text-muted/40")}
+                    aria-hidden="true"
+                  />
+                  Notebook
+                </>
+              )}
+            </span>
+          )}
         </span>
       </CardFooter>
 
@@ -480,8 +547,11 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
               <div className="space-y-2">
                 <p>This permanently removes:</p>
                 <List>
-                  <li>All simulation files and results{deleteSize ? ` (${deleteSize})` : ""}</li>
-                  {experiment.notebook && <li>The experiment’s notebook</li>}
+                  <li>
+                    {archived ? "The archived copy in S3" : "All simulation files and results"}
+                    {deleteSize ? ` (${deleteSize})` : ""}
+                  </li>
+                  {experiment.notebook && !archived && <li>The experiment’s notebook</li>}
                   {deleteActiveJobs > 0 && (
                     <li>
                       {deleteActiveJobs} running or queued {deleteActiveJobs === 1 ? "job" : "jobs"}
@@ -493,19 +563,28 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {/* flex overrides the DS Alert's icon grid so the button shares the text row */}
-          <InfoBanner className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0 space-y-1">
-              <AlertTitle>Want to keep the results?</AlertTitle>
-              <AlertDescription>
-                Archiving frees {deleteSize ? `the same ${deleteSize}` : "disk space"} but keeps the data. You can
-                restore it later.
-              </AlertDescription>
-            </div>
-            {/* TODO: archive support is not implemented in the API yet — enable when it lands */}
-            <Button variant="outline" className="self-end sm:shrink-0 sm:self-center" disabled>
-              <Archive /> Archive instead
-            </Button>
-          </InfoBanner>
+          {!archived && (
+            <InfoBanner className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0 space-y-1">
+                <AlertTitle>Want to keep the results?</AlertTitle>
+                <AlertDescription>
+                  Archiving frees {deleteSize ? `the same ${deleteSize}` : "disk space"} but keeps the data. You can
+                  restore it later.
+                </AlertDescription>
+              </div>
+              <Button
+                variant="outline"
+                className="self-end sm:shrink-0 sm:self-center"
+                disabled={!canArchive}
+                onClick={() => {
+                  setDeleteOpen(false)
+                  setArchiveOpen(true)
+                }}
+              >
+                <Archive /> Archive instead
+              </Button>
+            </InfoBanner>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             {/* TODO: switch to variant="error" prop once CERIT-SC/design-system#108 (variant/size
@@ -517,6 +596,61 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
             >
               <Trash2 aria-hidden="true" />
               Delete experiment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={archiveOpen} onOpenChange={setArchiveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Archive className="h-5 w-5" aria-hidden="true" />
+              Archive experiment “{experiment.name}”?
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  The data{deleteSize ? ` (${deleteSize})` : ""} moves to S3; the local copy is deleted once verified.
+                  You cannot edit the experiment until you restore it.
+                </p>
+                {active && <p>The running notebook will be stopped first.</p>}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => archive.mutate({ experimentId: experiment.id })}
+              disabled={archive.isPending}
+            >
+              <Archive aria-hidden="true" />
+              Archive experiment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={restoreOpen} onOpenChange={setRestoreOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Undo2 className="h-5 w-5" aria-hidden="true" />
+              Restore experiment “{experiment.name}”?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This downloads the archived copy{deleteSize ? ` (${deleteSize})` : ""} back to your drive and re-opens the
+              experiment for editing.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => restore.mutate({ experimentId: experiment.id })}
+              disabled={restore.isPending}
+            >
+              <Undo2 aria-hidden="true" />
+              Restore experiment
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
