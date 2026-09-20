@@ -45,7 +45,7 @@ describe("archiveStateLabel", () => {
     expect(archiveStateLabel(experiment("c", { archived_at: daysAgo(2), archive_state: "archived" }))).toBe(
       "Archived 2 days ago"
     )
-    // restore_failed still means "data lives only in S3" — never "Active … ago".
+    // restore_failed still means "data lives only in S3", never "Active … ago".
     expect(archiveStateLabel(experiment("e", { archived_at: daysAgo(2), archive_state: "restore_failed" }))).toBe(
       "Archived 2 days ago"
     )
