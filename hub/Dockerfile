@@ -25,7 +25,7 @@ RUN mkdir -p /out/tpl /out/static && \
 FROM quay.io/jupyterhub/k8s-hub:4.4.2 AS runtime
 
 ARG EGI_HUB_REF=4ffff9e582b3e0ffb2b41e3ec14087d350402037
-# k8s-hub 4.4.0 defaults to a non-root user; install the package system-wide.
+# k8s-hub 4.4.2 defaults to a non-root user; install the package system-wide.
 USER root
 # egi-notebooks-hub uses pbr-derived versions; give it a deterministic version
 # when building from a raw commit archive.

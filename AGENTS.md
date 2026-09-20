@@ -45,7 +45,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - `--resync` runs ONLY on a genuine first run (empty workdir) or as last-resort recovery; normal runs use `--recover --resilient --max-lock 2m`. Every `--resync` invocation MUST also pass `--max-lock`: a lock's expiry is set by the process that creates it, so an interrupted resync without `--max-lock` leaves a never-expiring `.lck` that blocks all future runs (the normal loop's `--max-lock` can't break a lock it didn't create).
 - A `.s3-init` marker file (non-excluded) keeps both paths non-empty so bisync's empty-path safety check doesn't abort every cycle on a fresh PVC.
 - Do NOT add `--create-empty-src-dirs`: S3 can't durably hold truly-empty dirs, so the flag records a phantom dir on S3 and the next cycle deletes it from the PVC (symptom: empty dirs vanish). Without it, empty dirs are left untouched on each side (never deleted, not propagated to S3).
-- The image pins `rclone/rclone:1.74.4` via multi-stage (alpine's `apk` package ships a stale `-DEV` build).
+- The image pins `rclone/rclone:1.75.1` via multi-stage (alpine's `apk` package ships a stale `-DEV` build).
 - One rclone filter list feeds every consumer (bisync sidecar, mdrepo uploader, archive worker), built from `dashboard/rclone-filters.txt` (build context `dashboard/` for all three images). Per-tool exclusions (upload/archive status docs, `/_archives/**`) live in the same list. They are no-ops for consumers that never see those paths.
 - A local `/mddash/_archives` tree is never legitimate. `sync.sh` removes stray copies at startup, restoring the write bit first since bisync-downloaded dirs are read-only.
 
