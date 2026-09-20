@@ -65,7 +65,7 @@ response = requests.get(f"{settings.SEER_AUTOFIX_URL}{path}")
 **SSRF Example - IS a vulnerability:**
 ```python
 # VULNERABLE: URL comes from request (attacker-controlled)
-response = requests.get(request.GET.get('url'))
+response = requests.get(request.GET.get("url"))
 ```
 
 ### Framework-Mitigated Patterns

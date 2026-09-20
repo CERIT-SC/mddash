@@ -23,19 +23,23 @@ When an application deserializes untrusted data:
 ```python
 # VULNERABLE: pickle with untrusted data
 import pickle
+
 data = pickle.loads(untrusted_data)  # RCE possible
 
 # VULNERABLE: yaml.load (pre-5.1)
 import yaml
+
 data = yaml.load(untrusted_data)  # RCE via !!python/object
 
 # VULNERABLE: marshal
 import marshal
+
 code = marshal.loads(untrusted_data)
 
 # VULNERABLE: shelve (uses pickle)
 import shelve
-db = shelve.open('data')
+
+db = shelve.open("data")
 ```
 
 #### Safe Alternatives
@@ -43,20 +47,24 @@ db = shelve.open('data')
 ```python
 # SAFE: JSON
 import json
+
 data = json.loads(untrusted_data)  # Only primitive types
 
 # SAFE: yaml.safe_load
 import yaml
+
 data = yaml.safe_load(untrusted_data)  # No arbitrary objects
 
 # SAFE: Explicit data classes with validation
 from dataclasses import dataclass
 from dacite import from_dict
 
+
 @dataclass
 class UserInput:
     name: str
     email: str
+
 
 data = from_dict(UserInput, json.loads(untrusted_data))
 ```
@@ -68,7 +76,8 @@ data = from_dict(UserInput, json.loads(untrusted_data))
 # Or hex: 80 04 95
 
 import base64
-if b'\x80\x04\x95' in base64.b64decode(data):
+
+if b"\x80\x04\x95" in base64.b64decode(data):
     # Likely pickle data
     pass
 ```
@@ -289,9 +298,11 @@ const { value, error } = schema.validate(JSON.parse(input));
 import json
 from pydantic import BaseModel
 
+
 class UserData(BaseModel):
     name: str
     email: str
+
 
 data = UserData(**json.loads(untrusted_input))
 ```
@@ -303,15 +314,17 @@ import hmac
 import hashlib
 import json
 
-SECRET_KEY = b'your-secret-key'
+SECRET_KEY = b"your-secret-key"
+
 
 def serialize_with_signature(data):
     json_data = json.dumps(data)
     signature = hmac.new(SECRET_KEY, json_data.encode(), hashlib.sha256).hexdigest()
     return f"{json_data}:{signature}"
 
+
 def deserialize_with_verification(signed_data):
-    json_data, signature = signed_data.rsplit(':', 1)
+    json_data, signature = signed_data.rsplit(":", 1)
     expected = hmac.new(SECRET_KEY, json_data.encode(), hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(signature, expected):
@@ -341,11 +354,12 @@ schema = {
     "type": "object",
     "properties": {
         "name": {"type": "string", "maxLength": 100},
-        "age": {"type": "integer", "minimum": 0, "maximum": 150}
+        "age": {"type": "integer", "minimum": 0, "maximum": 150},
     },
     "required": ["name"],
-    "additionalProperties": False
+    "additionalProperties": False,
 }
+
 
 def safe_parse(data):
     parsed = json.loads(data)

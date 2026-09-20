@@ -51,17 +51,17 @@ Classify all data by sensitivity level:
 ```python
 # VULNERABLE: Collecting unnecessary data
 user_data = {
-    'name': form.name,
-    'email': form.email,
-    'ssn': form.ssn,  # Why do you need this?
-    'mother_maiden_name': form.mother_maiden_name,  # Security risk
-    'password': form.password,  # Never store plaintext
+    "name": form.name,
+    "email": form.email,
+    "ssn": form.ssn,  # Why do you need this?
+    "mother_maiden_name": form.mother_maiden_name,  # Security risk
+    "password": form.password,  # Never store plaintext
 }
 
 # SAFE: Collect only what's needed
 user_data = {
-    'name': form.name,
-    'email': form.email,
+    "name": form.name,
+    "email": form.email,
 }
 ```
 
@@ -74,9 +74,11 @@ user_data = {
 # Application-level encryption for specific fields
 from cryptography.fernet import Fernet
 
+
 def encrypt_ssn(ssn):
     f = Fernet(get_encryption_key())
     return f.encrypt(ssn.encode())
+
 
 def decrypt_ssn(encrypted_ssn):
     f = Fernet(get_encryption_key())
@@ -87,14 +89,14 @@ def decrypt_ssn(encrypted_ssn):
 
 ```python
 # VULNERABLE: HTTP endpoint
-app.run(host='0.0.0.0', port=80)
+app.run(host="0.0.0.0", port=80)
 
 # SAFE: HTTPS required
-app.run(host='0.0.0.0', port=443, ssl_context='adhoc')
+app.run(host="0.0.0.0", port=443, ssl_context="adhoc")
 
 # BETTER: Proper TLS configuration
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-ssl_context.load_cert_chain('cert.pem', 'key.pem')
+ssl_context.load_cert_chain("cert.pem", "key.pem")
 ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
 ```
 
@@ -109,11 +111,12 @@ ssl_context.minimum_version = ssl.TLSVersion.TLSv1_2
 @app.errorhandler(Exception)
 def handle_error(e):
     return {
-        'error': str(e),
-        'traceback': traceback.format_exc(),
-        'sql_query': last_query,
-        'server': socket.gethostname()
+        "error": str(e),
+        "traceback": traceback.format_exc(),
+        "sql_query": last_query,
+        "server": socket.gethostname(),
     }, 500
+
 
 # SAFE: Generic error messages
 @app.errorhandler(Exception)
@@ -122,7 +125,7 @@ def handle_error(e):
     app.logger.error(f"Error: {e}", exc_info=True)
 
     # Return generic message to client
-    return {'error': 'An unexpected error occurred'}, 500
+    return {"error": "An unexpected error occurred"}, 500
 ```
 
 ### Stack Traces
@@ -134,33 +137,32 @@ app.run(debug=True)
 # SAFE: Debug off, custom error pages
 app.run(debug=False)
 
+
 @app.errorhandler(404)
 def not_found(e):
-    return render_template('404.html'), 404
+    return render_template("404.html"), 404
+
 
 @app.errorhandler(500)
 def server_error(e):
-    return render_template('500.html'), 500
+    return render_template("500.html"), 500
 ```
 
 ### API Response Filtering
 
 ```python
 # VULNERABLE: Returning all fields
-@app.route('/api/users/<id>')
+@app.route("/api/users/<id>")
 def get_user(id):
     user = User.query.get(id)
     return jsonify(user.__dict__)  # Includes password_hash, internal_id, etc.
 
+
 # SAFE: Explicit field selection
-@app.route('/api/users/<id>')
+@app.route("/api/users/<id>")
 def get_user(id):
     user = User.query.get(id)
-    return jsonify({
-        'id': user.public_id,
-        'name': user.name,
-        'email': user.email
-    })
+    return jsonify({"id": user.public_id, "name": user.name, "email": user.email})
 ```
 
 ### Server Headers
@@ -177,12 +179,13 @@ def get_user(id):
 # server_tokens off;
 
 # In Express.js:
-app.disable('x-powered-by');
+app.disable("x-powered-by")
+
 
 # In Flask:
 @app.after_request
 def remove_headers(response):
-    response.headers.pop('Server', None)
+    response.headers.pop("Server", None)
     return response
 ```
 
@@ -223,9 +226,11 @@ logger.debug(f"Session token: {hash_for_logging(session_id)}")
 logger.info(f"Search query: {user_input}")
 # Attack: user_input = "test\nINFO: Admin logged in"
 
+
 # SAFE: Sanitize before logging
 def sanitize_for_log(text):
-    return text.replace('\n', '\\n').replace('\r', '\\r')
+    return text.replace("\n", "\\n").replace("\r", "\\r")
+
 
 logger.info(f"Search query: {sanitize_for_log(user_input)}")
 ```
@@ -243,6 +248,7 @@ logger.info(f"Search query: {sanitize_for_log(user_input)}")
 # BETTER: Clear sensitive data
 import ctypes
 
+
 def secure_zero(data):
     """Zero out sensitive data in memory."""
     if isinstance(data, bytearray):
@@ -251,6 +257,7 @@ def secure_zero(data):
     elif isinstance(data, bytes):
         # Can't modify bytes, but can overwrite the reference
         pass
+
 
 # In Java:
 # char[] password = getPassword();
@@ -264,9 +271,10 @@ def secure_zero(data):
 # VULNERABLE: Simple delete (data recoverable)
 os.remove(sensitive_file)
 
+
 # SAFER: Overwrite before delete
 def secure_delete(filepath):
-    with open(filepath, 'ba+') as f:
+    with open(filepath, "ba+") as f:
         length = f.tell()
         f.seek(0)
         f.write(os.urandom(length))  # Random overwrite
@@ -287,9 +295,9 @@ def cleanup_old_data():
 
     # Or anonymize instead of delete
     User.query.filter(User.last_login < cutoff).update({
-        'email': func.concat('deleted_', User.id, '@example.com'),
-        'name': 'Deleted User',
-        'phone': None
+        "email": func.concat("deleted_", User.id, "@example.com"),
+        "name": "Deleted User",
+        "phone": None,
     })
 ```
 
@@ -303,17 +311,19 @@ def cleanup_old_data():
 def get_user_with_ssn(user_id):
     return User.query.get(user_id)  # Includes SSN
 
+
 # SAFE: Don't cache sensitive data
 def get_user_with_ssn(user_id):
     return User.query.get(user_id)  # Not cached
+
 
 # Or cache only non-sensitive parts
 @cache.cached(timeout=3600)
 def get_user_profile(user_id):
     user = User.query.get(user_id)
     return {
-        'id': user.id,
-        'name': user.name,
+        "id": user.id,
+        "name": user.name,
         # SSN excluded
     }
 ```
@@ -322,9 +332,9 @@ def get_user_profile(user_id):
 
 ```python
 # For sensitive pages
-response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-response.headers['Pragma'] = 'no-cache'
-response.headers['Expires'] = '0'
+response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+response.headers["Pragma"] = "no-cache"
+response.headers["Expires"] = "0"
 ```
 
 ---

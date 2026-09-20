@@ -55,6 +55,7 @@
 ```python
 # VULNERABLE: MD5 hash
 import hashlib
+
 password_hash = hashlib.md5(password.encode()).hexdigest()
 
 # VULNERABLE: SHA256 without salt/iterations
@@ -62,10 +63,12 @@ password_hash = hashlib.sha256(password.encode()).hexdigest()
 
 # SAFE: bcrypt
 import bcrypt
+
 password_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt(rounds=12))
 
 # SAFE: Argon2
 from argon2 import PasswordHasher
+
 ph = PasswordHasher()
 password_hash = ph.hash(password)
 ```
@@ -119,6 +122,7 @@ Return identical error messages regardless of the specific failure reason.
 LOCKOUT_THRESHOLD = 5  # Failed attempts before lockout
 OBSERVATION_WINDOW = 15 * 60  # 15 minutes
 LOCKOUT_DURATION = 30 * 60  # 30 minutes
+
 
 # Implementation
 class LoginAttemptTracker:
@@ -207,6 +211,7 @@ session_id = str(user_id) + str(int(time.time()))
 
 # SAFE: Cryptographically random
 import secrets
+
 session_id = secrets.token_hex(32)  # 256 bits
 ```
 
@@ -227,24 +232,27 @@ Set-Cookie: session_id=abc123;
 # VULNERABLE: Not regenerating session on login (Session Fixation)
 def login(username, password):
     user = authenticate(username, password)
-    session['user_id'] = user.id  # Same session ID - attacker can pre-set it!
+    session["user_id"] = user.id  # Same session ID - attacker can pre-set it!
+
 
 # SAFE: Regenerate session ID after authentication
 def login(user, password):
     if authenticate(user, password):
         # CRITICAL: Generate new session ID to prevent fixation
         session.regenerate()
-        session['user_id'] = user.id
+        session["user_id"] = user.id
+
 
 # Regenerate after privilege changes
 def elevate_privileges():
     session.regenerate()
-    session['is_admin'] = True
+    session["is_admin"] = True
+
 
 # Proper logout - invalidate both server and client
 def logout():
     session.invalidate()  # Server-side invalidation
-    response.delete_cookie('session_id')
+    response.delete_cookie("session_id")
 ```
 
 ### Session Timeouts
@@ -262,13 +270,16 @@ def login(user):
     invalidate_all_sessions(user.id)
     return create_session(user)
 
+
 # Option 2: Limit concurrent sessions
 MAX_SESSIONS = 3
+
+
 def login(user):
     sessions = get_sessions_by_user(user.id)
     if len(sessions) >= MAX_SESSIONS:
-        oldest = min(sessions, key=lambda s: s['created_at'])
-        invalidate_session(oldest['id'])
+        oldest = min(sessions, key=lambda s: s["created_at"])
+        invalidate_session(oldest["id"])
     return create_session(user)
 ```
 
@@ -286,14 +297,18 @@ Require fresh credentials before:
 ```python
 def requires_recent_auth(max_age=300):  # 5 minutes
     """Decorator requiring recent authentication."""
+
     def decorator(f):
         def wrapper(*args, **kwargs):
-            last_auth = session.get('last_auth_time')
+            last_auth = session.get("last_auth_time")
             if not last_auth or time.time() - last_auth > max_age:
                 raise ReauthenticationRequired()
             return f(*args, **kwargs)
+
         return wrapper
+
     return decorator
+
 
 @requires_recent_auth(max_age=300)
 def change_password(old_password, new_password):

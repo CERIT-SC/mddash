@@ -15,10 +15,11 @@ Every permission must be explicitly granted. The default position is denial.
 def get_document(request, doc_id):
     return Document.objects.get(id=doc_id)
 
+
 # SAFE: Explicit authorization
 def get_document(request, doc_id):
     doc = Document.objects.get(id=doc_id)
-    if not request.user.has_permission('read', doc):
+    if not request.user.has_permission("read", doc):
         raise PermissionDenied()
     return doc
 ```
@@ -29,11 +30,7 @@ Assign users only the minimum necessary permissions for their role.
 
 ```python
 # Define minimal permission sets
-ROLE_PERMISSIONS = {
-    'viewer': ['read'],
-    'editor': ['read', 'write'],
-    'admin': ['read', 'write', 'delete', 'admin']
-}
+ROLE_PERMISSIONS = {"viewer": ["read"], "editor": ["read", "write"], "admin": ["read", "write", "delete", "admin"]}
 ```
 
 ### 3. Validate Permissions on Every Request
@@ -42,17 +39,19 @@ Never rely on UI hiding or client-side checks alone.
 
 ```python
 # VULNERABLE: Authorization only on some endpoints
-@app.route('/api/admin/users', methods=['GET'])
+@app.route("/api/admin/users", methods=["GET"])
 @require_admin  # Good
 def list_users():
     pass
 
-@app.route('/api/admin/users/<id>', methods=['DELETE'])
+
+@app.route("/api/admin/users/<id>", methods=["DELETE"])
 def delete_user(id):  # Missing authorization check!
     User.delete(id)
 
+
 # SAFE: Consistent authorization
-@app.route('/api/admin/users/<id>', methods=['DELETE'])
+@app.route("/api/admin/users/<id>", methods=["DELETE"])
 @require_admin  # Always check
 def delete_user(id):
     User.delete(id)
@@ -68,9 +67,10 @@ IDOR occurs when attackers access or modify objects by manipulating identifiers.
 
 ```python
 # VULNERABLE: No ownership validation
-@app.route('/api/orders/<order_id>')
+@app.route("/api/orders/<order_id>")
 def get_order(order_id):
     return Order.query.get(order_id).to_dict()
+
 
 # Attack: User A accesses /api/orders/123 (User B's order)
 ```
@@ -81,11 +81,11 @@ def get_order(order_id):
 
 ```python
 # SAFE: Scope queries to current user
-@app.route('/api/orders/<order_id>')
+@app.route("/api/orders/<order_id>")
 def get_order(order_id):
     order = Order.query.filter_by(
         id=order_id,
-        user_id=current_user.id  # Ownership check
+        user_id=current_user.id,  # Ownership check
     ).first_or_404()
     return order.to_dict()
 ```
@@ -98,7 +98,8 @@ def get_user_order_map(user_id):
     orders = Order.query.filter_by(user_id=user_id).all()
     return {i: order.id for i, order in enumerate(orders)}
 
-@app.route('/api/orders/<int:index>')
+
+@app.route("/api/orders/<int:index>")
 def get_order(index):
     order_map = get_user_order_map(current_user.id)
     real_id = order_map.get(index)
@@ -132,11 +133,8 @@ def check_permission(user, action, resource):
 Simple but limited. Good for straightforward permission structures.
 
 ```python
-ROLES = {
-    'admin': {'create', 'read', 'update', 'delete'},
-    'editor': {'create', 'read', 'update'},
-    'viewer': {'read'}
-}
+ROLES = {"admin": {"create", "read", "update", "delete"}, "editor": {"create", "read", "update"}, "viewer": {"read"}}
+
 
 def has_permission(user, action):
     return action in ROLES.get(user.role, set())
@@ -155,12 +153,8 @@ def evaluate_policy(subject, action, resource, environment):
     Environment: context (time, location, device)
     """
     # Example: Only managers can approve during business hours
-    if action == 'approve':
-        return (
-            subject.role == 'manager' and
-            resource.department == subject.department and
-            environment.is_business_hours
-        )
+    if action == "approve":
+        return subject.role == "manager" and resource.department == subject.department and environment.is_business_hours
     return False
 ```
 
@@ -193,12 +187,13 @@ Accessing resources belonging to other users at the same privilege level.
 
 ```python
 # VULNERABLE: User A can access User B's profile
-@app.route('/api/profile/<user_id>')
+@app.route("/api/profile/<user_id>")
 def get_profile(user_id):
     return User.query.get(user_id).profile
 
+
 # SAFE: Only access own profile
-@app.route('/api/profile')
+@app.route("/api/profile")
 def get_profile():
     return current_user.profile
 ```
@@ -209,14 +204,15 @@ Accessing higher-privilege functionality.
 
 ```python
 # VULNERABLE: Hidden admin endpoint
-@app.route('/api/admin/delete-all')
+@app.route("/api/admin/delete-all")
 def delete_all():
     # No authorization check
     Database.delete_all()
 
+
 # SAFE: Explicit admin check
-@app.route('/api/admin/delete-all')
-@require_role('super_admin')
+@app.route("/api/admin/delete-all")
+@require_role("super_admin")
 def delete_all():
     Database.delete_all()
 ```
@@ -225,15 +221,16 @@ def delete_all():
 
 ```python
 # VULNERABLE: Path-based authorization bypass
-@app.route('/files/<path:filepath>')
+@app.route("/files/<path:filepath>")
 def get_file(filepath):
     # Attacker: /files/../../../etc/passwd
     return send_file(filepath)
 
+
 # SAFE: Validate and sanitize path
-@app.route('/files/<path:filepath>')
+@app.route("/files/<path:filepath>")
 def get_file(filepath):
-    base_dir = '/app/user_files'
+    base_dir = "/app/user_files"
     full_path = os.path.realpath(os.path.join(base_dir, filepath))
     if not full_path.startswith(base_dir):
         raise PermissionDenied()
@@ -244,15 +241,16 @@ def get_file(filepath):
 
 ```python
 # VULNERABLE: User can set admin flag
-@app.route('/api/users/<id>', methods=['PATCH'])
+@app.route("/api/users/<id>", methods=["PATCH"])
 def update_user(id):
     user = User.query.get(id)
     user.update(**request.json)  # Includes is_admin!
 
+
 # SAFE: Allowlist fields
-@app.route('/api/users/<id>', methods=['PATCH'])
+@app.route("/api/users/<id>", methods=["PATCH"])
 def update_user(id):
-    ALLOWED_FIELDS = {'name', 'email', 'bio'}
+    ALLOWED_FIELDS = {"name", "email", "bio"}
     user = User.query.get(id)
     data = {k: v for k, v in request.json.items() if k in ALLOWED_FIELDS}
     user.update(**data)
@@ -287,17 +285,14 @@ class DocumentPolicy:
         self.document = document
 
     def can_view(self):
-        return (
-            self.document.is_public or
-            self.document.owner_id == self.user.id or
-            self.user.is_admin
-        )
+        return self.document.is_public or self.document.owner_id == self.user.id or self.user.is_admin
 
     def can_edit(self):
         return self.document.owner_id == self.user.id
 
     def can_delete(self):
         return self.document.owner_id == self.user.id or self.user.is_admin
+
 
 # Usage
 policy = DocumentPolicy(current_user, document)
@@ -349,13 +344,14 @@ def test_horizontal_access():
 
     # User B should not access User A's resource
     client.login(user_b)
-    response = client.get(f'/api/resources/{resource.id}')
+    response = client.get(f"/api/resources/{resource.id}")
     assert response.status_code == 403
+
 
 def test_idor_enumeration():
     # Try sequential IDs
     for i in range(1, 100):
-        response = client.get(f'/api/resources/{i}')
+        response = client.get(f"/api/resources/{i}")
         if response.status_code == 200:
             # Should be denied or return 404, not 200
             assert False, f"IDOR vulnerability: /api/resources/{i}"

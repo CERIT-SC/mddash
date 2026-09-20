@@ -58,14 +58,16 @@ http://192.168.1.1:6379  # Redis
 def fetch_url(url):
     return requests.get(url).content
 
+
 # SAFE: Allowlist of permitted domains
-ALLOWED_DOMAINS = {'api.example.com', 'cdn.example.com'}
+ALLOWED_DOMAINS = {"api.example.com", "cdn.example.com"}
+
 
 def fetch_url(url):
     parsed = urlparse(url)
 
     # Validate scheme
-    if parsed.scheme not in ('http', 'https'):
+    if parsed.scheme not in ("http", "https"):
         raise ValueError("Invalid URL scheme")
 
     # Validate domain against allowlist
@@ -84,20 +86,21 @@ import ipaddress
 import socket
 
 BLOCKED_RANGES = [
-    ipaddress.ip_network('127.0.0.0/8'),      # Loopback
-    ipaddress.ip_network('10.0.0.0/8'),       # Private
-    ipaddress.ip_network('172.16.0.0/12'),    # Private
-    ipaddress.ip_network('192.168.0.0/16'),   # Private
-    ipaddress.ip_network('169.254.0.0/16'),   # Link-local (metadata)
-    ipaddress.ip_network('0.0.0.0/8'),        # Current network
-    ipaddress.ip_network('100.64.0.0/10'),    # Shared address space
-    ipaddress.ip_network('192.0.0.0/24'),     # IETF Protocol
-    ipaddress.ip_network('192.0.2.0/24'),     # Documentation
-    ipaddress.ip_network('198.51.100.0/24'),  # Documentation
-    ipaddress.ip_network('203.0.113.0/24'),   # Documentation
-    ipaddress.ip_network('224.0.0.0/4'),      # Multicast
-    ipaddress.ip_network('240.0.0.0/4'),      # Reserved
+    ipaddress.ip_network("127.0.0.0/8"),  # Loopback
+    ipaddress.ip_network("10.0.0.0/8"),  # Private
+    ipaddress.ip_network("172.16.0.0/12"),  # Private
+    ipaddress.ip_network("192.168.0.0/16"),  # Private
+    ipaddress.ip_network("169.254.0.0/16"),  # Link-local (metadata)
+    ipaddress.ip_network("0.0.0.0/8"),  # Current network
+    ipaddress.ip_network("100.64.0.0/10"),  # Shared address space
+    ipaddress.ip_network("192.0.0.0/24"),  # IETF Protocol
+    ipaddress.ip_network("192.0.2.0/24"),  # Documentation
+    ipaddress.ip_network("198.51.100.0/24"),  # Documentation
+    ipaddress.ip_network("203.0.113.0/24"),  # Documentation
+    ipaddress.ip_network("224.0.0.0/4"),  # Multicast
+    ipaddress.ip_network("240.0.0.0/4"),  # Reserved
 ]
+
 
 def is_internal_ip(ip_str):
     try:
@@ -106,11 +109,12 @@ def is_internal_ip(ip_str):
     except ValueError:
         return True  # Invalid IP, block it
 
+
 def validate_url(url):
     parsed = urlparse(url)
 
     # Validate scheme
-    if parsed.scheme not in ('http', 'https'):
+    if parsed.scheme not in ("http", "https"):
         raise ValueError("Invalid URL scheme")
 
     # Resolve hostname to IP
@@ -145,6 +149,7 @@ response = requests.get(url, allow_redirects=True)
 # SAFE: Don't follow redirects automatically
 response = requests.get(url, allow_redirects=False)
 
+
 # If redirects needed, validate each location
 def safe_fetch(url, max_redirects=5):
     for _ in range(max_redirects):
@@ -152,7 +157,7 @@ def safe_fetch(url, max_redirects=5):
         response = requests.get(url, allow_redirects=False)
 
         if response.status_code in (301, 302, 303, 307, 308):
-            url = response.headers.get('Location')
+            url = response.headers.get("Location")
             if not url:
                 raise ValueError("Redirect without Location")
             continue
@@ -168,6 +173,7 @@ def safe_fetch(url, max_redirects=5):
 import socket
 import time
 
+
 def safe_fetch_with_dns_pinning(url):
     parsed = urlparse(url)
     hostname = parsed.hostname
@@ -182,13 +188,13 @@ def safe_fetch_with_dns_pinning(url):
     # Make request directly to IP with Host header
     # This prevents DNS rebinding attacks
     modified_url = url.replace(hostname, ip)
-    headers = {'Host': hostname}
+    headers = {"Host": hostname}
 
     response = requests.get(
         modified_url,
         headers=headers,
         allow_redirects=False,
-        verify=True  # Still verify TLS with original hostname
+        verify=True,  # Still verify TLS with original hostname
     )
 
     return response
@@ -212,7 +218,7 @@ aws ec2 modify-instance-metadata-options \
 # 2. GET with token in header
 
 # Block metadata IP regardless
-if '169.254.169.254' in url or '169.254.170.2' in url:
+if "169.254.169.254" in url or "169.254.170.2" in url:
     raise ValueError("Metadata endpoints not allowed")
 ```
 
@@ -220,21 +226,14 @@ if '169.254.169.254' in url or '169.254.170.2' in url:
 
 ```python
 # Block GCP metadata
-BLOCKED_HOSTS = [
-    'metadata.google.internal',
-    'metadata.google.com',
-    '169.254.169.254'
-]
+BLOCKED_HOSTS = ["metadata.google.internal", "metadata.google.com", "169.254.169.254"]
 ```
 
 #### Azure
 
 ```python
 # Block Azure metadata
-BLOCKED_HOSTS = [
-    '169.254.169.254',
-    'management.azure.com'
-]
+BLOCKED_HOSTS = ["169.254.169.254", "management.azure.com"]
 ```
 
 ---
@@ -247,12 +246,13 @@ BLOCKED_HOSTS = [
 from urllib.parse import urlparse
 import requests
 
+
 class SafeRequests:
     @staticmethod
     def get(url, **kwargs):
         validate_url(url)
-        kwargs['allow_redirects'] = False
-        kwargs['timeout'] = (5, 30)  # Connect and read timeout
+        kwargs["allow_redirects"] = False
+        kwargs["timeout"] = (5, 30)  # Connect and read timeout
         return requests.get(url, **kwargs)
 ```
 

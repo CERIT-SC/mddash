@@ -15,8 +15,9 @@ Business logic vulnerabilities occur when the application's logic can be manipul
 def transfer(from_account, to_account, amount):
     if from_account.balance >= amount:  # Check
         time.sleep(0.1)  # Simulating processing delay
-        from_account.balance -= amount   # Use
+        from_account.balance -= amount  # Use
         to_account.balance += amount
+
 
 # Attack: Two concurrent transfers can overdraft
 
@@ -24,6 +25,7 @@ def transfer(from_account, to_account, amount):
 from threading import Lock
 
 account_locks = {}
+
 
 def transfer(from_account, to_account, amount):
     # Acquire locks in consistent order to prevent deadlock
@@ -41,6 +43,7 @@ def transfer(from_account, to_account, amount):
 ```python
 # SAFE: Database transaction with SELECT FOR UPDATE
 from django.db import transaction
+
 
 @transaction.atomic
 def transfer(from_account_id, to_account_id, amount):
@@ -68,28 +71,28 @@ def transfer(from_account_id, to_account_id, amount):
 
 # SAFE: Server-side state machine
 class RegistrationFlow:
-    STATES = ['email_pending', 'email_verified', 'password_set', 'complete']
+    STATES = ["email_pending", "email_verified", "password_set", "complete"]
 
     def __init__(self, user_id):
         self.state = self.get_state(user_id)
 
     def verify_email(self, token):
-        if self.state != 'email_pending':
+        if self.state != "email_pending":
             raise InvalidStateError("Email verification not pending")
         # Verify token...
-        self.set_state('email_verified')
+        self.set_state("email_verified")
 
     def set_password(self, password):
-        if self.state != 'email_verified':
+        if self.state != "email_verified":
             raise InvalidStateError("Email not verified")
         # Set password...
-        self.set_state('password_set')
+        self.set_state("password_set")
 
     def complete(self):
-        if self.state != 'password_set':
+        if self.state != "password_set":
             raise InvalidStateError("Password not set")
         # Complete registration...
-        self.set_state('complete')
+        self.set_state("complete")
 ```
 
 ### 3. Numeric Manipulation
@@ -101,7 +104,9 @@ class RegistrationFlow:
 def calculate_total(quantity, price):
     return quantity * price
 
+
 # Attack: quantity = -1 results in negative price (refund)
+
 
 # SAFE: Validate numeric ranges
 def calculate_total(quantity, price):
@@ -125,25 +130,26 @@ for item in items:
 # SAFE: Use Decimal for financial calculations
 from decimal import Decimal, ROUND_HALF_UP
 
-total = Decimal('0')
+total = Decimal("0")
 for item in items:
     total += Decimal(str(item.price)) * item.quantity
 
 # Round properly
-total = total.quantize(Decimal('.01'), rounding=ROUND_HALF_UP)
+total = total.quantize(Decimal(".01"), rounding=ROUND_HALF_UP)
 ```
 
 ### 4. Price/Discount Manipulation
 
 ```python
 # VULNERABLE: Trust client-submitted price
-@app.route('/checkout', methods=['POST'])
+@app.route("/checkout", methods=["POST"])
 def checkout():
-    price = request.json['price']  # Client can set any price!
+    price = request.json["price"]  # Client can set any price!
     process_payment(price)
 
+
 # SAFE: Calculate price server-side
-@app.route('/checkout', methods=['POST'])
+@app.route("/checkout", methods=["POST"])
 def checkout():
     cart = get_cart(current_user.id)
     price = calculate_total(cart)  # Always server-calculated
@@ -157,14 +163,16 @@ def apply_discounts(cart, discount_codes):
         discount = get_discount(code)
         cart.total -= discount.amount
 
+
 # Attack: Apply same code multiple times, negative total
+
 
 # SAFE: Limit discount application
 def apply_discounts(cart, discount_codes):
     # Remove duplicates
     unique_codes = set(discount_codes)
 
-    total_discount = Decimal('0')
+    total_discount = Decimal("0")
     for code in unique_codes:
         if is_code_used(cart.user_id, code):
             continue  # Code already used
@@ -173,7 +181,7 @@ def apply_discounts(cart, discount_codes):
         mark_code_used(cart.user_id, code)
 
     # Cap discount at total
-    max_discount = cart.subtotal * Decimal('0.5')  # Max 50% off
+    max_discount = cart.subtotal * Decimal("0.5")  # Max 50% off
     final_discount = min(total_discount, max_discount)
     cart.total -= final_discount
 ```
@@ -191,6 +199,7 @@ def checkout(cart):
     process_payment()
     for item in cart.items:
         reduce_stock(item.product_id, item.quantity)  # May oversell
+
 
 # SAFE: Reserve inventory atomically
 @transaction.atomic
@@ -216,13 +225,13 @@ def apply_coupon(code):
         return coupon.discount
     raise CouponExpired()
 
+
 # SAFE: Use database time, not application time
 from django.db.models.functions import Now
 
+
 def apply_coupon(code):
-    coupon = Coupon.objects.annotate(
-        is_valid=Q(expiry__gt=Now())
-    ).get(code=code)
+    coupon = Coupon.objects.annotate(is_valid=Q(expiry__gt=Now())).get(code=code)
 
     if not coupon.is_valid:
         raise CouponExpired()
@@ -235,13 +244,15 @@ def apply_coupon(code):
 # VULNERABLE: Trust hidden form fields
 # HTML: <input type="hidden" name="user_id" value="123">
 
-@app.route('/update-profile', methods=['POST'])
+
+@app.route("/update-profile", methods=["POST"])
 def update_profile():
-    user_id = request.form['user_id']  # Attacker can change this!
+    user_id = request.form["user_id"]  # Attacker can change this!
     User.query.get(user_id).update(...)
 
+
 # SAFE: Use session-based user identification
-@app.route('/update-profile', methods=['POST'])
+@app.route("/update-profile", methods=["POST"])
 def update_profile():
     user_id = current_user.id  # From authenticated session
     User.query.get(user_id).update(...)
@@ -256,14 +267,14 @@ def update_profile():
 ```python
 class OrderStateMachine:
     VALID_TRANSITIONS = {
-        'draft': ['submitted'],
-        'submitted': ['approved', 'rejected'],
-        'approved': ['shipped'],
-        'shipped': ['delivered', 'returned'],
-        'delivered': ['returned'],
-        'rejected': [],
-        'returned': ['refunded'],
-        'refunded': []
+        "draft": ["submitted"],
+        "submitted": ["approved", "rejected"],
+        "approved": ["shipped"],
+        "shipped": ["delivered", "returned"],
+        "delivered": ["returned"],
+        "rejected": [],
+        "returned": ["refunded"],
+        "refunded": [],
     }
 
     def transition(self, order, new_state):
@@ -279,6 +290,7 @@ class OrderStateMachine:
 ```python
 # SAFE: Idempotent operations with idempotency keys
 import hashlib
+
 
 def process_request(request_data, idempotency_key):
     # Check if request was already processed
@@ -301,6 +313,7 @@ def process_request(request_data, idempotency_key):
 from functools import wraps
 import time
 
+
 def rate_limit_action(action_name, limit, window):
     def decorator(f):
         @wraps(f)
@@ -316,14 +329,18 @@ def rate_limit_action(action_name, limit, window):
                 raise RateLimitExceeded(f"Too many {action_name} attempts")
 
             return f(*args, **kwargs)
+
         return wrapper
+
     return decorator
 
-@rate_limit_action('password_reset', limit=3, window=3600)
+
+@rate_limit_action("password_reset", limit=3, window=3600)
 def request_password_reset(email):
     pass
 
-@rate_limit_action('transfer', limit=10, window=86400)
+
+@rate_limit_action("transfer", limit=10, window=86400)
 def transfer_funds(from_account, to_account, amount):
     pass
 ```
@@ -337,7 +354,7 @@ def transfer_funds(from_account, to_account, amount):
 ```python
 # Always recalculate on server
 def calculate_order_total(order):
-    subtotal = Decimal('0')
+    subtotal = Decimal("0")
     for item in order.items:
         # Get current price from database, not from request
         product = Product.query.get(item.product_id)
@@ -353,17 +370,12 @@ def calculate_order_total(order):
     total = subtotal + tax - discount
 
     # Sanity checks
-    if total < Decimal('0'):
+    if total < Decimal("0"):
         raise InvalidOrderError("Negative total")
     if discount > subtotal:
         raise InvalidOrderError("Discount exceeds subtotal")
 
-    return {
-        'subtotal': subtotal,
-        'tax': tax,
-        'discount': discount,
-        'total': total
-    }
+    return {"subtotal": subtotal, "tax": tax, "discount": discount, "total": total}
 ```
 
 ### Business Rule Enforcement

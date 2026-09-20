@@ -155,7 +155,7 @@ if command not in ALLOWED_COMMANDS:
     raise ValueError("Invalid command")
 
 # Validate arguments against safe patterns
-if not re.match(r'^[a-zA-Z0-9_\-\.]+$', filename):
+if not re.match(r"^[a-zA-Z0-9_\-\.]+$", filename):
     raise ValueError("Invalid filename")
 ```
 

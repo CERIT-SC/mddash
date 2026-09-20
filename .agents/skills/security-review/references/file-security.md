@@ -12,10 +12,11 @@ File operations present multiple security risks: path traversal attacks, malicio
 
 ```python
 # VULNERABLE: User-controlled path
-@app.route('/download')
+@app.route("/download")
 def download():
-    filename = request.args.get('file')
-    return send_file(f'/uploads/{filename}')
+    filename = request.args.get("file")
+    return send_file(f"/uploads/{filename}")
+
 
 # Attack: ?file=../../../etc/passwd
 # Results in: /uploads/../../../etc/passwd → /etc/passwd
@@ -26,6 +27,7 @@ def download():
 ```python
 import os
 from pathlib import Path
+
 
 # Method 1: Validate and canonicalize path
 def safe_join(base_directory, user_path):
@@ -40,13 +42,16 @@ def safe_join(base_directory, user_path):
 
     return str(target)
 
+
 # Method 2: Use allowlist of files
-ALLOWED_FILES = {'report.pdf', 'manual.pdf', 'readme.txt'}
+ALLOWED_FILES = {"report.pdf", "manual.pdf", "readme.txt"}
+
 
 def download_file(filename):
     if filename not in ALLOWED_FILES:
         raise ValueError("File not allowed")
     return send_file(os.path.join(UPLOAD_DIR, filename))
+
 
 # Method 3: Use indirect references
 def get_file_by_id(file_id):
@@ -62,14 +67,15 @@ def get_file_by_id(file_id):
 ```python
 # Dangerous path patterns
 BLOCKED_PATTERNS = [
-    '..',           # Parent directory
-    '~',            # Home directory
-    '%2e%2e',       # URL-encoded ..
-    '%252e%252e',   # Double-encoded ..
-    '..\\',         # Windows backslash
-    '..%5c',        # URL-encoded Windows
-    '%00',          # Null byte (older systems)
+    "..",  # Parent directory
+    "~",  # Home directory
+    "%2e%2e",  # URL-encoded ..
+    "%252e%252e",  # Double-encoded ..
+    "..\\",  # Windows backslash
+    "..%5c",  # URL-encoded Windows
+    "%00",  # Null byte (older systems)
 ]
+
 
 def contains_traversal(path):
     path_lower = path.lower()
@@ -89,15 +95,11 @@ import uuid
 from pathlib import Path
 
 # Configuration
-ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'gif'}
-ALLOWED_MIMETYPES = {
-    'application/pdf',
-    'image/png',
-    'image/jpeg',
-    'image/gif'
-}
+ALLOWED_EXTENSIONS = {"pdf", "png", "jpg", "jpeg", "gif"}
+ALLOWED_MIMETYPES = {"application/pdf", "image/png", "image/jpeg", "image/gif"}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
-UPLOAD_DIR = '/var/uploads'  # Outside webroot
+UPLOAD_DIR = "/var/uploads"  # Outside webroot
+
 
 def secure_upload(file):
     """Comprehensive file upload validation."""
@@ -111,7 +113,7 @@ def secure_upload(file):
 
     # 2. Validate extension
     original_filename = file.filename
-    extension = Path(original_filename).suffix.lower().lstrip('.')
+    extension = Path(original_filename).suffix.lower().lstrip(".")
     if extension not in ALLOWED_EXTENSIONS:
         raise ValueError(f"Extension not allowed: {extension}")
 
@@ -137,11 +139,11 @@ def secure_upload(file):
     os.chmod(storage_path, 0o640)
 
     return {
-        'original_name': original_filename,
-        'stored_name': safe_filename,
-        'storage_path': storage_path,
-        'size': size,
-        'mime_type': mime
+        "original_name": original_filename,
+        "stored_name": safe_filename,
+        "storage_path": storage_path,
+        "size": size,
+        "mime_type": mime,
     }
 ```
 
@@ -151,29 +153,30 @@ def secure_upload(file):
 import re
 import unicodedata
 
+
 def sanitize_filename(filename):
     """Sanitize filename for safe storage."""
     # Normalize unicode
-    filename = unicodedata.normalize('NFKD', filename)
+    filename = unicodedata.normalize("NFKD", filename)
 
     # Remove path components
     filename = os.path.basename(filename)
 
     # Remove null bytes
-    filename = filename.replace('\x00', '')
+    filename = filename.replace("\x00", "")
 
     # Allow only safe characters
-    filename = re.sub(r'[^a-zA-Z0-9._-]', '_', filename)
+    filename = re.sub(r"[^a-zA-Z0-9._-]", "_", filename)
 
     # Prevent hidden files
-    filename = filename.lstrip('.')
+    filename = filename.lstrip(".")
 
     # Limit length
     if len(filename) > 255:
         name, ext = os.path.splitext(filename)
-        filename = name[:255-len(ext)] + ext
+        filename = name[: 255 - len(ext)] + ext
 
-    return filename or 'unnamed'
+    return filename or "unnamed"
 ```
 
 ### Image Validation
@@ -181,6 +184,7 @@ def sanitize_filename(filename):
 ```python
 from PIL import Image
 import io
+
 
 def validate_image(file_data):
     """Validate and reprocess image to strip metadata/payloads."""
@@ -209,28 +213,52 @@ def validate_image(file_data):
 # Never allow execution
 DANGEROUS_EXTENSIONS = {
     # Executables
-    'exe', 'dll', 'so', 'dylib', 'bin',
+    "exe",
+    "dll",
+    "so",
+    "dylib",
+    "bin",
     # Scripts
-    'php', 'php3', 'php4', 'php5', 'phtml',
-    'asp', 'aspx', 'ascx', 'ashx',
-    'jsp', 'jspx',
-    'cgi', 'pl', 'py', 'rb', 'sh', 'bash',
+    "php",
+    "php3",
+    "php4",
+    "php5",
+    "phtml",
+    "asp",
+    "aspx",
+    "ascx",
+    "ashx",
+    "jsp",
+    "jspx",
+    "cgi",
+    "pl",
+    "py",
+    "rb",
+    "sh",
+    "bash",
     # Server config
-    'htaccess', 'htpasswd',
-    'config', 'ini',
+    "htaccess",
+    "htpasswd",
+    "config",
+    "ini",
     # HTML (XSS risk)
-    'html', 'htm', 'xhtml', 'svg',
+    "html",
+    "htm",
+    "xhtml",
+    "svg",
     # Office macros
-    'docm', 'xlsm', 'pptm',
+    "docm",
+    "xlsm",
+    "pptm",
 }
 
 # Dangerous MIME types
 DANGEROUS_MIMETYPES = {
-    'application/x-executable',
-    'application/x-msdownload',
-    'application/x-php',
-    'text/html',
-    'image/svg+xml',  # Can contain scripts
+    "application/x-executable",
+    "application/x-msdownload",
+    "application/x-php",
+    "text/html",
+    "image/svg+xml",  # Can contain scripts
 }
 ```
 
@@ -254,20 +282,18 @@ DANGEROUS_MIMETYPES = {
 ```python
 # VULNERABLE: Default lxml settings
 from lxml import etree
+
 doc = etree.parse(untrusted_file)  # XXE enabled by default
 
 # SAFE: Disable external entities
 from lxml import etree
-parser = etree.XMLParser(
-    resolve_entities=False,
-    no_network=True,
-    dtd_validation=False,
-    load_dtd=False
-)
+
+parser = etree.XMLParser(resolve_entities=False, no_network=True, dtd_validation=False, load_dtd=False)
 doc = etree.parse(untrusted_file, parser)
 
 # SAFE: defusedxml library (recommended)
 import defusedxml.ElementTree as ET
+
 doc = ET.parse(untrusted_file)  # XXE disabled by default
 ```
 
@@ -313,11 +339,12 @@ XmlReader reader = XmlReader.Create(stream, settings);
 import zipfile
 import os
 
+
 def safe_extract(zip_path, extract_dir):
     """Safely extract ZIP, preventing path traversal."""
     extract_dir = os.path.abspath(extract_dir)
 
-    with zipfile.ZipFile(zip_path, 'r') as zf:
+    with zipfile.ZipFile(zip_path, "r") as zf:
         for member in zf.namelist():
             # Get absolute path of extracted file
             member_path = os.path.abspath(os.path.join(extract_dir, member))
@@ -327,11 +354,11 @@ def safe_extract(zip_path, extract_dir):
                 raise ValueError(f"Path traversal in ZIP: {member}")
 
             # Check for symlinks (additional safety)
-            if member.endswith('/'):
+            if member.endswith("/"):
                 os.makedirs(member_path, exist_ok=True)
             else:
                 os.makedirs(os.path.dirname(member_path), exist_ok=True)
-                with zf.open(member) as source, open(member_path, 'wb') as target:
+                with zf.open(member) as source, open(member_path, "wb") as target:
                     target.write(source.read())
 ```
 
@@ -341,11 +368,12 @@ def safe_extract(zip_path, extract_dir):
 MAX_UNCOMPRESSED_SIZE = 100 * 1024 * 1024  # 100MB
 MAX_COMPRESSION_RATIO = 100
 
+
 def check_zip_bomb(zip_path):
     """Detect potential zip bombs."""
     compressed_size = os.path.getsize(zip_path)
 
-    with zipfile.ZipFile(zip_path, 'r') as zf:
+    with zipfile.ZipFile(zip_path, "r") as zf:
         uncompressed_size = sum(info.file_size for info in zf.infolist())
 
         # Check total size
@@ -371,13 +399,16 @@ def check_zip_bomb(zip_path):
 import os
 import stat
 
+
 # Uploaded files: readable by app, not executable
 def secure_file_permissions(path):
     os.chmod(path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP)  # 640
 
+
 # Directories: accessible by app
 def secure_directory_permissions(path):
     os.chmod(path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)  # 750
+
 
 # Sensitive files: only owner
 def sensitive_file_permissions(path):
@@ -391,11 +422,11 @@ import tempfile
 import os
 
 # VULNERABLE: Predictable temp file
-with open('/tmp/myapp_temp.txt', 'w') as f:
+with open("/tmp/myapp_temp.txt", "w") as f:
     f.write(sensitive_data)
 
 # SAFE: Secure temp file
-with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
     f.write(sensitive_data)
     temp_path = f.name
     # File has restrictive permissions automatically

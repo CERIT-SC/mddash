@@ -18,6 +18,7 @@ def login(username, password):
         return create_session(user)
     return None  # Failed login not logged
 
+
 def change_password(user, old_pass, new_pass):
     if verify_password(old_pass, user.password):
         user.password = hash_password(new_pass)
@@ -30,7 +31,8 @@ def change_password(user, old_pass, new_pass):
 import logging
 from datetime import datetime
 
-security_logger = logging.getLogger('security')
+security_logger = logging.getLogger("security")
+
 
 # Authentication events
 def login(username, password):
@@ -39,39 +41,36 @@ def login(username, password):
         security_logger.info(
             "login_success",
             extra={
-                'user_id': user.id,
-                'username': username,
-                'ip': request.remote_addr,
-                'user_agent': request.user_agent.string,
-                'timestamp': datetime.utcnow().isoformat()
-            }
+                "user_id": user.id,
+                "username": username,
+                "ip": request.remote_addr,
+                "user_agent": request.user_agent.string,
+                "timestamp": datetime.utcnow().isoformat(),
+            },
         )
         return create_session(user)
     else:
         security_logger.warning(
             "login_failure",
             extra={
-                'username': username,
-                'ip': request.remote_addr,
-                'reason': 'invalid_credentials',
-                'timestamp': datetime.utcnow().isoformat()
-            }
+                "username": username,
+                "ip": request.remote_addr,
+                "reason": "invalid_credentials",
+                "timestamp": datetime.utcnow().isoformat(),
+            },
         )
         return None
+
 
 # Access control events
 def access_resource(user, resource):
     if not user.can_access(resource):
         security_logger.warning(
             "access_denied",
-            extra={
-                'user_id': user.id,
-                'resource': resource.id,
-                'action': 'read',
-                'ip': request.remote_addr
-            }
+            extra={"user_id": user.id, "resource": resource.id, "action": "read", "ip": request.remote_addr},
         )
         raise PermissionDenied()
+
 
 # Critical data changes
 def update_user_role(admin, user, new_role):
@@ -80,12 +79,7 @@ def update_user_role(admin, user, new_role):
     user.save()
     security_logger.info(
         "role_change",
-        extra={
-            'admin_id': admin.id,
-            'target_user_id': user.id,
-            'old_role': old_role,
-            'new_role': new_role
-        }
+        extra={"admin_id": admin.id, "target_user_id": user.id, "old_role": old_role, "new_role": new_role},
     )
 ```
 
@@ -136,21 +130,24 @@ logger.info(f"Payment with card: {card_number}")
 # SAFE: Never log credentials
 logger.info(f"Login attempt for user: {username}")  # No password
 
+
 # SAFE: Mask sensitive data
 def mask_token(token):
     if len(token) > 8:
-        return token[:4] + '****' + token[-4:]
-    return '****'
+        return token[:4] + "****" + token[-4:]
+    return "****"
+
 
 logger.info(f"API request with key: {mask_token(api_key)}")
 
+
 # SAFE: Redact PII
 def redact_pii(data):
-    sensitive_fields = {'password', 'ssn', 'credit_card', 'api_key', 'token'}
+    sensitive_fields = {"password", "ssn", "credit_card", "api_key", "token"}
     if isinstance(data, dict):
-        return {k: '[REDACTED]' if k in sensitive_fields else v
-                for k, v in data.items()}
+        return {k: "[REDACTED]" if k in sensitive_fields else v for k, v in data.items()}
     return data
+
 
 logger.debug(f"Request data: {redact_pii(request.json)}")
 
@@ -158,11 +155,11 @@ logger.debug(f"Request data: {redact_pii(request.json)}")
 logger.info(
     "payment_processed",
     extra={
-        'user_id': user.id,
-        'amount': amount,
-        'card_last_four': card_number[-4:],  # Only last 4
-        'transaction_id': txn_id
-    }
+        "user_id": user.id,
+        "amount": amount,
+        "card_last_four": card_number[-4:],  # Only last 4
+        "transaction_id": txn_id,
+    },
 )
 ```
 
@@ -199,25 +196,31 @@ logger.info("User %s performed action" % user_input)
 # SAFE: Sanitize input before logging
 import re
 
+
 def sanitize_log_input(value):
     """Remove newlines and control characters."""
     if isinstance(value, str):
         # Remove newlines and carriage returns
-        value = value.replace('\n', '\\n').replace('\r', '\\r')
+        value = value.replace("\n", "\\n").replace("\r", "\\r")
         # Remove other control characters
-        value = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', value)
+        value = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", value)
     return value
+
 
 logger.info(f"User search: {sanitize_log_input(user_input)}")
 
 # SAFE: Use structured logging (JSON)
 import json_logging
+
 json_logging.init_non_web()
 
-logger.info("search_performed", extra={
-    'query': user_input,  # JSON encoding handles special chars
-    'user_id': user.id
-})
+logger.info(
+    "search_performed",
+    extra={
+        "query": user_input,  # JSON encoding handles special chars
+        "user_id": user.id,
+    },
+)
 
 # SAFE: Use parameterized logging
 logger.info("User %s searched for %s", user_id, sanitize_log_input(query))
@@ -231,14 +234,14 @@ logger.info("User %s searched for %s", user_id, sanitize_log_input(query))
 
 ```python
 # VULNERABLE: World-readable log files
-logging.basicConfig(filename='/var/log/app.log')
-os.chmod('/var/log/app.log', 0o644)  # Anyone can read
+logging.basicConfig(filename="/var/log/app.log")
+os.chmod("/var/log/app.log", 0o644)  # Anyone can read
 
 # VULNERABLE: Logs in web-accessible directory
-logging.basicConfig(filename='/var/www/html/logs/app.log')
+logging.basicConfig(filename="/var/www/html/logs/app.log")
 
 # VULNERABLE: No log rotation (can fill disk)
-logging.basicConfig(filename='app.log')  # Grows forever
+logging.basicConfig(filename="app.log")  # Grows forever
 ```
 
 ### Secure Log Configuration
@@ -248,11 +251,11 @@ logging.basicConfig(filename='app.log')  # Grows forever
 import os
 from logging.handlers import RotatingFileHandler
 
-log_file = '/var/log/app/security.log'
+log_file = "/var/log/app/security.log"
 handler = RotatingFileHandler(
     log_file,
-    maxBytes=10*1024*1024,  # 10MB
-    backupCount=10
+    maxBytes=10 * 1024 * 1024,  # 10MB
+    backupCount=10,
 )
 
 # Set restrictive permissions
@@ -262,8 +265,8 @@ os.chmod(log_file, 0o600)  # Owner only
 import logging.handlers
 
 syslog_handler = logging.handlers.SysLogHandler(
-    address=('secure-syslog.company.com', 514),
-    socktype=socket.SOCK_STREAM  # TCP for reliability
+    address=("secure-syslog.company.com", 514),
+    socktype=socket.SOCK_STREAM,  # TCP for reliability
 )
 # Use TLS for syslog transport
 ```
@@ -278,21 +281,22 @@ syslog_handler = logging.handlers.SysLogHandler(
 # These should trigger immediate alerts, not just logging
 
 ALERT_THRESHOLDS = {
-    'failed_logins': 5,        # Per user per hour
-    'access_denied': 10,       # Per user per hour
-    'admin_login': 1,          # Any admin login from new IP
-    'privilege_escalation': 1, # Any role change
-    'data_export': 1,          # Large data exports
+    "failed_logins": 5,  # Per user per hour
+    "access_denied": 10,  # Per user per hour
+    "admin_login": 1,  # Any admin login from new IP
+    "privilege_escalation": 1,  # Any role change
+    "data_export": 1,  # Large data exports
 }
+
 
 def check_alert_threshold(event_type, user_id):
     count = get_recent_event_count(event_type, user_id, hours=1)
-    if count >= ALERT_THRESHOLDS.get(event_type, float('inf')):
+    if count >= ALERT_THRESHOLDS.get(event_type, float("inf")):
         send_security_alert(
             event_type=event_type,
             user_id=user_id,
             count=count,
-            severity='high' if event_type in ['admin_login', 'privilege_escalation'] else 'medium'
+            severity="high" if event_type in ["admin_login", "privilege_escalation"] else "medium",
         )
 ```
 
@@ -302,25 +306,21 @@ def check_alert_threshold(event_type, user_id):
 # Security monitoring rules
 MONITORING_RULES = [
     {
-        'name': 'brute_force_detection',
-        'condition': 'failed_logins > 5 in 5 minutes from same IP',
-        'action': 'block_ip, alert_security_team'
+        "name": "brute_force_detection",
+        "condition": "failed_logins > 5 in 5 minutes from same IP",
+        "action": "block_ip, alert_security_team",
     },
     {
-        'name': 'impossible_travel',
-        'condition': 'login from geographically impossible location',
-        'action': 'require_mfa, alert_user'
+        "name": "impossible_travel",
+        "condition": "login from geographically impossible location",
+        "action": "require_mfa, alert_user",
     },
+    {"name": "off_hours_admin", "condition": "admin action outside business hours", "action": "alert_security_team"},
     {
-        'name': 'off_hours_admin',
-        'condition': 'admin action outside business hours',
-        'action': 'alert_security_team'
+        "name": "mass_data_access",
+        "condition": "data export > 10000 records",
+        "action": "alert_security_team, require_approval",
     },
-    {
-        'name': 'mass_data_access',
-        'condition': 'data export > 10000 records',
-        'action': 'alert_security_team, require_approval'
-    }
 ]
 ```
 
@@ -335,6 +335,7 @@ MONITORING_RULES = [
 def delete_audit_log(log_id):
     AuditLog.query.filter_by(id=log_id).delete()  # Can be deleted
 
+
 # SAFE: Append-only audit logs
 class AuditLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -348,21 +349,15 @@ class AuditLog(db.Model):
     def create(cls, event_type, user_id, details):
         # Get previous entry's checksum for chain
         prev = cls.query.order_by(cls.id.desc()).first()
-        prev_checksum = prev.checksum if prev else 'genesis'
+        prev_checksum = prev.checksum if prev else "genesis"
 
-        entry = cls(
-            timestamp=datetime.utcnow(),
-            event_type=event_type,
-            user_id=user_id,
-            details=details
-        )
+        entry = cls(timestamp=datetime.utcnow(), event_type=event_type, user_id=user_id, details=details)
         # Chain checksum
-        entry.checksum = hashlib.sha256(
-            f"{prev_checksum}{entry.timestamp}{entry.event_type}".encode()
-        ).hexdigest()
+        entry.checksum = hashlib.sha256(f"{prev_checksum}{entry.timestamp}{entry.event_type}".encode()).hexdigest()
         db.session.add(entry)
         db.session.commit()
         return entry
+
 
 # No delete method - audit logs are immutable
 ```
@@ -372,12 +367,13 @@ class AuditLog(db.Model):
 ```python
 # Configure retention based on compliance requirements
 LOG_RETENTION = {
-    'security_events': 365,      # 1 year
-    'authentication': 90,         # 90 days
-    'access_logs': 30,           # 30 days
-    'debug_logs': 7,             # 7 days
-    'audit_trail': 2555,         # 7 years (compliance)
+    "security_events": 365,  # 1 year
+    "authentication": 90,  # 90 days
+    "access_logs": 30,  # 30 days
+    "debug_logs": 7,  # 7 days
+    "audit_trail": 2555,  # 7 years (compliance)
 }
+
 
 def cleanup_old_logs():
     for log_type, days in LOG_RETENTION.items():

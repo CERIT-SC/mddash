@@ -12,20 +12,21 @@ Security misconfiguration is one of the most common vulnerabilities. It occurs w
 
 ```python
 # VULNERABLE: No security headers
-@app.route('/')
+@app.route("/")
 def index():
-    return render_template('index.html')
+    return render_template("index.html")
+
 
 # SAFE: Security headers configured
 @app.after_request
 def add_security_headers(response):
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'DENY'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
-    response.headers['Content-Security-Policy'] = "default-src 'self'"
-    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=()'
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
     return response
 ```
 
@@ -45,6 +46,7 @@ def add_security_headers(response):
 ```python
 # VULNERABLE: Overly permissive CSP
 "Content-Security-Policy: default-src *"
+
 "Content-Security-Policy: script-src 'unsafe-inline' 'unsafe-eval'"
 
 # SAFE: Restrictive CSP
@@ -81,19 +83,17 @@ Access-Control-Allow-Origin: null
 
 ```python
 # SAFE: Explicit allowlist
-ALLOWED_ORIGINS = {
-    'https://app.example.com',
-    'https://admin.example.com'
-}
+ALLOWED_ORIGINS = {"https://app.example.com", "https://admin.example.com"}
+
 
 @app.after_request
 def add_cors(response):
-    origin = request.headers.get('Origin')
+    origin = request.headers.get("Origin")
     if origin in ALLOWED_ORIGINS:
-        response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     return response
 ```
 
@@ -129,9 +129,9 @@ if app.debug:
     pass
 
 # Check environment variables
-if os.environ.get('DEBUG') == 'true':
+if os.environ.get("DEBUG") == "true":
     pass
-if os.environ.get('FLASK_ENV') == 'development':
+if os.environ.get("FLASK_ENV") == "development":
     pass
 ```
 
@@ -143,22 +143,22 @@ if os.environ.get('FLASK_ENV') == 'development':
 
 ```python
 # VULNERABLE: Default/weak credentials
-username = 'admin'
-password = 'admin'
-password = 'password'
-password = '123456'
-password = 'changeme'
-password = 'default'
+username = "admin"
+password = "admin"
+password = "password"
+password = "123456"
+password = "changeme"
+password = "default"
 
 # VULNERABLE: Well-known default credentials
 # Database defaults
-DB_PASSWORD = 'root'
-DB_PASSWORD = 'postgres'
-DB_PASSWORD = 'mysql'
+DB_PASSWORD = "root"
+DB_PASSWORD = "postgres"
+DB_PASSWORD = "mysql"
 
 # Admin panel defaults
-ADMIN_PASSWORD = 'admin123'
-SECRET_KEY = 'development-secret-key'
+ADMIN_PASSWORD = "admin123"
+SECRET_KEY = "development-secret-key"
 ```
 
 ### Configuration Files to Check
@@ -237,8 +237,8 @@ urllib3.disable_warnings()
 ssl_context.minimum_version = ssl.TLSVersion.TLSv1  # Use TLS 1.2+
 
 # VULNERABLE: Weak cipher suites
-ssl_context.set_ciphers('ALL')
-ssl_context.set_ciphers('DEFAULT')
+ssl_context.set_ciphers("ALL")
+ssl_context.set_ciphers("DEFAULT")
 ```
 
 ### Secure Configuration
@@ -249,7 +249,7 @@ import ssl
 
 context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 context.minimum_version = ssl.TLSVersion.TLSv1_2
-context.set_ciphers('ECDHE+AESGCM:DHE+AESGCM:ECDHE+CHACHA20')
+context.set_ciphers("ECDHE+AESGCM:DHE+AESGCM:ECDHE+CHACHA20")
 context.verify_mode = ssl.CERT_REQUIRED
 context.check_hostname = True
 ```
@@ -294,14 +294,15 @@ Options -Indexes
 @app.errorhandler(Exception)
 def handle_error(e):
     return jsonify({
-        'error': str(e),
-        'traceback': traceback.format_exc(),
-        'query': last_executed_query,
-        'config': app.config
+        "error": str(e),
+        "traceback": traceback.format_exc(),
+        "query": last_executed_query,
+        "config": app.config,
     }), 500
 
+
 # VULNERABLE: Stack traces exposed
-app.config['PROPAGATE_EXCEPTIONS'] = True
+app.config["PROPAGATE_EXCEPTIONS"] = True
 ```
 
 ### Secure Error Handling
@@ -311,7 +312,7 @@ app.config['PROPAGATE_EXCEPTIONS'] = True
 @app.errorhandler(Exception)
 def handle_error(e):
     app.logger.error(f"Error: {e}", exc_info=True)  # Log details server-side
-    return jsonify({'error': 'An unexpected error occurred'}), 500
+    return jsonify({"error": "An unexpected error occurred"}), 500
 ```
 
 ---
@@ -322,10 +323,10 @@ def handle_error(e):
 
 ```python
 # VULNERABLE: Insecure cookie settings
-response.set_cookie('session', value)  # Missing flags
+response.set_cookie("session", value)  # Missing flags
 
 # VULNERABLE: Explicit insecure flags
-response.set_cookie('session', value, secure=False, httponly=False, samesite='None')
+response.set_cookie("session", value, secure=False, httponly=False, samesite="None")
 ```
 
 ### Secure Cookie Configuration
@@ -333,20 +334,20 @@ response.set_cookie('session', value, secure=False, httponly=False, samesite='No
 ```python
 # SAFE: Secure cookie settings
 response.set_cookie(
-    'session',
+    "session",
     value,
-    secure=True,       # HTTPS only
-    httponly=True,     # No JavaScript access
-    samesite='Lax',    # CSRF protection
-    max_age=3600,      # Reasonable expiration
-    path='/',
-    domain='.example.com'
+    secure=True,  # HTTPS only
+    httponly=True,  # No JavaScript access
+    samesite="Lax",  # CSRF protection
+    max_age=3600,  # Reasonable expiration
+    path="/",
+    domain=".example.com",
 )
 
 # Flask session configuration
-app.config['SESSION_COOKIE_SECURE'] = True
-app.config['SESSION_COOKIE_HTTPONLY'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 ```
 
 ---
@@ -370,7 +371,7 @@ os.umask(0o000)
 # SAFE: Restrictive permissions
 os.chmod(config_file, 0o600)  # Owner read/write only
 os.chmod(private_key, 0o400)  # Owner read only
-os.chmod(script, 0o700)       # Owner execute only
+os.chmod(script, 0o700)  # Owner execute only
 ```
 
 ---
@@ -391,11 +392,12 @@ os.chmod(script, 0o700)       # Owner execute only
 
 ```python
 # SAFE: Explicit method restrictions
-@app.route('/api/data', methods=['GET'])
+@app.route("/api/data", methods=["GET"])
 def get_data():
     pass
 
-@app.route('/api/data', methods=['POST'])
+
+@app.route("/api/data", methods=["POST"])
 @require_auth
 def create_data():
     pass

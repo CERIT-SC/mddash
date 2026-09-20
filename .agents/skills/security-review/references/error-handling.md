@@ -16,17 +16,14 @@ Improper error handling can lead to information disclosure, denial of service, o
 def handle_error(e):
     return f"Error: {traceback.format_exc()}", 500
 
+
 # VULNERABLE: Detailed exception info
-@app.route('/api/user/<id>')
+@app.route("/api/user/<id>")
 def get_user(id):
     try:
         return User.query.get(id).to_dict()
     except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'type': type(e).__name__,
-            'args': e.args
-        }), 500
+        return jsonify({"error": str(e), "type": type(e).__name__, "args": e.args}), 500
 ```
 
 ### Secure Error Handling
@@ -37,19 +34,22 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 @app.errorhandler(Exception)
 def handle_error(e):
     # Log full details server-side
     logger.error(f"Unhandled exception: {e}", exc_info=True)
 
     # Return generic message to client
-    return jsonify({'error': 'An internal error occurred'}), 500
+    return jsonify({"error": "An internal error occurred"}), 500
+
 
 # SAFE: Custom exceptions with safe messages
 class UserNotFoundError(Exception):
     pass
 
-@app.route('/api/user/<id>')
+
+@app.route("/api/user/<id>")
 def get_user(id):
     try:
         user = User.query.get(id)
@@ -57,10 +57,10 @@ def get_user(id):
             raise UserNotFoundError()
         return user.to_dict()
     except UserNotFoundError:
-        return jsonify({'error': 'User not found'}), 404
+        return jsonify({"error": "User not found"}), 404
     except Exception:
         logger.exception("Error fetching user")
-        return jsonify({'error': 'Internal error'}), 500
+        return jsonify({"error": "Internal error"}), 500
 ```
 
 ---
@@ -78,6 +78,7 @@ def authenticate(token):
     except Exception:
         return None  # Returns None, might be treated as valid
 
+
 # VULNERABLE: Exception allows bypass
 def check_permission(user, resource):
     try:
@@ -85,8 +86,9 @@ def check_permission(user, resource):
     except ServiceUnavailable:
         return True  # DANGEROUS: Allows access on service failure
 
+
 # VULNERABLE: Default to authorized on error
-@app.route('/admin')
+@app.route("/admin")
 def admin():
     try:
         if not is_admin(current_user):
@@ -110,6 +112,7 @@ def authenticate(token):
         logger.error(f"Auth error: {e}")
         raise AuthenticationError("Authentication failed")
 
+
 # SAFE: Deny on service unavailable
 def check_permission(user, resource):
     try:
@@ -118,8 +121,9 @@ def check_permission(user, resource):
         logger.error("Permission service unavailable")
         return False  # Deny access when unable to verify
 
+
 # SAFE: Explicit denial on error
-@app.route('/admin')
+@app.route("/admin")
 def admin():
     try:
         if not is_admin(current_user):
@@ -164,10 +168,10 @@ try:
     validate_input(user_input)
 except ValidationError as e:
     logger.warning(f"Validation failed: {e}")
-    return jsonify({'error': 'Invalid input'}), 400
+    return jsonify({"error": "Invalid input"}), 400
 except Exception as e:
     logger.error(f"Unexpected validation error: {e}")
-    return jsonify({'error': 'Validation error'}), 500
+    return jsonify({"error": "Validation error"}), 500
 
 # SAFE: Never silently swallow security-critical exceptions
 try:
@@ -188,14 +192,15 @@ except ValueError as e:
 
 ```python
 # VULNERABLE: Different messages reveal user existence
-@app.route('/login', methods=['POST'])
+@app.route("/login", methods=["POST"])
 def login():
     user = User.query.filter_by(email=email).first()
     if not user:
-        return jsonify({'error': 'User not found'}), 401  # Reveals user doesn't exist
+        return jsonify({"error": "User not found"}), 401  # Reveals user doesn't exist
     if not check_password(password, user.password):
-        return jsonify({'error': 'Wrong password'}), 401  # Reveals user exists
+        return jsonify({"error": "Wrong password"}), 401  # Reveals user exists
     return create_session(user)
+
 
 # VULNERABLE: Timing difference reveals user existence
 def login(email, password):
@@ -209,15 +214,17 @@ def login(email, password):
 
 ```python
 # SAFE: Consistent error messages
-@app.route('/login', methods=['POST'])
+@app.route("/login", methods=["POST"])
 def login():
     user = User.query.filter_by(email=email).first()
     if not user or not check_password(password, user.password):
-        return jsonify({'error': 'Invalid credentials'}), 401  # Same message
+        return jsonify({"error": "Invalid credentials"}), 401  # Same message
     return create_session(user)
 
+
 # SAFE: Constant-time comparison with dummy hash
-DUMMY_HASH = generate_password_hash('dummy')
+DUMMY_HASH = generate_password_hash("dummy")
+
 
 def login(email, password):
     user = User.query.filter_by(email=email).first()
@@ -237,28 +244,28 @@ def login(email, password):
 
 ```python
 # VULNERABLE: Attacker can fill logs
-@app.route('/api/data')
+@app.route("/api/data")
 def get_data():
     try:
         return process_data(request.json)
     except Exception as e:
         # Logs entire request body - attacker sends huge payloads
         logger.error(f"Error processing: {request.json}")
-        return jsonify({'error': 'Error'}), 500
+        return jsonify({"error": "Error"}), 500
 ```
 
 ### Secure Logging
 
 ```python
 # SAFE: Limit logged data
-@app.route('/api/data')
+@app.route("/api/data")
 def get_data():
     try:
         return process_data(request.json)
     except Exception as e:
         # Log limited info, not full payload
         logger.error(f"Error processing request from {request.remote_addr}")
-        return jsonify({'error': 'Error'}), 500
+        return jsonify({"error": "Error"}), 500
 ```
 
 ---
@@ -320,13 +327,13 @@ process.on('unhandledRejection', (reason, promise) => {
 
 ```python
 # VULNERABLE: Database errors exposed
-@app.route('/api/search')
+@app.route("/api/search")
 def search():
     try:
         results = db.execute(f"SELECT * FROM items WHERE name = '{query}'")
         return jsonify(results)
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({"error": str(e)}), 500
         # Exposes: "syntax error at or near 'OR'" - reveals SQL injection possibility
 ```
 
@@ -334,14 +341,14 @@ def search():
 
 ```python
 # SAFE: Generic database errors
-@app.route('/api/search')
+@app.route("/api/search")
 def search():
     try:
         results = db.execute("SELECT * FROM items WHERE name = %s", (query,))
         return jsonify(results)
     except DatabaseError as e:
         logger.error(f"Database error: {e}")
-        return jsonify({'error': 'Search failed'}), 500
+        return jsonify({"error": "Search failed"}), 500
 ```
 
 ---
@@ -357,6 +364,7 @@ def process_file(filename):
     data = f.read()
     process(data)  # If this raises, file handle leaks
     f.close()
+
 
 # VULNERABLE: Connection not returned to pool
 def query_db():
@@ -374,6 +382,7 @@ def process_file(filename):
     with open(filename) as f:
         data = f.read()
         process(data)  # File closed even on exception
+
 
 # SAFE: Try-finally for cleanup
 def query_db():

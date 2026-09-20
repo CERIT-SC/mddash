@@ -35,6 +35,7 @@
 ```python
 # VULNERABLE: ECB mode
 from Crypto.Cipher import AES
+
 cipher = AES.new(key, AES.MODE_ECB)
 
 # SAFE: GCM mode
@@ -73,10 +74,12 @@ ciphertext, tag = cipher.encrypt_and_digest(plaintext)
 ```python
 # VULNERABLE: Predictable random
 import random
-token = ''.join(random.choices(string.ascii_letters, k=32))
+
+token = "".join(random.choices(string.ascii_letters, k=32))
 
 # SAFE: Cryptographically secure
 import secrets
+
 token = secrets.token_urlsafe(32)
 ```
 
@@ -89,6 +92,7 @@ token = secrets.token_urlsafe(32)
 ```python
 # Check if UUID v4 is actually random
 import uuid
+
 # uuid.uuid4() uses os.urandom() in Python - SAFE
 token = str(uuid.uuid4())
 ```
@@ -105,6 +109,7 @@ key = password.encode()
 
 # SAFE: Key derivation function
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
 kdf = PBKDF2HMAC(
     algorithm=hashes.SHA256(),
     length=32,
@@ -130,13 +135,13 @@ key = kdf.derive(password.encode())
 
 ```python
 # VULNERABLE: Hardcoded key
-KEY = b'super_secret_key_12345'
+KEY = b"super_secret_key_12345"
 
 # VULNERABLE: Key in code as base64
-KEY = base64.b64decode('c3VwZXJfc2VjcmV0X2tleQ==')
+KEY = base64.b64decode("c3VwZXJfc2VjcmV0X2tleQ==")
 
 # SAFE: Load from secure source
-KEY = secrets_manager.get_secret('encryption_key')
+KEY = secrets_manager.get_secret("encryption_key")
 ```
 
 ### Key Rotation
@@ -159,6 +164,7 @@ KEY = secrets_manager.get_secret('encryption_key')
 # - Data Encryption Key (DEK): Encrypts actual data
 # - Key Encryption Key (KEK): Encrypts the DEK
 
+
 def encrypt_with_envelope(plaintext, kek):
     # Generate random DEK
     dek = secrets.token_bytes(32)
@@ -173,12 +179,12 @@ def encrypt_with_envelope(plaintext, kek):
 
     # Store encrypted_dek with ciphertext
     return {
-        'ciphertext': ciphertext,
-        'tag': tag,
-        'encrypted_dek': encrypted_dek,
-        'dek_tag': dek_tag,
-        'nonce': cipher.nonce,
-        'dek_nonce': kek_cipher.nonce
+        "ciphertext": ciphertext,
+        "tag": tag,
+        "encrypted_dek": encrypted_dek,
+        "dek_tag": dek_tag,
+        "nonce": cipher.nonce,
+        "dek_nonce": kek_cipher.nonce,
     }
 ```
 
@@ -206,10 +212,12 @@ See `authentication.md` for password-specific hashing.
 ```python
 # For integrity/checksums
 import hashlib
+
 digest = hashlib.sha256(data).hexdigest()
 
 # For authentication (HMAC)
 import hmac
+
 mac = hmac.new(key, data, hashlib.sha256).digest()
 ```
 
@@ -222,6 +230,7 @@ mac = hmac.new(key, data, hashlib.sha256).digest()
 ```python
 # VULNERABLE: MD5 for security purposes
 import hashlib
+
 checksum = hashlib.md5(data).hexdigest()
 
 # VULNERABLE: SHA1 for signatures
@@ -235,7 +244,7 @@ checksum = hashlib.sha256(data).hexdigest()
 
 ```python
 # VULNERABLE: Short key
-key = b'short_key'  # 9 bytes
+key = b"short_key"  # 9 bytes
 
 # SAFE: Adequate key length
 key = secrets.token_bytes(32)  # 256 bits
@@ -245,10 +254,10 @@ key = secrets.token_bytes(32)  # 256 bits
 
 ```python
 # VULNERABLE: Reused or predictable nonce
-nonce = b'\x00' * 12  # Static nonce
+nonce = b"\x00" * 12  # Static nonce
 
 # VULNERABLE: Counter-based without persistence
-nonce = counter.to_bytes(12, 'big')
+nonce = counter.to_bytes(12, "big")
 
 # SAFE: Random nonce
 nonce = secrets.token_bytes(12)
