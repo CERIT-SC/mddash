@@ -102,7 +102,7 @@ resources:
       limit: 1
   notebookQuota:
     # Max concurrent notebook pods per user namespace
-    maxConcurrent: 2
+    maxConcurrent: 1  # TODO: change back to 2 after user testing is over
   notebook:
     # Idle timeout in seconds: kernels are culled and the server shuts down after this period
     idleTimeoutSeconds: 3600
