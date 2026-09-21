@@ -324,7 +324,7 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
               {active || publish.isPending ? (
                 <Button type="button" disabled>
                   <LoaderCircle className="animate-spin" aria-hidden />
-                  {active ? "Uploading…" : "Publishing…"}
+                  Uploading…
                 </Button>
               ) : (
                 <Button type="button" onClick={handlePublish}>
