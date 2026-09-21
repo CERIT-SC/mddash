@@ -9,7 +9,8 @@ uv tool install ruff
 uv tool install ty
 uv tool install zizmor
 
-npm install -g @playwright/cli@latest
+pnpm config set global-bin-dir /home/vscode/.local/bin --location=global
+pnpm add -g @playwright/cli@latest
 playwright-cli install-browser chromium --with-deps
 
 # Install frontend workspace dependencies
