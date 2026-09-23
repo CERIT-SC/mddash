@@ -3,7 +3,7 @@
 
 import * as React from "react"
 
-import { cn } from "@e-infra/design-system"
+import { cn, Tooltip, TooltipContent, TooltipTrigger } from "@e-infra/design-system"
 import { Check } from "lucide-react"
 
 export interface Step {
@@ -11,6 +11,8 @@ export interface Step {
   description?: string
   icon?: React.ComponentType<{ className?: string }>
   progress?: number | null
+  /** Tooltip explaining why the marker is locked; rendered while the marker is unreachable. */
+  lockedTitle?: string
 }
 
 interface StepperContextValue {
@@ -106,6 +108,7 @@ export function StepperHeader({ steps = [], className, maxStep, unlockedIndexes 
     label: steps[index]?.label ?? `Step ${String(index + 1)}`,
     icon: steps[index]?.icon,
     progress: steps[index]?.progress,
+    lockedTitle: steps[index]?.lockedTitle,
   }))
   const currentStepLabel = stepItems[activeStepIndex]?.label ?? `Step ${String(activeStepIndex + 1)}`
 
@@ -147,13 +150,15 @@ export function StepperHeader({ steps = [], className, maxStep, unlockedIndexes 
                 const reachable = maxStep === undefined || index <= maxStep || unlockedIndexes.includes(index)
                 const progressLabel = inProgress ? `, ${String(step.progress)}% complete` : ""
 
-                return (
+                // aria-disabled (not disabled) keeps hover events flowing for the lock reason tooltip.
+                const lockReason = !reachable ? step.lockedTitle : undefined
+                const marker = (
                   <button
                     key={`${step.label}-${String(index)}`}
                     type="button"
-                    disabled={!reachable}
+                    aria-disabled={!reachable || undefined}
                     onClick={() => {
-                      goToStep(index)
+                      if (reachable) goToStep(index)
                     }}
                     aria-current={isCurrent ? "step" : undefined}
                     aria-label={`Go to section ${String(index + 1)}: ${step.label}${progressLabel}`}
@@ -205,6 +210,13 @@ export function StepperHeader({ steps = [], className, maxStep, unlockedIndexes 
                       {inProgress && <> · {step.progress}%</>}
                     </span>
                   </button>
+                )
+                if (lockReason === undefined) return marker
+                return (
+                  <Tooltip key={`${step.label}-${String(index)}-lock`}>
+                    <TooltipTrigger asChild>{marker}</TooltipTrigger>
+                    <TooltipContent>{lockReason}</TooltipContent>
+                  </Tooltip>
                 )
               })}
             </div>

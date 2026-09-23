@@ -181,7 +181,7 @@ function renderAnalyze(props: Partial<React.ComponentProps<typeof AnalyzeStep>> 
           experimentId="exp1"
           engine="GMX"
           simulation={READY_SIM}
-          canPublish
+          publishReason={undefined}
           selectedAnalysis={analysis}
           onSelectedAnalysisChange={onSelectedAnalysisChange ?? setAnalysis}
           tab={view}
@@ -220,11 +220,16 @@ describe("AnalyzeStep layout", () => {
     expect(spies.onStepChange).toHaveBeenCalledWith(4)
   })
 
-  it("disables Publish while the step is still locked", async () => {
+  it("disables Publish while the step is still locked, explaining why", async () => {
     mockAnalyze()
-    renderAnalyze({ canPublish: false })
+    renderAnalyze({ publishReason: "Publishing unlocks once tuning and the run have finished or stopped." })
 
-    expect(await screen.findByRole("button", { name: /publish/i })).toBeDisabled()
+    const publish = await screen.findByRole("button", { name: "Publish" })
+    expect(publish).toBeDisabled()
+    await userEvent.hover(publish.parentElement as HTMLElement)
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Publishing unlocks once tuning and the run have finished or stopped."
+    )
   })
 
   it("shows the still-running alert with progress while the simulation runs", async () => {

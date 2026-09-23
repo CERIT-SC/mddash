@@ -31,6 +31,14 @@ if (!Element.prototype.hasPointerCapture) {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => undefined
 }
+// jsdom lacks ResizeObserver; Popper-based primitives (Tooltip, Select) size with it.
+if (globalThis.ResizeObserver === undefined) {
+  globalThis.ResizeObserver = class {
+    observe = () => undefined
+    unobserve = () => undefined
+    disconnect = () => undefined
+  }
+}
 
 afterEach(() => {
   cleanup()

@@ -16,6 +16,9 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from "@e-infra/design-system"
 import { ArrowLeft, ArrowRight, RotateCcw } from "lucide-react"
 
@@ -41,8 +44,8 @@ type AnalyzeStepProps = {
   tab: "trajectory" | "analysis"
   onTabChange: (tab: "trajectory" | "analysis") => void
   onStepChange: (step: number) => void
-  /** Publish wizard step unlocked (server-reported ladder). */
-  canPublish: boolean
+  /** Why Publish is still locked (tooltip on the disabled button); undefined when unlocked. */
+  publishReason: string | undefined
   /** Test seam; production callers omit it. */
   pollMs?: number
 }
@@ -57,7 +60,7 @@ export function AnalyzeStep({
   tab,
   onTabChange,
   onStepChange,
-  canPublish,
+  publishReason,
   pollMs = SIMULATION_POLL_MS,
 }: AnalyzeStepProps) {
   const [reloadKey, setReloadKey] = useState(0)
@@ -167,15 +170,18 @@ export function AnalyzeStep({
           <ArrowLeft aria-hidden />
           Back
         </Button>
-        <Button
-          type="button"
-          disabled={!canPublish}
-          title={canPublish ? undefined : "Available once this simulation is ready to publish"}
-          onClick={() => onStepChange(4)}
-        >
-          Publish
-          <ArrowRight aria-hidden />
-        </Button>
+        {/* The span wrapper lets the tooltip fire while the button is disabled. */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-flex">
+              <Button type="button" disabled={publishReason !== undefined} onClick={() => onStepChange(4)}>
+                Publish
+                <ArrowRight aria-hidden />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          {publishReason !== undefined && <TooltipContent>{publishReason}</TooltipContent>}
+        </Tooltip>
       </div>
     </div>
   )

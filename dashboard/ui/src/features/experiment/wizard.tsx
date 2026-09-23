@@ -125,6 +125,11 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
   const maxStep = selected === undefined ? 0 : ownStep
   // Publish waits for the viewed simulation to settle; other sims may still run.
   const publishUnlocked = (data.can_publish ?? false) && !(selected?.live ?? false)
+  const publishReason = publishUnlocked
+    ? undefined
+    : data.can_publish
+      ? "Publishing unlocks once tuning and the run have finished or stopped on this simulation."
+      : "Publish unlocks once a run has finished or been stopped."
   // A URL step past the unlocks (stale bookmark) falls back to the simulation's
   // own progress — never locked UI.
   // The ladder flips to Tune while the user is in the notebook; the implicit view
@@ -201,7 +206,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
             onTabChange={(next) =>
               updateSearch({ simulation: simTab, step: search.step, tab: next === "analysis" ? "analysis" : undefined })
             }
-            canPublish={publishUnlocked}
+            publishReason={publishReason}
             onStepChange={(next) => updateSearch({ simulation: simTab, step: next })}
           />,
           <PublishStep
@@ -253,6 +258,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
                 steps={STEPS}
                 maxStep={maxStep}
                 unlockedIndexes={publishUnlocked ? [LAST_STEP] : []}
+                publishReason={publishReason}
                 pollMs={SIMULATIONS_POLL_MS}
               />
               <Separator className="mt-4" />
