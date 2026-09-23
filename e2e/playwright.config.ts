@@ -15,7 +15,6 @@ export default defineConfig({
   use: {
     baseURL: "http://localhost:5173/dash/",
     trace: "retain-on-failure",
-    video: "retain-on-failure",
     screenshot: "only-on-failure",
   },
   webServer: [

@@ -334,84 +334,93 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "nsteps": 1000000,
     }
 
-    # Finished GMX study that is ready to publish but not yet published. The E2E
-    # publish journey owns this experiment (PARALLEL state assignment, see
-    # docs/specs/2026-09-22-e2e-testing-design.md).
-    publishable = build_model(
-        Experiment,
-        id="hhhhh",
-        name="Alanine dipeptide free energy landscape",
-        module_name="Protein",
-        module_category="protein",
+    def finished_gmx_study(
+        experiment_id: str,
+        name: str,
+        sim_name: str,
+        *,
+        source_type: SourceType,
+        source_ref: str | None = None,
+        nsteps: int,
+        performance: float,
+        ranks: int,
+        threads: int,
+        nb: DeviceType,
+        age_days: int,
+    ) -> "tuple[Experiment, Notebook, GromacsJob]":
+        """Seed a FINISHED GMX experiment with manifest, files, and log — the shape E2E journeys own."""
+        tpr_name = f"{sim_name}.tpr"
+        experiment = build_model(
+            Experiment,
+            id=experiment_id,
+            name=name,
+            module_name="Protein",
+            module_category="protein",
+            source_type=source_type,
+            source_ref=source_ref,
+            source_files=[tpr_name, "structure.pdb"] if source_type is SourceType.FILE else None,
+            notebooks_repo="https://github.com/CERIT-SC/mddash-notebooks.git",
+            created_at=now - timedelta(days=age_days),
+            updated_at=now - timedelta(days=age_days - 1),
+        )
+        notebook = build_model(Notebook, experiment_id=experiment.id, token=f"demo-token-{sim_name}")
+        demo_state.notebook_status[experiment.id] = PodStatus.DOWN
+
+        started = now - timedelta(days=age_days)
+        job = build_model(
+            GromacsJob,
+            id=f"demo-gmx-{sim_name}",
+            experiment=experiment,
+            simulation_path=f"{sim_name}.simulation.json",
+            pme=DeviceType.CPU,
+            nb=nb,
+            np=ranks,
+            ntomp=threads,
+            _nsteps=nsteps,
+            _start_timestamp=int(started.timestamp()),
+            _finish_timestamp=int((started + timedelta(hours=12)).timestamp()),
+            _performance=performance,
+            created_at=started,
+        )
+        demo_state.mdrun_jobs[job.id] = {
+            "status": JobStatus.FINISHED.value,
+            "experiment_id": experiment.id,
+            "tpr_name": tpr_name,
+            "nsteps": nsteps,
+        }
+        ensure_demo_files(experiment.id, [tpr_name, "structure.pdb", "trajectory.xtc"])
+        write_finished_gmx_log(experiment.id, sim_name, nsteps=nsteps, performance=performance)
+        write_gmx_simulation(experiment.id, sim_name, simulation_path=f"{sim_name}.simulation.json", topology=tpr_name)
+        return experiment, notebook, job
+
+    # Ready to publish but not yet published — owned by the E2E publish journey.
+    publishable, publishable_notebook, publishable_gmx = finished_gmx_study(
+        "hhhhh",
+        "Alanine dipeptide free energy landscape",
+        "alanine_dipeptide",
         source_type=SourceType.PDB,
         source_ref="2JOF",
-        notebooks_repo="https://github.com/CERIT-SC/mddash-notebooks.git",
-        created_at=now - timedelta(days=6),
-        updated_at=now - timedelta(days=5),
-    )
-    publishable_notebook = build_model(Notebook, experiment_id=publishable.id, token="demo-token-publishable")
-    demo_state.notebook_status[publishable.id] = PodStatus.DOWN
-
-    publishable_gmx = build_model(
-        GromacsJob,
-        id="demo-gmx-publishable",
-        experiment=publishable,
-        simulation_path="alanine_dipeptide.simulation.json",
-        pme=DeviceType.CPU,
+        nsteps=100000,
+        performance=87.4,
+        ranks=2,
+        threads=2,
         nb=DeviceType.CPU,
-        np=2,
-        ntomp=2,
-        _nsteps=100000,
-        _start_timestamp=int((now - timedelta(days=6)).timestamp()),
-        _finish_timestamp=int((now - timedelta(days=5, hours=12)).timestamp()),
-        _performance=87.4,
-        created_at=now - timedelta(days=6),
+        age_days=6,
     )
-    demo_state.mdrun_jobs[publishable_gmx.id] = {
-        "status": JobStatus.FINISHED.value,
-        "experiment_id": publishable.id,
-        "tpr_name": "alanine_dipeptide.tpr",
-        "nsteps": 100000,
-    }
 
-    # Finished GMX study dedicated to the E2E MDPosit-handoff journey: a finished
-    # run with its trajectory intact and nothing live, unpublished.
-    handoff = build_model(
-        Experiment,
-        id="jjjjj",
-        name="KIX domain folding benchmark",
-        module_name="Protein",
-        module_category="protein",
+    # Finished run with its trajectory intact and nothing live — the MDPosit-handoff journey.
+    handoff, handoff_notebook, handoff_gmx = finished_gmx_study(
+        "jjjjj",
+        "KIX domain folding benchmark",
+        "kix_domain",
         source_type=SourceType.FILE,
-        source_files=["kix_domain.tpr", "structure.pdb"],
-        notebooks_repo="https://github.com/CERIT-SC/mddash-notebooks.git",
-        created_at=now - timedelta(days=4),
-        updated_at=now - timedelta(days=3),
-    )
-    handoff_notebook = build_model(Notebook, experiment_id=handoff.id, token="demo-token-handoff")
-    demo_state.notebook_status[handoff.id] = PodStatus.DOWN
-
-    handoff_gmx = build_model(
-        GromacsJob,
-        id="demo-gmx-handoff",
-        experiment=handoff,
-        simulation_path="kix_domain.simulation.json",
-        pme=DeviceType.CPU,
+        nsteps=250000,
+        performance=112.8,
+        ranks=4,
+        threads=2,
         nb=DeviceType.GPU,
-        np=4,
-        ntomp=2,
-        _nsteps=250000,
-        _start_timestamp=int((now - timedelta(days=4)).timestamp()),
-        _finish_timestamp=int((now - timedelta(days=3, hours=12)).timestamp()),
-        _performance=112.8,
-        created_at=now - timedelta(days=4),
+        age_days=4,
     )
-    demo_state.mdrun_jobs[handoff_gmx.id] = {
-        "status": JobStatus.FINISHED.value,
-        "experiment_id": handoff.id,
-        "tpr_name": "kix_domain.tpr",
-        "nsteps": 250000,
-    }
 
     # Experiment 4: AMBER protein folding study (currently running AMBER simulation)
     amber_folding = build_model(
@@ -781,14 +790,6 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     ensure_demo_files(published.id, ["lysozyme_hewl.tpr", "structure.pdb", "trajectory.xtc", "input.pdb"])
     write_finished_gmx_log(published.id, "lysozyme_hewl", nsteps=1000000, performance=45.3)
 
-    # Publish-ready study: finished run, same simple structure
-    ensure_demo_files(publishable.id, ["alanine_dipeptide.tpr", "structure.pdb", "trajectory.xtc", "input.pdb"])
-    write_finished_gmx_log(publishable.id, "alanine_dipeptide", nsteps=100000, performance=87.4)
-
-    # Handoff study: finished run with its trajectory intact
-    ensure_demo_files(handoff.id, ["kix_domain.tpr", "structure.pdb", "trajectory.xtc"])
-    write_finished_gmx_log(handoff.id, "kix_domain", nsteps=250000, performance=112.8)
-
     # AMBER villin folding study: uses AMBER file format
     ensure_amber_demo_files(
         amber_folding.id,
@@ -847,20 +848,6 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "lysozyme_hewl",
         simulation_path="lysozyme_hewl.simulation.json",
         topology="lysozyme_hewl.tpr",
-    )
-
-    write_gmx_simulation(
-        publishable.id,
-        "alanine_dipeptide",
-        simulation_path="alanine_dipeptide.simulation.json",
-        topology="alanine_dipeptide.tpr",
-    )
-
-    write_gmx_simulation(
-        handoff.id,
-        "kix_domain",
-        simulation_path="kix_domain.simulation.json",
-        topology="kix_domain.tpr",
     )
 
     write_amber_simulation(

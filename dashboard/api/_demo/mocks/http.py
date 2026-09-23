@@ -898,30 +898,21 @@ E2E_MDRUN_STAGES = 3
 E2E_MDRUN_STAGE_INTERVAL_SEC = 1.5
 
 
-def _e2e_progress(job_data: dict) -> "tuple[bool, float] | None":
-    """
-    Per-poll stage advance for submitted jobs in E2E mode, or None for wall-clock timing.
-
-    Burst reads (post-submit invalidations) advance at most one stage per
-    E2E_MDRUN_STAGE_INTERVAL_SEC, so stages never collapse into each other.
-    """
-    if not E2E or "e2e_reads" not in job_data:
-        return None
-    job_data["e2e_reads"] = int(job_data["e2e_reads"]) + 1
-    now = time.time()
-    stage = int(job_data.get("e2e_stage", 0))
-    if stage < E2E_MDRUN_STAGES - 1 and now - float(job_data.get("e2e_stage_at", now)) >= E2E_MDRUN_STAGE_INTERVAL_SEC:
-        stage += 1
-        job_data["e2e_stage"] = stage
-        job_data["e2e_stage_at"] = now
-    done = stage >= E2E_MDRUN_STAGES - 1
-    return done, 1.0 if done else stage / E2E_MDRUN_STAGES
-
-
 def _job_progress(job_data: dict) -> "tuple[bool, float]":
-    """Whether the job is done plus its progress ratio (per-poll in E2E mode, else wall-clock)."""
-    if (e2e := _e2e_progress(job_data)) is not None:
-        return e2e
+    """Whether the job is done plus its progress ratio (staged per-poll in E2E mode, else wall-clock)."""
+    if E2E and "e2e_reads" in job_data:
+        # Burst reads (post-submit invalidations) advance at most one stage per
+        # E2E_MDRUN_STAGE_INTERVAL_SEC, so stages never collapse into each other.
+        job_data["e2e_reads"] = int(job_data["e2e_reads"]) + 1
+        now = time.time()
+        stage = int(job_data.get("e2e_stage", 0))
+        if stage < E2E_MDRUN_STAGES - 1 and now - float(job_data["e2e_stage_at"]) >= E2E_MDRUN_STAGE_INTERVAL_SEC:
+            stage += 1
+            job_data["e2e_stage"] = stage
+            job_data["e2e_stage_at"] = now
+        done = stage >= E2E_MDRUN_STAGES - 1
+        return done, 1.0 if done else stage / E2E_MDRUN_STAGES
+
     duration_sec = float(job_data.get("duration_sec", DEFAULT_GMX_DURATION_SEC))
     created_at = float(job_data.get("created_at", time.time()))
     elapsed = max(0.0, time.time() - created_at)
