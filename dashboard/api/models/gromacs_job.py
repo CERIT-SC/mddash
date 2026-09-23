@@ -171,8 +171,8 @@ class GromacsJob(SimulationJob):
         simulation = Simulation.get(experiment.id, simulation_path)
         simulation.require_files(["run_input"])
         tpr_rel_path = simulation.resolved_files["run_input"]
-        # TODO: remove as soon as user testing is done (also drop _nsteps below) — force all runs to 500k steps.
-        extra_args = f"{strip_run_control_args(simulation.extra_args)} -nsteps 500000"
+        # TODO: remove as soon as user testing is done (also drop _nsteps below) — force all runs to 1M steps.
+        extra_args = f"{strip_run_control_args(simulation.extra_args)} -nsteps 1000000"
 
         mdrun_job = mdrun.create_job(
             experiment_id=experiment.id,
@@ -195,7 +195,7 @@ class GromacsJob(SimulationJob):
             experiment_id=experiment.id,  # type: ignore[call-arg]
             engine=Engine.GMX,  # type: ignore[call-arg]
             _last_known_status=JobStatus.PENDING,  # type: ignore[call-arg]
-            _nsteps=500000,  # type: ignore[call-arg]
+            _nsteps=1000000,  # type: ignore[call-arg]
         )
         db.session.add(job)
 
