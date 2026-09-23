@@ -169,6 +169,11 @@ class TunerJob(db.Model):  # type: ignore
         )
         extra_args = simulation.extra_args
 
+        # TODO: drop after user testing (#166) — 500k everywhere; GMX pin keeps the tuner's length report accurate.
+        nsteps = 500000
+        if experiment.engine == Engine.GMX:
+            extra_args = f"{extra_args} -nsteps 500000".strip()
+
         try:
             match experiment.engine:
                 case Engine.GMX:
