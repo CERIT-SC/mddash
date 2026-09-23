@@ -108,7 +108,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             "duration_sec": DEFAULT_GMX_DURATION_SEC,
             "log_line_index": 0,
             "log_total_lines": 500,
-            "e2e_reads": 0,
+            "e2e_stage": 0,
             "e2e_stage_at": started_at,
         }
 
@@ -159,7 +159,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             "duration_sec": DEFAULT_GMX_DURATION_SEC,
             "log_line_index": 0,
             "log_total_lines": 500,
-            "e2e_reads": 0,
+            "e2e_stage": 0,
             "e2e_stage_at": started_at,
         }
 
@@ -900,12 +900,11 @@ E2E_MDRUN_STAGE_INTERVAL_SEC = 1.5
 
 def _job_progress(job_data: dict) -> "tuple[bool, float]":
     """Whether the job is done plus its progress ratio (staged per-poll in E2E mode, else wall-clock)."""
-    if E2E and "e2e_reads" in job_data:
-        # Burst reads (post-submit invalidations) advance at most one stage per
-        # E2E_MDRUN_STAGE_INTERVAL_SEC, so stages never collapse into each other.
-        job_data["e2e_reads"] = int(job_data["e2e_reads"]) + 1
+    if E2E and "e2e_stage" in job_data:
+        # Advance ≤1 stage per E2E_MDRUN_STAGE_INTERVAL_SEC, so post-submit read
+        # bursts cannot collapse stages.
         now = time.time()
-        stage = int(job_data.get("e2e_stage", 0))
+        stage = int(job_data["e2e_stage"])
         if stage < E2E_MDRUN_STAGES - 1 and now - float(job_data["e2e_stage_at"]) >= E2E_MDRUN_STAGE_INTERVAL_SEC:
             stage += 1
             job_data["e2e_stage"] = stage

@@ -24,6 +24,7 @@ from .files import (
     write_running_amber_log,
     write_running_gmx_log,
 )
+from .mode import E2E
 from .state import build_model, demo_state
 
 logger = logging.getLogger(__name__)
@@ -393,34 +394,36 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         write_gmx_simulation(experiment.id, sim_name, simulation_path=f"{sim_name}.simulation.json", topology=tpr_name)
         return experiment, notebook, job
 
-    # Ready to publish but not yet published — owned by the E2E publish journey.
-    publishable, publishable_notebook, publishable_gmx = finished_gmx_study(
-        "hhhhh",
-        "Alanine dipeptide free energy landscape",
-        "alanine_dipeptide",
-        source_type=SourceType.PDB,
-        source_ref="2JOF",
-        nsteps=100000,
-        performance=87.4,
-        ranks=2,
-        threads=2,
-        nb=DeviceType.CPU,
-        age_days=6,
-    )
+    # E2E-only seeds: publish journey, MDPosit-handoff journey, AMBER manual-run journey.
+    e2e_models: list = []
+    if E2E:
+        publishable, publishable_notebook, publishable_gmx = finished_gmx_study(
+            "hhhhh",
+            "Alanine dipeptide free energy landscape",
+            "alanine_dipeptide",
+            source_type=SourceType.PDB,
+            source_ref="2JOF",
+            nsteps=100000,
+            performance=87.4,
+            ranks=2,
+            threads=2,
+            nb=DeviceType.CPU,
+            age_days=6,
+        )
 
-    # Finished run with its trajectory intact and nothing live — the MDPosit-handoff journey.
-    handoff, handoff_notebook, handoff_gmx = finished_gmx_study(
-        "jjjjj",
-        "KIX domain folding benchmark",
-        "kix_domain",
-        source_type=SourceType.FILE,
-        nsteps=250000,
-        performance=112.8,
-        ranks=4,
-        threads=2,
-        nb=DeviceType.GPU,
-        age_days=4,
-    )
+        handoff, handoff_notebook, handoff_gmx = finished_gmx_study(
+            "jjjjj",
+            "KIX domain folding benchmark",
+            "kix_domain",
+            source_type=SourceType.FILE,
+            nsteps=250000,
+            performance=112.8,
+            ranks=4,
+            threads=2,
+            nb=DeviceType.GPU,
+            age_days=4,
+        )
+        e2e_models += [publishable, publishable_notebook, publishable_gmx, handoff, handoff_notebook, handoff_gmx]
 
     # Experiment 4: AMBER protein folding study (currently running AMBER simulation)
     amber_folding = build_model(
@@ -508,23 +511,25 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     amber_dna_notebook = build_model(Notebook, experiment_id=amber_dna.id, token="demo-token-dna")
     demo_state.notebook_status[amber_dna.id] = PodStatus.DOWN
 
-    # AMBER study with a valid simulation and no jobs yet — the E2E manual AMBER
-    # run journey (Tune → Manual configuration → Run Simulation) owns it.
-    amber_tetra = build_model(
-        Experiment,
-        id="iiiii",
-        name="AMBER tetrapeptide conformational sampling",
-        module_name="Protein (BioBB)",
-        module_category="protein",
-        source_type=SourceType.FILE,
-        source_files=["tetrapeptide.prmtop", "tetrapeptide.inpcrd", "production.mdin"],
-        notebooks_repo="https://github.com/CERIT-SC/mddash-notebooks.git",
-        engine=Engine.AMBER,
-        created_at=now - timedelta(days=1),
-        updated_at=now - timedelta(hours=3),
-    )
-    amber_tetra_notebook = build_model(Notebook, experiment_id=amber_tetra.id, token="demo-token-tetra")
-    demo_state.notebook_status[amber_tetra.id] = PodStatus.DOWN
+    # AMBER study with a valid simulation and no jobs yet — E2E-only, the manual
+    # AMBER run journey (Tune → Manual configuration → Run Simulation) owns it.
+    if E2E:
+        amber_tetra = build_model(
+            Experiment,
+            id="iiiii",
+            name="AMBER tetrapeptide conformational sampling",
+            module_name="Protein (BioBB)",
+            module_category="protein",
+            source_type=SourceType.FILE,
+            source_files=["tetrapeptide.prmtop", "tetrapeptide.inpcrd", "production.mdin"],
+            notebooks_repo="https://github.com/CERIT-SC/mddash-notebooks.git",
+            engine=Engine.AMBER,
+            created_at=now - timedelta(days=1),
+            updated_at=now - timedelta(hours=3),
+        )
+        amber_tetra_notebook = build_model(Notebook, experiment_id=amber_tetra.id, token="demo-token-tetra")
+        demo_state.notebook_status[amber_tetra.id] = PodStatus.DOWN
+        e2e_models += [amber_tetra, amber_tetra_notebook]
 
     # Analyses for the DNA study: one ready, one still calculating
     dna_rmsd_analysis = build_model(
@@ -682,12 +687,6 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         published,
         published_notebook,
         published_gmx,
-        publishable,
-        publishable_notebook,
-        publishable_gmx,
-        handoff,
-        handoff_notebook,
-        handoff_gmx,
         rmsd_analysis,
         sasa_analysis,
         hbonds_analysis,
@@ -697,8 +696,6 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         running_amber,
         amber_dna,
         amber_dna_notebook,
-        amber_tetra,
-        amber_tetra_notebook,
         dna_rmsd_analysis,
         dna_clusters_analysis,
         villin_rmsd_analysis,
@@ -709,6 +706,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         archived,
         archived_notebook,
     ])
+    db.session.add_all(e2e_models)
     db.session.commit()
 
     # Register seeded analysis jobs so the mock K8s layer reports real statuses
@@ -810,13 +808,14 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     )
     write_finished_amber_log(amber_dna.id, "simulation")
 
-    # AMBER tetrapeptide study: ready to run, no jobs yet
-    ensure_amber_demo_files(
-        amber_tetra.id,
-        prmtop_name="tetrapeptide.prmtop",
-        inpcrd_name="tetrapeptide.inpcrd",
-        mdin_names=["production.mdin"],
-    )
+    # AMBER tetrapeptide study: ready to run, no jobs yet (E2E-only)
+    if E2E:
+        ensure_amber_demo_files(
+            amber_tetra.id,
+            prmtop_name="tetrapeptide.prmtop",
+            inpcrd_name="tetrapeptide.inpcrd",
+            mdin_names=["production.mdin"],
+        )
 
     # MDPosit import study: mirrors the project file layout exposed by HTTP mocks.
     ensure_mdposit_demo_files(mdposit_demo.id)
@@ -877,14 +876,15 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         control="simulation.mdin",
     )
 
-    write_amber_simulation(
-        amber_tetra.id,
-        "tetrapeptide",
-        simulation_path="tetrapeptide.simulation.json",
-        topology="tetrapeptide.prmtop",
-        coordinates="tetrapeptide.inpcrd",
-        control="production.mdin",
-    )
+    if E2E:
+        write_amber_simulation(
+            amber_tetra.id,
+            "tetrapeptide",
+            simulation_path="tetrapeptide.simulation.json",
+            topology="tetrapeptide.prmtop",
+            coordinates="tetrapeptide.inpcrd",
+            control="production.mdin",
+        )
 
 
 def _backdate_stale_simulations(experiment_id: str, stems: tuple[str, ...]) -> None:

@@ -11,7 +11,6 @@ test("submit an RMSD analysis to completion", async ({ page }) => {
   await page.getByRole("option", { name: "RMSD", exact: true }).click()
   await page.getByRole("button", { name: "Calculate" }).click()
 
-  // 0.5s completion can land before the first poll — assert the terminal state, which
-  // also proves the job ran (results exist).
+  // Completion (0.5s) races the first poll; assert the terminal state.
   await expect(page.getByRole("button", { name: "Re-calculate" })).toBeVisible({ timeout: 30_000 })
 })

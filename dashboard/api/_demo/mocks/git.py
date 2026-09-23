@@ -1,8 +1,4 @@
-"""
-Neutralize notebooks-repo git clones for E2E runs (no network, no git).
-
-Installed only under MDDASH_DEMO_E2E; `make demo` keeps real clones.
-"""
+"""Offline notebooks-repo clone stubs, installed under MDDASH_DEMO_E2E."""
 
 from pathlib import Path
 

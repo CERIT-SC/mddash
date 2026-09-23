@@ -1,7 +1,7 @@
 # E2E Testing Design
 
 Date: 2026-09-22
-Status: proposed
+Status: implemented
 
 ## Problem
 
@@ -18,7 +18,7 @@ MDDash cannot be fully deployed locally: the platform depends on Rancher-provisi
 
 - Browser-level E2E covering the critical user journeys of the dashboard, runnable locally via `make e2e` and as a manually triggered GitHub Actions workflow.
 - Deterministic: no live network, no fixed sleeps anywhere, seeded state reset per run.
-- Fast: suite in the low single-digit minutes, serial.
+- Fast: suite in the low single-digit minutes, parallel across 3 workers.
 
 ## Non-goals
 
@@ -51,7 +51,7 @@ Root wiring (the only files outside `e2e/` and `dashboard/api/_demo/` that chang
 - Root `package.json`: add `--filter @mddash/e2e` to the existing `knip` and `type-check` parallel scripts; add `e2e` to the oxlint path list; add `e2e/**/*.ts` to the prettier `format`/`format:check` globs.
 - Root `.gitignore`: add `e2e/test-results/` and `e2e/playwright-report/`.
 - `.github/dependabot.yml`: unchanged — the single root npm entry (`directory: /`, weekly, grouped) already covers all workspace members via the root lockfile, so `@playwright/test` updates flow automatically.
-- `.devcontainer/post-create.sh`: add `pnpm exec playwright install --with-deps chromium` so local `make e2e` works out of the box.
+- `.devcontainer/post-create.sh`: add `pnpm --filter @mddash/e2e exec playwright install --with-deps chromium` so local `make e2e` works out of the box.
 - `Makefile`: new `.PHONY: e2e` target next to the test targets — `pnpm --filter @mddash/e2e test`. It is part of the documented feedback loop in AGENTS.md but deliberately not part of `make test` (browser install is heavy).
 - `@playwright/test` is a devDependency of `@mddash/e2e`, pinned to an exact version (browsers and library must match; Dependabot keeps both in step via `playwright install`).
 
@@ -66,11 +66,11 @@ Ports are fixed: vite runs with `strictPort: true` and its proxy target is hardc
 
 `baseURL` is `http://localhost:5173/dash/` and specs navigate with paths relative to it (e.g. `goto("experiments/bbbbb")`). A leading slash (`goto("/experiments/...")`) resolves against the host root and escapes `/dash`; the app then boots without its base, the runtime-config fetch hits the vite SPA fallback, and every assertion fails with a dashboard configuration error. This was an observed failure mode during implementation, not a hypothetical.
 
-Playwright constants: `workers: 3`, `fullyParallel: true`, `retries: 0` (interference must surface as failure, never be masked), `expect.timeout: 15_000` (the largest poll interval the inventory exercises is 5s; 15s gives a 3-cycle margin — specs that touch longer-poll flows, e.g. notebook steady polling at 30s, must set a larger per-assertion timeout), per-test `timeout: 90_000`, `webServer` timeout 180s, reporter `list` + `html` (`open: "never"`), `trace`/`video`/`screenshot: "retain-on-failure"`.
+Playwright constants: `workers: 3`, `fullyParallel: true`, `retries: 0` (interference must surface as failure, never be masked), `expect.timeout: 15_000` (the largest poll interval the inventory exercises is 5s; 15s gives a 3-cycle margin — specs that touch longer-poll flows, e.g. notebook steady polling at 30s, must set a larger per-assertion timeout), per-test `timeout: 90_000`, `webServer` timeout 180s, reporter `list` + `html` (`open: "never"`), `trace: "retain-on-failure"`, `screenshot: "only-on-failure"` (no video — the trace covers the failure timeline without re-encoding).
 
 ## E2E mode in the demo harness
 
-One env var, `MDDASH_DEMO_E2E=1`, read in one place — a new `_demo/mode.py` exporting `E2E: bool` — and consulted by the mock, seed, and analysis modules. When unset, behavior is byte-identical to today. When set, four changes apply:
+One env var, `MDDASH_DEMO_E2E=1`, read in one place — a new `_demo/mode.py` exporting `E2E: bool` — and consulted by the mock, seed, and analysis modules. When unset, seeded content and behavior are byte-identical to today. When set: the three E2E-only seeds (`hhhhh` publish journey, `jjjjj` handoff journey, `iiiii` AMBER manual-run journey) are added alongside the standard demo data, and four changes apply:
 
 **Process behavior:** `_demo/app.py`'s `__main__` calls `app.run(debug=False, ...)`. This disables the Werkzeug file-watch reloader, which would otherwise wipe and reseed demo state mid-suite whenever a repo file changes (the reloader restarts re-run `seed_data()`).
 
@@ -141,8 +141,8 @@ Knowingly not covered: JupyterLab internals (`setup.ipynb`/`analysis.ipynb` are 
 
 New file `.github/workflows/e2e.yml`; `workflow_dispatch` is the only trigger — E2E runs on demand, never in PR CI, never called by `cd.yml`/`release.yml`.
 
-- `permissions: contents: read`; `concurrency: e2e-${{ github.ref }}` with `cancel-in-progress: true`; `timeout-minutes: 15`.
-- Steps: `actions/checkout` (pinned SHA, `persist-credentials: false`) → `./.github/actions/setup-frontend` → `astral-sh/setup-uv` (cache enabled, keyed on `uv.lock`) → `pnpm exec playwright install --with-deps chromium` → `make e2e`.
+- `permissions: contents: read`; `concurrency: ${{ github.workflow }}-${{ github.ref }}` with `cancel-in-progress: true`; `timeout-minutes: 15`.
+- Steps: `actions/checkout` (pinned SHA, `persist-credentials: false`) → `./.github/actions/setup-frontend` → `astral-sh/setup-uv` (cache enabled, keyed on `uv.lock`) → `pnpm --filter @mddash/e2e exec playwright install --with-deps chromium` → `make e2e`.
 - On failure: `actions/upload-artifact` (pinned SHA, `if: failure()`) with paths `e2e/playwright-report/` and `e2e/test-results/`.
 - `make lint-workflows` (actionlint + zizmor, `--min-severity high`) covers the new workflow; per repo convention, secrets/templates are passed via `env:` blocks only (none needed here).
 

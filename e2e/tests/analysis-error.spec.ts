@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 
-// Pockets is absent upstream, so it ends ERROR like a real failed run; in E2E mode
-// the cache miss does the same without network. Seed: villin study, simulation "villin".
+// Pockets has no cache payload: the miss ends the job ERROR without network.
+// Seed: villin study, simulation "villin".
 test("pockets analysis ends in a durable error state", async ({ page }) => {
   await page.goto("experiments/ddddd")
 

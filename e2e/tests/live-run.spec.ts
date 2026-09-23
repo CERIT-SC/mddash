@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test"
 
 // Seed: enzyme study bbbbb, GMX job demo-gmx-running on simulation "md".
 test("open seeded live experiment from the dashboard", async ({ page }) => {
-  await page.goto("/")
+  await page.goto("./")
   await page.getByRole("link", { name: "HIV protease inhibitor binding study" }).click()
 
   await expect(page.getByRole("tab", { name: "md", exact: true })).toHaveAttribute("aria-selected", "true")

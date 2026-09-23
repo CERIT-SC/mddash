@@ -19,7 +19,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: `PORT=8888 MDDASH_DEMO_E2E=1 MDDASH_DEMO_ANALYSIS_CACHE=${repoRoot}e2e/fixtures/mdposit-cache uv run --directory dashboard/api python _demo/app.py`,
+      command: `PORT=8888 MDDASH_DEMO_E2E=1 MDDASH_DEMO_ANALYSIS_CACHE="${repoRoot}e2e/fixtures/mdposit-cache" uv run --directory dashboard/api python _demo/app.py`,
       url: "http://localhost:8888/dash/api/health",
       timeout: 180_000,
       cwd: repoRoot,
