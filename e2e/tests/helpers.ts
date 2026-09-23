@@ -9,3 +9,7 @@ export async function openRunSection(page: Page, experimentId: string, simulatio
   await page.getByRole("button", { name: /Go to section 3: Run/ }).click()
   await expect(page.getByRole("region", { name: "Run progress" })).toBeVisible()
 }
+
+export function demoDataFile(name: string): string {
+  return new URL(`../../dashboard/api/_demo/data/${name}`, import.meta.url).pathname
+}

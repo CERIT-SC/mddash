@@ -10,4 +10,7 @@ test("stop the seeded running AMBER job", async ({ page }) => {
   await page.getByRole("alertdialog").getByRole("button", { name: "Stop run" }).click()
 
   await expect(page.getByRole("region", { name: "Run progress" })).toContainText("Stopped")
+  // Extend is GROMACS-only; a stopped AMBER run offers Re-run instead.
+  await expect(page.getByRole("button", { name: "Extend", exact: true })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Re-run" })).toBeVisible()
 })

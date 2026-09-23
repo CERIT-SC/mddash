@@ -374,6 +374,45 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "nsteps": 100000,
     }
 
+    # Finished GMX study dedicated to the E2E MDPosit-handoff journey: a finished
+    # run with its trajectory intact and nothing live, unpublished.
+    handoff = build_model(
+        Experiment,
+        id="jjjjj",
+        name="KIX domain folding benchmark",
+        module_name="Protein",
+        module_category="protein",
+        source_type=SourceType.FILE,
+        source_files=["kix_domain.tpr", "structure.pdb"],
+        notebooks_repo="https://github.com/CERIT-SC/mddash-notebooks.git",
+        created_at=now - timedelta(days=4),
+        updated_at=now - timedelta(days=3),
+    )
+    handoff_notebook = build_model(Notebook, experiment_id=handoff.id, token="demo-token-handoff")
+    demo_state.notebook_status[handoff.id] = PodStatus.DOWN
+
+    handoff_gmx = build_model(
+        GromacsJob,
+        id="demo-gmx-handoff",
+        experiment=handoff,
+        simulation_path="kix_domain.simulation.json",
+        pme=DeviceType.CPU,
+        nb=DeviceType.GPU,
+        np=4,
+        ntomp=2,
+        _nsteps=250000,
+        _start_timestamp=int((now - timedelta(days=4)).timestamp()),
+        _finish_timestamp=int((now - timedelta(days=3, hours=12)).timestamp()),
+        _performance=112.8,
+        created_at=now - timedelta(days=4),
+    )
+    demo_state.mdrun_jobs[handoff_gmx.id] = {
+        "status": JobStatus.FINISHED.value,
+        "experiment_id": handoff.id,
+        "tpr_name": "kix_domain.tpr",
+        "nsteps": 250000,
+    }
+
     # Experiment 4: AMBER protein folding study (currently running AMBER simulation)
     amber_folding = build_model(
         Experiment,
@@ -459,6 +498,24 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     )
     amber_dna_notebook = build_model(Notebook, experiment_id=amber_dna.id, token="demo-token-dna")
     demo_state.notebook_status[amber_dna.id] = PodStatus.DOWN
+
+    # AMBER study with a valid simulation and no jobs yet — the E2E manual AMBER
+    # run journey (Tune → Manual configuration → Run Simulation) owns it.
+    amber_tetra = build_model(
+        Experiment,
+        id="iiiii",
+        name="AMBER tetrapeptide conformational sampling",
+        module_name="Protein (BioBB)",
+        module_category="protein",
+        source_type=SourceType.FILE,
+        source_files=["tetrapeptide.prmtop", "tetrapeptide.inpcrd", "production.mdin"],
+        notebooks_repo="https://github.com/CERIT-SC/mddash-notebooks.git",
+        engine=Engine.AMBER,
+        created_at=now - timedelta(days=1),
+        updated_at=now - timedelta(hours=3),
+    )
+    amber_tetra_notebook = build_model(Notebook, experiment_id=amber_tetra.id, token="demo-token-tetra")
+    demo_state.notebook_status[amber_tetra.id] = PodStatus.DOWN
 
     # Analyses for the DNA study: one ready, one still calculating
     dna_rmsd_analysis = build_model(
@@ -619,6 +676,9 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         publishable,
         publishable_notebook,
         publishable_gmx,
+        handoff,
+        handoff_notebook,
+        handoff_gmx,
         rmsd_analysis,
         sasa_analysis,
         hbonds_analysis,
@@ -628,6 +688,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         running_amber,
         amber_dna,
         amber_dna_notebook,
+        amber_tetra,
+        amber_tetra_notebook,
         dna_rmsd_analysis,
         dna_clusters_analysis,
         villin_rmsd_analysis,
@@ -723,6 +785,10 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     ensure_demo_files(publishable.id, ["alanine_dipeptide.tpr", "structure.pdb", "trajectory.xtc", "input.pdb"])
     write_finished_gmx_log(publishable.id, "alanine_dipeptide", nsteps=100000, performance=87.4)
 
+    # Handoff study: finished run with its trajectory intact
+    ensure_demo_files(handoff.id, ["kix_domain.tpr", "structure.pdb", "trajectory.xtc"])
+    write_finished_gmx_log(handoff.id, "kix_domain", nsteps=250000, performance=112.8)
+
     # AMBER villin folding study: uses AMBER file format
     ensure_amber_demo_files(
         amber_folding.id,
@@ -742,6 +808,14 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         mdin_names=["simulation.mdin"],
     )
     write_finished_amber_log(amber_dna.id, "simulation")
+
+    # AMBER tetrapeptide study: ready to run, no jobs yet
+    ensure_amber_demo_files(
+        amber_tetra.id,
+        prmtop_name="tetrapeptide.prmtop",
+        inpcrd_name="tetrapeptide.inpcrd",
+        mdin_names=["production.mdin"],
+    )
 
     # MDPosit import study: mirrors the project file layout exposed by HTTP mocks.
     ensure_mdposit_demo_files(mdposit_demo.id)
@@ -782,6 +856,13 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         topology="alanine_dipeptide.tpr",
     )
 
+    write_gmx_simulation(
+        handoff.id,
+        "kix_domain",
+        simulation_path="kix_domain.simulation.json",
+        topology="kix_domain.tpr",
+    )
+
     write_amber_simulation(
         amber_folding.id,
         "villin",
@@ -807,6 +888,15 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         topology="dna.prmtop",
         coordinates="dna.inpcrd",
         control="simulation.mdin",
+    )
+
+    write_amber_simulation(
+        amber_tetra.id,
+        "tetrapeptide",
+        simulation_path="tetrapeptide.simulation.json",
+        topology="tetrapeptide.prmtop",
+        coordinates="tetrapeptide.inpcrd",
+        control="production.mdin",
     )
 
 

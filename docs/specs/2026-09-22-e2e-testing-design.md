@@ -82,7 +82,7 @@ One env var, `MDDASH_DEMO_E2E=1`, read in one place — a new `_demo/mode.py` ex
 
 | Flow | Demo mode today | E2E mode |
 |---|---|---|
-| Submitted MDRun GMX/AMBER job (`DEFAULT_GMX_DURATION_SEC = 30.0`, elapsed-time machine in http.py) — consumer: spec #4 | Transitions by wall clock | Poll-count schedule per job: status read 1 → RUNNING with low `nsteps_done`; read 2 → RUNNING with grown progress and appended log (existing per-poll log append); read ≥3 → FINISHED with a real `Performance:` line. Per-job read counter; independent per submitted job. |
+| Submitted MDRun GMX/AMBER job (`DEFAULT_GMX_DURATION_SEC = 30.0`, elapsed-time machine in http.py) — consumers: extend/run-submission specs | Transitions by wall clock | Stage schedule per job: stage 0 Preparing (0%) → stage 1 RUNNING (progress + appended log) → stage 2 FINISHED with a real `Performance:` line. A status read only advances a stage, and at most one stage per 1.5s — post-submit invalidation bursts fire several reads per second, so a pure read count collapses all stages instantly (observed in the first parallel run; this floor prevents it while keeping total time-to-FINISHED ~3s). Per-job state (`e2e_reads`/`e2e_stage`/`e2e_stage_at`), independent per submitted job. |
 | MDRepo upload job completion (`UPLOAD_JOB_DURATION_SEC = 4.0`, thread sleep in k8s.py) — consumer: spec #5 | 4.0s | 0.5s |
 | Submitted analysis completion (`ANALYSIS_JOB_DURATION_SEC = 3.0`, thread delay in k8s.py) — consumer: spec #6 | 3.0s | 0.5s |
 
@@ -102,7 +102,7 @@ Specs ban `waitForTimeout`. All waiting is via auto-waiting Playwright assertion
 The suite runs 3 Playwright workers in full parallelism against one shared demo instance (one API + one vite server; startup amortized). Parallel safety comes from a disjointness contract, not from locking:
 
 - **Selector discipline**: locate entities by exact seeded name or self-created id — never by list position or count (list pages show every experiment, including ones other specs just created).
-- **Dedicated state per mutating spec**, assigned once and not shared: spec #4 (extend, GMX-only) owns the enzyme study; specs #3 (stop) and #6 (pockets analysis) share the villin study — compatible since stopping leaves the run's files and a STOPPED job implies the analysis step is enabled; spec #5 (publish) owns a **new minimal seeded FINISHED GMX experiment added to `seed.py`** (it cannot share enzyme: an active extension hides the publish step); specs #1 (read-only enzyme view) and #2 (creates its own experiment in the flow under test) conflict with nothing. Shared helpers exist only where ≥2 specs need them (`tests/helpers.ts`).
+- **Dedicated state per mutating spec**, assigned once and not shared: live-run/analysis-run-gmx/locked-simulation read enzyme (`md` sim); extend-run owns enzyme `npt_equilibration`; stop-run and analysis-error share villin (compatible: stopping leaves files, a STOPPED run implies the analysis step); tune-guided owns membrane `aaaaa`; manual-run-amber owns new seed `iiiii` (valid AMBER sim, no jobs); mdposit-handoff owns new seed `jjjjj` (finished GMX run, nothing live — publish marker gating is per selected simulation); publish owns `hhhhh`; notebook mutates notebook status of `eeeee`/`ddddd` (no spec asserts notebook state there); dashboard-chrome renames+deletes disposable `fffff`; create/setup-manual specs create their own experiments. Specs sharing a page use disjoint surfaces or are proven compatible. Shared helpers exist only where ≥2 specs need them (`tests/helpers.ts`).
 - **Browser contexts are isolated** per test (cookies/storage separate; each publish spec performs its own demo-MDRepo auth).
 - State reset happens once per suite run: the demo wipes and reseeds `MDDASH_DEMO_DATA_DIR` on API start. Specs do not reset mid-run — they are correct under any interleaving by contract.
 - **Known hazards and their wind-back levers** (apply only if empirically hit): SQLite `database is locked` under parallel writes → enable `busy_timeout` in the demo profile, else `workers: 2`; seeded-entity interference → re-assign ownership; CPU contention on the CI runner → `workers: 2`. Instance sharding (one API + one vite per worker, own port + `MDDASH_DEMO_DATA_DIR`) remains the known endgame if the suite ever outgrows these levers.
@@ -113,12 +113,29 @@ The demo intentionally fetches MDPosit analysis payloads over live network in de
 
 ## Spec inventory
 
-1. **Dashboard → live experiment**: open the seeded enzyme study; live job status and growing log are visible.
-2. **Create experiment (happy path)**: new experiment from PDB upload lands on the Setup step.
-3. **Stop a running job** (villin study): seeded RUNNING AMBER job → stop → STOPPED rendering.
-4. **Extend a stopped GMX run** (enzyme study): seeded STOPPED second segment with checkpoint → extend → new segment RUNNING with progress advancing across polls → FINISHED.
-5. **Publish happy path** (new dedicated seeded FINISHED experiment `hhhhh`): demo-MDRepo auth bypass → start upload → in-progress state → draft created on the mock MDRepo and the "Finish in MDRepo" link visible (the truthful terminal state — finalization lives in MDRepo-UI, which the demo does not model).
-6. **Error rendering (negative)**: submit pockets analysis → job ends ERROR (the seeded MDPosit project 404s pockets, as in production); assert the durable error surface per the UI contract (`ApiError.message = solution ?? detail`), not a toast-only flash.
+Journeys are derived from the user guides in `docs/guides/` (guide file in brackets). Both engines are covered for every job-bearing flow.
+
+| Spec | Journey | Guide | Engine |
+|---|---|---|---|
+| live-run | dashboard → live run view with streaming logs | 02, 06 | GMX |
+| create-experiment | new experiment from PDB id → Setup | 01 | GMX |
+| setup-manual-gmx | Upload Files source → manual manifest form, auto-fill, step unlock | 01, 04 | GMX |
+| setup-manual-amber | same, AMBER engine toggle + AMBER roles | 01, 04 | AMBER |
+| tune-guided | tuner running view, trials table, failed-trial logs, stop tuning, pick trial → Run Simulation → Finished | 05, 06 | GMX |
+| manual-run-amber | manual configuration (Binary/Ewald) → Run Simulation → Finished | 05, 06 | AMBER |
+| stop-run | stop a running job → Stopped; assert no Extend on AMBER (engine asymmetry) | 06 | AMBER |
+| extend-run | extend stopped run → Finished, then Re-run destructive reset → one fresh segment | 06 | GMX |
+| analysis-run-gmx | successful RMSD analysis submission to completion | 07 | GMX |
+| amber-analyze | ready analysis results + trajectory viewer mounts | 07 | AMBER |
+| analysis-error | pockets → ERROR; durable alert "Previous analysis run failed." | 07 | AMBER |
+| publish | MDRepo auth bypass → upload → draft → "Finish in MDRepo" | 08 | GMX |
+| mdposit-handoff | MDPosit target → prepare → four download links | 08 | GMX |
+| published-view | Published card, record link, disabled "Publish a new version" | 08 | GMX |
+| notebook | limit dialog (both seeded notebooks running) → stop → start → status bar → stop | 02, 09 | (eeeee) |
+| dashboard-chrome | search filter, rename, delete (disposable fffff) | 02 | — |
+| locked-simulation | Locked badge + disabled form on a job-referenced simulation | 04 | GMX |
+
+Knowingly not covered: JupyterLab internals (`setup.ipynb`/`analysis.ipynb` are external apps), start-tuning confirm dialog and re-tune destruction (covered paths reach the same endpoints), stop-calculation (0.5s completion cannot be reliably caught mid-flight), preprocessing Image/Fit choices, membrane analyses, trial Fastest/Eco badge ranking, quota-exceeded toast, hub-level flows (server start/stop, tokens).
 
 ## Workflow
 

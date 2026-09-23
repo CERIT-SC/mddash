@@ -109,6 +109,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             "log_line_index": 0,
             "log_total_lines": 500,
             "e2e_reads": 0,
+            "e2e_stage_at": started_at,
         }
 
         response_body = {
@@ -159,6 +160,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             "log_line_index": 0,
             "log_total_lines": 500,
             "e2e_reads": 0,
+            "e2e_stage_at": started_at,
         }
 
         response_body = {
@@ -892,15 +894,28 @@ def _extract_mdposit_accession(url: str) -> str:
     return unquote(match.group("accession")) if match else ""
 
 
-E2E_MDRUN_TOTAL_READS = 3
+E2E_MDRUN_STAGES = 3
+E2E_MDRUN_STAGE_INTERVAL_SEC = 1.5
 
 
 def _e2e_progress(job_data: dict) -> "tuple[bool, float] | None":
-    """Per-poll stage advance for submitted jobs in E2E mode, or None for wall-clock timing."""
+    """
+    Per-poll stage advance for submitted jobs in E2E mode, or None for wall-clock timing.
+
+    Burst reads (post-submit invalidations) advance at most one stage per
+    E2E_MDRUN_STAGE_INTERVAL_SEC, so stages never collapse into each other.
+    """
     if not E2E or "e2e_reads" not in job_data:
         return None
-    reads = job_data["e2e_reads"] = int(job_data["e2e_reads"]) + 1
-    return reads >= E2E_MDRUN_TOTAL_READS, min(1.0, reads / E2E_MDRUN_TOTAL_READS)
+    job_data["e2e_reads"] = int(job_data["e2e_reads"]) + 1
+    now = time.time()
+    stage = int(job_data.get("e2e_stage", 0))
+    if stage < E2E_MDRUN_STAGES - 1 and now - float(job_data.get("e2e_stage_at", now)) >= E2E_MDRUN_STAGE_INTERVAL_SEC:
+        stage += 1
+        job_data["e2e_stage"] = stage
+        job_data["e2e_stage_at"] = now
+    done = stage >= E2E_MDRUN_STAGES - 1
+    return done, 1.0 if done else stage / E2E_MDRUN_STAGES
 
 
 def _job_progress(job_data: dict) -> "tuple[bool, float]":
