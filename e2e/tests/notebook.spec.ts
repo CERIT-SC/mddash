@@ -20,11 +20,10 @@ test("notebook lifecycle: limit dialog, stop, and start", async ({ page }) => {
   // The notebook status bar lives on experiment pages.
   await page.getByRole("link", { name: "AMBER DNA duplex stability" }).click()
   await expect(page.getByRole("region", { name: "Notebook status" })).toBeVisible()
-  await expect(page.getByRole("region", { name: "Notebook status" }).getByRole("link", { name: "Open notebook" })).toBeVisible()
+  await expect(
+    page.getByRole("region", { name: "Notebook status" }).getByRole("link", { name: "Open notebook" })
+  ).toBeVisible()
 
-  await page
-    .getByRole("region", { name: "Notebook status" })
-    .getByRole("button", { name: "Stop notebook" })
-    .click()
+  await page.getByRole("region", { name: "Notebook status" }).getByRole("button", { name: "Stop notebook" }).click()
   await expect(page.getByRole("region", { name: "Notebook status" })).toBeHidden()
 })

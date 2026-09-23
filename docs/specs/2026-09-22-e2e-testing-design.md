@@ -150,8 +150,8 @@ New file `.github/workflows/e2e.yml`; `workflow_dispatch` is the only trigger �
 
 E2E does not replace unit/component tests. Every surviving test must answer: *"name the realistic accident this catches, or the non-obvious behavior it pins."*
 
-- **Keep**: pure-logic tests (parse/format/log-text/tuned-trials/errors/runtime-config/live-work) and component state machines with combinatorial edges (run-step polling transitions, archive states, notebooks).
-- **Prune**: the end state deletes component tests that merely replay happy-path journeys covered by E2E, and any "renders without crashing" filler.
+- **Kept**: pure-logic tests (parse/format/log-text/errors/runtime-config/live-work, etc.) and component state machines with combinatorial edges (run/analyze/tune steps, publish, forms, notebooks).
+- **Pruned**: 12 journey/UI-assembly files deleted (~3k of ~6k lines; 38 → 26 files, 319 → 203 tests): wizard, dashboard, experiment-card, app-shell, site-header, server-status-bar, stepper, step-guide, module-icon, source-metadata, new-experiment-page, notebook-quota-dialog. Nothing was moved or refactored in production code to keep any pin.
 - Rule going forward: verify at the lowest layer that can express the assertion — pure decision → unit; client interaction matrix → component; needs real API + browser → E2E.
 
 ## Risks and mitigations
