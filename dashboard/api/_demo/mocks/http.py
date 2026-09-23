@@ -38,7 +38,7 @@ from ..files import (
     write_mdrun_stdio,
     write_running_amber_log,
 )
-from ..state import demo_state
+from ..state import E2E, demo_state
 
 if TYPE_CHECKING:
     from responses import ResponsesProxy
@@ -107,6 +107,8 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             "duration_sec": DEFAULT_GMX_DURATION_SEC,
             "log_line_index": 0,
             "log_total_lines": 500,
+            "e2e_stage": 0,
+            "e2e_stage_at": started_at,
         }
 
         response_body = {
@@ -156,6 +158,8 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             "duration_sec": DEFAULT_GMX_DURATION_SEC,
             "log_line_index": 0,
             "log_total_lines": 500,
+            "e2e_stage": 0,
+            "e2e_stage_at": started_at,
         }
 
         response_body = {
@@ -889,17 +893,39 @@ def _extract_mdposit_accession(url: str) -> str:
     return unquote(match.group("accession")) if match else ""
 
 
+E2E_MDRUN_STAGES = 3
+E2E_MDRUN_STAGE_INTERVAL_SEC = 1.5
+
+
+def _job_progress(job_data: dict) -> "tuple[bool, float]":
+    """Whether the job is done plus its progress ratio (staged per-poll in E2E mode, else wall-clock)."""
+    if E2E and "e2e_stage" in job_data:
+        # Advance ≤1 stage per E2E_MDRUN_STAGE_INTERVAL_SEC, so post-submit read
+        # bursts cannot collapse stages.
+        now = time.time()
+        stage = int(job_data["e2e_stage"])
+        if stage < E2E_MDRUN_STAGES - 1 and now - float(job_data["e2e_stage_at"]) >= E2E_MDRUN_STAGE_INTERVAL_SEC:
+            stage += 1
+            job_data["e2e_stage"] = stage
+            job_data["e2e_stage_at"] = now
+        done = stage >= E2E_MDRUN_STAGES - 1
+        return done, 1.0 if done else stage / E2E_MDRUN_STAGES
+
+    duration_sec = float(job_data.get("duration_sec", DEFAULT_GMX_DURATION_SEC))
+    created_at = float(job_data.get("created_at", time.time()))
+    elapsed = max(0.0, time.time() - created_at)
+    progress_ratio = min(1.0, elapsed / duration_sec) if duration_sec > 0 else 1.0
+    return elapsed >= duration_sec, progress_ratio
+
+
 def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
-    """Advance MDRun job state based on elapsed time."""
+    """Advance MDRun job state: elapsed wall-clock, or per-poll stages in E2E mode."""
     if job_data.get("status") != "RUNNING":
         return
 
-    created_at = float(job_data.get("created_at", time.time()))
-    duration_sec = float(job_data.get("duration_sec", DEFAULT_GMX_DURATION_SEC))
-    elapsed = max(0.0, time.time() - created_at)
+    done, progress_ratio = _job_progress(job_data)
 
     log_total_lines = int(job_data.get("log_total_lines", 500))
-    progress_ratio = min(1.0, elapsed / duration_sec) if duration_sec > 0 else 1.0
     job_data["log_line_index"] = int(log_total_lines * progress_ratio)
 
     # Write log files lazily here: AmberJob/GromacsJob.start() cleans previous
@@ -916,7 +942,7 @@ def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
         write_mdrun_stdio(experiment_id, str(Path(deffnm).parent), job_id)
         _sync_amber_mdinfo_progress(job_data, progress_ratio)
 
-    if elapsed >= duration_sec:
+    if done:
         job_data["status"] = "FINISHED"
         job_data["performance"] = 62.5
 

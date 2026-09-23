@@ -11,7 +11,7 @@ from config import DATA_DIR
 from enums import JobStatus
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
 
-from .state import demo_state
+from .state import E2E, demo_state
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +59,11 @@ def fetch_analysis_payload(mdposit_name: str) -> JsonValue:
             return json.loads(cache_file.read_text())
         except (OSError, json.JSONDecodeError):
             cache_file.unlink(missing_ok=True)
+
+    if E2E:
+        # No network in E2E mode: a cache miss ends the analysis ERROR, exactly
+        # like a real upstream 404.
+        return None
 
     response = requests.get(
         f"{MDPOSIT_ANALYSES_URL}/{mdposit_name}", headers={"Accept": "application/json"}, timeout=30

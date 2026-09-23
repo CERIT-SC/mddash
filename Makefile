@@ -299,6 +299,10 @@ history: ## Show Helm release history
 rollback: ## Rollback to previous revision (REVISION=N for specific)
 	@$(MAKE) -C helm rollback ENV=$(ENV) REVISION=$(REVISION)
 
+.PHONY: e2e
+e2e: ## Run browser E2E tests against the demo harness (Playwright)
+	pnpm --filter @mddash/e2e test
+
 .PHONY: demo
 demo: ## Run local demo (real Flask API in demo profile + React dev server)
 	@fuser -k 8888/tcp 5173/tcp 2>/dev/null || true # clean up stale listeners from previous runs

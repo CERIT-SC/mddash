@@ -10,6 +10,8 @@ node_modules/
 **/dist/
 **/*.tsbuildinfo
 .playwright-mcp/
+e2e/test-results/
+e2e/playwright-report/
 pmemd*.tar.bz2
 ambertools*.tar.bz2
 .playwright-cli/

@@ -24,7 +24,7 @@ from .files import (
     write_running_amber_log,
     write_running_gmx_log,
 )
-from .state import build_model, demo_state
+from .state import E2E, build_model, demo_state
 
 logger = logging.getLogger(__name__)
 
@@ -132,45 +132,44 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         is_stopped=False,
         error_message=None,
     )
-    if running_tuner.id:
-        started_at = time.time() - 4
-        demo_state.tuner_jobs[running_tuner.id] = {
-            "status": JobStatus.RUNNING.value,
-            "created_at": started_at,
-            "max_trials": 12,
-            "trials": [
-                {
-                    # Matches the seeded running production job's config, so the
-                    # Run step shows tuned estimates for "Configuration used".
-                    "id": "prod_00000",
-                    "status": JobStatus.FINISHED.value,
-                    "np": 4,
-                    "ntomp": 2,
-                    "nb": "gpu",
-                    "pme": "cpu",
-                    "performance": 704.12,
-                },
-                {
-                    "id": "prod_00001",
-                    "status": JobStatus.ERROR.value,
-                    "np": 4,
-                    "ntomp": 2,
-                    "nb": "cpu",
-                    "pme": "cpu",
-                    "performance": None,
-                },
-                {
-                    "id": "prod_00002",
-                    "status": JobStatus.RUNNING.value,
-                    "np": 4,
-                    "ntomp": 2,
-                    "nb": "gpu",
-                    "pme": "gpu",
-                    "performance": None,
-                    "started_at": started_at,
-                },
-            ],
-        }
+    started_at = time.time() - 4
+    demo_state.tuner_jobs[running_tuner.id] = {
+        "status": JobStatus.RUNNING.value,
+        "created_at": started_at,
+        "max_trials": 12,
+        "trials": [
+            {
+                # Matches the seeded running production job's config, so the
+                # Run step shows tuned estimates for "Configuration used".
+                "id": "prod_00000",
+                "status": JobStatus.FINISHED.value,
+                "np": 4,
+                "ntomp": 2,
+                "nb": "gpu",
+                "pme": "cpu",
+                "performance": 704.12,
+            },
+            {
+                "id": "prod_00001",
+                "status": JobStatus.ERROR.value,
+                "np": 4,
+                "ntomp": 2,
+                "nb": "cpu",
+                "pme": "cpu",
+                "performance": None,
+            },
+            {
+                "id": "prod_00002",
+                "status": JobStatus.RUNNING.value,
+                "np": 4,
+                "ntomp": 2,
+                "nb": "gpu",
+                "pme": "gpu",
+                "performance": None,
+                "started_at": started_at,
+            },
+        ],
+    }
 
     # Stopped/completed tuner job from equilibration phase
     stopped_tuner = build_model(
@@ -309,8 +308,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     )
     published_notebook = build_model(Notebook, experiment_id=published.id, token="demo-token-published")
     demo_state.notebook_status[published.id] = PodStatus.DOWN
-    if published.mdrepo_id:
-        demo_state.mdrepo_records[published.mdrepo_id] = True
+    demo_state.mdrepo_records["8gahj-dh519"] = True
 
     published_gmx = build_model(
         GromacsJob,
@@ -333,6 +331,96 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "tpr_name": "lysozyme_hewl.tpr",
         "nsteps": 1000000,
     }
+
+    def finished_gmx_study(
+        experiment_id: str,
+        name: str,
+        sim_name: str,
+        *,
+        source_type: SourceType,
+        source_ref: str | None = None,
+        nsteps: int,
+        performance: float,
+        ranks: int,
+        threads: int,
+        nb: DeviceType,
+        age_days: int,
+    ) -> "tuple[Experiment, Notebook, GromacsJob]":
+        """Seed a FINISHED GMX experiment with manifest, files, and log — the shape E2E journeys own."""
+        tpr_name = f"{sim_name}.tpr"
+        experiment = build_model(
+            Experiment,
+            id=experiment_id,
+            name=name,
+            module_name="Protein",
+            module_category="protein",
+            source_type=source_type,
+            source_ref=source_ref,
+            source_files=[tpr_name, "structure.pdb"] if source_type is SourceType.FILE else None,
+            notebooks_repo="https://github.com/CERIT-SC/mddash-notebooks.git",
+            created_at=now - timedelta(days=age_days),
+            updated_at=now - timedelta(days=age_days - 1),
+        )
+        notebook = build_model(Notebook, experiment_id=experiment.id, token=f"demo-token-{sim_name}")
+        demo_state.notebook_status[experiment.id] = PodStatus.DOWN
+
+        started = now - timedelta(days=age_days)
+        job = build_model(
+            GromacsJob,
+            id=f"demo-gmx-{sim_name}",
+            experiment=experiment,
+            simulation_path=f"{sim_name}.simulation.json",
+            pme=DeviceType.CPU,
+            nb=nb,
+            np=ranks,
+            ntomp=threads,
+            _nsteps=nsteps,
+            _start_timestamp=int(started.timestamp()),
+            _finish_timestamp=int((started + timedelta(hours=12)).timestamp()),
+            _performance=performance,
+            created_at=started,
+        )
+        demo_state.mdrun_jobs[job.id] = {
+            "status": JobStatus.FINISHED.value,
+            "experiment_id": experiment.id,
+            "tpr_name": tpr_name,
+            "nsteps": nsteps,
+        }
+        ensure_demo_files(experiment.id, [tpr_name, "structure.pdb", "trajectory.xtc"])
+        write_finished_gmx_log(experiment.id, sim_name, nsteps=nsteps, performance=performance)
+        write_gmx_simulation(experiment.id, sim_name, simulation_path=f"{sim_name}.simulation.json", topology=tpr_name)
+        return experiment, notebook, job
+
+    # E2E-only seeds: publish journey, MDPosit-handoff journey, AMBER manual-run journey.
+    e2e_models: list = []
+    if E2E:
+        publishable, publishable_notebook, publishable_gmx = finished_gmx_study(
+            "hhhhh",
+            "Alanine dipeptide free energy landscape",
+            "alanine_dipeptide",
+            source_type=SourceType.PDB,
+            source_ref="2JOF",
+            nsteps=100000,
+            performance=87.4,
+            ranks=2,
+            threads=2,
+            nb=DeviceType.CPU,
+            age_days=6,
+        )
+
+        handoff, handoff_notebook, handoff_gmx = finished_gmx_study(
+            "jjjjj",
+            "KIX domain folding benchmark",
+            "kix_domain",
+            source_type=SourceType.FILE,
+            nsteps=250000,
+            performance=112.8,
+            ranks=4,
+            threads=2,
+            nb=DeviceType.GPU,
+            age_days=4,
+        )
+        e2e_models += [publishable, publishable_notebook, publishable_gmx, handoff, handoff_notebook, handoff_gmx]
 
     # Experiment 4: AMBER protein folding study (currently running AMBER simulation)
     amber_folding = build_model(
@@ -419,6 +507,26 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     )
     amber_dna_notebook = build_model(Notebook, experiment_id=amber_dna.id, token="demo-token-dna")
     demo_state.notebook_status[amber_dna.id] = PodStatus.DOWN
+
+    # AMBER study with a valid simulation and no jobs yet — E2E-only, the manual
+    # AMBER run journey (Tune → Manual configuration → Run Simulation) owns it.
+    if E2E:
+        amber_tetra = build_model(
+            Experiment,
+            id="iiiii",
+            name="AMBER tetrapeptide conformational sampling",
+            module_name="Protein (BioBB)",
+            module_category="protein",
+            source_type=SourceType.FILE,
+            source_files=["tetrapeptide.prmtop", "tetrapeptide.inpcrd", "production.mdin"],
+            notebooks_repo="https://github.com/CERIT-SC/mddash-notebooks.git",
+            engine=Engine.AMBER,
+            created_at=now - timedelta(days=1),
+            updated_at=now - timedelta(hours=3),
+        )
+        amber_tetra_notebook = build_model(Notebook, experiment_id=amber_tetra.id, token="demo-token-tetra")
+        demo_state.notebook_status[amber_tetra.id] = PodStatus.DOWN
+        e2e_models += [amber_tetra, amber_tetra_notebook]
 
     # Analyses for the DNA study: one ready, one still calculating
     dna_rmsd_analysis = build_model(
@@ -595,6 +703,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         archived,
         archived_notebook,
     ])
+    db.session.add_all(e2e_models)
     db.session.commit()
 
     # Register seeded analysis jobs so the mock K8s layer reports real statuses
@@ -696,6 +805,15 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     )
     write_finished_amber_log(amber_dna.id, "simulation")
 
+    # AMBER tetrapeptide study: ready to run, no jobs yet (E2E-only)
+    if E2E:
+        ensure_amber_demo_files(
+            amber_tetra.id,
+            prmtop_name="tetrapeptide.prmtop",
+            inpcrd_name="tetrapeptide.inpcrd",
+            mdin_names=["production.mdin"],
+        )
+
     # MDPosit import study: mirrors the project file layout exposed by HTTP mocks.
     ensure_mdposit_demo_files(mdposit_demo.id)
 
@@ -754,6 +872,16 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         coordinates="dna.inpcrd",
         control="simulation.mdin",
     )
+
+    if E2E:
+        write_amber_simulation(
+            amber_tetra.id,
+            "tetrapeptide",
+            simulation_path="tetrapeptide.simulation.json",
+            topology="tetrapeptide.prmtop",
+            coordinates="tetrapeptide.inpcrd",
+            control="production.mdin",
+        )
 
 
 def _backdate_stale_simulations(experiment_id: str, stems: tuple[str, ...]) -> None:
