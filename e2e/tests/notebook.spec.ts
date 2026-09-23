@@ -1,8 +1,6 @@
 import { expect, test } from "@playwright/test"
 
-// Two notebooks are seeded RUNNING (enzyme + villin) and the demo limit is 2, so any
-// further start hits the limit dialog. Journey: stop villin's from the dialog, start
-// DNA's with "Start new notebook", stop it from the experiment page's status bar.
+// Two RUNNING notebooks at a demo limit of 2 — every further start routes through the limit dialog.
 test("notebook lifecycle: limit dialog, stop, and start", async ({ page }) => {
   await page.goto("./")
 

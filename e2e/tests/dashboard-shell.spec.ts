@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 // Uses the disposable MDPosit-import seed fffff: renamed, then deleted.
-test("dashboard chrome: search, rename, and delete an experiment", async ({ page }) => {
+test("dashboard shell: search, rename, and delete an experiment", async ({ page }) => {
   await page.goto("./")
 
   await page.getByLabel("Search experiments").fill("villin")
