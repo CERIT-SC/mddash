@@ -241,6 +241,90 @@ class TestStop:
             assert stopped._last_known_status is JobStatus.STOPPED
 
 
+class TestSubmit:
+    """Submit is create-only: any existing run 409s — the only way back is DELETE."""
+
+    def test_submit_creates_job_on_empty_history(
+        self, client: FlaskClient, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        mdrun = _mock_mdrun(mocker)
+        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+
+        response = client.post(
+            f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}",
+            json={"np": 4, "ntomp": 2, "pme": "cpu", "nb": "gpu"},
+        )
+
+        assert response.status_code == HTTPStatus.CREATED
+        mdrun["create"].assert_called_once()
+
+    @pytest.mark.parametrize("status", [JobStatus.PENDING, JobStatus.RUNNING, JobStatus.STOPPED, JobStatus.FINISHED])
+    def test_submit_existing_run_conflicts(
+        self,
+        status: JobStatus,
+        client: FlaskClient,
+        app: Flask,
+        experiment_id: str,
+        tmp_path: Path,
+        mocker: MockerFixture,
+    ) -> None:
+        """Any run, live or terminal, blocks submit regardless of status — only DELETE clears the way."""
+        mdrun = _mock_mdrun(mocker)
+        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        _add_gmx_job(app, experiment_id, sim_path, f"job-{status.value}", status)
+
+        response = client.post(
+            f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}",
+            json={"np": 4, "ntomp": 2, "pme": "cpu", "nb": "gpu"},
+        )
+
+        assert response.status_code == HTTPStatus.CONFLICT
+        assert (
+            response.get_json()["detail"]
+            == "A run already exists for this simulation; delete it first to submit a new run."
+        )
+        mdrun["create"].assert_not_called()
+
+    def test_submit_existing_amber_run_conflicts(
+        self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        mdrun = _mock_mdrun(mocker)
+        sim_path = _write_amber_simulation(tmp_path / experiment_id)
+        _add_amber_job(app, experiment_id, sim_path, "amber-fin", JobStatus.FINISHED)
+
+        response = client.post(
+            f"/dash/api/experiments/{experiment_id}/amber/{sim_path}",
+            json={"binary": "pmemd.cuda", "ewald": "default", "np": 1, "ntomp": 8},
+        )
+
+        assert response.status_code == HTTPStatus.CONFLICT
+        assert (
+            response.get_json()["detail"]
+            == "A run already exists for this simulation; delete it first to submit a new run."
+        )
+        mdrun["create"].assert_not_called()
+
+    def test_resubmit_after_delete_succeeds(
+        self, client: FlaskClient, app: Flask, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """The sanctioned re-run path: DELETE wipes the history, then POST creates a fresh run."""
+        mdrun = _mock_mdrun(mocker)
+        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        _add_gmx_job(app, experiment_id, sim_path, "job-old", JobStatus.STOPPED)
+
+        assert (
+            client.delete(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}").status_code == HTTPStatus.NO_CONTENT
+        )
+
+        response = client.post(
+            f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}",
+            json={"np": 4, "ntomp": 2, "pme": "cpu", "nb": "gpu"},
+        )
+
+        assert response.status_code == HTTPStatus.CREATED
+        mdrun["create"].assert_called_once()
+
+
 class TestExtend:
     """mdrun -cpi counts ADDITIONAL steps: commands carry the delta, rows persist the absolute target."""
 

@@ -9,7 +9,7 @@ from models import AmberJob, Experiment
 from models.simulation import check_simulation_path
 from schemas import AmberJobSchema
 from validators import check_positive_int
-from werkzeug.exceptions import BadRequest, NotFound
+from werkzeug.exceptions import BadRequest, Conflict, NotFound
 
 amber_bp = Blueprint("amber", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/amber")
 
@@ -59,6 +59,7 @@ def submit_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturn
 
     Raises:
         BadRequest: If compute parameters are invalid.
+        Conflict: If a run already exists for this simulation.
     """
     check_simulation_path(simulation_path)
 
@@ -66,26 +67,27 @@ def submit_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturn
     experiment: Experiment = Experiment.query.get_or_404(
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
-    job = AmberJob.latest_for(experiment_id, simulation_path)
 
-    if not job:
-        data = request.get_json(silent=True) or {}
-        try:
-            binary = AmberBinary.from_string(data.get("binary", request.form.get("binary", "")))
-            ewald = EwaldPreset.from_string(data.get("ewald", request.form.get("ewald", "")))
-            np = int(data.get("np", request.form.get("np", "")))
-            ntomp = int(data.get("ntomp", request.form.get("ntomp", "")))
-        except (ValueError, TypeError) as exc:
-            raise BadRequest("Invalid compute parameters.") from exc
+    if AmberJob.latest_for(experiment_id, simulation_path) is not None:
+        raise Conflict("A run already exists for this simulation; delete it first to submit a new run.")
 
-        job = AmberJob.start(
-            experiment=experiment,
-            simulation_path=simulation_path,
-            binary=binary,
-            ewald=ewald,
-            np=np,
-            ntomp=ntomp,
-        )
+    data = request.get_json(silent=True) or {}
+    try:
+        binary = AmberBinary.from_string(data.get("binary", request.form.get("binary", "")))
+        ewald = EwaldPreset.from_string(data.get("ewald", request.form.get("ewald", "")))
+        np = int(data.get("np", request.form.get("np", "")))
+        ntomp = int(data.get("ntomp", request.form.get("ntomp", "")))
+    except (ValueError, TypeError) as exc:
+        raise BadRequest("Invalid compute parameters.") from exc
+
+    job = AmberJob.start(
+        experiment=experiment,
+        simulation_path=simulation_path,
+        binary=binary,
+        ewald=ewald,
+        np=np,
+        ntomp=ntomp,
+    )
 
     return jsonify(schema.dump(job)), HTTPStatus.CREATED
 

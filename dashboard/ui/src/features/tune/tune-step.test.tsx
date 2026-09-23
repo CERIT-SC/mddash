@@ -80,7 +80,7 @@ function tunerJob(overrides: Partial<TunerJob> = {}): TunerJob {
   }
 }
 
-function mockTuner(initial: TunerJob | null, options: { submitFails?: boolean } = {}) {
+function mockTuner(initial: TunerJob | null, options: { submitFails?: boolean; submitConflicts?: boolean } = {}) {
   const state = { current: initial }
   const calls: { url: string; method: string; body?: unknown }[] = []
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -92,6 +92,16 @@ function mockTuner(initial: TunerJob | null, options: { submitFails?: boolean } 
       body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
     })
     if (url.endsWith(GMX_ONE) && method === "POST") {
+      if (options.submitConflicts) {
+        return Response.json(
+          {
+            type: "urn:mddash:conflict",
+            title: "Conflict",
+            detail: "A run already exists for this simulation; delete it first to submit a new run.",
+          },
+          { status: 409 }
+        )
+      }
       if (options.submitFails) {
         return Response.json(
           { type: "urn:mddash:forbidden", title: "Forbidden", detail: "MDRun refused the job." },
@@ -333,6 +343,17 @@ describe("TuneStep running job", () => {
       nb: "cpu",
     })
     expect(spies.onStepChange).toHaveBeenCalledWith(2)
+  })
+
+  it("navigates to the existing run when submit conflicts with one already there", async () => {
+    mockTuner(job, { submitConflicts: true })
+    const spies = renderTune({ trialId: "t2" })
+
+    const run = screen.getByRole("button", { name: /run simulation/i })
+    await waitFor(() => expect(run).toBeEnabled())
+    await userEvent.click(run)
+
+    await waitFor(() => expect(spies.onStepChange).toHaveBeenCalledWith(2))
   })
 
   it("stays on Tune when the run submission fails", async () => {

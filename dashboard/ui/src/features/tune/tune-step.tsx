@@ -175,6 +175,17 @@ export function TuneStep({
   const amberSubmit = useSubmitAmberJob()
   const submitRun = (engine === Engine.AMBER ? amberSubmit : gmxSubmit) as unknown as SubmitRun
 
+  const advanceToRun = () => {
+    const jobKey =
+      engine === Engine.AMBER
+        ? getGetAmberJobQueryKey(experimentId, simulation.simulation_path)
+        : getGetGromacsJobQueryKey(experimentId, simulation.simulation_path)
+    void queryClient.invalidateQueries({ queryKey: jobKey })
+    void queryClient.invalidateQueries({ queryKey: getListSimulationsQueryKey(experimentId) })
+    void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experimentId) })
+    onStepChange(2)
+  }
+
   // Run Simulation submits the production job and navigates to Run on success;
   // a failure stays on Tune with the actionable error.
   const startRun = (values: HardwareConfigValues) =>
@@ -183,16 +194,14 @@ export function TuneStep({
       {
         onSuccess: () => {
           toast.success("Run started")
-          const jobKey =
-            engine === Engine.AMBER
-              ? getGetAmberJobQueryKey(experimentId, simulation.simulation_path)
-              : getGetGromacsJobQueryKey(experimentId, simulation.simulation_path)
-          void queryClient.invalidateQueries({ queryKey: jobKey })
-          void queryClient.invalidateQueries({ queryKey: getListSimulationsQueryKey(experimentId) })
-          void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experimentId) })
-          onStepChange(2)
+          advanceToRun()
         },
-        onError: (error) => toast.error(toApiError(error).message),
+        onError: (error) => {
+          const apiError = toApiError(error)
+          toast.error(apiError.message)
+          // The 409 run already exists — the goal is met despite the error; go there.
+          if (apiError.status === 409) advanceToRun()
+        },
       }
     )
 
