@@ -1,10 +1,13 @@
 """
 Demo runtime state management.
 
-Provides typed state containers for tracking mock service state
-during demo sessions. All state is held in memory and cleared on restart.
+Typed state containers for the mock services, in memory and cleared on restart.
+
+MDDASH_DEMO_E2E=1 trades human-realistic timing for test speed and adds
+E2E-only seeds (see AGENTS.md); read once here for every consumer.
 """
 
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, TypeVar
@@ -12,6 +15,8 @@ from typing import Any, TypeVar
 from enums import PodStatus
 
 from .files import MDPOSIT_DEMO_ACCESSION, MDPOSIT_DEMO_FILES
+
+E2E = os.environ.get("MDDASH_DEMO_E2E") == "1"
 
 ModelType = TypeVar("ModelType")
 

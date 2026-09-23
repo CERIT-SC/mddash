@@ -47,7 +47,7 @@ def install_all_mocks() -> None:  # ruff:ignore[non-empty-init-module]
     # Install tuner log mocks (module mutation for trial stdout/stderr)
     install_tuner_log_mocks()
 
-    from ..mode import E2E  # ruff:ignore[import-outside-top-level]
+    from ..state import E2E  # ruff:ignore[import-outside-top-level]
 
     if E2E:
         from .git import install_git_mocks  # ruff:ignore[import-outside-top-level]

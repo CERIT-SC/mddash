@@ -70,7 +70,7 @@ Playwright constants: `workers: 3`, `fullyParallel: true`, `retries: 0` (interfe
 
 ## E2E mode in the demo harness
 
-One env var, `MDDASH_DEMO_E2E=1`, read in one place — a new `_demo/mode.py` exporting `E2E: bool` — and consulted by the mock, seed, and analysis modules. When unset, seeded content and behavior are byte-identical to today. When set: the three E2E-only seeds (`hhhhh` publish journey, `jjjjj` handoff journey, `iiiii` AMBER manual-run journey) are added alongside the standard demo data, and four changes apply:
+One env var, `MDDASH_DEMO_E2E=1`, read once in `_demo/state.py` (`E2E: bool`) and consulted by the mock, seed, and analysis modules. When unset, seeded content and behavior are byte-identical to today. When set: the three E2E-only seeds (`hhhhh` publish journey, `jjjjj` handoff journey, `iiiii` AMBER manual-run journey) are added alongside the standard demo data, and four changes apply:
 
 **Process behavior:** `_demo/app.py`'s `__main__` calls `app.run(debug=False, ...)`. This disables the Werkzeug file-watch reloader, which would otherwise wipe and reseed demo state mid-suite whenever a repo file changes (the reloader restarts re-run `seed_data()`).
 

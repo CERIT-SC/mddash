@@ -38,8 +38,7 @@ from ..files import (
     write_mdrun_stdio,
     write_running_amber_log,
 )
-from ..mode import E2E
-from ..state import demo_state
+from ..state import E2E, demo_state
 
 if TYPE_CHECKING:
     from responses import ResponsesProxy

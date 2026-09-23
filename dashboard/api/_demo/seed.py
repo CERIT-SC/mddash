@@ -24,8 +24,7 @@ from .files import (
     write_running_amber_log,
     write_running_gmx_log,
 )
-from .mode import E2E
-from .state import build_model, demo_state
+from .state import E2E, build_model, demo_state
 
 logger = logging.getLogger(__name__)
 

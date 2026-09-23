@@ -116,7 +116,7 @@ app = create_demo_app()
 
 
 if __name__ == "__main__":
-    from _demo.mode import E2E
+    from _demo.state import E2E
 
     # E2E: no reloader/debugger — a file-watch restart would wipe and reseed
     # demo state mid-suite.

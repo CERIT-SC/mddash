@@ -11,8 +11,7 @@ from config import DATA_DIR
 from enums import JobStatus
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
 
-from .mode import E2E
-from .state import demo_state
+from .state import E2E, demo_state
 
 logger = logging.getLogger(__name__)
 

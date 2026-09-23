@@ -20,8 +20,7 @@ from config import DATA_DIR
 from enums import JobStatus, PodStatus
 
 from ..analysis_data import start_analysis_thread
-from ..mode import E2E
-from ..state import demo_state
+from ..state import E2E, demo_state
 
 logger = logging.getLogger(__name__)
 
