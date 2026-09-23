@@ -168,6 +168,9 @@ class TunerJob(db.Model):  # type: ignore
             ["run_input"] if experiment.engine == Engine.GMX else ["topology", "coordinates", "control"]
         )
         extra_args = simulation.extra_args
+        # TODO: drop after user testing (#166) — pin the tuner's length estimate to the forced 500k run.
+        if experiment.engine == Engine.GMX:
+            extra_args = f"{extra_args} -nsteps 500000".strip()
 
         try:
             match experiment.engine:
