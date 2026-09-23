@@ -1,5 +1,5 @@
 ---
-name: e2e-testing-patterns
+name: e2e-testing
 description: ALWAYS use this skill when implementing or debugging browser-driven E2E tests, Playwright specs, critical user-flow automation, or E2E test standards.
 ---
 

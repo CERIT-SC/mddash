@@ -1,4 +1,4 @@
-# e2e-testing-patterns — detailed patterns and worked examples
+# e2e-testing — detailed patterns and worked examples
 
 ## Playwright Patterns
 
