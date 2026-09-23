@@ -2,6 +2,7 @@ packages:
   - dashboard/ui
   - landing
   - hub/ui
+  - e2e
 
 allowBuilds:
   "@parcel/watcher": false

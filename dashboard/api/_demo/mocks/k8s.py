@@ -20,15 +20,16 @@ from config import DATA_DIR
 from enums import JobStatus, PodStatus
 
 from ..analysis_data import start_analysis_thread
+from ..mode import E2E
 from ..state import demo_state
 
 logger = logging.getLogger(__name__)
 
-# Analysis job duration in seconds
-ANALYSIS_JOB_DURATION_SEC = 3.0
+# Analysis job duration in seconds (0.5s in E2E mode)
+ANALYSIS_JOB_DURATION_SEC = 0.5 if E2E else 3.0
 
-# MDRepo upload job duration in seconds
-UPLOAD_JOB_DURATION_SEC = 4.0
+# MDRepo upload job duration in seconds (0.5s in E2E mode)
+UPLOAD_JOB_DURATION_SEC = 0.5 if E2E else 4.0
 
 
 def install_k8s_mocks() -> None:

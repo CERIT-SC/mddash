@@ -15,3 +15,6 @@ playwright-cli install-browser chromium --with-deps
 
 # Install frontend workspace dependencies
 COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile
+
+# Playwright browser for make e2e
+pnpm --filter @mddash/e2e exec playwright install --with-deps chromium

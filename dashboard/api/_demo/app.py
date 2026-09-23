@@ -116,4 +116,8 @@ app = create_demo_app()
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=8888)
+    from _demo.mode import E2E
+
+    # E2E: no reloader/debugger — a file-watch restart would wipe and reseed
+    # demo state mid-suite.
+    app.run(debug=not E2E, host="0.0.0.0", port=8888)

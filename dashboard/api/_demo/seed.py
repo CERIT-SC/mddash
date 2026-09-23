@@ -334,6 +334,46 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "nsteps": 1000000,
     }
 
+    # Finished GMX study that is ready to publish but not yet published. The E2E
+    # publish journey owns this experiment (PARALLEL state assignment, see
+    # docs/specs/2026-09-22-e2e-testing-design.md).
+    publishable = build_model(
+        Experiment,
+        id="hhhhh",
+        name="Alanine dipeptide free energy landscape",
+        module_name="Protein",
+        module_category="protein",
+        source_type=SourceType.PDB,
+        source_ref="2JOF",
+        notebooks_repo="https://github.com/CERIT-SC/mddash-notebooks.git",
+        created_at=now - timedelta(days=6),
+        updated_at=now - timedelta(days=5),
+    )
+    publishable_notebook = build_model(Notebook, experiment_id=publishable.id, token="demo-token-publishable")
+    demo_state.notebook_status[publishable.id] = PodStatus.DOWN
+
+    publishable_gmx = build_model(
+        GromacsJob,
+        id="demo-gmx-publishable",
+        experiment=publishable,
+        simulation_path="alanine_dipeptide.simulation.json",
+        pme=DeviceType.CPU,
+        nb=DeviceType.CPU,
+        np=2,
+        ntomp=2,
+        _nsteps=100000,
+        _start_timestamp=int((now - timedelta(days=6)).timestamp()),
+        _finish_timestamp=int((now - timedelta(days=5, hours=12)).timestamp()),
+        _performance=87.4,
+        created_at=now - timedelta(days=6),
+    )
+    demo_state.mdrun_jobs[publishable_gmx.id] = {
+        "status": JobStatus.FINISHED.value,
+        "experiment_id": publishable.id,
+        "tpr_name": "alanine_dipeptide.tpr",
+        "nsteps": 100000,
+    }
+
     # Experiment 4: AMBER protein folding study (currently running AMBER simulation)
     amber_folding = build_model(
         Experiment,
@@ -576,6 +616,9 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         published,
         published_notebook,
         published_gmx,
+        publishable,
+        publishable_notebook,
+        publishable_gmx,
         rmsd_analysis,
         sasa_analysis,
         hbonds_analysis,
@@ -676,6 +719,10 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     ensure_demo_files(published.id, ["lysozyme_hewl.tpr", "structure.pdb", "trajectory.xtc", "input.pdb"])
     write_finished_gmx_log(published.id, "lysozyme_hewl", nsteps=1000000, performance=45.3)
 
+    # Publish-ready study: finished run, same simple structure
+    ensure_demo_files(publishable.id, ["alanine_dipeptide.tpr", "structure.pdb", "trajectory.xtc", "input.pdb"])
+    write_finished_gmx_log(publishable.id, "alanine_dipeptide", nsteps=100000, performance=87.4)
+
     # AMBER villin folding study: uses AMBER file format
     ensure_amber_demo_files(
         amber_folding.id,
@@ -726,6 +773,13 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "lysozyme_hewl",
         simulation_path="lysozyme_hewl.simulation.json",
         topology="lysozyme_hewl.tpr",
+    )
+
+    write_gmx_simulation(
+        publishable.id,
+        "alanine_dipeptide",
+        simulation_path="alanine_dipeptide.simulation.json",
+        topology="alanine_dipeptide.tpr",
     )
 
     write_amber_simulation(

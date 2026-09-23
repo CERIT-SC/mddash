@@ -10,12 +10,12 @@
     "build:landing": "pnpm --filter landing build",
     "build:hub-ui": "pnpm --filter hub-ui build",
     "test:ui": "pnpm --filter dash test",
-    "type-check": "pnpm --parallel --filter dash --filter landing --filter hub-ui type-check",
-    "knip": "pnpm --parallel --filter dash --filter landing --filter hub-ui knip",
-    "lint": "oxlint --type-aware --deny-warnings dashboard/ui landing hub/ui",
-    "lint:fix": "oxlint --type-aware --fix dashboard/ui landing hub/ui",
-    "format": "prettier --write --log-level warn \"{dashboard/ui,landing,hub/ui}/src/**/*.{ts,tsx,css}\"",
-    "format:check": "prettier --check \"{dashboard/ui,landing,hub/ui}/src/**/*.{ts,tsx,css}\""
+    "type-check": "pnpm --parallel --filter dash --filter landing --filter hub-ui --filter @mddash/e2e type-check",
+    "knip": "pnpm --parallel --filter dash --filter landing --filter hub-ui --filter @mddash/e2e knip",
+    "lint": "oxlint --type-aware --deny-warnings dashboard/ui landing hub/ui e2e",
+    "lint:fix": "oxlint --type-aware --fix dashboard/ui landing hub/ui e2e",
+    "format": "prettier --write --log-level warn \"{dashboard/ui,landing,hub/ui}/src/**/*.{ts,tsx,css}\" \"e2e/**/*.ts\"",
+    "format:check": "prettier --check \"{dashboard/ui,landing,hub/ui}/src/**/*.{ts,tsx,css}\" \"e2e/**/*.ts\""
   },
   "devDependencies": {
     "@ianvs/prettier-plugin-sort-imports": "4.7.1",

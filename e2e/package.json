@@ -1,0 +1,16 @@
+{
+  "name": "@mddash/e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "type-check": "tsc --noEmit",
+    "knip": "knip"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "26.6.2",
+    "knip": "^6.37.0",
+    "typescript": "7.0.2"
+  }
+}

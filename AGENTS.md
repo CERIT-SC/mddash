@@ -71,6 +71,7 @@ make fix
 make type-check
 make knip
 make test
+make e2e
 make validate-charts  # when editing Helm charts or config (requires helm + gomplate + yq)
 make lint-workflows  # when editing GitHub Actions workflows (requires actionlint + zizmor)
 ```
