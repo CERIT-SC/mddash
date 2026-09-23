@@ -204,11 +204,14 @@ class Experiment(db.Model):  # type: ignore
 
         Publishing is experiment-level (the MDRepo upload covers the whole
         experiment), so this lives here rather than on a simulation: unlocked
-        once a draft/record exists, or once any run finished anywhere in the
-        experiment. The wizard additionally holds Publish while the SELECTED
+        once a draft/record exists, or once any run finished or was stopped
+        anywhere in the experiment (stopped ⇔ finished: partial results are
+        publishable). The wizard additionally holds Publish while the SELECTED
         simulation is live — a per-simulation concern this flag can't express.
         """
-        return self.mdrepo_id is not None or any(job.status == JobStatus.FINISHED for job in self.simulation_jobs)
+        return self.mdrepo_id is not None or any(
+            job.status in {JobStatus.FINISHED, JobStatus.STOPPED} for job in self.simulation_jobs
+        )
 
     @property
     def mdrepo_record_url(self) -> str | None:

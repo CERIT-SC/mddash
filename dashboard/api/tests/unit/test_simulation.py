@@ -1146,6 +1146,19 @@ class TestCanPublish:
             assert experiment is not None
             assert experiment.can_publish is False
 
+    def test_stopped_run_unlocks_publish(self, app: Flask, tmp_path: Path) -> None:
+        """Stopped ⇔ finished: partial results are publishable (mirrors the step ladder's analyzing handling)."""
+        exp_id = _seed_experiment(app)
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        _add_gmx_job(app, exp_id, "protein.simulation.json", _last_known_status=JobStatus.STOPPED)
+
+        with app.app_context():
+            experiment = db.session.get(Experiment, exp_id)
+            assert experiment is not None
+            assert experiment.can_publish is True
+
     def test_finished_run_unlocks_even_when_not_latest(self, app: Flask, tmp_path: Path) -> None:
         """A finished non-latest run leaves the ladder at the latest sim but unlocks Publish."""
         exp_id = _seed_experiment(app)

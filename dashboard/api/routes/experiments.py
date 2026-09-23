@@ -196,7 +196,7 @@ def publish_experiment(experiment_id: str) -> ResponseReturnValue:
         # Same gate as the wizard's can_publish unlock — a stale URL/bookmark
         # must not create an MDRepo draft for an experiment with nothing publishable.
         if not experiment.can_publish:
-            raise Conflict("Nothing to publish yet: no finished run and no existing publication.")
+            raise Conflict("Nothing to publish yet: no finished or stopped run and no existing publication.")
 
         # TODO: Add endpoint to fetch available communities from MDRepo and allow user to select from a dropdown in the publish UI.
         #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.
