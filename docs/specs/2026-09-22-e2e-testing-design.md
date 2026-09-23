@@ -40,7 +40,7 @@ e2e/
   package.json            # scripts: test → "playwright test", type-check → "tsc --noEmit", knip → "knip"
   playwright.config.ts
   tsconfig.json           # strict, extends nothing project-external; types via @playwright/test
-  knip.json               # entry: playwright.config.ts, tests/**/*.spec.ts
+  knip.json               # entry: tests/**/*.spec.ts
   tests/*.spec.ts
   fixtures/mdposit-cache/ # committed MDPosit payload cache (see Hermeticity)
 ```
@@ -82,7 +82,7 @@ One env var, `MDDASH_DEMO_E2E=1`, read in one place — a new `_demo/mode.py` ex
 
 | Flow | Demo mode today | E2E mode |
 |---|---|---|
-| Submitted MDRun GMX/AMBER job (`DEFAULT_GMX_DURATION_SEC = 30.0`, elapsed-time machine in http.py) — consumers: extend/run-submission specs | Transitions by wall clock | Stage schedule per job: stage 0 Preparing (0%) → stage 1 RUNNING (progress + appended log) → stage 2 FINISHED with a real `Performance:` line. A status read only advances a stage, and at most one stage per 1.5s — post-submit invalidation bursts fire several reads per second, so a pure read count collapses all stages instantly (observed in the first parallel run; this floor prevents it while keeping total time-to-FINISHED ~3s). Per-job state (`e2e_reads`/`e2e_stage`/`e2e_stage_at`), independent per submitted job. |
+| Submitted MDRun GMX/AMBER job (`DEFAULT_GMX_DURATION_SEC = 30.0`, elapsed-time machine in http.py) — consumers: extend/run-submission specs | Transitions by wall clock | Stage schedule per job: stage 0 Preparing (0%) → stage 1 RUNNING (progress + appended log) → stage 2 FINISHED with a real `Performance:` line. A status read only advances a stage, and at most one stage per 1.5s — post-submit invalidation bursts fire several reads per second, so a pure read count collapses all stages instantly (observed in the first parallel run; this floor prevents it while keeping total time-to-FINISHED ~3s). Per-job state (`e2e_stage`/`e2e_stage_at`), independent per submitted job. |
 | MDRepo upload job completion (`UPLOAD_JOB_DURATION_SEC = 4.0`, thread sleep in k8s.py) — consumer: spec #5 | 4.0s | 0.5s |
 | Submitted analysis completion (`ANALYSIS_JOB_DURATION_SEC = 3.0`, thread delay in k8s.py) — consumer: spec #6 | 3.0s | 0.5s |
 

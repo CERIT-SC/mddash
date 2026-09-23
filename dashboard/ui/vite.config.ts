@@ -75,8 +75,8 @@ export default defineConfig({
       },
       {
         test: {
-          // Mocks ./renderers and ./mol-star; its factories must not leak into files
-          // importing the same graph (wizard.test.tsx) through a shared registry.
+          // Mocks ./renderers and ./mol-star; its factories must not leak into peer
+          // test files through a shared registry.
           name: "isolate",
           include: ["src/features/analyze/analyze-step.test.tsx"],
         },

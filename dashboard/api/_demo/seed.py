@@ -133,45 +133,44 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         is_stopped=False,
         error_message=None,
     )
-    if running_tuner.id:
-        started_at = time.time() - 4
-        demo_state.tuner_jobs[running_tuner.id] = {
-            "status": JobStatus.RUNNING.value,
-            "created_at": started_at,
-            "max_trials": 12,
-            "trials": [
-                {
-                    # Matches the seeded running production job's config, so the
-                    # Run step shows tuned estimates for "Configuration used".
-                    "id": "prod_00000",
-                    "status": JobStatus.FINISHED.value,
-                    "np": 4,
-                    "ntomp": 2,
-                    "nb": "gpu",
-                    "pme": "cpu",
-                    "performance": 704.12,
-                },
-                {
-                    "id": "prod_00001",
-                    "status": JobStatus.ERROR.value,
-                    "np": 4,
-                    "ntomp": 2,
-                    "nb": "cpu",
-                    "pme": "cpu",
-                    "performance": None,
-                },
-                {
-                    "id": "prod_00002",
-                    "status": JobStatus.RUNNING.value,
-                    "np": 4,
-                    "ntomp": 2,
-                    "nb": "gpu",
-                    "pme": "gpu",
-                    "performance": None,
-                    "started_at": started_at,
-                },
-            ],
-        }
+    started_at = time.time() - 4
+    demo_state.tuner_jobs[running_tuner.id] = {
+        "status": JobStatus.RUNNING.value,
+        "created_at": started_at,
+        "max_trials": 12,
+        "trials": [
+            {
+                # Matches the seeded running production job's config, so the
+                # Run step shows tuned estimates for "Configuration used".
+                "id": "prod_00000",
+                "status": JobStatus.FINISHED.value,
+                "np": 4,
+                "ntomp": 2,
+                "nb": "gpu",
+                "pme": "cpu",
+                "performance": 704.12,
+            },
+            {
+                "id": "prod_00001",
+                "status": JobStatus.ERROR.value,
+                "np": 4,
+                "ntomp": 2,
+                "nb": "cpu",
+                "pme": "cpu",
+                "performance": None,
+            },
+            {
+                "id": "prod_00002",
+                "status": JobStatus.RUNNING.value,
+                "np": 4,
+                "ntomp": 2,
+                "nb": "gpu",
+                "pme": "gpu",
+                "performance": None,
+                "started_at": started_at,
+            },
+        ],
+    }
 
     # Stopped/completed tuner job from equilibration phase
     stopped_tuner = build_model(
@@ -310,8 +309,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     )
     published_notebook = build_model(Notebook, experiment_id=published.id, token="demo-token-published")
     demo_state.notebook_status[published.id] = PodStatus.DOWN
-    if published.mdrepo_id:
-        demo_state.mdrepo_records[published.mdrepo_id] = True
+    demo_state.mdrepo_records["8gahj-dh519"] = True
 
     published_gmx = build_model(
         GromacsJob,
