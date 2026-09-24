@@ -5,8 +5,8 @@
 # (normally cerit.io/mddash, populated by CI); with a custom registry, push them yourself.
 #
 # Usage:
-#   ./install.sh            # apply the mutations for real (default)
-#   ./install.sh --dry-run  # print what would happen without changing anything
+#   ./install.sh            # deploy to a Kubernetes cluster
+#   ./install.sh --dry-run  # show the actions without applying them
 set -euo pipefail
 
 DRY_RUN=0
@@ -116,7 +116,7 @@ rancher_wait() {
 # -------------------------------- environment ---------------------------------
 
 missing=""
-for tool in git kubectl helm yq gomplate make openssl python3; do
+for tool in git kubectl helm yq gomplate make openssl python3 curl; do
   command -v "$tool" >/dev/null 2>&1 || missing+=" $tool"
 done
 [[ -z "$missing" ]] || die "missing tools:$missing (all available in the dev container)"
@@ -156,8 +156,7 @@ else
   KUBE_CONTEXT="${current_ctx:-${contexts[0]}}"
 fi
 info "kubectl context: $(bold "$KUBE_CONTEXT")"
-# fork the kubeconfig into a temp copy: all kubectl/helm calls then use the chosen context
-# (in dry-run too, so read-only checks hit the right cluster) without mutating the operator's config
+# fork the kubeconfig so every kubectl/helm call uses the chosen context without mutating the operator's config
 TMP_WORK="$(mktemp -d)"
 trap 'rm -rf "$TMP_WORK"' EXIT
 kubectl config view --flatten > "$TMP_WORK/kubeconfig" 2>/dev/null || true
@@ -175,8 +174,7 @@ elif [[ "$REGISTRY" != "cerit.io/mddash" ]]; then
   prompt IMAGE_TAG "Image tag to deploy (SemVer x.y.z)"
   [[ "$IMAGE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "tag must be strict SemVer x.y.z"
 else
-  # remote tags define which artifacts exist; the chart templates and pre_spawn_hook.py come from
-  # the local checkout though, so warn only when those actually differ from the tag being deployed
+  # remote tags define which artifacts exist; warn only when the local helm/ sources differ from the tag
   LATEST_TAG="$(git ls-remote --tags --refs origin 'v*' 2>/dev/null | awk -F/ '{print $NF}' | sort -V | tail -1 || true)"
   [[ "$LATEST_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
     || die "could not resolve the latest release tag from origin (check network/access to: $(git remote get-url origin 2>/dev/null || echo origin))"
@@ -223,7 +221,7 @@ else
   printf '    %-24s %10s %10s   %s\n' "hub namespace memory" "$HUB_RMEM" "$HUB_LMEM" "(computed worst case)"
   printf '    %-24s %10s %10s   %s\n' "user namespace CPU" "$USER_RCPU" "$USER_LCPU" ""
   printf '    %-24s %10s %10s   %s\n' "user namespace memory" "$USER_RMEM" "$USER_LMEM" "(resources.namespaceQuota, per user)"
-  info "the project limit must fit hub + users; full breakdown: $(bold "make resources ENV=$ENV")"
+  info "project limit must fit hub + users; full breakdown: $(bold "make resources ENV=$ENV")"
 
   QUOTA_JSON="{\"limit\":{\"limitsCpu\":\"$HUB_LCPU\",\"limitsMemory\":\"$HUB_LMEM\",\"requestsCpu\":\"$HUB_RCPU\",\"requestsMemory\":\"$HUB_RMEM\"}}"
   PATCH="$(PROJECT="$RANCHER_PROJECT_ID" QUOTA="$QUOTA_JSON" yq -n \
@@ -303,6 +301,11 @@ fi
 run "make -C helm update ENV=$ENV"
 run "make -C helm deploy ENV=$ENV IMAGE_TAG=$IMAGE_TAG"
 run "make status ENV=$ENV"
+if [[ $DRY_RUN -eq 0 ]]; then
+  info "waiting for https://$HOSTNAME/hub/health..."
+  curl -sf --retry 18 --retry-delay 10 --retry-all-errors --max-time 10 "https://$HOSTNAME/hub/health" >/dev/null \
+    || die "hub health check failed (inspect: make logs ENV=$ENV)"
+fi
 
 echo
 ok "Done: https://$HOSTNAME (ingress fallback: make -C helm port-forward ENV=$ENV)"
