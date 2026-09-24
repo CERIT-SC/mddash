@@ -74,12 +74,12 @@ choose() {
     fi
     idx=$((idx + 1))
   done
-  printf '  %s: ' "$(cyan "Select") $(dim "[1-$#, default $default]")"
-  read -r reply
-  reply="${reply:-$default}"
-  if ! [[ "$reply" =~ ^[0-9]+$ ]] || (( reply < 1 || reply > $# )); then
-    die "invalid selection: $reply"
-  fi
+  reply=""
+  until [[ "$reply" =~ ^[0-9]+$ ]] && (( reply >= 1 && reply <= $# )); do
+    printf '  %s: ' "$(cyan "Select") $(dim "[1-$#, default $default]")"
+    read -r reply || die "no input on stdin"
+    reply="${reply:-$default}"
+  done
   printf -v "$var" '%s' "${!reply}"
 }
 
@@ -95,7 +95,7 @@ run() {
 }
 
 # rancher_wait DESCRIPTION TEST_COMMAND: poll (60s) until Rancher reflects a change.
-# No-op in dry-run; soft-fails with a manual-fallback warning in execute mode.
+# No-op in dry-run; on timeout, warns with manual-fallback instructions and continues.
 rancher_wait() {
   local desc="$1" test_cmd="$2" waited=0
   if [[ $DRY_RUN -eq 1 ]]; then
@@ -108,12 +108,11 @@ rancher_wait() {
       warn "timed out waiting for $desc"
       warn "if this cluster is not Rancher-managed, remove rancherProjectId from $CONFIG;"
       warn "otherwise finish the quota setup in the Rancher UI (docs/resource-management.md)"
-      return 1
+      return 0
     fi
     sleep 2
     waited=$((waited + 2))
   done
-  return 0
 }
 
 # ---------------------------------------------------------------- environment
@@ -139,7 +138,6 @@ REGISTRY="$(yq -r '.registry' "$CONFIG")"
 HOSTNAME="$(yq -r '.dashboard.hostname' "$CONFIG")"
 STORAGE_CLASS="$(yq -r '.storageClassName' "$CONFIG")"
 RANCHER_PROJECT_ID="$(yq -r '.rancherProjectId // ""' "$CONFIG")"
-[[ "$RANCHER_PROJECT_ID" == "null" ]] && RANCHER_PROJECT_ID=""
 
 info "deploying $(bold "$ENV"): namespace $NAMESPACE, helm package $PACKAGE, https://$HOSTNAME"
 if [[ "$REGISTRY" != "cerit.io/mddash" ]]; then
@@ -160,7 +158,14 @@ else
   KUBE_CONTEXT="${current_ctx:-${contexts[0]}}"
 fi
 info "kubectl context: $(bold "$KUBE_CONTEXT")"
-run "kubectl config use-context '$KUBE_CONTEXT'"
+# fork the kubeconfig into a temp copy: all kubectl/helm calls then use the chosen context
+# (in dry-run too, so read-only checks hit the right cluster) without mutating the operator's config
+TMP_WORK="$(mktemp -d)"
+trap 'rm -rf "$TMP_WORK"' EXIT
+kubectl config view --flatten > "$TMP_WORK/kubeconfig" 2>/dev/null || true
+[[ -s "$TMP_WORK/kubeconfig" ]] || die "could not flatten kubeconfig"
+export KUBECONFIG="$TMP_WORK/kubeconfig"
+kubectl config use-context "$KUBE_CONTEXT" >/dev/null
 kubectl get --raw=/readyz >/dev/null 2>&1 || die "cluster not reachable via context $KUBE_CONTEXT"
 
 # ---------------------------------------------------------------- image tag
@@ -233,8 +238,8 @@ fi
 
 # ---------------------------------------------------------------- cluster RBAC
 
-RBAC_DIR="$(mktemp -d)"
-trap 'rm -rf "$RBAC_DIR"' EXIT
+RBAC_DIR="$TMP_WORK/rbac"
+mkdir -p "$RBAC_DIR"
 sed "s/<NAMESPACE>/$NAMESPACE/g" helm/rbac/clusterrole.yaml > "$RBAC_DIR/clusterrole.yaml"
 if [[ -n "$RANCHER_PROJECT_ID" ]]; then
   sed -e "s/<NAMESPACE>/$NAMESPACE/g" -e "s/<PROJECT_ID>/${RANCHER_PROJECT_ID##*p-}/g" \
@@ -264,7 +269,7 @@ fi
 
 # ---------------------------------------------------------------- secrets
 
-# create_secret NAME key:label ...: prompts for values only when the secret is missing
+# create_secret NAME key:label ...: prompts for values (execute mode) only when the secret is missing
 create_secret() {
   local name="$1" args="" masked="" key label value pair
   shift
@@ -274,9 +279,10 @@ create_secret() {
   fi
   for pair in "$@"; do
     key="${pair%%:*}"; label="${pair#*:}"
-    prompt_secret value "$label"
-    args+=" --from-literal=$key='$value'"
     masked+=" --from-literal=$key=<hidden>"
+    [[ $DRY_RUN -eq 1 ]] && continue
+    prompt_secret value "$label"
+    args+=" --from-literal=$key=$(printf '%q' "$value")"
   done
   run "kubectl create secret generic '$name'$args -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -" \
       "kubectl create secret generic '$name'$masked -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -"
@@ -290,14 +296,13 @@ kubectl get secret tuner-auth -n "$NAMESPACE" >/dev/null 2>&1 \
 
 # ---------------------------------------------------------------- deploy
 
+# helm upgrade --install covers both first install and updates
 run "make -C helm update ENV=$ENV"
-if helm status "$PACKAGE" -n "$NAMESPACE" >/dev/null 2>&1; then
-  run "make -C helm deploy ENV=$ENV IMAGE_TAG=$IMAGE_TAG"
-else
-  run "make -C helm install ENV=$ENV IMAGE_TAG=$IMAGE_TAG"
-fi
+run "make -C helm deploy ENV=$ENV IMAGE_TAG=$IMAGE_TAG"
 run "make status ENV=$ENV"
 
 echo
 ok "Done: https://$HOSTNAME (ingress fallback: make -C helm port-forward ENV=$ENV)"
-[[ $DRY_RUN -eq 1 ]] && info "dry-run only; apply for real with $(bold "./install.sh --execute")"
+if [[ $DRY_RUN -eq 1 ]]; then
+  info "dry-run only; apply for real with $(bold "./install.sh --execute")"
+fi

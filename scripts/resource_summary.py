@@ -8,7 +8,7 @@ per-user namespaces.
 
 Usage:
     python3 scripts/resource_summary.py <config.yaml>          # human-readable table
-    python3 scripts/resource_summary.py --json <config.yaml>   # totals as JSON (for install.sh)
+    python3 scripts/resource_summary.py --json <config.yaml>   # hub totals as JSON (for install.sh)
 
 Example:
     make resources ENV=dev
@@ -18,6 +18,51 @@ Example:
 import json
 import subprocess
 import sys
+from collections.abc import Iterable
+from typing import NamedTuple
+
+
+class Row(NamedTuple):
+    """One container's resource footprint. CPU in millicores, memory in bytes."""
+
+    name: str
+    cpu_req: int
+    mem_req: int
+    cpu_lim: int
+    mem_lim: int
+
+
+def row_mib(name: str, cpu_req: int, mem_req: int, cpu_lim: int, mem_lim: int) -> Row:
+    """Build a Row from values written in millicores/MiB (as the constants below are)."""
+    return Row(name, cpu_req, mem_req * 1024**2, cpu_lim, mem_lim * 1024**2)
+
+
+def row_cfg(name: str, config: str, prefix: str) -> Row:
+    """Build a Row from a config section shaped as {requests, limits}.{cpu, memory}."""
+    return Row(
+        name,
+        parse_cpu(yq(f"{prefix}.requests.cpu", config)),
+        parse_memory(yq(f"{prefix}.requests.memory", config)),
+        parse_cpu(yq(f"{prefix}.limits.cpu", config)),
+        parse_memory(yq(f"{prefix}.limits.memory", config)),
+    )
+
+
+def total(name: str, rows: Iterable[Row]) -> Row:
+    """Sum rows into one Row."""
+    rows = list(rows)
+    return Row(
+        name,
+        sum(r.cpu_req for r in rows),
+        sum(r.mem_req for r in rows),
+        sum(r.cpu_lim for r in rows),
+        sum(r.mem_lim for r in rows),
+    )
+
+
+def scale(r: Row, factor: int, name: str | None = None) -> Row:
+    """Multiply a Row's values (tier/replica counts)."""
+    return Row(name or r.name, r.cpu_req * factor, r.mem_req * factor, r.cpu_lim * factor, r.mem_lim * factor)
 
 
 def yq(query: str, path: str) -> str:
@@ -105,43 +150,43 @@ def fmt_mem(b: int) -> str:
     return f"{int(b / 1024**2)}Mi"
 
 
+# Values written in millicores/MiB; row_mib converts.
+
 # Sidecar resources are hardcoded in pre_spawn_hook.py _*_container() — keep in sync if those change.
-# CPU in millicores, memory in MiB.
 SIDECARS = [
-    ("proxy", 10, 32, 100, 64),
-    ("auth", 10, 48, 100, 96),
-    ("api (dashboard)", 50, 128, 250, 512),
-    ("s3sync", 10, 64, 200, 256),
+    row_mib("proxy", 10, 32, 100, 64),
+    row_mib("auth", 10, 48, 100, 96),
+    row_mib("api (dashboard)", 50, 128, 250, 512),
+    row_mib("s3sync", 10, 64, 200, 256),
 ]
 
 TIERS = [1, 2, 4]
 
-# MDRepo upload job resources are hardcoded in upload/submission.py (100m/128Mi req, 500m/256Mi lim).
-UPLOAD_JOB = ("uploader", 100, 128, 500, 256)
+# MDRepo upload job resources are hardcoded in upload/submission.py — keep in sync.
+UPLOAD_JOB = row_mib("uploader", 100, 128, 500, 256)
 
-# s3-sync sidecar per mdrun job (fixed, hardcoded in mdrun-api/k8s_client.py)
-JOB_S3SYNC = ("s3-sync sidecar", 100, 128, 200, 256)
+# s3-sync sidecar per mdrun job, hardcoded in mdrun-api/k8s_client.py — keep in sync.
+JOB_S3SYNC = row_mib("s3-sync sidecar", 100, 128, 200, 256)
 
 # Fixed platform overhead in the hub namespace, set in helm/charts/mddash/values.yaml.tmpl — keep in sync with
-# proxy.chp.resources and landing.resources there. CPU in millicores, memory in MiB.
-CHP_PROXY = ("chp proxy", 100, 128, 500, 512)
-LANDING = ("landing page", 50, 32, 100, 64)
+# proxy.chp.resources and landing.resources there.
+CHP_PROXY = row_mib("chp proxy", 100, 128, 500, 512)
+LANDING = row_mib("landing page", 50, 32, 100, 64)
 
 
 def compute_budget(config: str) -> dict:
     """Read the config and compute all per-namespace resource totals."""
     b: dict = {"config": config, "namespace": yq(".namespace", config), "gpu_type": yq('.gpuType // ""', config)}
-    b["sidecars"] = [(name, cr, mr * 1024**2, cl, ml * 1024**2) for name, cr, mr, cl, ml in SIDECARS]
+    b["sidecars"] = SIDECARS
 
-    b["singleuser"] = (
+    b["singleuser"] = Row(
         "singleuser (jupyter)",
         parse_cpu(yq(".resources.singleuser.cpu.guarantee", config)),
         parse_memory(yq(".resources.singleuser.memory.guarantee", config)),
         parse_cpu(yq(".resources.singleuser.cpu.limit", config)),
         parse_memory(yq(".resources.singleuser.memory.limit", config)),
     )
-
-    b["notebook"] = (
+    b["notebook"] = Row(
         "jupyter",
         parse_cpu(yq(".resources.notebook.cpuRequest", config)),
         parse_memory(yq(".resources.notebook.memoryRequest", config)),
@@ -149,17 +194,13 @@ def compute_budget(config: str) -> dict:
         parse_memory(yq(".resources.notebook.memoryLimit", config)),
     )
     b["max_notebooks"] = int(yq(".resources.notebookQuota.maxConcurrent", config))
-    b["tiers"] = TIERS
-
-    b["analysis"] = (
+    b["analysis"] = Row(
         "analysis",
         parse_cpu(yq(".resources.analysisJob.cpuRequest", config)),
         parse_memory(yq(".resources.analysisJob.memoryRequest", config)),
         parse_cpu(yq(".resources.analysisJob.cpuLimit", config)),
         parse_memory(yq(".resources.analysisJob.memoryLimit", config)),
     )
-    b["upload_job"] = (UPLOAD_JOB[0], UPLOAD_JOB[1], UPLOAD_JOB[2] * 1024**2, UPLOAD_JOB[3], UPLOAD_JOB[4] * 1024**2)
-
     b["ns_quota_configured"] = {
         "requestsCpu": yq(".resources.namespaceQuota.requestsCpu", config),
         "requestsMemory": yq(".resources.namespaceQuota.requestsMemory", config),
@@ -167,113 +208,41 @@ def compute_budget(config: str) -> dict:
         "limitsMemory": yq(".resources.namespaceQuota.limitsMemory", config),
     }
 
-    # ── User namespace totals (worst case: all notebooks at highest tier) ──
-    pod = [0, 0, 0, 0]
-    for _, cr, mr, cl, ml in b["sidecars"]:
-        pod[0] += cr
-        pod[1] += mr
-        pod[2] += cl
-        pod[3] += ml
-    for i, v in enumerate(b["singleuser"][1:]):
-        pod[i] += v
-    b["user_pod_total"] = ("User pod total", *pod)
-
-    max_tier = max(TIERS)
-    nb = b["notebook"][1:]
-    per_nb = [v * max_tier for v in nb]
-    b["user_tier_rows"] = [(t, [v * t for v in nb]) for t in TIERS]
-    b["max_tier"] = max_tier
-
-    an = b["analysis"][1:]
-    up = b["upload_job"][1:]
-    b["user_total"] = (
+    # User namespace totals, worst case: all notebooks at the highest tier
+    max_tier = b["max_tier"] = max(TIERS)
+    b["tiers"] = TIERS
+    b["user_tier_rows"] = [(t, scale(b["notebook"], t)) for t in TIERS]
+    b["user_pod_total"] = total("User pod total", [*SIDECARS, b["singleuser"]])
+    b["user_total"] = total(
         f"USER NAMESPACE TOTAL (worst-case: {max_tier}x)",
-        pod[0] + b["max_notebooks"] * per_nb[0] + an[0] + up[0],
-        pod[1] + b["max_notebooks"] * per_nb[1] + an[1] + up[1],
-        pod[2] + b["max_notebooks"] * per_nb[2] + an[2] + up[2],
-        pod[3] + b["max_notebooks"] * per_nb[3] + an[3] + up[3],
+        [b["user_pod_total"], scale(b["notebook"], max_tier * b["max_notebooks"]), b["analysis"], UPLOAD_JOB],
     )
 
-    # ── Hub namespace ──
-    b["hub_services"] = [
-        (
-            "jupyterhub-hub",
-            parse_cpu(yq(".hub.resources.requests.cpu", config)),
-            parse_memory(yq(".hub.resources.requests.memory", config)),
-            parse_cpu(yq(".hub.resources.limits.cpu", config)),
-            parse_memory(yq(".hub.resources.limits.memory", config)),
-        ),
-        (
-            "mdrun-api",
-            parse_cpu(yq(".mdrunApi.resources.requests.cpu", config)),
-            parse_memory(yq(".mdrunApi.resources.requests.memory", config)),
-            parse_cpu(yq(".mdrunApi.resources.limits.cpu", config)),
-            parse_memory(yq(".mdrunApi.resources.limits.memory", config)),
-        ),
-        (
-            "mdrun-api poller",
-            parse_cpu(yq(".mdrunApi.polling.resources.requests.cpu", config)),
-            parse_memory(yq(".mdrunApi.polling.resources.requests.memory", config)),
-            parse_cpu(yq(".mdrunApi.polling.resources.limits.cpu", config)),
-            parse_memory(yq(".mdrunApi.polling.resources.limits.memory", config)),
-        ),
-        (
-            "tuner-api",
-            parse_cpu(yq(".tuner.api.resources.requests.cpu", config)),
-            parse_memory(yq(".tuner.api.resources.requests.memory", config)),
-            parse_cpu(yq(".tuner.api.resources.limits.cpu", config)),
-            parse_memory(yq(".tuner.api.resources.limits.memory", config)),
-        ),
-        (
-            "ray-head",
-            parse_cpu(yq(".tuner.ray.head.resources.requests.cpu", config)),
-            parse_memory(yq(".tuner.ray.head.resources.requests.memory", config)),
-            parse_cpu(yq(".tuner.ray.head.resources.limits.cpu", config)),
-            parse_memory(yq(".tuner.ray.head.resources.limits.memory", config)),
-        ),
-    ]
-    rw = [
-        parse_cpu(yq(".tuner.worker.resources.requests.cpu", config)),
-        parse_memory(yq(".tuner.worker.resources.requests.memory", config)),
-        parse_cpu(yq(".tuner.worker.resources.limits.cpu", config)),
-        parse_memory(yq(".tuner.worker.resources.limits.memory", config)),
-    ]
+    # Hub namespace
     b["ray_worker_replicas"] = int(yq(".tuner.worker.maxReplicas", config))
-    b["hub_services"].append((
-        "ray-worker (x {})".format(b["ray_worker_replicas"]),
-        *[v * b["ray_worker_replicas"] for v in rw],
-    ))
-    b["hub_services"].extend(
-        (name, cr, mr * 1024**2, cl, ml * 1024**2) for name, cr, mr, cl, ml in (CHP_PROXY, LANDING)
-    )
-
-    svc = [0, 0, 0, 0]
-    for _, cr, mr, cl, ml in b["hub_services"]:
-        svc[0] += cr
-        svc[1] += mr
-        svc[2] += cl
-        svc[3] += ml
-    b["services_total"] = ("Services total", *svc)
+    b["hub_services"] = [
+        row_cfg("jupyterhub-hub", config, ".hub.resources"),
+        row_cfg("mdrun-api", config, ".mdrunApi.resources"),
+        row_cfg("mdrun-api poller", config, ".mdrunApi.polling.resources"),
+        row_cfg("tuner-api", config, ".tuner.api.resources"),
+        row_cfg("ray-head", config, ".tuner.ray.head.resources"),
+        scale(
+            row_cfg("ray-worker", config, ".tuner.worker.resources"),
+            b["ray_worker_replicas"],
+            f"ray-worker (x {b['ray_worker_replicas']})",
+        ),
+        CHP_PROXY,
+        LANDING,
+    ]
+    b["services_total"] = total("Services total", b["hub_services"])
 
     b["max_jobs"] = int(yq(".mdrunApi.jobHeadroom.maxConcurrentJobs", config))
-    gmx = [
-        parse_cpu(yq(".mdrunApi.jobHeadroom.cpuPerJob", config)),
-        parse_memory(yq(".mdrunApi.jobHeadroom.memoryPerJob", config)),
-    ]
+    gmx_cpu = parse_cpu(yq(".mdrunApi.jobHeadroom.cpuPerJob", config))
+    gmx_mem = parse_memory(yq(".mdrunApi.jobHeadroom.memoryPerJob", config))
     # GROMACS jobs have request = limit (MPI: throttling causes rank starvation)
-    b["job_rows"] = [("gromacs  (req=lim)", gmx[0], gmx[1], gmx[0], gmx[1])]
-    s3 = (JOB_S3SYNC[0], JOB_S3SYNC[1], JOB_S3SYNC[2] * 1024**2, JOB_S3SYNC[3], JOB_S3SYNC[4] * 1024**2)
-    b["job_rows"].append(s3)
-    b["per_job_total"] = ("Per job total", gmx[0] + s3[1], gmx[1] + s3[2], gmx[0] + s3[3], gmx[1] + s3[4])
-
-    pj = b["per_job_total"][1:]
-    b["hub_total"] = (
-        "HUB NAMESPACE TOTAL",
-        svc[0] + b["max_jobs"] * pj[0],
-        svc[1] + b["max_jobs"] * pj[1],
-        svc[2] + b["max_jobs"] * pj[2],
-        svc[3] + b["max_jobs"] * pj[3],
-    )
+    b["job_rows"] = [Row("gromacs  (req=lim)", gmx_cpu, gmx_mem, gmx_cpu, gmx_mem), JOB_S3SYNC]
+    b["per_job_total"] = total("Per job total", b["job_rows"])
+    b["hub_total"] = total("HUB NAMESPACE TOTAL", [b["services_total"], scale(b["per_job_total"], b["max_jobs"])])
 
     return b
 
@@ -288,17 +257,19 @@ def header() -> None:
     print("  " + "─" * (COL + W * 4 + 4))
 
 
-def row(label: str, cr: int, mr: int, cl: int, ml: int, indent: int = 0) -> None:
+def row(r: Row, indent: int = 0) -> None:
     """Print a single resource table row."""
     prefix = "  " + "  " * indent
     pad = COL - len("  " * indent)
-    print(f"{prefix}{label:<{pad}} {fmt_cpu(cr):>{W}} {fmt_mem(mr):>{W}} {fmt_cpu(cl):>{W}} {fmt_mem(ml):>{W}}")
+    print(
+        f"{prefix}{r.name:<{pad}} {fmt_cpu(r.cpu_req):>{W}} {fmt_mem(r.mem_req):>{W}} {fmt_cpu(r.cpu_lim):>{W}} {fmt_mem(r.mem_lim):>{W}}"
+    )
 
 
-def subtotal(label: str, cr: int, mr: int, cl: int, ml: int) -> None:
+def subtotal(r: Row) -> None:
     """Print a subtotal row preceded by a separator line."""
     print("  " + "─" * (COL + W * 4 + 4))
-    row(label, cr, mr, cl, ml)
+    row(r)
 
 
 def section(title: str) -> None:
@@ -330,44 +301,40 @@ def print_table(b: dict) -> None:
     print(f"\n  ── User namespace (per user, MAX_NOTEBOOKS={b['max_notebooks']}) ──")
 
     section("User pod  (always-on, 1 pod per user)")
-    for name, cr, mr, cl, ml in b["sidecars"]:
-        row(name, cr, mr, cl, ml, indent=1)
-    su = b["singleuser"]
-    row(su[0], su[1], su[2], su[3], su[4], indent=1)
-    pod = b["user_pod_total"]
-    subtotal(pod[0], pod[1], pod[2], pod[3], pod[4])
+    for r in b["sidecars"]:
+        row(r, indent=1)
+    row(b["singleuser"], indent=1)
+    subtotal(b["user_pod_total"])
 
     tiers = b["tiers"]
     print(f"\n  Notebook pod  (on-demand, up to {b['max_notebooks']} pods, tiers: {', '.join(f'{t}x' for t in tiers)})")
-    for t, vals in b["user_tier_rows"]:
+    for t, sc in b["user_tier_rows"]:
         section(f"  Tier {t}x")
-        row("jupyter", vals[0], vals[1], vals[2], vals[3], indent=2)
-        subtotal(f"Per notebook ({t}x)", vals[0], vals[1], vals[2], vals[3])
+        row(sc, indent=2)
+        subtotal(sc._replace(name=f"Per notebook ({t}x)"))
 
     if b["gpu_type"]:
         print(f"\n  GPU: 1x {b['gpu_type']} (optional, added to notebook container when enabled)")
 
     section("Analysis job  (on-demand, 1 at a time)")
-    an = b["analysis"]
-    row(an[0], an[1], an[2], an[3], an[4], indent=1)
+    row(b["analysis"], indent=1)
 
     section("MDRepo upload job  (on-demand, 1 at a time)")
-    up = b["upload_job"]
-    row(up[0], up[1], up[2], up[3], up[4], indent=1)
+    row(UPLOAD_JOB, indent=1)
 
     print()
     print("  " + "═" * (COL + W * 4 + 4))
-    ut = b["user_total"]
-    row(ut[0], ut[1], ut[2], ut[3], ut[4])
+    row(b["user_total"])
 
     print()
     print("  User namespace quota comparison (worst-case: all notebooks at highest tier):")
+    ut = b["user_total"]
     cfg = b["ns_quota_configured"]
     ok_u = all([
-        compare_quota("NS_REQUESTS_CPU", ut[1], cfg["requestsCpu"], True),
-        compare_quota("NS_REQUESTS_MEMORY", ut[2], cfg["requestsMemory"], False),
-        compare_quota("NS_LIMITS_CPU", ut[3], cfg["limitsCpu"], True),
-        compare_quota("NS_LIMITS_MEMORY", ut[4], cfg["limitsMemory"], False),
+        compare_quota("NS_REQUESTS_CPU", ut.cpu_req, cfg["requestsCpu"], True),
+        compare_quota("NS_REQUESTS_MEMORY", ut.mem_req, cfg["requestsMemory"], False),
+        compare_quota("NS_LIMITS_CPU", ut.cpu_lim, cfg["limitsCpu"], True),
+        compare_quota("NS_LIMITS_MEMORY", ut.mem_lim, cfg["limitsMemory"], False),
     ])
     if not ok_u:
         print("\n  WARNING: Increase the under-provisioned values in resources.namespaceQuota and redeploy.")
@@ -375,38 +342,32 @@ def print_table(b: dict) -> None:
     print("\n\n  ── Hub namespace ──")
 
     section("Always-on services")
-    for name, cr, mr, cl, ml in b["hub_services"]:
-        row(name, cr, mr, cl, ml, indent=1)
-    svc = b["services_total"]
-    subtotal(svc[0], svc[1], svc[2], svc[3], svc[4])
+    for r in b["hub_services"]:
+        row(r, indent=1)
+    subtotal(b["services_total"])
 
     section(f"HPC jobs  (on-demand, up to {b['max_jobs']} concurrent)")
-    for name, cr, mr, cl, ml in b["job_rows"]:
-        row(name, cr, mr, cl, ml, indent=1)
-    pj = b["per_job_total"]
-    subtotal(pj[0], pj[1], pj[2], pj[3], pj[4])
+    for r in b["job_rows"]:
+        row(r, indent=1)
+    subtotal(b["per_job_total"])
 
     print()
     print("  " + "═" * (COL + W * 4 + 4))
-    ht = b["hub_total"]
-    row(ht[0], ht[1], ht[2], ht[3], ht[4])
+    row(b["hub_total"])
     print(f"\n  Set these as the Rancher quota for the hub namespace ({b['namespace']}).")
     print()
 
 
-def quota_values(total: tuple) -> dict:
-    """Convert a (label, cpu_req, mem_req, cpu_lim, mem_lim) total row to quota strings."""
-    return {
-        "requestsCpu": fmt_cpu(total[1]),
-        "requestsMemory": fmt_mem(total[2]),
-        "limitsCpu": fmt_cpu(total[3]),
-        "limitsMemory": fmt_mem(total[4]),
-    }
-
-
 def print_json(b: dict) -> None:
-    """Print per-namespace quota totals as JSON (consumed by install.sh)."""
-    print(json.dumps({"hub": quota_values(b["hub_total"]), "user": quota_values(b["user_total"])}))
+    """Print hub-namespace quota totals as JSON (consumed by install.sh)."""
+    ht = b["hub_total"]
+    hub = {
+        "requestsCpu": fmt_cpu(ht.cpu_req),
+        "requestsMemory": fmt_mem(ht.mem_req),
+        "limitsCpu": fmt_cpu(ht.cpu_lim),
+        "limitsMemory": fmt_mem(ht.mem_lim),
+    }
+    print(json.dumps({"hub": hub}))
 
 
 def main(argv: list[str]) -> None:

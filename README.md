@@ -141,7 +141,7 @@ Local commands expect `uv` for Python workflows and `pnpm` for the UI unless you
 
 ## Manual Deployment
 
-If you need to deploy manually (bypassing CI/CD), follow these steps.
+If you need to deploy manually (bypassing CI/CD), run `./install.sh` for an interactive walkthrough of the steps below (dry-run by default; `--execute` applies). The remaining sections document the same steps for doing them by hand.
 
 ### 1. Prerequisites
 
@@ -178,7 +178,7 @@ kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || kubectl create namespace
 ```
 
 > [!CAUTION]
-> If you are using Rancher, manually restrict the Resource Quota of the hub namespace in the Rancher UI so user namespaces have room. See `docs/resource-management.md` for sizing guidance.
+> If you are using Rancher, restrict the Resource Quota of the hub namespace so user namespaces have room. When `rancherProjectId` is set in the config, `./install.sh` does this automatically via namespace annotations; otherwise set it manually in the Rancher UI. See `docs/resource-management.md` for sizing guidance.
 
 Apply the cluster-wide RBAC once:
 
