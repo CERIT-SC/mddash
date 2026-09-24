@@ -5,21 +5,21 @@
 # (normally cerit.io/mddash, populated by CI); with a custom registry, push them yourself.
 #
 # Usage:
-#   ./install.sh            # dry-run: print what would happen (default)
-#   ./install.sh --execute  # apply the mutations for real
+#   ./install.sh            # apply the mutations for real (default)
+#   ./install.sh --dry-run  # print what would happen without changing anything
 set -euo pipefail
 
-DRY_RUN=1
+DRY_RUN=0
 case "${1:-}" in
-  --execute) DRY_RUN=0 ;;
+  --dry-run) DRY_RUN=1 ;;
   "" ) ;;
-  *) echo "usage: $0 [--execute]" >&2; exit 2 ;;
+  *) echo "usage: $0 [--dry-run]" >&2; exit 2 ;;
 esac
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
 
-# ---------------------------------------------------------------- helpers
+# ---------------------------------- helpers -----------------------------------
 
 bold()   { printf '\033[1m%s\033[0m'  "$*"; }
 dim()    { printf '\033[2m%s\033[0m'  "$*"; }
@@ -105,9 +105,7 @@ rancher_wait() {
   info "waiting for $desc..."
   until eval "$test_cmd"; do
     if (( waited >= 60 )); then
-      warn "timed out waiting for $desc"
-      warn "if this cluster is not Rancher-managed, remove rancherProjectId from $CONFIG;"
-      warn "otherwise finish the quota setup in the Rancher UI (docs/resource-management.md)"
+      warn "timed out waiting for $desc: finish the quota setup manually (docs/resource-management.md) or remove rancherProjectId from $CONFIG"
       return 0
     fi
     sleep 2
@@ -115,7 +113,7 @@ rancher_wait() {
   done
 }
 
-# ---------------------------------------------------------------- environment
+# -------------------------------- environment ---------------------------------
 
 missing=""
 for tool in git kubectl helm yq gomplate make openssl python3; do
@@ -123,7 +121,7 @@ for tool in git kubectl helm yq gomplate make openssl python3; do
 done
 [[ -z "$missing" ]] || die "missing tools:$missing (all available in the dev container)"
 
-[[ $DRY_RUN -eq 1 ]] && info "$(bold dry-run): mutating commands are printed, not executed. Apply with $(bold "./install.sh --execute")"
+[[ $DRY_RUN -eq 1 ]] && info "$(bold dry-run): mutating commands are printed, not executed."
 
 mapfile -t configs < <(compgen -G config.yaml; compgen -G 'config.*.yaml' | sort)
 [[ ${#configs[@]} -gt 0 ]] || die "no config*.yaml found in $REPO_ROOT"
@@ -144,7 +142,7 @@ if [[ "$REGISTRY" != "cerit.io/mddash" ]]; then
   warn "custom registry $REGISTRY: images and Helm charts must already exist there; this script only deploys"
 fi
 
-# ---------------------------------------------------------------- cluster
+# ---------------------------------- cluster -----------------------------------
 
 mapfile -t contexts < <(kubectl config get-contexts -o name 2>/dev/null || true)
 [[ ${#contexts[@]} -gt 0 ]] || die "no kubectl contexts configured"
@@ -168,7 +166,7 @@ export KUBECONFIG="$TMP_WORK/kubeconfig"
 kubectl config use-context "$KUBE_CONTEXT" >/dev/null
 kubectl get --raw=/readyz >/dev/null 2>&1 || die "cluster not reachable via context $KUBE_CONTEXT"
 
-# ---------------------------------------------------------------- image tag
+# --------------------------------- image tag ----------------------------------
 
 if [[ "$ENV" == "dev" ]]; then
   IMAGE_TAG=dev
@@ -186,14 +184,13 @@ else
     || die "latest upstream release is $LATEST_TAG but your clone lacks it: git fetch --tags origin, then re-run"
   IMAGE_TAG="${LATEST_TAG#v}"
   if ! git diff --quiet "$LATEST_TAG" -- helm/ 2>/dev/null; then
-    warn "local chart sources under helm/ differ from $LATEST_TAG (images come from the release,"
-    warn "chart and pre_spawn_hook from your checkout): for a stock deploy, checkout $LATEST_TAG instead"
-    confirm "Deploy $LATEST_TAG with the local chart sources?" Y || die "re-run from the $LATEST_TAG checkout"
+    warn "helm/ sources differ from $LATEST_TAG: release images would be paired with your checkout's chart"
+    confirm "Deploy $LATEST_TAG with the local chart sources?" Y || die "re-run from a $LATEST_TAG checkout"
   fi
 fi
 info "image tag: $(bold "$IMAGE_TAG")"
 
-# ---------------------------------------------------------------- namespace & quota
+# ----------------------------- namespace & quota ------------------------------
 
 if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
   run "kubectl create namespace '$NAMESPACE'"
@@ -239,7 +236,7 @@ else
     "kubectl get resourcequota -n '$NAMESPACE' --no-headers 2>/dev/null | grep -q ."
 fi
 
-# ---------------------------------------------------------------- cluster RBAC
+# -------------------------------- cluster RBAC --------------------------------
 
 RBAC_DIR="$TMP_WORK/rbac"
 mkdir -p "$RBAC_DIR"
@@ -270,9 +267,9 @@ if [[ "$apply_rbac" == true ]]; then
   done
 fi
 
-# ---------------------------------------------------------------- secrets
+# ---------------------------------- secrets -----------------------------------
 
-# create_secret NAME key:label ...: prompts for values (execute mode) only when the secret is missing
+# create_secret NAME key:label ...: prompts for values (real mode) only when the secret is missing
 create_secret() {
   local name="$1" args="" masked="" key label value pair
   shift
@@ -294,10 +291,13 @@ create_secret() {
 create_secret oidc-credentials "client_id:OIDC client ID" "client_secret:OIDC client secret"
 create_secret "${PACKAGE}-s3-creds" "S3_ACCESS_KEY:S3 access key" "S3_SECRET_KEY:S3 secret key"
 create_secret "${PACKAGE}-mdrepo-credentials" "client_id:MDRepo client ID" "client_secret:MDRepo client secret"
-kubectl get secret tuner-auth -n "$NAMESPACE" >/dev/null 2>&1 \
-  || run "kubectl create secret generic tuner-auth --from-literal=user=tuner --from-literal=password=\"\$(openssl rand -base64 32)\" -n '$NAMESPACE'"
+if kubectl get secret tuner-auth -n "$NAMESPACE" >/dev/null 2>&1; then
+  ok "secret tuner-auth exists, keeping"
+else
+  run "kubectl create secret generic tuner-auth --from-literal=user=tuner --from-literal=password=\"\$(openssl rand -base64 32)\" -n '$NAMESPACE'"
+fi
 
-# ---------------------------------------------------------------- deploy
+# ----------------------------------- deploy -----------------------------------
 
 # helm upgrade --install covers both first install and updates
 run "make -C helm update ENV=$ENV"
@@ -307,5 +307,5 @@ run "make status ENV=$ENV"
 echo
 ok "Done: https://$HOSTNAME (ingress fallback: make -C helm port-forward ENV=$ENV)"
 if [[ $DRY_RUN -eq 1 ]]; then
-  info "dry-run only; apply for real with $(bold "./install.sh --execute")"
+  info "dry-run only; re-run without --dry-run to apply"
 fi
