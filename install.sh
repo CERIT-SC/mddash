@@ -177,16 +177,19 @@ elif [[ "$REGISTRY" != "cerit.io/mddash" ]]; then
   prompt IMAGE_TAG "Image tag to deploy (SemVer x.y.z)"
   [[ "$IMAGE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "tag must be strict SemVer x.y.z"
 else
-  # remote tags define which artifacts exist; checkout must match the tag because the
-  # values template and pre_spawn_hook.py come from the local clone (hook/image version coupling)
+  # remote tags define which artifacts exist; the chart templates and pre_spawn_hook.py come from
+  # the local checkout though, so warn only when those actually differ from the tag being deployed
   LATEST_TAG="$(git ls-remote --tags --refs origin 'v*' 2>/dev/null | awk -F/ '{print $NF}' | sort -V | tail -1 || true)"
   [[ "$LATEST_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
     || die "could not resolve the latest release tag from origin (check network/access to: $(git remote get-url origin 2>/dev/null || echo origin))"
   git rev-parse --verify --quiet "refs/tags/$LATEST_TAG" >/dev/null \
-    || die "latest upstream release is $LATEST_TAG but your clone lacks it: git fetch --tags origin && git checkout $LATEST_TAG, then re-run"
-  [[ "$(git rev-parse HEAD)" == "$(git rev-list -n1 "$LATEST_TAG")" ]] \
-    || die "deploying $LATEST_TAG requires its exact checkout: git checkout $LATEST_TAG, then re-run (current HEAD: $(git rev-parse --short HEAD))"
+    || die "latest upstream release is $LATEST_TAG but your clone lacks it: git fetch --tags origin, then re-run"
   IMAGE_TAG="${LATEST_TAG#v}"
+  if ! git diff --quiet "$LATEST_TAG" -- helm/ 2>/dev/null; then
+    warn "local chart sources under helm/ differ from $LATEST_TAG (images come from the release,"
+    warn "chart and pre_spawn_hook from your checkout): for a stock deploy, checkout $LATEST_TAG instead"
+    confirm "Deploy $LATEST_TAG with the local chart sources?" Y || die "re-run from the $LATEST_TAG checkout"
+  fi
 fi
 info "image tag: $(bold "$IMAGE_TAG")"
 
