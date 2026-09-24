@@ -141,7 +141,7 @@ Local commands expect `uv` for Python workflows and `pnpm` for the UI unless you
 
 ## Manual Deployment
 
-If you need to deploy manually (bypassing CI/CD), run `./install.sh` for an interactive walkthrough of the steps below (dry-run by default; `--execute` applies). The remaining sections document the same steps for doing them by hand.
+If you need to deploy manually (bypassing CI/CD), run `./install.sh` for an interactive walkthrough of the steps below (`--dry-run` shows the actions without applying them). The remaining sections document the same steps for doing them by hand.
 
 ### 1. Prerequisites
 
