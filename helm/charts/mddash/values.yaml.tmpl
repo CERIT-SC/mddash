@@ -224,6 +224,16 @@ jupyterhub:
 
   proxy:
     secretToken: "your-secret-token-here-change-me"
+    # chp must declare resources: a Rancher resourceQuota on the hub namespace
+    # rejects pods that don't specify the tracked requests/limits.
+    chp:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
 
   # Requires cluster-wide permissions to be enabled
   scheduling:
