@@ -136,6 +136,7 @@ REGISTRY="$(yq -r '.registry' "$CONFIG")"
 HOSTNAME="$(yq -r '.dashboard.hostname' "$CONFIG")"
 STORAGE_CLASS="$(yq -r '.storageClassName' "$CONFIG")"
 RANCHER_PROJECT_ID="$(yq -r '.rancherProjectId // ""' "$CONFIG")"
+S3_SEAWEEDFS="$(yq -r '.s3.seaweedfs.enabled // false' "$CONFIG")"
 
 info "deploying $(bold "$ENV"): namespace $NAMESPACE, helm package $PACKAGE, https://$HOSTNAME"
 if [[ "$REGISTRY" != "cerit.io/mddash" ]]; then
@@ -287,7 +288,19 @@ create_secret() {
 }
 
 create_secret oidc-credentials "client_id:OIDC client ID" "client_secret:OIDC client secret"
-create_secret "${PACKAGE}-s3-creds" "S3_ACCESS_KEY:S3 access key" "S3_SECRET_KEY:S3 secret key"
+if [[ "$S3_SEAWEEDFS" == "true" ]]; then
+  # bundled store: generate the shared identity instead of prompting for it
+  if kubectl get secret "${PACKAGE}-s3-creds" -n "$NAMESPACE" >/dev/null 2>&1; then
+    ok "secret ${PACKAGE}-s3-creds exists, keeping"
+  else
+    s3_access_key="$(openssl rand -hex 20)"
+    s3_secret_key="$(openssl rand -hex 40)"
+    run "kubectl create secret generic '${PACKAGE}-s3-creds' --from-literal=S3_ACCESS_KEY=$(printf '%q' "$s3_access_key") --from-literal=S3_SECRET_KEY=$(printf '%q' "$s3_secret_key") -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -" \
+        "kubectl create secret generic '${PACKAGE}-s3-creds' --from-literal=S3_ACCESS_KEY=<hidden> --from-literal=S3_SECRET_KEY=<hidden> -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -"
+  fi
+else
+  create_secret "${PACKAGE}-s3-creds" "S3_ACCESS_KEY:S3 access key" "S3_SECRET_KEY:S3 secret key"
+fi
 create_secret "${PACKAGE}-mdrepo-credentials" "client_id:MDRepo client ID" "client_secret:MDRepo client secret"
 if kubectl get secret tuner-auth -n "$NAMESPACE" >/dev/null 2>&1; then
   ok "secret tuner-auth exists, keeping"

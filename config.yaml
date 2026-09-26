@@ -90,7 +90,11 @@ sidecars:
 
 # S3 object storage configuration
 s3:
-  endpoint: https://s3.cl4.du.cesnet.cz
+  endpoint: ""  # used when seaweedfs.enabled is false
+  seaweedfs:
+    enabled: true
+    diskSize: 500Gi      # single RWO PVC; no replication
+    storageClassName: ""
 
 resources:
   singleuser:

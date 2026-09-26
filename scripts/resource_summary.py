@@ -173,6 +173,10 @@ JOB_S3SYNC = row_mib("s3-sync sidecar", 100, 128, 200, 256)
 CHP_PROXY = row_mib("chp proxy", 100, 128, 500, 512)
 LANDING = row_mib("landing page", 50, 32, 100, 64)
 
+# In-cluster S3 store, only when s3.seaweedfs.enabled — keep in sync with the
+# seaweedfs.allInOne.resources block in helm/charts/mddash/values.yaml.tmpl.
+S3_STORE = row_mib("s3 store (seaweedfs)", 100, 256, 1000, 1024)
+
 
 def compute_budget(config: str) -> dict:
     """Read the config and compute all per-namespace resource totals."""
@@ -234,6 +238,8 @@ def compute_budget(config: str) -> dict:
         CHP_PROXY,
         LANDING,
     ]
+    if yq(".s3.seaweedfs.enabled // false", config) == "true":
+        b["hub_services"].append(S3_STORE)
     b["services_total"] = total("Services total", b["hub_services"])
 
     b["max_jobs"] = int(yq(".mdrunApi.jobHeadroom.maxConcurrentJobs", config))

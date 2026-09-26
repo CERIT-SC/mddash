@@ -13,6 +13,8 @@ Each user gets an isolated Kubernetes namespace (`{helm-package}-user-{username}
 
 The hub namespaces — `md-dashboard-ns` (prod) and `mddash-dev` (dev) — host JupyterHub itself, mdrun-api, Tuner, and the landing page; those are not covered by per-user quotas. Both live in the same Rancher project, so the project limit must cover both hubs plus all user namespaces.
 
+When `s3.seaweedfs.enabled` is true, the hub namespace also runs the in-cluster S3 store (SeaweedFS all-in-one, 1 pod: 100m/256Mi requested, 1 CPU/1Gi limit — included in `make resources`). Its data PVC (`s3.seaweedfs.diskSize`) is provisioned on `s3.seaweedfs.storageClassName` (empty = cluster default) and counts toward the Rancher project's storage quota where tracked.
+
 ---
 
 ## Fixed overhead (always-on)
