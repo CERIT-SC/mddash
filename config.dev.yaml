@@ -1,10 +1,10 @@
 # Development environment configuration
 
 # Kubernetes namespace
-namespace: krasa-ns
+namespace: mddash-dev
 
-# Rancher project ID for user namespace annotation
-rancherProjectId: "c-m-qvndqhf6:p-8rjpv"
+# Rancher project ID for user namespace annotation (shared with prod)
+rancherProjectId: "c-m-qvndqhf6:p-hshk2"
 
 # Global storage class for all persistent volumes
 storageClassName: nfs-csi
@@ -88,7 +88,11 @@ sidecars:
 
 # S3 object storage configuration
 s3:
-  endpoint: https://s3.cl4.du.cesnet.cz
+  endpoint: ""  # used when seaweedfs.enabled is false
+  seaweedfs:
+    enabled: true
+    diskSize: 100Gi      # single RWO PVC; no replication
+    storageClassName: ""
 
 resources:
   singleuser:

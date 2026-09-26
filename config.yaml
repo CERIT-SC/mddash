@@ -90,7 +90,11 @@ sidecars:
 
 # S3 object storage configuration
 s3:
-  endpoint: https://s3.cl4.du.cesnet.cz
+  endpoint: ""  # used when seaweedfs.enabled is false
+  seaweedfs:
+    enabled: true
+    diskSize: 500Gi      # single RWO PVC; no replication
+    storageClassName: ""
 
 resources:
   singleuser:
@@ -102,7 +106,7 @@ resources:
       limit: 1
   notebookQuota:
     # Max concurrent notebook pods per user namespace
-    maxConcurrent: 1  # TODO: change back to 2 after user testing is over
+    maxConcurrent: 2
   notebook:
     # Idle timeout in seconds: kernels are culled and the server shuts down after this period
     idleTimeoutSeconds: 3600
@@ -120,10 +124,10 @@ resources:
     memoryLimit: "8Gi"
   namespaceQuota:
     # requests = expected simultaneous usage; formula: see docs/resource-management.md
-    requestsCpu: "4000m"
-    requestsMemory: "8Gi"
-    # limits = sum of all container limits at full load (1 notebook at 4x tier)
-    limitsCpu: "42000m"
+    requestsCpu: "6000m"
+    requestsMemory: "12Gi"
+    # limits = sum of all container limits at full load (2 notebooks at 4x tier)
+    limitsCpu: "44000m"
     limitsMemory: "80Gi"
   pvcStorageSize: 100Gi
 
@@ -170,7 +174,7 @@ mdrunApi:
   jobHeadroom:
     # Maximum number of HPC jobs running simultaneously in the hub namespace.
     # Set cpuPerJob/memoryPerJob to the largest single job you want to allow.
-    maxConcurrentJobs: 1  # TODO: increase when more resources are available
+    maxConcurrentJobs: 2
     cpuPerJob: "16"
     memoryPerJob: "32Gi"
 
@@ -210,14 +214,14 @@ tuner:
   worker:
     image: "cerit.io/mddash/tuner-worker:gmx-2026.1_amber-26_ray-2.54.0_py-3.13"
     pullPolicy: IfNotPresent
-    maxReplicas: 1  # TODO: increase to 3 when more resources are available
+    maxReplicas: 1
     idleTimeoutSeconds: 3600
     resources:
       limits:
-        cpu: "8"  # TODO: ask for more (should be at least 32)
+        cpu: "32"
         memory: "64Gi"
         nvidia.com/mig-1g.10gb: "1"
       requests:
-        cpu: "8"  # should be same as limit
+        cpu: "32"  # should be same as limit
         memory: "16Gi"
         nvidia.com/mig-1g.10gb: "1"
