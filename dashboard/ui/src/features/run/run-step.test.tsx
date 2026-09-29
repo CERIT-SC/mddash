@@ -89,13 +89,10 @@ type MockRunOptions = {
 function mockRun(options: MockRunOptions = {}) {
   const state = {
     job: options.initial === undefined ? gmxJob() : options.initial,
-    jobs: [] as (GromacsJob | AmberJob)[],
     jobGets: 0,
   }
-  if (state.job !== null) state.jobs.push(state.job)
   const replaceActiveJob = (next: GromacsJob | AmberJob) => {
     state.job = next
-    state.jobs = state.jobs.map((j) => (j.id === next.id ? next : j))
   }
   const logs = options.logs ?? {
     gmx: "gmx log contents\n",
@@ -127,16 +124,15 @@ function mockRun(options: MockRunOptions = {}) {
       if (url.endsWith(`${GMX_ONE}/extend`) && method === "POST") {
         const body = (typeof init?.body === "string" ? JSON.parse(init.body) : {}) as { nsteps?: number }
         const prev = state.job as GromacsJob | null
-        const segment = gmxJob({
-          id: `job${String(state.jobs.length + 1)}`,
+        const next = gmxJob({
+          id: "job2",
           status: "RUNNING",
           is_live: true,
           nsteps: (prev?.nsteps ?? 0) + (body.nsteps ?? 0),
           nsteps_done: prev?.nsteps_done ?? 0,
         })
-        state.jobs = [segment] // extend replaces the single run row
-        state.job = segment
-        return Response.json(segment, { status: 201 })
+        state.job = next
+        return Response.json(next, { status: 201 })
       }
       if (url.endsWith(one)) {
         if (options.settleAfter !== undefined && method === "GET") {
@@ -156,20 +152,15 @@ function mockRun(options: MockRunOptions = {}) {
         }
         if (method === "DELETE") {
           state.job = null
-          state.jobs = []
           return new Response(null, { status: 204 })
         }
         if (method === "POST") {
           const body = (typeof init?.body === "string" ? JSON.parse(init.body) : {}) as Partial<GromacsJob>
           state.job = gmxJob({ ...body, id: "job2", status: "RUNNING" }) as GromacsJob | AmberJob
-          state.jobs = [state.job]
           return Response.json(state.job, { status: 201 })
         }
         return state.job === null ? new Response(null, { status: 404 }) : Response.json(state.job)
       }
-    }
-    if (url.endsWith("/experiments/exp1/gmx") || url.endsWith("/experiments/exp1/amber")) {
-      return Response.json(state.jobs)
     }
     if (url.endsWith(TUNER_ONE)) {
       return trials.length === 0 ? new Response(null, { status: 404 }) : Response.json(tunerJob(trials))

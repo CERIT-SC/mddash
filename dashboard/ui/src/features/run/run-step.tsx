@@ -5,8 +5,6 @@ import {
   getGetAmberJobQueryKey,
   getGetExperimentQueryKey,
   getGetGromacsJobQueryKey,
-  getListAmberJobsQueryKey,
-  getListGromacsJobsQueryKey,
   getListSimulationsQueryKey,
   useGetTunerJob,
 } from "@/api/generated/client"
@@ -76,16 +74,13 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
       engine === Engine.AMBER
         ? getGetAmberJobQueryKey(experimentId, simulation.simulation_path)
         : getGetGromacsJobQueryKey(experimentId, simulation.simulation_path)
-    const jobsKey =
-      engine === Engine.AMBER ? getListAmberJobsQueryKey(experimentId) : getListGromacsJobsQueryKey(experimentId)
     void queryClient.invalidateQueries({ queryKey: jobKey })
-    void queryClient.invalidateQueries({ queryKey: jobsKey })
     void queryClient.invalidateQueries({ queryKey: getListSimulationsQueryKey(experimentId) })
     void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experimentId) })
   }
 
   // When the polled run settles (finished/failed), this is the job query's last
-  // fetch — nothing else refreshes run history, wizard lists, or header without a reload.
+  // fetch — refresh the wizard lists and header explicitly.
   const wasLiveRef = useRef(false)
   useEffect(() => {
     if (wasLiveRef.current && !live) invalidate()
