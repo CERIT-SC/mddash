@@ -230,17 +230,19 @@ def compute_budget(config: str) -> dict:
         row_cfg("mdrun-api poller", config, ".mdrunApi.polling.resources"),
         row_cfg("tuner-api", config, ".tuner.api.resources"),
         row_cfg("ray-head", config, ".tuner.ray.head.resources"),
-        scale(
-            row_cfg("ray-worker", config, ".tuner.worker.resources"),
-            b["ray_worker_replicas"],
-            f"ray-worker (x {b['ray_worker_replicas']})",
-        ),
         CHP_PROXY,
         LANDING,
     ]
     if yq(".s3.seaweedfs.enabled // false", config) == "true":
         b["hub_services"].append(S3_STORE)
     b["services_total"] = total("Services total", b["hub_services"])
+    # KubeRay autoscaler: 0 workers when idle, up to maxReplicas under load
+    b["ray_idle_timeout"] = yq(".tuner.worker.idleTimeoutSeconds", config)
+    b["ray_workers"] = scale(
+        row_cfg("ray-worker", config, ".tuner.worker.resources"),
+        b["ray_worker_replicas"],
+        f"ray-worker (x 0..{b['ray_worker_replicas']})",
+    )
 
     b["max_jobs"] = int(yq(".mdrunApi.jobHeadroom.maxConcurrentJobs", config))
     gmx_cpu = parse_cpu(yq(".mdrunApi.jobHeadroom.cpuPerJob", config))
@@ -248,7 +250,10 @@ def compute_budget(config: str) -> dict:
     # GROMACS jobs have request = limit (MPI: throttling causes rank starvation)
     b["job_rows"] = [Row("gromacs  (req=lim)", gmx_cpu, gmx_mem, gmx_cpu, gmx_mem), JOB_S3SYNC]
     b["per_job_total"] = total("Per job total", b["job_rows"])
-    b["hub_total"] = total("HUB NAMESPACE TOTAL", [b["services_total"], scale(b["per_job_total"], b["max_jobs"])])
+    b["hub_total"] = total(
+        "HUB NAMESPACE TOTAL",
+        [b["services_total"], b["ray_workers"], scale(b["per_job_total"], b["max_jobs"])],
+    )
 
     return b
 
@@ -351,6 +356,12 @@ def print_table(b: dict) -> None:
     for r in b["hub_services"]:
         row(r, indent=1)
     subtotal(b["services_total"])
+
+    section(
+        f"Tuner Ray workers  (on-demand: KubeRay autoscaler, 0..{b['ray_worker_replicas']} replicas, "
+        f"idle timeout {b['ray_idle_timeout']}s)"
+    )
+    row(b["ray_workers"], indent=1)
 
     section(f"HPC jobs  (on-demand, up to {b['max_jobs']} concurrent)")
     for r in b["job_rows"]:
