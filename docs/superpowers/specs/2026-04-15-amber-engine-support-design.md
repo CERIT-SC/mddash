@@ -407,4 +407,4 @@ File-upload-based, engine-agnostic. No changes.
 | `dashboard/ui/src/components/Wizard/AnalyzeStep/AnalyzeStep.tsx` | Read engine config for file filters |
 | `dashboard/ui/src/components/Wizard/AnalyzeStep/AnalyzeSidebar.tsx` | Accept `structureExts`, `trajectoryExts` as props |
 | `dashboard/ui/src/pages/New.tsx` | Add engine selector |
-| `dashboard/ui/CLAUDE.md` | Update supported formats list (add prmtop/parm7, nc/nctraj) |
+| `dashboard/ui/AGENTS.md` | Update supported formats list (add prmtop/parm7, nc/nctraj) |

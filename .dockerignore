@@ -25,4 +25,3 @@ config*.yaml
 **/pytest.ini
 **/Dockerfile
 **/AGENTS.md
-**/CLAUDE.md
