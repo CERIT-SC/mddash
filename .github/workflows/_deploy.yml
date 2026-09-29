@@ -317,16 +317,26 @@ jobs:
           S3_SECRET_KEY: ${{ secrets.S3_SECRET_KEY }}
           MDREPO_CLIENT_ID: ${{ secrets.MDREPO_CLIENT_ID }}
           MDREPO_CLIENT_SECRET: ${{ secrets.MDREPO_CLIENT_SECRET }}
+          CONFIG_FILE: ${{ inputs.config-file }}
         run: |
           kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
           kubectl create secret generic oidc-credentials \
             --from-literal=client_id="$OAUTH_CLIENT_ID" \
             --from-literal=client_secret="$OAUTH_CLIENT_SECRET" \
             -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-          kubectl create secret generic "$PACKAGE"-s3-creds \
+          if [[ "$(yq -r '.s3.seaweedfs.enabled // false' "$CONFIG_FILE")" == "true" ]]; then
+            # bundled store: the secret is the store's identity; never overwrite, generate if absent
+            kubectl get secret "$PACKAGE"-s3-creds -n "$NAMESPACE" >/dev/null 2>&1 || \
+              kubectl create secret generic "$PACKAGE"-s3-creds \
+              --from-literal=S3_ACCESS_KEY="$(openssl rand -hex 20)" \
+              --from-literal=S3_SECRET_KEY="$(openssl rand -hex 40)" \
+              -n "$NAMESPACE"
+          else
+            kubectl create secret generic "$PACKAGE"-s3-creds \
             --from-literal=S3_ACCESS_KEY="$S3_ACCESS_KEY" \
             --from-literal=S3_SECRET_KEY="$S3_SECRET_KEY" \
             -n "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+          fi
           kubectl create secret generic "$PACKAGE"-mdrepo-credentials \
             --from-literal=client_id="$MDREPO_CLIENT_ID" \
             --from-literal=client_secret="$MDREPO_CLIENT_SECRET" \

@@ -39,8 +39,8 @@
    - `KUBECONFIG` - Your kubeconfig base64 encoded: `cat ~/.kube/config | base64 -w 0`
    - `OAUTH_CLIENT_ID` - OAuth client ID for authentication
    - `OAUTH_CLIENT_SECRET` - OAuth client secret
-   - `S3_ACCESS_KEY` - S3 access key
-   - `S3_SECRET_KEY` - S3 secret key
+   - `S3_ACCESS_KEY` - S3 access key (external S3 only; unused when `s3.seaweedfs.enabled: true`)
+   - `S3_SECRET_KEY` - S3 secret key (external S3 only; unused when `s3.seaweedfs.enabled: true`)
    - `MDREPO_CLIENT_ID` - MDRepo OAuth client ID for publishing experiments
    - `MDREPO_CLIENT_SECRET` - MDRepo OAuth client secret
 
@@ -203,7 +203,9 @@ kubectl create secret generic oidc-credentials \
   --from-literal=client_secret="YOUR_CLIENT_SECRET" \
   -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
-# S3 Credentials
+# S3 Credentials (external S3 only; with s3.seaweedfs.enabled: true the
+# install/deployment paths generate this secret instead — it serves as the
+# bundled store's auth identity and must stay stable)
 kubectl create secret generic ${PACKAGE}-s3-creds \
   --from-literal=S3_ACCESS_KEY="YOUR_S3_ACCESS_KEY" \
   --from-literal=S3_SECRET_KEY="YOUR_S3_SECRET_KEY" \
@@ -311,7 +313,7 @@ Isolated environments created for each logged-in user.
 Services outside the Kubernetes cluster that the application depends on.
 
 - **S3**
-  - *Location*: Endpoint configured in `config*.yaml` (secrets stored in `${PACKAGE}-s3-creds`)
+  - *Location*: External `s3.endpoint` or the bundled SeaweedFS store (`s3.seaweedfs.enabled` in `config*.yaml`); credentials in `${PACKAGE}-s3-creds`
   - *Purpose*: Provides a central, scalable storage layer accessible by all services to persist large simulation datasets and trajectories.
 - **MDRepo**
   - *Location*: Endpoint and OAuth client configured in `config*.yaml` (`mdrepo:`, secrets in `${PACKAGE}-mdrepo-credentials`); OAuth flow managed by the Dashboard API
