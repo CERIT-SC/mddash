@@ -8,6 +8,8 @@ import {
   getGetTunerJobQueryKey,
   getListSimulationsQueryKey,
   useDeleteTunerJob,
+  useGetAmberJob,
+  useGetGromacsJob,
   useGetTunerJob,
   useStartTunerJob,
   useStopTunerJob,
@@ -114,6 +116,7 @@ export function TuneStep({
   const [logTrialId, setLogTrialId] = useState<string | null>(null)
   const [confirmRetune, setConfirmRetune] = useState(false)
   const [confirmStartNsteps, setConfirmStartNsteps] = useState<number | null>(null)
+  const [confirmNewRun, setConfirmNewRun] = useState<HardwareConfigValues | null>(null)
   // The manual and customize forms never co-mount (separate tabs), so one flag suffices.
   const [formValid, setFormValid] = useState(false)
 
@@ -175,6 +178,16 @@ export function TuneStep({
   const amberSubmit = useSubmitAmberJob()
   const submitRun = (engine === Engine.AMBER ? amberSubmit : gmxSubmit) as unknown as SubmitRun
 
+  // An existing terminal run is deleted and replaced on submit — the user confirms first.
+  const gmxRun = useGetGromacsJob(experimentId, simulation.simulation_path, {
+    query: { retry: false, enabled: engine !== Engine.AMBER },
+  })
+  const amberRun = useGetAmberJob(experimentId, simulation.simulation_path, {
+    query: { retry: false, enabled: engine === Engine.AMBER },
+  })
+  const runQuery = engine === Engine.AMBER ? amberRun : gmxRun
+  const priorTerminalRun = runQuery.data?.status === 200 && !runQuery.data.data.is_live
+
   const advanceToRun = () => {
     const jobKey =
       engine === Engine.AMBER
@@ -188,22 +201,29 @@ export function TuneStep({
 
   // Run Simulation submits the production job and navigates to Run on success;
   // a failure stays on Tune with the actionable error.
-  const startRun = (values: HardwareConfigValues) =>
+  const submitRunNow = (values: HardwareConfigValues) =>
     submitRun.mutate(
       { experimentId, simulationPath: simulation.simulation_path, data: toJobRequest(engine, values) },
       {
         onSuccess: () => {
+          setConfirmNewRun(null)
           toast.success("Run started")
           advanceToRun()
         },
         onError: (error) => {
+          setConfirmNewRun(null)
           const apiError = toApiError(error)
           toast.error(apiError.message)
-          // The 409 run already exists — the goal is met despite the error; go there.
+          // The 409 live-run conflict — the goal is met despite the error; go there.
           if (apiError.status === 409) advanceToRun()
         },
       }
     )
+
+  const startRun = (values: HardwareConfigValues) => {
+    if (priorTerminalRun) setConfirmNewRun(values)
+    else submitRunNow(values)
+  }
 
   // The pick counts only while THIS job contains it (tab switches carry the URL over).
   const pickedRow = useMemo(
@@ -354,6 +374,31 @@ export function TuneStep({
             <AlertDialogAction onClick={() => confirmStartNsteps !== null && startJob(confirmStartNsteps)}>
               <Play aria-hidden />
               Start tuning
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={confirmNewRun !== null} onOpenChange={(open) => !open && setConfirmNewRun(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <RotateCcw className="text-primary" aria-hidden />
+              Start a new run?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This deletes the previous run of this simulation — its results, trajectory, and logs — and starts a fresh
+              run with the configuration you chose. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmNewRun !== null && submitRunNow(confirmNewRun)}
+              disabled={submitRun.isPending}
+            >
+              <Play aria-hidden />
+              Start new run
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -80,7 +80,15 @@ function tunerJob(overrides: Partial<TunerJob> = {}): TunerJob {
   }
 }
 
-function mockTuner(initial: TunerJob | null, options: { submitFails?: boolean; submitConflicts?: boolean } = {}) {
+function mockTuner(
+  initial: TunerJob | null,
+  options: {
+    submitFails?: boolean
+    submitConflicts?: boolean
+    /** A run returned by GET for the simulation (terminal runs get replaced on submit). */
+    priorRun?: { id: string; status: string; is_live: boolean }
+  } = {}
+) {
   const state = { current: initial }
   const calls: { url: string; method: string; body?: unknown }[] = []
   vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -97,7 +105,7 @@ function mockTuner(initial: TunerJob | null, options: { submitFails?: boolean; s
           {
             type: "urn:mddash:conflict",
             title: "Conflict",
-            detail: "A run already exists for this simulation; delete it first to submit a new run.",
+            detail: "A run is already active for this simulation; stop it first to submit a new run.",
           },
           { status: 409 }
         )
@@ -109,6 +117,9 @@ function mockTuner(initial: TunerJob | null, options: { submitFails?: boolean; s
         )
       }
       return Response.json({ id: "run1" }, { status: 201 })
+    }
+    if (url.endsWith(GMX_ONE)) {
+      return options.priorRun === undefined ? new Response(null, { status: 404 }) : Response.json(options.priorRun)
     }
     if (url.endsWith(`${TUNER_ONE}/trials/err1/stdout`)) return Response.json("trial stdout contents")
     if (url.endsWith(`${TUNER_ONE}/trials/err1/stderr`)) return Response.json("trial stderr contents")
@@ -354,6 +365,24 @@ describe("TuneStep running job", () => {
     await userEvent.click(run)
 
     await waitFor(() => expect(spies.onStepChange).toHaveBeenCalledWith(2))
+  })
+
+  it("confirms before a new run replaces a terminal previous run", async () => {
+    const { calls } = mockTuner(job, { priorRun: { id: "old", status: "FINISHED", is_live: false } })
+    const spies = renderTune({ trialId: "t2" })
+
+    const run = screen.getByRole("button", { name: /run simulation/i })
+    await waitFor(() => expect(run).toBeEnabled())
+    await userEvent.click(run)
+
+    // Submit waits for the confirmation: nothing is deleted or submitted yet.
+    expect(await screen.findByRole("alertdialog")).toBeInTheDocument()
+    expect(calls.some((call) => call.method === "POST" && call.url.endsWith(GMX_ONE))).toBe(false)
+
+    await userEvent.click(within(screen.getByRole("alertdialog")).getByRole("button", { name: /start new run/i }))
+
+    await waitFor(() => expect(calls.some((call) => call.method === "POST" && call.url.endsWith(GMX_ONE))).toBe(true))
+    expect(spies.onStepChange).toHaveBeenCalledWith(2)
   })
 
   it("stays on Tune when the run submission fails", async () => {

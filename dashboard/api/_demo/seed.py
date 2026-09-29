@@ -243,30 +243,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         "log_total_lines": 500,
     }
 
-    # Finished MD simulation (NPT equilibration complete)
-    finished_gmx = build_model(
-        GromacsJob,
-        id="demo-gmx-finished",
-        experiment=enzyme,
-        simulation_path="npt_equilibration.simulation.json",
-        pme=DeviceType.CPU,
-        nb=DeviceType.GPU,
-        np=8,
-        ntomp=1,
-        _nsteps=100000,
-        _start_timestamp=int((now - timedelta(days=1)).timestamp()),
-        _finish_timestamp=int((now - timedelta(hours=20)).timestamp()),
-        _performance=68.5,
-        created_at=now - timedelta(days=1),
-    )
-    demo_state.mdrun_jobs[finished_gmx.id] = {
-        "status": JobStatus.FINISHED.value,
-        "experiment_id": enzyme.id,
-        "tpr_name": "npt_equilibration.tpr",
-        "nsteps": 100000,
-    }
-
-    # Exercises segment history, non-destructive stop, and extend-from-checkpoint.
+    # A run of NPT equilibration extended past its finished first block and then
+    # stopped — exercises non-destructive stop and extend-from-checkpoint.
     stopped_gmx = build_model(
         GromacsJob,
         id="demo-gmx-stopped",
@@ -680,7 +658,6 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         stopped_tuner,
         error_tuner,
         running_gmx,
-        finished_gmx,
         published,
         published_notebook,
         published_gmx,
@@ -769,7 +746,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     write_running_gmx_log(enzyme.id, "production/md")
     write_finished_gmx_log(enzyme.id, "npt_equilibration", nsteps=100000, performance=68.5)
     write_mdrun_stdio(enzyme.id, "production", running_gmx.id)
-    # The stopped second segment of npt_equilibration resumable via its checkpoint.
+    # The stopped run is resumable via its checkpoint.
     write_gmx_checkpoint(enzyme.id, "npt_equilibration")
     # TERM-stopped runs leave a Performance line the parsers must not trust.
     append_gmx_stopped_segment(

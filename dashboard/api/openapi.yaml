@@ -413,11 +413,11 @@ paths:
       - {$ref: '#/components/parameters/SimulationPath'}
     get:
       tags: [GROMACS]
-      summary: Get the latest segment of a GROMACS job
+      summary: Get a GROMACS job
       operationId: getGromacsJob
       responses:
         '200':
-          description: Latest segment of the GROMACS job
+          description: GROMACS job
           content:
             application/json:
               schema: {$ref: '#/components/schemas/GromacsJob'}
@@ -425,7 +425,7 @@ paths:
         default: {$ref: '#/components/responses/Problem'}
     post:
       tags: [GROMACS]
-      summary: Submit a GROMACS job
+      summary: Submit a GROMACS job (replaces a terminal run, 409s on a live one)
       operationId: submitGromacsJob
       requestBody:
         content:
@@ -435,12 +435,13 @@ paths:
             schema: {$ref: '#/components/schemas/GromacsJobRequest'}
       responses:
         '201':
-          description: Submitted or existing GROMACS job
+          description: Submitted GROMACS job
           content:
             application/json:
               schema: {$ref: '#/components/schemas/GromacsJob'}
         '400': {$ref: '#/components/responses/BadRequest'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
         default: {$ref: '#/components/responses/Problem'}
     delete:
       tags: [GROMACS]
@@ -456,7 +457,7 @@ paths:
       - {$ref: '#/components/parameters/SimulationPath'}
     post:
       tags: [GROMACS]
-      summary: Stop the latest GROMACS run segment, preserving its data
+      summary: Stop a GROMACS run, preserving its data
       operationId: stopGromacsJob
       responses:
         '204': {$ref: '#/components/responses/NoContent'}
@@ -479,7 +480,7 @@ paths:
             schema: {$ref: '#/components/schemas/ExtendGromacsJobRequest'}
       responses:
         '201':
-          description: Created extension segment of the GROMACS job
+          description: Created GROMACS run extension
           content:
             application/json:
               schema: {$ref: '#/components/schemas/GromacsJob'}
@@ -492,7 +493,7 @@ paths:
       - {$ref: '#/components/parameters/SimulationPath'}
     get:
       tags: [GROMACS]
-      summary: Get a GROMACS job log (latest segment)
+      summary: Get a GROMACS job log
       operationId: getGromacsJobLog
       parameters:
         - {name: type, in: query, schema: {type: string, default: gmx}}
@@ -534,7 +535,7 @@ paths:
         default: {$ref: '#/components/responses/Problem'}
     post:
       tags: [AMBER]
-      summary: Submit an AMBER job
+      summary: Submit an AMBER job (replaces a terminal run, 409s on a live one)
       operationId: submitAmberJob
       requestBody:
         content:
@@ -544,12 +545,13 @@ paths:
             schema: {$ref: '#/components/schemas/AmberJobRequest'}
       responses:
         '201':
-          description: Submitted or existing AMBER job
+          description: Submitted AMBER job
           content:
             application/json:
               schema: {$ref: '#/components/schemas/AmberJob'}
         '400': {$ref: '#/components/responses/BadRequest'}
         '404': {$ref: '#/components/responses/NotFound'}
+        '409': {$ref: '#/components/responses/Conflict'}
         default: {$ref: '#/components/responses/Problem'}
     delete:
       tags: [AMBER]
@@ -565,7 +567,7 @@ paths:
       - {$ref: '#/components/parameters/SimulationPath'}
     post:
       tags: [AMBER]
-      summary: Stop the latest AMBER run segment, preserving its data
+      summary: Stop an AMBER run, preserving its data
       operationId: stopAmberJob
       responses:
         '204': {$ref: '#/components/responses/NoContent'}

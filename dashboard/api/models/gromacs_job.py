@@ -15,6 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from utils import nsteps_override, strip_run_control_args, tail, tail_bytes
 from werkzeug.exceptions import (
     BadRequest,
+    Conflict,
     Forbidden,
     InternalServerError,
     NotFound,
@@ -201,7 +202,13 @@ class GromacsJob(SimulationJob):
 
         job._cleanup_files()
 
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # A rival run won the row race; tear down our orphaned MDRun job.
+            db.session.rollback()
+            mdrun.delete_gmx_job(job.id)
+            raise Conflict("A run is already active for this simulation; stop it first to submit a new run.") from None
         simulation.mark_readonly()
         logger.info(f"Started GROMACS job {job.id} for experiment {experiment.id} (simulation {simulation_path})")
 
@@ -210,12 +217,15 @@ class GromacsJob(SimulationJob):
     @classmethod
     def extend(cls, experiment: "Experiment", simulation_path: str, nsteps: int) -> "GromacsJob":
         """
-        Extend the latest segment by ``nsteps`` additional steps, resuming from its checkpoint.
+        Extend the simulation's run by ``nsteps`` additional steps, resuming from its checkpoint.
+
+        The run row is replaced (delete+insert) so its PK keeps naming the current
+        MDRun job; the result files and the appended log are untouched.
 
         Raises:
-            BadRequest: No prior segment, live segment, missing checkpoint, manifest contains ``-cpi``, or concurrent extend.
+            BadRequest: No run, live run, missing checkpoint, manifest contains ``-cpi``, or concurrent extend.
         """
-        latest = cls.latest_for(experiment.id, simulation_path)
+        latest = cls.one_for(experiment.id, simulation_path)
         if latest is None:
             raise BadRequest("No run exists for this simulation yet; extend requires a finished or stopped run.")
         if latest.is_live:
@@ -237,19 +247,14 @@ class GromacsJob(SimulationJob):
         except ValueError as exc:
             raise BadRequest(str(exc)) from exc
 
-        # Freeze log-derived fields before appending: parsers take the last match,
-        # so the old segment's row must be locked before the new block is written.
-        _ = latest.init_step, latest.start_timestamp, latest.performance
         previous_total = latest.nsteps
         if previous_total is None:
             raise BadRequest("Cannot determine the previous run's total step count from its log.")
 
-        # Anchor on actual progress, not the previous target: a stopped segment
-        # resumes from where it stood, so "extend by N" must mean N more steps
-        # from that point (the same value is frozen for the history display).
+        # Anchor on actual progress, not the previous target: a stopped run
+        # resumes from where it stood, so "extend by N" means N more steps from
+        # that point. Read before the new block appends to the shared log.
         progress = latest.nsteps_done
-        if progress is not None:
-            latest.nsteps_done = progress
         base = progress if progress is not None else previous_total
 
         # mdrun -cpi counts -nsteps as ADDITIONAL steps from the checkpoint step —
@@ -282,11 +287,14 @@ class GromacsJob(SimulationJob):
         )
         job._nsteps = total
         job._init_step = base
+        db.session.delete(latest)
+        # Flush first: one flush inserts before deletes, tripping the unique constraint.
+        db.session.flush()
         db.session.add(job)
         try:
             db.session.commit()
         except IntegrityError:
-            # Concurrent extend won the partial-unique-index race; clean up the orphaned cluster job.
+            # Concurrent submit/extend won the unique-path race; clean up the orphaned cluster job.
             db.session.rollback()
             mdrun.delete_gmx_job(mdrun_job["id"])
             raise BadRequest("Another extension of this simulation is already in progress.") from None

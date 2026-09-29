@@ -8,7 +8,6 @@ from cachetools import cached
 from clients import mdrun
 from enums import Engine, JobStatus
 from extensions import db
-from sqlalchemy import Index, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from utils import count_lines
 
@@ -28,19 +27,9 @@ class SimulationJob(db.Model):  # type: ignore
     """
 
     __tablename__ = "simulation_jobs"
-    # At most one live segment per simulation: rows are born PENDING and a second
-    # concurrent extension violates this index instead of spawning two pods that
-    # append to one trajectory. NULL (never-yet-polled legacy rows) is deliberately
-    # excluded — status fetches converge them before any extend can insert.
-    __table_args__ = (
-        Index(
-            "uq_simulation_jobs_live_segment",
-            "experiment_id",
-            "simulation_path",
-            unique=True,
-            sqlite_where=text("last_known_status IN ('PENDING', 'RUNNING', 'UNKNOWN')"),
-        ),
-    )
+    # One run per simulation; extend swaps the row in place so the PK stays the
+    # current MDRun job — a second pod can never append to one trajectory.
+    __table_args__ = (db.UniqueConstraint("experiment_id", "simulation_path"),)
     __mapper_args__: ClassVar[dict[str, Any]] = {"polymorphic_on": "engine"}
 
     # ID of the job inside the database
@@ -67,9 +56,6 @@ class SimulationJob(db.Model):  # type: ignore
     _nsteps: Mapped[int | None] = mapped_column("nsteps", db.Integer, nullable=True)
     # Performance (ns/day)
     _performance: Mapped[float | None] = mapped_column("performance", db.Float, nullable=True)
-    # Frozen progress for terminal segments (set by extend so appended log
-    # can't overwrite this row's display). Null while live; parsers fill in.
-    _nsteps_done: Mapped[int | None] = mapped_column("nsteps_done", db.Integer, nullable=True)
     # Last successfully-fetched non-UNKNOWN status (fallback when MDRun API is unavailable)
     _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", db.Enum(JobStatus), nullable=True)
 
@@ -77,14 +63,25 @@ class SimulationJob(db.Model):  # type: ignore
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="simulation_jobs")
 
     @classmethod
-    def latest_for(cls, experiment_id: str, simulation_path: str) -> Self | None:
-        """Latest (most recently created) segment of the simulation's run history, or None."""
-        return (
-            cls.query
-            .filter_by(experiment_id=experiment_id, simulation_path=simulation_path)
-            .order_by(cls.created_at.desc())
-            .first()
-        )
+    def one_for(cls, experiment_id: str, simulation_path: str) -> Self | None:
+        """Return the simulation's single run row (unique per experiment and path), or None."""
+        return cls.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first()
+
+    @classmethod
+    def delete_for(cls, experiment_id: str, simulation_path: str) -> Self | None:
+        """
+        Delete the simulation's run: its MDRun job, DB row, and result files.
+
+        Returns:
+            The deleted row, or None when the simulation never ran.
+        """
+        job = cls.one_for(experiment_id, simulation_path)
+        if job is None:
+            return None
+        job.delete()
+        db.session.delete(job)
+        db.session.commit()
+        return job
 
     @property
     @cached(cache=simulation_status_cache)
@@ -153,10 +150,7 @@ class SimulationJob(db.Model):  # type: ignore
 
     @property
     def nsteps_done(self) -> int | None:
-        """Number of steps completed so far (persisted for terminal rows once frozen)."""
-        if self._nsteps_done is not None:
-            return self._nsteps_done
-
+        """Number of steps completed so far (absolute trajectory step)."""
         if self._archived:
             return self._nsteps if self._performance else None
 
@@ -166,11 +160,6 @@ class SimulationJob(db.Model):  # type: ignore
             return self._nsteps
 
         return self._parse_nsteps_done()
-
-    @nsteps_done.setter
-    def nsteps_done(self, value: int) -> None:
-        """Freeze a terminal segment's progress (extend flow) so later appends can't rewrite it."""
-        self._nsteps_done = value
 
     @property
     def start_timestamp(self) -> int | None:
