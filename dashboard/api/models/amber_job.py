@@ -167,7 +167,7 @@ class AmberJob(SimulationJob):
         try:
             db.session.commit()
         except IntegrityError:
-            # A rival run won the row race; tear down our orphaned MDRun job.
+            # Another request committed the row first; delete our unreferenced MDRun job.
             db.session.rollback()
             mdrun.delete_amber_job(job.id)
             raise Conflict("A run is already active for this simulation; stop it first to submit a new run.") from None
