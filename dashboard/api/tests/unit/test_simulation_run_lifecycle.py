@@ -397,7 +397,7 @@ class TestExtend:
         assert manifest["extra_args"] == ""
 
         with app.app_context():
-            run = GromacsJob.current(experiment_id, sim_path)
+            run = GromacsJob.get(experiment_id, sim_path)
             assert run is not None
             # The row is swapped in place: one run, PK naming the new MDRun job…
             assert run.id == response.get_json()["id"] != "run-1"
@@ -429,7 +429,7 @@ class TestExtend:
         client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/extend", json={"nsteps": 50000})
         # The extended run finishes (its MDRun entry reports finished), then extends again.
         with app.app_context():
-            run = GromacsJob.current(experiment_id, sim_path)
+            run = GromacsJob.get(experiment_id, sim_path)
             assert run is not None
             run._last_known_status = JobStatus.FINISHED
             db.session.commit()
@@ -440,7 +440,7 @@ class TestExtend:
         kwargs = mdrun["create"].call_args.kwargs
         assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 25000"
         with app.app_context():
-            run = GromacsJob.current(experiment_id, sim_path)
+            run = GromacsJob.get(experiment_id, sim_path)
             assert run is not None
             assert run._nsteps == 175000
             assert GromacsJob.query.filter_by(experiment_id=experiment_id, simulation_path=sim_path).count() == 1
@@ -458,7 +458,7 @@ class TestExtend:
 
         # The extension finishes, then a second extension follows.
         with app.app_context():
-            run = GromacsJob.current(experiment_id, sim_path)
+            run = GromacsJob.get(experiment_id, sim_path)
             assert run is not None
             run._last_known_status = JobStatus.FINISHED
             db.session.commit()
@@ -471,7 +471,7 @@ class TestExtend:
         # extension's persisted 130000 — NOT the manifest's stale 80000 override.
         assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 25000"
         with app.app_context():
-            run = GromacsJob.current(experiment_id, sim_path)
+            run = GromacsJob.get(experiment_id, sim_path)
             assert run is not None
             assert run._nsteps == 155000
 
@@ -500,7 +500,7 @@ class TestExtend:
         # NOT the 150000 target.
         assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 20000"
         with app.app_context():
-            run = GromacsJob.current(experiment_id, sim_path)
+            run = GromacsJob.get(experiment_id, sim_path)
             assert run is not None
             assert run._nsteps == 140000
             assert run._init_step == 120000
@@ -525,7 +525,7 @@ class TestExtend:
 
         assert response.status_code == HTTPStatus.CREATED
         with app.app_context():
-            run = GromacsJob.current(experiment_id, sim_path)
+            run = GromacsJob.get(experiment_id, sim_path)
             assert run is not None
             assert run._init_step == 120000
             assert run.init_step == 120000
@@ -552,7 +552,7 @@ class TestExtend:
         assert response.status_code == HTTPStatus.CREATED
         assert mdrun["create"].call_args.kwargs["extra_args"] == "-cpi protein.cpt -nsteps 20000"
         with app.app_context():
-            run = GromacsJob.current(experiment_id, sim_path)
+            run = GromacsJob.get(experiment_id, sim_path)
             assert run is not None
             # Stopped is not a proven 150k completion; the anchor is the log's 120k,
             # and no performance is inherited onto the new row.
@@ -579,7 +579,7 @@ class TestExtend:
         assert response.status_code == HTTPStatus.CREATED
         assert mdrun["create"].call_args.kwargs["extra_args"] == "-cpi protein.cpt -nsteps 20000"
         with app.app_context():
-            run = GromacsJob.current(experiment_id, sim_path)
+            run = GromacsJob.get(experiment_id, sim_path)
             assert run is not None
             assert run._nsteps == 170000
             assert run._init_step == 150000
@@ -598,7 +598,7 @@ class TestExtend:
         kwargs = mdrun["create"].call_args.kwargs
         assert kwargs["extra_args"] == "-cpi protein.cpt -nsteps 10"
         with app.app_context():
-            run = GromacsJob.current(experiment_id, sim_path)
+            run = GromacsJob.get(experiment_id, sim_path)
             assert run is not None
             assert run.nsteps == 50010
 

@@ -15,7 +15,7 @@ gmx_bp = Blueprint("gmx", __name__, url_prefix=f"{API_PREFIX}/experiments/<exper
 
 def _job_or_404(experiment_id: str, simulation_path: str) -> GromacsJob:
     """Return the simulation's single run row."""
-    job = GromacsJob.current(experiment_id, simulation_path)
+    job = GromacsJob.get(experiment_id, simulation_path)
     if job is None:
         raise NotFound(f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
     return job
@@ -67,7 +67,7 @@ def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
 
-    prior = GromacsJob.current(experiment_id, simulation_path)
+    prior = GromacsJob.get(experiment_id, simulation_path)
     if prior is not None and prior.is_live:
         raise Conflict("A run is already active for this simulation; stop it first to submit a new run.")
 
@@ -81,7 +81,7 @@ def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
         raise BadRequest("Invalid compute parameters.") from exc
 
     # A terminal run (finished, stopped, or failed) is replaced by the new one.
-    GromacsJob.delete_current(experiment_id, simulation_path)
+    GromacsJob.remove(experiment_id, simulation_path)
 
     job = GromacsJob.start(
         experiment=experiment,
@@ -103,7 +103,7 @@ def delete_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
     Returns:
         Response: Empty JSON response with 204 No Content on success.
     """
-    if not GromacsJob.delete_current(experiment_id, simulation_path):
+    if not GromacsJob.remove(experiment_id, simulation_path):
         raise NotFound(f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
 
     return "", HTTPStatus.NO_CONTENT
