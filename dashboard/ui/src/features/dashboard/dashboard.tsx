@@ -122,20 +122,12 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
         >
           <TabsList>
             <TabsTrigger value="active">
-              Active{" "}
-              {experiments !== undefined && (
-                <Badge variant="secondary" className="ml-2">
-                  {activeCount}
-                </Badge>
-              )}
+              Active
+              {experiments !== undefined && <Badge variant="secondary">{activeCount}</Badge>}
             </TabsTrigger>
             <TabsTrigger value="archived">
-              Archived{" "}
-              {experiments !== undefined && (
-                <Badge variant="secondary" className="ml-2">
-                  {archivedCount}
-                </Badge>
-              )}
+              Archived
+              {experiments !== undefined && <Badge variant="secondary">{archivedCount}</Badge>}
             </TabsTrigger>
           </TabsList>
         </Tabs>
