@@ -63,19 +63,19 @@ class SimulationJob(db.Model):  # type: ignore
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="simulation_jobs")
 
     @classmethod
-    def one_for(cls, experiment_id: str, simulation_path: str) -> Self | None:
+    def current(cls, experiment_id: str, simulation_path: str) -> Self | None:
         """Return the simulation's single run row (unique per experiment and path), or None."""
         return cls.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first()
 
     @classmethod
-    def delete_for(cls, experiment_id: str, simulation_path: str) -> Self | None:
+    def delete_current(cls, experiment_id: str, simulation_path: str) -> Self | None:
         """
         Delete the simulation's run: its MDRun job, DB row, and result files.
 
         Returns:
             The deleted row, or None when the simulation never ran.
         """
-        job = cls.one_for(experiment_id, simulation_path)
+        job = cls.current(experiment_id, simulation_path)
         if job is None:
             return None
         job.delete()

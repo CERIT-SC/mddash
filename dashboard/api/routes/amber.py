@@ -15,7 +15,7 @@ amber_bp = Blueprint("amber", __name__, url_prefix=f"{API_PREFIX}/experiments/<e
 
 def _job_or_404(experiment_id: str, simulation_path: str) -> AmberJob:
     """Return the simulation's single run row."""
-    job = AmberJob.one_for(experiment_id, simulation_path)
+    job = AmberJob.current(experiment_id, simulation_path)
     if job is None:
         raise NotFound(f"AMBER job for simulation {simulation_path} in experiment {experiment_id} not found")
     return job
@@ -67,7 +67,7 @@ def submit_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturn
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
 
-    prior = AmberJob.one_for(experiment_id, simulation_path)
+    prior = AmberJob.current(experiment_id, simulation_path)
     if prior is not None and prior.is_live:
         raise Conflict("A run is already active for this simulation; stop it first to submit a new run.")
 
@@ -81,7 +81,7 @@ def submit_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturn
         raise BadRequest("Invalid compute parameters.") from exc
 
     # A terminal run (finished, stopped, or failed) is replaced by the new one.
-    AmberJob.delete_for(experiment_id, simulation_path)
+    AmberJob.delete_current(experiment_id, simulation_path)
 
     job = AmberJob.start(
         experiment=experiment,
@@ -103,7 +103,7 @@ def delete_amber_job(experiment_id: str, simulation_path: str) -> ResponseReturn
     Returns:
         Response: Empty JSON response with 204 No Content on success.
     """
-    if not AmberJob.delete_for(experiment_id, simulation_path):
+    if not AmberJob.delete_current(experiment_id, simulation_path):
         raise NotFound(f"AMBER job for simulation {simulation_path} in experiment {experiment_id} not found")
 
     return "", HTTPStatus.NO_CONTENT

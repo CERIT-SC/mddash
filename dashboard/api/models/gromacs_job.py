@@ -225,7 +225,7 @@ class GromacsJob(SimulationJob):
         Raises:
             BadRequest: No run, live run, missing checkpoint, manifest contains ``-cpi``, or concurrent extend.
         """
-        latest = cls.one_for(experiment.id, simulation_path)
+        latest = cls.current(experiment.id, simulation_path)
         if latest is None:
             raise BadRequest("No run exists for this simulation yet; extend requires a finished or stopped run.")
         if latest.is_live:
