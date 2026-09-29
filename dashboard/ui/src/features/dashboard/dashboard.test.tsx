@@ -4,7 +4,7 @@ import { renderWithProviders } from "@/shared/fixtures/render-with-providers"
 import { screen, waitFor } from "@testing-library/react"
 import { describe, expect, it } from "vitest"
 
-import { Dashboard } from "./dashboard"
+import { Dashboard, type DashboardSearch } from "./dashboard"
 
 const EXPERIMENTS = "/dash/api/experiments"
 
@@ -26,9 +26,9 @@ function experiment(overrides: Partial<Experiment> = {}): Experiment {
   }
 }
 
-function renderDashboard(experiments: Experiment[]) {
+function renderDashboard(experiments: Experiment[], search: DashboardSearch = {}) {
   mockApiBySuffix({ [EXPERIMENTS]: Response.json(experiments) })
-  return renderWithProviders(<Dashboard search={{}} onSearchChange={() => undefined} />)
+  return renderWithProviders(<Dashboard search={search} onSearchChange={() => undefined} />)
 }
 
 const createCard = () => screen.queryByRole("link", { name: /Create your first experiment/i })
@@ -54,5 +54,11 @@ describe("Dashboard empty state", () => {
     await renderDashboard([experiment()])
     expect(await screen.findByRole("tab", { name: "Archived 0" })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "Active 1" })).toBeInTheDocument()
+  })
+
+  it("shows the search no-match text instead of the create card", async () => {
+    await renderDashboard([experiment()], { q: "nope" })
+    expect(await screen.findByText("No experiments match “nope”.")).toBeInTheDocument()
+    expect(createCard()).toBeNull()
   })
 })

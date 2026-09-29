@@ -181,11 +181,15 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
           </div>
         )
       ) : active.length === 0 ? (
-        // Same grid as the populated list: the placeholder occupies exactly one
-        // experiment-card column slot instead of stretching edge-to-edge.
-        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <EmptyExperimentsCard />
-        </div>
+        q ? (
+          <p className="text-text-muted py-12 text-center">{`No experiments match “${search.q}”.`}</p>
+        ) : (
+          // Same grid as the populated list: the placeholder occupies exactly one
+          // experiment-card column slot instead of stretching edge-to-edge.
+          <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <EmptyExperimentsCard />
+          </div>
+        )
       ) : (
         <div className="space-y-8">
           {running.length > 0 && (
