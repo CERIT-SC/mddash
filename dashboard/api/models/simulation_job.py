@@ -194,7 +194,7 @@ class SimulationJob(db.Model):  # type: ignore
         if self._archived or self._performance:
             return self._performance
 
-        # Live/stopped segments would inherit the previous segment's Performance line from the appended log.
+        # Live/stopped runs would inherit the previous run's Performance line from the appended log.
         if self.status != JobStatus.FINISHED:
             return None
 

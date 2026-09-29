@@ -368,7 +368,7 @@ class GromacsJob(SimulationJob):
         self._stderr_log.unlink(missing_ok=True)
 
     def _parse_nsteps(self) -> int | None:
-        """Last match wins — the log is appended across extensions, each segment dumps its own nsteps."""
+        """Last match wins — the log is appended across extensions, each extension dumps its own nsteps."""
         if not self._gmx_log.exists():
             return None
 
@@ -424,7 +424,7 @@ class GromacsJob(SimulationJob):
             log = tail_bytes(self._gmx_log)
             pattern = r"^\s*\d+\s+\d+\.\d+\s*"
             for line in reversed(log.splitlines()):
-                # "Finished mdrun" may be from a prior segment; only trust it when
+                # "Finished mdrun" may be from a previous run; only trust it when
                 # THIS job is FINISHED, else fall through to step rows.
                 if "Finished mdrun" in line:
                     if self.status == JobStatus.FINISHED:
@@ -443,7 +443,7 @@ class GromacsJob(SimulationJob):
         return None
 
     def _parse_start_timestamp(self) -> int | None:
-        """Start timestamp; last match wins (newest segment's 'Started mdrun' line)."""
+        """Start timestamp; last match wins (newest extension's 'Started mdrun' line)."""
         if not self._gmx_log.exists():
             return None
 
