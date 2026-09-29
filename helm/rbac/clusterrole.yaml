@@ -15,7 +15,7 @@ rules:
     resources: ["resourcequotas"]
     verbs: ["list"]
   - apiGroups: [""]
-    resources: ["events", "services", "pods/exec", "persistentvolumeclaims"]
+    resources: ["events", "services", "persistentvolumeclaims"]
     verbs: ["get", "watch", "list", "create", "delete"]
   - apiGroups: [""]
     resources: ["pods"]

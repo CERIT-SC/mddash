@@ -227,8 +227,8 @@ def test_role_manifest_adds_pvc_only_when_requested(monkeypatch: pytest.MonkeyPa
 
     base_resources = base["rules"][0]["resources"]
     pvc_resources = with_pvc["rules"][0]["resources"]
-    assert base_resources == ["pods", "pods/exec", "services", "events"]
-    assert pvc_resources == ["pods", "pods/exec", "services", "events", "persistentvolumeclaims"]
+    assert base_resources == ["pods", "services", "events"]
+    assert pvc_resources == ["pods", "services", "events", "persistentvolumeclaims"]
 
 
 def test_role_binding_manifest_includes_subject_namespace_only_when_given(monkeypatch: pytest.MonkeyPatch) -> None:
