@@ -89,13 +89,10 @@ type MockRunOptions = {
 function mockRun(options: MockRunOptions = {}) {
   const state = {
     job: options.initial === undefined ? gmxJob() : options.initial,
-    jobs: [] as (GromacsJob | AmberJob)[],
     jobGets: 0,
   }
-  if (state.job !== null) state.jobs.push(state.job)
   const replaceActiveJob = (next: GromacsJob | AmberJob) => {
     state.job = next
-    state.jobs = state.jobs.map((j) => (j.id === next.id ? next : j))
   }
   const logs = options.logs ?? {
     gmx: "gmx log contents\n",
@@ -127,16 +124,15 @@ function mockRun(options: MockRunOptions = {}) {
       if (url.endsWith(`${GMX_ONE}/extend`) && method === "POST") {
         const body = (typeof init?.body === "string" ? JSON.parse(init.body) : {}) as { nsteps?: number }
         const prev = state.job as GromacsJob | null
-        const segment = gmxJob({
-          id: `job${String(state.jobs.length + 1)}`,
+        const next = gmxJob({
+          id: "job2",
           status: "RUNNING",
           is_live: true,
           nsteps: (prev?.nsteps ?? 0) + (body.nsteps ?? 0),
           nsteps_done: prev?.nsteps_done ?? 0,
         })
-        state.jobs.push(segment)
-        state.job = segment
-        return Response.json(segment, { status: 201 })
+        state.job = next
+        return Response.json(next, { status: 201 })
       }
       if (url.endsWith(one)) {
         if (options.settleAfter !== undefined && method === "GET") {
@@ -156,20 +152,15 @@ function mockRun(options: MockRunOptions = {}) {
         }
         if (method === "DELETE") {
           state.job = null
-          state.jobs = []
           return new Response(null, { status: 204 })
         }
         if (method === "POST") {
           const body = (typeof init?.body === "string" ? JSON.parse(init.body) : {}) as Partial<GromacsJob>
           state.job = gmxJob({ ...body, id: "job2", status: "RUNNING" }) as GromacsJob | AmberJob
-          state.jobs = [state.job]
           return Response.json(state.job, { status: 201 })
         }
         return state.job === null ? new Response(null, { status: 404 }) : Response.json(state.job)
       }
-    }
-    if (url.endsWith("/experiments/exp1/gmx") || url.endsWith("/experiments/exp1/amber")) {
-      return Response.json(state.jobs)
     }
     if (url.endsWith(TUNER_ONE)) {
       return trials.length === 0 ? new Response(null, { status: 404 }) : Response.json(tunerJob(trials))
@@ -334,14 +325,12 @@ describe("RunStep finished job", () => {
     const dialog = await screen.findByRole("alertdialog")
     await userEvent.click(within(dialog).getByRole("button", { name: /re-run/i }))
 
+    // The server replaces the terminal run: one POST, no DELETE round-trip.
     await waitFor(() => {
-      const deleteIndex = calls.findIndex((call) => call.method === "DELETE" && call.url.endsWith(GMX_ONE))
       const post = calls.find((call) => call.method === "POST" && call.url.endsWith(GMX_ONE))
-      expect(deleteIndex).toBeGreaterThanOrEqual(0)
       expect(post?.body).toEqual({ np: 1, ntomp: 1, pme: "cpu", nb: "cpu" })
-      expect(calls.findIndex((call) => call.method === "POST")).toBeGreaterThan(deleteIndex)
     })
-    // The re-submit chain must not trip the gone-job auto-navigation.
+    expect(calls.some((call) => call.method === "DELETE")).toBe(false)
     expect(spies.onStepChange).not.toHaveBeenCalled()
   })
 })
@@ -389,9 +378,7 @@ describe("RunStep stop flow", () => {
     expect(screen.getByRole("button", { name: /re-run/i })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /stop run/i })).not.toBeInTheDocument()
 
-    // The stop lands in the run history as a Stopped segment (after the refetch).
-    const history = await screen.findByRole("region", { name: /run history/i })
-    expect(await within(history).findByText("Stopped")).toBeInTheDocument()
+    expect(screen.queryByRole("region", { name: /run history/i })).not.toBeInTheDocument()
   })
 
   it("cancelling the stop dialog keeps the run going", async () => {
@@ -409,22 +396,18 @@ describe("RunStep stop flow", () => {
 })
 
 describe("RunStep settle-refresh edge", () => {
-  it("flips the headline and refreshes the run history when a live run settles", async () => {
+  it("flips the headline when a live run settles", async () => {
     mockRun({ settleAfter: 2 })
     renderRun({ pollMs: 25 })
 
     const progress = await screen.findByRole("region", { name: /run progress/i })
     await waitFor(() => expect(within(progress).getByText("Finished")).toBeInTheDocument())
-
-    // The run history refetched without a reload and shows the settled segment.
-    const history = await screen.findByRole("region", { name: /run history/i })
-    expect(await within(history).findByText("Finished")).toBeInTheDocument()
     expect(within(progress).getByText("10,000 / 10,000 steps")).toBeInTheDocument()
   })
 })
 
 describe("RunStep extend flow", () => {
-  it("extends a finished GMX run from its checkpoint as a new segment", async () => {
+  it("extends a finished GMX run from its checkpoint in place", async () => {
     const { calls } = mockRun({
       initial: gmxJob({ status: "FINISHED", is_live: false, nsteps_done: 10000, performance: 62.5, estimated_time: 0 }),
     })
@@ -441,12 +424,8 @@ describe("RunStep extend flow", () => {
       expect(post?.body).toEqual({ nsteps: 50000 })
     })
 
-    // The new segment is live again…
     expect(await screen.findByRole("button", { name: /stop run/i })).toBeInTheDocument()
-    // …and the history lists the finished initial segment plus the running extension.
-    const history = await screen.findByRole("region", { name: /run history/i })
-    expect(within(history).getByText("Finished")).toBeInTheDocument()
-    expect(within(history).getByText("Running")).toBeInTheDocument()
+    expect(screen.queryByRole("region", { name: /run history/i })).not.toBeInTheDocument()
   })
 
   it("disables Extend until a positive step count is entered", async () => {

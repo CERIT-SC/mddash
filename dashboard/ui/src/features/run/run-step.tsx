@@ -5,8 +5,6 @@ import {
   getGetAmberJobQueryKey,
   getGetExperimentQueryKey,
   getGetGromacsJobQueryKey,
-  getListAmberJobsQueryKey,
-  getListGromacsJobsQueryKey,
   getListSimulationsQueryKey,
   useGetTunerJob,
 } from "@/api/generated/client"
@@ -36,7 +34,6 @@ import { ConfigUsed } from "./config-used"
 import { ExtendDialog } from "./extend-dialog"
 import { RunLogs } from "./run-logs"
 import { RunProgress } from "./run-progress"
-import { SegmentsList } from "./segments-list"
 import { jobConfigRequest, useJobMutations, useSimulationJobQuery } from "./use-simulation-job"
 
 const RUN_POLL_MS = 5000
@@ -56,8 +53,6 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
   const [confirmStop, setConfirmStop] = useState(false)
   const [confirmRestart, setConfirmRestart] = useState(false)
   const [confirmExtend, setConfirmExtend] = useState(false)
-  // Suppresses the gone-job auto-navigation during the re-run delete→submit chain.
-  const [restarting, setRestarting] = useState(false)
 
   const jobQuery = useSimulationJobQuery(experimentId, simulation.simulation_path, engine, pollMs)
   const job = jobQuery.job
@@ -79,16 +74,13 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
       engine === Engine.AMBER
         ? getGetAmberJobQueryKey(experimentId, simulation.simulation_path)
         : getGetGromacsJobQueryKey(experimentId, simulation.simulation_path)
-    const jobsKey =
-      engine === Engine.AMBER ? getListAmberJobsQueryKey(experimentId) : getListGromacsJobsQueryKey(experimentId)
     void queryClient.invalidateQueries({ queryKey: jobKey })
-    void queryClient.invalidateQueries({ queryKey: jobsKey })
     void queryClient.invalidateQueries({ queryKey: getListSimulationsQueryKey(experimentId) })
     void queryClient.invalidateQueries({ queryKey: getGetExperimentQueryKey(experimentId) })
   }
 
   // When the polled run settles (finished/failed), this is the job query's last
-  // fetch — nothing else refreshes run history, wizard lists, or header without a reload.
+  // fetch; refresh the wizard lists and header explicitly.
   const wasLiveRef = useRef(false)
   useEffect(() => {
     if (wasLiveRef.current && !live) invalidate()
@@ -97,8 +89,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
 
   const mutations = useJobMutations(engine)
   const stopping = mutations.stop.isPending
-  const busy =
-    mutations.remove.isPending || mutations.submit.isPending || mutations.stop.isPending || mutations.extend.isPending
+  const busy = mutations.submit.isPending || mutations.stop.isPending || mutations.extend.isPending
 
   const vars = { experimentId, simulationPath: simulation.simulation_path }
 
@@ -125,40 +116,28 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
       }
     )
 
+  // Submit replaces the terminal run server-side.
   const restartRun = () => {
     if (job === undefined) return
-    setRestarting(true)
-    mutations.remove.mutate(vars, {
-      onSuccess: () => {
-        mutations.submit.mutate(
-          { ...vars, data: jobConfigRequest(engine, job) },
-          {
-            onSuccess: () => {
-              toast.success("Run restarted")
-              invalidate()
-            },
-            onError: (error) => toast.error(toApiError(error).message),
-            onSettled: () => {
-              setConfirmRestart(false)
-              setRestarting(false)
-            },
-          }
-        )
-      },
-      onError: (error) => {
-        toast.error(toApiError(error).message)
-        setConfirmRestart(false)
-        setRestarting(false)
-      },
-    })
+    mutations.submit.mutate(
+      { ...vars, data: jobConfigRequest(engine, job) },
+      {
+        onSuccess: () => {
+          toast.success("Run restarted")
+          invalidate()
+        },
+        onError: (error) => toast.error(toApiError(error).message),
+        onSettled: () => setConfirmRestart(false),
+      }
+    )
   }
 
   // A gone job (deleted here or elsewhere) means this step has nothing to show —
   // the run lifecycle restarts from Tune, so send the user there.
   const missing = jobQuery.missing
   useEffect(() => {
-    if (missing && !restarting) onStepChange(1)
-  }, [missing, restarting, onStepChange])
+    if (missing) onStepChange(1)
+  }, [missing, onStepChange])
 
   return (
     <div className="space-y-6">
@@ -189,13 +168,6 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
             onStop={() => setConfirmStop(true)}
             onExtend={() => setConfirmExtend(true)}
             onRestart={() => setConfirmRestart(true)}
-          />
-          <SegmentsList
-            experimentId={experimentId}
-            simulationPath={simulation.simulation_path}
-            engine={engine}
-            live={live}
-            pollMs={pollMs}
           />
           {/* A pending pod has produced nothing — every stream 404s, so there is
               nothing to show and no reason to hit the log endpoint. */}
@@ -262,14 +234,11 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
               <RotateCcw className="text-primary" aria-hidden />
               Re-run the simulation?
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              The whole run history (all segments, results, and logs) will be deleted, and the run starts over with the
-              same configuration. This cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This permanently deletes the current run and its data.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={restartRun} disabled={restarting}>
+            <AlertDialogAction onClick={restartRun} disabled={mutations.submit.isPending}>
               <RotateCcw aria-hidden />
               Re-run
             </AlertDialogAction>

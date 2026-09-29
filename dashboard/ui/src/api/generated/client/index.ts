@@ -3733,7 +3733,7 @@ export const getGetGromacsJobUrl = (experimentId: string,
 }
 
 /**
- * @summary Get the latest segment of a GROMACS job
+ * @summary Get a GROMACS job
  */
 export const getGromacsJob = async (experimentId: string,
     simulationPath: string, options?: RequestInit): Promise<getGromacsJobResponseSuccess> => {
@@ -3825,7 +3825,7 @@ export function useGetGromacsJob<TData = Awaited<ReturnType<typeof getGromacsJob
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Get the latest segment of a GROMACS job
+ * @summary Get a GROMACS job
  */
 
 export function useGetGromacsJob<TData = Awaited<ReturnType<typeof getGromacsJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
@@ -3862,15 +3862,20 @@ export type submitGromacsJobResponse404 = {
   status: 404
 }
 
+export type submitGromacsJobResponse409 = {
+  data: ConflictResponse
+  status: 409
+}
+
 export type submitGromacsJobResponseDefault = {
   data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 201 | 400 | 404>
+  status: Exclude<HTTPStatusCodes, 201 | 400 | 404 | 409>
 }
 
 export type submitGromacsJobResponseSuccess = (submitGromacsJobResponse201) & {
   headers: Headers;
 };
-export type submitGromacsJobResponseError = (submitGromacsJobResponse400 | submitGromacsJobResponse404 | submitGromacsJobResponseDefault) & {
+export type submitGromacsJobResponseError = (submitGromacsJobResponse400 | submitGromacsJobResponse404 | submitGromacsJobResponse409 | submitGromacsJobResponseDefault) & {
   headers: Headers;
 };
 
@@ -3884,7 +3889,7 @@ export const getSubmitGromacsJobUrl = (experimentId: string,
 }
 
 /**
- * @summary Submit a GROMACS job
+ * @summary Submit a GROMACS job (replaces a terminal run, 409s on a live one)
  */
 export const submitGromacsJob = async (experimentId: string,
     simulationPath: string,
@@ -3934,7 +3939,7 @@ const res = await fetch(getSubmitGromacsJobUrl(experimentId,simulationPath),
 
 export const getSubmitGromacsJobMutationKey = () => ['submitGromacsJob'] as const;
 
-export const getSubmitGromacsJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const getSubmitGromacsJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,SubmitGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,SubmitGromacsJobMutationVariables, TContext> => {
 
@@ -3963,13 +3968,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type SubmitGromacsJobMutationResult = NonNullable<Awaited<ReturnType<typeof submitGromacsJob>>>
     export type SubmitGromacsJobMutationBody = GromacsJobRequest | undefined
-    export type SubmitGromacsJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type SubmitGromacsJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number }
     export type SubmitGromacsJobMutationVariables = {experimentId: string;simulationPath: string;data?: GromacsJobRequest}
 
     /**
- * @summary Submit a GROMACS job
+ * @summary Submit a GROMACS job (replaces a terminal run, 409s on a live one)
  */
-export const useSubmitGromacsJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const useSubmitGromacsJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,SubmitGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof submitGromacsJob>>,
@@ -4130,7 +4135,7 @@ export const getStopGromacsJobUrl = (experimentId: string,
 }
 
 /**
- * @summary Stop the latest GROMACS run segment, preserving its data
+ * @summary Stop a GROMACS run, preserving its data
  */
 export const stopGromacsJob = async (experimentId: string,
     simulationPath: string, options?: RequestInit): Promise<stopGromacsJobResponseSuccess> => {
@@ -4198,7 +4203,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type StopGromacsJobMutationVariables = {experimentId: string;simulationPath: string}
 
     /**
- * @summary Stop the latest GROMACS run segment, preserving its data
+ * @summary Stop a GROMACS run, preserving its data
  */
 export const useStopGromacsJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopGromacsJob>>, TError,StopGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
@@ -4389,7 +4394,7 @@ export const getGetGromacsJobLogUrl = (experimentId: string,
 }
 
 /**
- * @summary Get a GROMACS job log (latest segment)
+ * @summary Get a GROMACS job log
  */
 export const getGromacsJobLog = async (experimentId: string,
     simulationPath: string,
@@ -4487,7 +4492,7 @@ export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacs
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
 /**
- * @summary Get a GROMACS job log (latest segment)
+ * @summary Get a GROMACS job log
  */
 
 export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacsJobLog>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
@@ -4804,15 +4809,20 @@ export type submitAmberJobResponse404 = {
   status: 404
 }
 
+export type submitAmberJobResponse409 = {
+  data: ConflictResponse
+  status: 409
+}
+
 export type submitAmberJobResponseDefault = {
   data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 201 | 400 | 404>
+  status: Exclude<HTTPStatusCodes, 201 | 400 | 404 | 409>
 }
 
 export type submitAmberJobResponseSuccess = (submitAmberJobResponse201) & {
   headers: Headers;
 };
-export type submitAmberJobResponseError = (submitAmberJobResponse400 | submitAmberJobResponse404 | submitAmberJobResponseDefault) & {
+export type submitAmberJobResponseError = (submitAmberJobResponse400 | submitAmberJobResponse404 | submitAmberJobResponse409 | submitAmberJobResponseDefault) & {
   headers: Headers;
 };
 
@@ -4826,7 +4836,7 @@ export const getSubmitAmberJobUrl = (experimentId: string,
 }
 
 /**
- * @summary Submit an AMBER job
+ * @summary Submit an AMBER job (replaces a terminal run, 409s on a live one)
  */
 export const submitAmberJob = async (experimentId: string,
     simulationPath: string,
@@ -4876,7 +4886,7 @@ const res = await fetch(getSubmitAmberJobUrl(experimentId,simulationPath),
 
 export const getSubmitAmberJobMutationKey = () => ['submitAmberJob'] as const;
 
-export const getSubmitAmberJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const getSubmitAmberJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAmberJob>>, TError,SubmitAmberJobMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof submitAmberJob>>, TError,SubmitAmberJobMutationVariables, TContext> => {
 
@@ -4905,13 +4915,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type SubmitAmberJobMutationResult = NonNullable<Awaited<ReturnType<typeof submitAmberJob>>>
     export type SubmitAmberJobMutationBody = AmberJobRequest | undefined
-    export type SubmitAmberJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type SubmitAmberJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number }
     export type SubmitAmberJobMutationVariables = {experimentId: string;simulationPath: string;data?: AmberJobRequest}
 
     /**
- * @summary Submit an AMBER job
+ * @summary Submit an AMBER job (replaces a terminal run, 409s on a live one)
  */
-export const useSubmitAmberJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const useSubmitAmberJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAmberJob>>, TError,SubmitAmberJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof submitAmberJob>>,
@@ -5072,7 +5082,7 @@ export const getStopAmberJobUrl = (experimentId: string,
 }
 
 /**
- * @summary Stop the latest AMBER run segment, preserving its data
+ * @summary Stop an AMBER run, preserving its data
  */
 export const stopAmberJob = async (experimentId: string,
     simulationPath: string, options?: RequestInit): Promise<stopAmberJobResponseSuccess> => {
@@ -5140,7 +5150,7 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
     export type StopAmberJobMutationVariables = {experimentId: string;simulationPath: string}
 
     /**
- * @summary Stop the latest AMBER run segment, preserving its data
+ * @summary Stop an AMBER run, preserving its data
  */
 export const useStopAmberJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopAmberJob>>, TError,StopAmberJobMutationVariables, TContext>, fetch?: RequestInit}

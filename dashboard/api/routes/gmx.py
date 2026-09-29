@@ -2,7 +2,6 @@ from http import HTTPStatus
 
 from config import API_PREFIX
 from enums import DeviceType
-from extensions import db
 from flask import Blueprint, Response, jsonify, request
 from flask.typing import ResponseReturnValue
 from models import Experiment, GromacsJob
@@ -14,9 +13,9 @@ from werkzeug.exceptions import BadRequest, Conflict, NotFound
 gmx_bp = Blueprint("gmx", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/gmx")
 
 
-def _latest_job_or_404(experiment_id: str, simulation_path: str) -> GromacsJob:
-    """Latest (most recently created) segment of the simulation's run history."""
-    job = GromacsJob.latest_for(experiment_id, simulation_path)
+def _job_or_404(experiment_id: str, simulation_path: str) -> GromacsJob:
+    """Return the simulation's single run row."""
+    job = GromacsJob.get(experiment_id, simulation_path)
     if job is None:
         raise NotFound(f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
     return job
@@ -44,7 +43,7 @@ def get_gmx_job(experiment_id: str, simulation_path: str) -> Response:
         Response: JSON response with the GROMACS job data.
     """
     schema = GromacsJobSchema()
-    return jsonify(schema.dump(_latest_job_or_404(experiment_id, simulation_path)))
+    return jsonify(schema.dump(_job_or_404(experiment_id, simulation_path)))
 
 
 @gmx_bp.route("/<path:simulation_path>", methods=["POST"])
@@ -59,7 +58,7 @@ def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
 
     Raises:
         BadRequest: If compute parameters are invalid.
-        Conflict: If a run already exists for this simulation.
+        Conflict: If a live run already exists for this simulation.
     """
     check_simulation_path(simulation_path)
 
@@ -68,8 +67,9 @@ def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
         experiment_id, description=f"Experiment {experiment_id} not found"
     )
 
-    if GromacsJob.latest_for(experiment_id, simulation_path) is not None:
-        raise Conflict("A run already exists for this simulation; delete it first to submit a new run.")
+    prior = GromacsJob.get(experiment_id, simulation_path)
+    if prior is not None and prior.is_live:
+        raise Conflict("A run is already active for this simulation; stop it first to submit a new run.")
 
     data = request.get_json(silent=True) or {}
     try:
@@ -79,6 +79,9 @@ def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
         nb = DeviceType.from_string(data.get("nb", request.form.get("nb", "")))
     except (ValueError, TypeError) as exc:
         raise BadRequest("Invalid compute parameters.") from exc
+
+    # A terminal run (finished, stopped, or failed) is replaced by the new one.
+    GromacsJob.remove(experiment_id, simulation_path)
 
     job = GromacsJob.start(
         experiment=experiment,
@@ -95,36 +98,29 @@ def submit_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
 @gmx_bp.route("/<path:simulation_path>", methods=["DELETE"])
 def delete_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
-    Delete the whole run history: every segment's MDRun job, DB row, and result files.
+    Delete the simulation's run: its MDRun job, DB row, and result files.
 
     Returns:
         Response: Empty JSON response with 204 No Content on success.
     """
-    jobs: list[GromacsJob] = GromacsJob.query.filter_by(
-        experiment_id=experiment_id, simulation_path=simulation_path
-    ).all()
-    if not jobs:
+    if not GromacsJob.remove(experiment_id, simulation_path):
         raise NotFound(f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
 
-    for job in jobs:
-        job.delete()
-        db.session.delete(job)
-    db.session.commit()
     return "", HTTPStatus.NO_CONTENT
 
 
 @gmx_bp.route("/<path:simulation_path>/stop", methods=["POST"])
 def stop_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
     """
-    Stop the latest run segment gracefully, keeping all data and job history.
+    Stop the run gracefully, keeping all data and the job row.
 
     Returns:
         Response: Empty JSON response with 204 No Content on success.
 
     Raises:
-        BadRequest: If the latest segment is not live.
+        BadRequest: If the run is not live.
     """
-    job = _latest_job_or_404(experiment_id, simulation_path)
+    job = _job_or_404(experiment_id, simulation_path)
     if not job.is_live:
         raise BadRequest("Only a live run can be stopped.")
     job.stop()
@@ -139,7 +135,7 @@ def extend_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
     Body: ``{"nsteps": 100000}`` — steps to add on top of the current total.
 
     Returns:
-        Response: JSON response with the created GROMACS job (the new segment), HTTP 201.
+        Response: JSON response with the created GROMACS job (the extension), HTTP 201.
 
     Raises:
         BadRequest: If nsteps is invalid or the run cannot be extended.
@@ -164,12 +160,12 @@ def extend_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
 @gmx_bp.route("/<path:simulation_path>/log", methods=["GET"])
 def get_gmx_job_log(experiment_id: str, simulation_path: str) -> Response:
     """
-    Get log output for the latest segment of a GROMACS job.
+    Get log output for a GROMACS job.
 
     Returns:
         Response: JSON response with the requested log content.
     """
-    job = _latest_job_or_404(experiment_id, simulation_path)
+    job = _job_or_404(experiment_id, simulation_path)
 
     log_type = request.args.get("type", "gmx").lower()
     tail_lines = request.args.get("tail", "10000")

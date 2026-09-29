@@ -10,9 +10,10 @@ from config import DATA_DIR, S3_BUCKET
 from enums import AmberBinary, Engine, EwaldPreset, JobStatus
 from extensions import db
 from sqlalchemy import ForeignKey
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 from utils import tail, tail_bytes
-from werkzeug.exceptions import BadRequest, Forbidden, InternalServerError, NotFound, UnprocessableEntity
+from werkzeug.exceptions import BadRequest, Conflict, Forbidden, InternalServerError, NotFound, UnprocessableEntity
 
 from models.simulation import Simulation
 
@@ -163,7 +164,13 @@ class AmberJob(SimulationJob):
 
         job._cleanup_files()
 
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Another request committed the row first; delete our unreferenced MDRun job.
+            db.session.rollback()
+            mdrun.delete_amber_job(job.id)
+            raise Conflict("A run is already active for this simulation; stop it first to submit a new run.") from None
         simulation.mark_readonly()
         logger.info(f"Started AMBER job {job.id} for experiment {experiment.id} (simulation {simulation_path})")
 

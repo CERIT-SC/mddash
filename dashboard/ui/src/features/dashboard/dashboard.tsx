@@ -50,7 +50,7 @@ type DashboardProps = {
 
 function SectionHeading({ children, count, limit }: { children: string; count: number; limit?: number }) {
   return (
-    <h2 className="text-text-muted flex items-center gap-2 text-sm font-medium tracking-wide uppercase">
+    <h2 className="text-text-muted flex items-center gap-1.5 text-sm font-medium tracking-wide uppercase">
       {children} <Badge variant="secondary">{limit === undefined ? count : `${count}/${limit}`}</Badge>
     </h2>
   )
@@ -122,20 +122,12 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
         >
           <TabsList>
             <TabsTrigger value="active">
-              Active{" "}
-              {experiments !== undefined && (
-                <Badge variant="secondary" className="ml-2">
-                  {activeCount}
-                </Badge>
-              )}
+              Active
+              {experiments !== undefined && <Badge variant="secondary">{activeCount}</Badge>}
             </TabsTrigger>
             <TabsTrigger value="archived">
-              Archived{" "}
-              {experiments !== undefined && archivedCount > 0 && (
-                <Badge variant="secondary" className="ml-2">
-                  {archivedCount}
-                </Badge>
-              )}
+              Archived
+              {experiments !== undefined && <Badge variant="secondary">{archivedCount}</Badge>}
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -169,12 +161,6 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
             <Skeleton key={index} className="h-44 rounded-xl" />
           ))}
         </div>
-      ) : experiments.length === 0 ? (
-        // Same grid as the populated list: the placeholder occupies exactly one
-        // experiment-card column slot instead of stretching edge-to-edge.
-        <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <EmptyExperimentsCard />
-        </div>
       ) : tab === "archived" ? (
         archived.length === 0 ? (
           <p className="text-text-muted py-12 text-center">
@@ -194,8 +180,16 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
             ))}
           </div>
         )
-      ) : filtered.length === 0 ? (
-        <p className="text-text-muted py-12 text-center">{`No experiments match “${search.q}”.`}</p>
+      ) : active.length === 0 ? (
+        q ? (
+          <p className="text-text-muted py-12 text-center">{`No experiments match “${search.q}”.`}</p>
+        ) : (
+          // Same grid as the populated list: the placeholder occupies exactly one
+          // experiment-card column slot instead of stretching edge-to-edge.
+          <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <EmptyExperimentsCard />
+          </div>
+        )
       ) : (
         <div className="space-y-8">
           {running.length > 0 && (

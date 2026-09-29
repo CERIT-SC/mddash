@@ -4,6 +4,8 @@ from collections.abc import Mapping
 from pathlib import Path
 
 import app as app_module
+import pytest
+import sqlalchemy as sa
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from extensions import db, ma, migrate
@@ -11,6 +13,7 @@ from flask import Flask
 from flask_migrate import upgrade
 from sqlalchemy import Engine
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.exc import IntegrityError
 
 
 def _make_app(db_path: Path) -> Flask:
@@ -310,9 +313,9 @@ def test_models_match_migrated_schema(tmp_path: Path) -> None:
 
 
 def test_migration_012_adds_segment_progress_and_live_uniqueness(tmp_path: Path) -> None:
-    """nsteps_done column and the partial live-segment unique index exist at head."""
+    """At 012, the nsteps_done column and the partial live-segment unique index exist."""
     app = _make_app(tmp_path / "test.db")
-    _upgrade_to(app, "head")
+    _upgrade_to(app, "012")
     with app.app_context():
         assert "nsteps_done" in _column_names(db.engine, "simulation_jobs")
 
@@ -322,3 +325,48 @@ def test_migration_012_adds_segment_progress_and_live_uniqueness(tmp_path: Path)
         assert live_index["unique"]  # SQLite reflects 1/0
         assert set(live_index["column_names"]) == {"experiment_id", "simulation_path"}
         assert live_index.get("dialect_options", {}).get("sqlite_where") is not None
+
+
+def test_migration_014_collapses_to_one_run_per_simulation(tmp_path: Path) -> None:
+    """At head: one run row per simulation path, no segment history columns or index."""
+    app = _make_app(tmp_path / "test.db")
+    _upgrade_to(app, "013")
+    with app.app_context():
+        db.session.execute(
+            sa.text(
+                "INSERT INTO simulation_jobs (id, experiment_id, simulation_path, created_at, engine, np, ntomp, "
+                "last_known_status) VALUES "
+                "('old', 'aaaaa', 'a.simulation.json', '2026-01-01', 'GMX', 1, 1, 'FINISHED'), "
+                "('new', 'aaaaa', 'a.simulation.json', '2026-01-02', 'GMX', 1, 1, 'STOPPED'), "
+                "('keep', 'aaaaa', 'b.simulation.json', '2026-01-01', 'GMX', 1, 1, 'RUNNING')"
+            )
+        )
+        db.session.execute(
+            sa.text(
+                "INSERT INTO gromacs_jobs (id, pme, nb) VALUES ('old', 'CPU', 'GPU'), ('new', 'CPU', 'GPU'), ('keep', 'CPU', 'GPU')"
+            )
+        )
+        db.session.commit()
+
+    _upgrade_to(app, "head")
+    with app.app_context():
+        rows = db.session.execute(sa.text("SELECT id FROM simulation_jobs ORDER BY id")).scalars().all()
+        assert rows == ["keep", "new"], "superseded segments must be collapsed to the newest row"
+        children = db.session.execute(sa.text("SELECT id FROM gromacs_jobs ORDER BY id")).scalars().all()
+        assert children == ["keep", "new"], "engine child rows must follow their parent"
+
+        assert "nsteps_done" not in _column_names(db.engine, "simulation_jobs")
+        index_names = {ix["name"] for ix in sa_inspect(db.engine).get_indexes("simulation_jobs")}
+        assert "uq_simulation_jobs_live_segment" not in index_names
+
+        constraints = sa_inspect(db.engine).get_unique_constraints("simulation_jobs")
+        covered = [c for c in constraints if set(c["column_names"]) == {"experiment_id", "simulation_path"}]
+        assert covered, "unique (experiment_id, simulation_path) constraint missing"
+
+        with pytest.raises(IntegrityError):
+            db.session.execute(
+                sa.text(
+                    "INSERT INTO simulation_jobs (id, experiment_id, simulation_path, created_at, engine, np, ntomp) "
+                    "VALUES ('dup', 'aaaaa', 'a.simulation.json', '2026-01-03', 'GMX', 1, 1)"
+                )
+            )

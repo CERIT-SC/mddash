@@ -331,7 +331,7 @@ export function ExperimentCard({ experiment }: ExperimentCardProps) {
   const deleteActiveJobs = activeJobCount(experiment)
 
   const archived = isArchived(experiment)
-  const archiveInFlight = isArchiving(experiment)
+  const archiveInFlight = isArchiving(experiment) || archive.isPending || archive.isSuccess
   const readOnly = archived || archiveInFlight
   const failed = isArchivedFailed(experiment)
   const archiveStatus = useGetArchiveStatus(experiment.id, { query: { enabled: failed } })
