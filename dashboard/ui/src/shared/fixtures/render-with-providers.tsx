@@ -18,8 +18,13 @@ export async function renderWithProviders(ui: ReactNode) {
     path: "/experiments/$experimentId",
     component: () => null,
   })
+  const newRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/new",
+    component: () => null,
+  })
   const router = createRouter({
-    routeTree: rootRoute.addChildren([wizardRoute]),
+    routeTree: rootRoute.addChildren([wizardRoute, newRoute]),
     history: createMemoryHistory(),
   })
   await router.load()
