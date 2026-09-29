@@ -44,7 +44,7 @@ const pollWhileRestoring = (query: { state: { data: unknown } }): number | false
 export type WizardSearch = {
   /** Selected simulation tab — simulation_path minus the ".simulation.json" suffix (may still contain slashes). */
   simulation?: string
-  /** Current wizard step (0-based); defaults to the simulation's progress — Setup→Tune always waits for a click. */
+  /** Current wizard step (0-based); defaults to the simulation's phase — tuning lands on Tune, Setup→Tune otherwise waits for a click. */
   step?: number
   /** Setup source view; only the non-default "manual" is worth a param. */
   source?: SetupSource
@@ -130,11 +130,8 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
     : data.can_publish
       ? "Publishing unlocks once tuning and the run have finished or stopped on this simulation."
       : "Publish unlocks once a run has finished or been stopped."
-  // A URL step past the unlocks (stale bookmark) falls back to the simulation's
-  // own progress — never locked UI.
-  // The ladder flips to Tune while the user is in the notebook; the implicit view
-  // (no URL step) holds Setup until they click through; later phases track the ladder.
-  const requestedStep = search.step ?? (ownStep > 1 ? ownStep : 0)
+  // Implicit landing: Setup waits for a click-through; tuning work lands on Tune.
+  const requestedStep = search.step ?? (selected?.status === "tuning" ? 1 : ownStep > 1 ? ownStep : 0)
   const unlocked = requestedStep <= maxStep || (publishUnlocked && requestedStep === LAST_STEP)
   const step = selected === undefined ? 0 : unlocked ? requestedStep : ownStep
   const simTab = selected?.simulation_path ?? CREATE_TAB
