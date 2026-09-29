@@ -235,8 +235,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
               Re-run the simulation?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The run (results, trajectory, and logs) will be deleted, and the simulation starts over with the same
-              configuration. This cannot be undone.
+              This deletes the current run and its data and cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

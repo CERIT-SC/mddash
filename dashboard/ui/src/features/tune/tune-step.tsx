@@ -387,8 +387,7 @@ export function TuneStep({
               Start a new run?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This deletes the previous run of this simulation (results, trajectory, and logs) and starts a fresh run
-              with the configuration you chose. This cannot be undone.
+              This deletes the previous run and its data and cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
