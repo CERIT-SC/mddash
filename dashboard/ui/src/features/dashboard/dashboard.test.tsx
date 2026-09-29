@@ -49,4 +49,10 @@ describe("Dashboard empty state", () => {
     await screen.findByText("Old run")
     expect(createCard()).toBeNull()
   })
+
+  it("shows a zero badge on the archived tab, same as the active tab", async () => {
+    await renderDashboard([experiment()])
+    expect(await screen.findByRole("tab", { name: "Archived 0" })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "Active 1" })).toBeInTheDocument()
+  })
 })

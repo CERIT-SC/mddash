@@ -131,7 +131,7 @@ export function Dashboard({ search, onSearchChange }: DashboardProps) {
             </TabsTrigger>
             <TabsTrigger value="archived">
               Archived{" "}
-              {experiments !== undefined && archivedCount > 0 && (
+              {experiments !== undefined && (
                 <Badge variant="secondary" className="ml-2">
                   {archivedCount}
                 </Badge>
