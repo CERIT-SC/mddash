@@ -963,7 +963,7 @@ export const ListGromacsJobsResponse = zod.array(ListGromacsJobsResponseItem)
 
 
 /**
- * @summary Get the latest segment of a GROMACS job
+ * @summary Get a GROMACS job
  */
 
 
@@ -1007,7 +1007,7 @@ export const GetGromacsJobResponse = zod.object({
 
 
 /**
- * @summary Submit a GROMACS job
+ * @summary Submit a GROMACS job (replaces a terminal run, 409s on a live one)
  */
 
 
@@ -1077,7 +1077,7 @@ export const DeleteGromacsJobResponse = zod.void()
 
 
 /**
- * @summary Stop the latest GROMACS run segment, preserving its data
+ * @summary Stop a GROMACS run, preserving its data
  */
 
 
@@ -1143,7 +1143,7 @@ export const ExtendGromacsJobResponse = zod.object({
 
 
 /**
- * @summary Get a GROMACS job log (latest segment)
+ * @summary Get a GROMACS job log
  */
 
 
@@ -1256,7 +1256,7 @@ export const GetAmberJobResponse = zod.object({
 
 
 /**
- * @summary Submit an AMBER job
+ * @summary Submit an AMBER job (replaces a terminal run, 409s on a live one)
  */
 
 
@@ -1326,7 +1326,7 @@ export const DeleteAmberJobResponse = zod.void()
 
 
 /**
- * @summary Stop the latest AMBER run segment, preserving its data
+ * @summary Stop an AMBER run, preserving its data
  */
 
 
