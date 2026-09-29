@@ -386,9 +386,7 @@ export function TuneStep({
               <RotateCcw className="text-primary" aria-hidden />
               Start a new run?
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              This permanently deletes the previous run and its data.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This permanently deletes the previous run and its data.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>

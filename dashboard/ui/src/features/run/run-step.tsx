@@ -234,9 +234,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
               <RotateCcw className="text-primary" aria-hidden />
               Re-run the simulation?
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              This permanently deletes the current run and its data.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This permanently deletes the current run and its data.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
