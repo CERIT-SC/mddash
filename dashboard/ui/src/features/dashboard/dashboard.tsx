@@ -50,7 +50,7 @@ type DashboardProps = {
 
 function SectionHeading({ children, count, limit }: { children: string; count: number; limit?: number }) {
   return (
-    <h2 className="text-text-muted flex items-center gap-2 text-sm font-medium tracking-wide uppercase">
+    <h2 className="text-text-muted flex items-center gap-1.5 text-sm font-medium tracking-wide uppercase">
       {children} <Badge variant="secondary">{limit === undefined ? count : `${count}/${limit}`}</Badge>
     </h2>
   )
