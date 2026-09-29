@@ -3,6 +3,18 @@
 {{- $helmPackage := $cfg.helm.package -}}
 {{- $imageTag := getenv "IMAGE_TAG" -}}
 {{- $registry := $cfg.registry -}}
+{{- /* Configs predating the seaweedfs section default to external (absent == disabled). */ -}}
+{{- $sws := index $cfg.s3 "seaweedfs" | default dict -}}
+{{- $swEnabled := index $sws "enabled" | default false -}}
+{{- $swDiskSize := index $sws "diskSize" | default "500Gi" -}}
+{{- $swStorageClass := index $sws "storageClassName" | default "" -}}
+{{- /* Namespace-qualified: user pods consume S3 cross-namespace. */ -}}
+{{- $s3Endpoint := "" -}}
+{{- if $swEnabled -}}
+{{- $s3Endpoint = printf "http://%s-seaweedfs-all-in-one.%s.svc:8333" $helmPackage $namespace -}}
+{{- else -}}
+{{- $s3Endpoint = required "s3.endpoint must be set when s3.seaweedfs.enabled is false" $cfg.s3.endpoint -}}
+{{- end -}}
 jupyterhub:
   hub:
     resources:
@@ -61,7 +73,7 @@ jupyterhub:
             name: oidc-credentials
             key: client_secret
       S3_ENDPOINT:
-        value: "{{ $cfg.s3.endpoint }}"
+        value: "{{ $s3Endpoint }}"
       S3_ACCESS_KEY:
         valueFrom:
           secretKeyRef:
@@ -224,6 +236,15 @@ jupyterhub:
 
   proxy:
     secretToken: "your-secret-token-here-change-me"
+    # chp must declare resources: a hub-namespace resourceQuota rejects pods without them
+    chp:
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "128Mi"
+        limits:
+          cpu: "500m"
+          memory: "512Mi"
 
   # Requires cluster-wide permissions to be enabled
   scheduling:
@@ -289,7 +310,7 @@ mdrun-api:
           name: {{ $helmPackage }}-s3-creds
           key: S3_SECRET_KEY
     - name: S3_ENDPOINT
-      value: "{{ $cfg.s3.endpoint }}"
+      value: "{{ $s3Endpoint }}"
     - name: GMX_IMAGE
       value: "{{ $cfg.gmxImage }}"
     - name: AMBER_IMAGE
@@ -342,3 +363,53 @@ tuner:
       numGpu: {{ $numGpu }}
       resources:
 {{ $cfg.tuner.worker.resources | toYAML | indent 8 }}
+
+seaweedfs:
+  enabled: {{ $swEnabled }}
+  global:
+    seaweedfs:
+      # chart default creates a cluster-wide pods delete role: neither allowed nor wanted here
+      createClusterRole: false
+  master: { enabled: false }
+  volume: { enabled: false }
+  filer: { enabled: false }
+  cosi: { enabled: false }
+  s3:
+    enabled: false
+    enableAuth: true
+    credentials:
+      admin:
+        existingSecret: "{{ $helmPackage }}-s3-creds"
+        accessKeyKey: S3_ACCESS_KEY
+        secretKeyKey: S3_SECRET_KEY
+  allInOne:
+    enabled: true
+    replicas: 1
+    # RWO volume: a second pod must never attach it during rollout
+    updateStrategy: { type: Recreate }
+    s3:
+      enabled: true
+    data:
+      type: persistentVolumeClaim
+      size: "{{ $swDiskSize }}"
+      storageClass: "{{ $swStorageClass }}"
+    resources:
+      requests:
+        cpu: "100m"
+        memory: "256Mi"
+      limits:
+        cpu: "1"
+        memory: "1Gi"
+    podSecurityContext:
+      enabled: true
+      runAsNonRoot: true
+      runAsUser: 1000
+      runAsGroup: 1000
+      fsGroup: 1000
+      seccompProfile: { type: RuntimeDefault }
+    containerSecurityContext:
+      enabled: true
+      runAsNonRoot: true
+      allowPrivilegeEscalation: false
+      capabilities: { drop: ["ALL"] }
+      seccompProfile: { type: RuntimeDefault }

@@ -16,3 +16,7 @@ dependencies:
   - name: tuner
     version: "0.1.0"
     repository: "file://../tuner"
+  - name: seaweedfs
+    version: "4.47.0"
+    repository: "https://seaweedfs.github.io/seaweedfs/helm"
+    condition: seaweedfs.enabled

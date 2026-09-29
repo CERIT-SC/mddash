@@ -10,8 +10,9 @@ Each user gets a dedicated Kubernetes namespace with resource quotas managed via
 
 ```
 Admin namespace:  JupyterHub Hub, MDRun API, Tuner, Landing Page (Caddy)
+                  (+ SeaweedFS all-in-one S3 store when `s3.seaweedfs.enabled`)
 User namespace:   Proxy (Caddy) -> Auth (Flask), API (Flask), S3-Sync (rclone), JupyterHub Singleuser
-External:         MDRepo, S3-compatible storage
+External:         MDRepo, S3-compatible storage (unless `s3.seaweedfs.enabled`)
 ```
 
 The Proxy container serves the complete static UI (compiled React/TypeScript dashboard) embedded as static assets in its image, and routes to the JupyterHub Singleuser service configured in `values.yaml.tmpl`. The hub itself runs the in-repo `mddash-hub` image (`hub/`): stock k8s-hub + the EGI authenticator (`/hub/jwt_login`) + the custom e-INFRA hub UI (`hub/ui/`) baked into the image. No runtime ConfigMaps are used.
@@ -21,6 +22,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - **Simulation Manifest Pattern**: `.simulation.json` files are the single source of truth for file roles and `extra_args`. Job models reference `simulation_path` instead of storing file names. (Dashboard API + UI) Paths inside a manifest resolve relative to the manifest's own directory (notebooks write manifests next to their outputs), with an existence-checked experiment-relative fallback; the API always returns experiment-relative paths.
 - **Sidecar Polling Pattern**: MDRun API's poller sidecar co-locates with the API on one PVC and polls K8s job status on an interval. SQLite lives on a block-device-backed volume, never NFS (WAL is unsupported on network filesystems).
 - **Template-Based Configuration**: `helm/charts/mddash/values.yaml.tmpl` is rendered with `gomplate` before Helm. Never edit `values.yaml`; it's generated.
+- **S3 Provider Toggle**: `s3.seaweedfs.enabled` swaps every consumer's `S3_ENDPOINT` to the in-cluster SeaweedFS `all-in-one` Service; consumers stay endpoint-agnostic. The store reads the shared `<package>-s3-creds` via key remapping. Flipping providers: stop all user pods, seed the new bucket, wipe every user's `.rclone-bisync` workdir (see S3 Sync rules above).
 
 ## Cross-Component Gotchas
 

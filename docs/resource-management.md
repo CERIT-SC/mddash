@@ -11,7 +11,9 @@ Each user gets an isolated Kubernetes namespace (`{helm-package}-user-{username}
 | Always-on | While the user is logged in | JupyterHub singleuser pod + sidecars (proxy, auth, api, s3sync) |
 | On-demand | User-initiated, short to long-lived | Notebook pods, analysis jobs |
 
-The hub namespace (`md-dashboard-ns`) hosts JupyterHub itself, mdrun-api, Tuner, and the landing page — those are not covered by per-user quotas.
+The hub namespaces — `md-dashboard-ns` (prod) and `mddash-dev` (dev) — host JupyterHub itself, mdrun-api, Tuner, and the landing page; those are not covered by per-user quotas. Both live in the same Rancher project, so the project limit must cover both hubs plus all user namespaces.
+
+When `s3.seaweedfs.enabled` is true, the hub namespace also runs the in-cluster S3 store (SeaweedFS all-in-one, 1 pod: 100m/256Mi requested, 1 CPU/1Gi limit — included in `make resources`). Its data PVC (`s3.seaweedfs.diskSize`) is provisioned on `s3.seaweedfs.storageClassName` (empty = cluster default) and counts toward the Rancher project's storage quota where tracked.
 
 ---
 
@@ -36,7 +38,7 @@ Configured via `resources.singleuser` in `config.yaml`.
 | s3sync | 10m | 64Mi | 200m | 256Mi |
 | **Sidecar total** | **80m** | **272Mi** | **650m** | **928Mi** |
 
-**Fixed overhead total:** ~280m CPU / ~784Mi memory (requests) · ~1650m CPU / ~4.9Gi (limits)
+**Fixed overhead total:** ~280m CPU / ~760Mi memory (requests) · ~1650m CPU / ~4.6Gi (limits)
 
 ---
 
@@ -44,17 +46,13 @@ Configured via `resources.singleuser` in `config.yaml`.
 
 ### Notebook pods
 
-Resources are configured via `resources.notebook` in `config.yaml`.
+Resources are configured via `resources.notebook` in `config.yaml`. The notebook pod is a single `jupyter` container; GROMACS and AmberTools binaries are bundled in the notebook image.
 
 | Container | CPU req | Mem req | CPU lim | Mem lim |
 |---|---|---|---|---|
 | jupyter | 500m | 1Gi | 5000m | 8Gi |
-| gmx | 100m | 256Mi | 4000m | 8Gi |
-| **Per notebook** | **600m** | **~1.25Gi** | **9000m** | **16Gi** |
 
-**Why gmx has a high CPU limit:** GROMACS is run with MPI/OpenMP inside this container. CPU throttling causes rank starvation and produces incorrect simulation results.
-
-**Why jupyter limits are generous:** User notebooks can spike in memory (e.g. loading a large trajectory). The 8Gi limit prevents a runaway computation from OOMKilling other pods.
+**Why jupyter limits are generous:** GROMACS runs with MPI/OpenMP inside the notebook container, where CPU throttling causes rank starvation and incorrect simulation results, and notebooks can spike in memory (e.g. loading a large trajectory). The 8Gi limit prevents a runaway computation from OOMKilling other pods.
 
 `resources.notebookQuota.maxConcurrent` sets the API-enforced count limit on concurrent notebook pods (passed to the API as `NS_MAX_NOTEBOOKS`, a **required** env var — the API refuses to start without it and exposes it via `GET /api/.../notebook-config` as `concurrentLimit`). It is sized so that `maxConcurrent` notebooks at the **4x tier** fit within the namespace quota — the same quota headroom fits `maxConcurrent × 4` notebooks at 1x tier.
 
@@ -63,7 +61,7 @@ Resources are configured via `resources.notebook` in `config.yaml`.
 | | CPU | Memory |
 |---|---|---|
 | Request | 1000m | 2Gi |
-| Limit | 4000m | 8Gi |
+| Limit | 1000m | 8Gi |
 
 Batch jobs (mddb_wf). Only one analysis job per experiment can be active at a time (enforced by job naming).
 
@@ -72,21 +70,21 @@ Batch jobs (mddb_wf). Only one analysis job per experiment can be active at a ti
 ## Quota formula
 
 ```
-# fixed_base = sidecars + singleuser = 280m CPU / 784Mi memory
-requests_cpu = fixed_base (280m)     + MAX_NOTEBOOKS × 600m    + analysis (1000m)
-requests_mem = fixed_base (784Mi)    + MAX_NOTEBOOKS × 1280Mi  + analysis (2Gi)
-limits_cpu   = fixed_base (1650m)    + MAX_NOTEBOOKS × 9000m   + analysis (4000m)
-limits_mem   = fixed_base (~4.9Gi)   + MAX_NOTEBOOKS × 16Gi    + analysis (8Gi)
+# user_pod = sidecars + singleuser = 280m CPU / 760Mi mem (requests), 1650m CPU / 4.6Gi mem (limits)
+requests_cpu = user_pod (280m)   + MAX_NOTEBOOKS × tier×500m   + analysis (1000m) + upload (100m)
+requests_mem = user_pod (760Mi)  + MAX_NOTEBOOKS × tier×1Gi    + analysis (2Gi)   + upload (128Mi)
+limits_cpu   = user_pod (1650m)  + MAX_NOTEBOOKS × tier×5000m  + analysis (1000m) + upload (500m)
+limits_mem   = user_pod (4.6Gi)  + MAX_NOTEBOOKS × tier×8Gi    + analysis (8Gi)   + upload (256Mi)
 ```
 
 Tiers multiply the per-notebook values linearly (2x tier → ×2, 4x → ×4). Size the quota for the worst case: `MAX_NOTEBOOKS` all at 4x.
 
-### With `MAX_NOTEBOOKS = 1` (default)
+### With `MAX_NOTEBOOKS = 2` (default)
 
-| | Requests | Limits (1x tier) | Limits (4x tier — quota target) |
-|---|---|---|---|
-| CPU | ~1880m | ~14650m | ~41650m |
-| Memory | ~4Gi | ~29Gi | ~77Gi |
+| | Requests (worst case) | Limits (worst case) |
+|---|---|---|
+| CPU | ~5380m | ~43150m |
+| Memory | ~10.9Gi | ~76.9Gi |
 
 **Namespace limits quota must be ≥ sum of all container limits at full load.** If smaller, users hit 403 errors even when individual pods are within their own limits.
 
@@ -98,9 +96,9 @@ Set `resources.namespaceQuota.*` in `config.yaml` (or `config.dev.yaml`) to valu
 
 ### Hub namespace quota
 
-Rancher project limits are shared between the hub namespace and every user namespace. The user namespace quotas are set automatically by MDDash from `resources.namespaceQuota.*` in `config.yaml`, but the hub namespace quota is not. You must manually cap it in the Rancher UI.
+Rancher project limits are shared between both hub namespaces and every user namespace. The user namespace quotas are set automatically by MDDash from `resources.namespaceQuota.*` in `config.yaml`. Hub namespace quotas are set by `install.sh` from the `make resources` totals (or manually in the Rancher UI): prod caps `md-dashboard-ns`, dev caps `mddash-dev`.
 
-In Rancher, open **Cluster → Projects/Namespaces**, select your project, find the hub namespace, click **⋮ → Edit Config**, and set its Resource Quota so the project limit minus the hub quota leaves enough room for at least one user namespace at full load. Use `make resources` to see the exact CPU and memory totals MDDash will request for each user namespace.
+To adjust a hub quota manually in Rancher, open **Cluster → Projects/Namespaces**, select the project, find the hub namespace, click **⋮ → Edit Config**, and set its Resource Quota to the `make resources` hub totals. The project limit minus the hub quotas must leave enough room for the planned number of user namespaces at full load.
 
 1. Edit `resources.namespaceQuota.*` in `config.yaml`.
 2. Run `make deploy` — renders values into the hub's `extraEnv`; the pre-spawn hook applies them when creating user namespaces.
