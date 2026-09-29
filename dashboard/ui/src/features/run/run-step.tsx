@@ -235,7 +235,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
               Re-run the simulation?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This deletes the current run and its data and cannot be undone.
+              This permanently deletes the current run and its data.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -387,7 +387,7 @@ export function TuneStep({
               Start a new run?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This deletes the previous run and its data and cannot be undone.
+              This permanently deletes the previous run and its data.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
