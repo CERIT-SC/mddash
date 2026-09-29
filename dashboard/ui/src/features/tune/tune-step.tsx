@@ -178,7 +178,7 @@ export function TuneStep({
   const amberSubmit = useSubmitAmberJob()
   const submitRun = (engine === Engine.AMBER ? amberSubmit : gmxSubmit) as unknown as SubmitRun
 
-  // An existing terminal run is deleted and replaced on submit — the user confirms first.
+  // An existing terminal run is deleted and replaced on submit; the user confirms first.
   const gmxRun = useGetGromacsJob(experimentId, simulation.simulation_path, {
     query: { retry: false, enabled: engine !== Engine.AMBER },
   })
@@ -214,7 +214,7 @@ export function TuneStep({
           setConfirmNewRun(null)
           const apiError = toApiError(error)
           toast.error(apiError.message)
-          // The 409 live-run conflict — the goal is met despite the error; go there.
+          // The 409 live-run conflict: the goal is met despite the error; go there.
           if (apiError.status === 409) advanceToRun()
         },
       }
@@ -387,8 +387,8 @@ export function TuneStep({
               Start a new run?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This deletes the previous run of this simulation — its results, trajectory, and logs — and starts a fresh
-              run with the configuration you chose. This cannot be undone.
+              This deletes the previous run of this simulation (results, trajectory, and logs) and starts a fresh run
+              with the configuration you chose. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

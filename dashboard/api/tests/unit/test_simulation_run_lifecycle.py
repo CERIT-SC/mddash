@@ -278,7 +278,7 @@ class TestSubmit:
         tmp_path: Path,
         mocker: MockerFixture,
     ) -> None:
-        """A live run blocks submit — the user must stop it first."""
+        """A live run blocks submit until it is stopped."""
         mdrun = _mock_mdrun(mocker, status="running")
         sim_path = _write_gmx_simulation(tmp_path / experiment_id)
         _add_gmx_job(app, experiment_id, sim_path, f"job-{status.value}", status)
@@ -554,7 +554,7 @@ class TestExtend:
         with app.app_context():
             run = GromacsJob.current(experiment_id, sim_path)
             assert run is not None
-            # Stopped: not a proven 150k completion — the anchor is the log's 120k,
+            # Stopped is not a proven 150k completion; the anchor is the log's 120k,
             # and no performance is inherited onto the new row.
             assert run._init_step == 120000
             assert run.nsteps_done == 120000
@@ -611,8 +611,8 @@ class TestExtend:
         self._write_checkpoint(tmp_path / experiment_id)
 
         def concurrent_winner(**kwargs: object) -> dict:
-            # A rival request replaces the run after our is_live check but
-            # before our insert — exactly the window the unique constraint closes.
+            # A concurrent request replaces the run after our is_live check but
+            # before our insert, exactly the window the unique constraint closes.
             with app.app_context():
                 base = db.session.get(GromacsJob, "run-1")
                 assert base is not None

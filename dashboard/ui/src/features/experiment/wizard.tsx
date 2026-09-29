@@ -44,7 +44,7 @@ const pollWhileRestoring = (query: { state: { data: unknown } }): number | false
 export type WizardSearch = {
   /** Selected simulation tab — simulation_path minus the ".simulation.json" suffix (may still contain slashes). */
   simulation?: string
-  /** Current wizard step (0-based); defaults to the simulation's phase — tuning lands on Tune, Setup→Tune otherwise waits for a click. */
+  /** Current wizard step (0-based); defaults to the simulation's phase: tuning lands on Tune, otherwise waits for a click. */
   step?: number
   /** Setup source view; only the non-default "manual" is worth a param. */
   source?: SetupSource

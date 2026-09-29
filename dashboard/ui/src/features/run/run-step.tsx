@@ -80,7 +80,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
   }
 
   // When the polled run settles (finished/failed), this is the job query's last
-  // fetch — refresh the wizard lists and header explicitly.
+  // fetch; refresh the wizard lists and header explicitly.
   const wasLiveRef = useRef(false)
   useEffect(() => {
     if (wasLiveRef.current && !live) invalidate()
@@ -235,8 +235,8 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
               Re-run the simulation?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The run — its results, trajectory, and logs — will be deleted, and the simulation starts over with the
-              same configuration. This cannot be undone.
+              The run (results, trajectory, and logs) will be deleted, and the simulation starts over with the same
+              configuration. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

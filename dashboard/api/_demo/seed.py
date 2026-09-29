@@ -244,7 +244,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
     }
 
     # A run of NPT equilibration extended past its finished first block and then
-    # stopped — exercises non-destructive stop and extend-from-checkpoint.
+    # stopped: exercises non-destructive stop and extend-from-checkpoint.
     stopped_gmx = build_model(
         GromacsJob,
         id="demo-gmx-stopped",

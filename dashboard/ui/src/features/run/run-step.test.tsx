@@ -424,9 +424,7 @@ describe("RunStep extend flow", () => {
       expect(post?.body).toEqual({ nsteps: 50000 })
     })
 
-    // The extended run is live again…
     expect(await screen.findByRole("button", { name: /stop run/i })).toBeInTheDocument()
-    // …and there is no segment history — one run row per simulation.
     expect(screen.queryByRole("region", { name: /run history/i })).not.toBeInTheDocument()
   })
 

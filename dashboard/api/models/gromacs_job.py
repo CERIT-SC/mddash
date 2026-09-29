@@ -368,7 +368,7 @@ class GromacsJob(SimulationJob):
         self._stderr_log.unlink(missing_ok=True)
 
     def _parse_nsteps(self) -> int | None:
-        """Last match wins — the log is appended across extensions, each extension dumps its own nsteps."""
+        """Last match wins: the log is appended across extensions, each extension dumps its own nsteps."""
         if not self._gmx_log.exists():
             return None
 

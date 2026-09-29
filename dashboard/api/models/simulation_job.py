@@ -28,7 +28,7 @@ class SimulationJob(db.Model):  # type: ignore
 
     __tablename__ = "simulation_jobs"
     # One run per simulation; extend swaps the row in place so the PK stays the
-    # current MDRun job — a second pod can never append to one trajectory.
+    # current MDRun job; a second pod can never append to one trajectory.
     __table_args__ = (db.UniqueConstraint("experiment_id", "simulation_path"),)
     __mapper_args__: ClassVar[dict[str, Any]] = {"polymorphic_on": "engine"}
 
