@@ -1,4 +1,4 @@
-"""API schemas package — re-exports common types."""
+"""API schemas package. It re-exports common types."""
 
 from api.schemas.amber import AmberTrialResponse
 from api.schemas.common import JobStatus, MDEngine

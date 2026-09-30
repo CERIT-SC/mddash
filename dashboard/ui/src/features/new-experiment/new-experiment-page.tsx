@@ -17,7 +17,7 @@ export type NewExperimentSearch = { engine?: EngineFilter }
 type NewExperimentPageProps = {
   search: NewExperimentSearch
   onSearchChange: (next: NewExperimentSearch) => void
-  /** From validated runtime config — environment-derived values get no fallback defaults. */
+  /** From validated runtime config. Environment-derived values get no fallback defaults. */
   defaultNotebooksRepo: string
 }
 

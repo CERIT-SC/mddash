@@ -1,8 +1,8 @@
 import { Engine, JobStatus, type TunerTrial } from "@/api/generated/models"
 import { z } from "zod"
 
-// TunerTrial config fields are engine-shaped and left untyped by the API —
-// this module is the Zod runtime boundary into typed table rows.
+// TunerTrial config fields are engine-shaped and left untyped by the API.
+// This module is the Zod runtime boundary into typed table rows.
 
 const baseTrialSchema = z.object({
   id: z.string(),
@@ -73,7 +73,7 @@ export function selectable(row: TrialRow): boolean {
 }
 
 type Suggestions = {
-  /** Highest measured performance — the tuner's speed champion. */
+  /** Highest measured performance among finished trials. */
   fastestId: string | null
   /** Lowest estimated production cost; may coincide with fastestId. */
   ecoId: string | null

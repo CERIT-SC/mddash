@@ -48,7 +48,7 @@ export function AuthedLayout({
   )
 }
 
-/** Centered card over the page canvas — for login, logout, error and status pages. */
+/** Centered card over the page canvas. Used for login, logout, error and status pages. */
 export function CenteredLayout({
   announcement,
   maxWidth = "max-w-lg",

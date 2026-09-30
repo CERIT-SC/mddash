@@ -13,7 +13,7 @@ step_status_cache: TTLCache = TTLCache(maxsize=100, ttl=0.1)
 # Cache for MDRepo publication status (60s TTL)
 mdrepo_status_cache: TTLCache = TTLCache(maxsize=100, ttl=60)
 
-# Cache for tuner job status (1s TTL — request coalescing only; UI polls 5s)
+# Coalesce tuner status requests for 1s; UI polls every 5s
 tuner_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
 
 # Fallback cache for tuner job failures (job_id -> status)
@@ -22,13 +22,13 @@ tuner_last_known_status: dict[str, dict] = {}
 # Cache for GROMACS job status (1s TTL)
 gromacs_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
 
-# Cache for analysis job status (2s TTL — analyses are long-running)
+# Hold analysis status for 2s; analyses run for a long time
 analysis_status_cache: TTLCache = TTLCache(maxsize=100, ttl=2)
 
 # Cache for simulation job status (1s TTL)
 simulation_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
 
-# Cache for simulation job log line counts keyed by job id (30s TTL — counting streams whole files)
+# Log line counts keyed by job id live 30s; counting streams whole files
 simulation_log_lines_cache: TTLCache = TTLCache(maxsize=100, ttl=30)
 
 # Cache for archive/restore Job liveness keyed by (direction, experiment_id)

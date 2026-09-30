@@ -518,7 +518,7 @@ def get_job_status(ns: str, name: str) -> JobStatus:
                     return _POD_PHASE_STATUS.get(pods.items[0].status.phase, JobStatus.PENDING)
             except ApiException:
                 pass
-            # Can't determine pod phase — fall back to RUNNING since job is active
+            # Pod phase is unknown, so fall back to RUNNING since the job is active.
             return JobStatus.RUNNING
         return JobStatus.PENDING
 

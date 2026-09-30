@@ -1,4 +1,4 @@
-"""GmxEngine — adapts GmxTrialConfig and run_mdrun to the Engine protocol."""
+"""GmxEngine adapts GmxTrialConfig and run_mdrun to the Engine protocol."""
 
 from dataclasses import dataclass
 

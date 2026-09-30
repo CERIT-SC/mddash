@@ -80,7 +80,7 @@ def remove_route(route_id: str) -> bool:
     try:
         response = requests.delete(url, timeout=5)
         if response.status_code == HTTPStatus.NOT_FOUND:
-            return True  # already gone — idempotent
+            return True  # Already gone; deletion stays idempotent.
         response.raise_for_status()
         return True
     except RequestException:

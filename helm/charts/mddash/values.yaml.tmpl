@@ -141,7 +141,7 @@ jupyterhub:
         value: "{{ $cfg.gpuType }}"
       DEFAULT_NOTEBOOKS_REPO:
         value: "{{ $cfg.defaultNotebooksRepo }}"
-      # MDRepo OAuth for publishing experiments to the repository
+      # MDRepo OAuth for publishing experiments
       MDREPO_URL:
         value: "{{ $cfg.mdrepo.url }}"
       MDREPO_SCOPES:
@@ -186,7 +186,7 @@ jupyterhub:
 
   singleuser:
     podNameTemplate: "{{ $helmPackage }}-{username}"
-    # Stock image (sidecars carry the customization); pin tracks k8s-hub 4.4.2's JupyterHub 5.5.x line.
+    # Stock image. Pin tracks k8s-hub 4.4.2 with JupyterHub 5.5.x.
     image:
       name: quay.io/jupyterhub/singleuser
       tag: "5.5.1"
@@ -236,7 +236,7 @@ jupyterhub:
 
   proxy:
     secretToken: "your-secret-token-here-change-me"
-    # chp must declare resources: a hub-namespace resourceQuota rejects pods without them
+    # chp must declare resources. A hub-namespace resourceQuota rejects pods without them.
     chp:
       resources:
         requests:
@@ -254,7 +254,7 @@ jupyterhub:
   prePuller:
     continuous:
       enabled: false
-    # disabled because it was exceeding resource limit and preventing the chart from installing
+    # Disabled. It exceeded the resource limit and blocked chart install.
     hook:
       enabled: false
 
@@ -368,7 +368,7 @@ seaweedfs:
   enabled: {{ $swEnabled }}
   global:
     seaweedfs:
-      # chart default creates a cluster-wide pods delete role: neither allowed nor wanted here
+      # Chart default creates a cluster-wide pods delete role. This setup does not allow it.
       createClusterRole: false
   master: { enabled: false }
   volume: { enabled: false }
@@ -385,7 +385,7 @@ seaweedfs:
   allInOne:
     enabled: true
     replicas: 1
-    # RWO volume: a second pod must never attach it during rollout
+    # RWO volume. A second pod must never attach it during rollout.
     updateStrategy: { type: Recreate }
     s3:
       enabled: true

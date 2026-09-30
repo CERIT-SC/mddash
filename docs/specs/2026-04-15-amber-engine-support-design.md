@@ -1,9 +1,8 @@
-# AMBER Engine Support Design
+# AMBER engine support design
 
-**Date:** 2026-04-15  
-**Status:** Approved  
-**Scope:** Add AMBER molecular dynamics engine support alongside GROMACS across the full wizard workflow, designed for easy addition of future MD engines.
-
+Date is 2026-04-15.
+Status is Approved.
+Scope is Add AMBER molecular dynamics engine support alongside GROMACS across the full wizard workflow, designed for easy addition of future MD engines.
 ---
 
 ## Background
@@ -12,8 +11,8 @@ The platform currently supports only GROMACS (`gmx`) as its MD engine. The Groma
 
 AMBER input files: `.prmtop`/`.parm7` (topology), `.inpcrd`/`.rst7`/`.nc` (coordinates), `.mdin` (run control).  
 AMBER run parameters tuned by the tuner: `binary` (`pmemd.cuda` | `pmemd.MPI`), `np`, `ntomp`, `ewald` (`default` | `optimized`).  
-MolStar supports: `.prmtop`/`.parm7` as topology, `.nc`/`.nctraj` as trajectory — no conversion needed.  
-`mwf` supported formats: topology `.prmtop`, trajectory `.nc`, structure `.pdb` — AMBER data fed directly.
+MolStar supports: `.prmtop`/`.parm7` as topology, `.nc`/`.nctraj` as trajectory, no conversion needed.  
+`mwf` supported formats: topology `.prmtop`, trajectory `.nc`, structure `.pdb`, AMBER data fed directly.
 
 ---
 
@@ -32,7 +31,7 @@ MolStar supports: `.prmtop`/`.parm7` as topology, `.nc`/`.nctraj` as trajectory 
 
 ## Architecture
 
-### Engine Enum
+### Engine enum
 
 New `dashboard/api/enums/engine.py`:
 ```python
@@ -54,7 +53,7 @@ class EwaldPreset(str, Enum):
 
 ---
 
-### Experiment Model
+### Experiment model
 
 `Experiment` gains one column:
 ```python
@@ -66,7 +65,7 @@ engine: Mapped[Engine] = mapped_column(db.Enum(Engine), nullable=False, default=
 
 ---
 
-### SimulationJob — Joined Table Inheritance
+### SimulationJob, joined table inheritance
 
 #### Base table: `simulation_jobs`
 
@@ -76,8 +75,8 @@ engine: Mapped[Engine] = mapped_column(db.Enum(Engine), nullable=False, default=
 | `experiment_id` | String(5) FK | |
 | `created_at` | DateTime | |
 | `engine` | Enum(Engine) | JTI discriminator |
-| `np` | Integer | MPI processes — common to both |
-| `ntomp` | Integer | OpenMP threads — common to both |
+| `np` | Integer | MPI processes, common to both |
+| `ntomp` | Integer | OpenMP threads, common to both |
 | `extra_args` | Text | |
 | `_start_timestamp` | Integer nullable | |
 | `_finish_timestamp` | Integer nullable | |
@@ -134,7 +133,7 @@ Migration creates `simulation_jobs` base table, copies existing `gromacs_jobs` r
 
 ---
 
-### TunerJob Model Changes
+### TunerJob model changes
 
 `TunerJob` stays as a single table. New columns:
 
@@ -144,7 +143,7 @@ Migration creates `simulation_jobs` base table, copies existing `gromacs_jobs` r
 | `inpcrd_name` | String(255) nullable | AMBER only |
 | `mdin_name` | String(255) nullable | AMBER only |
 
-`tpr_name` remains the primary input file identifier (stores `.prmtop` path for AMBER jobs — the column name is internal-only and not user-facing).
+`tpr_name` remains the primary input file identifier (stores `.prmtop` path for AMBER jobs, the column name is internal-only and not user-facing).
 
 `TunerJob.start()`, `_status()`, `stop()`, `delete()` each dispatch on `self.engine`:
 ```python
@@ -155,11 +154,11 @@ match self.engine:
         tuner.amber_submit(tpr_path, inpcrd_path, mdin_path, ...)
 ```
 
-`TunerJob._status()` dispatches to `tuner.amber_poll_status` for AMBER. Preserved trials JSON shape differs per engine (AMBER trials carry `binary`/`ewald`; GMX carry `nb`/`pme`) — both stored in the existing `preserved_trials` JSON column.
+`TunerJob._status()` dispatches to `tuner.amber_poll_status` for AMBER. Preserved trials JSON shape differs per engine (AMBER trials carry `binary`/`ewald`; GMX carry `nb`/`pme`), both stored in the existing `preserved_trials` JSON column.
 
 ---
 
-### Dashboard API Changes
+### Dashboard API changes
 
 #### New routes: `routes/amber.py` (`amber_bp`)
 
@@ -185,8 +184,8 @@ Trial log routes dispatch to `tuner.amber_get_trial_stdout/stderr` vs `tuner.gmx
 
 #### New schemas
 
-- `SimulationJobSchema` — polymorphic base; marshmallow-sqlalchemy resolves to `GromacsJobSchema` or `AmberJobSchema` based on `engine`
-- `AmberJobSchema` — auto-schema for `AmberJob`
+- `SimulationJobSchema`, polymorphic base; marshmallow-sqlalchemy resolves to `GromacsJobSchema` or `AmberJobSchema` based on `engine`
+- `AmberJobSchema`, auto-schema for `AmberJob`
 
 #### Updated `clients/mdrun.py`
 
@@ -196,7 +195,7 @@ Existing `create_job(...)` updated to hit renamed `POST /api/jobs/gmx`.
 
 ---
 
-### MDRun API Changes
+### MDRun API changes
 
 #### Endpoint restructure
 
@@ -207,7 +206,7 @@ Existing `create_job(...)` updated to hit renamed `POST /api/jobs/gmx`.
 | `GET /api/jobs/{id}` | `GET /api/jobs/gmx/{id}` + `GET /api/jobs/amber/{id}` | Same handler, separate routes |
 | `DELETE /api/jobs/{id}` | `DELETE /api/jobs/gmx/{id}` + `DELETE /api/jobs/amber/{id}` | Same handler, separate routes |
 
-GET and DELETE routes per engine point to shared internal functions — the implementation is identical since `MdrunJob` is engine-agnostic. Separate routes match the tuner pattern and keep the API self-consistent:
+GET and DELETE routes per engine point to shared internal functions, the implementation is identical since `MdrunJob` is engine-agnostic. Separate routes match the tuner pattern and keep the API self-consistent:
 
 ```python
 def _get_job(job_id): ...
@@ -239,7 +238,7 @@ Same structure as `create_gromacs_job()`:
 
 ---
 
-## UI Architecture
+## UI architecture
 
 ### Engine type
 
@@ -334,7 +333,7 @@ const ANALYZE_CONFIG: Record<Engine, AnalyzeConfig> = {
 }
 ```
 
-MolStar already handles `prmtop` + `nc` natively — viewer unchanged. `mwf` is engine-agnostic — analysis backend unchanged.
+MolStar already handles `prmtop` + `nc` natively, viewer unchanged. `mwf` is engine-agnostic, analysis backend unchanged.
 
 #### Publish (unchanged)
 File-upload-based, engine-agnostic. No changes.
@@ -349,11 +348,11 @@ File-upload-based, engine-agnostic. No changes.
 - `useAmberLogs(experimentId, prmtopName, logType, shouldPoll)` → `GET .../log`
 
 `src/hooks/use-tuner.ts` extended:
-- `useRunAmberTuner(experimentId)` — sends `prmtop_name`, `inpcrd_name`, `mdin_name` as query params
+- `useRunAmberTuner(experimentId)`, sends `prmtop_name`, `inpcrd_name`, `mdin_name` as query params
 
 ---
 
-## File Inventory
+## File inventory
 
 ### New files
 | File | Purpose |

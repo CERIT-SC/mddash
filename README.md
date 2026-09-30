@@ -13,7 +13,7 @@
 
 ## References
 
-- Krása, F., Rošinec, A., Ondrejka, A., & Křenek, A. MDDash – one stop shop for MD simulations. MDDB Conference, Lausanne, 2026. https://doi.org/10.5281/zenodo.18740266
+- Krása, F., Rošinec, A., Ondrejka, A., & Křenek, A. MDDash - one stop shop for MD simulations. MDDB Conference, Lausanne, 2026. https://doi.org/10.5281/zenodo.18740266
 
 ### MDDash paper
 
@@ -31,9 +31,9 @@
 }
 ```
 
-## CI/CD Setup
+## CI/CD setup
 
-1. **Add GitHub secrets** (Settings → Secrets):
+1. **Add GitHub secrets** (Settings, then Secrets):
    - `REGISTRY_USERNAME` - Container registry user
    - `REGISTRY_PASSWORD` - Container registry password  
    - `KUBECONFIG` - Your kubeconfig base64 encoded: `cat ~/.kube/config | base64 -w 0`
@@ -52,17 +52,17 @@
    | Development deployment | `master` push | `dev` | `dev` |
    | Production release | `vMAJOR.MINOR.PATCH` tag | `prod` | `MAJOR.MINOR.PATCH` |
 
-   - Push to `master` → CD calls CI as a quality gate, then deploys all images tagged `dev` to the dev environment
-   - Push a SemVer tag `v1.2.3` → Release validates SemVer, calls CI, then deploys immutable `1.2.3` images and Helm charts to production, followed by a generated GitHub Release
+   - Push to `master`. CD calls CI as a quality gate, then deploys all images tagged `dev` to the dev environment
+   - Push a SemVer tag `v1.2.3`. Release validates SemVer, calls CI, then deploys immutable `1.2.3` images and Helm charts to production, followed by a generated GitHub Release
    - Run `make release VERSION=1.2.3` from a clean, up-to-date `master` checkout to create and push the release tag
-   - Push to legacy `dev` branch → no CI or deployment triggers
+   - Push to legacy `dev` branch. No CI or deployment triggers
    - Production operational commands use `ENV=prod` without needing a version
 
 All secrets are automatically created in the namespace during deployment.
 CodeQL security scanning runs for `master` pull requests and the weekly scheduled scan.
 
 
-## Image Tagging Strategy
+## Image tagging strategy
 
 | Environment | Git ref | Tag Format | Pull Policy |
 | ----------- | ------- | ----------- | ----------- |
@@ -71,21 +71,21 @@ CodeQL security scanning runs for `master` pull requests and the weekly schedule
 
 Dev images use the mutable `dev` tag with `Always` pull policy. Production images use immutable SemVer tags (without the leading `v`). Every `master` push rebuilds the complete image set as `dev`, repairing any partial pushes from cancelled runs.
 
-Production releases are triggered by a strict SemVer tag (`v0.1.0`, `v1.2.3`). The tag's commit must be an ancestor of `master`. SemVer image tags are immutable — a retry reuses an artifact only when its OCI source revision matches the tagged commit.
+Production releases are triggered by a strict SemVer tag (`v0.1.0`, `v1.2.3`). The tag's commit must be an ancestor of `master`. SemVer image tags are immutable. A retry reuses an artifact only when its OCI source revision matches the tagged commit.
 
 Services can override pull policy in configuration. The Tuner API follows platform release tags, while its large worker image uses a separately managed static stack tag.
 
-### Harbor Retention Policy
+### Harbor retention policy
 
-Configure in Harbor UI (Project → Policy → Tag Retention):
-1. **Dev tags**: Repository `**`, tag `dev` → Retain always
-2. **Prod tags**: Repository `**`, tag matching `[0-9]+\.[0-9]+\.[0-9]+` → Retain always
+Configure in Harbor UI (Project, then Policy, then Tag Retention):
+1. **Dev tags.** Repository `**`, tag `dev`. Retain always.
+2. **Prod tags.** Repository `**`, tag matching `[0-9]+\.[0-9]+\.[0-9]+`. Retain always.
 
 Prod SemVer tags are immutable and must be retained indefinitely: `make rollback ENV=prod REVISION=N` restores a Helm release revision whose values reference a specific image tag, so evicting a live or recently-live tag makes the rollback pod fail to pull. A count-based rule on push time (e.g. "last 10 pushed") can evict the currently-running tag during fast hotfix cycles, since push order diverges from deploy order. Release cadence bounds the count naturally at this project's scale.
 
-### Rollback Data Compatibility
+### Rollback data compatibility
 
-Image tags are not the only rollback hazard: enum additions are forward-safe but not rollback-safe. The release that adds simulation **stop** (`JobStatus.STOPPED` on `simulation_jobs.last_known_status` and `mdrun_jobs.last_status`) writes status strings a pre-STOPPED binary cannot decode (SQLAlchemy raises `LookupError` when loading such rows → 500s). Before rolling back across that release boundary, normalize the data in both databases (dashboard SQLite in the user pod at `/mddash/experiments.db`, MDRun SQLite at `/data/mdrun.db`):
+Image tags are not the only rollback hazard: enum additions are forward-safe but not rollback-safe. The release that adds simulation **stop** (`JobStatus.STOPPED` on `simulation_jobs.last_known_status` and `mdrun_jobs.last_status`) writes status strings a pre-STOPPED binary cannot decode (SQLAlchemy raises `LookupError` when loading such rows, which returns 500s). Before rolling back across that release boundary, normalize the data in both databases (dashboard SQLite in the user pod at `/mddash/experiments.db`, MDRun SQLite at `/data/mdrun.db`):
 
 ```sql
 UPDATE simulation_jobs SET last_known_status = 'ERROR' WHERE last_known_status = 'STOPPED';
@@ -100,13 +100,13 @@ UPDATE mdrun_jobs SET last_status = 'FINISHED' WHERE last_status = 'STOPPED';
 - `config.edc.yaml` - EDC/EGI CheckIn environment configuration
 
 
-## Development Setup
+## Development setup
 
-### Dev Container
+### Dev container
 
-Install the *Dev Containers* extension in VSCode, then `F1` → *"Reopen in Container"*. Includes Docker-in-Docker, kubectl, and all dev tools.
+Install the *Dev Containers* extension in VSCode, then `F1`, then *"Reopen in Container"*. Includes Docker-in-Docker, kubectl, and all dev tools.
 
-### Local Demo
+### Local demo
 
 Run the dashboard locally with the real Flask API, deterministic demo data, mocked external integrations, and the React dev server:
 
@@ -115,7 +115,7 @@ make demo
 ```
 
 
-## Local Commands
+## Local commands
 
 ```bash
 make build ENV=dev    # Build images
@@ -134,12 +134,12 @@ make rollback ENV=prod REVISION=3  # Rollback to specific revision
 make help             # Show all commands
 ```
 
-`ENV` defaults to `dev` and accepts only `dev` or `prod`. Production application releases must use a SemVer tag — `make all ENV=prod` is rejected. Supported production operational commands (`status`, `logs`, `history`, `rollback`) require only `ENV=prod`.
+`ENV` defaults to `dev` and accepts only `dev` or `prod`. Production application releases must use a SemVer tag. `make all ENV=prod` is rejected. Supported production operational commands (`status`, `logs`, `history`, `rollback`) require only `ENV=prod`.
 
 Local commands expect `uv` for Python workflows and `pnpm` for the UI unless you are using the dev container.
 
 
-## Manual Deployment
+## Manual deployment
 
 If you need to deploy manually (bypassing CI/CD), run `./install.sh` for an interactive walkthrough of the steps below (`--dry-run` shows the actions without applying them). The remaining sections document the same steps for doing them by hand.
 
@@ -155,7 +155,7 @@ Ensure you have the following tools installed (all are installed if using the de
 - `pnpm`
 - `make`
 
-### 2. Environment Setup
+### 2. Environment setup
 
 Choose your target environment and matching config file:
 
@@ -169,7 +169,7 @@ export NAMESPACE=$(yq '.namespace' "${CONFIG}")
 export PACKAGE=$(yq '.helm.package' "${CONFIG}")
 ```
 
-### 3. Bootstrap Kubernetes Resources
+### 3. Bootstrap Kubernetes resources
 
 Create the target namespace, apply the hub service account RBAC, and create the required Kubernetes secrets.
 
@@ -204,7 +204,7 @@ kubectl create secret generic oidc-credentials \
   -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
 # S3 Credentials (external S3 only; with s3.seaweedfs.enabled: true the
-# install/deployment paths generate this secret instead — it serves as the
+# install/deployment paths generate this secret instead. It is the
 # bundled store's auth identity and must stay stable)
 kubectl create secret generic ${PACKAGE}-s3-creds \
   --from-literal=S3_ACCESS_KEY="YOUR_S3_ACCESS_KEY" \
@@ -217,7 +217,7 @@ kubectl create secret generic ${PACKAGE}-mdrepo-credentials \
   --from-literal=client_secret="YOUR_MDREPO_CLIENT_SECRET" \
   -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
-# Tuner Credentials (static user, random password — created once)
+# Tuner Credentials (static user, random password, created once)
 kubectl get secret tuner-auth -n ${NAMESPACE} >/dev/null 2>&1 || \
   kubectl create secret generic tuner-auth \
   --from-literal=user="tuner" \
@@ -225,7 +225,7 @@ kubectl get secret tuner-auth -n ${NAMESPACE} >/dev/null 2>&1 || \
   -n ${NAMESPACE}
 ```
 
-### 4. Build and Deploy
+### 4. Build and deploy
 
 Once secrets are in place, you can run the full deployment pipeline:
 
@@ -254,33 +254,33 @@ make deploy ENV=${ENV}
 ```
 
 
-## App Architecture
+## App architecture
 
 ![Architecture Diagram](docs/img/architecture.png)
 
-### Admin Namespace
+### Admin namespace
 Shared infrastructure components that manage the platform and compute resources.
 
 - **JupyterHub**
   - *Location*: `hub/` (custom `mddash-hub` image: stock `k8s-hub` + the EGI Check-in authenticator + the MDDash-branded hub UI in `hub/ui/`, one HTML entry per JupyterHub template), configured in `helm/charts/mddash/values.yaml.tmpl`
-  - *Purpose*: Orchestrates the platform by managing user logins and spawning isolated environments for each user on demand.
+  - *Purpose*: Manages user logins and spawns isolated environments for each user on demand.
 - **MDRun API**
   - *Location*: `mdrun-api/`, `helm/charts/mdrun-api` (Configured in `helm/charts/mddash/values.yaml.tmpl`)
-  - *Purpose*: Decouples simulation execution from user sessions, ensuring long-running GROMACS and AMBER jobs continue even if the user logs out.
+  - *Purpose*: Decouples simulation execution from user sessions. Long-running GROMACS and AMBER jobs continue even if the user logs out.
 - **Tuner**
   - *Location*: `tuner/`, `helm/charts/tuner` (Configured in `helm/charts/mddash/values.yaml.tmpl`)
-  - *Purpose*: Automatically benchmarks and selects the most efficient simulation parameters to optimize performance and resource usage.
+  - *Purpose*: Benchmarks simulation parameters and selects the fastest config for the available hardware.
 - **Landing Page**
   - *Location*: `landing/`
-  - *Purpose*: Public landing page served at the root path, introducing the platform and linking users to the JupyterHub login at `/hub/`.
+  - *Purpose*: Public landing page served at the root path. It introduces the platform and links users to the JupyterHub login at `/hub/`.
 
-### User Namespace
+### User namespace
 Isolated environments created for each logged-in user.
 
 - **Proxy (Caddy)**
   - *Location*: `dashboard/proxy/`
   - *Port*: `8888`, `2019` (proxy admin)
-  - *Purpose*: Acts as the single entry point for the user pod, routing traffic to the appropriate internal service (UI, API, or Jupyter) and serving the frontend application.
+  - *Purpose*: Is the single entry point for the user pod. It routes traffic to the internal service (UI, API, or Jupyter) and serves the frontend application.
 - **JupyterHub Singleuser**
   - *Location*: Configured in `helm/charts/mddash/values.yaml.tmpl`
   - *Port*: `8080`
@@ -288,33 +288,33 @@ Isolated environments created for each logged-in user.
 - **Forward Auth**
   - *Location*: `dashboard/auth/`
   - *Port*: `5001`
-  - *Purpose*: Secures the application by intercepting requests and validating JupyterHub authentication tokens before they reach the API or UI.
+  - *Purpose*: Intercepts requests and validates JupyterHub authentication tokens before they reach the API or UI.
 - **UI**
   - *Location*: `dashboard/ui/`
-  - *Purpose*: Simplifies the complex workflow of molecular dynamics by providing a graphical interface for experiment setup and monitoring.
+  - *Purpose*: Provides a graphical interface for experiment setup and monitoring.
 - **API**
   - *Location*: `dashboard/api/`
   - *Port*: `5000`
-  - *Purpose*: Centralizes business logic to manage experiment state and coordinate actions between the user interface and backend simulation services.
+  - *Purpose*: Manages experiment state and coordinates actions between the user interface and backend simulation services.
 - **S3 Sync Daemon**
   - *Location*: `dashboard/s3-sync/`
-  - *Purpose*: Bridges the gap between local file access and cloud storage by automatically syncing user data to S3 for persistence and sharing.
+  - *Purpose*: Syncs user data to S3 for persistence and sharing.
 - **Analysis Job**
   - *Location*: Executed from `dashboard/api/models/analysis_job.py`
   - *Purpose*: Runs on-demand molecular workflow analysis jobs against experiment data.
 - **Jupyter Notebooks**
   - *Location*: `notebook/`
-  - *Purpose*: Offers an interactive environment for specific setup tasks (like protein preparation) that require manual visualization or intervention.
+  - *Purpose*: Provides an interactive environment for setup tasks (like protein preparation) that require manual visualization or intervention.
 - **User PVC**
   - *Location*: Configured in `helm/charts/mddash/files/pre_spawn_hook.py`
-  - *Purpose*: Mounts the `/mddash` directory to a persistent volume, ensuring user data and configurations persist across sessions.
+  - *Purpose*: Mounts the `/mddash` directory to a persistent volume. User data and configurations persist across sessions.
 
-### External Services
+### External services
 Services outside the Kubernetes cluster that the application depends on.
 
 - **S3**
   - *Location*: External `s3.endpoint` or the bundled SeaweedFS store (`s3.seaweedfs.enabled` in `config*.yaml`); credentials in `${PACKAGE}-s3-creds`
-  - *Purpose*: Provides a central, scalable storage layer accessible by all services to persist large simulation datasets and trajectories.
+  - *Purpose*: Stores large simulation datasets and trajectories for all services.
 - **MDRepo**
   - *Location*: Endpoint and OAuth client configured in `config*.yaml` (`mdrepo:`, secrets in `${PACKAGE}-mdrepo-credentials`); OAuth flow managed by the Dashboard API
   - *Purpose*: InvenioRDM-based repository where completed experiments are published.

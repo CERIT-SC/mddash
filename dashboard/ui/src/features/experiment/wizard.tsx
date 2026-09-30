@@ -42,7 +42,7 @@ const pollWhileRestoring = (query: { state: { data: unknown } }): number | false
 }
 
 export type WizardSearch = {
-  /** Selected simulation tab — simulation_path minus the ".simulation.json" suffix (may still contain slashes). */
+  /** Selected simulation tab. simulation_path minus the ".simulation.json" suffix (may still contain slashes). */
   simulation?: string
   /** Current wizard step (0-based); defaults to the simulation's phase: tuning lands on Tune, otherwise waits for a click. */
   step?: number
@@ -72,7 +72,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
     query: { retry: false, refetchInterval: pollWhileAnyLive(SIMULATIONS_POLL_MS) },
   })
 
-  // can_publish flips when a run finishes; this query doesn't poll — refetch
+  // can_publish flips when a run finishes; this query doesn't poll. Refetch
   // once on the live→settled transition so the Publish unlock lands.
   const anyLive = simulations.data?.status === 200 && simulations.data.data.some((simulation) => simulation.live)
   const wasLive = useRef(false)
@@ -151,7 +151,7 @@ export function ExperimentWizard({ experimentId, search, onSearchChange }: Exper
           : simulationParam(next.simulation),
     })
 
-  // Array order must match STEPS — StepperContent renders children by index;
+  // Array order must match STEPS. StepperContent renders children by index;
   // create mode keeps only Setup.
   const steps = [
     <SetupStep

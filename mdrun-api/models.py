@@ -45,7 +45,7 @@ class MdrunJob(db.Model):  # type: ignore
     def status(self) -> JobStatus:
         """The current job status from Kubernetes; the database row is updated as a side effect."""
         # STOPPED is sticky: the row outlives its K8s job, which K8s still reports
-        # RUNNING through the graceful-deletion window — trusting it would resurrect the row.
+        # as RUNNING through the graceful-deletion window. Trusting it would resurrect the row.
         if self.last_status == JobStatus.STOPPED:
             return JobStatus.STOPPED
 

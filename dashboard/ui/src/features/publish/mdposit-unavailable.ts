@@ -5,7 +5,7 @@ import { missingRequiredRoles } from "@/features/simulation"
 const MDPOSIT_ROLES = ["reference_structure", "run_input", "trajectory"] as const
 
 /** Human-readable reason the MDPosit handoff can't be prepared for this
- * simulation, or null when it can — mirrors the check `_publish_mdposit` enforces. */
+ * simulation, or null when it can. It mirrors the check `_publish_mdposit` enforces. */
 export function mdpositUnavailableReason(simulation: Simulation): string | null {
   if (!simulation.valid) return "The selected simulation is invalid. Repair it in the setup step."
   const missing = missingRequiredRoles(simulation, MDPOSIT_ROLES)

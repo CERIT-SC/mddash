@@ -65,7 +65,7 @@ export function AnalyzeStep({
 }: AnalyzeStepProps) {
   const [reloadKey, setReloadKey] = useState(0)
 
-  // The simulation may still be running — results keep changing while it is.
+  // The simulation may still be running. Results keep changing while it is.
   const jobQuery = useSimulationJobQuery(experimentId, simulation.simulation_path, engine, pollMs)
   const simJob = jobQuery.job
   const simRunning = simJob !== undefined && simJob.is_live

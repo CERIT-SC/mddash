@@ -75,7 +75,7 @@ def _describe_validation_error(exc: jsonschema.ValidationError) -> str:
     Describe a jsonschema failure in plain English.
 
     Builds the message from the exception's structured fields (validator,
-    validator_value, absolute_path, instance, schema) — never by parsing
+    validator_value, absolute_path, instance, schema). It never parses
     ``exc.message``, whose wording is not a stable API and leaks regexes
     and jsonschema jargon to end users.
     """
@@ -125,7 +125,7 @@ def _safe_default_path(name: str) -> str:
 
 
 class _JobRows(NamedTuple):
-    """Job rows referencing one ``simulation_path`` — the single source of the job-model set."""
+    """Job rows for one ``simulation_path``. This is the single source of the job-model set."""
 
     tuner: list[Any]
     simulation: list[Any]
@@ -284,9 +284,9 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         Latest of manifest mtime, simulation-job creation/start/finish, and
         tuner/analysis-job creation. Job start/finish are only set once the
-        MDRun API reports them, hence creation time for fresh jobs. Analysis
-        counts here (moves the 'latest' pointer) but not in the step ladder —
-        that only advances on a finished MD job.
+        MDRun API reports them, hence creation time for fresh jobs.
+        Analysis counts here (moves the 'latest' pointer) but not in the step ladder.
+        That ladder only advances on a finished MD job.
         """
         events: list[float] = []
         with suppress(OSError):
@@ -320,7 +320,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         Step is the wizard phase index: Setup 0, Tune 1, Run 2, Analyze 3.
         A running job counts as Run done once nsteps_done parses from its
-        engine log — before that, the run's files (trajectory included)
+        engine log. Before that, the run's files (trajectory included)
         don't exist. Publish is experiment-level, not part of this ladder.
         """
         jobs = self._cached_jobs()
@@ -578,7 +578,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         Names are the wizard tab identity (``?tab=<name>``), hence unique;
         ``_new`` is reserved for the wizard's create tab. ``current_name``
-        is the manifest's own name before an edit — keeping it is allowed.
+        is the manifest's own name before an edit. Keeping it is allowed.
 
         Raises:
             ApiError: 409 when the name is reserved or already taken.

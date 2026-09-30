@@ -1,4 +1,4 @@
-# Release and Deployment Conventions Design
+# Release and deployment conventions design
 
 ## Summary
 
@@ -31,7 +31,7 @@ versioned `0.1.0`.
 - Require explicit `ENV=prod` for every local production operation.
 - Change the development hostname to `dev.mddash.dyn.cloud.e-infra.cz`.
 
-## Non-Goals
+## Non-goals
 
 - Renaming `master` to `main`.
 - Deleting the legacy `dev` branch.
@@ -42,9 +42,9 @@ versioned `0.1.0`.
 - Introducing a tracked `VERSION` file.
 - Adding a mandatory production approval step.
 
-## Branch and Release Model
+## Branch and release model
 
-### Active Branches
+### Active branches
 
 `master` remains the GitHub default branch and becomes the sole active
 integration branch. Pull requests target `master`; successful pushes deploy the
@@ -53,7 +53,7 @@ development environment.
 The existing `dev` branch remains in the remote as a frozen historical branch.
 No CI or deployment workflow responds to pushes to `dev` after cutover.
 
-### Production Releases
+### Production releases
 
 A production release starts by creating a tag such as `v0.1.0` on a commit that
 is contained in `master`. The release workflow must reject:
@@ -74,7 +74,7 @@ After production health verification succeeds, the workflow creates a GitHub
 Release for the existing tag with generated release notes. A failed deployment
 does not publish a successful GitHub Release.
 
-## Workflow Architecture
+## Workflow architecture
 
 ### `ci.yml`
 
@@ -155,9 +155,9 @@ fail-fast disabled so all independent failures are reported.
 The existing monolithic `cd.yml` is removed after the split workflows are in
 place.
 
-## GitHub Actions Engineering Standards
+## GitHub actions engineering standards
 
-### Declarative Workflows
+### Declarative workflows
 
 Workflow YAML orchestrates maintained actions and short repository commands; it
 does not contain long Bash or `jq` programs. Maintained, narrowly scoped actions
@@ -173,7 +173,7 @@ invoking `make` or `gh release create`.
 
 Static workflow matrices replace the current inline `jq` matrix construction.
 
-### Supply-Chain Controls
+### Supply-chain controls
 
 - Pin every action to a full commit SHA and retain a nearby version comment.
 - Add monthly Dependabot updates for the `github-actions` ecosystem.
@@ -204,9 +204,9 @@ Registry caches are preferred over a single GitHub-hosted BuildKit cache because
 the notebook image is large and durable per-image caches avoid scope collisions
 and hosted-cache eviction pressure.
 
-## Artifact Model
+## Artifact model
 
-### Container Images
+### Container images
 
 Dev images retain the mutable `dev` tag and `Always` pull policy. The term
 `canary` is not used because MDDash does not perform progressive traffic rollout.
@@ -223,7 +223,7 @@ SemVer image tags are immutable. A retry may reuse an artifact only when its OCI
 source revision matches the tagged commit; otherwise the release fails rather
 than overwriting the artifact.
 
-### Helm Charts
+### Helm charts
 
 Both `mdrun-api` and the MDDash umbrella chart are packaged with the platform
 release version. For release `v1.2.3`:
@@ -240,7 +240,7 @@ packaged and pushed before resolving and packaging the umbrella chart.
 Dev continues rendering the chart from the checked-out source with image tag
 `dev`.
 
-## Makefile Contract
+## Makefile contract
 
 All Makefiles use these rules:
 
@@ -267,7 +267,7 @@ operator-facing commands.
 Branch-based production inference and `sha-*` production image tags are removed
 from the root and component Makefiles.
 
-## Dockerfile Unification
+## Dockerfile unification
 
 `dashboard/api/Dockerfile.dev` and `dashboard/auth/Dockerfile.dev` are removed.
 Their differences are development dependency installation and legacy Flask
@@ -280,7 +280,7 @@ comes from runtime log levels, structured application logs, Kubernetes logs,
 health endpoints, rollout diagnostics, and status commands rather than a
 different dependency set or server entrypoint.
 
-## Development Hostname Migration
+## Development hostname migration
 
 `config.dev.yaml` changes the dashboard hostname from
 `mddash-dev.dyn.cloud.e-infra.cz` to `dev.mddash.dyn.cloud.e-infra.cz`. The
@@ -299,7 +299,7 @@ Before branch cutover:
 3. The cluster issuer must be able to provision the hostname's derived TLS
    secret.
 
-## Deployment and Failure Behavior
+## Deployment and failure behavior
 
 Deployments use `helm upgrade --install --atomic --wait` with an explicit bounded
 timeout. A failed rollout restores the previous Helm release automatically.
@@ -321,9 +321,9 @@ GitHub Release. Recovery is either a safe retry that verifies existing artifact
 provenance or a new patch release. Helm rollback remains available for urgent
 operational recovery.
 
-## Testing and Verification
+## Testing and verification
 
-### Static and Unit Validation
+### Static and unit validation
 
 - Validate workflow syntax and semantics with `actionlint`.
 - Run `zizmor` security analysis over all workflows.
@@ -333,7 +333,7 @@ operational recovery.
 - Test production safeguards against unversioned local releases.
 - Verify no workflow trigger remains for pushes to legacy `dev`.
 
-### Helm Validation
+### Helm validation
 
 - Render dev and production configurations.
 - Lint and template both charts.
@@ -342,7 +342,7 @@ operational recovery.
 - Confirm generated dev ingress, OAuth callback, and TLS secret use
   `dev.mddash.dyn.cloud.e-infra.cz`.
 
-### Repository Gates
+### Repository gates
 
 Run the project gates in their required order:
 
@@ -355,7 +355,7 @@ make test
 Also verify all image builds select the single production Dockerfile path and
 that release metadata produces the expected image tags and OCI labels.
 
-### Post-Deployment Smoke Checks
+### Post-deployment smoke checks
 
 After the first `master` deployment, verify:
 
@@ -368,7 +368,7 @@ After the first `master` deployment, verify:
 After tagging `v0.1.0`, verify production health, deployed image versions, Helm
 chart metadata, rollback history, and the generated GitHub Release.
 
-## Cutover Sequence
+## Cutover sequence
 
 1. Implement and validate the new conventions on `dev`.
 2. Prepare the `development` and `production` GitHub Environments without
@@ -384,7 +384,7 @@ chart metadata, rollback history, and the generated GitHub Release.
     GitHub Release publication to complete.
 11. Verify production artifact and deployment metadata report version `0.1.0`.
 
-## Expected File Changes
+## Expected file changes
 
 - Update `.github/workflows/ci.yml` to target `master`, support reuse, and add
   workflow validation.
@@ -400,7 +400,7 @@ chart metadata, rollback history, and the generated GitHub Release.
 - Update README and AGENTS instructions that describe branches, tags, workflows,
   commands, Dockerfiles, or the old development hostname.
 
-## Success Criteria
+## Success criteria
 
 - Pull requests and `master` pushes pass the same CI quality gates.
 - A `master` push deploys all production-equivalent images as `dev` to

@@ -72,7 +72,7 @@ class Notebook(db.Model):  # type: ignore
     experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
     # token for accessing jupyter notebook
     token: Mapped[str] = mapped_column(db.String(36), nullable=False, default=lambda: str(uuid4()))
-    # resource tier (1x, 2x, 4x) — NULL for notebooks created before tiers were introduced
+    # resource tier (1x, 2x, 4x); NULL for notebooks created before tiers were introduced
     tier: Mapped[NotebookTier | None] = mapped_column(
         db.Enum(NotebookTier),
         nullable=True,

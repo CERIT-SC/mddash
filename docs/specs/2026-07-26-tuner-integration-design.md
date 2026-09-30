@@ -1,12 +1,12 @@
-# Tuner Integration Design
+# Tuner integration design
 
 ## Goal
 
 Import the former standalone tuner repository as a first-class MDDash component. MDDash will own the tuner API source, tests, dependencies, image, Helm chart, configuration, and releases. The large combined molecular-dynamics worker image remains a manually built, statically tagged artifact and must never enter the automated build or deployment pipelines.
 
-The integrated service is named **Tuner**. Active source, configuration, artifacts, Kubernetes resources, and documentation must not use the former `gromacs-tuner` name because the service supports both GROMACS and AMBER. Engine-specific API paths and implementation names remain where they describe actual engine behavior.
+The integrated service is named Tuner. Active source, configuration, artifacts, Kubernetes resources, and documentation must not use the former `gromacs-tuner` name because the service supports both GROMACS and AMBER. Engine-specific API paths and implementation names remain where they describe actual engine behavior.
 
-## Component Layout
+## Component layout
 
 The imported component will use this layout:
 
@@ -54,7 +54,7 @@ The migration applies these names consistently:
 
 The existing worker must be manually built and published to the renamed `tuner-worker` repository before a deployment switches to that reference. CI/CD will not build, copy, or retag it.
 
-## Python Packaging And Tooling
+## Python packaging and tooling
 
 `tuner/pyproject.toml` replaces `tuner/api/requirements.txt` and `requirements-dev.txt`. It declares Python 3.13, all API runtime dependencies, test dependencies, and `ty`. The root UV workspace includes `tuner`, and the shared `uv.lock` is regenerated.
 
@@ -62,7 +62,7 @@ The root Ruff configuration is authoritative. The nested tuner Ruff configuratio
 
 The component-level `tuner/Makefile` follows the `mdrun-api` integration pattern and provides API build, push, test, and manual E2E targets. Redundant `tuner/api/Makefile` and standalone Helm Makefiles are removed. The independent `tuner/worker/Makefile` and all of its build, push, tag, AMBER-base, and cleanup commands are retained and normalized for the MDDash registry.
 
-## Worker Boundary
+## Worker boundary
 
 The worker image contains GROMACS, licensed AMBER binaries, Ray, and supporting Python dependencies. Its large size, licensed input, and static software-stack tag make it unsuitable for routine CI/CD.
 
@@ -75,7 +75,7 @@ The following constraints are mandatory:
 - The tuner Helm chart consumes the configured static worker image unchanged.
 - The API image is independent and follows normal MDDash `dev` and SemVer release tags.
 
-## Build And Release Integration
+## Build and release integration
 
 The Tuner API becomes a normal MDDash application artifact:
 
@@ -98,7 +98,7 @@ The values template renders the renamed chart section and distinguishes database
 
 The dashboard API changes its cluster-local URL to `http://tuner-api-svc.<namespace>.svc.cluster.local:8000/api`. Existing dashboard-to-tuner endpoint paths and authentication behavior remain unchanged.
 
-## Runtime Storage
+## Runtime storage
 
 The standalone chart incorrectly places the SQLite WAL database and shared trial files on one RWX NFS volume. The integrated chart splits these concerns:
 
@@ -109,7 +109,7 @@ The standalone chart incorrectly places the SQLite WAL database and shared trial
 
 Alembic migrations remain the startup authority for the tuner database. Migration failure prevents API startup rather than silently creating an unknown schema.
 
-## Kubernetes Resources
+## Kubernetes resources
 
 All chart resources use the `tuner-*` naming scheme and standard chart labels. The API deployment gains Kubernetes liveness and readiness probes against `/api/health`; the Docker health check remains useful for direct container execution.
 
@@ -117,7 +117,7 @@ The chart does not install KubeRay. KubeRay and compatible Ray CRDs are cluster-
 
 The standalone ingress template and values are removed. MDDash accesses Tuner through its cluster service, while manual E2E testing uses `kubectl port-forward`.
 
-## API Contract Simplification
+## API contract simplification
 
 The hand-maintained OpenAPI YAML is removed. FastAPI exposes its generated schema at `/api/openapi.json`, making application routes and schemas the single source of truth. This also removes the custom schema loader, the missing-file container failure, the obsolete external hostname, and the unnecessary PyYAML dependency.
 
@@ -128,13 +128,13 @@ Engine-specific endpoint paths remain stable:
 
 The health endpoint remains unauthenticated for Kubernetes probes. Other existing authentication semantics remain unchanged.
 
-## Restart Semantics
+## Restart semantics
 
 This migration fixes storage and deployment blockers but does not redesign Ray orchestration. Active thread state, cancellation events, and Ray object references remain in API process memory. An API restart can therefore mark active jobs as failed while remote work finishes or becomes orphaned.
 
 The limitation must be documented. Durable recovery, reconciliation, or a poller-based redesign is a separate project because it changes job semantics rather than repository integration. The API deployment strategy and persistent database prevent corruption but do not claim restart-safe active jobs.
 
-## Tests And Validation
+## Tests and validation
 
 Existing router, engine, database, utility, and Ray unit tests are retained and updated for new packaging and names. Add focused coverage for:
 
@@ -157,7 +157,7 @@ make validate-charts
 make lint-workflows
 ```
 
-## Documentation And Cleanup
+## Documentation and cleanup
 
 Root architecture and operational documentation will identify Tuner as source owned by this repository. A focused `tuner/AGENTS.md` will capture runtime invariants, storage rules, Ray prerequisites, migration behavior, and the manual worker policy.
 
@@ -174,7 +174,7 @@ Delete or consolidate these standalone artifacts:
 
 Historical design documents remain unchanged because they describe the state and naming at the time they were written.
 
-## Out Of Scope
+## Out of scope
 
 - Building or publishing the worker image in CI/CD.
 - Installing or managing the KubeRay operator.

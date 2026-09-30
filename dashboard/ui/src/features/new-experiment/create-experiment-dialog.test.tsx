@@ -38,7 +38,7 @@ function renderPage() {
   )
 }
 
-/** Tab queries must scope to the dialog — the page behind it has engine-filter tabs. */
+/** Tab queries must scope to the dialog. The page behind it has engine-filter tabs. */
 function dialogTab(name: string | RegExp) {
   return within(screen.getByRole("dialog")).getByRole("tab", { name })
 }
@@ -52,7 +52,7 @@ describe("CreateExperimentDialog", () => {
     const { router } = await renderPage()
 
     await user.click(await screen.findByRole("button", { name: "Protein · AMBER" }))
-    // the preset fixes the engine — no engine choice to make
+    // The preset fixes the engine. No engine choice to make.
     expect(within(screen.getByRole("dialog")).queryByRole("tab", { name: "AMBER" })).not.toBeInTheDocument()
     await user.type(screen.getByLabelText("Name"), "Lysozyme run")
     await user.type(screen.getByLabelText(/pdb id or url/i), "1AKI")
@@ -119,7 +119,7 @@ describe("CreateExperimentDialog", () => {
     await user.type(screen.getByLabelText("Name"), "Token run")
     await user.type(screen.getByLabelText(/pdb id or url/i), "1AKI")
 
-    // token section is only meaningful for https — cleartext urls hide it
+    // Token section is only meaningful for https. Cleartext urls hide it.
     expect(screen.getByRole("button", { name: /add access token/i })).toBeVisible()
     const repo = screen.getByLabelText(/notebooks repository/i)
     await user.clear(repo)

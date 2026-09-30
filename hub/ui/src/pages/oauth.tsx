@@ -30,8 +30,8 @@ interface OAuthConfig {
 }
 
 /**
- * OAuth consent page. This MUST be a plain HTML form POST to the same URL —
- * the hub's OAuth handler consumes the form data and completes the redirect.
+ * OAuth consent page. This MUST be a plain HTML form POST to the same URL.
+ * The hub's OAuth handler consumes the form data and completes the redirect.
  */
 export function OAuthPage() {
   const cfg = getAppConfig<OAuthConfig>({

@@ -45,7 +45,7 @@ export function useTheme() {
     try {
       localStorage.setItem(STORAGE_KEY, next)
     } catch {
-      // Storage unavailable (privacy mode) — apply for this session only.
+      // Storage is unavailable (privacy mode). Apply the theme for this session only.
     }
     setThemeState(next)
   }, [])

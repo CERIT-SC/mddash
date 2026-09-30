@@ -132,7 +132,7 @@ def extend_gmx_job(experiment_id: str, simulation_path: str) -> ResponseReturnVa
     """
     Extend a finished or stopped run by additional steps, resuming from its checkpoint.
 
-    Body: ``{"nsteps": 100000}`` — steps to add on top of the current total.
+    Body: ``{"nsteps": 100000}``. Steps to add on top of the current total.
 
     Returns:
         Response: JSON response with the created GROMACS job (the extension), HTTP 201.

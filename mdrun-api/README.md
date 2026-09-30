@@ -2,33 +2,32 @@
 
 Flask-based API for managing molecular dynamics simulation jobs.
 
-## Development Mode
+## Development mode
 
 - Uses Flask's built-in development server with hot-reload
 - Debug mode enabled
 - SQL query logging enabled
 - Detailed logging (DEBUG level)
 
-**Build & Run:**
+**Build and run.**
 ```bash
 make build-dev
 docker run -p 5000:5000 -v $(pwd):/app <image>:dev
 ```
 
-## Production Mode
+## Production mode
 
 - Gunicorn with 2 workers and 4 threads by default
 - Health check endpoint configured
 - INFO level logging
-- Optimized for performance and security
 
-**Build & Run:**
+**Build and run.**
 ```bash
 make build-prod
 docker push <image>:latest
 ```
 
-## Environment Variables
+## Environment variables
 
 - `APP_ENV`: Set to `dev` or `prod` (default: `prod`)
 - `GUNICORN_WORKERS`: Number of Gunicorn worker processes (default: 2)

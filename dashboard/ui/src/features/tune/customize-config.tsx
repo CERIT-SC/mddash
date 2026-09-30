@@ -8,7 +8,7 @@ import type { TrialRow } from "./tuned-trials"
 
 type CustomizeConfigSectionProps = {
   engine: Engine
-  /** The picked trial — pre-fills the form. */
+  /** The picked trial. It pre-fills the form. */
   row: TrialRow
   /** Lets the footer Run button submit this form via the native form attribute. */
   formId: string

@@ -91,8 +91,8 @@ export function ServerStatusBar() {
         </Button>
       </div>
 
-      {/* One click must not kill the server and its in-memory kernel state —
-          every destructive action in the app confirms first. */}
+      {/* One click must not kill the server and its in-memory kernel state.
+          Every destructive action in the app confirms first. */}
       <AlertDialog open={confirmStop} onOpenChange={setConfirmStop}>
         <AlertDialogContent>
           <AlertDialogHeader>

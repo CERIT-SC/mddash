@@ -34,7 +34,7 @@ export function SpawnPendingPage() {
   const [retrying, setRetrying] = useState(false)
   const [retryError, setRetryError] = useState<string | null>(null)
 
-  // Stream gone but server not ready — fall back to polling for the outcome.
+  // Stream gone but server not ready. Fall back to polling for the outcome.
   useEffect(() => {
     if (status === "ready" || status === "failed") return
     if (!streamEnded) return
@@ -50,7 +50,7 @@ export function SpawnPendingPage() {
           window.location.href = `${cfg.baseUrl}home`
         }
       } catch {
-        /* transient API errors — keep polling */
+        /* Keep polling through transient API errors. */
       }
     }
     void poll()

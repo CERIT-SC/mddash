@@ -74,7 +74,7 @@ function parseExpiryOptions(html: string): ExpiryOption[] {
   }))
 }
 
-/** Revoke is irreversible (scripts using the token lose access) — always confirm first. */
+/** Revoke is irreversible. Scripts using the token lose access, so confirm first. */
 function RevokeButton({ revoke }: { revoke: () => void }) {
   return (
     <AlertDialog>

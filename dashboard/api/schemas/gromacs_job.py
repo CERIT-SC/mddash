@@ -16,7 +16,7 @@ class GromacsJobSchema(BaseAutoSchema):
         include_fk = True
 
     # A schema-level Meta masks the custom model converter, so enum columns would
-    # dump by name (CPU/GPU) — the contract and all counterparties use lowercase.
+    # dump by name (CPU/GPU). The contract and all counterparties use lowercase.
     # Same explicit fix as `engine` in the sibling schemas.
     pme = fields.Enum(DeviceType, by_value=True)
     nb = fields.Enum(DeviceType, by_value=True)

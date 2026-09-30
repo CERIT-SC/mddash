@@ -168,7 +168,7 @@ export function SimulationForm({ experimentId, engine, simulation, onSaved }: Si
     resolver: zodResolver(schema),
     mode: "onChange",
     values: useMemo(() => defaultValues(engine, simulation), [engine, simulation]),
-    // React 19: FormProvider overrides keep clean — poll refreshes adopt server state
+    // React 19: FormProvider overrides keep clean. Poll refreshes adopt server state
     // only when the user hasn't diverged from it.
     resetOptions: { keepDirtyValues: true },
   })

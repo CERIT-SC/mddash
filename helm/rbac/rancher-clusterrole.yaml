@@ -1,4 +1,4 @@
-# Rancher-specific — only required on Rancher-managed clusters.
+# Rancher-specific. Only required on Rancher-managed clusters.
 # The pre_spawn_hook annotates each user namespace with field.cattle.io/projectId to place it
 # in the correct Rancher project. manage-namespaces on management.cattle.io/projects is the
 # non-standard Rancher verb that allows this. resourceNames scopes it to one project.

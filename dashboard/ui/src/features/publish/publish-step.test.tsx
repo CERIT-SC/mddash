@@ -97,7 +97,7 @@ function renderPublish(props: Partial<React.ComponentProps<typeof PublishStep>> 
   return spies
 }
 
-/** The step's marker, found via aria-current — null unless that step is active. */
+/** The step's marker, found via aria-current. Null unless that step is active. */
 function activeStepMarker(name: string) {
   return screen.getByText(name).closest("li")?.querySelector("[aria-current='step']")
 }
@@ -383,7 +383,7 @@ describe("PublishStep publication targets", () => {
     await user.click(screen.getByRole("button", { name: "Prepare MDPosit handoff" }))
     expect(await screen.findByRole("link", { name: /metadata file \(inputs\.yaml\)/i })).toBeInTheDocument()
 
-    // The wizard switches tabs without remounting the step — the previous
+    // The wizard switches tabs without remounting the step. The previous
     // simulation's handoff must not leak into the new one.
     rerender(
       <QueryClientProvider client={client}>

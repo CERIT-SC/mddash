@@ -75,7 +75,7 @@ def validate_pdb_content(content: bytes) -> None:
     Reject downloaded content that is not a valid PDB structure file.
 
     Catches HTML error pages, login redirects, and binary responses that return
-    200 but aren't valid PDB files — a structural file must contain at least one
+    200 but are not valid PDB files. A structural file must contain at least one
     ATOM or HETATM record (columns 1-6).
 
     Raises:

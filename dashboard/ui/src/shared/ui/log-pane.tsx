@@ -14,7 +14,7 @@ export type LogPaneProps = {
   loadingText?: string
   /** Empty-log text (default "(no output)"). */
   emptyText?: string
-  /** Overrides all other states when set — the log endpoint failed. */
+  /** Overrides all other states when set. The log endpoint failed. */
   errorText?: string
   className?: string
 }
@@ -47,7 +47,7 @@ export function LogPane({
   const paneRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const el = paneRef.current
-    // scrollTop assignment instead of scrollTo — Element.scrollTo is missing in jsdom.
+    // scrollTop assignment instead of scrollTo. Element.scrollTo is missing in jsdom.
     if (follow && el) el.scrollTop = el.scrollHeight
   }, [lines, follow])
 

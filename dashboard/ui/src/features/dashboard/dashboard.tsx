@@ -28,7 +28,7 @@ import { hasLiveWork } from "./live-work"
 // Matches the wizard's simulations heartbeat.
 const EXPERIMENTS_POLL_MS = 5000
 
-// Card statuses and detail rows only move when the list refetches — poll
+// Card statuses and detail rows only move when the list refetches. Poll
 // while any experiment has live work, rest when idle.
 const pollWhileAnyJobActive =
   (pollMs: number) =>

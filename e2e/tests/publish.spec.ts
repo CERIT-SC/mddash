@@ -8,13 +8,13 @@ test("publish the finished experiment to MDRepo", async ({ page }) => {
   await page.getByRole("link", { name: /sign-in/i }).click()
   await page.getByRole("button", { name: "Upload", exact: true }).click()
 
-  // Transitional UI: mutation-driven "Uploading…" button and/or status-doc texts.
+  // Transitional UI. Either the Uploading button or the status-doc texts show the upload state.
   await expect(
     page
       .getByRole("button", { name: "Uploading…" })
       .or(page.getByText(/Upload queued|Uploading files/))
       .first()
   ).toBeVisible()
-  // Demo end state: files sit in an MDRepo draft; finalization happens in MDRepo-UI (absent in the demo).
+  // Demo end state. Files sit in an MDRepo draft. Finalization happens in MDRepo-UI, which the demo does not include.
   await expect(page.getByRole("link", { name: "Finish in MDRepo" })).toBeVisible({ timeout: 30_000 })
 })

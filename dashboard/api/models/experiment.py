@@ -118,7 +118,7 @@ class Experiment(db.Model):  # type: ignore
     source_type: Mapped[SourceType | None] = mapped_column(db.Enum(SourceType), nullable=True)
     # RCSB accession, or the resolved download URL for URL/repo sources
     source_ref: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
-    # original uploaded filenames (source_type=file only) — creation history, not derived state
+    # original uploaded filenames (source_type=file only); creation history, not derived state
     source_files: Mapped[list[str] | None] = mapped_column(db.JSON, nullable=True)
     # git repository URL containing setup notebooks (nullable for legacy experiments) TODO: make non-nullable (breaks db migration)
     notebooks_repo: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
@@ -180,7 +180,7 @@ class Experiment(db.Model):  # type: ignore
             try:
                 size = (path := DATA_DIR / self.id / name).stat().st_size
             except OSError:
-                continue  # raced deletion — never leak a broken entry into the payload
+                continue  # Raced deletion. Never leak a broken entry into the payload.
             if not path.is_file():
                 continue
             files.append({"name": name, "size": size, "path": name, "url": file_download_url(self.id, name)})
@@ -206,8 +206,8 @@ class Experiment(db.Model):  # type: ignore
         experiment), so this lives here rather than on a simulation: unlocked
         once a draft/record exists, or once any run finished or was stopped
         anywhere in the experiment (stopped ⇔ finished: partial results are
-        publishable). The wizard additionally holds Publish while the SELECTED
-        simulation is live — a per-simulation concern this flag can't express.
+        publishable). The wizard also holds Publish while the SELECTED
+        simulation is live. This flag cannot express that per-simulation concern.
         """
         return self.mdrepo_id is not None or any(
             job.status in {JobStatus.FINISHED, JobStatus.STOPPED} for job in self.simulation_jobs
@@ -659,7 +659,7 @@ class Experiment(db.Model):  # type: ignore
         if upload_state == UploadState.FAILED.value:
             delete_upload_resources(self.id)
 
-        # Reuse the draft only if it still exists — the user may have deleted it in MDRepo.
+        # Reuse the draft only if it still exists. The user may have deleted it in MDRepo.
         if self.mdrepo_id and mdrepo.check_experiment_status(access_token, self.mdrepo_id) is not None:
             mdrepo_id = self.mdrepo_id
             mdrepo_experiment: dict = {"id": mdrepo_id, "links": {}}

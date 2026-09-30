@@ -19,7 +19,7 @@ const CUSTOM_PRESENTATION: { Icon: LucideIcon; tileClass: string } = {
 }
 
 // The category set evolves independently of deployed UIs (new catalog entries,
-// old experiments' snapshots) — unknown values must fall back, never crash.
+// old experiments' snapshots). Unknown values must fall back, never crash.
 const presentation = (category?: NotebookModuleCategory | null) =>
   (category && CATEGORY_PRESENTATION[category]) || CUSTOM_PRESENTATION
 

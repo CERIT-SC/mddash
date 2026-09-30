@@ -98,7 +98,7 @@ const LipidInteractionsPanel: FC<{ data: LipidInteractionAnalysis }> = ({ data }
     ({ value, xIndex, yIndex, xLabel, yLabel }: TooltipContext) => {
       const total = columnTotals[xIndex] ?? 0
       const percent = total ? ((value / total) * 100).toFixed(1) : "0.0"
-      // Labels come from the analysis payload — escape before innerHTML.
+      // Labels come from the analysis payload. Escape before innerHTML.
       const residueLabel = escapeHtml(yLabel ?? `Residue ${yIndex + 1}`)
       const lipidLabel = escapeHtml(xLabel ?? `Lipid ${xIndex + 1}`)
       return `<div><strong>${residueLabel}</strong><br/>${lipidLabel}: ${formatNumber(

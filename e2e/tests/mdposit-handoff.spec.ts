@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test"
 
-// Seed: jjjjj KIX study — FINISHED GMX run with trajectory, nothing live, unpublished.
+// Seed: jjjjj KIX study with a FINISHED GMX run and trajectory, nothing live, unpublished.
 test("prepare an MDPosit handoff package", async ({ page }) => {
   await page.goto("experiments/jjjjj")
   await page.getByRole("button", { name: /Go to section 5: Publish/ }).click()

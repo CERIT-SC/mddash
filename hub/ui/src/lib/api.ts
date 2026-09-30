@@ -22,7 +22,7 @@ export interface HubServerModel {
   ready: boolean
   /** True while the server process exists (including during startup). */
   active: boolean
-  /** Current transition — "spawn" or "stop" — or null when stable. */
+  /** Current transition ("spawn" or "stop"), or null when stable. */
   pending: string | null
   url: string
   started: string | null
@@ -110,7 +110,7 @@ export class HubApi {
       const body = (await response.json()) as { message?: string }
       if (body.message) message = body.message
     } catch {
-      // non-JSON error body — keep the generic message
+      // Non-JSON error body. Keep the generic message.
     }
     throw new HubApiError(response.status, message)
   }

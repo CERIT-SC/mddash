@@ -96,7 +96,7 @@ export function RunProgress({ job, busy, canExtend, onStop, onExtend, onRestart 
       </div>
 
       {/* DS ≤ 0.1.9 Progress destructures `value` away from the Radix Root, so the
-          determinate state never reaches AT — set aria-valuenow explicitly. */}
+          determinate state never reaches AT. Set aria-valuenow explicitly. */}
       <Progress
         value={finished ? 100 : (percent ?? 0)}
         aria-valuenow={finished ? 100 : (percent ?? 0)}

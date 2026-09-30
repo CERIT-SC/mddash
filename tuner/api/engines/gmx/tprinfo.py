@@ -71,7 +71,7 @@ def _read_dump(tpr_path: str) -> tuple[int, float] | None:
 
 
 def delta_t_ps(tpr_path: str) -> float | None:
-    """Timestep (ps) of a .tpr via local `gmx dump` (never dispatched remotely — safe on workers); None on failure."""
+    """Timestep in ps of a .tpr via local `gmx dump`. It never dispatches remotely, so it is safe on workers. Returns None on failure."""
     parsed = _read_dump(tpr_path)
     return parsed[1] if parsed else None
 

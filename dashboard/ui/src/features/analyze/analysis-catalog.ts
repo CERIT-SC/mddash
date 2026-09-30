@@ -2,7 +2,7 @@ import { AnalysisJobRequestAnalysis, AnalysisJobRequestPreprocessingMode } from 
 
 /**
  * Catalog of analyses a simulation can produce, keyed by the generated
- * contract enum. `resultName` is the normalized mwf output file name — it
+ * contract enum. `resultName` is the normalized mwf output file name. It
  * differs from `value` only where mwf's task name and output name disagree.
  */
 
@@ -15,7 +15,7 @@ export interface AnalysisInfo {
 }
 
 export const AVAILABLE_ANALYSES: AnalysisInfo[] = [
-  // Standard — work with structure + trajectory alone
+  // Standard. Works with structure + trajectory alone.
   { value: AnalysisJobRequestAnalysis.rmsds, label: "RMSD", resultName: "rmsds" },
   { value: AnalysisJobRequestAnalysis.rgyr, label: "Radius of Gyration", resultName: "rgyr" },
   { value: AnalysisJobRequestAnalysis.rmsf, label: "RMSF (Fluctuation)", resultName: "fluctuation" },
@@ -41,7 +41,7 @@ export const AVAILABLE_ANALYSES: AnalysisInfo[] = [
   // covers every submittable analysis so wizard and card counts agree.
   { value: AnalysisJobRequestAnalysis.perres, label: "RMSD Per Residue", resultName: "rmsd-perres" },
   { value: AnalysisJobRequestAnalysis.inter, label: "Interactions", resultName: "interactions" },
-  // Membrane — auto-detected from structure; skipped if no lipid bilayer present
+  // Membrane. Auto-detected from structure; skipped if no lipid bilayer is present.
   { value: AnalysisJobRequestAnalysis.density, label: "Density Profile", resultName: "density" },
   { value: AnalysisJobRequestAnalysis.thickness, label: "Thickness", resultName: "thickness" },
   { value: AnalysisJobRequestAnalysis.apl, label: "Area Per Lipid", resultName: "apl" },

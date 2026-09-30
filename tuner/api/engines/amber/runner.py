@@ -135,7 +135,7 @@ def _timestep_ps(mdin_path: Path) -> float | None:
 
 
 def _parse_amber_performance(content: str) -> float:
-    """Parse ns/day from mdout — last occurrence is the 'all steps' summary."""
+    """Parse ns/day from mdout. The last occurrence is the 'all steps' summary."""
     matches = re.findall(r"ns/day\s*=\s*([\d.]+)", content)
     return float(matches[-1]) if matches else 0.0
 

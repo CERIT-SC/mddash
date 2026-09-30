@@ -363,7 +363,7 @@ const isHydrogenBondsAnalysis = (obj: Analysis): obj is HydrogenBondsAnalysis =>
   })
 }
 
-/** Finite numbers only — drops NaN/Infinity and non-numeric junk from upstream payloads. */
+/** Finite numbers only. Drops NaN/Infinity and non-numeric junk from upstream payloads. */
 export const sanitizeNumericArray = (values: unknown): number[] =>
   Array.isArray(values)
     ? values.filter((value): value is number => typeof value === "number" && Number.isFinite(value))

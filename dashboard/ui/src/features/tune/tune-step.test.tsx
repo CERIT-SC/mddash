@@ -476,7 +476,7 @@ describe("TuneStep footer and manual tab", () => {
     await userEvent.type(screen.getByPlaceholderText("Enter number of ranks"), "1")
     await userEvent.type(screen.getByPlaceholderText("Enter number of threads"), "2")
 
-    // Resolver validation is async — let it settle before asserting the gate lifts.
+    // Resolver validation is async. Let it settle before asserting the gate lifts.
     await waitFor(() => expect(run).toBeEnabled())
     await userEvent.click(run)
     expect(calls.find((call) => call.method === "POST" && call.url.endsWith(GMX_ONE))?.body).toEqual({
@@ -562,7 +562,7 @@ describe("TuneStep coinciding suggestions", () => {
 
     expect(await screen.findByText("Fastest")).toBeInTheDocument()
     expect(screen.getByText("Eco")).toBeInTheDocument()
-    // The coinciding config renders once — badges share the row; the other trial stays below.
+    // The coinciding config renders once. Badges share the row; the other trial stays below.
     expect(screen.getAllByRole("radio")).toHaveLength(2)
   })
 })

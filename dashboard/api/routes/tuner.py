@@ -61,7 +61,7 @@ def start_tuner_job(experiment_id: str) -> ResponseReturnValue:
         else:
             return jsonify(schema.dump(existing))
 
-    # nsteps is always caller-supplied — reject the request instead of guessing a default.
+    # nsteps is always caller-supplied. Reject the request instead of guessing a default.
     raw_nsteps = data.get("nsteps", request.args.get("nsteps"))
     if raw_nsteps is None:
         raise BadRequest("nsteps is required.")

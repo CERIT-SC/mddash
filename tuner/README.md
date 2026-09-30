@@ -18,9 +18,9 @@ The manual end-to-end test requires a deployed Tuner, KubeRay, cluster credentia
 make -C tuner e2e ENV=dev
 ```
 
-## Worker Image
+## Worker image
 
-The combined GROMACS and AMBER worker is a large, statically tagged image that includes licensed AMBER artifacts. It is deliberately excluded from root build targets and GitHub Actions.
+The combined GROMACS and AMBER worker is a large, statically tagged image that includes licensed AMBER artifacts. It is excluded from root build targets and GitHub Actions.
 
 Build and publish it only through its dedicated Makefile:
 
@@ -37,4 +37,4 @@ The Helm chart is `helm/charts/tuner` and is consumed as a local dependency of t
 
 The API stores SQLite at `/data/tuner.db` on an RWO block volume. Inputs and trial outputs use the shared RWX `/tmp/tpr` volume mounted by the API and Ray pods. A NetworkPolicy limits direct Ray access to Tuner pods.
 
-Active jobs are not recoverable across API restarts because their Ray references and cancellation state remain in process memory. Tuner also currently uses one shared service credential and does not enforce per-user job ownership; the API must remain cluster-internal until a tenant-aware authorization design replaces that boundary.
+Active jobs are not recoverable across API restarts because their Ray references and cancellation state remain in process memory. Tuner also uses one shared service credential and does not enforce per-user job ownership; the API must remain cluster-internal until a tenant-aware authorization design replaces that boundary.

@@ -1,6 +1,6 @@
-# MDDash User Guides
+# MDDash user guides
 
-User-facing documentation for the MDDash production deployment. Suitable as context for RAG pipelines: each file covers one topic with verbatim UI labels. Deliberately excludes deployment-configurable values (quota numbers, URLs, timeouts) that may change over time — guides describe durable behavior and UI structure only.
+User-facing documentation for the MDDash production deployment. Suitable as context for RAG pipelines: each file covers one topic with verbatim UI labels. It excludes deployment-configurable values (quota numbers, URLs, timeouts) that may change over time. Guides describe durable behavior and UI structure only.
 
 | File | Topic |
 |---|---|

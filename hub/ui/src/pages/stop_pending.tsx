@@ -26,7 +26,7 @@ export function StopPendingPage() {
           }
         })
         .catch(() => {
-          /* transient API errors — keep polling */
+          /* Keep polling through transient API errors. */
         })
     }, 2000)
     return () => clearInterval(timer)

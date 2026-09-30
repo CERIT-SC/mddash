@@ -81,7 +81,7 @@ const buildTooltipFormatter =
 
     if (!normalized.length) return ""
 
-    // Categories/series names derive from payload membrane names — escape them;
+    // Categories/series names derive from payload membrane names. Escape them;
     // marker is ECharts' generated color-dot HTML and must stay markup.
     const header = escapeHtml(normalized[0].axisValueLabel ?? categories[normalized[0].dataIndex ?? 0] ?? "Membrane")
 

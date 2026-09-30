@@ -50,7 +50,7 @@ body {
   font-family: var(--font-display);
 }
 
-/* Multi-layer radial gradient — too verbose for arbitrary Tailwind values */
+/* Multi-layer radial gradient. Too verbose for arbitrary Tailwind values. */
 .hero-mesh {
   background:
     radial-gradient(
@@ -66,7 +66,7 @@ body {
     var(--background);
 }
 
-/* Stacked box-shadows — too verbose for arbitrary Tailwind values */
+/* Stacked box-shadows. Too verbose for arbitrary Tailwind values. */
 .screen-frame {
   border-radius: 12px;
   box-shadow:
@@ -75,7 +75,7 @@ body {
     0 8px 24px color-mix(in srgb, var(--color-primary-950) 50%, transparent);
 }
 
-/* Tertiary gradient accent text — semantic tokens only, no ramp suffixes.
+/* Tertiary gradient accent text. Semantic tokens only, no ramp suffixes.
    Both tokens are theme-aware, so a single rule serves light and dark. */
 .text-gradient {
   background: linear-gradient(135deg, var(--tertiary) 0%, var(--tertiary-foreground) 100%);
@@ -111,7 +111,7 @@ body {
   transition-delay: 0.4s;
 }
 
-/* Pseudo-class and JS-toggled states — cannot be expressed as Tailwind utilities */
+/* Pseudo-class and JS-toggled states. Cannot be expressed as Tailwind utilities. */
 .step-tab {
   cursor: pointer;
   border-left: 3px solid transparent;
@@ -130,7 +130,7 @@ body {
   background: color-mix(in srgb, var(--color-primary-800) 30%, transparent);
 }
 
-/* Uses multiple design-system color tokens — cannot be expressed as Tailwind utilities */
+/* Multiple design-system color tokens in use. Cannot be expressed as Tailwind utilities. */
 .glow-separator {
   background: linear-gradient(90deg, transparent, var(--primary), var(--tertiary), transparent);
 }

@@ -37,7 +37,7 @@ type RunLogsProps = {
   experimentId: string
   simulationPath: string
   engine: Engine
-  /** Payload line counts — sizes the badges without fetching any stream. */
+  /** Payload line counts. They size the badges without fetching any stream. */
   logLines: SimulationJobLogLines | undefined
   /** Poll the open stream while the job is alive. */
   live: boolean
@@ -174,7 +174,7 @@ export function RunLogs({ experimentId, simulationPath, engine, logLines, live, 
           ))}
         </Tabs>
 
-        {/* The payload count often runs one poll ahead of the refetch — the note
+        {/* The payload count often runs one poll ahead of the refetch. The note
             exists only for a genuinely capped window, never for that transient lag. */}
         {tabCount !== null && fetchedCount >= LOG_TAIL && tabCount > fetchedCount && (
           <p className="text-text-muted text-xs">

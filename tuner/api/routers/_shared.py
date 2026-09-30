@@ -1,4 +1,4 @@
-"""Engine-agnostic job management handlers — registered to each engine router."""
+"""Engine-agnostic job management handlers, registered to each engine router."""
 
 import logging
 from typing import Annotated, Literal

@@ -12,7 +12,7 @@ import { SetupGuide } from "./setup-guide"
 
 export type SetupSource = "notebook" | "manual"
 
-/** Heartbeat while the setup step is mounted — the manifest can appear mid-wait. */
+/** Heartbeat while the setup step is mounted. The manifest can appear mid-wait. */
 const SIMULATIONS_POLL_MS = 5000
 
 type SetupStepProps = {

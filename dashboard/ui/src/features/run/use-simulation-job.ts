@@ -59,7 +59,7 @@ const pollWhileLive =
 export type SimulationJobQuery = {
   /** Present only on a resolved 200; stays undefined on 404 ("no job"). */
   job: GromacsJob | AmberJob | undefined
-  /** Resolved 404 — there is no job for this simulation. */
+  /** Resolved 404. There is no job for this simulation. */
   missing: boolean
   pending: boolean
   /** Non-404 query failure. */

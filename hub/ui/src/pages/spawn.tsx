@@ -37,7 +37,7 @@ export function SpawnPage() {
     optionsForm: "",
   })
 
-  // A hub-rendered spawn error means the spawn already failed — show the failed
+  // A hub-rendered spawn error means the spawn already failed. Show the failed
   // state instead of auto-retrying (which would silently loop).
   const hasHubError = Boolean(cfg.errorHtmlMessage || cfg.errorMessage)
   const [status, setStatus] = useState<"starting" | "failed">(hasHubError ? "failed" : "starting")
@@ -46,7 +46,7 @@ export function SpawnPage() {
 
   useEffect(() => {
     if (cfg.optionsForm || hasHubError) return
-    // React StrictMode double-invokes effects — guard against spawning twice.
+    // React StrictMode double-invokes effects. Guard against spawning twice.
     if (started.current) return
     started.current = true
     const api = new HubApi(cfg.baseUrl, cfg.xsrf)

@@ -95,7 +95,7 @@ class SimulationJob(db.Model):  # type: ignore
         Returns:
             The current JobStatus of the simulation.
         """
-        # Terminal states never change — skip fetch
+        # Terminal states never change. Skip the fetch.
         if self._last_known_status is not None and self._last_known_status.is_terminal:
             return self._last_known_status
 
@@ -118,7 +118,7 @@ class SimulationJob(db.Model):  # type: ignore
 
     @property
     def is_live(self) -> bool:
-        """Non-terminal states — the job may still advance without user action."""
+        """The job may still advance without user action."""
         return self.status.is_live
 
     @property

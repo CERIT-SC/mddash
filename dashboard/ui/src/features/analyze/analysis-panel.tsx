@@ -55,7 +55,7 @@ import {
   useInvalidateAnalysisListsOnComplete,
 } from "./use-analysis"
 
-// Lazy — the ECharts bundle only loads once a result is actually rendered.
+// Lazy. The ECharts bundle only loads once a result is actually rendered.
 const AnalysisRenderer = lazy(() => import("./renderers").then((m) => ({ default: m.AnalysisRenderer })))
 // Sim-status polls leave the chart props reference-stable; skip re-renders (setOption notMerge resets zoom).
 const MemoAnalysisRenderer = memo(AnalysisRenderer)
@@ -74,7 +74,7 @@ type AnalysisPanelProps = {
 }
 
 /** Analysis picker + runner: choose an analysis, track its job, render its graph.
- * Empty, running, failed, and no-data states are durable — never toast-only. */
+ * Empty, running, failed, and no-data states are durable, never toast-only. */
 export function AnalysisPanel({
   experimentId,
   engine,
@@ -132,8 +132,8 @@ export function AnalysisPanel({
     return analysisWithResults?.value ?? null
   }, [activeJob, availableResults])
 
-  // The pick is user-owned: seeded once, then only the picker changes it —
-  // job failures or appearing results never move the selection.
+  // The pick is user-owned: seeded once, then only the picker changes it.
+  // Job failures or appearing results never move the selection.
   useEffect(() => {
     if (selectedAnalysis === undefined) {
       if (defaultAnalysis !== null) onSelectedAnalysisChange(defaultAnalysis)
@@ -154,7 +154,7 @@ export function AnalysisPanel({
     return [...availableResults].filter((r) => pattern.test(r)).sort()
   }, [analysisConfig, selectedResultName, availableResults])
 
-  // Render the first variant unless the user picked one — the base file is the
+  // Render the first variant unless the user picked one. The base file is the
   // variant index (not renderable), so never fetch it directly.
   const activeVariant = selectedVariant ?? (analysisConfig?.hasVariants ? (variantResults[0] ?? null) : null)
 
@@ -173,7 +173,7 @@ export function AnalysisPanel({
   }, [variantsQuery.data])
 
   const isRunningThis = activeJob?.analysis_name === resolvedAnalysis
-  // For hasVariants analyses the base file is the variant index — never fetch or render it.
+  // For hasVariants analyses the base file is the variant index. Never fetch or render it.
   const effectiveResultName = analysisConfig?.hasVariants ? activeVariant : (activeVariant ?? selectedResultName)
 
   const dataQuery = useAnalysisData(experimentId, simulationPath, hasResult ? effectiveResultName : null)
@@ -354,7 +354,7 @@ export function AnalysisPanel({
       </div>
 
       {/* A failed run gets one clear, durable banner in the results column
-          (it can also overlay still-valid older results) — no floating chip
+          (it can also overlay still-valid older results). No floating chip
           in the run row. */}
       {failedForAnalysis && (
         <Alert role="alert" variant="error">
@@ -438,7 +438,7 @@ export function AnalysisPanel({
           )}
       </div>
 
-      {/* AlertDialogAction has no variant prop in DS ≤ 0.1.9 — buttonVariants workaround
+      {/* AlertDialogAction has no variant prop in DS ≤ 0.1.9. buttonVariants workaround
           (https://github.com/CERIT-SC/design-system/pull/108). */}
       <AlertDialog open={confirmCancel} onOpenChange={setConfirmCancel}>
         <AlertDialogContent>

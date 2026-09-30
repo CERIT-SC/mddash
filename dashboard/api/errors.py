@@ -16,7 +16,7 @@ class ApiError(HTTPException):
     HTTPException with a value-add type token and optional user-facing solution.
 
     Raise at known-error sites; the global handler renders it as RFC 9457 JSON.
-    Plain werkzeug exceptions (Conflict/NotFound/...) also work — the handler
+    Plain werkzeug exceptions (Conflict/NotFound/...) also work. The handler
     upgrades them to an ApiError with a token derived from the HTTP phrase.
     """
 

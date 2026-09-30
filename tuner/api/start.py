@@ -37,7 +37,7 @@ def main() -> None:
         logger.exception("Startup validation or database migration failed.")
         sys.exit(1)
 
-    from api.main import app  # ruff: ignore[import-outside-top-level] — intentional: import after migrations complete
+    from api.main import app  # ruff: ignore[import-outside-top-level]  # Import after migrations complete.
 
     try:
         uvicorn.run(app, host="0.0.0.0", port=8000, log_config=LOGGING_CONFIG)

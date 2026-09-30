@@ -190,7 +190,7 @@ const ClustersPanel: FC<{ data: ClustersAnalysis }> = ({ data }) => {
                 yLabels={labels}
                 title="Transitions"
                 tooltipFormatter={(context) => {
-                  // Labels come from the analysis payload — escape before innerHTML.
+                  // Labels come from the analysis payload. Escape before innerHTML.
                   const fromLabel = escapeHtml(labels[context.yIndex] ?? `Cluster ${context.yIndex + 1}`)
                   const toLabel = escapeHtml(labels[context.xIndex] ?? `Cluster ${context.xIndex + 1}`)
                   return `<div><strong>${fromLabel} → ${toLabel}</strong><br/>Count: ${context.value}</div>`

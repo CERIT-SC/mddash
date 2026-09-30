@@ -21,7 +21,7 @@ help: ## Show this help
 	@echo ""
 	@echo "Current: ENV=$(ENV), TAG=$(IMAGE_TAG), NS=$(namespace)"
 
-# ==================== FORMAT / LINT ====================
+# Format and lint
 
 .PHONY: fix
 fix: ## Auto-fix formatting and lint issues (Python via Ruff, frontend via Prettier/Oxlint)
@@ -46,7 +46,7 @@ knip: ## Check frontend dead code (dashboard/ui, landing and hub/ui via Knip)
 	pnpm run knip
 
 .PHONY: lint-workflows
-lint-workflows: ## Validate GitHub Actions workflows (actionlint + zizmor). Requires actionlint + zizmor (in devcontainer).
+lint-workflows: ## Validate GitHub Actions workflows with actionlint and zizmor. Requires both tools in the dev container.
 	actionlint
 	zizmor --min-severity high .
 
@@ -62,7 +62,7 @@ format-check-ui: ## Check frontend formatting (dashboard/ui, landing and hub/ui 
 	pnpm run format:check
 
 .PHONY: lint-helm
-lint-helm: validate-charts ## Validate all Helm charts including umbrella dependency build. Requires helm + gomplate + yq.
+lint-helm: validate-charts ## Validate all Helm charts including umbrella dependency build. Requires helm, gomplate, and yq.
 	helm repo add jupyterhub https://hub.jupyter.org/helm-chart/ >/dev/null
 	helm repo update jupyterhub >/dev/null
 	helm dependency build helm/charts/mddash
@@ -70,7 +70,7 @@ lint-helm: validate-charts ## Validate all Helm charts including umbrella depend
 	helm template mddash helm/charts/mddash >/dev/null
 
 .PHONY: validate-charts
-validate-charts: ## Lint and template all charts for every environment. Requires helm + gomplate + yq.
+validate-charts: ## Lint and template all charts for every environment. Requires helm, gomplate, and yq.
 	@for chart in mdrun-api tuner; do \
 		helm lint helm/charts/$$chart; \
 		helm template $$chart helm/charts/$$chart >/dev/null; \
@@ -81,7 +81,7 @@ validate-charts: ## Lint and template all charts for every environment. Requires
 		helm template mddash helm/charts/mddash -f helm/charts/mddash/values.yaml >/dev/null; \
 	done
 
-# ==================== TYPE CHECK ====================
+# Type check
 
 .PHONY: type-check
 type-check: type-check-dashboard-api type-check-dashboard-auth type-check-mdrun-api type-check-tuner type-check-ui type-check-landing type-check-hub-ui ## Run type checks on all components
@@ -103,7 +103,7 @@ type-check-tuner: ## Type-check Tuner API
 	cd tuner && uv run ty check api
 
 .PHONY: type-check-ui
-type-check-ui: ## Type-check dashboard UI architecture configuration (TypeScript)
+type-check-ui: ## Type-check dashboard UI with TypeScript
 	pnpm --filter dash type-check
 
 .PHONY: type-check-landing
@@ -114,7 +114,7 @@ type-check-landing: ## Type-check landing page (TypeScript)
 type-check-hub-ui: ## Type-check hub UI (TypeScript)
 	pnpm --filter hub-ui type-check
 
-# ==================== TEST ====================
+# Test
 
 .PHONY: test
 test: test-dashboard-api test-dashboard-auth test-dashboard-ui test-mdrun-api test-tuner test-pre-spawn-hook ## Run all tests
@@ -143,7 +143,7 @@ test-tuner: ## Run Tuner API tests
 test-pre-spawn-hook: ## Run pre-spawn hook unit tests
 	uv run --group dev pytest helm/charts/mddash/tests/
 
-# ==================== BUILD ====================
+# Build
 
 .PHONY: require-image-tag
 require-image-tag:
@@ -179,7 +179,7 @@ build-landing: require-image-tag ## Build landing page image
 	@$(MAKE) -C landing build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: build-hub
-build-hub: require-image-tag ## Build JupyterHub image (hub + custom UI)
+build-hub: require-image-tag ## Build JupyterHub image with hub and custom UI
 	@$(MAKE) -C hub build ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push
@@ -206,10 +206,10 @@ push-landing: require-image-tag ## Build and push landing page image
 	@$(MAKE) -C landing push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
 .PHONY: push-hub
-push-hub: require-image-tag ## Build and push JupyterHub image (hub + custom UI)
+push-hub: require-image-tag ## Build and push JupyterHub image with hub and custom UI
 	@$(MAKE) -C hub push ENV=$(ENV) IMAGE_TAG=$(IMAGE_TAG)
 
-# ==================== HELM CHART PACKAGING ====================
+# Helm chart packaging
 
 .PHONY: push-mdrun-api-chart
 push-mdrun-api-chart: ## Package and push mdrun-api Helm chart to OCI registry
@@ -286,25 +286,25 @@ logs: ## Show deployment logs
 	@$(MAKE) -C helm logs ENV=$(ENV)
 
 .PHONY: resources
-resources: ## Show resource budget and recommended namespace quota values (offline)
+resources: ## Show offline resource budget and recommended namespace quota values
 	@python3 scripts/resource_summary.py $(config)
 
-# ==================== ROLLBACK ====================
+# Rollback
 
 .PHONY: history
 history: ## Show Helm release history
 	@$(MAKE) -C helm history ENV=$(ENV)
 
 .PHONY: rollback
-rollback: ## Rollback to previous revision (REVISION=N for specific)
+rollback: ## Rollback to previous revision. Set REVISION=N for a specific revision.
 	@$(MAKE) -C helm rollback ENV=$(ENV) REVISION=$(REVISION)
 
 .PHONY: e2e
-e2e: ## Run browser E2E tests against the demo harness (Playwright)
+e2e: ## Run browser E2E tests against the demo harness with Playwright
 	pnpm --filter @mddash/e2e test
 
 .PHONY: demo
-demo: ## Run local demo (real Flask API in demo profile + React dev server)
+demo: ## Run local demo with real Flask API in demo profile and React dev server
 	@fuser -k 8888/tcp 5173/tcp 2>/dev/null || true # clean up stale listeners from previous runs
 	@echo "Demo running at http://localhost:5173/dash/ (Ctrl+C to stop)"; \
 	trap "kill 0 2>/dev/null; exit" INT TERM EXIT; \

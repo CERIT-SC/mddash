@@ -18,7 +18,7 @@ api:
     initialDelaySeconds: 5
     periodSeconds: 10
   pricing:
-    # Hourly resource rates (currency units) for trial cost estimation & early-stop pruning.
+    # Hourly resource rates in currency units for trial cost estimates and early-stop pruning.
     cpuCoreHour: "0.04"
     gpuHour: "0.30"
     gbRamHour: "0.005"

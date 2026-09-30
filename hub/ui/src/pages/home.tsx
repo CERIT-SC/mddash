@@ -48,7 +48,7 @@ export function HomePage() {
   const serverUrl = cfg.serverUrl || `${cfg.baseUrl}user/${encodeURIComponent(cfg.userName)}/`
 
   // Route both transitions to spawn-pending (the hub picks the pending template);
-  // never the user server URL — the dying proxy serves errors.
+  // never the user server URL. The dying proxy serves errors.
   useEffect(() => {
     if (status === "starting" || status === "stopping") {
       window.location.href = `${cfg.baseUrl}spawn-pending/${encodeURIComponent(cfg.userName)}`
@@ -76,7 +76,7 @@ export function HomePage() {
   }, [api, cfg.userName])
 
   // Dashboard "Stop server" lands here with ?stop: hub pages own the stop call
-  // (the dashboard can't reach the hub API — the _xsrf cookie is scoped to /hub),
+  // (the dashboard can't reach the hub API. The _xsrf cookie is scoped to /hub),
   // and the stopping transition below routes to spawn-pending like a manual stop.
   const stopRequested = useRef(new URLSearchParams(window.location.search).has("stop"))
 

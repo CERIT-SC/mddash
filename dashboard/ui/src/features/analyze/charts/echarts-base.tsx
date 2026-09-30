@@ -19,7 +19,7 @@ interface EChartsBaseProps {
 
 const EChartsBase: React.FC<EChartsBaseProps> = ({ option, className, style, opts, height = 400 }) => {
   const palette = useChartPalette()
-  // Canvas can't read CSS vars — resolve tokens at render time.
+  // Canvas can't read CSS vars. Resolve tokens at render time.
   const resolvedOption: EChartsOption = palette ? { ...option, color: option.color ?? palette } : option
   const resolvedHeight = typeof height === "number" ? `${height}px` : height
   return (
