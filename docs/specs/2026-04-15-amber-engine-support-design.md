@@ -202,7 +202,7 @@ Existing `create_job(...)` updated to hit renamed `POST /api/jobs/gmx`.
 | Before | After | Notes |
 |--------|-------|-------|
 | `POST /api/jobs` | `POST /api/jobs/gmx` | Different payload per engine |
-|, | `POST /api/jobs/amber` | New |
+| — | `POST /api/jobs/amber` | New |
 | `GET /api/jobs/{id}` | `GET /api/jobs/gmx/{id}` + `GET /api/jobs/amber/{id}` | Same handler, separate routes |
 | `DELETE /api/jobs/{id}` | `DELETE /api/jobs/gmx/{id}` + `DELETE /api/jobs/amber/{id}` | Same handler, separate routes |
 

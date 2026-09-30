@@ -95,8 +95,8 @@ The tab *is* the wizard, the stepper header is per-tab content:
 │  Experiment name card  (experiment-level, stays on top)    │
 │  [ protein ] [ ligand ] [ + ]        ← SimulationTabs      │
 │ ┌────────────────────────────────────────────────────────┐ │
-│ │ ◯ Setup, ◯ Tune, ◯ Run, ● Analyze, ◯ Publish   │ │
-│ │ (StepperHeader for THIS tab, gated on this simulation)      │ │
+│ │ ◯ Setup, ◯ Tune, ◯ Run, ● Analyze, ◯ Publish       │ │
+│ │ (StepperHeader for THIS tab, gated on this simulation) │ │
 │ │ <ActiveStep/>                                          │ │
 │ └────────────────────────────────────────────────────────┘ │
 └────────────────────────────────────────────────────────────┘
