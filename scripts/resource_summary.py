@@ -1,5 +1,19 @@
 #!/usr/bin/env python3
-"""Offline resource budget calculator for mddash namespaces."""
+"""
+Offline resource budget calculator for mddash namespaces.
+
+Reads resource configuration from config YAML files and computes the
+recommended namespace quota values for both the hub namespace and
+per-user namespaces.
+
+Usage:
+    python3 scripts/resource_summary.py <config.yaml>          # human-readable table
+    python3 scripts/resource_summary.py --json <config.yaml>   # hub totals as JSON (for install.sh)
+
+Example:
+    make resources ENV=dev
+    python3 scripts/resource_summary.py config.dev.yaml
+"""
 
 import json
 import subprocess

@@ -171,7 +171,7 @@ kubectl get --raw=/readyz >/dev/null 2>&1 || die "cluster not reachable via cont
 if [[ "$ENV" == "dev" ]]; then
   IMAGE_TAG=dev
 elif [[ "$REGISTRY" != "cerit.io/mddash" ]]; then
-  # Custom registry. Artifacts are the operator own, so the tag cannot come from upstream releases.
+  # Custom registry. Artifacts are the operator's own, so the tag cannot come from upstream releases.
   prompt IMAGE_TAG "Image tag to deploy (SemVer x.y.z)"
   [[ "$IMAGE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "tag must be strict SemVer x.y.z"
 else

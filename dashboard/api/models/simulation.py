@@ -284,8 +284,8 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         Latest of manifest mtime, simulation-job creation/start/finish, and
         tuner/analysis-job creation. Job start/finish are only set once the
-        MDRun API reports them, hence creation time for fresh jobs.         Analysis
-        counts here (moves the 'latest' pointer) but not in the step ladder.
+        MDRun API reports them, hence creation time for fresh jobs.
+        Analysis counts here (moves the 'latest' pointer) but not in the step ladder.
         That ladder only advances on a finished MD job.
         """
         events: list[float] = []

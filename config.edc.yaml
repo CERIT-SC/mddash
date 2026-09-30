@@ -117,6 +117,7 @@ resources:
 
   analysisJob:
     # Dashboard mwf analysis jobs are mostly single-threaded. Extra CPU limit rarely speeds them up.
+    #  edc test: cpuRequest: "1000m"
     cpuRequest: "100m"
     memoryRequest: "2Gi"
     cpuLimit: "1000m"
@@ -174,6 +175,8 @@ mdrunApi:
     # Maximum number of HPC jobs running simultaneously in the hub namespace.
     # Set cpuPerJob and memoryPerJob to the largest single job you want to allow.
     maxConcurrentJobs: 1  # TODO: increase when more resources are available
+    # edc test: cpuPerJob: "16"
+    # edc test: memoryPerJob: "32Gi"
     cpuPerJob: "2"
     memoryPerJob: "12Gi"
 

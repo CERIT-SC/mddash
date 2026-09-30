@@ -10,9 +10,13 @@ logger = logging.getLogger(__name__)
 
 
 class ApiError(HTTPException):
-    """HTTPException with a type token and optional solution."""
+    """
+    HTTPException with a value-add type token and optional user-facing solution.
 
-    problem_type: str
+    Raise at known-error sites; the global handler renders it as RFC 9457 JSON.
+    Plain werkzeug exceptions (Conflict/NotFound/...) also work. The handler
+    upgrades them to an ApiError with a token derived from the HTTP phrase.
+    """
 
     problem_type: str
     problem_solution: str | None

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 
 import { jobConfigRequest } from "./use-simulation-job"
 
-// pme/nb/binary/ewald are non-nullable columns server-side — every stored job carries them.
+// pme/nb/binary/ewald are non-nullable columns server-side. Every stored job carries them.
 function gmxJob(overrides: Partial<GromacsJob> = {}): GromacsJob {
   return {
     id: "job1",

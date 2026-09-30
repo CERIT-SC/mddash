@@ -209,7 +209,7 @@ describe("RunStep pending job", () => {
     expect(screen.getByRole("progressbar")).toBeInTheDocument()
     expect(screen.queryByText(/steps$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/remaining/)).not.toBeInTheDocument()
-    // A pending pod cannot have produced any log output — the section stays hidden
+    // A pending pod cannot have produced any log output. The section stays hidden
     // and nothing ever hits the log endpoint.
     expect(screen.queryByRole("button", { name: /logs/i })).not.toBeInTheDocument()
     expect(calls.some((call) => call.url.includes("/log"))).toBe(false)
@@ -254,7 +254,7 @@ describe("RunStep running job", () => {
   })
 
   it("keeps Analyze disabled while the ladder holds the run at step 2, even with progress parsed", async () => {
-    // The button follows the same ladder value the stepper consumes — no
+    // The button follows the same ladder value the stepper consumes. No
     // second client-side copy of the unlock rule from a different query.
     mockRun({ initial: gmxJob({ nsteps_done: 5000 }) })
     renderRun({ simulation: simulation(SIM, { valid: true, missing_files: [], step: 2 }) })
@@ -455,7 +455,7 @@ describe("RunStep logs", () => {
     const { calls } = mockRun()
     renderRun()
 
-    // Counts ride the job payload — visible while collapsed, no log fetch yet.
+    // Counts ride the job payload. Visible while collapsed, no log fetch yet.
     expect(await screen.findByText("1,800")).toBeInTheDocument()
     expect(calls.some((call) => call.url.includes("/log"))).toBe(false)
 

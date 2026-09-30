@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { AnalyzeStep } from "./analyze-step"
 
-// Real renderers boot ECharts (needs canvas, absent in jsdom) — stub the
+// Real renderers boot ECharts (needs canvas, absent in jsdom). Stub the
 // registry and assert the panel passes it the right analysis name + payload.
 const renderSpy = vi.fn<(props: { analysisName: string; data: unknown }) => void>()
 vi.mock("./renderers", () => ({
@@ -22,7 +22,7 @@ vi.mock("./renderers", () => ({
   },
 }))
 
-// The trajectory tab is the default, so MolStar would mount — it needs WebGL,
+// The trajectory tab is the default, so MolStar would mount. It needs WebGL,
 // absent in jsdom. Stub it like the renderers.
 vi.mock("./mol-star", () => ({
   __esModule: true,
@@ -339,7 +339,7 @@ describe("AnalyzeStep results", () => {
     expect(await screen.findByText("Results are being calculated…")).toBeInTheDocument()
 
     // The backend job completes: the next polls flip it to FINISHED and the
-    // results list gains the payload — no manual reload needed.
+    // Results list gains the payload. No manual reload needed.
     state.jobs = [job({ status: "FINISHED" })]
     state.results = ["rmsds"]
 
@@ -394,8 +394,8 @@ describe("AnalyzeStep analysis switching", () => {
       expect(renderSpy).toHaveBeenCalledWith({ analysisName: "clusters-00", data: CLUSTERS_00_RESULT })
     )
 
-    // Switch back to RMSD: from here on, no render may name clusters-00 —
-    // a stale variant would briefly show the previous analysis under the RMSD
+    // Switch back to RMSD: from here on, no render may name clusters-00.
+    // A stale variant would briefly show the previous analysis under the RMSD
     // label (and the data is cached, so there is no loading gap to hide it).
     renderSpy.mockClear()
     await userEvent.click(screen.getByRole("combobox", { name: /analysis/i }))
@@ -515,7 +515,7 @@ describe("AnalyzeStep selection stability", () => {
     await userEvent.click(screen.getByRole("combobox", { name: /analysis/i }))
     await userEvent.click(await screen.findByRole("option", { name: /^SASA$/ }))
 
-    // No results and no job — only the pick itself keeps SASA selected.
+    // No results and no job. Only the pick itself keeps SASA selected.
     expect(screen.getByRole("combobox", { name: /analysis/i })).toHaveTextContent("SASA")
 
     await userEvent.click(screen.getByRole("tab", { name: "View Trajectories" }))

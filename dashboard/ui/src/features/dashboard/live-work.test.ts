@@ -54,7 +54,7 @@ describe("hasLiveWork", () => {
   })
 
   it("follows the server is_live flag on simulation and tuner jobs, including UNKNOWN", () => {
-    // The payload already encodes liveness — the client must not re-decide
+    // The payload already encodes liveness. The client must not re-decide
     // from a status set (UNKNOWN is live server-side on transient failures).
     expect(hasLiveWork(experiment("e1", { simulation_jobs: [simJob("UNKNOWN", true)] }))).toBe(true)
     expect(hasLiveWork(experiment("e1", { tuner_jobs: [tunerJob(true)] }))).toBe(true)

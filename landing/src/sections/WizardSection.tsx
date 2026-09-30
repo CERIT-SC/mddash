@@ -80,7 +80,7 @@ const WIZARD_STEPS: WizardStep[] = [
     label: "Publish",
     tagline: "One-click FAIR data publication",
     description:
-      "One-click publication to MDRepo. Metadata auto-extracted with GROMACS MetaDump. Files upload in the background. The experiment receives a persistent DOI. Built on InvenioRDM, the same framework as Zenodo, enforcing MD-specific metadata schemas and standardized trajectory formats.",
+      "One-click publication to MDRepo. Metadata auto-extracted with GROMACS MetaDump. Files upload in the background. The experiment receives a persistent DOI. Built on InvenioRDM — the same framework as Zenodo — enforcing MD-specific metadata schemas and standardized trajectory formats.",
     lightImg: publishLightImg,
     darkImg: publishDarkImg,
     alt: "MDDash publish step",
