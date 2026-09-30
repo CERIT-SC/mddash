@@ -38,7 +38,7 @@ Frequently asked questions and common issues in MDDash (production deployment).
 
 **My run says "Preparing" and nothing happens.** The pod is being scheduled or waiting for resources (possibly a GPU). There is no queue indicator. It will start when resources free up.
 
-**How do I cancel/stop a simulation job?** On the Run step, use **"Stop run"** (confirm in the "Stop this run?" dialog. Stopping deletes the run, its progress so far, and its logs). There is no pause. **"Re-run"** restarts with the same configuration, and changing parameters means going back to the Tune step.
+**How do I cancel/stop a simulation job?** On the Run step, use **"Stop run"** and confirm in the "Stop this run?" dialog. Stopping keeps the run, its progress so far, and its logs, so you can analyze the partial results or extend the run later. There is no pause. **"Re-run"** restarts with the same configuration, and changing parameters means going back to the Tune step.
 
 **Re-running deleted my previous outputs.** By design. Starting or re-running a run removes previous result files of that simulation (trajectory, structures, logs). Keep copies if you need them.
 
