@@ -1,4 +1,4 @@
-"""AmberEngine — adapts AmberTrialConfig and run_pmemd to the Engine protocol."""
+"""AmberEngine adapts AmberTrialConfig and run_pmemd to the Engine protocol."""
 
 import logging
 from dataclasses import dataclass

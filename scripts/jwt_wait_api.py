@@ -1,15 +1,5 @@
 #!/usr/bin/env python3
-"""
-Verify end-to-end login and dashboard API accessibility.
-
-A standalone manual test script that:
-1. Logs in via EGI JWT authentication,
-2. Waits for the singleuser server to be ready,
-3. Completes the OAuth flow for mddash session,
-4. Calls the dashboard API health endpoint.
-
-Requires a `TOKEN` environment variable containing a valid EGI JWT access token.
-"""
+"""Verify login and dashboard API access with EGI JWT authentication. Needs TOKEN in the environment."""
 
 import json
 import os
@@ -19,7 +9,6 @@ import requests
 
 
 def log_request(method, url, headers=None, params=None):
-    """Log outgoing request details."""
     print(f"\n[REQUEST] {method} {url}")
     if headers:
         safe_headers = {k: ("***" if k.lower() in ("authorization", "cookie") else v) for k, v in headers.items()}
@@ -29,7 +18,6 @@ def log_request(method, url, headers=None, params=None):
 
 
 def log_response(resp, prefix=""):
-    """Log response details."""
     print(f"\n[RESPONSE {prefix}] Status: {resp.status_code}")
     print(f"  Headers: {dict(resp.headers)}")
     try:
@@ -52,8 +40,8 @@ def wait_for_server():
 
     session = requests.Session()
 
-    # Step 1: JWT Login
-    print("--- Step 1: JWT Login ---")
+    # Log in with JWT
+    print("JWT login.")
     log_request("GET", login_url, {"Authorization": "bearer ***"})
     login_resp = session.get(login_url, headers={"Authorization": f"bearer {token}"})
     log_response(login_resp, "LOGIN")
@@ -70,8 +58,8 @@ def wait_for_server():
     print("Login successful.")
     print(f"Cookies set: {list(session.cookies.keys())}")
 
-    # Step 2: Prime the session
-    print("--- Step 2: Priming session ---")
+    # Prime the session
+    print("Priming session.")
 
     log_request("GET", f"{base_url}/hub/home", {"Authorization": "token ***"})
     resp1 = session.get(f"{base_url}/hub/home", headers={"Authorization": f"token {token}"})
@@ -84,13 +72,12 @@ def wait_for_server():
     xsrf_token = session.cookies.get("_xsrf")
     print(f"XSRF token: {xsrf_token[:20]}..." if xsrf_token else "No XSRF token")
 
-    # Step 3: Check server status from /hub/api/user
-    print("--- Step 3: Checking server status ---")
+    # Check server status from /hub/api/user
+    print("Checking server status.")
     user_info = resp2.json()
     servers = user_info.get("servers", {})
 
     default_server = servers.get("", {})
-    server_state = default_server.get("state", default_server.get("ready", "unknown"))
     server_url_path = default_server.get("url", "")
 
     print("Server info from API:")
@@ -98,14 +85,14 @@ def wait_for_server():
     print(f"  stopped: {default_server.get('stopped', 'N/A')}")
     print(f"  url: {server_url_path}")
 
-    # Step 4: Wait for server to be ready
-    print("--- Step 4: Waiting for singleuser server to come up ---")
+    # Wait for server to be ready
+    print("Waiting for singleuser server to come up.")
     max_retries = 60
     retry_interval = 5
     server_ready = False
 
     for i in range(max_retries):
-        print(f"\n--- Poll attempt {i + 1}/{max_retries} ---")
+        print(f"\nPoll attempt {i + 1}/{max_retries}.")
 
         log_request("GET", user_api_url, {"Authorization": "token ***"})
         resp = session.get(user_api_url, headers={"Authorization": f"token {token}"})
@@ -119,7 +106,7 @@ def wait_for_server():
             is_ready = default_server.get("ready", False)
             is_stopped = default_server.get("stopped", True)
 
-            print(f"Server status - ready: {is_ready}, stopped: {is_stopped}")
+            print(f"Server status. Ready: {is_ready}, stopped: {is_stopped}")
 
             if is_ready and not is_stopped:
                 server_ready = True
@@ -135,8 +122,8 @@ def wait_for_server():
     print("Server is ready!")
     print(f"Server URL path: {server_url_path}")
 
-    # Step 5: Establish mddash-auth session via OAuth flow
-    print("--- Step 5: Establishing mddash-auth session ---")
+    # Establish mddash-auth session through OAuth flow
+    print("Establishing mddash-auth session.")
     dash_url = f"{base_url}{server_url_path}dash/"
     print(f"Accessing {dash_url} to complete OAuth flow...")
 
@@ -150,8 +137,8 @@ def wait_for_server():
 
     print(f"mddash-auth cookie obtained: {session.cookies['mddash-auth'][:30]}...")
 
-    # Step 6: Call the dash/api endpoint
-    print("--- Step 6: Calling dash/api endpoint ---")
+    # Call the dash/api endpoint
+    print("Calling dash/api endpoint.")
 
     dash_api_url = f"{base_url}{server_url_path}dash/api/health"
 

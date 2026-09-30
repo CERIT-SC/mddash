@@ -1,4 +1,4 @@
-# Tuner Job Status: Ray-Ground-Truth Trials and Start Watchdog
+# Tuner job status: Ray-ground-truth trials and start watchdog
 
 Date: 2026-08-10
 Component: `tuner/` (tuner-api only; no chart changes; no dashboard/UI changes)
@@ -9,17 +9,17 @@ This spec resulted from a tuner quality review. Findings, and the decisions take
 
 ### How we know a tuning job has finished
 
-The trial universe is the full generated grid (`engine.generate_configs()`), created as PENDING rows up front, ordered by priority. The job thread walks the list (baseline of 3, then batches of 6) and writes `FINISHED` only when the grid is exhausted. This definition stands unchanged: **FINISHED = every trial reached a terminal state**.
+The trial universe is the full generated grid (`engine.generate_configs()`), created as PENDING rows up front, ordered by priority. The job thread walks the list (baseline of 3, then batches of 6) and writes `FINISHED` only when the grid is exhausted. This definition stands unchanged: FINISHED = every trial reached a terminal state.
 
 ### Schedulability of trials
 
 Configs exceeding `MAX_CPU`/`MAX_GPU` are filtered out at generation, and the chart wires both from the same values as the Ray worker template (`ray.worker.numCpu`/`numGpu`: 32 CPU, 1 GPU per worker, autoscaling 0–5 workers). So every generated config fits a single worker pod by construction, and the KubeRay autoscaler provisions workers on demand. There is no per-trial "unrunnable" class: either the cluster provides workers and every trial eventually runs, or it provides none and nothing runs.
 
-Ray does **not** offer a per-task verdict for "cannot be scheduled": the State API reports `PENDING_NODE_ASSIGNMENT` for both "waiting for autoscaling" and "stuck forever". The only user-visible hang is a job stuck in RUNNING for hours with zero progress because `ray.wait` blocks indefinitely.
+Ray does not offer a per-task verdict for "cannot be scheduled": the State API reports `PENDING_NODE_ASSIGNMENT` for both "waiting for autoscaling" and "stuck forever". The only user-visible hang is a job stuck in RUNNING for hours with zero progress because `ray.wait` blocks indefinitely.
 
 ### Trial status today is a guess
 
-`_submit_trials` writes `RUNNING` the moment a task is *submitted* to Ray, so a trial shows RUNNING while it is actually queued (`PENDING_NODE_ASSIGNMENT`). This spec derives trial and job status from Ray task ground truth instead — the states "as Ray intended": `PENDING_*` → PENDING, `RUNNING*` → RUNNING, terminal states owned by the job thread.
+`_submit_trials` writes `RUNNING` the moment a task is *submitted* to Ray, so a trial shows RUNNING while it is actually queued (`PENDING_NODE_ASSIGNMENT`). This spec derives trial and job status from Ray task ground truth instead, the states "as Ray intended": `PENDING_*` → PENDING, `RUNNING*` → RUNNING, terminal states owned by the job thread.
 
 ## Goals
 
@@ -27,11 +27,11 @@ Ray does **not** offer a per-task verdict for "cannot be scheduled": the State A
 - Derive the job status from effective trial statuses: PENDING until the first trial executes, RUNNING monotonically after, FINISHED at grid exhaustion, terminal DB states (ERROR stalls/cancels) always win.
 - Bound the two non-terminating paths: cold-start / starvation (nothing ever begins) and mid-run starvation (trials stop beginning) with one watchdog rule.
 
-## Non-Goals
+## Non-goals
 
 - No new statuses: no QUEUED enum anywhere (tuner, dashboard, UI untouched).
-- No changes to grid generation, ordering, batch sizes, or early-stop thresholds. Batches (baseline 3, then 6) are load-bearing for the pruner — trials receive `best_steps_per_sec` at submission time — and must not be flattened into a submit-all or streaming-refill loop.
-- No per-trial wedge timer: a wedged RUNNING process that is a batch's last remaining trial is a known, accepted gap (it shows as RUNNING forever). Documented here only.
+- No changes to grid generation, ordering, batch sizes, or early-stop thresholds. Batches (baseline 3, then 6) are load-bearing for the pruner, trials receive `best_steps_per_sec` at submission time, and must not be flattened into a submit-all or streaming-refill loop.
+- No per-trial stuck timer: a stuck RUNNING process that is a batch's last remaining trial is a known, accepted gap (it shows as RUNNING forever). Documented here only.
 - No per-user authorization, no restart-safe active jobs (documented invariants in `tuner/AGENTS.md` remain).
 
 ## Design
@@ -40,8 +40,8 @@ All changes live in `tuner/api/rayworker/tuner.py`, `tuner/api/config.py`, and t
 
 ### 1. State plumbing
 
-- `JobState.futures` becomes a `future → trial_id` mapping so any code path can map an active Ray task back to its DB trial. `add_futures`/`get_futures`/`remove_future` signatures adjust accordingly. `cancel_job` iterates the map keys — behavior unchanged.
-- `_task_states(job_id) -> dict[int, str]`: for each active future, query the Ray State API (`ray.util.state.get_task(str(future.task_id()), address=...)`) and return `trial_id → task state string`. Bound per call by the active batch size (≤ 6). The dashboard address derives from `RAY_ADDRESS` (head service, dashboard port 8265); reachability from the API pod is already permitted by `tuner-ray` NetworkPolicy (any `tuner`-labeled pod → ray pods, all ports). Query failures or unknown tasks yield *absent* entries — never an exception to the caller.
+- `JobState.futures` becomes a `future → trial_id` mapping so any code path can map an active Ray task back to its DB trial. `add_futures`/`get_futures`/`remove_future` signatures adjust accordingly. `cancel_job` iterates the map keys, behavior unchanged.
+- `_task_states(job_id) -> dict[int, str]`: for each active future, query the Ray State API (`ray.util.state.get_task(str(future.task_id()), address=...)`) and return `trial_id → task state string`. Bound per call by the active batch size (≤ 6). The dashboard address derives from `RAY_ADDRESS` (head service, dashboard port 8265); reachability from the API pod is already permitted by `tuner-ray` NetworkPolicy (any `tuner`-labeled pod → ray pods, all ports). Query failures or unknown tasks yield *absent* entries, never an exception to the caller.
 - `trial_status_overrides(job_id) -> dict[int, JobStatus]`: built from `_task_states`; a submitted trial whose Ray state starts with `RUNNING` maps to `JobStatus.RUNNING`. This is the only non-terminal override.
 
 ### 2. Submission keeps trials PENDING
@@ -52,7 +52,7 @@ All changes live in `tuner/api/rayworker/tuner.py`, `tuner/api/config.py`, and t
 
 Before building the trial list in the response, fetch `trial_status_overrides(job_id)` and apply: for a trial whose DB status is PENDING, use the override when present (RUNNING); otherwise keep the DB status. Trials with non-PENDING DB status are never overridden. No DB writes on the read path.
 
-Effective **job** status in the same response — derived, not stored:
+Effective job status in the same response, derived, not stored:
 
 - DB status terminal (FINISHED/ERROR) → report as-is.
 - Else, if any effective trial is RUNNING or already terminal → report RUNNING.
@@ -84,17 +84,17 @@ On the unschedulable path:
 1. Log job_id and the remaining trial IDs.
 2. `ray.cancel(future, force=False)` for each remaining future (same teardown as `cancel_job`).
 3. `update_trial_result(trial_id, JobStatus.ERROR, None)` for each remaining trial in the current batch.
-4. Raise `RuntimeError("No trial began or completed within 7200s; cluster busy or unavailable — retry later")`; the existing outer `except` writes job `ERROR` with that message. Trials of never-submitted later batches stay PENDING, which reads honestly.
+4. Raise `RuntimeError("No trial began or completed within 7200s; cluster busy or unavailable, retry later")`; the existing outer `except` writes job `ERROR` with that message. Trials of never-submitted later batches stay PENDING, which reads honestly.
 
-Why this rule is equivalent to "no progress for 2h": a task that *began* either completes (the wait returns it — including failures, which surface as `RayError` on `get`) or is still executing (visible as RUNNING in the state query). The state check at expiry therefore detects "started" without per-tick polling or transition bookkeeping.
+Why this rule is equivalent to "no progress for 2h": a task that *began* either completes (the wait returns it, including failures, which appear as `RayError` on `get`) or is still executing (visible as RUNNING in the state query). The state check at expiry therefore detects "started" without per-tick polling or transition bookkeeping.
 
 Scenarios:
 
 - Cold start, dead worker pool: everything pending, nothing running → fires at 2h. Realistic provisioning (autoscaler scale-up + large worker image pull) is tens of minutes, so no false fire.
-- Inter-job contention: another user's grid camping the workers looks identical and triggers the same ERROR — intentional; the message says busy-or-unavailable and the user can retry.
+- Inter-job contention: another user's grid camping the workers looks identical and triggers the same ERROR, intentional; the message says busy-or-unavailable and the user can retry.
 - Slow-but-progressing jobs: any RUNNING trial (or any completion) resets/extends, so they are never killed.
 
-Known accepted gap: a wedged RUNNING process (never advances steps) that becomes a batch's last remaining trial shows RUNNING forever and is not killed by this watchdog.
+Known accepted gap: a stuck RUNNING process (never advances steps) that becomes a batch's last remaining trial shows RUNNING forever and is not killed by this watchdog.
 
 ### 5. Testing
 

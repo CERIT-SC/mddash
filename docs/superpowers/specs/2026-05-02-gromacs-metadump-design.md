@@ -1,4 +1,4 @@
-# GROMACS MetaDump Integration
+# GROMACS MetaDump integration
 
 Date: 2026-05-02
 
@@ -16,7 +16,7 @@ Integrate GROMACS MetaDump API into the experiment publishing flow. Before publi
 
 ## Design
 
-### 1. MetaDump Client (`clients/metadump.py`)
+### 1. MetaDump client (`clients/metadump.py`)
 
 ```python
 extract_metadata_bulk(tpr_paths: list[Path]) -> list[dict]
@@ -38,7 +38,7 @@ extract_metadata(tpr_path: Path) -> dict
 
 On any failure (upload HTTP error, timeout, API error, missing UUID) -> raise InternalServerError with message that propagates to user.
 
-### 2. Experiment Model (`models/experiment.py`)
+### 2. Experiment model (`models/experiment.py`)
 
 In `publish()` method, before creating MDRepo record:
 
@@ -62,7 +62,7 @@ Env var pipeline:
 - `helm/charts/mddash/values.yaml.tmpl`: add `METADUMP_API_URL: value: "{{ $cfg.metadump.url }}"`
 - `helm/charts/mddash/files/pre_spawn_hook.py`: add `"METADUMP_API_URL"` to env_keep list
 
-### 4. Demo / Test Mocks
+### 4. Demo / test mocks
 
 In `_demo/mocks/http.py`, add responses mocks for MetaDump endpoints:
 - `POST /api/annotate` -> `{"uuid": "<uuid>", "pin": "123456", "status_url": "...", "results_url": "..."}`
@@ -77,14 +77,14 @@ Add `dashboard/api/tests/unit/test_metadump.py` testing:
 - HTTP error handling
 - Missing env var handling
 
-## Error Handling
+## Error handling
 
 - MetaDump API down -> `InternalServerError`, publish fails before MDRepo record created
 - Timeout -> `InternalServerError` with clear message
 - No GROMACS jobs -> publish proceeds with empty `simulations` list
 - Missing `METADUMP_API_URL` env var -> publish proceeds without MetaDump metadata (same as today)
 
-## Files Changed
+## Files changed
 
 | File | Change |
 |------|--------|
@@ -100,7 +100,7 @@ Add `dashboard/api/tests/unit/test_metadump.py` testing:
 | `dashboard/api/_demo/mocks/http.py` | Add MetaDump mock endpoints |
 | `dashboard/api/tests/unit/test_metadump.py` | New unit tests |
 
-## No-Gos
+## No-gos
 
 - No CLI/embedded gmx binary approach (only HTTP API)
 - No AMBER metadata extraction (MetaDump is GROMACS-specific)

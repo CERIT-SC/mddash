@@ -1,4 +1,4 @@
-"""RFC 9457 problem-details error handling (no DB, no marshmallow). Body: `{type, title, detail[, solution]}`."""
+"""RFC 9457 problem-details error handling without DB or marshmallow. Body holds type, title, detail, and optional solution."""
 
 import logging
 from http import HTTPStatus
@@ -10,27 +10,23 @@ logger = logging.getLogger(__name__)
 
 
 class ApiError(HTTPException):
-    """
-    HTTPException with a value-add type token and optional user-facing solution.
+    """HTTPException with a type token and optional solution."""
 
-    Raise at known-error sites; the global handler renders it as RFC 9457 JSON.
-    Plain werkzeug exceptions (Conflict/NotFound/...) also work — the handler
-    upgrades them to an ApiError with a token derived from the HTTP phrase.
-    """
+    problem_type: str
 
     problem_type: str
     problem_solution: str | None
     code: int  # type: ignore[assignment]  # narrows the base HTTPException.code (int | None)
 
     def __init__(self, code: int, description: str, type_: str, solution: str | None = None) -> None:
-        """Construct a known error: HTTP `code`, `description` (cause), `type_` token, optional `solution`."""
+        """Construct a known error from HTTP code, description, type token, and optional solution."""
         super().__init__(description=description)
         self.code = code
         self.problem_type = type_
         self.problem_solution = solution
 
     def to_response(self) -> Response:
-        """Render this error as an RFC 9457 problem-details JSON response."""
+        """Render as RFC 9457 JSON."""
         body: dict[str, str] = {
             "type": self.problem_type,
             "title": HTTPStatus(self.code).phrase,
@@ -45,7 +41,6 @@ class ApiError(HTTPException):
 
 
 def register_error_handlers(app: Flask) -> None:
-    """Register global error handlers returning RFC 9457 problem details."""
 
     @app.errorhandler(HTTPException)
     def _http(exc: HTTPException) -> Response:

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MDDash interactive installer: deploys from config*.yaml to a Kubernetes cluster.
+# MDDash interactive installer. Deploys from config*.yaml to a Kubernetes cluster.
 #
 # Assumes images and Helm charts already exist in the configured registry
 # (normally cerit.io/mddash, populated by CI); with a custom registry, push them yourself.
@@ -19,7 +19,7 @@ esac
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$REPO_ROOT"
 
-# ---------------------------------- helpers -----------------------------------
+# Helpers.
 
 bold()   { printf '\033[1m%s\033[0m'  "$*"; }
 dim()    { printf '\033[2m%s\033[0m'  "$*"; }
@@ -33,7 +33,7 @@ ok()   { printf '  %s %s\n' "$(green "✓")" "$*"; }
 warn() { printf '  %s %s\n' "$(yellow "!")" "$*"; }
 die()  { printf '%s %s\n' "$(red "error:")" "$*" >&2; exit 1; }
 
-# prompt VAR "question" [default]
+# Prompt for a value with an optional default.
 prompt() {
   local var="$1" question="$2" default="${3:-}" reply
   printf '  %s%s: ' "$(cyan "$question")" "${default:+ $(dim "[$default]")}"
@@ -41,7 +41,7 @@ prompt() {
   printf -v "$var" '%s' "${reply:-$default}"
 }
 
-# prompt_secret VAR "question": masked input, re-prompts until non-empty
+# Prompt for a secret with masked input. Re-prompt until the input is not empty.
 prompt_secret() {
   local var="$1" question="$2" reply=""
   while [[ -z "$reply" ]]; do
@@ -52,7 +52,7 @@ prompt_secret() {
   printf -v "$var" '%s' "$reply"
 }
 
-# confirm "question" [Y|N default] -> 0=yes 1=no
+# Ask a yes or no question. Return success for yes and failure for no.
 confirm() {
   local question="$1" default="${2:-Y}" hint reply
   [[ "$default" == Y ]] && hint="Y/n" || hint="y/N"
@@ -61,7 +61,7 @@ confirm() {
   [[ "${reply:-$default}" =~ ^[Yy]$ ]]
 }
 
-# choose VAR "question" default_index option...
+# Let the user choose one option by number.
 choose() {
   local var="$1" question="$2" default="$3" reply idx=1 opt
   shift 3
@@ -83,7 +83,7 @@ choose() {
   printf -v "$var" '%s' "${!reply}"
 }
 
-# run CMD [DISPLAY]: single binding point for mutating commands; DISPLAY masks CMD in output (secrets).
+# Run a mutating command. DISPLAY masks CMD in output when it holds secrets.
 run() {
   local cmd="$1" display="${2:-$1}"
   if [[ $DRY_RUN -eq 1 ]]; then
@@ -94,8 +94,8 @@ run() {
   fi
 }
 
-# rancher_wait DESCRIPTION TEST_COMMAND: poll (60s) until Rancher reflects a change.
-# No-op in dry-run; on timeout, warns with manual-fallback instructions and continues.
+# Poll for up to 60s until Rancher reflects a change. Do nothing in dry-run.
+# On timeout, warn with manual fallback instructions and continue.
 rancher_wait() {
   local desc="$1" test_cmd="$2" waited=0
   if [[ $DRY_RUN -eq 1 ]]; then
@@ -113,7 +113,7 @@ rancher_wait() {
   done
 }
 
-# -------------------------------- environment ---------------------------------
+# Environment.
 
 missing=""
 for tool in git kubectl helm yq gomplate make openssl python3 curl; do
@@ -143,13 +143,13 @@ if [[ "$REGISTRY" != "cerit.io/mddash" ]]; then
   warn "custom registry $REGISTRY: images and Helm charts must already exist there; this script only deploys"
 fi
 
-# ---------------------------------- cluster -----------------------------------
+# Cluster.
 
 mapfile -t contexts < <(kubectl config get-contexts -o name 2>/dev/null || true)
 [[ ${#contexts[@]} -gt 0 ]] || die "no kubectl contexts configured"
 current_ctx="$(kubectl config current-context 2>/dev/null || true)"
 if (( ${#contexts[@]} > 2 )) || [[ -z "$current_ctx" && ${#contexts[@]} -gt 1 ]]; then
-  # multiple plausible targets (or no current context to default to): make the choice explicit
+  # Multiple plausible targets, or no current context to default to. Make the choice explicit.
   default_ctx=1
   for i in "${!contexts[@]}"; do [[ "${contexts[$i]}" == "$current_ctx" ]] && default_ctx=$((i + 1)); done
   choose KUBE_CONTEXT "Available kubeconfig contexts:" "$default_ctx" "${contexts[@]}"
@@ -157,7 +157,7 @@ else
   KUBE_CONTEXT="${current_ctx:-${contexts[0]}}"
 fi
 info "kubectl context: $(bold "$KUBE_CONTEXT")"
-# fork the kubeconfig so every kubectl/helm call uses the chosen context without mutating the operator's config
+# Fork the kubeconfig so every kubectl and helm call uses the chosen context without mutating the operator config.
 TMP_WORK="$(mktemp -d)"
 trap 'rm -rf "$TMP_WORK"' EXIT
 kubectl config view --flatten > "$TMP_WORK/kubeconfig" 2>/dev/null || true
@@ -166,16 +166,16 @@ export KUBECONFIG="$TMP_WORK/kubeconfig"
 kubectl config use-context "$KUBE_CONTEXT" >/dev/null
 kubectl get --raw=/readyz >/dev/null 2>&1 || die "cluster not reachable via context $KUBE_CONTEXT"
 
-# --------------------------------- image tag ----------------------------------
+# Image tag.
 
 if [[ "$ENV" == "dev" ]]; then
   IMAGE_TAG=dev
 elif [[ "$REGISTRY" != "cerit.io/mddash" ]]; then
-  # custom registry: artifacts are the operator's own, so the tag cannot be inferred from upstream releases
+  # Custom registry. Artifacts are the operator own, so the tag cannot come from upstream releases.
   prompt IMAGE_TAG "Image tag to deploy (SemVer x.y.z)"
   [[ "$IMAGE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "tag must be strict SemVer x.y.z"
 else
-  # remote tags define which artifacts exist; warn only when the local helm/ sources differ from the tag
+  # Remote tags define which artifacts exist. Warn only when local helm sources differ from the tag.
   LATEST_TAG="$(git ls-remote --tags --refs origin 'v*' 2>/dev/null | awk -F/ '{print $NF}' | sort -V | tail -1 || true)"
   [[ "$LATEST_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
     || die "could not resolve the latest release tag from origin (check network/access to: $(git remote get-url origin 2>/dev/null || echo origin))"
@@ -189,7 +189,7 @@ else
 fi
 info "image tag: $(bold "$IMAGE_TAG")"
 
-# ----------------------------- namespace & quota ------------------------------
+# Namespace and quota.
 
 if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
   run "kubectl create namespace '$NAMESPACE'"
@@ -230,12 +230,12 @@ else
   printf '%s\n' "$PATCH" | sed 's/^/    /'
   PATCH_JSON="$(yq -o=json -I=0 <<<"$PATCH")"
   run "kubectl patch namespace '$NAMESPACE' --type merge -p '$PATCH_JSON'"
-  # the ResourceQuota object appearing proves Rancher enrolled the namespace and synced the quota
+  # The ResourceQuota object appearing proves Rancher enrolled the namespace and synced the quota.
   rancher_wait "ResourceQuota object in $NAMESPACE" \
     "kubectl get resourcequota -n '$NAMESPACE' --no-headers 2>/dev/null | grep -q ."
 fi
 
-# -------------------------------- cluster RBAC --------------------------------
+# Cluster RBAC.
 
 RBAC_DIR="$TMP_WORK/rbac"
 mkdir -p "$RBAC_DIR"
@@ -251,7 +251,7 @@ if ! kubectl auth can-i create clusterroles >/dev/null 2>&1 \
   if ! confirm "Cluster-admin rights are needed to apply helm/rbac/. Do you have them?" N; then
     warn "ask your cluster admin to apply the following (rendered for namespace $NAMESPACE, no repo clone needed):"
     echo
-    # heredoc body and EOF stay at column 0: indented '---' is not a valid YAML document separator
+    # Heredoc body and EOF stay at column 0. Indented '---' is not a valid YAML document separator.
     printf '    %s\n' "$(bold "kubectl apply -f - <<'EOF'")"
     cat "$RBAC_DIR"/*.yaml
     printf 'EOF\n'
@@ -266,9 +266,9 @@ if [[ "$apply_rbac" == true ]]; then
   done
 fi
 
-# ---------------------------------- secrets -----------------------------------
+# Secrets.
 
-# create_secret NAME key:label ...: prompts for values (real mode) only when the secret is missing
+# Create a secret. Prompt for values only when the secret is missing and not in dry-run.
 create_secret() {
   local name="$1" args="" masked="" key label value pair
   shift
@@ -289,7 +289,7 @@ create_secret() {
 
 create_secret oidc-credentials "client_id:OIDC client ID" "client_secret:OIDC client secret"
 if [[ "$S3_SEAWEEDFS" == "true" ]]; then
-  # bundled store: generate the shared identity instead of prompting for it
+  # Bundled store. Generate the shared identity instead of prompting for it.
   if kubectl get secret "${PACKAGE}-s3-creds" -n "$NAMESPACE" >/dev/null 2>&1; then
     ok "secret ${PACKAGE}-s3-creds exists, keeping"
   else
@@ -308,9 +308,9 @@ else
   run "kubectl create secret generic tuner-auth --from-literal=user=tuner --from-literal=password=\"\$(openssl rand -base64 32)\" -n '$NAMESPACE'"
 fi
 
-# ----------------------------------- deploy -----------------------------------
+# Deploy.
 
-# helm upgrade --install covers both first install and updates
+# helm upgrade --install covers both first install and updates.
 run "make -C helm update ENV=$ENV"
 run "make -C helm deploy ENV=$ENV IMAGE_TAG=$IMAGE_TAG"
 run "make status ENV=$ENV"

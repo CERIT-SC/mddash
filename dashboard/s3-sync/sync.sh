@@ -7,25 +7,24 @@ WORKDIR="/mddash/.rclone-bisync"
 FILTERS_FILE="$WORKDIR/filters.txt"
 SRC_FILTERS="/rclone-filters.txt"
 
-# No --create-empty-src-dirs: S3 can't hold empty dirs, so the flag makes bisync delete them from the PVC next cycle.
-# --force: bypass --max-delete; user-initiated deletes (incl. rm -rf) propagate as on a normal filesystem.
+# Do not add --create-empty-src-dirs. S3 cannot hold empty dirs, so the flag makes bisync delete them from the PVC on the next cycle.
+# --force bypasses --max-delete. User-initiated deletes, including rm -rf, propagate as on a normal filesystem.
 COMMON_FLAGS="--workdir $WORKDIR \
   --force --ignore-errors --fast-list --local-no-check-updated \
   --filter-from $FILTERS_FILE"
 
 RUN_FLAGS="--recover --resilient --max-lock 2m --conflict-resolve newer --retries 3 --retries-sleep 2s"
 
-# --max-lock is required on resync: a lock's expiry is set by the creating
-# process, so an interrupted resync without --max-lock leaves a never-expiring
-# .lck that blocks all future runs (the normal loop's --max-lock can't break a
-# lock it did not create).
+# --max-lock is required on resync. A lock expiry is set by the process that creates it.
+# An interrupted resync without --max-lock leaves a never-expiring .lck that blocks all future runs.
+# The normal loop --max-lock cannot break a lock it did not create.
 RESYNC_FLAGS="--resync --resync-mode newer $COMMON_FLAGS --max-lock 2m --resilient --log-level INFO"
 
 setup_rclone() {
     [ -n "$S3_BUCKET" ] || { log "No S3_BUCKET configured, local-only mode"; exit 0; }
 
-    # /_archives/** is bisync-excluded and the worker mirrors server-side, so a
-    # local copy is never legitimate; delete it (dirs arrive owner-read-only).
+    # /_archives/** is bisync-excluded and the worker mirrors server-side, so a local copy is never legitimate.
+    # Delete it. Downloaded dirs arrive owner-read-only.
     if [ -d /mddash/_archives ]; then
         log "Removing stray _archives tree from the PVC (bisync-excluded prefix)"
         chmod -R u+w /mddash/_archives 2>/dev/null || true
@@ -46,8 +45,8 @@ EOF
     log "Creating bucket if it doesn't exist..."
     rclone mkdir s3remote:${S3_BUCKET} 2>&1 || log "Bucket creation failed or already exists"
 
-    # Non-excluded marker: keeps both paths non-empty so bisync's empty-path
-    # safety check doesn't abort every cycle on a fresh PVC.
+    # Non-excluded marker. It keeps both paths non-empty so the bisync empty-path
+    # safety check does not abort every cycle on a fresh PVC.
     if [ ! -f "/mddash/.s3-init" ]; then
         log "Creating S3 sync marker file"
         echo "S3 sync marker - do not delete" > /mddash/.s3-init
@@ -55,11 +54,11 @@ EOF
     rclone copyto /mddash/.s3-init s3remote:${S3_BUCKET}/.s3-init --log-level ERROR \
         || log "Marker copy to S3 failed, continuing"
 
-    # Stage filters into the workdir: bisync writes its filter-hash .md5 next to them.
+    # Stage filters into the workdir. Bisync writes its filter-hash .md5 next to them.
     mkdir -p "$WORKDIR"
     if [ -f "$FILTERS_FILE" ] && ! cmp -s "$SRC_FILTERS" "$FILTERS_FILE" && ! is_first_run; then
-        # Changed filters fail every normal cycle until a --resync; run the
-        # sanctioned recovery now, not after the loop's failure backoff.
+        # Changed filters fail every normal cycle until a --resync. Run the recovery now,
+        # not after the loop failure backoff.
         log "Filters changed since last boot: applying recovery --resync for the new filters..."
         cp "$SRC_FILTERS" "$FILTERS_FILE"
         rclone bisync /mddash s3remote:${S3_BUCKET} $RESYNC_FLAGS \
@@ -75,18 +74,18 @@ is_first_run() {
 
 initial_sync() {
     if is_first_run; then
-        log "First run (no state in $WORKDIR): initial --resync (--resync-mode newer)..."
+        log "First run with no state in $WORKDIR. Running initial --resync with --resync-mode newer."
         rclone bisync /mddash s3remote:${S3_BUCKET} $RESYNC_FLAGS \
             || log "Initial resync had issues, will retry in loop"
     else
-        log "Prior state found in $WORKDIR, skipping resync"
+        log "Prior state found in $WORKDIR. Skipping resync."
     fi
 }
 
 run_sync_loop() {
     [ -n "$S3_BUCKET" ] || { log "No S3_BUCKET configured, sleeping indefinitely"; sleep infinity; }
 
-    log "Starting sync loop..."
+    log "Starting sync loop."
     initial_sync
 
     FAIL_COUNT=0
@@ -94,9 +93,9 @@ run_sync_loop() {
 
     while true; do
         if is_first_run; then
-            # Retry as --resync (not stateless bisync) when no .lst state exists,
-            # e.g. if initial_sync's resync failed without writing state.
-            log "No bisync state yet, retrying --resync..."
+            # Retry as --resync, not stateless bisync, when no .lst state exists.
+            # For example, the initial resync may have failed without writing state.
+            log "No bisync state yet. Retrying --resync."
             if rclone bisync /mddash s3remote:${S3_BUCKET} $RESYNC_FLAGS 2>&1; then
                 FAIL_COUNT=0
             else
@@ -112,23 +111,23 @@ run_sync_loop() {
         else
             EXIT_CODE=$?
             FAIL_COUNT=$((FAIL_COUNT + 1))
-            # .lst-err is a critical lockout: only --resync recovers it.
+            # .lst-err is a critical lockout. Only --resync recovers it.
             if ls "$WORKDIR"/*.lst-err >/dev/null 2>&1; then
-                log "Critical lockout (.lst-err): running recovery --resync..."
+                log "Critical lockout with .lst-err. Running recovery --resync."
                 if rclone bisync /mddash s3remote:${S3_BUCKET} $RESYNC_FLAGS 2>&1; then
                     log "Recovery resync successful"; FAIL_COUNT=0
                 else
                     log "Recovery resync failed, backing off 60s"; sleep 60; continue
                 fi
             elif [ "$FAIL_COUNT" -ge "$MAX_FAILS" ]; then
-                log "Persistent failure ($FAIL_COUNT): fallback --resync..."
+                log "Persistent failure ($FAIL_COUNT). Running fallback --resync."
                 if rclone bisync /mddash s3remote:${S3_BUCKET} $RESYNC_FLAGS 2>&1; then
                     log "Fallback resync successful"; FAIL_COUNT=0
                 else
                     log "Fallback resync failed, backing off 60s"; sleep 60; continue
                 fi
             else
-                # Do NOT resync here: it only copies and would re-create deleted files/dirs.
+                # Do not resync here. It only copies and would re-create deleted files and dirs.
                 log "Transient failure ($FAIL_COUNT/$MAX_FAILS, exit $EXIT_CODE), backing off"
                 sleep $((FAIL_COUNT * 10))
                 continue
@@ -140,9 +139,9 @@ run_sync_loop() {
 
 final_sync() {
     [ -n "$S3_BUCKET" ] || return 0
-    # Non-destructive: never use `rclone sync --delete-during` here, it would
-    # delete remote files if the PVC were only partially populated.
-    log "Performing final bisync to S3..."
+    # Non-destructive. Never use `rclone sync --delete-during` here.
+    # It would delete remote files if the PVC were only partly populated.
+    log "Performing final bisync to S3."
     rclone bisync /mddash s3remote:${S3_BUCKET} \
         $RUN_FLAGS $COMMON_FLAGS --log-level INFO 2>&1 || log "Final sync had issues"
     log "Final sync complete"

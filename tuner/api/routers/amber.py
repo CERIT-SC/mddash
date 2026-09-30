@@ -1,4 +1,4 @@
-"""AMBER tuning job endpoints — /api/tuning-jobs/amber."""
+"""AMBER tuning job endpoints at /api/tuning-jobs/amber."""
 
 import logging
 import uuid

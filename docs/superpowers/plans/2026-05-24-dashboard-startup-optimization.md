@@ -1,16 +1,15 @@
-# Dashboard Startup Optimization Implementation Plan
+# Dashboard startup optimization implementation plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> For agentic workers, REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Reduce dashboard API/auth first-health latency and suppress noisy successful health probe logs without weakening startup safety or observability.
+Reduce dashboard API/auth first-health latency and suppress noisy successful health probe logs without weakening startup safety or observability.
 
-**Architecture:** Keep the existing sidecar architecture. Add targeted startup timing, remove duplicate API app construction, skip Alembic upgrades only when the DB is already at head, lazy-load Kubernetes clients, delay storage scanning, make proxy waits use real health endpoints, and filter successful `mdrun-api` health access logs at the server layer.
+Keep the existing sidecar architecture. Add targeted startup timing, remove duplicate API app construction, skip Alembic upgrades only when the DB is already at head, lazy-load Kubernetes clients, delay storage scanning, make proxy waits use real health endpoints, and filter successful `mdrun-api` health access logs at the server layer.
 
-**Tech Stack:** Python 3.12, Flask, Flask-SQLAlchemy, Flask-Migrate/Alembic, Gunicorn, uWSGI, Kubernetes Python client, Kubernetes sidecar specs in JupyterHub `pre_spawn_hook.py`, pytest, Helm/gomplate-rendered values.
-
+Tech stack is Python 3.12, Flask, Flask-SQLAlchemy, Flask-Migrate/Alembic, Gunicorn, uWSGI, Kubernetes Python client, Kubernetes sidecar specs in JupyterHub `pre_spawn_hook.py`, pytest, Helm/gomplate-rendered values.
 ---
 
-## File Structure
+## File structure
 
 | File | Responsibility |
 |---|---|
@@ -31,13 +30,13 @@
 | `helm/charts/mddash/AGENTS.md` | Document proxy sidecar health wait behavior. |
 | `mdrun-api/AGENTS.md` | Document successful health access-log suppression policy. |
 
-## Task 1: Dashboard API Startup Timing, Migration Gate, And Single App Factory
+## Task 1: Dashboard API startup timing, migration gate, and single app factory
 
-**Files:**
+Files:
 - Modify: `dashboard/api/app.py`
 - Create: `dashboard/api/tests/unit/test_app_startup.py`
 
-- [ ] **Step 1: Write failing startup and migration tests**
+- [ ] Step 1: Write failing startup and migration tests
 
 Create `dashboard/api/tests/unit/test_app_startup.py` with:
 
@@ -152,7 +151,7 @@ def test_run_migrations_stamps_unversioned_database_with_tables(app: Flask, mock
     upgrade.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR))
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [ ] Step 2: Run tests to verify they fail
 
 Run:
 
@@ -162,7 +161,7 @@ uv run --package dashboard-api pytest dashboard/api/tests/unit/test_app_startup.
 
 Expected: FAIL because `app.py` still exposes module-level `app`, has no `_run_migrations()`, and always calls `upgrade()`.
 
-- [ ] **Step 3: Refactor `dashboard/api/app.py` startup**
+- [ ] Step 3: Refactor `dashboard/api/app.py` startup
 
 Replace the contents of `dashboard/api/app.py` with this structure, preserving existing imports/routes and adding only focused startup helpers:
 
@@ -299,7 +298,7 @@ if __name__ == "__main__":
     create_app().run(debug=True, host="0.0.0.0", port=5000)
 ```
 
-- [ ] **Step 4: Run focused API startup tests**
+- [ ] Step 4: Run focused API startup tests
 
 Run:
 
@@ -309,7 +308,7 @@ uv run --package dashboard-api pytest dashboard/api/tests/unit/test_app_startup.
 
 Expected: PASS.
 
-- [ ] **Step 5: Run API health integration test**
+- [ ] Step 5: Run API health integration test
 
 Run:
 
@@ -319,7 +318,7 @@ uv run --package dashboard-api pytest dashboard/api/tests/integration/test_healt
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 1**
+- [ ] Step 6: Commit Task 1
 
 Run:
 
@@ -329,14 +328,14 @@ git commit -m "perf(dashboard-api): Trim startup migration path" \
   -m "Avoid duplicate app construction and skip Alembic upgrade when the dashboard DB is already at head. Add startup timing logs around the critical first-health path."
 ```
 
-## Task 2: Lazy-Load Dashboard API Kubernetes Clients
+## Task 2: Lazy-load Dashboard API Kubernetes clients
 
-**Files:**
+Files:
 - Modify: `dashboard/api/clients/k8s.py`
 - Modify: `dashboard/api/routes/misc.py`
 - Create: `dashboard/api/tests/unit/test_k8s_client.py`
 
-- [ ] **Step 1: Write failing lazy-load tests**
+- [ ] Step 1: Write failing lazy-load tests
 
 Create `dashboard/api/tests/unit/test_k8s_client.py` with:
 
@@ -401,7 +400,7 @@ def test_get_batch_v1_loads_config_once(mocker) -> None:
     batch_api.assert_called_once_with()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [ ] Step 2: Run tests to verify they fail
 
 Run:
 
@@ -411,7 +410,7 @@ uv run --package dashboard-api pytest dashboard/api/tests/unit/test_k8s_client.p
 
 Expected: FAIL because `clients.k8s` loads config at import time and has no lazy helpers.
 
-- [ ] **Step 3: Add lazy client helpers**
+- [ ] Step 3: Add lazy client helpers
 
 In `dashboard/api/clients/k8s.py`, replace lines 41-43 with:
 
@@ -459,7 +458,7 @@ def reset_k8s_clients_for_tests() -> None:
     _k8s_config_loaded = False
 ```
 
-- [ ] **Step 4: Replace global client usage with local lazy clients**
+- [ ] Step 4: Replace global client usage with local lazy clients
 
 In `dashboard/api/clients/k8s.py`, replace every method body reference to the old globals with local client variables. Use this exact pattern:
 
@@ -475,7 +474,7 @@ batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job_manifest)
 
 Apply the same replacement for every current `core_v1.*` and `batch_v1.*` call site in `clients/k8s.py`.
 
-- [ ] **Step 5: Avoid importing Kubernetes on health-only path**
+- [ ] Step 5: Avoid importing Kubernetes on health-only path
 
 Modify `dashboard/api/routes/misc.py` so the module does not import `clients.k8s` at import time. Change:
 
@@ -507,7 +506,7 @@ def get_metrics() -> Response:
     return jsonify({"requests": requests, "limits": limits})
 ```
 
-- [ ] **Step 6: Run lazy client and health tests**
+- [ ] Step 6: Run lazy client and health tests
 
 Run:
 
@@ -517,7 +516,7 @@ uv run --package dashboard-api pytest dashboard/api/tests/unit/test_k8s_client.p
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit Task 2**
+- [ ] Step 7: Commit Task 2
 
 Run:
 
@@ -527,13 +526,13 @@ git commit -m "perf(dashboard-api): Lazy-load Kubernetes clients" \
   -m "Keep dashboard health import independent of in-cluster Kubernetes setup. Initialize cached Kubernetes clients only when endpoints need them."
 ```
 
-## Task 3: Delay Dashboard Storage-Size Monitor Startup
+## Task 3: Delay Dashboard storage-size monitor startup
 
-**Files:**
+Files:
 - Modify: `dashboard/api/utils.py`
 - Modify: `dashboard/api/tests/unit/test_utils.py`
 
-- [ ] **Step 1: Write failing delayed monitor tests**
+- [ ] Step 1: Write failing delayed monitor tests
 
 Append this test class to `dashboard/api/tests/unit/test_utils.py`:
 
@@ -570,7 +569,7 @@ class TestDuMonitor:
         run.assert_not_called()
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [ ] Step 2: Run tests to verify they fail
 
 Run:
 
@@ -580,7 +579,7 @@ uv run --package dashboard-api pytest dashboard/api/tests/unit/test_utils.py::Te
 
 Expected: FAIL because `_du_loop()` and `start_du_monitor()` do not accept `initial_delay`.
 
-- [ ] **Step 3: Add initial delay support**
+- [ ] Step 3: Add initial delay support
 
 In `dashboard/api/utils.py`, change `_du_loop()` and `start_du_monitor()` to:
 
@@ -624,7 +623,7 @@ def start_du_monitor(data_dir: Path, initial_delay: float = 0.0) -> None:
     logger.info("du monitor started (interval: %ds, initial delay: %.1fs)", DU_INTERVAL, initial_delay)
 ```
 
-- [ ] **Step 4: Run delayed monitor tests**
+- [ ] Step 4: Run delayed monitor tests
 
 Run:
 
@@ -634,7 +633,7 @@ uv run --package dashboard-api pytest dashboard/api/tests/unit/test_utils.py::Te
 
 Expected: PASS.
 
-- [ ] **Step 5: Run API startup tests that use `start_du_monitor()`**
+- [ ] Step 5: Run API startup tests that use `start_du_monitor()`
 
 Run:
 
@@ -644,7 +643,7 @@ uv run --package dashboard-api pytest dashboard/api/tests/unit/test_app_startup.
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit Task 3**
+- [ ] Step 6: Commit Task 3
 
 Run:
 
@@ -654,13 +653,13 @@ git commit -m "perf(dashboard-api): Delay storage monitor scan" \
   -m "Allow the storage-size monitor to wait before the first du scan so PVC IO does not compete with first health responses."
 ```
 
-## Task 4: Proxy Sidecar Waits For Real Health Endpoints
+## Task 4: Proxy sidecar waits for real health endpoints
 
-**Files:**
+Files:
 - Modify: `helm/charts/mddash/files/pre_spawn_hook.py`
 - Create: `helm/charts/mddash/tests/test_pre_spawn_hook.py`
 
-- [ ] **Step 1: Write failing proxy command test**
+- [ ] Step 1: Write failing proxy command test
 
 Create `helm/charts/mddash/tests/test_pre_spawn_hook.py` with:
 
@@ -702,7 +701,7 @@ def test_proxy_start_command_waits_for_real_health_endpoints(monkeypatch) -> Non
     assert "caddy run --config /etc/caddy/Caddyfile --adapter caddyfile" in command
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] Step 2: Run test to verify it fails
 
 Run:
 
@@ -712,7 +711,7 @@ uv run pytest helm/charts/mddash/tests/test_pre_spawn_hook.py -v
 
 Expected: FAIL because `_proxy_start_command()` does not exist.
 
-- [ ] **Step 3: Extract proxy start command helper**
+- [ ] Step 3: Extract proxy start command helper
 
 In `helm/charts/mddash/files/pre_spawn_hook.py`, add this helper above `_proxy_container()`:
 
@@ -735,7 +734,7 @@ Then change the `_proxy_container()` command field to:
 "command": ["sh", "-c", _proxy_start_command(service_prefix)],
 ```
 
-- [ ] **Step 4: Run proxy command test**
+- [ ] Step 4: Run proxy command test
 
 Run:
 
@@ -745,7 +744,7 @@ uv run pytest helm/charts/mddash/tests/test_pre_spawn_hook.py -v
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 4**
+- [ ] Step 5: Commit Task 4
 
 Run:
 
@@ -755,13 +754,13 @@ git commit -m "fix(spawner): Wait for dashboard sidecar health" \
   -m "Make the proxy sidecar wait for successful auth and dashboard API health responses instead of accepting any HTTP response from the ports."
 ```
 
-## Task 5: Suppress Successful `mdrun-api` Health Access Logs
+## Task 5: Suppress successful `mdrun-api` health access logs
 
-**Files:**
+Files:
 - Modify: `mdrun-api/Dockerfile`
 - Create: `mdrun-api/tests/test_container_config.py`
 
-- [ ] **Step 1: Write failing Dockerfile configuration test**
+- [ ] Step 1: Write failing Dockerfile configuration test
 
 Create `mdrun-api/tests/test_container_config.py` with:
 
@@ -781,7 +780,7 @@ def test_uwsgi_suppresses_successful_health_access_logs() -> None:
     assert "--log-5xx" in content
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] Step 2: Run test to verify it fails
 
 Run:
 
@@ -791,7 +790,7 @@ uv run --package mdrun-api pytest mdrun-api/tests/test_container_config.py -v
 
 Expected: FAIL because the Dockerfile has no uWSGI health log filter.
 
-- [ ] **Step 3: Add uWSGI health access-log filtering**
+- [ ] Step 3: Add uWSGI health access-log filtering
 
 In `mdrun-api/Dockerfile`, replace the `CMD` with:
 
@@ -801,7 +800,7 @@ CMD ["sh", "-c", "uwsgi --http 0.0.0.0:5000 --module app:app --processes $UWSGI_
 
 This keeps failed 4xx/5xx requests visible while suppressing routine successful `/api/health` access lines.
 
-- [ ] **Step 4: Run container config and route tests**
+- [ ] Step 4: Run container config and route tests
 
 Run:
 
@@ -811,7 +810,7 @@ uv run --package mdrun-api pytest mdrun-api/tests/test_container_config.py mdrun
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 5**
+- [ ] Step 5: Commit Task 5
 
 Run:
 
@@ -821,13 +820,13 @@ git commit -m "chore(mdrun-api): Suppress health probe access logs" \
   -m "Filter routine successful /api/health uWSGI access lines while preserving failed probe and error visibility."
 ```
 
-## Task 6: Auth Startup Timing Logs
+## Task 6: Auth startup timing logs
 
-**Files:**
+Files:
 - Modify: `dashboard/auth/auth.py`
 - Modify: `dashboard/auth/tests/test_auth.py`
 
-- [ ] **Step 1: Write failing auth timing test**
+- [ ] Step 1: Write failing auth timing test
 
 Append this test to `dashboard/auth/tests/test_auth.py`:
 
@@ -843,7 +842,7 @@ def test_health_logs_first_health_once(client: FlaskClient, caplog) -> None:
     assert messages.count("auth first health response served") == 1
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [ ] Step 2: Run test to verify it fails
 
 Run:
 
@@ -853,7 +852,7 @@ uv run --package dashboard-auth pytest dashboard/auth/tests/test_auth.py::test_h
 
 Expected: FAIL because auth does not log first health.
 
-- [ ] **Step 3: Add lightweight auth startup logging**
+- [ ] Step 3: Add lightweight auth startup logging
 
 In `dashboard/auth/auth.py`, add imports and module logger state:
 
@@ -887,7 +886,7 @@ def health() -> tuple[str, int]:
     return "OK", HTTPStatus.OK
 ```
 
-- [ ] **Step 4: Run auth tests**
+- [ ] Step 4: Run auth tests
 
 Run:
 
@@ -897,7 +896,7 @@ uv run --package dashboard-auth pytest dashboard/auth/tests/test_auth.py -v
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit Task 6**
+- [ ] Step 5: Commit Task 6
 
 Run:
 
@@ -907,38 +906,38 @@ git commit -m "chore(auth): Log first health response" \
   -m "Add one-time auth startup health visibility without logging every routine health probe."
 ```
 
-## Task 7: Update Agent Documentation For New Startup Behavior
+## Task 7: Update agent documentation for new startup behavior
 
-**Files:**
+Files:
 - Modify: `dashboard/api/AGENTS.md`
 - Modify: `helm/charts/mddash/AGENTS.md`
 - Modify: `mdrun-api/AGENTS.md`
 
-- [ ] **Step 1: Update dashboard API AGENTS gotcha**
+- [ ] Step 1: Update dashboard API AGENTS gotcha
 
 In `dashboard/api/AGENTS.md`, replace the Kubernetes resources gotcha line that says in-cluster config is called at module import with:
 
 ```markdown
-- **In-cluster config is lazy-loaded**: `clients/k8s.py` initializes Kubernetes API clients on first Kubernetes operation, not during health-route import. Keep `/health` independent of Kubernetes setup so first-health latency remains low and failures are scoped to endpoints that need the cluster.
+- In-cluster config is lazy-loaded: `clients/k8s.py` initializes Kubernetes API clients on first Kubernetes operation, not during health-route import. Keep `/health` independent of Kubernetes setup so first-health latency remains low and failures are scoped to endpoints that need the cluster.
 ```
 
-- [ ] **Step 2: Update Helm chart AGENTS proxy gotcha**
+- [ ] Step 2: Update Helm chart AGENTS proxy gotcha
 
 In `helm/charts/mddash/AGENTS.md`, add this gotcha under Sidecar Container Pattern or Critical Gotchas:
 
 ```markdown
-- **Proxy Health Wait**: The proxy sidecar waits for `auth` `/health` and the dashboard API prefixed `/dash/api/health` endpoint with `curl --fail` before starting Caddy. Do not replace this with bare port checks; non-2xx responses must not count as readiness.
+- Proxy Health Wait: The proxy sidecar waits for `auth` `/health` and the dashboard API prefixed `/dash/api/health` endpoint with `curl --fail` before starting Caddy. Do not replace this with bare port checks; non-2xx responses must not count as readiness.
 ```
 
-- [ ] **Step 3: Update mdrun-api AGENTS logging gotcha**
+- [ ] Step 3: Update mdrun-api AGENTS logging gotcha
 
 In `mdrun-api/AGENTS.md`, add this gotcha near SQLite or K8s config:
 
 ```markdown
-- **Health access logs**: Successful `/api/health` probe access logs are suppressed at the uWSGI layer to avoid log congestion. Failed probes, 4xx/5xx responses, startup logs, and application errors must remain visible.
+- Health access logs: Successful `/api/health` probe access logs are suppressed at the uWSGI layer to avoid log congestion. Failed probes, 4xx/5xx responses, startup logs, and application errors must remain visible.
 ```
 
-- [ ] **Step 4: Commit Task 7**
+- [ ] Step 4: Commit Task 7
 
 Run:
 
@@ -948,12 +947,12 @@ git commit -m "docs: Document dashboard startup behavior" \
   -m "Keep agent guidance aligned with lazy Kubernetes startup, proxy health waits, and mdrun-api health log filtering."
 ```
 
-## Task 8: Full Verification And Final Commit If Needed
+## Task 8: Full verification and final commit if needed
 
-**Files:**
+Files:
 - No new files expected unless verification reveals fixes.
 
-- [ ] **Step 1: Run dashboard API tests**
+- [ ] Step 1: Run dashboard API tests
 
 Run:
 
@@ -963,7 +962,7 @@ uv run --package dashboard-api pytest dashboard/api/tests -v
 
 Expected: PASS.
 
-- [ ] **Step 2: Run dashboard auth tests**
+- [ ] Step 2: Run dashboard auth tests
 
 Run:
 
@@ -973,7 +972,7 @@ uv run --package dashboard-auth pytest dashboard/auth/tests -v
 
 Expected: PASS.
 
-- [ ] **Step 3: Run mdrun-api tests**
+- [ ] Step 3: Run mdrun-api tests
 
 Run:
 
@@ -983,7 +982,7 @@ uv run --package mdrun-api pytest mdrun-api/tests -v
 
 Expected: PASS.
 
-- [ ] **Step 4: Run project format/type/test gate**
+- [ ] Step 4: Run project format/type/test gate
 
 Run from repo root:
 
@@ -995,7 +994,7 @@ make test
 
 Expected: all commands PASS.
 
-- [ ] **Step 5: Render Helm values to catch template or hook syntax issues**
+- [ ] Step 5: Render Helm values to catch template or hook syntax issues
 
 Run:
 
@@ -1005,7 +1004,7 @@ make -C helm render
 
 Expected: PASS and no unintended generated value changes beyond normal render output.
 
-- [ ] **Step 6: Inspect git status**
+- [ ] Step 6: Inspect git status
 
 Run:
 
@@ -1021,7 +1020,7 @@ git commit -m "fix(startup): Address verification findings" \
   -m "Resolve issues found by the startup optimization verification gate."
 ```
 
-## Manual Cluster Verification Checklist
+## Manual cluster verification checklist
 
 Run after building/deploying to dev:
 
@@ -1042,8 +1041,8 @@ Expected observations:
 - `mdrun-api` logs no longer contain routine successful `/api/health` access lines.
 - Failed or non-health requests still appear in `mdrun-api` logs.
 
-## Plan Self-Review
+## Plan self-review
 
 - Spec coverage: Tasks cover API timing, single app construction, migration skip, lazy Kubernetes clients, delayed `du`, proxy health wait, `mdrun-api` health access-log filtering, docs, and verification.
-- Placeholder scan: No deferred-decision markers, broad “handle errors” instructions, or undefined function names remain.
+- Placeholder scan: No deferred-decision markers, broad "handle errors" instructions, or undefined function names remain.
 - Type consistency: New helper names are consistent across tests and implementation steps: `_run_migrations`, `get_core_v1`, `get_batch_v1`, `reset_k8s_clients_for_tests`, `_proxy_start_command`, and `start_du_monitor(initial_delay=...)`.

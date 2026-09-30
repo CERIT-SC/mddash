@@ -1,4 +1,4 @@
-# Durable MDRepo Upload Design
+# Durable MDRepo upload design
 
 ## Context
 
@@ -19,7 +19,7 @@ This design replaces that daemon thread with a Kubernetes Job in the existing pe
 - Make delegated OAuth credentials eligible for automatic garbage collection five minutes after the Job finishes.
 - Preserve the existing behavior of opening the MDRepo draft as soon as the upload Job is accepted.
 
-## Non-Goals
+## Non-goals
 
 - Capturing an immutable snapshot of the experiment at the instant the user clicks Publish.
 - Waiting for or reading from the local-to-S3 bisync cycle.
@@ -29,7 +29,7 @@ This design replaces that daemon thread with a Kubernetes Job in the existing pe
 - Introducing OneData, a central queue, or a new long-running upload service.
 - Automating final publication of the Invenio draft.
 
-## Selected Semantics
+## Selected semantics
 
 The uploader lists the current eligible files under the experiment directory on the PVC once when the Job starts. It uses the S3 synchronization filter, but does not depend on the S3 sidecar or remote bucket. Files can change after listing, so the worker verifies source identity, metadata, and checksum while reading and fails changed files rather than reporting an inconsistent upload as complete.
 
@@ -37,7 +37,7 @@ An upload is durably handed off only after the API receives confirmation that Ku
 
 ## Architecture
 
-### Upload Worker
+### Upload worker
 
 Add a dedicated, non-root MDRepo uploader image. Its only responsibilities are:
 
@@ -48,11 +48,11 @@ Add a dedicated, non-root MDRepo uploader image. Its only responsibilities are:
 - retry transient operations with bounded exponential backoff; and
 - write sanitized upload state to the PVC.
 
-Move `rclone-filters.txt` to one shared build source consumed by both the S3-sync and uploader images, and keep the pinned rclone version identical in both images. Rclone evaluates the filter relative to `/mddash`, exactly as the bisync sidecar does, and the worker retains only entries whose first path component is the validated experiment ID. The filter version and SHA-256 hash are recorded in status and verified for both images in CI. Python streams the resulting files and writes status. The filter gains `**/.mdrepo-upload.json` and `**/.mdrepo-upload.json.tmp` exclusions so operational state is neither synchronized to S3 nor uploaded to MDRepo.
+Move `rclone-filters.txt` to one shared build source consumed by both the S3-sync and uploader images, and keep the pinned rclone version identical in both images. Rclone evaluates the filter relative to `/mddash`, exactly as the bisync sidecar does, and the worker retains only entries whose first path component is the validated experiment ID. The filter version and SHA-256 hash are recorded in status and verified for both images in CI. Python streams the resulting files and writes status. The filter gains `/.mdrepo-upload.json` and `/.mdrepo-upload.json.tmp` exclusions so operational state is neither synchronized to S3 nor uploaded to MDRepo.
 
 The worker mounts the existing per-user `ReadWriteMany` PVC at `/mddash`. It runs with the existing non-root security policy, dropped capabilities, `RuntimeDefault` seccomp, and explicit requests and limits.
 
-### Kubernetes Resources
+### Kubernetes resources
 
 Each upload uses deterministic names derived from the local experiment and MDRepo draft IDs:
 
@@ -74,7 +74,7 @@ A failure before step 4 is not an acknowledged handoff. An admission timeout for
 
 Suspended Jobs carry a five-minute submission-lease annotation. API startup, each publish request, and the JupyterHub pre-spawn hook foreground-delete expired suspended submissions. The post-stop hook foreground-deletes every suspended or otherwise unadmitted upload Job because none has crossed the acknowledged handoff boundary.
 
-### Server Shutdown And Quota
+### Server shutdown and quota
 
 Kubernetes ResourceQuota is admission-time enforcement. Lowering CPU and memory quota below current usage does not evict already-created resources. It does prevent admission of replacement pods while the quota remains exceeded.
 
@@ -82,7 +82,7 @@ The existing `post_stop_hook` currently deletes every pod in the user namespace 
 
 The durability guarantee starts at the `202 Accepted` response because that response is delayed until pod admission. The worker handles retries inside that admitted pod. A new pod cannot be created after quota reaches zero, so process crashes, pod deletion, eviction, and node-loss recovery remain explicitly unsupported by this design.
 
-### Credentials And RBAC
+### Credentials and RBAC
 
 Credentials are passed to the worker via container environment variables in the Job manifest. The variables contain only values required by the worker:
 
@@ -93,7 +93,7 @@ This avoids creating Kubernetes Secrets and keeps the implementation simple. The
 
 The user pod's existing default service account continues to manage Jobs in its namespace; no Secrets permission is added. The notebook and API sidecars already share this namespace identity and the API already receives the MDRepo client secret, so the per-user pod and namespace remain one trust boundary. This design does not grant cross-tenant access, but it does not attempt to isolate platform credentials from code run by that same user. Achieving that stronger boundary requires moving the API to a separate pod identity or introducing a trusted broker, both outside this design. The uploader Job uses `automountServiceAccountToken: false` and no RBAC bindings, so the uploader pod has no Kubernetes API access.
 
-## API Flow
+## API flow
 
 `POST /experiments/<experiment_id>/publish` retains synchronous metadata extraction and Invenio draft creation. Its Invenio path changes as follows:
 
@@ -113,7 +113,7 @@ If the status file remains `queued` or `running` but its Job no longer exists, t
 
 Publish, status, retry, and experiment-deletion operations reconcile the experiment row from the attempt-fenced PVC and live Job state before applying active-attempt rules. A terminal state updates the row only when its attempt ID still matches, preventing an old result from closing a newer attempt. The worker never needs database or API access; reconciliation occurs when the user next interacts with the API.
 
-## Worker Flow
+## Worker flow
 
 1. Write `running` status with start time and empty counters.
 2. List `/mddash` recursively using the canonical rclone filter, retain the selected experiment prefix, and record each file's size, modification time, and inode identity.
@@ -131,7 +131,7 @@ The local listing is fixed for that Job attempt. New files created after listing
 
 Remote draft files that are absent from the local listing are left untouched because a user may add them directly in MDRepo. Completion therefore guarantees that the filtered local listing is present in the draft, not that the draft contains no additional files.
 
-## OAuth Refresh
+## OAuth refresh
 
 The worker owns a request-independent token manager initialized from container environment variables. Before each MDRepo operation it refreshes the access token when it is expired or within the configured safety window. A `401 Unauthorized` causes one refresh and replay when a refresh token is available.
 
@@ -139,7 +139,7 @@ Refreshed tokens remain in worker memory. Refresh-token rotation is honored for 
 
 A single content PUT that began with a valid token is allowed to finish. If MDRepo rejects a later commit because the token expired, the worker refreshes and retries the appropriate idempotent operation.
 
-## Idempotency And Retries
+## Idempotency and retries
 
 The local experiment has at most one active MDRepo draft and one active attempt. Deterministic Kubernetes names include the attempt ID and prevent duplicate resources for an idempotently repeated request. A retry returns the existing Job while it is active, reconciles it while it is suspended, or foreground-deletes its terminal resources before creating a new attempt.
 
@@ -147,7 +147,7 @@ Network timeouts, connection failures, `429`, and retryable `5xx` responses use 
 
 The worker attempts all eligible files where continuing is safe, records a bounded list of failed keys, and exits non-zero if any file remains unresolved. It never reports partial success as completion. A retry re-reads both the PVC and the draft inventory, skips committed matching files, and repairs incomplete entries.
 
-## Durable Status
+## Durable status
 
 The status file lives inside the retained experiment directory:
 
@@ -167,13 +167,13 @@ The state document contains:
 
 It never contains OAuth tokens, request headers, stack traces, or raw remote response bodies. Until pod admission the API is the only writer, including admission-timeout failure after it has confirmed that any raced pod is terminated. After pod admission the worker is the only writer. Every worker update verifies that the on-disk attempt ID matches its own; a mismatch fences the stale worker and prevents state regression. Writers create a complete attempt-specific temporary file, flush and fsync it, then atomically rename it over the status file. If a status write fails, the worker retries it but does not repeat an already committed MDRepo file solely because progress reporting failed.
 
-## UI Behavior
+## UI behavior
 
 The UI stops treating `mdrepo_id != null` as proof that file upload succeeded. It displays distinct draft/upload states and polls the publish-status endpoint while queued or running.
 
 After `POST /publish` returns, the UI immediately opens the MDRepo draft, preserving current behavior. It also continues to show upload progress and a warning that the draft's files are incomplete until the worker reports completion. Failed state exposes a retry action that invokes the same idempotent publish endpoint.
 
-## Error Cases
+## Error cases
 
 - Draft creation failure creates neither env vars nor a Job.
 - Job creation failure preserves the existing draft and records a retryable submission failure without creating another draft.
@@ -189,7 +189,7 @@ After `POST /publish` returns, the UI immediately opens the MDRepo draft, preser
 
 ## Testing
 
-### Worker Unit Tests
+### Worker unit tests
 
 - canonical rclone filter use and exclusion parity;
 - recursive PVC listing and empty-directory handling;
@@ -203,7 +203,7 @@ After `POST /publish` returns, the UI immediately opens the MDRepo draft, preser
 - atomic and attempt-fenced queued/running/completed/failed state writes; and
 - credential and remote-response redaction.
 
-### API Unit And Integration Tests
+### API unit and integration tests
 
 - first publication creates exactly one draft;
 - repeated and interrupted submissions reconcile deterministic resources;
@@ -220,7 +220,7 @@ After `POST /publish` returns, the UI immediately opens the MDRepo draft, preser
 - experiment deletion is blocked during active upload; and
 - published records reject upload retries.
 
-### Helm And Kubernetes Tests
+### Helm and Kubernetes tests
 
 - uploader image configuration, resources, security context, and RWX PVC mount;
 - namespace-local submitter RBAC and tokenless uploader service account;
@@ -230,7 +230,7 @@ After `POST /publish` returns, the UI immediately opens the MDRepo draft, preser
 - Job TTL cleanup; and
 - an admitted upload pod remains after invoking `post_stop_hook` and completes while quota is zero.
 
-### UI Tests
+### UI tests
 
 - draft opens immediately after Job acceptance;
 - queued and running progress are polled and rendered;
@@ -238,7 +238,7 @@ After `POST /publish` returns, the UI immediately opens the MDRepo draft, preser
 - failed upload offers an idempotent retry; and
 - the incomplete-files warning remains visible while the draft is openable.
 
-## Acceptance Criteria
+## Acceptance criteria
 
 - No MDRepo upload runs in a Flask daemon thread.
 - The upload Job mounts the retained per-user RWX PVC and does not require S3 credentials.
@@ -253,7 +253,7 @@ After `POST /publish` returns, the UI immediately opens the MDRepo draft, preser
 - Status files, API responses, and logs contain no OAuth credentials.
 - No Kubernetes Secret is created for upload credentials.
 
-## Accepted Limitations
+## Accepted limitations
 
 The selected same-namespace design relies on Kubernetes not evicting already-admitted resources when ResourceQuota is lowered. If the upload pod itself is subsequently deleted or evicted, the Job controller cannot create a replacement while quota is zero. Supporting that stronger guarantee requires either retaining upload-sized quota after server stop or moving execution to a namespace with an independent lifecycle.
 

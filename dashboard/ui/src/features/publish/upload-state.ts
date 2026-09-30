@@ -1,9 +1,9 @@
 import type { PublishStatus } from "@/api/generated/models"
 
-/** Upload lifecycle helpers for the MDRepo status document — the schema keeps
+/** Upload lifecycle helpers for the MDRepo status document. The schema keeps
  * `upload_state` a plain string, so these mirror the API's enum without restating it. */
 
-/** Non-terminal states — the upload Job keeps being polled while in either. */
+/** Non-terminal states. The upload Job keeps being polled while in either. */
 export function uploadActive(state: string | null | undefined): boolean {
   return state === "queued" || state === "running"
 }

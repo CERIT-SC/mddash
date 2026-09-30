@@ -8,8 +8,8 @@ const UNITS = [
 /**
  * Format a duration in seconds compactly with explicit units, using the two
  * most significant units (e.g. "9m", "2h 40m", "1d 3h", "47d"). Explicit
- * units stay unambiguous at every scale — unlike clock notation ("12:06"),
- * which collides with wall-clock readings and breaks past a day.
+ * units stay unambiguous at every scale. Clock notation ("12:06") collides
+ * with wall-clock readings and breaks past a day.
  */
 export function formatTime(seconds: number): string {
   if (Number.isNaN(seconds)) return "?"

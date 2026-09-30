@@ -1,14 +1,13 @@
-# MDPosit Publishing Implementation Plan
+# MDPosit publishing implementation plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> For agentic workers, REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add MDPosit/MDDB as a stateless publication option alongside the existing InvenioRDM flow, and support importing experiments from MDPosit URLs via `Experiment.from_repo`.
+Add MDPosit/MDDB as a stateless publication option alongside the existing InvenioRDM flow, and support importing experiments from MDPosit URLs via `Experiment.from_repo`.
 
-**Architecture:** A new `clients/mdposit.py` module handles MDDB REST interaction for metadata and file listing/download. The publish route accepts `target` (`invenio` or `mdposit`). The Invenio path writes to the existing `mdrepo_id`/`mdrepo_published` columns unchanged. The MDPosit path is stateless: it generates metadata and file download URLs, returns them to the frontend, and does not persist any publication state. The import path extracts MDPosit URL detection and download into module-level helpers consumed by `Experiment.from_repo`. The frontend adds a target selector in the publish step and uses the existing `FileSelector` with extension filters.
+A new `clients/mdposit.py` module handles MDDB REST interaction for metadata and file listing/download. The publish route accepts `target` (`invenio` or `mdposit`). The Invenio path writes to the existing `mdrepo_id`/`mdrepo_published` columns unchanged. The MDPosit path is stateless: it generates metadata and file download URLs, returns them to the frontend, and does not persist any publication state. The import path extracts MDPosit URL detection and download into module-level helpers consumed by `Experiment.from_repo`. The frontend adds a target selector in the publish step and uses the existing `FileSelector` with extension filters.
 
-**Tech Stack:** Flask, SQLAlchemy, Marshmallow, React, TanStack Query, ShadCN UI, Tailwind CSS, Playwright.
-
-**Git note:** The task-level commit commands below are historical checkpoints from the planning format. Do not run commits unless the human explicitly asks for commits in the current session.
+Tech stack is Flask, SQLAlchemy, Marshmallow, React, TanStack Query, ShadCN UI, Tailwind CSS, Playwright.
+The task-level commit commands below are historical checkpoints from the planning format. Do not run commits unless the human explicitly asks for commits in the current session.
 
 ---
 
@@ -36,13 +35,13 @@
 
 ### Task 1: Add MDPosit configuration
 
-**Files:**
+Files:
 - Modify: `dashboard/api/config.py`
 - Modify: `config.yaml`, `config.dev.yaml`, `config.edc.yaml`
 - Modify: `helm/charts/mddash/values.yaml.tmpl`
 - Modify: `helm/charts/mddash/files/pre_spawn_hook.py`
 
-- [ ] **Step 1: Add MDPosit config**
+- [ ] Step 1: Add MDPosit config
 
 After the MDREPO config block, add normalized URL derivation:
 
@@ -61,7 +60,7 @@ if not MDPOSIT_URL:
 
 Add `mdposit.url` to each root config file and render it into the hub environment as `MDPOSIT_URL` in `values.yaml.tmpl`. Add `MDPOSIT_URL` to `_API_PASSTHROUGH_ENV` so spawned user API sidecars receive it.
 
-- [ ] **Step 2: Commit**
+- [ ] Step 2: Commit
 
 ```bash
 git add dashboard/api/config.py config.yaml config.dev.yaml config.edc.yaml helm/charts/mddash/values.yaml.tmpl helm/charts/mddash/files/pre_spawn_hook.py
@@ -72,11 +71,11 @@ git commit -m "feat(api): add MDPosit URL configuration"
 
 ### Task 2: Create clients/mdposit.py
 
-**Files:**
+Files:
 - Create: `dashboard/api/clients/mdposit.py`
 - Modify: `dashboard/api/clients/__init__.py`
 
-- [ ] **Step 1: Write client module**
+- [ ] Step 1: Write client module
 
 ```python
 """MDPosit/MDDB REST client."""
@@ -232,7 +231,7 @@ def extract_accession(url: str) -> str:
     return path.split("/")[-1]
 ```
 
-- [ ] **Step 2: Export from __init__.py**
+- [ ] Step 2: Export from __init__.py
 
 Update `dashboard/api/clients/__init__.py`:
 
@@ -244,7 +243,7 @@ from . import caddy, k8s, mdposit, mdrepo, mdrun, metadump, tuner
 __all__ = ["caddy", "k8s", "mdposit", "mdrepo", "mdrun", "metadump", "tuner"]
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] Step 3: Commit
 
 ```bash
 git add dashboard/api/clients/mdposit.py dashboard/api/clients/__init__.py
@@ -255,11 +254,11 @@ git commit -m "feat(api): add MDPosit REST client with file download support"
 
 ### Task 3: Refactor experiment model for target-aware publish
 
-**Files:**
+Files:
 - Modify: `dashboard/api/models/experiment.py`
 - Modify: `dashboard/api/pyproject.toml`, `uv.lock` if using `PyYAML`
 
-- [ ] **Step 1: Update module-level imports**
+- [ ] Step 1: Update module-level imports
 
 Update the existing import line:
 
@@ -282,7 +281,7 @@ from config import (
 )
 ```
 
-- [ ] **Step 2: Update `publish` signature and route internally**
+- [ ] Step 2: Update `publish` signature and route internally
 
 Change:
 ```python
@@ -298,7 +297,7 @@ def publish(
 ) -> dict:
 ```
 
-Inside `publish`, add routing **before** the existing body:
+Inside `publish`, add routing before the existing body:
 
 ```python
 if target == "invenio":
@@ -310,7 +309,7 @@ raise BadRequest(description=f"Unknown publish target: {target}")
 
 Rename the existing `publish` body to `_publish_invenio(self, community: str) -> dict`.
 
-- [ ] **Step 3: Add `_publish_mdposit`**
+- [ ] Step 3: Add `_publish_mdposit`
 
 Add a new method on `Experiment`:
 
@@ -386,9 +385,9 @@ def _publish_mdposit(self, selected_files: dict[str, str]) -> dict:
     }
 ```
 
-**Note:** `PyYAML` is not declared in `dashboard/api/pyproject.toml` today. Either add `pyyaml` as an API dependency and update the lockfile, or replace this snippet with a minimal writer.
+`PyYAML` is not declared in `dashboard/api/pyproject.toml` today. Either add `pyyaml` as an API dependency and update the lockfile, or replace this snippet with a minimal writer.
 
-- [ ] **Step 4: Commit**
+- [ ] Step 4: Commit
 
 ```bash
 git add dashboard/api/models/experiment.py
@@ -399,10 +398,10 @@ git commit -m "feat(api): add target-aware publish routing in experiment model"
 
 ### Task 4: Refactor `Experiment.from_repo` to dispatch to Invenio and MDPosit helpers
 
-**Files:**
+Files:
 - Modify: `dashboard/api/models/experiment.py`
 
-- [ ] **Step 1: Extract `_import_invenio_repo` helper**
+- [ ] Step 1: Extract `_import_invenio_repo` helper
 
 Extract the Invenio-specific logic from `from_repo` into a private module-level function. Place it above the `Experiment` class or at the bottom of the file following existing conventions.
 
@@ -477,7 +476,7 @@ def _import_invenio_repo(repo_link: str, experiment_id: str) -> None:
     tmp_path.unlink(missing_ok=True)
 ```
 
-- [ ] **Step 2: Add `_import_mdposit_repo` helper**
+- [ ] Step 2: Add `_import_mdposit_repo` helper
 
 ```python
 def _import_mdposit_repo(repo_link: str, experiment_id: str) -> None:
@@ -513,7 +512,7 @@ def _import_mdposit_repo(repo_link: str, experiment_id: str) -> None:
         raise InternalServerError(description=f"Failed to download MDPosit project: {exc}") from exc
 ```
 
-- [ ] **Step 3: Update `from_repo` dispatcher**
+- [ ] Step 3: Update `from_repo` dispatcher
 
 Replace the body of `from_repo` with:
 
@@ -565,7 +564,7 @@ def from_repo(
         raise
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] Step 4: Commit
 
 ```bash
 git add dashboard/api/models/experiment.py
@@ -576,10 +575,10 @@ git commit -m "feat(api): dispatch from_repo to Invenio and MDPosit helpers"
 
 ### Task 5: Update publish route for target selection
 
-**Files:**
+Files:
 - Modify: `dashboard/api/routes/experiments.py`
 
-- [ ] **Step 1: Accept `target` in publish endpoint**
+- [ ] Step 1: Accept `target` in publish endpoint
 
 ```python
 @experiments_bp.route("/<experiment_id>/publish", methods=["POST"])
@@ -608,9 +607,9 @@ def publish_experiment(experiment_id: str) -> ResponseReturnValue:
     return jsonify(result), HTTPStatus.CREATED
 ```
 
-There is **no accession linking endpoint** for MDPosit because MDDash does not track MDPosit publication state. MDRepo OAuth remains required only for the Invenio target.
+There is no accession linking endpoint for MDPosit because MDDash does not track MDPosit publication state. MDRepo OAuth remains required only for the Invenio target.
 
-- [ ] **Step 2: Commit**
+- [ ] Step 2: Commit
 
 ```bash
 git add dashboard/api/routes/experiments.py
@@ -621,11 +620,11 @@ git commit -m "feat(api): add target-aware publish endpoint"
 
 ### Task 6: Frontend target selector and handoff UI (no state tracking)
 
-**Files:**
+Files:
 - Modify: `dashboard/ui/src/components/Wizard/PublishStep/PublishStep.tsx`
 - Create: `dashboard/ui/src/hooks/use-mdposit.ts`
 
-- [ ] **Step 1: Add hook for MDPosit publish handoff** using `useMutation`
+- [ ] Step 1: Add hook for MDPosit publish handoff using `useMutation`
 
 ```typescript
 // dashboard/ui/src/hooks/use-mdposit.ts
@@ -658,7 +657,7 @@ export function useMdPositPublishData(experimentId: string) {
 }
 ```
 
-- [ ] **Step 2: Render target selector in PublishStep**
+- [ ] Step 2: Render target selector in PublishStep
 
 Add a `Select` with options `["invenio", "mdposit"]` defaulting to `"invenio"`.
 Keep existing Invenio UI logic unchanged.
@@ -670,9 +669,9 @@ If target is `mdposit`, render:
 
 Keep the existing Invenio `usePublishExperiment` behavior and `mdrepo_id` cache update only inside the Invenio branch. The MDPosit branch must not update `experiment.mdrepo_id`, `mdrepo_record_url`, `mdrepo_published`, or wizard step state.
 
-Do **not** render an accession input or any follow-up state tracking for MDPosit.
+Do not render an accession input or any follow-up state tracking for MDPosit.
 
-- [ ] **Step 3: Commit**
+- [ ] Step 3: Commit
 
 ```bash
 git add dashboard/ui/src/hooks/use-mdposit.ts dashboard/ui/src/components/Wizard/PublishStep/PublishStep.tsx
@@ -683,16 +682,16 @@ git commit -m "feat(ui): add MDPosit publish target selector and handoff UI"
 
 ### Task 7: Update demo harness for MDPosit
 
-**Files:**
+Files:
 - Modify: `dashboard/api/_demo/state.py`, `dashboard/api/_demo/seed.py`, `dashboard/api/_demo/mocks/http.py`, `dashboard/api/_demo/files.py`
 
-- [ ] **Step 1: Add MDPosit demo mock**
+- [ ] Step 1: Add MDPosit demo mock
 
 In `_demo/state.py`, add `mdposit_projects` dict with a fake accession for import lookup, and mock `list_files`/`download_file` behavior.
 In `seed.py`, seed one experiment created from an MDPosit URL.
 In `_demo/mocks/http.py`, add deterministic MDPosit API mocks for `GET /api/projects/{id}`, `GET /api/projects/{id}/files`, and `GET /api/projects/{id}/files/{filename}` instead of relying on the current MDPosit pass-through for this flow. Use fixtures from `_demo/files.py` so `make demo` works offline.
 
-- [ ] **Step 2: Commit**
+- [ ] Step 2: Commit
 
 ```bash
 git add dashboard/api/_demo/state.py dashboard/api/_demo/seed.py
@@ -703,15 +702,15 @@ git commit -m "feat(demo): add MDPosit demo data and mocks"
 
 ### Task 8: Add/update backend tests
 
-**Files:**
+Files:
 - Modify: `dashboard/api/tests/unit/test_mdrepo_routes.py` (or new `test_mdposit.py`)
 
-- [ ] **Step 1: Add tests**
+- [ ] Step 1: Add tests
 
 Tests to cover:
 - Default publish target is Invenio (`publish` gets `"invenio"` by default) and still requires MDRepo OAuth.
 - Explicit `target=mdposit` returns handoff data without requiring MDRepo OAuth.
-- MDPosit publish does **not** modify `mdrepo_id` or `mdrepo_published`.
+- MDPosit publish does not modify `mdrepo_id` or `mdrepo_published`.
 - Existing Invenio publish behavior remains unchanged.
 - MDPosit handoff uses the user-selected structure, topology, and trajectory files only.
 - Missing selected file, nonexistent selected file, unsupported extension, and traversal paths return useful errors.
@@ -721,7 +720,7 @@ Tests to cover:
 - Config derivation for MDPosit URLs.
 - Helm/pre-spawn rendering passes `MDPOSIT_URL` to API sidecars.
 
-- [ ] **Step 2: Run tests**
+- [ ] Step 2: Run tests
 
 ```bash
 cd dashboard/api && pytest tests/ -v
@@ -729,7 +728,7 @@ cd dashboard/api && pytest tests/ -v
 
 Expected: all tests pass.
 
-- [ ] **Step 3: Commit**
+- [ ] Step 3: Commit
 
 ```bash
 git add dashboard/api/tests
@@ -740,7 +739,7 @@ git commit -m "test(api): add MDPosit publish, import, and client tests"
 
 ### Task 9: Run fix, type-check, and full test suite
 
-- [ ] **Step 1: Run code quality checks**
+- [ ] Step 1: Run code quality checks
 
 ```bash
 make fix
@@ -750,7 +749,7 @@ make test
 
 Expected: all pass.
 
-- [ ] **Step 2: Commit any auto-format changes**
+- [ ] Step 2: Commit any auto-format changes
 
 ```bash
 git add -A && git commit -m "style: apply fixes after MDPosit implementation"
@@ -758,9 +757,9 @@ git add -A && git commit -m "style: apply fixes after MDPosit implementation"
 
 ---
 
-## Self-Review
+## Self-review
 
-**1. Spec coverage:**
+1. Spec coverage:
 - Publish target selector: Task 6
 - FileSelector with extension filters: Task 6
 - Individual file downloads vs zip package: Tasks 3, 6
@@ -772,7 +771,7 @@ git add -A && git commit -m "style: apply fixes after MDPosit implementation"
 - Demo support: Task 7
 - Frontend demo with Playwright: not a code task, but final approach.
 
-**2. Coding standards compliance:**
+2. Coding standards compliance:
 - No wildcard imports: explicit module imports in `__init__.py`.
 - No imports inside functions: all imports at module level.
 - `pathlib` used for all file operations (`Path.open`, `Path.mkdir`, ` Path.unlink`).
@@ -785,10 +784,10 @@ git add -A && git commit -m "style: apply fixes after MDPosit implementation"
 - Module-level helpers (`_import_invenio_repo`, `_import_mdposit_repo`) keep `from_repo` readable.
 - Error handling uses werkzeug exceptions (`BadRequest`, `InternalServerError`, `NotFound`) consistent with existing routes.
 
-**3. Placeholder scan:**
+3. Placeholder scan:
 - No `TODO`/`TBD` left; all client functions are fully implemented.
 - All code snippets are real code (not pseudocode).
 
-**4. Type consistency:**
+4. Type consistency:
 - No new DB columns; `mdrepo_id`/`mdrepo_published` remain unchanged for Invenio.
 - MDPosit publish is stateless and returns dict from model method.

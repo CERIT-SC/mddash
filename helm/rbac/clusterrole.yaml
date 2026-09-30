@@ -1,6 +1,6 @@
-# Hub service account RBAC — applied once by a cluster admin, cluster-wide.
-# ClusterRole is required (not Role) because the hub creates user namespaces at spawn time,
-# which are outside its own namespace.
+# Hub service account RBAC. A cluster admin applies it once cluster-wide.
+# ClusterRole is required, not Role, because the hub creates user namespaces at spawn time
+# outside its own namespace.
 # On Rancher clusters, also apply rancher-clusterrole.yaml.
 ---
 kind: ClusterRole
@@ -19,7 +19,7 @@ rules:
     verbs: ["get", "watch", "list", "create", "delete"]
   - apiGroups: [""]
     resources: ["pods"]
-    # deletecollection: post_stop_hook bulk-deletes all pods in the user namespace on server stop
+    # deletecollection lets post_stop_hook bulk-delete all pods in the user namespace on server stop.
     verbs: ["create", "delete", "get", "list", "watch", "deletecollection"]
   - apiGroups: [""]
     resources: ["pods/log"]

@@ -60,7 +60,7 @@ spec:
     - port: 80
       targetPort: 8080
 ---
-# Combined ingress: replaces JupyterHub's built-in ingress (disabled via jupyterhub.ingress.enabled=false).
+# Combined ingress. It replaces the JupyterHub built-in ingress disabled with jupyterhub.ingress.enabled=false.
 # NGINX resolves Exact / before Prefix /, so the landing page owns only the root path.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -106,7 +106,7 @@ spec:
                   number: 80
 {{- range .Values.landing.redirectFrom }}
 ---
-# Permanent redirect from a legacy hostname to the canonical one (path preserved via $request_uri).
+# Permanent redirect from a legacy hostname to the canonical one. The path is preserved through $request_uri.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

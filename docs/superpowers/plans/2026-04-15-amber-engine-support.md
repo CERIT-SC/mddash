@@ -1,18 +1,16 @@
-# AMBER Engine Support Implementation Plan
+# AMBER engine support implementation plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> For agentic workers, REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add AMBER MD engine support alongside GROMACS across the full wizard workflow, with engine selected at experiment creation and immutable thereafter.
+Add AMBER MD engine support alongside GROMACS across the full wizard workflow, with engine selected at experiment creation and immutable thereafter.
 
-**Architecture:** Engine-dispatcher pattern — each wizard step resolves a per-engine panel component; backend uses Joined Table Inheritance for simulation jobs (`simulation_jobs` base + `gromacs_jobs` + `amber_jobs`); MDRun API gets symmetric per-engine routes mirroring the tuner pattern.
+Engine-dispatcher pattern, each wizard step resolves a per-engine panel component; backend uses Joined Table Inheritance for simulation jobs (`simulation_jobs` base + `gromacs_jobs` + `amber_jobs`); MDRun API gets symmetric per-engine routes mirroring the tuner pattern.
 
-**Tech Stack:** Flask/SQLAlchemy (JTI, Alembic migration), Marshmallow (polymorphic schemas), React/TypeScript (discriminated union types, dispatcher components), TanStack Query (new `use-amber.ts` hook file).
-
-**Design spec:** `docs/specs/2026-04-15-amber-engine-support-design.md`
-
+Tech stack is Flask/SQLAlchemy (JTI, Alembic migration), Marshmallow (polymorphic schemas), React/TypeScript (discriminated union types, dispatcher components), TanStack Query (new `use-amber.ts` hook file).
+Design spec is `docs/specs/2026-04-15-amber-engine-support-design.md`.
 ---
 
-## File Map
+## File map
 
 ### New files
 | File | Purpose |
@@ -72,18 +70,18 @@
 
 ---
 
-## Phase 1 — Backend Foundation
+## Phase 1, backend foundation
 
 ### Task 1: Engine enums
 
-**Files:**
+Files:
 - Create: `dashboard/api/enums/engine.py`
 - Modify: `dashboard/api/enums/__init__.py`
 
 - [ ] Create `engine.py` with three `str, Enum` classes:
-  - `Engine` — values `"gmx"` and `"amber"`
-  - `AmberBinary` — values `"pmemd.cuda"` and `"pmemd.MPI"`
-  - `EwaldPreset` — values `"default"` and `"optimized"`
+  - `Engine`, values `"gmx"` and `"amber"`
+  - `AmberBinary`, values `"pmemd.cuda"` and `"pmemd.MPI"`
+  - `EwaldPreset`, values `"default"` and `"optimized"`
 - [ ] Export all three from `enums/__init__.py` alongside existing enums
 - [ ] Verify import works: `cd dashboard/api && python -c "from enums import Engine, AmberBinary, EwaldPreset; print('ok')"`
   Expected: `ok`
@@ -93,7 +91,7 @@
 
 ### Task 2: SimulationJob JTI base model
 
-**Files:**
+Files:
 - Create: `dashboard/api/models/simulation_job.py`
 
 The `SimulationJob` table (`simulation_jobs`) holds all columns shared between engines:
@@ -102,9 +100,9 @@ The `SimulationJob` table (`simulation_jobs`) holds all columns shared between e
 - `_start_timestamp`, `_finish_timestamp`, `_nsteps`, `_performance`, `_last_known_status`
 
 Key methods on the base class:
-- `status` property — dispatches `mdrun.get_gmx_job` or `mdrun.get_amber_job` based on `self.engine`; uses `simulation_status_cache` from `cache.py`
-- `delete()` — dispatches `mdrun.delete_gmx_job` or `mdrun.delete_amber_job`, then calls `self._cleanup_files()` (no-op in base)
-- `_cleanup_files()` — virtual, empty in base, overridden in subclasses
+- `status` property, dispatches `mdrun.get_gmx_job` or `mdrun.get_amber_job` based on `self.engine`; uses `simulation_status_cache` from `cache.py`
+- `delete()`, dispatches `mdrun.delete_gmx_job` or `mdrun.delete_amber_job`, then calls `self._cleanup_files()` (no-op in base)
+- `_cleanup_files()`, virtual, empty in base, overridden in subclasses
 - `experiment` relationship back-ref (to be wired once `Experiment` is updated)
 
 Add `simulation_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)` to `dashboard/api/cache.py`.
@@ -120,7 +118,7 @@ Add `simulation_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)` to `dashb
 
 ### Task 3: Refactor GromacsJob as JTI subclass
 
-**Files:**
+Files:
 - Modify: `dashboard/api/models/gromacs_job.py`
 
 `GromacsJob` becomes `GromacsJob(SimulationJob)` with:
@@ -135,14 +133,14 @@ Add `simulation_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)` to `dashb
 
 - [ ] Rewrite `gromacs_job.py` as JTI subclass per above
 - [ ] Run existing tests: `cd dashboard/api && python -m pytest tests/ -x -q`
-  Expected: all tests pass (or skip any that need amber_bp — wire that in Task 10)
+  Expected: all tests pass (or skip any that need amber_bp, wire that in Task 10)
 - [ ] Commit: `git commit -m "refactor(api): convert GromacsJob to JTI subclass of SimulationJob"`
 
 ---
 
 ### Task 4: AmberJob JTI subclass
 
-**Files:**
+Files:
 - Create: `dashboard/api/models/amber_job.py`
 - Modify: `dashboard/api/models/__init__.py`
 
@@ -151,11 +149,11 @@ Add `simulation_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)` to `dashb
 - `id` FK to `simulation_jobs.id`
 - Engine-specific columns: `prmtop_name`, `inpcrd_name`, `mdin_name`, `binary (Enum AmberBinary)`, `ewald (Enum EwaldPreset)`
 - `RESULT_EXTENSIONS = ["nc", "rst7", "mdinfo", "out"]`
-- `start()` classmethod — calls `mdrun.create_amber_job(...)`, creates `AmberJob` DB record
-- `get_log(type)` — supports `"stdout"` and `"stderr"` only (no GMX log)
-- `_parse_performance()` — reads `_stdout_log`, finds line matching `ns/day =\s+([\d.]+)`
-- `_parse_nsteps_done()` — reads last `NSTEP =\s+(\d+)` from `_stdout_log`
-- `_cleanup_files()` — deletes AMBER result files by `RESULT_EXTENSIONS`
+- `start()` classmethod, calls `mdrun.create_amber_job(...)`, creates `AmberJob` DB record
+- `get_log(type)`, supports `"stdout"` and `"stderr"` only (no GMX log)
+- `_parse_performance()`, reads `_stdout_log`, finds line matching `ns/day =\s+([\d.]+)`
+- `_parse_nsteps_done()`, reads last `NSTEP =\s+(\d+)` from `_stdout_log`
+- `_cleanup_files()`, deletes AMBER result files by `RESULT_EXTENSIONS`
 - Log file paths follow same `mdrun-{id}.out` / `mdrun-{id}.err` convention
 
 - [ ] Create `amber_job.py`
@@ -166,9 +164,9 @@ Add `simulation_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)` to `dashb
 
 ---
 
-### Task 5: Experiment model — engine column + simulation_jobs relationship
+### Task 5: Experiment model, engine column + simulation_jobs relationship
 
-**Files:**
+Files:
 - Modify: `dashboard/api/models/experiment.py`
 
 Changes:
@@ -189,20 +187,20 @@ Note: Keep the `TYPE_CHECKING` import of `GromacsJob` → replace with `Simulati
 
 ### Task 6: TunerJob engine dispatch
 
-**Files:**
+Files:
 - Modify: `dashboard/api/models/tuner_job.py`
 
 New columns (will be applied by migration in Task 7):
-- `engine: Mapped[Engine]` — `nullable=False, default=Engine.GMX`
-- `inpcrd_name: Mapped[str | None]` — nullable, AMBER only
-- `mdin_name: Mapped[str | None]` — nullable, AMBER only
+- `engine: Mapped[Engine]`, `nullable=False, default=Engine.GMX`
+- `inpcrd_name: Mapped[str | None]`, nullable, AMBER only
+- `mdin_name: Mapped[str | None]`, nullable, AMBER only
 
 `tpr_name` stays as-is; for AMBER jobs it stores the `.prmtop` path (internal only).
 
 Dispatch in each method via `match self.engine: case Engine.GMX: ... case Engine.AMBER: ...`:
-- `start()` — GMX calls `tuner.gmx_submit(tpr_path, ...)`, AMBER calls `tuner.amber_submit(tpr_path, inpcrd_path, mdin_path, ...)`
-- `_status()` — GMX calls `tuner.gmx_poll_status`, AMBER calls `tuner.amber_poll_status`
-- `stop()` / `delete()` — both engines use same tuner delete call (tuner API is symmetric)
+- `start()`, GMX calls `tuner.gmx_submit(tpr_path, ...)`, AMBER calls `tuner.amber_submit(tpr_path, inpcrd_path, mdin_path, ...)`
+- `_status()`, GMX calls `tuner.gmx_poll_status`, AMBER calls `tuner.amber_poll_status`
+- `stop()` / `delete()`, both engines use same tuner delete call (tuner API is symmetric)
 
 Update `TunerJob.start()` classmethod signature to accept `engine`, `inpcrd_path`, `mdin_path` (optional, default `None`).
 
@@ -215,13 +213,13 @@ Update `TunerJob.start()` classmethod signature to accept `engine`, `inpcrd_path
 
 ### Task 7: Database migration 003
 
-**Files:**
+Files:
 - Create: `dashboard/api/migrations/versions/003_amber_engine.py`
 
 Migration steps (all use `op.batch_alter_table` for SQLite compatibility):
 
-1. **Create `simulation_jobs` table** — all shared columns with `engine` defaulting to `'gmx'`
-2. **Populate `simulation_jobs`** from existing `gromacs_jobs` rows using `op.execute(...)`:
+1. Create `simulation_jobs` table, all shared columns with `engine` defaulting to `'gmx'`
+2. Populate `simulation_jobs` from existing `gromacs_jobs` rows using `op.execute(...)`:
    ```sql
    INSERT INTO simulation_jobs (id, experiment_id, created_at, engine, np, ntomp, extra_args,
        start_timestamp, finish_timestamp, nsteps, performance, last_known_status)
@@ -229,31 +227,31 @@ Migration steps (all use `op.batch_alter_table` for SQLite compatibility):
        start_timestamp, finish_timestamp, nsteps, performance, last_known_status
    FROM gromacs_jobs
    ```
-3. **Rebuild `gromacs_jobs`** via `batch_alter_table`: drop migrated columns; add FK `id → simulation_jobs.id`
-4. **Create `amber_jobs` table** — `id` FK to `simulation_jobs`, plus AMBER-specific columns
-5. **Add `engine` column to `experiments`** — `NOT NULL`, server default `'gmx'`
-6. **Add AMBER columns to `tuner_jobs`** — `engine` (default `'gmx'`), `inpcrd_name` (nullable), `mdin_name` (nullable)
+3. Rebuild `gromacs_jobs` via `batch_alter_table`: drop migrated columns; add FK `id → simulation_jobs.id`
+4. Create `amber_jobs` table, `id` FK to `simulation_jobs`, plus AMBER-specific columns
+5. Add `engine` column to `experiments`, `NOT NULL`, server default `'gmx'`
+6. Add AMBER columns to `tuner_jobs`, `engine` (default `'gmx'`), `inpcrd_name` (nullable), `mdin_name` (nullable)
 
 `downgrade()` reverses each step in reverse order. Revision chain: `down_revision = "002"`.
 
 - [ ] Write migration `003_amber_engine.py` following the pattern from `002_notebook_tiers.py`
 - [ ] Verify migration runs: `cd dashboard/api && python -c "from app import create_app; app = create_app(); print('migration ok')"`
   Expected: `migration ok` (no errors in output)
-- [ ] Commit: `git commit -m "feat(api): migration 003 — simulation_jobs JTI + amber columns"`
+- [ ] Commit: `git commit -m "feat(api): migration 003, simulation_jobs JTI + amber columns"`
 
 ---
 
 ### Task 8: Schemas
 
-**Files:**
+Files:
 - Create: `dashboard/api/schemas/simulation_job.py`
 - Create: `dashboard/api/schemas/amber_job.py`
 - Modify: `dashboard/api/schemas/experiment.py`
 - Modify: `dashboard/api/schemas/__init__.py`
 
-`SimulationJobSchema` — polymorphic auto-schema for `SimulationJob`; marshmallow-sqlalchemy resolves to the correct subclass automatically via JTI.
+`SimulationJobSchema`, polymorphic auto-schema for `SimulationJob`; marshmallow-sqlalchemy resolves to the correct subclass automatically via JTI.
 
-`AmberJobSchema` — same pattern as `GromacsJobSchema`:
+`AmberJobSchema`, same pattern as `GromacsJobSchema`:
 ```python
 class AmberJobSchema(BaseAutoSchema):
     class Meta:
@@ -262,7 +260,7 @@ class AmberJobSchema(BaseAutoSchema):
         include_fk = True
 ```
 
-`ExperimentSchema` — replace `gromacs_jobs = fields.Nested("GromacsJobSchema", many=True)` with `simulation_jobs = fields.Nested("SimulationJobSchema", many=True)`.
+`ExperimentSchema`, replace `gromacs_jobs = fields.Nested("GromacsJobSchema", many=True)` with `simulation_jobs = fields.Nested("SimulationJobSchema", many=True)`.
 
 Export both new schemas from `schemas/__init__.py`.
 
@@ -275,18 +273,18 @@ Export both new schemas from `schemas/__init__.py`.
 
 ### Task 9: amber_bp routes
 
-**Files:**
+Files:
 - Create: `dashboard/api/routes/amber.py`
 
 Mirror `routes/gmx.py` exactly in structure. Five routes under `url_prefix = f"{API_PREFIX}/experiments/<experiment_id>/amber"`:
 
 | Method | Path | Handler |
 |--------|------|---------|
-| GET | `` | `list_amber_jobs` — query `AmberJob.filter_by(experiment_id=...)` |
-| GET | `/<path:prmtop_name>` | `get_amber_job` — lookup by `experiment_id + prmtop_name` |
-| POST | `/<path:prmtop_name>` | `submit_amber_job` — form fields: `inpcrd_name`, `mdin_name`, `binary`, `np`, `ntomp`, `ewald`, `extra_args`; calls `AmberJob.start(...)` |
+| GET | `` | `list_amber_jobs`, query `AmberJob.filter_by(experiment_id=...)` |
+| GET | `/<path:prmtop_name>` | `get_amber_job`, lookup by `experiment_id + prmtop_name` |
+| POST | `/<path:prmtop_name>` | `submit_amber_job`, form fields: `inpcrd_name`, `mdin_name`, `binary`, `np`, `ntomp`, `ewald`, `extra_args`; calls `AmberJob.start(...)` |
 | DELETE | `/<path:prmtop_name>` | `delete_amber_job` |
-| GET | `/<path:prmtop_name>/log` | `get_amber_log` — `type` query param: `stdout` or `stderr` |
+| GET | `/<path:prmtop_name>/log` | `get_amber_log`, `type` query param: `stdout` or `stderr` |
 
 All handlers use `@handle_exceptions()` (with `rollback=True` for POST/DELETE).
 
@@ -297,26 +295,26 @@ All handlers use `@handle_exceptions()` (with `rollback=True` for POST/DELETE).
 
 ### Task 10: Wire remaining route + test changes
 
-**Files:**
+Files:
 - Modify: `dashboard/api/routes/__init__.py`
 - Modify: `dashboard/api/routes/experiments.py`
 - Modify: `dashboard/api/routes/tuner.py`
 - Modify: `dashboard/api/tests/conftest.py`
 
-**`routes/__init__.py`:** Import and export `amber_bp`.
+`routes/__init__.py`: Import and export `amber_bp`.
 
-**`routes/experiments.py` — `create_experiment`:** Read `engine = form.get("engine", "gmx")`; validate it's a valid `Engine` value; pass `engine=Engine(engine)` to all three factory methods (`from_pdb`, `from_repo`, `from_files`). Update each factory classmethod on `Experiment` to accept and persist `engine`.
+`routes/experiments.py`, `create_experiment`: Read `engine = form.get("engine", "gmx")`; validate it's a valid `Engine` value; pass `engine=Engine(engine)` to all three factory methods (`from_pdb`, `from_repo`, `from_files`). Update each factory classmethod on `Experiment` to accept and persist `engine`.
 
-**`routes/tuner.py` — `start_tuner_job`:** Read `inpcrd_name = request.args.get("inpcrd_name")` and `mdin_name = request.args.get("mdin_name")`; pass to `TunerJob.start(experiment, tpr_path, ..., engine=experiment.engine, inpcrd_path=..., mdin_path=...)`.
+`routes/tuner.py`, `start_tuner_job`: Read `inpcrd_name = request.args.get("inpcrd_name")` and `mdin_name = request.args.get("mdin_name")`; pass to `TunerJob.start(experiment, tpr_path, ..., engine=experiment.engine, inpcrd_path=..., mdin_path=...)`.
 
-**`routes/tuner.py` — `get_trial_stdout/stderr`:** Dispatch based on `tuner_job.engine`:
+`routes/tuner.py`, `get_trial_stdout/stderr`: Dispatch based on `tuner_job.engine`:
 ```python
 match tuner_job.engine:
     case Engine.GMX:  stdout = tuner.gmx_get_trial_stdout(...)
     case Engine.AMBER: stdout = tuner.amber_get_trial_stdout(...)
 ```
 
-**`tests/conftest.py`:** Add `amber_bp` to the imports block and register it in the `app` fixture.
+`tests/conftest.py`: Add `amber_bp` to the imports block and register it in the `app` fixture.
 
 - [ ] Apply all four file changes
 - [ ] Run full test suite: `cd dashboard/api && python -m pytest tests/ -v`
@@ -325,17 +323,17 @@ match tuner_job.engine:
 
 ---
 
-## Phase 2 — MDRun API
+## Phase 2, MDRun API
 
-### Task 11: MDRun API — amber K8s job + config
+### Task 11: MDRun API, amber K8s job + config
 
-**Files:**
+Files:
 - Modify: `mdrun-api/config.py`
 - Modify: `mdrun-api/k8s_client.py`
 
-**`config.py`:** Add `AMBER_IMAGE = os.environ.get("AMBER_IMAGE", "cerit.io/mddash/amber:24")`. Add warning log if unset.
+`config.py`: Add `AMBER_IMAGE = os.environ.get("AMBER_IMAGE", "cerit.io/mddash/amber:24")`. Add warning log if unset.
 
-**`k8s_client.py` — `create_amber_job()`:** Follows the same structure as `create_gromacs_job()`:
+`k8s_client.py`, `create_amber_job()`: Follows the same structure as `create_gromacs_job()`:
 - S3 init container downloads `prmtop`, `inpcrd`, `mdin` files from S3
 - Main container uses `AMBER_IMAGE`; command dispatches on `binary`:
   - `pmemd.cuda`: `pmemd.cuda -O -i {mdin} -o {name}.out -p {prmtop} -c {inpcrd} -r {name}.rst7 -x {name}.nc`
@@ -351,16 +349,16 @@ match tuner_job.engine:
 
 ---
 
-### Task 12: MDRun API — schema + route restructure
+### Task 12: MDRun API, schema + route restructure
 
-**Files:**
+Files:
 - Modify: `mdrun-api/schemas.py`
 - Modify: `mdrun-api/routes.py`
 - Modify: `mdrun-api/tests/conftest.py`
 
-**`schemas.py`:** Rename `JobCreateRequestSchema` → `GmxJobCreateRequestSchema`. Add `AmberJobCreateRequestSchema` with fields: `experiment_id`, `prmtop_name`, `inpcrd_name`, `mdin_name`, `bucket_name`, `binary`, `np`, `ntomp`, `ewald`, `extra_args`.
+`schemas.py`: Rename `JobCreateRequestSchema` → `GmxJobCreateRequestSchema`. Add `AmberJobCreateRequestSchema` with fields: `experiment_id`, `prmtop_name`, `inpcrd_name`, `mdin_name`, `bucket_name`, `binary`, `np`, `ntomp`, `ewald`, `extra_args`.
 
-**`routes.py`:** Split `mdrun_bp` into two blueprints:
+`routes.py`: Split `mdrun_bp` into two blueprints:
 ```python
 gmx_bp   = Blueprint("gmx",   __name__, url_prefix=f"{API_PREFIX}/jobs/gmx")
 amber_bp = Blueprint("amber", __name__, url_prefix=f"{API_PREFIX}/jobs/amber")
@@ -376,7 +374,7 @@ Each blueprint registers GET `/<job_id>` and DELETE `/<job_id>` pointing to the 
 
 Register both in `app.py` (replace the single `mdrun_bp` registration).
 
-**`tests/conftest.py`:** Update the module-level import to use `gmx_bp, amber_bp` (instead of `mdrun_bp`). Register both in the `app` fixture. Update `mock_k8s_client` to also mock `create_amber_job`.
+`tests/conftest.py`: Update the module-level import to use `gmx_bp, amber_bp` (instead of `mdrun_bp`). Register both in the `app` fixture. Update `mock_k8s_client` to also mock `create_amber_job`.
 
 - [ ] Apply all changes
 - [ ] Run MDRun tests: `cd mdrun-api && python -m pytest tests/ -v`
@@ -385,11 +383,11 @@ Register both in `app.py` (replace the single `mdrun_bp` registration).
 
 ---
 
-## Phase 3 — Dashboard API mdrun client
+## Phase 3, Dashboard API mdrun client
 
 ### Task 13: Update mdrun client
 
-**Files:**
+Files:
 - Modify: `dashboard/api/clients/mdrun.py`
 
 Changes:
@@ -409,21 +407,21 @@ Changes:
 
 ---
 
-## Phase 4 — UI Types & New Experiment Form
+## Phase 4, UI types & new experiment form
 
-### Task 14: TypeScript types and Engine constant
+### Task 14: TypeScript types and engine constant
 
-**Files:**
+Files:
 - Modify: `dashboard/ui/src/util/types.ts`
 - Modify: `dashboard/ui/src/util/const.ts`
 
-**`const.ts`:** Add at the top (before `DEBUG`):
+`const.ts`: Add at the top (before `DEBUG`):
 ```typescript
 export const Engine = { GMX: "gmx", AMBER: "amber" } as const
 export type Engine = typeof Engine[keyof typeof Engine]
 ```
 
-**`types.ts`:**
+`types.ts`:
 - Add `engine: Engine` to `Experiment`
 - Replace `gromacs_jobs: GromacsJob[]` with `simulation_jobs: SimulationJob[]`
 - Add `AmberBinary = "pmemd.cuda" | "pmemd.MPI"` type alias
@@ -440,9 +438,9 @@ export type Engine = typeof Engine[keyof typeof Engine]
 
 ---
 
-### Task 15: Engine selector on New experiment page
+### Task 15: Engine selector on new experiment page
 
-**Files:**
+Files:
 - Modify: `dashboard/ui/src/pages/New.tsx`
 
 Add `engine` state (default `"gmx"`). Insert a `ToggleGroup` or segmented `Tabs` control above the "Initial Data" section:
@@ -469,18 +467,18 @@ In `handleSubmit`, append `formData.append("engine", engine)` before calling `cr
 
 ### Task 16: AMBER hooks + useRunAmberTuner
 
-**Files:**
+Files:
 - Create: `dashboard/ui/src/hooks/use-amber.ts`
 - Modify: `dashboard/ui/src/hooks/use-tuner.ts`
 
-**`use-amber.ts`:** Mirror the shape of `use-gromacs.ts` exactly, substituting `amber` endpoints and `AmberJob` types:
-- `useAmberStatuses(experimentId)` — `GET /experiments/{id}/amber`
-- `useAmberStatus(experimentId, prmtopName)` — with 5 s polling (stop on TERMINATED/ERROR)
-- `useSubmitAmber(experimentId)` — `POST /experiments/{id}/amber/{name}`
-- `useDeleteAmber(experimentId)` — `DELETE /experiments/{id}/amber/{name}`
-- `useAmberLogs(experimentId, prmtopName, logType, shouldPoll)` — `logType: "stdout" | "stderr"`
+`use-amber.ts`: Mirror the shape of `use-gromacs.ts` exactly, substituting `amber` endpoints and `AmberJob` types:
+- `useAmberStatuses(experimentId)`, `GET /experiments/{id}/amber`
+- `useAmberStatus(experimentId, prmtopName)`, with 5 s polling (stop on TERMINATED/ERROR)
+- `useSubmitAmber(experimentId)`, `POST /experiments/{id}/amber/{name}`
+- `useDeleteAmber(experimentId)`, `DELETE /experiments/{id}/amber/{name}`
+- `useAmberLogs(experimentId, prmtopName, logType, shouldPoll)`, `logType: "stdout" | "stderr"`
 
-**`use-tuner.ts`:** Add `useRunAmberTuner(experimentId)` mutation:
+`use-tuner.ts`: Add `useRunAmberTuner(experimentId)` mutation:
 ```typescript
 interface RunAmberTunerVariables {
   prmtopName: string
@@ -498,19 +496,19 @@ Posts to `/experiments/{id}/tuner/{prmtopName}` with `inpcrd_name`, `mdin_name`,
 
 ---
 
-## Phase 5 — Extract GMX Components + Dispatchers
+## Phase 5, extract GMX components + dispatchers
 
 ### Task 17: Extract GmxRunPanel + make RunStep a dispatcher
 
-**Files:**
+Files:
 - Rename: `StartForm.tsx` → `GmxStartForm.tsx` (update import in `RunView.tsx`)
 - Create: `dashboard/ui/src/components/Wizard/RunStep/GmxRunPanel.tsx`
 - Modify: `dashboard/ui/src/components/Wizard/RunStep/RunStep.tsx`
 - Modify: `dashboard/ui/src/components/Wizard/RunStep/RunView.tsx`
 
-**`GmxRunPanel.tsx`:** Move the entire current body of `RunStep.tsx` into this file verbatim. It receives `WizardStepProps` and renders the TPR selector + `RunView`.
+`GmxRunPanel.tsx`: Move the entire current body of `RunStep.tsx` into this file verbatim. It receives `WizardStepProps` and renders the TPR selector + `RunView`.
 
-**`RunStep.tsx`:** Replace body with engine dispatcher:
+`RunStep.tsx`: Replace body with engine dispatcher:
 ```tsx
 import type { ComponentType } from "react"
 import { Engine } from "@/util/const"
@@ -530,21 +528,21 @@ const RunStep = (props: WizardStepProps) => {
 export default RunStep
 ```
 
-Note: `AmberRunPanel` is created in Task 19; TypeScript will error until then — that's OK, will fix when AmberRunPanel exists.
+Note: `AmberRunPanel` is created in Task 19; TypeScript will error until then, that's OK, will fix when AmberRunPanel exists.
 
-**`RunView.tsx`:** Update import `StartForm` → `GmxStartForm`.
+`RunView.tsx`: Update import `StartForm` → `GmxStartForm`.
 
 - [ ] Rename `StartForm.tsx` to `GmxStartForm.tsx`; update the import in `RunView.tsx`
 - [ ] Create `GmxRunPanel.tsx` with moved content
 - [ ] Replace `RunStep.tsx` with dispatcher (tolerate the `AmberRunPanel` missing-import error for now)
-- [ ] Type-check: `npx tsc --noEmit` — expect only the `AmberRunPanel` missing-module error
+- [ ] Type-check: `npx tsc --noEmit`, expect only the `AmberRunPanel` missing-module error
 - [ ] Commit: `git commit -m "refactor(ui): extract GmxRunPanel; make RunStep an engine dispatcher"`
 
 ---
 
 ### Task 18: Extract GmxTunePanel + make TuneStep a dispatcher
 
-**Files:**
+Files:
 - Create: `dashboard/ui/src/components/Wizard/TuneStep/GmxTunePanel.tsx`
 - Modify: `dashboard/ui/src/components/Wizard/TuneStep/TuneStep.tsx`
 
@@ -559,11 +557,11 @@ Same extraction pattern as Task 17:
 
 ---
 
-## Phase 6 — AMBER UI Components
+## Phase 6, AMBER UI components
 
 ### Task 19: AmberInputSelector (shared 3-file selector)
 
-**Files:**
+Files:
 - Create: `dashboard/ui/src/components/Wizard/AmberInputSelector.tsx`
 
 Props:
@@ -594,65 +592,65 @@ Wrapped in a `Card` with title "AMBER Inputs". Display the selected file names b
 
 ### Task 20: AmberRunPanel + AmberStartForm + AmberRunView
 
-**Files:**
+Files:
 - Create: `dashboard/ui/src/components/Wizard/RunStep/AmberStartForm.tsx`
 - Create: `dashboard/ui/src/components/Wizard/RunStep/AmberRunView.tsx`
 - Create: `dashboard/ui/src/components/Wizard/RunStep/AmberRunPanel.tsx`
 
-**`AmberStartForm.tsx`:** Form for starting an AMBER job. Fields:
-- `binary` — `Select` with `pmemd.cuda` / `pmemd.MPI`
-- `np` — numeric `Input` (MPI processes)
-- `ntomp` — numeric `Input` (OpenMP threads)
-- `ewald` — `Select` with `default` / `optimized`
-- `extra_args` — optional text `Input`
+`AmberStartForm.tsx`: Form for starting an AMBER job. Fields:
+- `binary`, `Select` with `pmemd.cuda` / `pmemd.MPI`
+- `np`, numeric `Input` (MPI processes)
+- `ntomp`, numeric `Input` (OpenMP threads)
+- `ewald`, `Select` with `default` / `optimized`
+- `extra_args`, optional text `Input`
 - Submit button calls `useSubmitAmber` mutation
 
-**`AmberRunView.tsx`:** Mirror of `RunView.tsx` for AMBER:
+`AmberRunView.tsx`: Mirror of `RunView.tsx` for AMBER:
 - Uses `useAmberStatus` for job polling
 - Uses `useAmberLogs` for log display
 - `logType` select has only `stdout` and `stderr` (no GMX log)
 - Shows `AmberStartForm` when no job exists, `JobStatusDisplay` + logs when job exists
 
-**`AmberRunPanel.tsx`:** Contains `AmberInputSelector` (left column) + `AmberRunView` (right column, shown when all 3 files are selected). Uses `useAmberStatuses` and `useDeleteAmber`.
+`AmberRunPanel.tsx`: Contains `AmberInputSelector` (left column) + `AmberRunView` (right column, shown when all 3 files are selected). Uses `useAmberStatuses` and `useDeleteAmber`.
 
 - [ ] Create all three files
-- [ ] Type-check: `npx tsc --noEmit` — the `AmberRunPanel` missing-module error from Task 17 should now resolve
+- [ ] Type-check: `npx tsc --noEmit`, the `AmberRunPanel` missing-module error from Task 17 should now resolve
 - [ ] Commit: `git commit -m "feat(ui): add AmberRunPanel, AmberRunView, AmberStartForm"`
 
 ---
 
 ### Task 21: AmberTunePanel + AmberTunerView + AmberTunerTable
 
-**Files:**
+Files:
 - Create: `dashboard/ui/src/components/Wizard/TuneStep/AmberTunerTable.tsx`
 - Create: `dashboard/ui/src/components/Wizard/TuneStep/AmberTunerView.tsx`
 - Create: `dashboard/ui/src/components/Wizard/TuneStep/AmberTunePanel.tsx`
 
-**`AmberTunerTable.tsx`:** Trial results table showing columns `binary`, `ewald`, `np`, `ntomp`, `performance (ns/day)`. Receives `trials: AmberTunerTrial[]`.
+`AmberTunerTable.tsx`: Trial results table showing columns `binary`, `ewald`, `np`, `ntomp`, `performance (ns/day)`. Receives `trials: AmberTunerTrial[]`.
 
-**`AmberTunerView.tsx`:** Mirror of `TunerView.tsx` for AMBER:
+`AmberTunerView.tsx`: Mirror of `TunerView.tsx` for AMBER:
 - Uses `useRunAmberTuner` (with prmtop/inpcrd/mdin params)
 - Uses `useTunerStatus`, `useStopTuner`, `useTunerTrialLogs` (all engine-agnostic, keyed by prmtop name)
 - Renders `AmberTunerTable` with trials from the job
 
-**`AmberTunePanel.tsx`:** Contains `AmberInputSelector` (left) + `AmberTunerView` (right, shown when all 3 files selected) + Skip Tuning button. Uses `useDeleteTuner`.
+`AmberTunePanel.tsx`: Contains `AmberInputSelector` (left) + `AmberTunerView` (right, shown when all 3 files selected) + Skip Tuning button. Uses `useDeleteTuner`.
 
 - [ ] Create all three files
-- [ ] Type-check: `npx tsc --noEmit` — `AmberTunePanel` missing-module error from Task 18 should now resolve
+- [ ] Type-check: `npx tsc --noEmit`, `AmberTunePanel` missing-module error from Task 18 should now resolve
 - [ ] Commit: `git commit -m "feat(ui): add AmberTunePanel, AmberTunerView, AmberTunerTable"`
 
 ---
 
-## Phase 7 — Analyze Step Engine Config
+## Phase 7, analyze step engine config
 
-### Task 22: Engine-aware Analyze step
+### Task 22: Engine-aware analyze step
 
-**Files:**
+Files:
 - Create: `dashboard/ui/src/components/Wizard/AnalyzeStep/engine-analyze-config.ts`
 - Modify: `dashboard/ui/src/components/Wizard/AnalyzeStep/AnalyzeStep.tsx`
 - Modify: `dashboard/ui/src/components/Wizard/AnalyzeStep/AnalyzeSidebar.tsx`
 
-**`engine-analyze-config.ts`:**
+`engine-analyze-config.ts`:
 ```typescript
 interface AnalyzeConfig {
   structureExts: string[]
@@ -677,11 +675,11 @@ export const ANALYZE_CONFIG: Record<Engine, AnalyzeConfig> = {
 }
 ```
 
-**`AnalyzeStep.tsx`:**
+`AnalyzeStep.tsx`:
 - Import `ANALYZE_CONFIG` and replace the hardcoded `PREPROCESSED_TOPOLOGY_FORMATS` / `PREPROCESSING_TPR_FORMATS` constants with values derived from `ANALYZE_CONFIG[experiment.engine]`
 - Pass `structureExts` and `trajectoryExts` from the config into `AnalyzeSidebar` as new props
 
-**`AnalyzeSidebar.tsx`:**
+`AnalyzeSidebar.tsx`:
 - Add `structureExts: string[]` and `trajectoryExts: string[]` to `AnalyzeSidebarProps`
 - Replace the hardcoded `ext={["pdb", "gro"]}` and `ext={["xtc", "trr"]}` on the two `FileSelector` components with the prop values
 
@@ -699,6 +697,6 @@ export const ANALYZE_CONFIG: Record<Engine, AnalyzeConfig> = {
 ## Post-implementation checklist
 
 - [ ] Verify `make demo` runs without errors (demo harness uses real models/routes)
-- [ ] Run `cd dashboard/api && python -m pytest tests/ -v` — all pass
-- [ ] Run `cd mdrun-api && python -m pytest tests/ -v` — all pass
-- [ ] Run `cd dashboard/ui && npx tsc --noEmit` — zero errors
+- [ ] Run `cd dashboard/api && python -m pytest tests/ -v`, all pass
+- [ ] Run `cd mdrun-api && python -m pytest tests/ -v`, all pass
+- [ ] Run `cd dashboard/ui && npx tsc --noEmit`, zero errors

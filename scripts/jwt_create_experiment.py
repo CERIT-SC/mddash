@@ -1,23 +1,5 @@
 #!/usr/bin/env python3
-"""
-Create a test experiment end-to-end via the MDDash API.
-
-A standalone manual test script that:
-1. Logs in via EGI JWT authentication,
-2. Waits for the singleuser server to be ready,
-3. Completes the OAuth flow for mddash session,
-4. Creates a molecular dynamics experiment (PDB: 1L2Y) via the dashboard API.
-5. Generates a passwordless login URL by requesting a token from the auth service.
-
-Requires a `TOKEN` environment variable containing a valid EGI JWT access token.
-
-Usage:
-    TOKEN=<jwt-token> python scripts/jwt_create_experiment.py
-
-Output:
-    - Experiment creation result
-    - Passwordless login URL that can be shared for direct access
-"""
+"""Create a test experiment through the MDDash API with EGI JWT authentication."""
 
 import json
 import os
@@ -27,7 +9,6 @@ import requests
 
 
 def log_request(method, url, headers=None, data=None):
-    """Log outgoing request details."""
     print(f"\n[REQUEST] {method} {url}")
     if headers:
         safe_headers = {k: ("***" if k.lower() in ("authorization", "cookie") else v) for k, v in headers.items()}
@@ -37,7 +18,6 @@ def log_request(method, url, headers=None, data=None):
 
 
 def log_response(resp, prefix=""):
-    """Log response details."""
     print(f"\n[RESPONSE {prefix}] Status: {resp.status_code}")
     print(f"  Headers: {dict(resp.headers)}")
     try:
@@ -68,8 +48,7 @@ def create_experiment():
 
     session = requests.Session()
 
-    # Step 1: JWT Login
-    print("--- Step 1: JWT Login ---")
+    print("JWT login.")
     log_request("GET", login_url, {"Authorization": "bearer ***"})
     login_resp = session.get(login_url, headers={"Authorization": f"bearer {token}"})
     log_response(login_resp, "LOGIN")
@@ -86,8 +65,7 @@ def create_experiment():
     print("Login successful.")
     print(f"Cookies set: {list(session.cookies.keys())}")
 
-    # Step 2: Prime the session
-    print("--- Step 2: Priming session ---")
+    print("Priming session.")
 
     log_request("GET", f"{base_url}/hub/home", {"Authorization": "token ***"})
     resp1 = session.get(f"{base_url}/hub/home", headers={"Authorization": f"token {token}"})
@@ -100,8 +78,8 @@ def create_experiment():
     xsrf_token = session.cookies.get("_xsrf")
     print(f"XSRF token: {xsrf_token[:20]}..." if xsrf_token else "No XSRF token")
 
-    # Step 3: Check server status from /hub/api/user
-    print("--- Step 3: Checking server status ---")
+    # Check server status from /hub/api/user
+    print("Checking server status.")
     user_info = resp2.json()
     servers = user_info.get("servers", {})
 
@@ -113,14 +91,14 @@ def create_experiment():
     print(f"  stopped: {default_server.get('stopped', 'N/A')}")
     print(f"  url: {server_url_path}")
 
-    # Step 4: Wait for server to be ready
-    print("--- Step 4: Waiting for singleuser server to come up ---")
+    # Wait for server to be ready
+    print("Waiting for singleuser server to come up.")
     max_retries = 60
     retry_interval = 5
     server_ready = False
 
     for i in range(max_retries):
-        print(f"\n--- Poll attempt {i + 1}/{max_retries} ---")
+        print(f"\nPoll attempt {i + 1}/{max_retries}.")
 
         log_request("GET", user_api_url, {"Authorization": "token ***"})
         resp = session.get(user_api_url, headers={"Authorization": f"token {token}"})
@@ -134,7 +112,7 @@ def create_experiment():
             is_ready = default_server.get("ready", False)
             is_stopped = default_server.get("stopped", True)
 
-            print(f"Server status - ready: {is_ready}, stopped: {is_stopped}")
+            print(f"Server status. Ready: {is_ready}, stopped: {is_stopped}")
 
             if is_ready and not is_stopped:
                 server_ready = True
@@ -150,8 +128,8 @@ def create_experiment():
     print("Server is ready!")
     print(f"Server URL path: {server_url_path}")
 
-    # Step 5: Establish mddash-auth session via OAuth flow
-    print("--- Step 5: Establishing mddash-auth session ---")
+    # Establish mddash-auth session through OAuth flow
+    print("Establishing mddash-auth session.")
     dash_url = f"{base_url}{server_url_path}dash/"
     print(f"Accessing {dash_url} to complete OAuth flow...")
 
@@ -165,8 +143,8 @@ def create_experiment():
 
     print(f"mddash-auth cookie obtained: {session.cookies['mddash-auth'][:30]}...")
 
-    # Step 6: Create experiment via POST /dash/api/experiments
-    print("--- Step 6: Creating experiment ---")
+    # Create experiment with POST /dash/api/experiments
+    print("Creating experiment.")
 
     create_url = f"{base_url}{server_url_path}dash/api/experiments"
     experiment_data = {
@@ -192,14 +170,11 @@ def create_experiment():
     else:
         print(f"\nFailed to create experiment. Status: {resp.status_code}")
 
-    # Step 7: Request passwordless login URL from auth service
+    # Request passwordless login URL from auth service
     if GENERATE_PASSWORDLESS_URL:
-        print("--- Step 7: Requesting passwordless login URL ---")
+        print("Requesting passwordless login URL.")
 
-        # Call the /create-login-token endpoint which:
-        # 1. Validates the existing mddash-auth cookie
-        # 2. Creates a new session token server-side
-        # 3. Returns the token so we can construct the login URL
+        # The endpoint validates the mddash-auth cookie and returns a one-time token for the login URL.
         create_token_url = f"{base_url}{server_url_path}dash/auth/create-login-token"
 
         log_request("POST", create_token_url)
@@ -211,13 +186,10 @@ def create_experiment():
             login_url = result.get("login_url")
             expires_in = result.get("expires_in", 3600)
 
-            print("\n" + "=" * 60)
-            print("PASSWORDLESS LOGIN URL:")
-            print("=" * 60)
+            print("\nPasswordless login URL.")
             print(login_url)
-            print("=" * 60)
             print(f"\nThis token is valid for {expires_in // 60} minutes.")
-            print("The token is one-time use: consuming it will invalidate it.")
+            print("The token is one-time use. Consuming it invalidates it.")
             print()
         else:
             print(f"\nFailed to generate passwordless URL. Status: {resp.status_code}")

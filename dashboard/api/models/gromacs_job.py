@@ -110,7 +110,7 @@ class GromacsJob(SimulationJob):
         if self._archived or self._init_step is not None:
             return self._init_step or 0
 
-        # 0 is a legitimate parse result — persist it so the full-log scan happens
+        # 0 is a legitimate parse result. Persist it so the full-log scan happens
         # only once per row instead of on every dump.
         if (val := self._parse_init_step()) is not None:
             self._init_step = val
@@ -172,7 +172,7 @@ class GromacsJob(SimulationJob):
         simulation = Simulation.get(experiment.id, simulation_path)
         simulation.require_files(["run_input"])
         tpr_rel_path = simulation.resolved_files["run_input"]
-        # TODO: remove as soon as user testing is done (also drop _nsteps below) — force all runs to 500k steps.
+        # TODO: remove as soon as user testing is done (also drop _nsteps below). Force all runs to 500k steps.
         extra_args = f"{strip_run_control_args(simulation.extra_args)} -nsteps 500000"
 
         mdrun_job = mdrun.create_job(
@@ -239,7 +239,7 @@ class GromacsJob(SimulationJob):
         checkpoint = DATA_DIR / experiment.id / f"{deffnm}.cpt"
         if not checkpoint.exists():
             raise BadRequest(
-                f"No checkpoint file ({checkpoint.name}) found to resume from; it may still be syncing — try again shortly."
+                f"No checkpoint file ({checkpoint.name}) found to resume from. It may still be syncing. Try again shortly."
             )
 
         try:
@@ -257,8 +257,8 @@ class GromacsJob(SimulationJob):
         progress = latest.nsteps_done
         base = progress if progress is not None else previous_total
 
-        # mdrun -cpi counts -nsteps as ADDITIONAL steps from the checkpoint step —
-        # a cumulative total here would over-run by all previous progress.
+        # mdrun -cpi counts -nsteps as ADDITIONAL steps from the checkpoint step.
+        # A cumulative total here would over-run by all previous progress.
         total = base + nsteps
         cpt_name = f"{Path(tpr_rel_path).name.removesuffix('.tpr')}.cpt"
         extra_args = " ".join(filter(None, [base_args, f"-cpi {cpt_name}", f"-nsteps {nsteps}"]))

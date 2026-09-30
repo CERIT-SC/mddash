@@ -1,8 +1,7 @@
-# Landing Page Infrastructure Design
+# Landing page infrastructure design
 
-**Date:** 2026-05-25
-**Branch:** landing-page
-
+Date is 2026-05-25.
+Branch is landing-page.
 ## Goal
 
 Add a public landing page served at `/` on the same domain as the app (e.g. `mddash.dyn.cloud.e-infra.cz`), replacing the default JupyterHub redirect at the root path. The landing page links to the hub at `/hub/`. No authentication required. The page is a minimal React + TypeScript SPA used to validate the deployment pipeline; real content comes later.
@@ -15,21 +14,21 @@ Add a public landing page served at `/` on the same domain as the app (e.g. `mdd
 
 JupyterHub's ingress currently owns the entire domain with `pathType: Prefix /`. A second NGINX ingress resource with `pathType: Exact /` takes priority for the root path only. All other paths (`/hub/`, `/user/`, `/hub/static/`, etc.) continue to route to JupyterHub unchanged.
 
-JupyterHub does not functionally need `/` — it just redirects to `/hub/` when hit directly. Intercepting `/` with the landing page has no impact on hub operation.
+JupyterHub does not functionally need `/`, it just redirects to `/hub/` when hit directly. Intercepting `/` with the landing page has no impact on hub operation.
 
 The landing page links to the hub via `<a href="/hub/">`.
 
-### Asset Strategy
+### Asset strategy
 
 `vite-plugin-singlefile` inlines all JS and CSS into a single `index.html`. No `/assets/` requests are ever made by the browser, so no additional ingress rules are needed.
 
-**SEO note:** This produces a client-rendered SPA. Acceptable for infrastructure validation. When real content is written, evaluate SSR (e.g. Astro) for production SEO.
+This produces a client-rendered SPA. Acceptable for infrastructure validation. When real content is written, evaluate SSR (e.g. Astro) for production SEO.
 
 ---
 
 ## Components
 
-### 1. Landing Page App — `landing/`
+### 1. Landing page app, `landing/`
 
 New directory at repo root, same level as `dashboard/`, `mdrun-api/`, `notebook/`.
 
@@ -50,7 +49,7 @@ landing/
 
 No TanStack, ShadCN, or other heavy dependencies. Minimal React only.
 
-### 2. Dockerfile — `landing/Dockerfile`
+### 2. Dockerfile, `landing/Dockerfile`
 
 Two-stage build: Node build stage → Caddy runtime stage. Mirrors `dashboard/proxy/Dockerfile` for consistency.
 
@@ -66,7 +65,7 @@ RUN pnpm run build
 
 FROM caddy:2.10-alpine AS runtime
 
-# Drop privileged port binding — container runs as non-root on port 8080
+# Drop privileged port binding, container runs as non-root on port 8080
 RUN apk add --no-cache libcap curl && setcap -r /usr/bin/caddy
 
 RUN mkdir -p /config/caddy /data/caddy && \
@@ -85,7 +84,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
 ```
 
-### 3. Caddyfile — `landing/Caddyfile`
+### 3. Caddyfile, `landing/Caddyfile`
 
 Trivial static file server, no auth, no routing logic. Port 8080 (non-privileged, matching non-root USER 1000):
 
@@ -106,15 +105,15 @@ Trivial static file server, no auth, no routing logic. Port 8080 (non-privileged
 }
 ```
 
-### 4. Helm Chart — `helm/charts/mddash/templates/landing-page.yaml`
+### 4. Helm chart, `helm/charts/mddash/templates/landing-page.yaml`
 
 New `templates/` directory (first templates in this chart). Contains three resources:
 
-- **Deployment** — 1 replica, Caddy container, non-root (UID 1000), image from values, resource limits from values.
-- **Service** — ClusterIP on port 80, forwarding to container port 8080, selects landing page pods.
-- **Ingress** — same host and TLS configuration as JupyterHub's ingress; `pathType: Exact`, path `/`; same nginx annotations (proxy-body-size, timeouts). Takes priority over JupyterHub's `pathType: Prefix /` for the root path only.
+- Deployment, 1 replica, Caddy container, non-root (UID 1000), image from values, resource limits from values.
+- Service, ClusterIP on port 80, forwarding to container port 8080, selects landing page pods.
+- Ingress, same host and TLS configuration as JupyterHub's ingress; `pathType: Exact`, path `/`; same nginx annotations (proxy-body-size, timeouts). Takes priority over JupyterHub's `pathType: Prefix /` for the root path only.
 
-### 5. Helm Values — `helm/charts/mddash/values.yaml.tmpl`
+### 5. Helm values, `helm/charts/mddash/values.yaml.tmpl`
 
 New `landing` section:
 
@@ -133,7 +132,7 @@ landing:
       memory: "64Mi"
 ```
 
-### 6. Config Files
+### 6. Config files
 
 Add to `config.yaml`, `config.dev.yaml`, and `config.edc.yaml`:
 
@@ -159,7 +158,7 @@ push-landing: ## Build and push landing page image
 
 `landing/Makefile` mirrors the `mdrun-api/Makefile` pattern: reads image name from config, builds and pushes with the correct tag.
 
-### 8. CI/CD — `.github/workflows/cd.yml`
+### 8. CI/CD, `.github/workflows/cd.yml`
 
 Two changes:
 
@@ -178,7 +177,7 @@ Dev pushes rebuild only when `landing/**` changes. Prod pushes rebuild all compo
 
 ---
 
-## What Is NOT in Scope
+## What is NOT in scope
 
 - Actual landing page content and design (blank page with test button only)
 - SEO optimisation (deferred until real content is written)
@@ -187,7 +186,7 @@ Dev pushes rebuild only when `landing/**` changes. Prod pushes rebuild all compo
 
 ---
 
-## Validation Criteria
+## Validation criteria
 
 1. `make build-landing` succeeds locally.
 2. Browsing to `/` serves the React page (not a JupyterHub redirect).

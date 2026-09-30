@@ -1,6 +1,6 @@
 import type { ExperimentSource } from "@/api/generated/models"
 
-/** Display URL: scheme always stripped; doi.org prefix too — the DOI path is the identifier. */
+/** Display URL: scheme always stripped; doi.org prefix too. The DOI path is the identifier. */
 function displayUrl(url: string): string {
   return url.replace(/^https?:\/\/(doi\.org\/)?/i, "")
 }

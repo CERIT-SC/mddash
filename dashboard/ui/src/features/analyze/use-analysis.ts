@@ -110,7 +110,7 @@ export function useAnalysisVariants(experimentId: string, simulationPath: string
 
 /**
  * One typed analysis result; queried only when a result name is known to
- * exist. The response is the generated `AnalysisResult` union — the renderer
+ * exist. The response is the generated `AnalysisResult` union. The renderer
  * registry narrows it via its guards.
  */
 export function useAnalysisData(experimentId: string, simulationPath: string, resultName: string | null) {

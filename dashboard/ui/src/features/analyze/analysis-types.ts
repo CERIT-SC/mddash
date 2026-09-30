@@ -5,7 +5,7 @@ export type { StatisticalData }
 /**
  * The guarded input every renderer entry in `renderers/index.tsx` matches
  * against. Fetched results arrive as generated `AnalysisResult` and are passed
- * here as `unknown` — the guards, not the types, decide the payload family.
+ * here as `unknown`. The guards, not the types, decide the payload family.
  */
 export type Analysis =
   | MembraneMapAnalysis

@@ -23,8 +23,8 @@ type NotebookControlsProps = {
   className?: string
 }
 
-/** Active-notebook row shared by the top bar and Setup launcher; Stop stays
-    available throughout — a slow or stuck start must be cancellable. */
+/** Active-notebook row shared by the top bar and Setup launcher. Stop stays
+    available throughout. A slow or stuck start must be cancellable. */
 export function NotebookControls({
   experimentId,
   notebook,

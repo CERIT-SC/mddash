@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 
-// Seed: enzyme study bbbbb, simulation "md" (live run; analyses allowed mid-run).
-// E2E mode completes the submitted analysis in 0.5s; the UI notices on its 5s poll.
+// Seed: enzyme study bbbbb, simulation "md" with a live run that allows analyses mid-run.
+// E2E mode completes the submitted analysis in 0.5s. The UI notices it on its 5s poll.
 test("submit an RMSD analysis to completion", async ({ page }) => {
   await page.goto("experiments/bbbbb")
   await page.getByRole("button", { name: /Go to section 4: Analyze/ }).click()

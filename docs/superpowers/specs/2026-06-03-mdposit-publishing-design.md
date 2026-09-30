@@ -1,4 +1,4 @@
-# MDPosit Publishing Design
+# MDPosit publishing design
 
 ## Context
 
@@ -26,7 +26,7 @@ Terminology used in this design:
 - Let users import/create a MDDash experiment from an existing MDPosit record URL/accession through the existing DOI/repository setup field.
 - Update the demo harness so the new flows can be exercised locally.
 
-## Non-Goals
+## Non-goals
 
 - Do not run MDDB workflow or loader commands from MDDash.
 - Do not add SSH, VPN, or remote-command automation to the MDPosit host.
@@ -48,7 +48,7 @@ MDDash does not record MDPosit handoff or publication state. The endpoint return
 
 Setup import remains one DOI/repository URL field. DOI and InvenioRDM URLs use the existing archive download path. Trusted MDPosit URLs, including `mdposit.mddbr.eu` and the configured MDPosit host such as `mdrepo.eu`, route through the MDPosit client to fetch metadata and download record files from official MDDB REST/client endpoints.
 
-## Backend Components
+## Backend components
 
 - `clients/mdposit.py`: function-based MDPosit client module, parallel to `clients/mdrepo.py`.
 - `clients/mdposit.py:get_project(...)`: fetch MDDB project metadata by accession/project ID.
@@ -64,23 +64,23 @@ Setup import remains one DOI/repository URL field. DOI and InvenioRDM URLs use t
 
 Avoid a new class-heavy abstraction. The existing API uses function modules and model methods; the implementation should stay consistent with that style.
 
-## Database Changes
+## Database changes
 
 None for MDPosit publish. The existing Invenio target continues to use `mdrepo_id` and `mdrepo_published` unchanged.
 
 MDPosit import creates an experiment the same way any other `from_repo` source does. No additional source-provenance columns are added.
 
-## Frontend Components
+## Frontend components
 
 - Publish step target selector, defaulting to the existing Invenio target.
 - Invenio UI state remains functionally unchanged: OAuth connect, publish, and view/edit draft.
-- MDPosit UI state explains the handoff clearly.
+- MDPosit UI state explains the handoff.
 - MDPosit file selection UI lets the user pick one structure file, one topology file, and one trajectory file from the experiment directory using the existing `FileSelector` with extension filters. Multi-trajectory handoff is deferred unless a multi-select file picker is added.
 - MDPosit handoff action provides individual download links for the selected metadata file and selected MD files.
 - MDPosit instructions tell the user to open VRE Lite, upload the metadata file first, review the metadata form, then upload structure/topology/trajectory files.
 - Setup page keeps the existing DOI/repository field and expands help text to mention MDPosit/MDDB URLs.
 
-## MDPosit Publish Flow
+## MDPosit publish flow
 
 1. User opens the publish step.
 2. Target selector defaults to the existing Invenio target.
@@ -98,7 +98,7 @@ MDPosit import creates an experiment the same way any other `from_repo` source d
 
 MDDash does not track, store, or follow up on the MDPosit handoff.
 
-## Invenio Publish Flow
+## Invenio publish flow
 
 1. User keeps the default Invenio target.
 2. Existing OAuth status check runs.
@@ -109,7 +109,7 @@ MDDash does not track, store, or follow up on the MDPosit handoff.
 
 This flow must remain behaviorally unchanged for users.
 
-## MDPosit Import Flow
+## MDPosit import flow
 
 1. User enters a DOI/repository URL in the existing setup field.
 2. Resolver follows DOI redirects when needed.
@@ -134,7 +134,7 @@ If legacy `MDREPO_*` environment names remain in code, keep them scoped to the e
 
 Do not configure MDPosit storage credentials for this flow. MDDash uses VRE Lite as a user-facing handoff UI and MDDB REST/client endpoints for record lookup/import only.
 
-## Error Handling
+## Error handling
 
 Invenio errors keep the current semantics: missing OAuth returns unauthorized, draft creation and upload failures return API errors, and failed upload does not mark the experiment published.
 
@@ -146,7 +146,7 @@ MDPosit errors are local and explicit:
 - Import fails without creating an experiment if metadata is found but any record file cannot be downloaded.
 - MDPosit publish never fails because the user is not authenticated with the legacy MDRepo/Invenio OAuth integration; that authentication applies only to the Invenio target.
 
-## Demo Support
+## Demo support
 
 Update `dashboard/api/_demo/` as needed:
 
@@ -154,7 +154,7 @@ Update `dashboard/api/_demo/` as needed:
 - Demo seed data should include at least one experiment created from an MDPosit URL.
 - Demo publish flow should allow exercising MDPosit file handoff without real MDPosit calls.
 
-## Testing And Verification
+## Testing and verification
 
 Backend unit tests should cover:
 
@@ -183,7 +183,7 @@ make type-check
 make test
 ```
 
-## Open Constraints
+## Open constraints
 
 - Full automated MDPosit publication is not part of this design because the verified VRE Lite upload API does not link server-side uploads to a browser handoff and MDDB REST does not expose a publish endpoint.
 - The metadata mapping from MDDash experiment data to VRE Lite metadata should be conservative. Fields that cannot be mapped confidently should be left for the user to review or fill in VRE Lite.

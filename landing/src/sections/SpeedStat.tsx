@@ -16,8 +16,8 @@ export function SpeedStat() {
               less active setup time compared to a manual command-line workflow
             </P>
             <P className="text-text-muted text-sm leading-relaxed">
-              Automated performance tuning alone prevents days of wasted compute on multi-week production runs — the
-              advantage compounds the longer the simulation.
+              Automated performance tuning alone prevents days of wasted compute on multi-week production runs. The
+              advantage grows with longer simulations.
             </P>
             <P className="text-text-muted mt-3 text-xs leading-relaxed opacity-60">
               * as evaluated in Filip Krasa&apos;s thesis{" "}

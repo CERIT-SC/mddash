@@ -11,7 +11,7 @@ service:
 
 storage:
   size: 5Gi
-  # SQLite WAL requires a local POSIX filesystem; NFS causes disk I/O errors.
+  # SQLite WAL requires a local POSIX filesystem. NFS causes disk I/O errors.
   storageClassName: ""
 
 gunicorn:
@@ -44,5 +44,5 @@ readinessProbe:
   initialDelaySeconds: 5
   periodSeconds: 30
 
-# you should provide the S3_CREDENTIALS and S3_ENDPOINT via env
+# Provide S3_CREDENTIALS and S3_ENDPOINT through env.
 env: []

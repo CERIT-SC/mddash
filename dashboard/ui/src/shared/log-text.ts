@@ -55,7 +55,7 @@ export function countNewlines(text: string): number {
 
 /** Collapse terminal-overwrite lines, then convert ANSI to escaped HTML. */
 export function toLogHtml(text: string): string {
-  // Instantiated per call — module-level instantiation hit CJS interop issues in the legacy UI.
+  // Instantiated per call. Module-level instantiation hit CJS interop issues in the legacy UI.
   const converter = new AnsiToHtml({ escapeXML: true })
   return converter.toHtml(processTerminalOutput(text))
 }

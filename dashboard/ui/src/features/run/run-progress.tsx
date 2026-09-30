@@ -96,7 +96,7 @@ export function RunProgress({ job, busy, canExtend, onStop, onExtend, onRestart 
       </div>
 
       {/* DS ≤ 0.1.9 Progress destructures `value` away from the Radix Root, so the
-          determinate state never reaches AT — set aria-valuenow explicitly. */}
+          determinate state never reaches AT. Set aria-valuenow explicitly. */}
       <Progress
         value={finished ? 100 : (percent ?? 0)}
         aria-valuenow={finished ? 100 : (percent ?? 0)}
@@ -108,7 +108,7 @@ export function RunProgress({ job, busy, canExtend, onStop, onExtend, onRestart 
         {known && (
           <p className="text-text-muted text-sm tabular-nums">{`${(done as number).toLocaleString("en-US")} / ${(total as number).toLocaleString("en-US")} steps`}</p>
         )}
-        {failed && <p className="text-text-muted text-sm">The run failed — check the logs below for details.</p>}
+        {failed && <p className="text-text-muted text-sm">The run failed. Check the logs below for details.</p>}
         {stopped && (
           <p className="text-text-muted text-sm">
             The run was stopped. Results so far are kept{canExtend ? ", ready to extend from its checkpoint" : ""}.

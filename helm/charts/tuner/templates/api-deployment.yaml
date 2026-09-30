@@ -7,7 +7,7 @@ metadata:
     app.kubernetes.io/component: api
 spec:
   replicas: 1
-  # Recreate prevents two API pods from contending for the RWO SQLite volume.
+  # Recreate. Two API pods must not contend for the RWO SQLite volume.
   strategy:
     type: Recreate
   selector:

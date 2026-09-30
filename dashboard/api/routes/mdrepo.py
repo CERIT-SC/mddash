@@ -40,7 +40,7 @@ mdrepo_bp = Blueprint("mdrepo", __name__, url_prefix=f"{API_PREFIX}/mdrepo")
 
 
 def _redirect_with_query(url: str, **params: str) -> WerkzeugResponse:
-    """Redirect to a URL with query params merged in — the return URL may already carry its own query string."""
+    """Redirect to a URL with query params merged in. The return URL may already carry its own query string."""
     parts = urlsplit(url)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
     query.update(params)

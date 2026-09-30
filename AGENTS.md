@@ -15,19 +15,19 @@ User namespace:   Proxy (Caddy) -> Auth (Flask), API (Flask), S3-Sync (rclone), 
 External:         MDRepo, S3-compatible storage (unless `s3.seaweedfs.enabled`)
 ```
 
-The Proxy container serves the complete static UI (compiled React/TypeScript dashboard) embedded as static assets in its image, and routes to the JupyterHub Singleuser service configured in `values.yaml.tmpl`. The hub itself runs the in-repo `mddash-hub` image (`hub/`): stock k8s-hub + the EGI authenticator (`/hub/jwt_login`) + the custom e-INFRA hub UI (`hub/ui/`) baked into the image. No runtime ConfigMaps are used.
+The Proxy container serves the complete static UI (compiled React/TypeScript dashboard) embedded as static assets in its image. It routes to the JupyterHub Singleuser service configured in `values.yaml.tmpl`. The hub itself runs the in-repo `mddash-hub` image (`hub/`). It combines stock k8s-hub, the EGI authenticator (`/hub/jwt_login`), and the custom e-INFRA hub UI (`hub/ui/`) baked into the image. No runtime ConfigMaps are used.
 
-## Core Patterns
+## Core patterns
 
-- **Simulation Manifest Pattern**: `.simulation.json` files are the single source of truth for file roles and `extra_args`. Job models reference `simulation_path` instead of storing file names. (Dashboard API + UI) Paths inside a manifest resolve relative to the manifest's own directory (notebooks write manifests next to their outputs), with an existence-checked experiment-relative fallback; the API always returns experiment-relative paths.
-- **Sidecar Polling Pattern**: MDRun API's poller sidecar co-locates with the API on one PVC and polls K8s job status on an interval. SQLite lives on a block-device-backed volume, never NFS (WAL is unsupported on network filesystems).
-- **Template-Based Configuration**: `helm/charts/mddash/values.yaml.tmpl` is rendered with `gomplate` before Helm. Never edit `values.yaml`; it's generated.
-- **S3 Provider Toggle**: `s3.seaweedfs.enabled` swaps every consumer's `S3_ENDPOINT` to the in-cluster SeaweedFS `all-in-one` Service; consumers stay endpoint-agnostic. The store reads the shared `<package>-s3-creds` via key remapping. Flipping providers: stop all user pods, seed the new bucket, wipe every user's `.rclone-bisync` workdir (see S3 Sync rules above).
+- **Simulation manifest pattern.** `.simulation.json` files are the single source of truth for file roles and `extra_args`. Job models reference `simulation_path` instead of storing file names. (Dashboard API + UI) Paths inside a manifest resolve relative to the manifest's own directory (notebooks write manifests next to their outputs), with an existence-checked experiment-relative fallback; the API always returns experiment-relative paths.
+- **Sidecar polling pattern.** MDRun API's poller sidecar co-locates with the API on one PVC and polls K8s job status on an interval. SQLite lives on a block-device-backed volume, never NFS (WAL is unsupported on network filesystems).
+- **Template-based configuration.** `helm/charts/mddash/values.yaml.tmpl` is rendered with `gomplate` before Helm. Never edit `values.yaml`; it's generated.
+- **S3 provider toggle.** `s3.seaweedfs.enabled` swaps every consumer's `S3_ENDPOINT` to the in-cluster SeaweedFS `all-in-one` Service; consumers stay endpoint-agnostic. The store reads the shared `<package>-s3-creds` via key remapping. Flipping providers: stop all user pods, seed the new bucket, wipe every user's `.rclone-bisync` workdir (see S3 Sync rules above).
 
-## Cross-Component Gotchas
+## Cross-component gotchas
 
 ### Configuration
-- **Environment = explicit `ENV`**: `ENV=dev` or `ENV=prod`, defaulting to `dev`. Dev images use a static `dev` tag; prod uses immutable SemVer tags (e.g. `0.1.0`) provided by the release workflow. No branch-based inference.
+- **Environment is explicit `ENV`.** `ENV=dev` or `ENV=prod`, defaulting to `dev`. Dev images use a static `dev` tag; prod uses immutable SemVer tags (e.g. `0.1.0`) provided by the release workflow. No branch-based inference.
 - **Runtime configuration**: the proxy generates JSON at startup and serves it through the authenticated `{$CADDY_ROUTE_PREFIX}/dash/runtime-config.json` route. The UI validates it before creating application providers; local development falls back only when that route returns 404.
 
 ### Authentication
@@ -42,7 +42,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - All user-pod containers mount a shared PVC at `/mddash`.
 - User namespaces require `field.cattle.io/projectId` and `field.cattle.io/resourceQuota` annotations. The pre-spawn hook waits for `InitialRolesPopulated`, patches the namespace, then waits for ResourceQuota to become active.
 
-### S3 Sync
+### S3 sync
 - The user-pod sidecar (`dashboard/s3-sync/`) runs `rclone bisync` between `/mddash` (PVC) and S3. bisync state (`--workdir /mddash/.rclone-bisync`) MUST live on the PVC. If it's ephemeral, restarts force `--resync`, which only copies and re-creates files/dirs deleted on the other side.
 - `--resync` runs ONLY on a genuine first run (empty workdir) or as last-resort recovery; normal runs use `--recover --resilient --max-lock 2m`. Every `--resync` invocation MUST also pass `--max-lock`: a lock's expiry is set by the process that creates it, so an interrupted resync without `--max-lock` leaves a never-expiring `.lck` that blocks all future runs (the normal loop's `--max-lock` can't break a lock it didn't create).
 - A `.s3-init` marker file (non-excluded) keeps both paths non-empty so bisync's empty-path safety check doesn't abort every cycle on a fresh PVC.
@@ -52,18 +52,18 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - A local `/mddash/_archives` tree is never legitimate. `sync.sh` removes stray copies at startup, restoring the write bit first since bisync-downloaded dirs are read-only.
 
 ### Database
-- **Dashboard API**: runs `flask_migrate.upgrade()` on startup against versioned migrations in `dashboard/api/migrations/versions/` (fresh databases are created by the same migrations. There is no `db.create_all()` fallback (details in `dashboard/api/AGENTS.md`). Add a new migration file when adding columns. Do NOT manually run `flask db upgrade`.
-- **MDRun API**: `db.create_all()` only. No Alembic migrations. SQLite WAL mode for concurrent reads/writes.
+- **Dashboard API.** runs `flask_migrate.upgrade()` on startup against versioned migrations in `dashboard/api/migrations/versions/` (fresh databases are created by the same migrations, there is no `db.create_all()` fallback, see `dashboard/api/AGENTS.md`). Add a new migration file when adding columns. Do NOT manually run `flask db upgrade`.
+- **MDRun API.** `db.create_all()` only. No Alembic migrations. SQLite WAL mode for concurrent reads/writes.
 
-### Error Handling
+### Error handling
 - All services return RFC 9457 problem-details (`errors.py` per service): `{"type", "title", "detail"[, "solution"]}` with `Content-Type: application/problem+json`. The body carries no `status`; the HTTP status line does. `type` is the support-reportable code (`urn:mddash:<token>`, correlated in logs by `type` + time).
 - `ApiError` + handler registration is intentionally duplicated across `dashboard/api/errors.py`, `mdrun-api/errors.py`, `dashboard/auth/errors.py`, and `tuner/api/errors.py` (separate containers, no shared package). Keep all in lockstep: a contract change must be applied to all four.
 - `str(e)` and internal details never reach the client: unexpected exceptions return a generic 500 detail with a retry/support `solution`, traceback logged server-side only. This includes the Tuner rayworker's persisted job error, which is a user-friendly message, never the raw exception text.
-- The dashboard API wraps Tuner and MDRepo submit failures as `urn:mddash:upstream-unavailable` (with a `solution`) rather than letting them surface as generic 500s.
+- The dashboard API wraps Tuner and MDRepo submit failures as `urn:mddash:upstream-unavailable` (with a `solution`) rather than letting them appear as generic 500s.
 - Validation errors carry no `solution` (the `detail` already implies the fix).
 - The UI's `ApiError.message` is `solution ?? detail` (`dashboard/ui/src/api/errors.ts`); error states are durable UI (alerts/placeholders), never toast-only (see `dashboard/ui/AGENTS.md`).
 
-## Development & Feedback Loop
+## Development and feedback loop
 
 - `make demo` runs the real Flask API (`dashboard/api/_demo/app.py`, test-style mocks + seeded data) plus the React dev server locally. The demo data dir is wiped and reseeded on every start. Mutations never survive a restart.
 - Run from repo root before claiming any code is correct. Each must pass before the next:

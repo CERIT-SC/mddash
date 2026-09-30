@@ -1,10 +1,10 @@
-# Dashboard Startup Optimization Design
+# Dashboard startup optimization design
 
 ## Summary
 
 Reduce the time from dashboard user pod container start to the first successful dashboard API/auth health response. The first pass focuses on measurement and low-risk startup trimming for the dashboard `api` and `auth` sidecars, plus health-check access-log cleanup where probe noise hides useful logs. It does not redesign JupyterHub spawning, namespace provisioning, S3 persistence, or the sidecar architecture.
 
-## Current Context
+## Current context
 
 Dashboard user pods are assembled by `helm/charts/mddash/files/pre_spawn_hook.py`. The pod contains the JupyterHub singleuser container plus sidecars for proxy, auth, API, and S3 sync. The API and auth containers are injected as extra containers with fixed resources:
 
@@ -24,18 +24,18 @@ The dashboard API currently does several things before it can serve a health res
 
 The proxy waits for `http://localhost:5001` and `http://localhost:5000`, but it does not use `curl --fail` and does not target `/health`, so a non-2xx HTTP response can satisfy the wait. Dockerfile `HEALTHCHECK` directives are not Kubernetes readiness probes for these injected sidecars.
 
-The `mdrun-api` service is separate from the dashboard user pod, but its health endpoint is currently noisy in logs. Industry practice is to suppress routine successful probe access logs while preserving failed probes, application errors, and useful startup/diagnostic logs.
+The `mdrun-api` service is separate from the dashboard user pod, but its health endpoint is currently noisy in logs. Suppress routine successful probe access logs while preserving failed probes, application errors, and useful startup/diagnostic logs.
 
 ## Goals
 
-- Measure startup phases clearly enough to distinguish CPU-bound Python startup, PVC/SQLite migration work, Kubernetes client setup, proxy waiting, and auth startup.
+- Measure startup phases to distinguish CPU-bound Python startup, PVC/SQLite migration work, Kubernetes client setup, proxy waiting, and auth startup.
 - Reduce API first-health latency without weakening schema safety.
 - Keep auth behavior unchanged unless measurement shows it is a meaningful contributor.
 - Make proxy startup wait for real health success instead of any HTTP response.
 - Suppress successful health-check access-log noise, especially for `mdrun-api`, without hiding failures.
 - Preserve existing sidecar topology and user-facing dashboard behavior.
 
-## Non-Goals
+## Non-goals
 
 - Redesign JupyterHub spawning or Rancher namespace provisioning.
 - Move dashboard API out of the user pod.
@@ -44,7 +44,7 @@ The `mdrun-api` service is separate from the dashboard user pod, but its health 
 - Optimize total spawn time from login/click to dashboard page load beyond what directly affects dashboard health.
 - Change `mdrun-api` request handling or health response semantics beyond access-log filtering.
 
-## Proposed Approach
+## Proposed approach
 
 Use an instrumentation-first, low-risk trimming approach.
 
@@ -60,7 +60,7 @@ This approach should provide useful before/after evidence and reduce first-healt
 
 ## Architecture
 
-### Startup Timing
+### Startup timing
 
 The API should emit structured, timestamped startup logs for these phases:
 
@@ -78,25 +78,25 @@ Auth should emit a smaller set of timing logs: module import/app creation comple
 
 The logging should use the existing Python logging configuration. Instrumentation must not prevent startup if logging configuration is incomplete.
 
-### API App Construction
+### API app construction
 
 The production API container uses Gunicorn with `app:create_app()`. The module-level `app = create_app()` causes avoidable app construction during module import. The design is to use a single application creation path for production. Direct `python app.py` development usage can still create the app inside the `__main__` branch.
 
-### Database Migration Handling
+### Database migration handling
 
 Schema safety remains startup-gated. If the database is unversioned, unknown, or behind head, startup still performs the existing migration/stamp handling before serving the API.
 
 When the database revision is already equal to the Alembic script head, the API should skip `upgrade()`. This avoids invoking full migration machinery on every user pod start while preserving correctness for real migrations.
 
-Migration fallback to `db.create_all()` can remain for the first pass, but logs should clearly show when fallback happens because it may hide migration defects.
+Migration fallback to `db.create_all()` can remain for the first pass, but logs show when fallback happens because it may hide migration defects.
 
-### Kubernetes Client Loading
+### Kubernetes client loading
 
 The health endpoint should not require Kubernetes client initialization. `clients.k8s` should expose cached helper functions that load in-cluster config and construct `CoreV1Api`/`BatchV1Api` only when a route actually needs Kubernetes.
 
 Routes that need Kubernetes keep using the client module through the same public operations. Internals can change from module-level clients to lazy cached clients without changing API route behavior.
 
-### Storage Size Monitor
+### Storage size monitor
 
 The storage-size monitor should not compete with first health. Two acceptable implementations are:
 
@@ -105,7 +105,7 @@ The storage-size monitor should not compete with first health. Two acceptable im
 
 The simpler first pass is an initial delay. It keeps `/metrics` behavior eventually consistent and avoids introducing request-time `du` latency.
 
-### Proxy Health Wait
+### Proxy health wait
 
 The proxy command should wait for explicit endpoints:
 
@@ -116,7 +116,7 @@ Because the API route prefix includes `JUPYTERHUB_SERVICE_PREFIX`, the proxy com
 
 The wait should use `curl --fail` so only successful HTTP status codes pass. The retry interval can remain short, but logs should make prolonged waits diagnosable.
 
-### Health Access Logging
+### Health access logging
 
 Routine successful health/readiness probe requests should not congest access logs. The first target is `mdrun-api`, where `/api/health` is checked frequently by Kubernetes probes and generates low-value noise. The preferred implementation is server-level filtering in the `mdrun-api` uWSGI startup/configuration so successful `GET /api/health` access lines are suppressed before they reach stdout.
 
@@ -130,7 +130,7 @@ The filtering policy should be narrow:
 
 Dashboard API/auth can adopt the same policy later if their successful probe logs become noisy, but they are secondary to `mdrun-api` for this pass.
 
-## Data Flow
+## Data flow
 
 Startup after the change:
 
@@ -145,7 +145,7 @@ Startup after the change:
 9. Proxy starts Caddy only after auth and API health endpoints return successful status codes.
 10. Routine successful probe traffic is omitted from high-volume access logs, while failures remain diagnosable.
 
-## Error Handling
+## Error handling
 
 - Timing logs must be best-effort and never fatal.
 - Migration errors keep the current fallback behavior for the first pass, with clearer warning logs.
@@ -153,9 +153,9 @@ Startup after the change:
 - Proxy health waiting should fail visibly through container logs if auth or API never becomes healthy.
 - Health access-log filtering must not suppress failed probes, exceptions, or non-health requests.
 
-## Testing And Verification
+## Testing and verification
 
-### Automated Tests
+### Automated tests
 
 - API migration tests:
   - DB already at Alembic head skips `upgrade()`.
@@ -169,7 +169,7 @@ Startup after the change:
   - successful `mdrun-api` `/api/health` probes are not emitted as routine access logs
   - failed health probes or application errors remain visible
 
-### Manual Cluster Verification
+### Manual cluster verification
 
 Collect before/after evidence from a user pod startup:
 
@@ -189,7 +189,7 @@ Success means the logs can explain where startup time is spent and the API first
 3. If API health latency remains high, use the timing logs to decide whether resource tuning, image pull optimization, or lifecycle splitting is the next bottleneck.
 4. Promote to production only after dev startup behavior and health checks are stable.
 
-## Risks And Mitigations
+## Risks and mitigations
 
 | Risk | Mitigation |
 |---|---|
@@ -200,6 +200,6 @@ Success means the logs can explain where startup time is spent and the API first
 | Startup logs become noisy. | Use concise INFO logs for phase duration and warnings only for abnormal paths. |
 | Health log filtering hides real failures. | Filter only successful health access lines and verify failures/errors still appear. |
 
-## Open Decisions
+## Open decisions
 
 No open product decisions remain for the first pass. If measurements show cluster resource throttling dominates after low-risk trimming, resource tuning should be handled as a follow-up design or a small separate change.

@@ -12,7 +12,7 @@ const TONE_CLASSES: Record<IconTone, string> = {
   error: "text-error",
 }
 
-/** Card header with a colored icon before the title — used by every hub card page. */
+/** Card header with a colored icon before the title. Every hub card page uses it. */
 export function IconCardHeader({
   icon: Icon,
   tone = "primary",

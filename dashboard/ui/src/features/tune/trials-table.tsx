@@ -86,7 +86,7 @@ export function TrialsTableHeader({ engine, pickColumn = true }: { engine: Engin
 /** Suggestions (fastest/cheapest) in a band up top; the rest sorted by performance below. */
 export function TrialsTable({ engine, rows, value, onValueChange, live, onShowLogs }: TrialsTableProps) {
   const { fastestId, ecoId } = suggest(rows)
-  // Fastest and eco may be the same row — dedupe before mapping.
+  // Fastest and eco may be the same row. Dedupe before mapping.
   const sorted = sortTrials(rows)
   const suggested = [...new Set([fastestId, ecoId])]
     .map((id) => sorted.find((row) => row.id === id))
@@ -178,7 +178,7 @@ type TrialRowCellsProps = {
   onShowLogs?: (trialId: string) => void
 }
 
-/** The trial's cells (no surrounding TableRow) — shared by the picker and "configuration used". */
+/** The trial's cells (no surrounding TableRow). The picker and "configuration used" share them. */
 export function TrialRowCells({ engine, row, fastest, eco, onShowLogs }: TrialRowCellsProps) {
   return (
     <>
@@ -191,7 +191,7 @@ export function TrialRowCells({ engine, row, fastest, eco, onShowLogs }: TrialRo
       </TableCell>
       <TableCell className="text-right tabular-nums">{row.estCost === null ? "—" : formatCost(row.estCost)}</TableCell>
       <TableCell aria-hidden className="w-28 p-0" />
-      {/* Hardware cells are confirmation detail — muted so badges and outcomes win the eye. */}
+      {/* Hardware cells are confirmation detail. They stay muted so badges and outcomes stand out. */}
       {engine === Engine.AMBER ? (
         <>
           <TableCell className="text-text-muted whitespace-nowrap">{row.binary ?? "—"}</TableCell>

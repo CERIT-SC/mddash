@@ -54,7 +54,7 @@ const HeatmapMatrix: React.FC<HeatmapMatrixProps> = ({
   const maxValue = typeof valueRange?.max === "number" && Number.isFinite(valueRange.max) ? valueRange.max : computedMax
 
   const defaultTooltip = (context: TooltipContext) => {
-    // Labels come from the analysis payload — escape before innerHTML.
+    // Labels come from the analysis payload. Escape before innerHTML.
     const xLabel = context.xLabel ?? `Col ${context.xIndex + 1}`
     const yLabel = context.yLabel ?? `Row ${context.yIndex + 1}`
     const formattedValue = Number.isFinite(context.value) ? context.value.toFixed(2) : String(context.value)

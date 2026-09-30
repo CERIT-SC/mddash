@@ -20,7 +20,7 @@ type SiteHeaderProps = {
   user: string
 }
 
-// Hub routes are the same on every deployment — no need for runtime configuration.
+// Hub routes are the same on every deployment. No runtime configuration is needed.
 const HUB_TOKEN_URL = "/hub/token"
 const LOGOUT_URL = "/hub/logout"
 

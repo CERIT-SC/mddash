@@ -19,7 +19,7 @@ class EwaldPreset(str, Enum):
     """Ewald summation performance preset applied to the &ewald mdin namelist."""
 
     DEFAULT = "default"  # netfrc=1, skin_permit=1.0
-    OPTIMIZED = "optimized"  # netfrc=0, skin_permit=0.75 — ~15-20% GPU speedup
+    OPTIMIZED = "optimized"  # netfrc=0, skin_permit=0.75; about 15-20% GPU speedup
 
 
 @dataclass

@@ -181,8 +181,8 @@ async function loadSingleStructure(
   }
 }
 
-/** Load a structure/topology + coordinates pair as a trajectory —
- * mirrors MolStar's own LoadTrajectory action. */
+/** Load a structure/topology + coordinates pair as a trajectory.
+ * Mirrors MolStar's own LoadTrajectory action. */
 async function loadStructureWithCoordinates(
   plugin: PluginUIContext,
   options: {

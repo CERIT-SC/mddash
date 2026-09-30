@@ -169,7 +169,7 @@ def list_analysis_results(experiment_id: str) -> Response:
     List available analysis result names for a simulation.
 
     Query params:
-        simulation_path: Required — the simulation manifest path to scope results.
+        simulation_path: Required. The simulation manifest path to scope results.
 
     Returns:
         JSON response with a list of result name strings.
@@ -191,7 +191,7 @@ def get_analysis_variants(experiment_id: str, name: str) -> Response:
     Return variant options for a multi-file analysis from its summary JSON.
 
     Query params:
-        simulation_path: Required — the simulation manifest path to scope results.
+        simulation_path: Required. The simulation manifest path to scope results.
 
     Returns:
         JSON response with a list of variant objects, or an empty list if not found.
@@ -225,7 +225,7 @@ def get_analysis_result(experiment_id: str, name: str) -> Response:
     Get the JSON content of a specific analysis result.
 
     Query params:
-        simulation_path: Required — the simulation manifest path to scope results.
+        simulation_path: Required. The simulation manifest path to scope results.
 
     Returns:
         JSON response with the parsed analysis data, or an error response if not found.

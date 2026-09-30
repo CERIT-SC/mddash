@@ -81,7 +81,7 @@ const TUNE_REQUIRED_ROLES: Record<Engine, FileRoleKey[]> = {
 const MANUAL_FORM_ID = "tune-manual-config"
 const CUSTOMIZE_FORM_ID = "tune-customize-config"
 
-/** error_message is NullableString — treat both null and undefined as absent. */
+/** error_message is NullableString. Treat both null and undefined as absent. */
 const hasErrorMessage = (job: TunerJob) => job.error_message !== null && job.error_message !== undefined
 
 type TuneStepProps = {
@@ -156,7 +156,7 @@ export function TuneStep({
   const stop = useStopTunerJob({
     mutation: {
       onSuccess: () => {
-        toast.success("Tuning stopped — results so far are kept")
+        toast.success("Tuning stopped. Results so far are kept.")
         invalidate()
       },
       onError: (error) => toast.error(toApiError(error).message),
@@ -335,7 +335,7 @@ export function TuneStep({
         </Button>
       </div>
 
-      {/* AlertDialogAction has no variant prop in DS ≤ 0.1.9 — buttonVariants workaround
+      {/* AlertDialogAction has no variant prop in DS ≤ 0.1.9. buttonVariants workaround
           until https://github.com/CERIT-SC/design-system/pull/108 lands. */}
       <AlertDialog open={confirmRetune} onOpenChange={setConfirmRetune}>
         <AlertDialogContent>
@@ -365,8 +365,8 @@ export function TuneStep({
               Start tuning with {confirmStartNsteps?.toLocaleString("en-US")} steps?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Tuning at this size usually takes <strong>several minutes</strong>. You can close the page — it keeps
-              running, and you can stop it from this step.
+              Tuning at this size takes <strong>several minutes</strong>. You can close the page. It keeps running, and
+              you can stop it from this step.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -514,7 +514,7 @@ function TuningBody({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-4">
-        {/* The displayed nsteps is the job's — changing it requires a re-tune. */}
+        {/* The displayed nsteps is the job's. Changing it requires a re-tune. */}
         <NstepsField id="tune-nsteps-job" value={job.nsteps} onValueChange={() => undefined} disabled />
         {live ? (
           <>
@@ -577,7 +577,7 @@ type NstepsFieldProps = {
 function NstepsField({ id, value, onValueChange, disabled = false }: NstepsFieldProps) {
   return (
     <div className="space-y-2">
-      {/* Hint stays outside the Label — inside, it would leak into the control's accessible name. */}
+      {/* Hint stays outside the Label. Inside, it would leak into the control's accessible name. */}
       <span className="inline-flex items-center gap-1">
         <Label htmlFor={id}>Number of steps</Label>
         <HintTooltip text="Length of each tuning trial in MD steps. Longer trials give more reliable estimates but take longer." />

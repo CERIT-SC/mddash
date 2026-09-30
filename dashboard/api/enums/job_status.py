@@ -13,12 +13,12 @@ class JobStatus(str, Enum):
 
     @property
     def is_live(self) -> bool:
-        """Non-terminal states — the job may still advance without user action."""
+        """The job may still advance without user action."""
         return self in {JobStatus.UNKNOWN, JobStatus.PENDING, JobStatus.RUNNING}
 
     @property
     def is_terminal(self) -> bool:
-        """States that never change again — safe to cache and skip re-fetching."""
+        """These states never change. Callers can cache them and skip re-fetching."""
         return self in {JobStatus.FINISHED, JobStatus.ERROR, JobStatus.STOPPED}
 
     def __str__(self) -> str:
@@ -26,10 +26,5 @@ class JobStatus(str, Enum):
 
     @classmethod
     def from_string(cls, value: str) -> "JobStatus":
-        """
-        Create a JobStatus from a string value.
-
-        Returns:
-            JobStatus: The matching enum member.
-        """
+        """Match a string to a member. Matching ignores case."""
         return cls(value.upper())

@@ -15,7 +15,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query"
 // state needs only an occasional check (idle-culling, starts from elsewhere).
 const TRANSITION_POLL_MS = 3000
 const STEADY_POLL_MS = 30_000
-// Serving probes back off to a 30s ceiling (no hard give-up — slow binder
+// Serving probes back off to a 30s ceiling (no hard give-up. Slow binder
 // installs take minutes); enough failures degrade the label in consumers.
 const PROBE_MAX_DELAY_MS = 30_000
 const TRANSITIONING = new Set<string>(["PENDING", "TERMINATING"])
@@ -33,7 +33,7 @@ export function useNotebook(experimentId: string) {
 }
 
 /**
- * Readiness of a RUNNING notebook: RUNNING only means the container started —
+ * Readiness of a RUNNING notebook: RUNNING only means the container started.
  * Jupyter (or binder installs) lags behind, so the probe retries without giving
  * up. started_at in the key re-probes restarts.
  */
@@ -68,14 +68,14 @@ export function useNotebookInvalidation(experimentId: string) {
 
 const QUOTA_POLL_MS = 3000
 
-/** True only for the API's concurrent-notebook limit problem — not other 403s (quota headroom etc.). */
+/** True only for the API's concurrent-notebook limit problem, not other 403s (quota headroom etc.). */
 export function isNotebookQuotaError(error: unknown): boolean {
   return toApiError(error).type === "urn:mddash:notebook-quota-exceeded"
 }
 
 /**
  * Concurrent-notebook quota from /notebook-config plus the experiments list.
- * `full` requires both to be known — an unknown state never blocks starts.
+ * `full` requires both to be known. An unknown state never blocks starts.
  */
 export function useNotebookQuota({ poll = false }: { poll?: boolean } = {}) {
   const config = useGetNotebookConfig({ query: { retry: false } })

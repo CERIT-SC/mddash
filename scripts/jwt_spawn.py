@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-Start a JupyterHub singleuser server using JWT token authentication.
-
-A standalone manual test script for exercising the EGI authenticator JWT
-callback flow against the MDDash EDC deployment.
-"""
+"""Start a JupyterHub singleuser server with JWT token authentication. Manual test script for the EGI authenticator JWT flow."""
 
 import os
 
@@ -19,21 +14,20 @@ def start_server():
 
     base_url = "https://mddash-edc.dyn.cloud.e-infra.cz"
     login_url = f"{base_url}/hub/jwt_login"
-    # Server name can be empty string for default server, or a named server
+    # Server name is empty for the default server, or a named server.
     server_name = ""
     server_url = f"{base_url}/hub/api/users/ljocha/servers/{server_name}"
 
-    # Use a session to automatically manage cookies (including path-based cookies like _xsrf)
+    # Use a session to manage cookies, including path-based cookies like _xsrf.
     session = requests.Session()
 
-    print("--- Step 1: JWT Login ---")
+    print("JWT login.")
     login_resp = session.get(login_url, headers={"Authorization": f"bearer {token}"})
 
     if login_resp.status_code != 200:
         print(f"Login failed: {login_resp.text}")
         return
 
-    # Extract the XSRF token from cookies (session handles path=/hub/ automatically)
     xsrf_token = session.cookies.get("_xsrf")
 
     if not xsrf_token:
@@ -42,16 +36,15 @@ def start_server():
 
     print("Login successful.")
 
-    print("--- Step 2: Priming session ---")
+    print("Priming session.")
 
-    # Hit home page to ensure XSRF cookie is properly set for /hub/ path
+    # Load the home page so the XSRF cookie is set for the /hub/ path.
     session.get(f"{base_url}/hub/home", headers={"Authorization": f"token {token}"})
     xsrf_token = session.cookies.get("_xsrf")
 
-    # Prime the API session
     session.get(f"{base_url}/hub/api/user", headers={"Authorization": f"token {token}"})
 
-    print("--- Step 3: Starting server ---")
+    print("Starting server.")
 
     post_resp = session.post(
         server_url,
@@ -69,5 +62,4 @@ def start_server():
 
 
 if __name__ == "__main__":
-    # Label: Ljocha 2026
     start_server()

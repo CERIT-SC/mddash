@@ -1,19 +1,19 @@
-# Resource Management
+# Resource management
 
 ## Namespace structure
 
 Each user gets an isolated Kubernetes namespace (`{helm-package}-user-{username}-ns`) managed by JupyterHub's pre-spawn hook. Two categories of workload run there:
 
-> `{username}` is normalized to a Kubernetes DNS-1123-safe slug, so OIDC usernames containing dots or other invalid characters (e.g. `john.doe` → `john-doe`) do not break namespace creation. The raw username is still used for JupyterHub routing.
+> `{username}` is normalized to a Kubernetes DNS-1123-safe slug, so OIDC usernames containing dots or other invalid characters (e.g. `john.doe` becomes `john-doe`) do not break namespace creation. The raw username is still used for JupyterHub routing.
 
 | Category | Lifetime | Examples |
 |---|---|---|
 | Always-on | While the user is logged in | JupyterHub singleuser pod + sidecars (proxy, auth, api, s3sync) |
 | On-demand | User-initiated, short to long-lived | Notebook pods, analysis jobs |
 
-The hub namespaces — `md-dashboard-ns` (prod) and `mddash-dev` (dev) — host JupyterHub itself, mdrun-api, Tuner, and the landing page; those are not covered by per-user quotas. Both live in the same Rancher project, so the project limit must cover both hubs plus all user namespaces.
+The hub namespaces, `md-dashboard-ns` (prod) and `mddash-dev` (dev), host JupyterHub itself, mdrun-api, Tuner, and the landing page; those are not covered by per-user quotas. Both live in the same Rancher project, so the project limit must cover both hubs plus all user namespaces.
 
-When `s3.seaweedfs.enabled` is true, the hub namespace also runs the in-cluster S3 store (SeaweedFS all-in-one, 1 pod: 100m/256Mi requested, 1 CPU/1Gi limit — included in `make resources`). Its data PVC (`s3.seaweedfs.diskSize`) is provisioned on `s3.seaweedfs.storageClassName` (empty = cluster default) and counts toward the Rancher project's storage quota where tracked.
+When `s3.seaweedfs.enabled` is true, the hub namespace also runs the in-cluster S3 store (SeaweedFS all-in-one, 1 pod: 100m/256Mi requested, 1 CPU/1Gi limit, included in `make resources`). Its data PVC (`s3.seaweedfs.diskSize`) is provisioned on `s3.seaweedfs.storageClassName` (empty means cluster default) and counts toward the Rancher project's storage quota where tracked.
 
 ---
 
@@ -38,7 +38,7 @@ Configured via `resources.singleuser` in `config.yaml`.
 | s3sync | 10m | 64Mi | 200m | 256Mi |
 | **Sidecar total** | **80m** | **272Mi** | **650m** | **928Mi** |
 
-**Fixed overhead total:** ~280m CPU / ~760Mi memory (requests) · ~1650m CPU / ~4.6Gi (limits)
+Fixed overhead totals about 280m CPU / 760Mi memory (requests) and about 1650m CPU / 4.6Gi (limits).
 
 ---
 
@@ -52,9 +52,9 @@ Resources are configured via `resources.notebook` in `config.yaml`. The notebook
 |---|---|---|---|---|
 | jupyter | 500m | 1Gi | 5000m | 8Gi |
 
-**Why jupyter limits are generous:** GROMACS runs with MPI/OpenMP inside the notebook container, where CPU throttling causes rank starvation and incorrect simulation results, and notebooks can spike in memory (e.g. loading a large trajectory). The 8Gi limit prevents a runaway computation from OOMKilling other pods.
+Jupyter limits are generous because GROMACS runs with MPI/OpenMP inside the notebook container, where CPU throttling causes rank starvation and incorrect simulation results, and notebooks can spike in memory (e.g. loading a large trajectory). The 8Gi limit prevents a runaway computation from OOMKilling other pods.
 
-`resources.notebookQuota.maxConcurrent` sets the API-enforced count limit on concurrent notebook pods (passed to the API as `NS_MAX_NOTEBOOKS`, a **required** env var — the API refuses to start without it and exposes it via `GET /api/.../notebook-config` as `concurrentLimit`). It is sized so that `maxConcurrent` notebooks at the **4x tier** fit within the namespace quota — the same quota headroom fits `maxConcurrent × 4` notebooks at 1x tier.
+`resources.notebookQuota.maxConcurrent` sets the API-enforced count limit on concurrent notebook pods (passed to the API as `NS_MAX_NOTEBOOKS`, a required env var. The API refuses to start without it and exposes it via `GET /api/.../notebook-config` as `concurrentLimit`). It is sized so that `maxConcurrent` notebooks at the **4x tier** fit within the namespace quota. The same quota headroom fits `maxConcurrent × 4` notebooks at 1x tier.
 
 ### Analysis jobs
 
@@ -77,7 +77,7 @@ limits_cpu   = user_pod (1650m)  + MAX_NOTEBOOKS × tier×5000m  + analysis (100
 limits_mem   = user_pod (4.6Gi)  + MAX_NOTEBOOKS × tier×8Gi    + analysis (8Gi)   + upload (256Mi)
 ```
 
-Tiers multiply the per-notebook values linearly (2x tier → ×2, 4x → ×4). Size the quota for the worst case: `MAX_NOTEBOOKS` all at 4x.
+Tiers multiply the per-notebook values linearly (2x tier means ×2, 4x means ×4). Size the quota for the worst case: `MAX_NOTEBOOKS` all at 4x.
 
 ### With `MAX_NOTEBOOKS = 2` (default)
 
@@ -86,9 +86,9 @@ Tiers multiply the per-notebook values linearly (2x tier → ×2, 4x → ×4). S
 | CPU | ~5380m | ~43150m |
 | Memory | ~10.9Gi | ~76.9Gi |
 
-**Namespace limits quota must be ≥ sum of all container limits at full load.** If smaller, users hit 403 errors even when individual pods are within their own limits.
+Namespace limits quota must be at least the sum of all container limits at full load. If smaller, users hit 403 errors even when individual pods are within their own limits.
 
-Set `resources.namespaceQuota.*` in `config.yaml` (or `config.dev.yaml`) to values ≥ the 4x tier column, rounded up to your node size.
+Set `resources.namespaceQuota.*` in `config.yaml` (or `config.dev.yaml`) to values at least the 4x tier column, rounded up to your node size.
 
 ---
 
@@ -98,10 +98,10 @@ Set `resources.namespaceQuota.*` in `config.yaml` (or `config.dev.yaml`) to valu
 
 Rancher project limits are shared between both hub namespaces and every user namespace. The user namespace quotas are set automatically by MDDash from `resources.namespaceQuota.*` in `config.yaml`. Hub namespace quotas are set by `install.sh` from the `make resources` totals (or manually in the Rancher UI): prod caps `md-dashboard-ns`, dev caps `mddash-dev`.
 
-To adjust a hub quota manually in Rancher, open **Cluster → Projects/Namespaces**, select the project, find the hub namespace, click **⋮ → Edit Config**, and set its Resource Quota to the `make resources` hub totals. The project limit minus the hub quotas must leave enough room for the planned number of user namespaces at full load.
+To adjust a hub quota manually in Rancher, open **Cluster → Projects/Namespaces**, select the project, find the hub namespace, click **⋮**, then Edit Config, and set its Resource Quota to the `make resources` hub totals. The project limit minus the hub quotas must leave enough room for the planned number of user namespaces at full load.
 
 1. Edit `resources.namespaceQuota.*` in `config.yaml`.
-2. Run `make deploy` — renders values into the hub's `extraEnv`; the pre-spawn hook applies them when creating user namespaces.
+2. Run `make deploy`. It renders values into the hub's `extraEnv`; the pre-spawn hook applies them when creating user namespaces.
 3. **Existing namespaces** are only updated on next login. To force an immediate update, patch the namespace annotation manually or delete the namespace.
 
 ### Using `make resources`
@@ -117,7 +117,7 @@ Prints per-component breakdown, formula minimums, and a comparison against the c
 
 ## Notebook resource tiers
 
-Users choose between **1x**, **2x**, and **4x** tiers when starting a notebook. The API multiplies all CPU and memory values in `resources.notebook` by the tier factor at runtime — no per-tier config needed. An optional **GPU toggle** attaches a single GPU (`gpuType` config key → `GPU_TYPE` env var, e.g. `nvidia.com/mig-1g.10gb`) to the gmx container, independent of tier. GPU resources use a separate Kubernetes resource name and do not count toward CPU/memory quota.
+Users choose between **1x**, **2x**, and **4x** tiers when starting a notebook. The API multiplies all CPU and memory values in `resources.notebook` by the tier factor at runtime. No per-tier config is needed. An optional **GPU toggle** attaches a single GPU (`gpuType` config key sets `GPU_TYPE` env var, e.g. `nvidia.com/mig-1g.10gb`) to the gmx container, independent of tier. GPU resources use a separate Kubernetes resource name and do not count toward CPU/memory quota.
 
 ### Pod labels
 
@@ -134,5 +134,5 @@ The `notebooks` table has `tier` (enum: 1x, 2x, 4x) and `gpu` (boolean) columns.
 
 ### API endpoints
 
-- `POST /api/.../notebook` — accepts optional `{"tier": "2x", "gpu": true}` JSON body
-- `GET /api/.../notebook-config` — returns available tiers, the default tier, and `concurrentLimit` (max concurrent notebook pods per user)
+- `POST /api/.../notebook` accepts optional `{"tier": "2x", "gpu": true}` JSON body
+- `GET /api/.../notebook-config` returns available tiers, the default tier, and `concurrentLimit` (max concurrent notebook pods per user)

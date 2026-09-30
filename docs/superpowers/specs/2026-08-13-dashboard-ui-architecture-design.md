@@ -1,9 +1,8 @@
-# Dashboard UI Architecture Design
+# Dashboard UI architecture design
 
-**Date:** 2026-08-13
-**Status:** Approved
-**Scope:** Frontend workspace and greenfield Dashboard UI architecture
-
+Date is 2026-08-13.
+Status is Approved.
+Scope is Frontend workspace and greenfield Dashboard UI architecture.
 ## Goal
 
 Establish a clean-room architecture for a new Dashboard SPA of approximately the same product scale as the current UI. The architecture must keep related code close together, minimize manually maintained API code, use the e-INFRA design system, and make changes easy to understand and verify for both people and coding agents.
@@ -24,7 +23,7 @@ They currently use independent pnpm roots and lockfiles. Landing and Hub use `@e
 
 The Flask Dashboard API has no OpenAPI document or automatic schema generation. It exposes approximately 50 operations with several contract-sensitive cases: multipart uploads, arbitrary binary downloads, JSON-string logs, redirects, RFC 9457 errors, engine-discriminated payloads, variable analysis results, and catch-all path parameters containing slashes.
 
-## Locked Decisions
+## Locked decisions
 
 | Area | Decision |
 |---|---|
@@ -47,7 +46,7 @@ The Flask Dashboard API has no OpenAPI document or automatic schema generation. 
 | Formatting | Keep Prettier initially. Evaluate Oxfmt later in an isolated tooling change. |
 | Testing | Vitest unit tests and Testing Library component integration tests. |
 
-## Considered Architecture Approaches
+## Considered architecture approaches
 
 ### 1. Feature modules with centralized generated API infrastructure
 
@@ -63,7 +62,7 @@ Most code would live beneath route directories. This makes navigation structure 
 
 Global `components`, `hooks`, `schemas`, `services`, and `utils` directories are initially familiar, but a feature change spans many distant folders. This resembles the current architecture's primary scaling problem and encourages unrelated catch-all modules.
 
-## System Boundaries
+## System boundaries
 
 The application has five top-level boundaries:
 
@@ -83,7 +82,7 @@ Lower layers never import upper layers. `app` initializes lower-level modules by
 
 No cross-application React component package is introduced. Dashboard, Landing, and Hub have different runtime and build contracts. The e-INFRA package is their common visual foundation; the root workspace shares dependency policy and tooling, not application code. Shared application packages may be considered later only after stable, identical duplication is demonstrated.
 
-## Generic Directory Structure
+## Generic directory structure
 
 ```text
 dashboard/
@@ -120,7 +119,7 @@ dashboard/
 
 This tree specifies architecture, not product features. `features/` is intentionally unexpanded. A feature starts flat and adds internal directories only when it contains independently understandable units. Empty ceremonial directories are not created.
 
-### Placement Rules
+### Placement rules
 
 - Start product code in the feature that owns the user capability.
 - Keep feature-specific components, forms, Query policies, derived state, and tests together.
@@ -133,7 +132,7 @@ This tree specifies architecture, not product features. `features/` is intention
 
 Application code imports generated artifacts through Orval's generated entry points: `@/api/generated/client`, `@/api/generated/models`, `@/api/generated/schemas`, or `@/api/generated/mocks`. Handwritten transport and error policy remains under `@/api`. Generated implementation files are not edited or imported through undocumented deep paths.
 
-## OpenAPI And Generated Client
+## OpenAPI and generated client
 
 ### Contract ownership
 
@@ -203,7 +202,7 @@ Features do not construct endpoint URLs or call `fetch` directly.
 
 The current `simulation_path` and file-path catch-all routes are non-standard OpenAPI edge cases because a single path parameter may contain `/`. The contract documents actual encoding requirements, and the transport boundary centralizes the workaround. A future API redesign should move opaque filesystem-like identifiers out of path parameters. No feature may depend directly on the workaround.
 
-## Data And State Ownership
+## Data and state ownership
 
 ### Server state
 
@@ -236,7 +235,7 @@ Notebook, tuner, simulation, analysis, and publication lifecycles use generated 
 
 TanStack Query owns synchronization. Pure state functions own interpretation. Presentation components do not accumulate repeated status conditionals, and no state-machine library is introduced.
 
-## Forms And Validation
+## Forms and validation
 
 Forms use React Hook Form directly. The e-INFRA design system's `Form` components provide RHF-aware field composition but do not replace RHF state management.
 
@@ -249,7 +248,7 @@ Generated request schemas are reused when a form and request have the same shape
 
 Backend validation remains authoritative. Recognized field errors are mapped into RHF. Non-field RFC 9457 errors use the application error presentation. Generated DTOs and schemas are never manually copied into feature type files.
 
-## Design System And Components
+## Design system and components
 
 The e-INFRA design system is the visual and interaction foundation. Its setup CSS, semantic tokens, typography, themes, and primitives are initialized once under `app/styles` and `app/providers`.
 
@@ -289,11 +288,11 @@ If a design requires a missing component, variant, token, accessibility fix, or 
 
 Accessibility remains an application responsibility even when primitives are accessible. Tests cover landmarks and headings, labels, keyboard operation, focus restoration, live announcements, reduced motion, responsive behavior, and meaningful error presentation.
 
-## Cohesive Reuse
+## Cohesive reuse
 
 The architecture avoids duplication without creating global dumping grounds. Shared code is placed at the narrowest common owner.
 
-Files named `constants.ts`, `formatters.ts`, `types.ts`, or `hooks.ts` are allowed when scoped to one cohesive feature or concept. They are not allowed to collect unrelated exports merely because those exports share a TypeScript category.
+Files named `constants.ts`, `formatters.ts`, `types.ts`, or `hooks.ts` are allowed when scoped to one cohesive feature or concept. They are not allowed to collect unrelated exports because those exports share a TypeScript category.
 
 Examples:
 
@@ -313,7 +312,7 @@ The placement test is:
 4. Can it be found through product or technical vocabulary?
 5. Would the new export reduce the module's cohesion?
 
-## Runtime And Build
+## Runtime and build
 
 The Dashboard remains a static Vite SPA served by the proxy under an arbitrary JupyterHub user base path. Deployment-specific URLs and user identity are not build-time variables.
 
@@ -334,7 +333,7 @@ The application defines durable global states for invalid runtime configuration,
 
 Route-level lazy loading provides natural bundle boundaries. Large visualization dependencies load only where used. Manual chunk maps are introduced only after measurement demonstrates a problem.
 
-## Workspace And Tooling
+## Workspace and tooling
 
 ### pnpm workspace
 
@@ -382,7 +381,7 @@ Generator-owned files compile but are excluded from manual lint fixes or other t
 - Forbidden imports and cycles.
 - Unused exports and dependencies where the selected tooling can enforce them reliably.
 
-## Testing Strategy
+## Testing strategy
 
 The UI test suite uses focused unit and component integration tests.
 
@@ -403,7 +402,7 @@ Vitest, Testing Library, and MSW carry most UI behavior coverage. Tests render r
 
 Integration tests cover forms, Query behavior, invalidation, polling termination, routing interactions, and loading, stale, empty, failure, and retry states. Tests query by semantic role and accessible name rather than implementation details or CSS classes.
 
-## Agentic-First Maintainability
+## Agentic-first maintainability
 
 Agentic-first means reducing the context required to make a correct change, not increasing abstraction.
 
@@ -420,7 +419,7 @@ Agentic-first means reducing the context required to make a correct change, not 
 - Non-obvious local constraints belong in the nearest `AGENTS.md`; ordinary structure remains self-explanatory.
 - Cross-feature architecture decisions are recorded in `docs/specs`; feature and mock decisions receive separate specs.
 
-## Implementation Sequence
+## Implementation sequence
 
 Implementation follows dependency direction:
 
@@ -432,7 +431,7 @@ Implementation follows dependency direction:
 
 This sequence does not prescribe migration or release timing. It ensures that feature implementation starts only after the contract and architectural boundaries are operational.
 
-## Architecture Acceptance Criteria
+## Architecture acceptance criteria
 
 The architecture is operational when:
 
@@ -452,7 +451,7 @@ The architecture is operational when:
 - e-INFRA setup and pre-render theme restoration pass visual and accessibility assertions. Import and source checks reject copied primitive modules, raw color literals, and generic Tailwind palette colors outside approved third-party adapter styles.
 - Import restrictions prevent upward dependencies and feature cycles; generated imports use the Orval entry points documented above.
 
-## Out Of Scope
+## Out of scope
 
 - Dashboard screen and feature designs.
 - The eventual list or nesting of feature modules.

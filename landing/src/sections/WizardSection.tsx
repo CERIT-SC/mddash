@@ -44,7 +44,7 @@ const WIZARD_STEPS: WizardStep[] = [
     label: "Tune",
     tagline: "Optimal performance, automatically",
     description:
-      "Integrated Tuner runs short GROMACS and AMBER benchmarks across MPI, OpenMP, and GPU configurations in parallel. The best-performing configuration is offered automatically — no manual guesswork, no wasted compute on long production runs.",
+      "Integrated Tuner runs short GROMACS and AMBER benchmarks across MPI, OpenMP, and GPU configurations in parallel. The best-performing configuration is offered automatically. You avoid manual guesswork and wasted compute on long production runs.",
     lightImg: tuneLightImg,
     darkImg: tuneDarkImg,
     alt: "MDDash tune step with benchmark results",
@@ -56,7 +56,7 @@ const WIZARD_STEPS: WizardStep[] = [
     label: "Run",
     tagline: "Live progress without shell access",
     description:
-      "Kubernetes Jobs manage execution with proper resource allocation. Watch live progress, stream logs, and inspect intermediate files — all without needing shell access to the cluster. Jobs survive browser disconnects and pod restarts.",
+      "Kubernetes Jobs manage execution with proper resource allocation. Watch live progress, stream logs, and inspect intermediate files, all without shell access to the cluster. Jobs survive browser disconnects and pod restarts.",
     lightImg: runLightImg,
     darkImg: runDarkImg,
     alt: "MDDash run step with live progress",
@@ -80,7 +80,7 @@ const WIZARD_STEPS: WizardStep[] = [
     label: "Publish",
     tagline: "One-click FAIR data publication",
     description:
-      "One-click publication to MDRepo. Metadata auto-extracted with GROMACS MetaDump. Files upload in the background. The experiment receives a persistent DOI. Built on InvenioRDM — the same framework as Zenodo — enforcing MD-specific metadata schemas and standardized trajectory formats.",
+      "One-click publication to MDRepo. Metadata auto-extracted with GROMACS MetaDump. Files upload in the background. The experiment receives a persistent DOI. Built on InvenioRDM, the same framework as Zenodo, enforcing MD-specific metadata schemas and standardized trajectory formats.",
     lightImg: publishLightImg,
     darkImg: publishDarkImg,
     alt: "MDDash publish step",

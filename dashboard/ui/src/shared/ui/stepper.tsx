@@ -167,7 +167,7 @@ export function StepperHeader({ steps = [], className, maxStep, unlockedIndexes 
                       reachable ? "cursor-pointer" : "cursor-not-allowed"
                     )}
                   >
-                    {/* border-background punches the marker out of the track — the
+                    {/* border-background punches the marker out of the track. The
                         markers sit on the wizard panel's bg-background. */}
                     <span
                       className={cn(

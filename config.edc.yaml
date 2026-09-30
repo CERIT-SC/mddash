@@ -20,7 +20,7 @@ dashboard:
 oidc:
   authenticator_class: egiauthenticator
   oauth_server: aai-dev.egi.eu
-  loginService: "EGI CheckIn Development"  # the button label in UI
+  loginService: "EGI CheckIn Development"  # Button label in UI.
 
   authorizePath: auth/realms/egi/protocol/openid-connect/auth
   tokenPath: auth/realms/egi/protocol/openid-connect/token
@@ -48,7 +48,7 @@ metadump:
 # Default notebooks repository (setup and analysis notebooks)
 defaultNotebooksRepo: https://github.com/CERIT-SC/mddash-notebooks.git
 
-# Notebook image (spawned by Dashboard pod)
+# Notebook image spawned by the Dashboard pod.
 notebook:
   image: mddash-notebook
   platform: linux/amd64
@@ -64,7 +64,7 @@ gpuType: "nvidia.com/mig-1g.10gb"
 gmxImage: "cerit.io/mddash/tuner-worker:gmx-2026.1_amber-26_ray-2.54.0_py-3.13"
 amberImage: "cerit.io/mddash/amber:26"
 
-# Landing page image (served at / on the dashboard hostname)
+# Landing page image served at / on the dashboard hostname.
 landing:
   image: mddash-landing
 
@@ -89,10 +89,10 @@ sidecars:
 
 # S3 object storage configuration
 s3:
-  endpoint: https://s3.cl4.du.cesnet.cz  # used when seaweedfs.enabled is false
+  endpoint: https://s3.cl4.du.cesnet.cz  # Used when seaweedfs.enabled is false.
   seaweedfs:
     enabled: false
-    diskSize: 500Gi      # single RWO PVC; no replication
+    diskSize: 500Gi      # Single RWO PVC without replication.
     storageClassName: ""
 
 resources:
@@ -104,34 +104,33 @@ resources:
       guarantee: 0.2
       limit: 1
   notebookQuota:
-    # Max concurrent notebook pods per user namespace
+    # Max concurrent notebook pods per user namespace.
     maxConcurrent: 1
   notebook:
-    # Idle timeout in seconds: kernels are culled and the server shuts down after this period
+    # Idle timeout in seconds. Kernels are culled and the server shuts down after this period.
     idleTimeoutSeconds: 3600
-    # jupyter container — limits allow burst above scheduling baseline
+    # Jupyter container. Limits allow burst above the scheduling baseline.
     cpuRequest: "500m"
     memoryRequest: "1Gi"
-    cpuLimit: "5000m"    # 10× request: interactive, prefer throttle over kill
-    memoryLimit: "8Gi"   # 8× request: burst headroom for in-memory analysis
+    cpuLimit: "5000m"    # 10x request for interactive use. Prefers throttle over kill.
+    memoryLimit: "8Gi"   # 8x request. Burst headroom for in-memory analysis.
 
   analysisJob:
-    # Dashboard mwf analysis jobs are mostly single-threaded; extra CPU limit rarely speeds them up.
-    #  edc test: cpuRequest: "1000m"
+    # Dashboard mwf analysis jobs are mostly single-threaded. Extra CPU limit rarely speeds them up.
     cpuRequest: "100m"
     memoryRequest: "2Gi"
     cpuLimit: "1000m"
     memoryLimit: "8Gi"
   namespaceQuota:
-    # requests = expected simultaneous usage; formula: see docs/resource-management.md
+    # Requests hold expected simultaneous usage. See docs/resource-management.md for the formula.
     requestsCpu: "4000m"
     requestsMemory: "8Gi"
-    # limits = sum of all container limits at full load (1 notebook at 4x tier)
+    # Limits hold the sum of all container limits at full load with 1 notebook at 4x tier.
     limitsCpu: "42000m"
     limitsMemory: "80Gi"
   pvcStorageSize: 100Gi
 
-# JupyterHub image (hub + custom UI, includes EGI Check-in JWT login)
+# JupyterHub image with hub and custom UI, including EGI Check-in JWT login.
 hub:
   image: mddash-hub
   resources:
@@ -149,7 +148,7 @@ helm:
 mdrunApi:
   image: mdrun-api
   platform: linux/amd64
-  storage:  # Persistent storage for mdrun-api database
+  storage:  # Persistent storage for mdrun-api database.
     size: 20Gi
     # SQLite WAL needs a block-device-backed filesystem, not NFS.
     storageClassName: csi-ceph-rbd-du
@@ -173,10 +172,8 @@ mdrunApi:
         memory: "128Mi"
   jobHeadroom:
     # Maximum number of HPC jobs running simultaneously in the hub namespace.
-    # Set cpuPerJob/memoryPerJob to the largest single job you want to allow.
+    # Set cpuPerJob and memoryPerJob to the largest single job you want to allow.
     maxConcurrentJobs: 1  # TODO: increase when more resources are available
-    # edc test: cpuPerJob: "16"
-    # edc test: memoryPerJob: "32Gi"
     cpuPerJob: "2"
     memoryPerJob: "12Gi"
 
@@ -193,7 +190,7 @@ tuner:
         cpu: "0.5"
         memory: "1Gi"
     pricing:
-      # Hourly resource rates (currency units) for trial cost estimation & early-stop pruning.
+      # Hourly resource rates in currency units for trial cost estimates and early-stop pruning.
       cpuCoreHour: "0.04"
       gpuHour: "0.30"
       gbRamHour: "0.005"
@@ -220,10 +217,10 @@ tuner:
     idleTimeoutSeconds: 3600
     resources:
       limits:
-        cpu: "2"  # TODO: ask for more (should be at least 32)
+        cpu: "2"  # TODO: ask for more. Should be at least 32.
         memory: "64Gi"
         nvidia.com/mig-1g.10gb: "1"
       requests:
-        cpu: "2"  # should be same as limit
+        cpu: "2"  # Should be same as limit.
         memory: "16Gi"
         nvidia.com/mig-1g.10gb: "1"

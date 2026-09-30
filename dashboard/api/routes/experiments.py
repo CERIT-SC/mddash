@@ -21,7 +21,7 @@ def list_experiments() -> Response:
     """
     List all experiments.
 
-    The dashboard polls this every 5s while any job is live — job relations
+    The dashboard polls this every 5s while any job is live. Job relations
     load eagerly so the dump costs a flat query set regardless of row count.
     """
     experiments: list[Experiment] = Experiment.query.options(
@@ -193,7 +193,7 @@ def publish_experiment(experiment_id: str) -> ResponseReturnValue:
         if not token:
             raise Unauthorized("Not authenticated with MDRepo. Please authenticate first.")
 
-        # Same gate as the wizard's can_publish unlock — a stale URL/bookmark
+        # Same gate as the wizard's can_publish unlock. A stale URL/bookmark
         # must not create an MDRepo draft for an experiment with nothing publishable.
         if not experiment.can_publish:
             raise Conflict("Nothing to publish yet: no finished or stopped run and no existing publication.")

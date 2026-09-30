@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test"
 
-// Two RUNNING notebooks at a demo limit of 2 — every further start routes through the limit dialog.
+// Two RUNNING notebooks meet the demo limit of 2. Every further start opens the limit dialog.
 test("notebook lifecycle: limit dialog, stop, and start", async ({ page }) => {
   await page.goto("./")
 

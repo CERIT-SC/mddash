@@ -57,7 +57,7 @@ else
 endif
 
 .PHONY: deploy
-deploy: upgrade ## Deploy (alias for upgrade)
+deploy: upgrade ## Deploy, alias for upgrade
 
 .PHONY: update
 update: update-deps ## Update local Helm chart dependencies
@@ -103,14 +103,14 @@ status: ## Show deployment status
 logs: ## Show hub deployment logs
 	kubectl logs -f deployment/hub -n $(namespace)
 
-# ==================== ROLLBACK ====================
+# Rollback
 
 .PHONY: history
 history: ## Show Helm release history
 	@helm history $(package) --namespace $(namespace)
 
 .PHONY: rollback
-rollback: ## Rollback to previous revision (REVISION=N for specific)
+rollback: ## Rollback to previous revision. Set REVISION=N for a specific revision.
 	@if [ -n "$(REVISION)" ]; then \
 		echo "Rolling back to revision $(REVISION)..."; \
 		helm rollback $(package) $(REVISION) --namespace $(namespace); \

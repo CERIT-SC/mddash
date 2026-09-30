@@ -43,7 +43,7 @@ const CAPABILITIES: Capability[] = [
   {
     icon: Cloud,
     title: "Cloud-native execution",
-    body: "Kubernetes Jobs manage execution with resource quotas. Jobs survive browser disconnects and pod restarts — no babysitting required.",
+    body: "Kubernetes Jobs manage execution with resource quotas. Jobs survive browser disconnects and pod restarts without manual supervision.",
   },
   {
     icon: GitFork,

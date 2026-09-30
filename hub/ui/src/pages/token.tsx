@@ -74,7 +74,7 @@ function parseExpiryOptions(html: string): ExpiryOption[] {
   }))
 }
 
-/** Revoke is irreversible (scripts using the token lose access) — always confirm first. */
+/** Revoke is irreversible. Scripts using the token lose access, so confirm first. */
 function RevokeButton({ revoke }: { revoke: () => void }) {
   return (
     <AlertDialog>
@@ -260,7 +260,7 @@ export function TokenPage() {
                   {copied ? "Copied" : "Copy token"}
                 </Button>
               </div>
-              <Small className="text-text-muted">You won't be able to see this token again — store it now.</Small>
+              <Small className="text-text-muted">You won't see this token again. Store it now.</Small>
             </AlertDescription>
           </Alert>
         ) : null}

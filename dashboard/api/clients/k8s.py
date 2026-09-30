@@ -190,7 +190,7 @@ def create_notebook_pod(
     Create a JupyterLab notebook pod for experiment setup.
 
     Creates a pod with a single Jupyter container. GROMACS and AmberTools
-    binaries are bundled in the notebook image — no sidecar needed.
+    binaries are bundled in the notebook image, so no sidecar is needed.
 
     Args:
         name: The name of the pod to create.

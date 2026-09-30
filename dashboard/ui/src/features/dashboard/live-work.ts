@@ -2,7 +2,7 @@ import type { AnalysisJob, Experiment } from "@/api/generated/models"
 
 import { IN_FLIGHT as IN_FLIGHT_ARCHIVE_STATES } from "./archive"
 
-// UNKNOWN is live server-side (transient upstream failure) — don't freeze on
+// UNKNOWN is live server-side (transient upstream failure). Don't freeze on
 // it. Sim/tuner payloads embed is_live; analysis carries only a plain status.
 const LIVE_ANALYSIS_STATUSES = new Set<AnalysisJob["status"]>(["PENDING", "RUNNING", "UNKNOWN"])
 

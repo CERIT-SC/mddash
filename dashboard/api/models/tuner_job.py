@@ -33,7 +33,7 @@ class TunerJob(db.Model):  # type: ignore
     error_message: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
     # creation time
     created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
-    # number of steps each tuning trial runs (always caller-supplied — no default, fail fast)
+    # number of steps each tuning trial runs (always caller-supplied; no default, fail fast)
     nsteps: Mapped[int] = mapped_column(db.Integer, nullable=False)
     # whether the job was stopped (preserves data but job is deleted from tuner)
     is_stopped: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
@@ -56,7 +56,7 @@ class TunerJob(db.Model):  # type: ignore
 
     @property
     def is_live(self) -> bool:
-        """Non-terminal states — a stopped job is terminal even though its status reads UNKNOWN."""
+        """A stopped job is terminal even though its status reads UNKNOWN."""
         return not self.is_stopped and self.tuner_status.is_live
 
     @property
@@ -154,7 +154,7 @@ class TunerJob(db.Model):  # type: ignore
         Args:
             experiment: The parent experiment.
             simulation_path: Experiment-relative path to the ``.simulation.json``.
-            nsteps: Number of steps for tuning runs (required — the caller decides, fail fast).
+            nsteps: Number of steps for tuning runs (required; the caller decides, fail fast).
 
         Returns:
             The created TunerJob instance.
@@ -168,7 +168,7 @@ class TunerJob(db.Model):  # type: ignore
             ["run_input"] if experiment.engine == Engine.GMX else ["topology", "coordinates", "control"]
         )
         extra_args = simulation.extra_args
-        # TODO: drop after user testing (#166) — pin the tuner's length estimate to the forced 500k run.
+        # TODO: drop after user testing (#166). Pin the tuner's length estimate to the forced 500k run.
         if experiment.engine == Engine.GMX:
             extra_args = f"{extra_args} -nsteps 500000".strip()
 

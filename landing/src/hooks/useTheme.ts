@@ -13,7 +13,7 @@ function storedTheme(): Theme | null {
     const value = localStorage.getItem(STORAGE_KEY)
     return value === "light" || value === "dark" ? value : null
   } catch {
-    // Storage unavailable (e.g. privacy mode) — behave as "no stored choice".
+    // Storage is unavailable (for example, privacy mode). Behave as if nothing is stored.
     return null
   }
 }
@@ -51,7 +51,7 @@ export function useTheme() {
     try {
       localStorage.setItem(STORAGE_KEY, next)
     } catch {
-      // Storage unavailable (privacy mode) — apply for this session only.
+      // Storage is unavailable (privacy mode). Apply the theme for this session only.
     }
     setThemeState(next)
   }, [])

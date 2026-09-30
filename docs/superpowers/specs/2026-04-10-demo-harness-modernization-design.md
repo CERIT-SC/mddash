@@ -1,4 +1,4 @@
-# Demo Harness Modernization Design
+# Demo harness modernization design
 
 ## Overview
 
@@ -6,19 +6,19 @@ Modernize the `_demo` harness to follow 2026 industry standards for UI developme
 
 ## Goals
 
-1. **Correctness** - All external systems properly mocked with realistic behavior
-2. **Industry Standards** - Use established mocking libraries and patterns
-3. **Maintainability** - Single source of truth for mocks, clear separation of concerns
-4. **No Production Changes** - All changes contained within `_demo/` directory
+1. Correctness - All external systems properly mocked with realistic behavior
+2. Industry Standards - Use established mocking libraries and patterns
+3. Maintainability - Single source of truth for mocks, clear separation of concerns
+4. No Production Changes - All changes contained within `_demo/` directory
 
-## Current State
+## Current state
 
-### What's Working
+### What's working
 - Comprehensive system coverage (K8s, Caddy, MDRun, Tuner, MDRepo)
 - Deterministic seeded data with realistic scenarios
 - Simulated job progression (GMX logs grow, tuner trials complete)
 
-### Issues Identified
+### Issues identified
 
 | Issue | Impact |
 |-------|--------|
@@ -28,7 +28,7 @@ Modernize the `_demo` harness to follow 2026 industry standards for UI developme
 | No separation between mocking/seeding/state | Tangled responsibilities |
 | Global mutable `demo_state` singleton | Hard to reason about, no reset capability |
 
-## Proposed Architecture
+## Proposed architecture
 
 ```
 _demo/
@@ -44,40 +44,40 @@ _demo/
 └── profile.py          # Demo profile setup (slimmed down)
 ```
 
-### Layer Separation
+### Layer separation
 
 | Layer | Responsibility | File(s) |
 |-------|---------------|---------|
-| **Mocking** | Intercept external calls, return fake responses | `mocks/*.py` |
-| **State** | Track runtime state (job progress, pod status) | `state.py` |
-| **Seeding** | Create initial database records and files | `seed.py` |
-| **Fixtures** | Static test data (PDB, TPR, logs) | `files.py`, `data/` |
+| Mocking | Intercept external calls, return fake responses | `mocks/*.py` |
+| State | Track runtime state (job progress, pod status) | `state.py` |
+| Seeding | Create initial database records and files | `seed.py` |
+| Fixtures | Static test data (PDB, TPR, logs) | `files.py`, `data/` |
 
-## Technical Approach
+## Technical approach
 
-### HTTP Mocking: `responses` Library
+### HTTP mocking: `responses` library
 
 Use the `responses` library to intercept `requests` calls at the network level. This is the industry-standard approach for Python HTTP mocking.
 
-**Why `responses`:**
+Why `responses`:
 - Realistic `requests.Response` objects
 - Supports regex URL matching
 - Supports dynamic responses based on request body
 - Active maintenance, widely adopted
 - No mutation of production modules needed
 
-**Clients mocked via `responses`:**
+Clients mocked via `responses`:
 - MDRun (`mdrun.py`)
 - Tuner (`tuner.py`)
 - MDRepo (`mdrepo.py`)
 - Caddy (`caddy.py`)
 - External downloads (PDB, Zenodo in `experiment.py`)
 
-### Kubernetes Mocking: Module Mutation
+### Kubernetes mocking: Module mutation
 
 The `kubernetes` library doesn't use `requests` internally, so we continue using module-level function replacement. This is the correct approach for non-HTTP clients.
 
-**Pattern:**
+Pattern:
 ```python
 # mocks/k8s.py
 from clients import k8s
@@ -88,9 +88,9 @@ def install_k8s_mocks() -> None:
     # ... etc
 ```
 
-### Missing Functionality to Add
+### Missing functionality to add
 
-#### Trial Log Endpoints
+#### Trial log endpoints
 
 Add mocks for:
 - `tuner.gmx_get_trial_stdout(job_id, trial_id) -> str`
@@ -98,7 +98,7 @@ Add mocks for:
 
 These should return simulated GROMACS log output stored in `demo_state`.
 
-### Response Registry Pattern
+### Response registry pattern
 
 Centralize all HTTP mock registrations:
 
@@ -130,7 +130,7 @@ class MockRegistry:
         # ...
 ```
 
-### State Management Improvements
+### State management improvements
 
 Make `DemoState` more explicit with typed methods:
 
@@ -150,13 +150,13 @@ class DemoState:
     def advance_mdrun_job(self, job_id: str) -> None: ...
 ```
 
-## Implementation Plan
+## Implementation plan
 
-### Phase 1: Structure Setup
+### Phase 1: Structure setup
 1. Create `mocks/` directory with `__init__.py`
 2. Add `responses` to requirements (dev dependency)
 
-### Phase 2: HTTP Mocks Migration
+### Phase 2: HTTP mocks migration
 1. Create `mocks/http.py` with `responses`-based mocks
 2. Port MDRun mocks from `service_mocks.py`
 3. Port Tuner mocks from `service_mocks.py`
@@ -164,11 +164,11 @@ class DemoState:
 5. Port Caddy mocks from `service_mocks.py`
 6. Port external download mocks (PDB, Zenodo)
 
-### Phase 3: K8s Mocks Consolidation
+### Phase 3: K8s mocks consolidation
 1. Create `mocks/k8s.py` with existing K8s mocks
 2. Remove duplicate `patch` calls from `app.py`
 
-### Phase 4: Missing Mocks
+### Phase 4: Missing mocks
 1. Add `mocks/tuner_logs.py` for trial stdout/stderr
 2. Integrate with `DemoState` for realistic output
 
@@ -179,12 +179,12 @@ class DemoState:
 4. Clean up `app.py` to remove redundant patches
 5. Update imports throughout `_demo/`
 
-### Phase 6: State Refinement
+### Phase 6: State refinement
 1. Add typed state classes (`MdrunJobState`, `TunerJobState`)
 2. Add convenience methods to `DemoState`
 3. Ensure proper reset on re-seed
 
-## Files Changed
+## Files changed
 
 | File | Change |
 |------|--------|
@@ -198,15 +198,15 @@ class DemoState:
 | `_demo/profile.py` | Update - use new mocks |
 | `_demo/app.py` | Simplify - remove patch calls |
 
-## Dependencies Added
+## Dependencies added
 
 ```
 responses>=0.25.0
 ```
 
-**Why this version:** Supports `pass_through` for real requests, async support, and improved regex handling.
+This version supports `pass_through` for real requests, async support, and improved regex handling.
 
-## Testing Strategy
+## Testing strategy
 
 1. Run demo app and verify all endpoints work
 2. Test each mocked service:
@@ -217,9 +217,9 @@ responses>=0.25.0
    - Access trial logs
 3. Verify no real HTTP calls made (responses assertion)
 
-## Data Accuracy Requirements
+## Data accuracy requirements
 
-**Critical principle:** Mocks must return realistic data matching actual API behavior.
+Mocks must return realistic data matching actual API behavior.
 
 Before implementing each mock:
 1. Study production code to understand expected response fields
@@ -233,7 +233,7 @@ Mock data should include:
 - Proper error responses with correct structure
 - Edge cases (empty lists, null values, error states)
 
-## Risks and Mitigations
+## Risks and mitigations
 
 | Risk | Mitigation |
 |------|------------|
@@ -242,7 +242,7 @@ Mock data should include:
 | Breaking existing seeded scenarios | Keep same seed data and scenarios |
 | Mock data diverges from real API | Research each API before mocking; ask user for clarification |
 
-## Success Criteria
+## Success criteria
 
 - [ ] All HTTP clients mocked via `responses` library
 - [ ] All K8s mocks in single location

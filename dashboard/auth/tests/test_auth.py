@@ -1,8 +1,4 @@
-"""
-Unit and integration tests for the auth service.
-
-Tests session management, HMAC signing, and OAuth flow.
-"""
+"""Unit and integration tests for the auth service."""
 
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -76,7 +72,6 @@ class TestSessionManagement:
     def test_expired_session_is_invalid(self, app: Flask) -> None:
         """Expired sessions should be invalid."""
         with app.app_context():
-            # Create expired session directly
             token = "expired-token"
             _sessions[token] = ("testuser", time.time() - 100)
 
@@ -92,7 +87,6 @@ class TestHmacSigning:
             signature = sign("test-state")
 
             assert isinstance(signature, str)
-            # HMAC SHA256 produces 64 hex characters
             assert len(signature) == HMAC_SHA256_HEX_LENGTH
             assert all(c in "0123456789abcdef" for c in signature)
 
@@ -122,11 +116,9 @@ class TestSessionCleanup:
         with app.app_context():
             now = time.time()
 
-            # Add sessions: one valid, one expired
             _sessions["valid"] = ("user1", now + 3600)
             _sessions["expired"] = ("user2", now - 100)
 
-            # Force cleanup by resetting last cleanup time
             auth._last_cleanup = 0
 
             remove_expired_sessions()
@@ -141,7 +133,6 @@ class TestAuthEndpoint:
 
     def test_authenticated_user_with_valid_session(self) -> None:
         """Session validation logic should work correctly."""
-        # Create session and verify it's valid
         token = create_session("testuser")
         assert is_valid_session(token, "testuser") is True
 
@@ -178,22 +169,18 @@ class TestOAuthCallback:
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
     def test_successful_oauth_flow(self) -> None:
-        """Complete OAuth flow logic - token exchange and user verification."""
-        # Test the core OAuth logic by verifying mocked responses work correctly
+        """Complete OAuth flow logic. Token exchange and user verification."""
         with patch("auth.requests.post") as mock_post, patch("auth.requests.get") as mock_get:
-            # Mock token exchange
             mock_post.return_value = MagicMock(
                 status_code=HTTPStatus.OK,
                 json=lambda: {"access_token": "test-access-token"},
             )
 
-            # Mock user info request
             mock_get.return_value = MagicMock(
                 status_code=HTTPStatus.OK,
                 json=lambda: {"name": "testuser"},
             )
 
-            # Verify the mocked endpoints return expected data
             token_response = mock_post()
             assert token_response.json()["access_token"] == "test-access-token"
 
@@ -214,12 +201,7 @@ class TestLoginTokenEndpoints:
 
     @staticmethod
     def create_login_token(client: FlaskClient) -> str:
-        """
-        Create a login token through the authenticated endpoint.
-
-        Returns:
-            str: The generated one-time token.
-        """
+        """Create a login token through the authenticated endpoint."""
         auth_token = create_session(USER)
         client.set_cookie(COOKIE_NAME, auth_token)
         response = client.post("/create-login-token")

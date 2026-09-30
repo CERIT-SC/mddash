@@ -2,13 +2,13 @@
 
 ## Architecture
 
-One-way imports: `app/routes → features → api/shared`. Lower layers never import upper; feature cycles forbidden.
+One-way imports. `app/routes` imports from `features`, which imports from `api/shared`. Lower layers never import upper. Feature cycles are forbidden.
 
 ## Features
 
-- A feature owns a product capability, not the page that renders it: notebook lifecycle, simulation manifests, and each implemented wizard step are their own features. Create features only with real behavior — no stubs.
+- A feature owns a product capability, not the page that renders it. Notebook lifecycle, simulation manifests, and each implemented wizard step are their own features. Create features only with real behavior. No stubs.
 - Cross-feature imports use the feature's `index.ts` (named re-exports only); deep paths into another feature are forbidden. Within a feature, import siblings directly; tests live beside their module.
-- `shared/` accepts a module only after 2+ features use it or it is inherently app-wide; enum→label maps over generated types start in `shared/`.
+- `shared/` accepts a module only after 2+ features use it or it is inherently app-wide. Enum to label maps over generated types start in `shared/`.
 
 ## API
 
@@ -22,7 +22,7 @@ URL path/search owns shareable state; TanStack Query owns server state; local st
 
 ## Constraints
 
-- Forms: React Hook Form + e-INFRA `Form` primitives + Zod at explicit runtime boundaries.
+- Forms use React Hook Form with e-INFRA `Form` primitives and Zod at explicit runtime boundaries.
 - Loading, stale, empty, and error are durable UI states, never toast-only.
 - e-INFRA components and semantic tokens only; no parallel design system, no one-to-one DS wrappers; design mocks never override the design system.
 - The inline `index.html` bootstrap sets the runtime `<base>` and theme before assets and CSS paint.

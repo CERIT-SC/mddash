@@ -18,7 +18,7 @@ class TrialConfig:
 class TrialResult:
     """Result returned by every engine after a trial."""
 
-    # ns/day; 0.0 on failure, None when a pruned trial's timestep is unknown —
+    # ns/day; 0.0 on failure, None when a pruned trial's timestep is unknown.
     # NULL must survive to the UI so the trial keeps no-result semantics.
     performance: float | None
     steps_per_sec: float  # used for early stopping comparison

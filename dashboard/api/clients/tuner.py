@@ -212,11 +212,9 @@ def amber_get_trial_stderr(job_id: str, trial_id: str) -> str:
     return response.text
 
 
-# DEMO
 if __name__ == "__main__":
     tpr_path = Path(__file__).parent.parent / "_demo" / "data" / "md.tpr"
 
-    # Submit a job
     response = gmx_submit(tpr_path, nsteps=25000, extra_args="")
     print("Submitted job:", response)
 
@@ -225,11 +223,9 @@ if __name__ == "__main__":
 
     sleep(2)
 
-    # Poll the status
     run_id = response["id"]
     status = gmx_poll_status(run_id)
     print("Job status:", status)
 
-    # Delete the job
     delete_response = gmx_delete_job(run_id)
     print("Deleted job:", delete_response)

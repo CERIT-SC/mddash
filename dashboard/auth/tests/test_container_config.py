@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def test_gunicorn_suppresses_successful_health_access_logs() -> None:
-    """Routine successful /health probes should not flood stdout logs."""
+    """Routine successful /health probes should not fill stdout logs."""
     dockerfile = Path(__file__).parents[1] / "Dockerfile"
     content = dockerfile.read_text(encoding="utf-8")
 

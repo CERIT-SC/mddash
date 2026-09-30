@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test"
 
-// The wizard lands on the ladder step (often Analyze for live runs); reach the Run view explicitly.
+// The wizard lands on the ladder step, often Analyze for live runs. Open the Run view explicitly.
 export async function openRunSection(page: Page, experimentId: string, simulation?: string) {
   await page.goto(`experiments/${experimentId}`)
   if (simulation) {

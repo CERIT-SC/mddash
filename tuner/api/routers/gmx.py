@@ -1,4 +1,4 @@
-"""GMX tuning job endpoints — /api/tuning-jobs/gmx."""
+"""GMX tuning job endpoints at /api/tuning-jobs/gmx."""
 
 import logging
 import uuid

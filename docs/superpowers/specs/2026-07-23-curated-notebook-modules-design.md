@@ -1,4 +1,4 @@
-# Curated Notebook Modules Design
+# Curated notebook modules design
 
 ## Summary
 
@@ -16,7 +16,7 @@ The repository URL is not displayed in the normal creation flow. Users can choos
 - Keep the default creation flow free of repository configuration fields.
 - Leave room for additional protein, membrane, ligand, and other workflows.
 
-## Non-Goals
+## Non-goals
 
 - Discovering modules from arbitrary repositories.
 - Requiring custom repositories to follow the curated directory layout.
@@ -28,7 +28,7 @@ The repository URL is not displayed in the normal creation flow. Users can choos
 
 Custom repositories may continue to contain Binder configuration. The existing notebook startup behavior remains responsible for using it.
 
-## Current State
+## Current state
 
 Experiment creation currently accepts an always-visible notebooks repository URL. The API shallow-clones the remote default branch, removes `.git`, and moves all repository-root content into the experiment directory. The selected engine does not affect the clone.
 
@@ -52,7 +52,7 @@ The modules form two self-contained groups:
 
 The repository has no Binder configuration. Both setup notebooks expect `input.pdb` and write their simulation manifest and generated directories relative to the experiment root.
 
-## Curated Repository Layout
+## Curated repository layout
 
 The initial repository organization is:
 
@@ -73,7 +73,7 @@ Future modules use the same engine/module shape, for example `gromacs/membrane/`
 
 Each module must be self-contained. Notebooks, local Python helpers, and optional environment or Binder files required by that workflow live inside the module directory. MDDash copies the directory's contents, not the directory itself, into the experiment root. This preserves the current assumptions about `input.pdb`, local imports, and generated simulation files.
 
-## Module Catalog
+## Module catalog
 
 MDDash owns a versioned `notebook-modules.json` file bundled with the Dashboard API image. It is product content and is not part of runtime deployment configuration. The existing `defaultNotebooksRepo` setting remains the only operator-configurable part of the curated source.
 
@@ -119,13 +119,13 @@ The normal creation form has this order:
 
 The module section fetches the bundled catalog through the API and shows only modules compatible with the selected engine. Modules are presented by name and description; internal Git paths are not shown. A module selection is required, including when only one compatible module currently exists. Changing engines clears an incompatible selection and displays the new engine's modules.
 
-The repository input is absent from this default view. A secondary **Use custom notebooks repository** action switches the module section into custom mode and reveals the current repository URL and optional access-token controls. Custom mode retains the explicit engine selected above. It does not show module or subdirectory selection.
+The repository input is absent from this default view. A secondary Use custom notebooks repository action switches the module section into custom mode and reveals the current repository URL and optional access-token controls. Custom mode retains the explicit engine selected above. It does not show module or subdirectory selection.
 
 Switching back to curated modules clears the custom URL and token from form state. Tokens remain transient and are never persisted.
 
 Loading the module catalog is independent of Git access and requires no repository probe. If catalog loading fails, creation is disabled and the UI offers a retry. Custom repository creation remains available.
 
-## API And Clone Behavior
+## API and clone behavior
 
 Curated creation submits the selected module ID instead of a notebooks repository URL. The API:
 
@@ -145,7 +145,7 @@ Custom creation keeps the existing API and clone semantics: shallow-clone the re
 
 The initial implementation does not add database columns. The existing `notebooks_repo` value stores the configured default repository for curated experiments and the submitted URL for custom experiments. The selected module is creation input used to construct the workspace; the copied workspace remains the experiment's executable notebook source.
 
-## Errors And Cleanup
+## Errors and cleanup
 
 Curated creation reports distinct errors for:
 
@@ -177,7 +177,7 @@ An older MDDash version continues to find root notebooks during step 2. The new 
 - Reject duplicate IDs, unsupported engines, unknown schema versions, and unsafe paths.
 - Verify the catalog endpoint returns stable display metadata without internal paths or repository credentials.
 
-### API And Git
+### API and Git
 
 - Create each curated protein module and verify that only its files appear in the experiment root.
 - Reject unknown and engine-incompatible module IDs.
@@ -197,12 +197,12 @@ An older MDDash version continues to find root notebooks during step 2. The new 
 - Preserve existing custom URL validation, token controls, and pending state.
 - Display catalog-load and creation errors with retry behavior.
 
-### Repository Migration
+### Repository migration
 
 - Verify each reorganized module contains every notebook and helper it needs when copied alone into an empty experiment directory.
 - Smoke-test GROMACS and AMBER protein setup from `input.pdb` after selective checkout.
 
-## Future Extensions
+## Future extensions
 
 - Add membrane, ligand, nucleic-acid, and other curated modules by extending the bundled catalog and default repository together.
 - Add dedicated Binder repository discovery or presentation if custom Binder usage requires more guidance than the existing Git flow.

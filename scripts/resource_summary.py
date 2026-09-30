@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
-"""
-Offline resource budget calculator for mddash namespaces.
-
-Reads resource configuration from config YAML files and computes the
-recommended namespace quota values for both the hub namespace and
-per-user namespaces.
-
-Usage:
-    python3 scripts/resource_summary.py <config.yaml>          # human-readable table
-    python3 scripts/resource_summary.py --json <config.yaml>   # hub totals as JSON (for install.sh)
-
-Example:
-    make resources ENV=dev
-    python3 scripts/resource_summary.py config.dev.yaml
-"""
+"""Offline resource budget calculator for mddash namespaces."""
 
 import json
 import subprocess
@@ -49,7 +35,6 @@ def row_cfg(name: str, config: str, prefix: str) -> Row:
 
 
 def total(name: str, rows: Iterable[Row]) -> Row:
-    """Sum rows into one Row."""
     rows = list(rows)
     return Row(
         name,
@@ -66,15 +51,7 @@ def scale(r: Row, factor: int, name: str | None = None) -> Row:
 
 
 def yq(query: str, path: str) -> str:
-    """
-    Run a yq query against a YAML file and return the result as a string.
-
-    Returns:
-        str: The query result, stripped of leading/trailing whitespace.
-
-    Raises:
-        RuntimeError: If yq is not installed or the query fails.
-    """
+    """Run a yq query against a YAML file and return the stripped result."""
     try:
         return subprocess.check_output(["yq", "-r", query, path]).decode().strip()
     except FileNotFoundError as exc:
@@ -90,12 +67,7 @@ def yq(query: str, path: str) -> str:
 
 
 def parse_cpu(s: str) -> int:
-    """
-    Parse a Kubernetes CPU string to millicores.
-
-    Returns:
-        int: CPU value in millicores.
-    """
+    """Parse a Kubernetes CPU string to millicores."""
     s = s.strip()
     if s.endswith("m"):
         return int(s[:-1])
@@ -103,12 +75,7 @@ def parse_cpu(s: str) -> int:
 
 
 def parse_memory(s: str) -> int:
-    """
-    Parse a Kubernetes memory string to bytes.
-
-    Returns:
-        int: Memory value in bytes.
-    """
+    """Parse a Kubernetes memory string to bytes."""
     s = s.strip()
     if s.endswith("Gi"):
         return int(float(s[:-2]) * 1024**3)
@@ -124,24 +91,14 @@ def parse_memory(s: str) -> int:
 
 
 def fmt_cpu(millicores: int) -> str:
-    """
-    Format a millicores value as a human-readable CPU string.
-
-    Returns:
-        str: e.g. ``"2"`` for 2000m, ``"500m"`` for 500m.
-    """
+    """Format millicores as a CPU string, for example 2 for 2000m and 500m for 500m."""
     if millicores >= 1000 and millicores % 1000 == 0:  # ruff:ignore[magic-value-comparison]
         return f"{millicores // 1000}"
     return f"{millicores}m"
 
 
 def fmt_mem(b: int) -> str:
-    """
-    Format a bytes value as a human-readable memory string.
-
-    Returns:
-        str: e.g. ``"4Gi"`` for 4 GiB, ``"512Mi"`` for 512 MiB.
-    """
+    """Format bytes as a memory string, for example 4Gi for 4 GiB and 512Mi for 512 MiB."""
     gib = b / 1024**3
     if gib >= 1 and b % (1024**3) == 0:
         return f"{int(gib)}Gi"
@@ -152,7 +109,7 @@ def fmt_mem(b: int) -> str:
 
 # Values written in millicores/MiB; row_mib converts.
 
-# Sidecar resources are hardcoded in pre_spawn_hook.py _*_container() — keep in sync if those change.
+# Sidecar resources are hardcoded in pre_spawn_hook.py _*_container(). Keep in sync if those change.
 SIDECARS = [
     row_mib("proxy", 10, 32, 100, 64),
     row_mib("auth", 10, 48, 100, 96),
@@ -162,24 +119,23 @@ SIDECARS = [
 
 TIERS = [1, 2, 4]
 
-# MDRepo upload job resources are hardcoded in upload/submission.py — keep in sync.
+# MDRepo upload job resources are hardcoded in upload/submission.py. Keep in sync.
 UPLOAD_JOB = row_mib("uploader", 100, 128, 500, 256)
 
-# s3-sync sidecar per mdrun job, hardcoded in mdrun-api/k8s_client.py — keep in sync.
+# s3-sync sidecar per mdrun job, hardcoded in mdrun-api/k8s_client.py. Keep in sync.
 JOB_S3SYNC = row_mib("s3-sync sidecar", 100, 128, 200, 256)
 
-# Fixed platform overhead in the hub namespace, set in helm/charts/mddash/values.yaml.tmpl — keep in sync with
+# Fixed platform overhead in the hub namespace, set in helm/charts/mddash/values.yaml.tmpl. Keep in sync with
 # proxy.chp.resources and landing.resources there.
 CHP_PROXY = row_mib("chp proxy", 100, 128, 500, 512)
 LANDING = row_mib("landing page", 50, 32, 100, 64)
 
-# In-cluster S3 store, only when s3.seaweedfs.enabled — keep in sync with the
+# In-cluster S3 store, only when s3.seaweedfs.enabled. Keep in sync with the
 # seaweedfs.allInOne.resources block in helm/charts/mddash/values.yaml.tmpl.
 S3_STORE = row_mib("s3 store (seaweedfs)", 100, 256, 1000, 1024)
 
 
 def compute_budget(config: str) -> dict:
-    """Read the config and compute all per-namespace resource totals."""
     b: dict = {"config": config, "namespace": yq(".namespace", config), "gpu_type": yq('.gpuType // ""', config)}
     b["sidecars"] = SIDECARS
 
@@ -212,7 +168,7 @@ def compute_budget(config: str) -> dict:
         "limitsMemory": yq(".resources.namespaceQuota.limitsMemory", config),
     }
 
-    # User namespace totals, worst case: all notebooks at the highest tier
+    # User namespace totals for the worst case with all notebooks at the highest tier.
     max_tier = b["max_tier"] = max(TIERS)
     b["tiers"] = TIERS
     b["user_tier_rows"] = [(t, scale(b["notebook"], t)) for t in TIERS]
@@ -236,7 +192,7 @@ def compute_budget(config: str) -> dict:
     if yq(".s3.seaweedfs.enabled // false", config) == "true":
         b["hub_services"].append(S3_STORE)
     b["services_total"] = total("Services total", b["hub_services"])
-    # KubeRay autoscaler: 0 workers when idle, up to maxReplicas under load
+    # KubeRay autoscaler. Zero workers when idle, up to maxReplicas under load.
     b["ray_idle_timeout"] = yq(".tuner.worker.idleTimeoutSeconds", config)
     b["ray_workers"] = scale(
         row_cfg("ray-worker", config, ".tuner.worker.resources"),
@@ -247,7 +203,7 @@ def compute_budget(config: str) -> dict:
     b["max_jobs"] = int(yq(".mdrunApi.jobHeadroom.maxConcurrentJobs", config))
     gmx_cpu = parse_cpu(yq(".mdrunApi.jobHeadroom.cpuPerJob", config))
     gmx_mem = parse_memory(yq(".mdrunApi.jobHeadroom.memoryPerJob", config))
-    # GROMACS jobs have request = limit (MPI: throttling causes rank starvation)
+    # GROMACS jobs set request equal to limit. MPI throttling causes rank starvation.
     b["job_rows"] = [Row("gromacs  (req=lim)", gmx_cpu, gmx_mem, gmx_cpu, gmx_mem), JOB_S3SYNC]
     b["per_job_total"] = total("Per job total", b["job_rows"])
     b["hub_total"] = total(
@@ -263,13 +219,11 @@ W = 13
 
 
 def header() -> None:
-    """Print the resource table column headers."""
     print(f"  {'Container':<{COL}} {'CPU req':>{W}} {'Mem req':>{W}} {'CPU lim':>{W}} {'Mem lim':>{W}}")
     print("  " + "─" * (COL + W * 4 + 4))
 
 
 def row(r: Row, indent: int = 0) -> None:
-    """Print a single resource table row."""
     prefix = "  " + "  " * indent
     pad = COL - len("  " * indent)
     print(
@@ -278,24 +232,17 @@ def row(r: Row, indent: int = 0) -> None:
 
 
 def subtotal(r: Row) -> None:
-    """Print a subtotal row preceded by a separator line."""
     print("  " + "─" * (COL + W * 4 + 4))
     row(r)
 
 
 def section(title: str) -> None:
-    """Print a section heading followed by the column headers."""
     print(f"\n  {title}")
     header()
 
 
 def compare_quota(label: str, recommended: int, configured_str: str, is_cpu: bool) -> bool:
-    """
-    Print a quota comparison line and return True if the configured value meets the recommendation.
-
-    Returns:
-        bool: True if configured value >= recommended, False otherwise.
-    """
+    """Print a quota comparison line. Return True when the configured value meets the recommendation."""
     parse = parse_cpu if is_cpu else parse_memory
     fmt = fmt_cpu if is_cpu else fmt_mem
     ok = parse(configured_str) >= recommended
@@ -305,8 +252,7 @@ def compare_quota(label: str, recommended: int, configured_str: str, is_cpu: boo
 
 
 def print_table(b: dict) -> None:
-    """Print the human-readable resource budget table."""
-    print(f"\nResource Budget — {b['config']}")
+    print(f"\nResource Budget: {b['config']}")
     print("=" * 72)
 
     print(f"\n  ── User namespace (per user, MAX_NOTEBOOKS={b['max_notebooks']}) ──")
@@ -376,7 +322,6 @@ def print_table(b: dict) -> None:
 
 
 def print_json(b: dict) -> None:
-    """Print hub-namespace quota totals as JSON (consumed by install.sh)."""
     ht = b["hub_total"]
     hub = {
         "requestsCpu": fmt_cpu(ht.cpu_req),

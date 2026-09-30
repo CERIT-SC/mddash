@@ -79,8 +79,8 @@ export function PublishStep({ experiment, simulation, onStepChange, onOAuthHandl
   const mdpositEnabled = experiment.engine === Engine.GMX
   const [target, setTarget] = useState<PublishRequestTarget>(PublishRequestTarget.invenio)
 
-  // The MDRepo OAuth callback returns here with ?mdrepo_auth/?mdrepo_error —
-  // toast the outcome, then drop the params so a refresh can't re-toast.
+  // The MDRepo OAuth callback returns here with ?mdrepo_auth/?mdrepo_error.
+  // Toast the outcome, then drop the params so a refresh can't re-toast.
   const handledRef = useRef(false)
   useEffect(() => {
     if (handledRef.current) return
@@ -162,7 +162,7 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
   const mdrepoStatus = useGetMDRepoStatus({ query: { retry: false } })
   const publish = usePublishExperiment()
 
-  // mdrepo_id is NullableString — treat both null and undefined as absent.
+  // mdrepo_id is NullableString. Treat both null and undefined as absent.
   const hasDraft = experiment.mdrepo_id !== null && experiment.mdrepo_id !== undefined
   const published = experiment.mdrepo_published === true
   const authenticated = mdrepoStatus.data?.status === 200 && mdrepoStatus.data.data.authenticated
@@ -180,7 +180,7 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
   const recordUrl = upload?.draft_url ?? experiment.mdrepo_record_url ?? null
   const failureReason = uploadFailureReason(upload?.reason)
   // Captured at render; the wizard URL (simulation + step) round-trips through the
-  // OAuth callback. Must stay a relative path — the API rejects absolute return_urls.
+  // OAuth callback. Must stay a relative path. The API rejects absolute return_urls.
   const authHref = getAuthorizeMDRepoUrl({ return_url: `${window.location.pathname}${window.location.search}` })
 
   const handlePublish = () => {
@@ -307,7 +307,7 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
             ) : (
               <Small>
                 {hasDraft
-                  ? "A draft exists in MDRepo — retry the upload to update it, or finish the deposition there."
+                  ? "A draft exists in MDRepo. Retry the upload to update it, or finish the deposition there."
                   : "This step is going to upload your data to MDRepo server."}
               </Small>
             )}
@@ -343,8 +343,8 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
         finish === "active" ? (
           <>
             <Small>
-              Your files are uploaded and waiting in a draft. Fill in the metadata there to publish — you don&apos;t
-              need to come back here.
+              Your files are uploaded and waiting in a draft. Fill in the metadata there to publish. You don&apos;t need
+              to come back here.
             </Small>
             <div>
               {recordUrl !== null ? (
@@ -466,7 +466,7 @@ function MdpositPublish({ experiment, simulation, onStepChange }: MdpositPublish
   const unavailableReason = mdpositUnavailableReason(simulation)
 
   // No remount on tab switch: reset the previous simulation's stale handoff
-  // before preparing a new one (reset is stable — re-runs only on sim change).
+  // before preparing a new one (reset is stable. It re-runs only on sim change).
   const { reset } = prepare
   useEffect(() => {
     reset()
@@ -548,7 +548,7 @@ function MdpositPublish({ experiment, simulation, onStepChange }: MdpositPublish
           <>
             <Small>
               Open VRE Lite, upload the metadata file (inputs.yaml) first, review the imported form, then upload the
-              structure, topology, and trajectory files. The deposition finishes outside MDDash — you don&apos;t need to
+              structure, topology, and trajectory files. The deposition finishes outside MDDash. You don&apos;t need to
               come back here.
             </Small>
             <div>

@@ -58,8 +58,8 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
   const job = jobQuery.job
   const live = job !== undefined && job.is_live
   const failed = job?.status === JobStatus.ERROR
-  // The ladder in props is the single source — the same value the stepper
-  // consumes; the server holds it at Run until progress parses (STOPPED counts as step 3 too).
+  // The ladder in props is the single source. The stepper consumes the same value;
+  // the server holds it at Run until progress parses (STOPPED counts as step 3 too).
   const analyzable = simulation.step >= 3
   // A terminal GMX run can be resumed from its checkpoint (AMBER has no extension yet).
   const canExtend = engine !== Engine.AMBER && job !== undefined && !job.is_live
@@ -132,8 +132,8 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
     )
   }
 
-  // A gone job (deleted here or elsewhere) means this step has nothing to show —
-  // the run lifecycle restarts from Tune, so send the user there.
+  // A gone job (deleted here or elsewhere) means this step has nothing to show.
+  // The run lifecycle restarts from Tune, so send the user there.
   const missing = jobQuery.missing
   useEffect(() => {
     if (missing) onStepChange(1)
@@ -144,8 +144,8 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
       <div className="space-y-1">
         <H4>Run your simulation</H4>
         <p className="text-text-muted text-sm">
-          This step runs your full simulation with the configuration below. It can take a while — you'll be able to
-          leave the page and come back to check progress.
+          This step runs your full simulation with the configuration below. It can take a while. You can leave the page
+          and come back to check progress.
         </p>
       </div>
 
@@ -157,7 +157,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
       ) : jobQuery.error !== undefined ? (
         <ApiErrorAlert error={jobQuery.error} onRetry={jobQuery.retry} />
       ) : job === undefined ? (
-        <p className="text-text-muted text-sm">No run in progress — taking you back to tuning…</p>
+        <p className="text-text-muted text-sm">No run in progress. Taking you back to tuning…</p>
       ) : (
         <div className="space-y-6">
           <ConfigUsed engine={engine} job={job} trials={trials} />
@@ -169,7 +169,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
             onExtend={() => setConfirmExtend(true)}
             onRestart={() => setConfirmRestart(true)}
           />
-          {/* A pending pod has produced nothing — every stream 404s, so there is
+          {/* A pending pod has produced nothing. Every stream 404s, so there is
               nothing to show and no reason to hit the log endpoint. */}
           {job.status !== JobStatus.PENDING && (
             <RunLogs
@@ -203,7 +203,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
         </Button>
       </div>
 
-      {/* AlertDialogAction has no variant prop in DS ≤ 0.1.9 — buttonVariants workaround
+      {/* AlertDialogAction has no variant prop in DS ≤ 0.1.9. buttonVariants workaround
           until https://github.com/CERIT-SC/design-system/pull/108 lands. */}
       <AlertDialog open={confirmStop} onOpenChange={setConfirmStop}>
         <AlertDialogContent>
