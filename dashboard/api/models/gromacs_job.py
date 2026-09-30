@@ -239,7 +239,7 @@ class GromacsJob(SimulationJob):
         checkpoint = DATA_DIR / experiment.id / f"{deffnm}.cpt"
         if not checkpoint.exists():
             raise BadRequest(
-                f"No checkpoint file ({checkpoint.name}) found to resume from. It may still be syncing. Try again shortly."
+                f"No checkpoint file ({checkpoint.name}) found to resume from; it may still be syncing — try again shortly."
             )
 
         try:

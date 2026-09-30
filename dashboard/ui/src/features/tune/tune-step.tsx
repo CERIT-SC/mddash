@@ -156,7 +156,7 @@ export function TuneStep({
   const stop = useStopTunerJob({
     mutation: {
       onSuccess: () => {
-        toast.success("Tuning stopped. Results so far are kept.")
+        toast.success("Tuning stopped — results so far are kept")
         invalidate()
       },
       onError: (error) => toast.error(toApiError(error).message),
@@ -365,8 +365,8 @@ export function TuneStep({
               Start tuning with {confirmStartNsteps?.toLocaleString("en-US")} steps?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Tuning at this size takes <strong>several minutes</strong>. You can close the page. It keeps running, and
-              you can stop it from this step.
+              Tuning at this size usually takes <strong>several minutes</strong>. You can close the page — it keeps
+              running, and you can stop it from this step.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

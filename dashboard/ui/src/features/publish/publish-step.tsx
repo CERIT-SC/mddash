@@ -307,7 +307,7 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
             ) : (
               <Small>
                 {hasDraft
-                  ? "A draft exists in MDRepo. Retry the upload to update it, or finish the deposition there."
+                  ? "A draft exists in MDRepo — retry the upload to update it, or finish the deposition there."
                   : "This step is going to upload your data to MDRepo server."}
               </Small>
             )}
@@ -343,8 +343,8 @@ function InvenioPublish({ experiment, onStepChange, pollMs }: InvenioPublishProp
         finish === "active" ? (
           <>
             <Small>
-              Your files are uploaded and waiting in a draft. Fill in the metadata there to publish. You don&apos;t need
-              to come back here.
+              Your files are uploaded and waiting in a draft. Fill in the metadata there to publish — you don&apos;t
+              need to come back here.
             </Small>
             <div>
               {recordUrl !== null ? (
@@ -548,7 +548,7 @@ function MdpositPublish({ experiment, simulation, onStepChange }: MdpositPublish
           <>
             <Small>
               Open VRE Lite, upload the metadata file (inputs.yaml) first, review the imported form, then upload the
-              structure, topology, and trajectory files. The deposition finishes outside MDDash. You don&apos;t need to
+              structure, topology, and trajectory files. The deposition finishes outside MDDash — you don&apos;t need to
               come back here.
             </Small>
             <div>

@@ -87,7 +87,7 @@ export function NstepsSelect({ value, onValueChange, disabled = false, id }: Nst
             {formatSteps(preset.value)}
             {/* Radix renders the whole ItemText in the trigger; data-hint hides it there. */}
             <span data-hint className="text-text-muted ml-2">
-              , {preset.hint}
+              — {preset.hint}
             </span>
           </SelectItem>
         ))}

@@ -144,8 +144,8 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
       <div className="space-y-1">
         <H4>Run your simulation</H4>
         <p className="text-text-muted text-sm">
-          This step runs your full simulation with the configuration below. It can take a while. You can leave the page
-          and come back to check progress.
+          This step runs your full simulation with the configuration below. It can take a while — you'll be able to
+          leave the page and come back to check progress.
         </p>
       </div>
 
@@ -157,7 +157,7 @@ export function RunStep({ experimentId, engine, simulation, onStepChange, pollMs
       ) : jobQuery.error !== undefined ? (
         <ApiErrorAlert error={jobQuery.error} onRetry={jobQuery.retry} />
       ) : job === undefined ? (
-        <p className="text-text-muted text-sm">No run in progress. Taking you back to tuning…</p>
+        <p className="text-text-muted text-sm">No run in progress — taking you back to tuning…</p>
       ) : (
         <div className="space-y-6">
           <ConfigUsed engine={engine} job={job} trials={trials} />

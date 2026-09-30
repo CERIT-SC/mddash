@@ -119,4 +119,4 @@ export function SupportNote() {
 export const START_HINT = "This starts your personal notebook server. It usually takes up to a minute."
 
 /** Body copy for every spawn-failure state. */
-export const FAILED_LEAD = "This happens when the system is busy or restarting. It is not your fault."
+export const FAILED_LEAD = "This usually happens when the system is busy or restarting — it is not your fault."

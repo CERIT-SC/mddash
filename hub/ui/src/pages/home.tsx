@@ -108,8 +108,8 @@ export function HomePage() {
           </H1>
           {status === "stopped" ? (
             <Lead className="mx-auto max-w-md">
-              MDDash lets you prepare, tune, run, analyze, and publish MD simulations in the browser, without touching
-              the command line.
+              MDDash lets you prepare, tune, run, analyze, and publish MD simulations — all in the browser, without
+              touching the command line.
             </Lead>
           ) : (
             <Muted className="text-base">

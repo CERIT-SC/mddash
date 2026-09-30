@@ -22,8 +22,8 @@ MDDash cannot be fully deployed locally: the platform depends on Rancher-provisi
 
 ## Non-goals
 
-- Full-platform deployment tests (kind + simulated Rancher): rejected, the pre-spawn hook hard-depends on Rancher CRDs/controllers; simulation cost is high, signal low, and `_deploy.yml` health verification already covers deploy health.
-- Compose-based user-pod harness (proxy/auth/s3-sync with stub OAuth/MinIO): rejected, a second, drifting deployment description.
+- Full-platform deployment tests (kind + simulated Rancher): rejected. The pre-spawn hook hard-depends on Rancher CRDs/controllers; simulation cost is high, signal low, and `_deploy.yml` health verification already covers deploy health.
+- Compose-based user-pod harness (proxy/auth/s3-sync with stub OAuth/MinIO): rejected. A second, drifting deployment description.
 - SSO/login flows, chaos/soak testing, infra failure modes (hub down, S3 down), deployment-level smoke against dev. Those are separate decisions not covered here.
 - Browser-timer fast-forward (`page.clock`): not used. The suite accepts the poll-interval floor (see Speed mechanics).
 
@@ -50,9 +50,9 @@ Root wiring (the only files outside `e2e/` and `dashboard/api/_demo/` that chang
 - `pnpm-workspace.yaml`: add `e2e` to `packages`.
 - Root `package.json`: add `--filter @mddash/e2e` to the existing `knip` and `type-check` parallel scripts; add `e2e` to the oxlint path list; add `e2e/**/*.ts` to the prettier `format`/`format:check` globs.
 - Root `.gitignore`: add `e2e/test-results/` and `e2e/playwright-report/`.
-- `.github/dependabot.yml`: unchanged, the single root npm entry (`directory: /`, weekly, grouped) already covers all workspace members via the root lockfile, so `@playwright/test` updates flow automatically.
+- `.github/dependabot.yml`: unchanged. The single root npm entry (`directory: /`, weekly, grouped) already covers all workspace members via the root lockfile, so `@playwright/test` updates flow automatically.
 - `.devcontainer/post-create.sh`: add `pnpm --filter @mddash/e2e exec playwright install --with-deps chromium` so local `make e2e` works out of the box.
-- `Makefile`: new `.PHONY: e2e` target next to the test targets, `pnpm --filter @mddash/e2e test`. It is part of the documented feedback loop in AGENTS.md but deliberately not part of `make test` (browser install is heavy).
+- `Makefile`: new `.PHONY: e2e` target next to the test targets (`pnpm --filter @mddash/e2e test`). It is part of the documented feedback loop in AGENTS.md but deliberately not part of `make test` (browser install is heavy).
 - `@playwright/test` is a devDependency of `@mddash/e2e`, pinned to an exact version (browsers and library must match; Dependabot keeps both in step via `playwright install`).
 
 ## Orchestration
@@ -132,7 +132,7 @@ Journeys are derived from the user guides in `docs/guides/` (guide file in brack
 | mdposit-handoff | MDPosit target → prepare → four download links | 08 | GMX |
 | published-view | Published card, record link, disabled "Publish a new version" | 08 | GMX |
 | notebook | limit dialog (both seeded notebooks running) → stop → start → status bar → stop | 02, 09 | (eeeee) |
-| dashboard-shell | search filter, rename, delete (disposable fffff) | 02 |, |
+| dashboard-shell | search filter, rename, delete (disposable fffff) | 02 | — |
 | locked-simulation | Locked badge + disabled form on a job-referenced simulation | 04 | GMX |
 
 Knowingly not covered: JupyterLab internals (`setup.ipynb`/`analysis.ipynb` are external apps), start-tuning confirm dialog and re-tune destruction (covered paths reach the same endpoints), stop-calculation (0.5s completion cannot be reliably caught mid-flight), preprocessing Image/Fit choices, membrane analyses, trial Fastest/Eco badge ranking, quota-exceeded toast, hub-level flows (server start/stop, tokens).

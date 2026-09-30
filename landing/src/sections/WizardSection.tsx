@@ -44,7 +44,7 @@ const WIZARD_STEPS: WizardStep[] = [
     label: "Tune",
     tagline: "Optimal performance, automatically",
     description:
-      "Integrated Tuner runs short GROMACS and AMBER benchmarks across MPI, OpenMP, and GPU configurations in parallel. The best-performing configuration is offered automatically. You avoid manual guesswork and wasted compute on long production runs.",
+      "Integrated Tuner runs short GROMACS and AMBER benchmarks across MPI, OpenMP, and GPU configurations in parallel. The best-performing configuration is offered automatically — no manual guesswork, no wasted compute on long production runs.",
     lightImg: tuneLightImg,
     darkImg: tuneDarkImg,
     alt: "MDDash tune step with benchmark results",
@@ -56,7 +56,7 @@ const WIZARD_STEPS: WizardStep[] = [
     label: "Run",
     tagline: "Live progress without shell access",
     description:
-      "Kubernetes Jobs manage execution with proper resource allocation. Watch live progress, stream logs, and inspect intermediate files, all without shell access to the cluster. Jobs survive browser disconnects and pod restarts.",
+      "Kubernetes Jobs manage execution with proper resource allocation. Watch live progress, stream logs, and inspect intermediate files — all without needing shell access to the cluster. Jobs survive browser disconnects and pod restarts.",
     lightImg: runLightImg,
     darkImg: runDarkImg,
     alt: "MDDash run step with live progress",

@@ -91,12 +91,14 @@ def _describe_validation_error(exc: jsonschema.ValidationError) -> str:
             return f"Missing required {what}: {', '.join(repr(m) for m in missing)}."
         case "pattern":
             if leaf == "name":
-                return f"The simulation name {exc.instance!r} contains unsupported characters. Use only {_NAME_CHARS}."
-            return f"The path for '{label}' ({exc.instance!r}) contains unsupported characters. Use only {_PATH_CHARS}."
+                return f"The simulation name {exc.instance!r} contains unsupported characters — use only {_NAME_CHARS}."
+            return (
+                f"The path for '{label}' ({exc.instance!r}) contains unsupported characters — use only {_PATH_CHARS}."
+            )
         case "not":
             return (
-                f"The path for '{label}' must stay inside the experiment folder. "
-                "It must not start with '/' or contain '..' or '//'."
+                f"The path for '{label}' must stay inside the experiment folder — "
+                "it must not start with '/' or contain '..' or '//'."
             )
         case "const":
             return f"'{label}' must be '{exc.validator_value}'."
@@ -109,7 +111,7 @@ def _describe_validation_error(exc: jsonschema.ValidationError) -> str:
             extras = sorted(set(exc.instance) - set(properties))
             allowed = sorted(repr(property_label(p)) for p in properties)
             what = "file role" if leaf == "files" else "property"
-            return f"Unknown {what} {', '.join(repr(e) for e in extras)}. Allowed values: {', '.join(allowed)}."
+            return f"Unknown {what} {', '.join(repr(e) for e in extras)} — allowed values: {', '.join(allowed)}."
         case _:
             message = exc.message
             for role, friendly in ROLE_LABELS.items():
@@ -475,7 +477,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             self._validation = (
                 False,
                 [
-                    f"This simulation file could not be read. It may have been deleted or corrupted. ({self._read_error})"
+                    f"This simulation file could not be read — it may have been deleted or corrupted. ({self._read_error})"
                 ],
                 [],
             )
