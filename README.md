@@ -25,7 +25,7 @@ make demo   # real Flask API, seeded demo data, mocked integrations, React dev s
 
 Demo data is wiped and reseeded on every start.
 
-For a full toolchain, use the dev container: install the _Dev Containers_ VSCode extension, then `F1` → _"Reopen in Container"_ (includes Docker-in-Docker, kubectl, and all dev tools). Outside the container, commands expect `uv` and `pnpm`.
+For a full toolchain, use the dev container: install the *Dev Containers* VSCode extension, then `F1` → *"Reopen in Container"* (includes Docker-in-Docker, kubectl, and all dev tools). Outside the container, commands expect `uv` and `pnpm`.
 
 Quality gates, run from the repo root. Each must pass before the next:
 

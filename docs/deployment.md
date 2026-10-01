@@ -15,10 +15,11 @@ CI/CD deploys everything; manual deployment is a fallback. Run `./install.sh` fo
 
 2. **Branch, release, and environment mapping**:
 
-   | Purpose        | Git ref                  | Env    | Config            | Namespace         | Image tag                       | Pull policy    |
-   | -------------- | ------------------------ | ------ | ----------------- | ----------------- | ------------------------------- | -------------- |
-   | Dev deployment | `master` push            | `dev`  | `config.dev.yaml` | `mddash-dev`      | `dev`                           | `Always`       |
-   | Prod release   | `vMAJOR.MINOR.PATCH` tag | `prod` | `config.yaml`     | `md-dashboard-ns` | `MAJOR.MINOR.PATCH` (immutable) | `IfNotPresent` |
+   | Purpose | Git ref | Env | Config | Namespace | Image tag | Pull policy |
+   |---|---|---|---|---|---|---|
+   | Dev deployment | `master` push | `dev` | `config.dev.yaml` | `mddash-dev` | `dev` | `Always` |
+   | Prod release | `vMAJOR.MINOR.PATCH` tag | `prod` | `config.yaml` | `md-dashboard-ns` | `MAJOR.MINOR.PATCH` (immutable) | `IfNotPresent` |
+
    - Pull requests run CI only, with no deployment.
    - Push to `master`. CD calls CI as a quality gate, then deploys all images tagged `dev`.
    - Push a SemVer tag. Release validates SemVer, calls CI, deploys immutable images and Helm charts to prod, then creates a GitHub Release.

@@ -1,6 +1,7 @@
 **/node_modules/
 **/dist/
 **/*.tsbuildinfo
+**/*.md
 pnpm-lock.yaml
 dashboard/ui/src/api/generated/
 dashboard/ui/src/routeTree.gen.ts
