@@ -1,15 +1,52 @@
 # MDDash - one stop shop for MD simulations
 
-1. Download from PDB, upload your files, *download from MDDB, or clone git repo (coming soon)*
+1. Download from PDB, upload your files, import by DOI, or clone a git workflow repo
 2. Run arbitrary simulation setup protocol in Jupyter notebook to record provenance
 3. Tune computation setup (MPI jobs, OMP cores, GPU assignment) for the best performance
 4. Run production simulation
 5. Analyze and visualize results
-6. Publish results to MDDB *(still to be elaborated)*
+6. Publish results to MDRepo, or export to MDPosit
 
-**Wanna try?** 
-- contact us, we need lightweight registration to make sure the precious hardware funded by our authorities is used according to AUP
-- go to https://mddash.cloud.e-infra.cz/
+**Wanna try?** Contact us first. A lightweight registration makes sure the precious hardware funded by our authorities is used according to the AUP. Then go to https://mddash.cloud.e-infra.cz/.
+
+User-facing documentation lives in [docs/guides/](docs/guides/).
+
+## Architecture
+
+![Architecture Diagram](docs/img/architecture.png)
+
+Each user gets an isolated Kubernetes namespace; their pod runs sidecars (Caddy proxy, auth, dashboard API, S3 sync) next to Jupyter. The admin namespace runs JupyterHub, the MDRun API (runs GROMACS and AMBER jobs independently of user sessions), the Tuner, and the landing page. Full component inventory: [docs/architecture.md](docs/architecture.md).
+
+## Development
+
+```bash
+make demo   # real Flask API, seeded demo data, mocked integrations, React dev server
+```
+
+Demo data is wiped and reseeded on every start.
+
+For a full toolchain, use the dev container: install the _Dev Containers_ VSCode extension, then `F1` → _"Reopen in Container"_ (includes Docker-in-Docker, kubectl, and all dev tools). Outside the container, commands expect `uv` and `pnpm`.
+
+Quality gates, run from the repo root. Each must pass before the next:
+
+```bash
+make fix              # auto-fix formatting and lint (Ruff, Prettier/Oxlint)
+make type-check       # Python and TypeScript
+make knip             # frontend dead code
+make test             # all test suites
+make e2e              # Playwright browser E2E tests
+make validate-charts  # when editing Helm charts (requires helm + gomplate + yq)
+make lint-workflows   # when editing GitHub Actions (requires actionlint + zizmor)
+```
+
+`make help` lists all commands.
+
+## Deployment
+
+- A push to `master` runs the CI quality gate, then deploys all images tagged `dev` to the dev environment.
+- A `vMAJOR.MINOR.PATCH` tag (created via `make release VERSION=x.y.z`) runs CI, deploys immutable `MAJOR.MINOR.PATCH` images to production, and creates a GitHub Release.
+
+Operator setup (GitHub secrets, Kubernetes bootstrap, manual deployment, registry policies, rollback notes): [docs/deployment.md](docs/deployment.md).
 
 ## References
 
@@ -30,291 +67,3 @@
   URL_DATE = {2026-05-24},
 }
 ```
-
-## CI/CD setup
-
-1. **Add GitHub secrets** (Settings, then Secrets):
-   - `REGISTRY_USERNAME` - Container registry user
-   - `REGISTRY_PASSWORD` - Container registry password  
-   - `KUBECONFIG` - Your kubeconfig base64 encoded: `cat ~/.kube/config | base64 -w 0`
-   - `OAUTH_CLIENT_ID` - OAuth client ID for authentication
-   - `OAUTH_CLIENT_SECRET` - OAuth client secret
-   - `S3_ACCESS_KEY` - S3 access key (external S3 only; unused when `s3.seaweedfs.enabled: true`)
-   - `S3_SECRET_KEY` - S3 secret key (external S3 only; unused when `s3.seaweedfs.enabled: true`)
-   - `MDREPO_CLIENT_ID` - MDRepo OAuth client ID for publishing experiments
-   - `MDREPO_CLIENT_SECRET` - MDRepo OAuth client secret
-
-2. **Branch and release model**:
-
-   | Purpose | Git ref | Environment | Artifact tag |
-   |---|---|---|---|
-   | Pull request validation | Pull request | None | None |
-   | Development deployment | `master` push | `dev` | `dev` |
-   | Production release | `vMAJOR.MINOR.PATCH` tag | `prod` | `MAJOR.MINOR.PATCH` |
-
-   - Push to `master`. CD calls CI as a quality gate, then deploys all images tagged `dev` to the dev environment
-   - Push a SemVer tag `v1.2.3`. Release validates SemVer, calls CI, then deploys immutable `1.2.3` images and Helm charts to production, followed by a generated GitHub Release
-   - Run `make release VERSION=1.2.3` from a clean, up-to-date `master` checkout to create and push the release tag
-   - Push to legacy `dev` branch. No CI or deployment triggers
-   - Production operational commands use `ENV=prod` without needing a version
-
-All secrets are automatically created in the namespace during deployment.
-CodeQL security scanning runs for `master` pull requests and the weekly scheduled scan.
-
-
-## Image tagging strategy
-
-| Environment | Git ref | Tag Format | Pull Policy |
-| ----------- | ------- | ----------- | ----------- |
-| **Dev** | `master` push | Static `dev` | `Always` |
-| **Prod** | `vMAJOR.MINOR.PATCH` tag | `MAJOR.MINOR.PATCH` (immutable) | `IfNotPresent` |
-
-Dev images use the mutable `dev` tag with `Always` pull policy. Production images use immutable SemVer tags (without the leading `v`). Every `master` push rebuilds the complete image set as `dev`, repairing any partial pushes from cancelled runs.
-
-Production releases are triggered by a strict SemVer tag (`v0.1.0`, `v1.2.3`). The tag's commit must be an ancestor of `master`. SemVer image tags are immutable. A retry reuses an artifact only when its OCI source revision matches the tagged commit.
-
-Services can override pull policy in configuration. The Tuner API follows platform release tags, while its large worker image uses a separately managed static stack tag.
-
-### Harbor retention policy
-
-Configure in Harbor UI (Project, then Policy, then Tag Retention):
-1. **Dev tags.** Repository `**`, tag `dev`. Retain always.
-2. **Prod tags.** Repository `**`, tag matching `[0-9]+\.[0-9]+\.[0-9]+`. Retain always.
-
-Prod SemVer tags are immutable and must be retained indefinitely: `make rollback ENV=prod REVISION=N` restores a Helm release revision whose values reference a specific image tag, so evicting a live or recently-live tag makes the rollback pod fail to pull. A count-based rule on push time (e.g. "last 10 pushed") can evict the currently-running tag during fast hotfix cycles, since push order diverges from deploy order. Release cadence bounds the count naturally at this project's scale.
-
-### Rollback data compatibility
-
-Image tags are not the only rollback hazard: enum additions are forward-safe but not rollback-safe. The release that adds simulation **stop** (`JobStatus.STOPPED` on `simulation_jobs.last_known_status` and `mdrun_jobs.last_status`) writes status strings a pre-STOPPED binary cannot decode (SQLAlchemy raises `LookupError` when loading such rows, which returns 500s). Before rolling back across that release boundary, normalize the data in both databases (dashboard SQLite in the user pod at `/mddash/experiments.db`, MDRun SQLite at `/data/mdrun.db`):
-
-```sql
-UPDATE simulation_jobs SET last_known_status = 'ERROR' WHERE last_known_status = 'STOPPED';
-UPDATE mdrun_jobs SET last_status = 'FINISHED' WHERE last_status = 'STOPPED';
-```
-
-
-## Configuration
-
-- `config.yaml` - Production environment configuration
-- `config.dev.yaml` - Development environment configuration
-- `config.edc.yaml` - EDC/EGI CheckIn environment configuration
-
-
-## Development setup
-
-### Dev container
-
-Install the *Dev Containers* extension in VSCode, then `F1`, then *"Reopen in Container"*. Includes Docker-in-Docker, kubectl, and all dev tools.
-
-### Local demo
-
-Run the dashboard locally with the real Flask API, deterministic demo data, mocked external integrations, and the React dev server:
-
-```bash
-make demo
-```
-
-
-## Local commands
-
-```bash
-make build ENV=dev    # Build images
-make push ENV=dev     # Build and push images
-make all ENV=dev      # Build, push images, and deploy (dev only)
-make fix              # Auto-fix formatting and lint issues (Python via Ruff, UI via Prettier/Oxlint)
-make lint             # Check linting without auto-fix (Python and UI)
-make format-check     # Check formatting without modifying files
-make knip             # Check frontend dead code
-make type-check       # Type-check Python components and UI
-make test             # Run all test suites
-make validate-charts  # Lint and template Helm charts for every environment
-make status ENV=dev   # Check status
-make history ENV=prod # Show deployment history
-make rollback ENV=prod REVISION=3  # Rollback to specific revision
-make help             # Show all commands
-```
-
-`ENV` defaults to `dev` and accepts only `dev` or `prod`. Production application releases must use a SemVer tag. `make all ENV=prod` is rejected. Supported production operational commands (`status`, `logs`, `history`, `rollback`) require only `ENV=prod`.
-
-Local commands expect `uv` for Python workflows and `pnpm` for the UI unless you are using the dev container.
-
-
-## Manual deployment
-
-If you need to deploy manually (bypassing CI/CD), run `./install.sh` for an interactive walkthrough of the steps below (`--dry-run` shows the actions without applying them). The remaining sections document the same steps for doing them by hand.
-
-### 1. Prerequisites
-
-Ensure you have the following tools installed (all are installed if using the dev container):
-- `docker`
-- `kubectl`
-- `helm`
-- `yq`
-- `gomplate`
-- `uv`
-- `pnpm`
-- `make`
-
-### 2. Environment setup
-
-Choose your target environment and matching config file:
-
-```bash
-export ENV=dev  # or prod
-
-# Use config.yaml for prod, config.dev.yaml for dev, config.edc.yaml for edc, etc.
-export CONFIG=config.dev.yaml
-
-export NAMESPACE=$(yq '.namespace' "${CONFIG}")
-export PACKAGE=$(yq '.helm.package' "${CONFIG}")
-```
-
-### 3. Bootstrap Kubernetes resources
-
-Create the target namespace, apply the hub service account RBAC, and create the required Kubernetes secrets.
-
-```bash
-kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || kubectl create namespace "${NAMESPACE}"
-```
-
-> [!CAUTION]
-> If you are using Rancher, restrict the Resource Quota of the hub namespace so user namespaces have room. When `rancherProjectId` is set in the config, `./install.sh` does this automatically via namespace annotations; otherwise set it manually in the Rancher UI. See `docs/resource-management.md` for sizing guidance.
-
-Apply the cluster-wide RBAC once:
-
-> [!CAUTION]
-> `helm/rbac/` grants cluster-wide permissions. Namespace admin rights are not enough; ask a cluster/Rancher admin to apply these for you.
-
-```bash
-# Hub service account RBAC. Replace <NAMESPACE> first.
-kubectl apply -f helm/rbac/clusterrole.yaml
-
-# Rancher namespace-management RBAC. Replace <NAMESPACE> and <PROJECT_ID> first.
-# <PROJECT_ID> is the short suffix without "p-"; for c-xxx:p-hshk2 use hshk2.
-kubectl apply -f helm/rbac/rancher-clusterrole.yaml
-```
-
-Create the secrets, replacing placeholders with actual values:
-
-```bash
-# OAuth Credentials
-kubectl create secret generic oidc-credentials \
-  --from-literal=client_id="YOUR_CLIENT_ID" \
-  --from-literal=client_secret="YOUR_CLIENT_SECRET" \
-  -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-
-# S3 Credentials (external S3 only; with s3.seaweedfs.enabled: true the
-# install/deployment paths generate this secret instead. It is the
-# bundled store's auth identity and must stay stable)
-kubectl create secret generic ${PACKAGE}-s3-creds \
-  --from-literal=S3_ACCESS_KEY="YOUR_S3_ACCESS_KEY" \
-  --from-literal=S3_SECRET_KEY="YOUR_S3_SECRET_KEY" \
-  -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-
-# MDRepo OAuth Credentials (for publishing experiments to MDRepo)
-kubectl create secret generic ${PACKAGE}-mdrepo-credentials \
-  --from-literal=client_id="YOUR_MDREPO_CLIENT_ID" \
-  --from-literal=client_secret="YOUR_MDREPO_CLIENT_SECRET" \
-  -n ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-
-# Tuner Credentials (static user, random password, created once)
-kubectl get secret tuner-auth -n ${NAMESPACE} >/dev/null 2>&1 || \
-  kubectl create secret generic tuner-auth \
-  --from-literal=user="tuner" \
-  --from-literal=password="$(openssl rand -base64 32)" \
-  -n ${NAMESPACE}
-```
-
-### 4. Build and deploy
-
-Once secrets are in place, you can run the full deployment pipeline:
-
-```bash
-# 1. Authenticate to the container and Helm OCI registry.
-# Use the registry host from the selected config, for example cerit.io.
-docker login <registry-host>
-helm registry login <registry-host>
-
-# 2. Build and push all docker images
-make push ENV=${ENV}
-
-# 3. Package and push local subcharts when they changed.
-make push-mdrun-api-chart ENV=${ENV}
-make push-tuner-chart ENV=${ENV}
-
-# 4. Update Helm dependencies when charts or config changed
-make -C helm update ENV=${ENV}
-
-# 5. Deploy to Kubernetes
-# For first-time installation:
-make -C helm install ENV=${ENV}
-
-# For updates:
-make deploy ENV=${ENV}
-```
-
-
-## App architecture
-
-![Architecture Diagram](docs/img/architecture.png)
-
-### Admin namespace
-Shared infrastructure components that manage the platform and compute resources.
-
-- **JupyterHub**
-  - *Location*: `hub/` (custom `mddash-hub` image: stock `k8s-hub` + the EGI Check-in authenticator + the MDDash-branded hub UI in `hub/ui/`, one HTML entry per JupyterHub template), configured in `helm/charts/mddash/values.yaml.tmpl`
-  - *Purpose*: Manages user logins and spawns isolated environments for each user on demand.
-- **MDRun API**
-  - *Location*: `mdrun-api/`, `helm/charts/mdrun-api` (Configured in `helm/charts/mddash/values.yaml.tmpl`)
-  - *Purpose*: Decouples simulation execution from user sessions. Long-running GROMACS and AMBER jobs continue even if the user logs out.
-- **Tuner**
-  - *Location*: `tuner/`, `helm/charts/tuner` (Configured in `helm/charts/mddash/values.yaml.tmpl`)
-  - *Purpose*: Benchmarks simulation parameters and selects the fastest config for the available hardware.
-- **Landing Page**
-  - *Location*: `landing/`
-  - *Purpose*: Public landing page served at the root path. It introduces the platform and links users to the JupyterHub login at `/hub/`.
-
-### User namespace
-Isolated environments created for each logged-in user.
-
-- **Proxy (Caddy)**
-  - *Location*: `dashboard/proxy/`
-  - *Port*: `8888`, `2019` (proxy admin)
-  - *Purpose*: Is the single entry point for the user pod. It routes traffic to the internal service (UI, API, or Jupyter) and serves the frontend application.
-- **JupyterHub Singleuser**
-  - *Location*: Configured in `helm/charts/mddash/values.yaml.tmpl`
-  - *Port*: `8080`
-  - *Purpose*: Provides the standard interface required by JupyterHub to manage the pod's lifecycle and connectivity.
-- **Forward Auth**
-  - *Location*: `dashboard/auth/`
-  - *Port*: `5001`
-  - *Purpose*: Intercepts requests and validates JupyterHub authentication tokens before they reach the API or UI.
-- **UI**
-  - *Location*: `dashboard/ui/`
-  - *Purpose*: Provides a graphical interface for experiment setup and monitoring.
-- **API**
-  - *Location*: `dashboard/api/`
-  - *Port*: `5000`
-  - *Purpose*: Manages experiment state and coordinates actions between the user interface and backend simulation services.
-- **S3 Sync Daemon**
-  - *Location*: `dashboard/s3-sync/`
-  - *Purpose*: Syncs user data to S3 for persistence and sharing.
-- **Analysis Job**
-  - *Location*: Executed from `dashboard/api/models/analysis_job.py`
-  - *Purpose*: Runs on-demand molecular workflow analysis jobs against experiment data.
-- **Jupyter Notebooks**
-  - *Location*: `notebook/`
-  - *Purpose*: Provides an interactive environment for setup tasks (like protein preparation) that require manual visualization or intervention.
-- **User PVC**
-  - *Location*: Configured in `helm/charts/mddash/files/pre_spawn_hook.py`
-  - *Purpose*: Mounts the `/mddash` directory to a persistent volume. User data and configurations persist across sessions.
-
-### External services
-Services outside the Kubernetes cluster that the application depends on.
-
-- **S3**
-  - *Location*: External `s3.endpoint` or the bundled SeaweedFS store (`s3.seaweedfs.enabled` in `config*.yaml`); credentials in `${PACKAGE}-s3-creds`
-  - *Purpose*: Stores large simulation datasets and trajectories for all services.
-- **MDRepo**
-  - *Location*: Endpoint and OAuth client configured in `config*.yaml` (`mdrepo:`, secrets in `${PACKAGE}-mdrepo-credentials`); OAuth flow managed by the Dashboard API
-  - *Purpose*: InvenioRDM-based repository where completed experiments are published.
