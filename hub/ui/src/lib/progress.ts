@@ -15,6 +15,11 @@ export interface LogEntry {
 
 export type ProgressStatus = "connecting" | "streaming" | "ready" | "failed"
 
+// Hub 400s progress requests that land during spawn-failure cleanup; reconnecting replays
+// the terminal failed event. Budget counts consecutive failed connects (reset on open).
+const MAX_CONNECT_FAILURES = 5
+const RETRY_BASE_DELAY_MS = 1000
+
 export function useSpawnProgress(progressUrl: string) {
   const [progress, setProgress] = useState(0)
   const [currentMessage, setCurrentMessage] = useState<string | null>(null)
@@ -29,36 +34,60 @@ export function useSpawnProgress(progressUrl: string) {
   }
 
   useEffect(() => {
-    const source = new EventSource(progressUrl)
+    let source: EventSource | null = null
+    let retryTimer: ReturnType<typeof setTimeout> | undefined
+    let connectFailures = 0
+    let disposed = false
 
-    source.onmessage = (event: MessageEvent<string>) => {
-      setStatus("streaming")
-      const evt: ProgressEvent = JSON.parse(event.data)
-      if (evt.progress !== undefined) setProgress(evt.progress)
-      if (evt.html_message !== undefined) {
-        setCurrentMessage(evt.html_message.replace(/<[^>]*>/g, ""))
-        pushLog({ text: evt.html_message.replace(/<[^>]*>/g, ""), html: evt.html_message })
-      } else if (evt.message !== undefined) {
-        setCurrentMessage(evt.message)
-        pushLog({ text: evt.message })
+    const connect = () => {
+      if (disposed) return
+      const es = new EventSource(progressUrl)
+      source = es
+
+      es.onopen = () => {
+        connectFailures = 0
       }
-      if (evt.ready) {
-        setStatus("ready")
-        source.close()
-        window.location.reload()
-      } else if (evt.failed) {
-        setStatus("failed")
-        source.close()
+
+      es.onmessage = (event: MessageEvent<string>) => {
+        if (disposed) return
+        setStatus("streaming")
+        const evt: ProgressEvent = JSON.parse(event.data)
+        if (evt.progress !== undefined) setProgress(evt.progress)
+        if (evt.html_message !== undefined) {
+          setCurrentMessage(evt.html_message.replace(/<[^>]*>/g, ""))
+          pushLog({ text: evt.html_message.replace(/<[^>]*>/g, ""), html: evt.html_message })
+        } else if (evt.message !== undefined) {
+          setCurrentMessage(evt.message)
+          pushLog({ text: evt.message })
+        }
+        if (evt.ready) {
+          setStatus("ready")
+          es.close()
+          window.location.reload()
+        } else if (evt.failed) {
+          setStatus("failed")
+          es.close()
+        }
+      }
+
+      es.onerror = () => {
+        es.close()
+        if (disposed) return
+        connectFailures += 1
+        if (connectFailures >= MAX_CONNECT_FAILURES) {
+          setStreamEnded(true)
+          return
+        }
+        retryTimer = setTimeout(connect, RETRY_BASE_DELAY_MS * connectFailures)
       }
     }
 
-    source.onerror = () => {
-      source.close()
-      setStreamEnded(true)
-    }
+    connect()
 
     return () => {
-      source.close()
+      disposed = true
+      if (retryTimer !== undefined) clearTimeout(retryTimer)
+      source?.close()
     }
   }, [progressUrl])
 
