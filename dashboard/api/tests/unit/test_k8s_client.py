@@ -109,3 +109,51 @@ class TestGetPodInfo:
         mocker.patch("clients.k8s.get_core_v1", return_value=core)
 
         assert k8s.get_pod_info("notebook-exp1") == (PodStatus.DOWN, None)
+
+
+class TestCreateServiceOwnerReference:
+    """The notebook service must be owned by its pod so K8s GC reaps it on pod deletion."""
+
+    def test_service_carries_pod_owner_reference(self, mocker: MockerFixture) -> None:
+        from clients import k8s
+
+        k8s._load_k8s()  # populate the module-global V1* symbols used to build the service
+        core = MagicMock()
+        mocker.patch("clients.k8s.get_core_v1", return_value=core)
+        mocker.patch("clients.k8s.ping_resource", return_value=False)
+
+        k8s.create_service("svc-exp1", "notebook-exp1", "uid-123")
+
+        body = core.create_namespaced_service.call_args.kwargs["body"]
+        owner_refs = body.metadata.owner_references
+        assert len(owner_refs) == 1
+        assert owner_refs[0].api_version == "v1"
+        assert owner_refs[0].kind == "Pod"
+        assert owner_refs[0].name == "notebook-exp1"
+        assert owner_refs[0].uid == "uid-123"
+
+
+class TestCreateNotebookPodUid:
+    """create_notebook_pod returns the pod UID for the service owner reference."""
+
+    def test_returns_uid_of_newly_created_pod(self, mocker: MockerFixture) -> None:
+        from clients import k8s
+        from kubernetes.client.rest import ApiException
+
+        k8s._load_k8s()  # populate the module-global ApiException the except clause catches
+        core = MagicMock()
+        core.read_namespaced_pod.side_effect = ApiException(status=404)
+        core.create_namespaced_pod.return_value.metadata.uid = "new-uid"
+        mocker.patch("clients.k8s.get_core_v1", return_value=core)
+
+        assert k8s.create_notebook_pod("notebook-exp1", "exp1", "/dash/notebook/exp1", "tok") == "new-uid"
+
+    def test_returns_uid_of_existing_pod(self, mocker: MockerFixture) -> None:
+        from clients import k8s
+
+        core = MagicMock()
+        core.read_namespaced_pod.return_value.metadata.uid = "old-uid"
+        mocker.patch("clients.k8s.get_core_v1", return_value=core)
+
+        assert k8s.create_notebook_pod("notebook-exp1", "exp1", "/dash/notebook/exp1", "tok") == "old-uid"
+        core.create_namespaced_pod.assert_not_called()

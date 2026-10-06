@@ -160,7 +160,7 @@ class Notebook(db.Model):  # type: ignore
             raise Forbidden(description=msg)
 
         try:
-            k8s.create_notebook_pod(
+            pod_uid = k8s.create_notebook_pod(
                 pod_name,
                 self.experiment_id,
                 f"{PREFIX}/notebook/{self.experiment_id}",
@@ -184,7 +184,7 @@ class Notebook(db.Model):  # type: ignore
             raise InternalServerError(description="Failed to create notebook pod.") from e
 
         try:
-            k8s.create_service(svc_name, pod_name)
+            k8s.create_service(svc_name, pod_name, pod_uid)
         except Exception:
             k8s.delete_pod(pod_name)
             raise
