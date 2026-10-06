@@ -41,15 +41,37 @@ prompt() {
   printf -v "$var" '%s' "${reply:-$default}"
 }
 
+# Read a line into the named variable without echoing it, printing '*' per character.
+# Backspace removes the last character. Returns non-zero when stdin ends without a newline.
+read_masked() {
+  local out="" ch
+  while :; do
+    IFS= read -rsn1 ch || return 1
+    [[ -z "$ch" ]] && break
+    case "$ch" in
+      $'\177' | $'\b')
+        [[ -n "$out" ]] && { out="${out:0:${#out}-1}"; printf '\b \b'; }
+        ;;
+      *)
+        out+="$ch"
+        printf '*'
+        ;;
+    esac
+  done
+  printf -v "$1" '%s' "$out"
+}
+
 # Prompt for a secret with masked input. Re-prompt until the input is not empty.
 prompt_secret() {
-  local var="$1" question="$2" reply=""
-  while [[ -z "$reply" ]]; do
+  local var="$1" question="$2" secret=""
+  while :; do
     printf '  %s: ' "$(cyan "$question")"
-    read -rs reply
+    read_masked secret || [[ -n "$secret" ]] || die "no input on stdin"
     printf '\n'
+    [[ -n "$secret" ]] && break
+    warn "empty value, try again"
   done
-  printf -v "$var" '%s' "$reply"
+  printf -v "$var" '%s' "$secret"
 }
 
 # Ask a yes or no question. Return success for yes and failure for no.
