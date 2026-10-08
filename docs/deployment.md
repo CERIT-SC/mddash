@@ -77,19 +77,15 @@ kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || kubectl create namespace
 > [!CAUTION]
 > If you are using Rancher, restrict the Resource Quota of the hub namespace so user namespaces have room. When `rancherProjectId` is set in the config, `./install.sh` does this automatically via namespace annotations; otherwise set it manually in the Rancher UI. See `docs/resource-management.md` for sizing guidance.
 
-Apply the cluster-wide RBAC once:
+Set up the hub service account permissions:
 
 > [!CAUTION]
-> `helm/rbac/` grants cluster-wide permissions. Namespace admin rights are not enough; ask a cluster/Rancher admin to apply these for you.
+> The hub service account gets its permissions from a Rancher role template, not from anything applied by this repo. A Rancher admin must do this once (see `helm/rbac/roletemplate.yaml` for the full rule set and rationale):
 
-```bash
-# Hub service account RBAC. Replace <NAMESPACE> first.
-kubectl apply -f helm/rbac/clusterrole.yaml
+1. Create the role template from `helm/rbac/roletemplate.yaml` on the management cluster (Rancher UI: Global → Security → Role Templates).
+2. Bind it in the project to the group `system:serviceaccounts:<NAMESPACE>` (project members, custom principal with that exact name).
 
-# Rancher namespace-management RBAC. Replace <NAMESPACE> and <PROJECT_ID> first.
-# <PROJECT_ID> is the short suffix without "p-"; for c-xxx:p-hshk2 use hshk2.
-kubectl apply -f helm/rbac/rancher-clusterrole.yaml
-```
+Rancher replicates the binding into every project namespace, including user namespaces created at spawn time. `./install.sh` checks for the binding and prints these instructions when it is missing.
 
 Create the secrets, replacing placeholders with actual values:
 

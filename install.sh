@@ -257,35 +257,20 @@ else
     "kubectl get resourcequota -n '$NAMESPACE' --no-headers 2>/dev/null | grep -q ."
 fi
 
-# Cluster RBAC.
+# Hub RBAC comes from the Rancher role template (helm/rbac/roletemplate.yaml) bound to
+# system:serviceaccounts:$NAMESPACE in the project; user namespaces inherit the binding.
 
-RBAC_DIR="$TMP_WORK/rbac"
-mkdir -p "$RBAC_DIR"
-sed "s/<NAMESPACE>/$NAMESPACE/g" helm/rbac/clusterrole.yaml > "$RBAC_DIR/clusterrole.yaml"
-if [[ -n "$RANCHER_PROJECT_ID" ]]; then
-  sed -e "s/<NAMESPACE>/$NAMESPACE/g" -e "s/<PROJECT_ID>/${RANCHER_PROJECT_ID##*p-}/g" \
-    helm/rbac/rancher-clusterrole.yaml > "$RBAC_DIR/rancher-clusterrole.yaml"
-fi
-
-apply_rbac=true
-if ! kubectl auth can-i create clusterroles >/dev/null 2>&1 \
-  || ! kubectl auth can-i create clusterrolebindings >/dev/null 2>&1; then
-  if ! confirm "Cluster-admin rights are needed to apply helm/rbac/. Do you have them?" N; then
-    warn "ask your cluster admin to apply the following (rendered for namespace $NAMESPACE, no repo clone needed):"
-    echo
-    # Heredoc body and EOF stay at column 0. Indented '---' is not a valid YAML document separator.
-    printf '    %s\n' "$(bold "kubectl apply -f - <<'EOF'")"
-    cat "$RBAC_DIR"/*.yaml
-    printf 'EOF\n'
-    echo
-    confirm "Has the admin applied the RBAC?" N || die "re-run the installer once the RBAC is in place"
-    apply_rbac=false
-  fi
-fi
-if [[ "$apply_rbac" == true ]]; then
-  for manifest in "$RBAC_DIR"/*.yaml; do
-    run "kubectl apply -f '$manifest'"
-  done
+if ! kubectl get rolebindings -n "$NAMESPACE" -o json 2>/dev/null \
+     | grep -q "\"system:serviceaccounts:$NAMESPACE\""; then
+  warn "no project binding grants the hub service account a role template in $NAMESPACE"
+  info "ask a Rancher admin to create the role template once on the management cluster:"
+  echo
+  sed 's/^/    /' helm/rbac/roletemplate.yaml
+  echo
+  info "and bind it in project $(bold "${RANCHER_PROJECT_ID:-<project>}") to the group $(bold "system:serviceaccounts:$NAMESPACE")"
+  confirm "Is the role template in place?" N || die "re-run the installer once the binding exists"
+else
+  ok "hub role-template binding in place"
 fi
 
 # Secrets.

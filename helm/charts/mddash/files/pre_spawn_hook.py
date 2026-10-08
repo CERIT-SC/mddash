@@ -56,7 +56,7 @@ def _get_namespace_manifest(
 
 
 def _get_role_manifest(role_name: str, include_pvc: bool = False) -> dict:
-    resources = ["pods", "services", "events"]
+    resources = ["pods", "services"]
     if include_pvc:
         resources.append("persistentvolumeclaims")
 

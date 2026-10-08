@@ -1,0 +1,39 @@
+apiVersion: authz.management.cattle.io/v3
+kind: RoleTemplate
+metadata:
+  name: mddash-hub
+description: Permissions for the MDDash hub service account.
+context: project
+rules:
+  # The hooks create and patch namespaces; Rancher's webhook authorizes create via manage-namespaces.
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["create", "patch", "get", "list", "watch"]
+  - apiGroups: ["management.cattle.io"]
+    resources: ["projects"]
+    verbs: ["manage-namespaces"]
+  # Hook polls quota activation.
+  - apiGroups: [""]
+    resources: ["resourcequotas"]
+    verbs: ["list"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["create", "get"]
+  # KubeSpawner pod lifecycle and post_stop cleanup.
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  # The hub grants the rules below in each user namespace at spawn time. Kubernetes RBAC
+  # escalation requires the grantor to already hold the permissions it delegates.
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create", "delete", "get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "update", "patch", "delete"]
