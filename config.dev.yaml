@@ -14,7 +14,7 @@ registry: cerit.io/mddash
 
 # Dashboard hostname
 dashboard:
-  hostname: mddash-test.dyn.cloud.e-infra.cz
+  hostname: mddash-dev.dyn.cloud.e-infra.cz
 
 # OIDC provider for JupyterHub authentication
 oidc:
