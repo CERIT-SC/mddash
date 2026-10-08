@@ -260,15 +260,49 @@ fi
 # Hub RBAC comes from the Rancher role template (helm/rbac/roletemplate.yaml) bound to
 # system:serviceaccounts:$NAMESPACE in the project; user namespaces inherit the binding.
 
+print_role_template() {
+  while IFS= read -r line; do printf '    %s\n' "$(cyan "$line")"; done < helm/rbac/roletemplate.yaml
+}
+
 if ! kubectl get rolebindings -n "$NAMESPACE" -o json 2>/dev/null \
      | grep -q "\"system:serviceaccounts:$NAMESPACE\""; then
   warn "no project binding grants the hub service account a role template in $NAMESPACE"
-  info "ask a Rancher admin to create the role template once on the management cluster:"
-  echo
-  sed 's/^/    /' helm/rbac/roletemplate.yaml
-  echo
-  info "and bind it in project $(bold "${RANCHER_PROJECT_ID:-<project>}") to the group $(bold "system:serviceaccounts:$NAMESPACE")"
-  confirm "Is the role template in place?" N || die "re-run the installer once the binding exists"
+  rbac_done=false
+  RANCHER_API=""
+  if [[ -n "$RANCHER_PROJECT_ID" && $DRY_RUN -eq 0 ]]; then
+    KCFG_SERVER="$(kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.server}')"
+    KCFG_TOKEN="$(kubectl config view --minify --raw -o jsonpath='{.users[0].user.token}')"
+    RANCHER_API="${KCFG_SERVER%%/k8s/clusters/*}/v3"
+    # Direct (non-proxied) kubeconfigs have no /k8s/clusters suffix and no Rancher rights.
+    if [[ "$RANCHER_API" == "$KCFG_SERVER/v3" || -z "$KCFG_TOKEN" ]]; then
+      warn "kubeconfig is not Rancher-proxied; skipping Rancher API"
+      RANCHER_API=""
+    fi
+  fi
+  if [[ -n "$RANCHER_API" ]]; then
+    TEMPLATE_ID="$(yq -r '.metadata.name' helm/rbac/roletemplate.yaml)"
+    template_body="$(yq -o=json -I=0 '{"name": .metadata.name, "description": .description, "context": .context, "rules": .rules}' helm/rbac/roletemplate.yaml)"
+    prtb_body="$(PROJECT="$RANCHER_PROJECT_ID" TEMPLATE="$TEMPLATE_ID" GROUP="system:serviceaccounts:$NAMESPACE" NAME="$NAMESPACE-sa" \
+      yq -n -o=json -I=0 '{"name": strenv(NAME), "roleTemplateId": strenv(TEMPLATE), "projectId": strenv(PROJECT), "groupPrincipalId": strenv(GROUP)}')"
+    if (curl -fsS -H "Authorization: Bearer $KCFG_TOKEN" "$RANCHER_API/roletemplates/$TEMPLATE_ID" >/dev/null 2>&1 \
+        || curl -fsS -H "Authorization: Bearer $KCFG_TOKEN" -H "Content-Type: application/json" -d "$template_body" "$RANCHER_API/roletemplates" >/dev/null 2>&1) \
+       && curl -fsS -H "Authorization: Bearer $KCFG_TOKEN" -H "Content-Type: application/json" -d "$prtb_body" "$RANCHER_API/projectroletemplatebindings" >/dev/null 2>&1; then
+      rbac_done=true
+      ok "bound system:serviceaccounts:$NAMESPACE to role template $TEMPLATE_ID in project $RANCHER_PROJECT_ID"
+      rancher_wait "role-template binding in $NAMESPACE" \
+        "kubectl get rolebindings -n '$NAMESPACE' -o json 2>/dev/null | grep -q '\"system:serviceaccounts:$NAMESPACE\"'"
+    else
+      warn "Rancher API call failed; falling back to manual setup"
+    fi
+  fi
+  if [[ "$rbac_done" == false ]]; then
+    info "ask a Rancher admin to create the role template once on the management cluster:"
+    echo
+    print_role_template
+    echo
+    info "and bind it in project $(bold "${RANCHER_PROJECT_ID:-<project>}") to the group $(bold "system:serviceaccounts:$NAMESPACE")"
+    confirm "Is the role template in place?" N || die "re-run the installer once the binding exists"
+  fi
 else
   ok "hub role-template binding in place"
 fi
