@@ -80,7 +80,7 @@ kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || kubectl create namespace
 Set up the hub service account permissions:
 
 > [!CAUTION]
-> The hub service account gets its permissions from a Rancher role template, not from anything applied by this repo. A Rancher admin must do this once (see `helm/rbac/roletemplate.yaml` for the full rule set and rationale):
+> The hub service account gets its permissions from a Rancher role template. A Rancher admin must do this once (see `helm/rbac/roletemplate.yaml`):
 
 1. Create the role template from `helm/rbac/roletemplate.yaml` on the management cluster (Rancher UI: Global → Security → Role Templates).
 2. Bind it in the project to the group `system:serviceaccounts:<NAMESPACE>` (project members, custom principal with that exact name).
