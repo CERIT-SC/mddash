@@ -41,15 +41,41 @@ prompt() {
   printf -v "$var" '%s' "${reply:-$default}"
 }
 
+# Masked read into the named variable ('*' per character, backspace edits).
+# EOF keeps what was typed and fails only when it is empty.
+read_masked() {
+  local out="" ch
+  while :; do
+    if ! IFS= read -rsn1 ch; then
+      printf -v "$1" '%s' "$out"
+      [[ -n "$out" ]]
+      return
+    fi
+    [[ -z "$ch" ]] && break
+    case "$ch" in
+      $'\177' | $'\b')
+        [[ -n "$out" ]] && { out="${out:0:${#out}-1}"; printf '\b \b'; }
+        ;;
+      *)
+        out+="$ch"
+        printf '*'
+        ;;
+    esac
+  done
+  printf -v "$1" '%s' "$out"
+}
+
 # Prompt for a secret with masked input. Re-prompt until the input is not empty.
 prompt_secret() {
-  local var="$1" question="$2" reply=""
-  while [[ -z "$reply" ]]; do
+  local var="$1" question="$2" secret=""
+  while :; do
     printf '  %s: ' "$(cyan "$question")"
-    read -rs reply
+    read_masked secret || die "no input on stdin"
     printf '\n'
+    [[ -n "$secret" ]] && break
+    warn "empty value, try again"
   done
-  printf -v "$var" '%s' "$reply"
+  printf -v "$var" '%s' "$secret"
 }
 
 # Ask a yes or no question. Return success for yes and failure for no.
@@ -235,42 +261,87 @@ else
     "kubectl get resourcequota -n '$NAMESPACE' --no-headers 2>/dev/null | grep -q ."
 fi
 
-# Cluster RBAC.
+# Hub RBAC comes from the Rancher role template (helm/rbac/roletemplate.yaml) bound to
+# system:serviceaccounts:$NAMESPACE in the project; user namespaces inherit the binding.
 
-RBAC_DIR="$TMP_WORK/rbac"
-mkdir -p "$RBAC_DIR"
-sed "s/<NAMESPACE>/$NAMESPACE/g" helm/rbac/clusterrole.yaml > "$RBAC_DIR/clusterrole.yaml"
-if [[ -n "$RANCHER_PROJECT_ID" ]]; then
-  sed -e "s/<NAMESPACE>/$NAMESPACE/g" -e "s/<PROJECT_ID>/${RANCHER_PROJECT_ID##*p-}/g" \
-    helm/rbac/rancher-clusterrole.yaml > "$RBAC_DIR/rancher-clusterrole.yaml"
-fi
+print_role_template() {
+  while IFS= read -r line; do printf '    %s\n' "$(cyan "$line")"; done < helm/rbac/roletemplate.yaml
+}
 
-apply_rbac=true
-if ! kubectl auth can-i create clusterroles >/dev/null 2>&1 \
-  || ! kubectl auth can-i create clusterrolebindings >/dev/null 2>&1; then
-  if ! confirm "Cluster-admin rights are needed to apply helm/rbac/. Do you have them?" N; then
-    warn "ask your cluster admin to apply the following (rendered for namespace $NAMESPACE, no repo clone needed):"
-    echo
-    # Heredoc body and EOF stay at column 0. Indented '---' is not a valid YAML document separator.
-    printf '    %s\n' "$(bold "kubectl apply -f - <<'EOF'")"
-    cat "$RBAC_DIR"/*.yaml
-    printf 'EOF\n'
-    echo
-    confirm "Has the admin applied the RBAC?" N || die "re-run the installer once the RBAC is in place"
-    apply_rbac=false
+# Call the Rancher v3 API; print the response body, warn with curl's error text on failure.
+rancher_api() {
+  local method="$1" path="$2" body="${3:-}" curl_args=(-fsS -X "$method" -H "Authorization: Bearer $KCFG_TOKEN") out
+  [[ -n "$body" ]] && curl_args+=(-H "Content-Type: application/json" -d "$body")
+  if ! out="$(curl "${curl_args[@]}" "$RANCHER_API$path" 2>&1)"; then
+    warn "Rancher API $method $path: $out"
+    return 1
   fi
-fi
-if [[ "$apply_rbac" == true ]]; then
-  for manifest in "$RBAC_DIR"/*.yaml; do
-    run "kubectl apply -f '$manifest'"
-  done
+  printf '%s' "$out"
+}
+
+if ! kubectl get rolebindings -n "$NAMESPACE" -o json 2>/dev/null \
+     | grep -q "\"system:serviceaccounts:$NAMESPACE\""; then
+  warn "no project binding grants the hub service account a role template in $NAMESPACE"
+  rbac_done=false
+  RANCHER_API=""
+  if [[ -n "$RANCHER_PROJECT_ID" && $DRY_RUN -eq 0 ]]; then
+    KCFG_SERVER="$(kubectl config view --minify --raw -o jsonpath='{.clusters[0].cluster.server}')"
+    KCFG_TOKEN="$(kubectl config view --minify --raw -o jsonpath='{.users[0].user.token}')"
+    RANCHER_API="${KCFG_SERVER%%/k8s/clusters/*}/v3"
+    # Direct (non-proxied) kubeconfigs have no /k8s/clusters suffix and no Rancher rights.
+    if [[ "$RANCHER_API" == "$KCFG_SERVER/v3" || -z "$KCFG_TOKEN" ]]; then
+      warn "kubeconfig is not Rancher-proxied; skipping Rancher API"
+      RANCHER_API=""
+    fi
+  fi
+  if [[ -n "$RANCHER_API" ]]; then
+    TEMPLATE_ID="$(yq -r '.metadata.name' helm/rbac/roletemplate.yaml)"
+    template_body="$(yq -o=json -I=0 '{"name": .metadata.name, "description": .description, "context": .context, "rules": .rules}' helm/rbac/roletemplate.yaml)"
+    prtb_body="$(PROJECT="$RANCHER_PROJECT_ID" TEMPLATE="$TEMPLATE_ID" GROUP="system:serviceaccounts:$NAMESPACE" NAME="$NAMESPACE-sa" \
+      yq -n -o=json -I=0 '{"name": strenv(NAME), "roleTemplateId": strenv(TEMPLATE), "projectId": strenv(PROJECT), "groupPrincipalId": strenv(GROUP)}')"
+    template_ready=false
+    # The template may predate the repo file; PUT converges it, resourceVersion from GET satisfies optimistic concurrency.
+    if live="$(curl -fsS -H "Authorization: Bearer $KCFG_TOKEN" "$RANCHER_API/roletemplates/$TEMPLATE_ID" 2>/dev/null)"; then
+      put_body="$template_body"
+      live_rv="$(printf '%s' "$live" | yq -r '.resourceVersion // ""')"
+      [[ -z "$live_rv" ]] || put_body="$(RV="$live_rv" yq -o=json -I=0 '.resourceVersion = strenv(RV)' <<<"$template_body")"
+      if rancher_api PUT "/roletemplates/$TEMPLATE_ID" "$put_body" >/dev/null; then
+        ok "updated role template $TEMPLATE_ID to match helm/rbac/roletemplate.yaml"
+        template_ready=true
+      fi
+    elif rancher_api POST "/roletemplates" "$template_body" >/dev/null; then
+      ok "created role template $TEMPLATE_ID"
+      template_ready=true
+    fi
+    if [[ "$template_ready" == true ]] && rancher_api POST "/projectroletemplatebindings" "$prtb_body" >/dev/null; then
+      rbac_done=true
+      ok "bound system:serviceaccounts:$NAMESPACE to role template $TEMPLATE_ID in project $RANCHER_PROJECT_ID"
+      rancher_wait "role-template binding in $NAMESPACE" \
+        "kubectl get rolebindings -n '$NAMESPACE' -o json 2>/dev/null | grep -q '\"system:serviceaccounts:$NAMESPACE\"'"
+    fi
+  fi
+  if [[ "$rbac_done" == false ]]; then
+    info "ask a Rancher admin to create the role template once on the management cluster:"
+    echo
+    print_role_template
+    echo
+    info "and bind it in project $(bold "${RANCHER_PROJECT_ID:-<project>}") to the group $(bold "system:serviceaccounts:$NAMESPACE")"
+    confirm "Is the role template in place?" N || die "re-run the installer once the binding exists"
+  fi
+else
+  ok "hub role-template binding in place"
 fi
 
 # Secrets.
 
+# Mask --from-literal values in the display copy. The class keeps printf %q escapes atomic.
+mask_literals() {
+  sed -E 's/(--from-literal=[A-Za-z0-9_]+)=(\\.|[^ \t\\])*/\1=<hidden>/g' <<<"$1"
+}
+
 # Create a secret. Prompt for values only when the secret is missing and not in dry-run.
 create_secret() {
-  local name="$1" args="" masked="" key label value pair
+  local name="$1" args="" key label value pair
   shift
   if kubectl get secret "$name" -n "$NAMESPACE" >/dev/null 2>&1; then
     ok "secret $name exists, keeping"
@@ -278,13 +349,15 @@ create_secret() {
   fi
   for pair in "$@"; do
     key="${pair%%:*}"; label="${pair#*:}"
-    masked+=" --from-literal=$key=<hidden>"
-    [[ $DRY_RUN -eq 1 ]] && continue
+    if [[ $DRY_RUN -eq 1 ]]; then
+      args+=" --from-literal=$key=<hidden>"
+      continue
+    fi
     prompt_secret value "$label"
     args+=" --from-literal=$key=$(printf '%q' "$value")"
   done
-  run "kubectl create secret generic '$name'$args -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -" \
-      "kubectl create secret generic '$name'$masked -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -"
+  local cmd="kubectl create secret generic '$name'$args -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -"
+  run "$cmd" "$(mask_literals "$cmd")"
 }
 
 create_secret oidc-credentials "client_id:OIDC client ID" "client_secret:OIDC client secret"
@@ -295,8 +368,8 @@ if [[ "$S3_SEAWEEDFS" == "true" ]]; then
   else
     s3_access_key="$(openssl rand -hex 20)"
     s3_secret_key="$(openssl rand -hex 40)"
-    run "kubectl create secret generic '${PACKAGE}-s3-creds' --from-literal=S3_ACCESS_KEY=$(printf '%q' "$s3_access_key") --from-literal=S3_SECRET_KEY=$(printf '%q' "$s3_secret_key") -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -" \
-        "kubectl create secret generic '${PACKAGE}-s3-creds' --from-literal=S3_ACCESS_KEY=<hidden> --from-literal=S3_SECRET_KEY=<hidden> -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -"
+    cmd="kubectl create secret generic '${PACKAGE}-s3-creds' --from-literal=S3_ACCESS_KEY=$(printf '%q' "$s3_access_key") --from-literal=S3_SECRET_KEY=$(printf '%q' "$s3_secret_key") -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -"
+    run "$cmd" "$(mask_literals "$cmd")"
   fi
 else
   create_secret "${PACKAGE}-s3-creds" "S3_ACCESS_KEY:S3 access key" "S3_SECRET_KEY:S3 secret key"

@@ -37,7 +37,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - MDRepo OAuth is a separate flow managed by Dashboard API; tokens live in the Flask session (not the database).
 
 ### Kubernetes
-- Dashboard API, MDRun API, and pre_spawn_hook all use `config.load_incluster_config()`. The hub pod's service account needs the ClusterRole in `helm/rbac/` applied by the cluster admin.
+- Dashboard API, MDRun API, and pre_spawn_hook all use `config.load_incluster_config()`. The hub pod's service account gets its permissions from the Rancher role template in `helm/rbac/roletemplate.yaml`, bound to `system:serviceaccounts:<hub-namespace>` in the Rancher project.
 - All containers run as non-root (UID 1000) for e-INFRA compliance.
 - All user-pod containers mount a shared PVC at `/mddash`.
 - User namespaces require `field.cattle.io/projectId` and `field.cattle.io/resourceQuota` annotations. The pre-spawn hook waits for `InitialRolesPopulated`, patches the namespace, then waits for ResourceQuota to become active.

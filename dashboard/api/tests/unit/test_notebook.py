@@ -103,6 +103,19 @@ class TestNotebookStartQuotaCheck:
 
             mock_create.assert_called_once()
 
+    def test_service_is_owned_by_the_pod(self) -> None:
+        with (
+            patch("models.notebook.k8s.count_notebook_pods", return_value=0),
+            patch("models.notebook.MAX_NOTEBOOKS", 2),
+            patch("models.notebook.k8s.check_quota_headroom", return_value=None),
+            patch("models.notebook.k8s.create_notebook_pod", return_value="uid-123"),
+            patch("models.notebook.k8s.create_service") as mock_svc,
+            patch("models.notebook.caddy.add_proxy_route", return_value="route-id"),
+        ):
+            Notebook.start(self._make_notebook())
+
+            mock_svc.assert_called_once_with("svc-exp-test", "notebook-exp-test", "uid-123")
+
 
 class TestNotebookStartTierAndGpu:
     """Tests for tier selection, GPU attachment, and invalid tier handling in Notebook.start()."""
@@ -176,13 +189,13 @@ class TestNotebookStartTierAndGpu:
 class TestCreateNotebookPodLifecycleFlags:
     """Verify that create_notebook_pod() injects idle-culling flags and MY_POD_NAME into the pod spec."""
 
-    def test_lifecycle_flags_in_pod_spec(self) -> None:
+    def test_lifecycle_flags_in_pod_spec(self, k8s_module) -> None:
         """create_notebook_pod() must include cull_idle_timeout, shutdown_no_activity_timeout, and MY_POD_NAME."""
+        from kubernetes.client.rest import ApiException
+
         mock_core = MagicMock()
-        with (
-            patch("clients.k8s.ping_resource", return_value=False),
-            patch("clients.k8s.get_core_v1", return_value=mock_core),
-        ):
+        mock_core.read_namespaced_pod.side_effect = ApiException(status=404)
+        with patch("clients.k8s.get_core_v1", return_value=mock_core):
             create_notebook_pod(
                 name="notebook-test",
                 experiment_id="test",

@@ -218,10 +218,10 @@ tuner:
     idleTimeoutSeconds: 3600
     resources:
       limits:
-        cpu: "8" # Test value. Should be at least "32".
+        cpu: "32"
         memory: "64Gi"
         nvidia.com/mig-1g.10gb: "1"
       requests:
-        cpu: "8" # Should be same as limit.
+        cpu: "32"
         memory: "16Gi"
         nvidia.com/mig-1g.10gb: "1"

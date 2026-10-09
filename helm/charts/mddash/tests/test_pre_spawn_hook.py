@@ -227,8 +227,8 @@ def test_role_manifest_adds_pvc_only_when_requested(monkeypatch: pytest.MonkeyPa
 
     base_resources = base["rules"][0]["resources"]
     pvc_resources = with_pvc["rules"][0]["resources"]
-    assert base_resources == ["pods", "services", "events"]
-    assert pvc_resources == ["pods", "services", "events", "persistentvolumeclaims"]
+    assert base_resources == ["pods", "services"]
+    assert pvc_resources == ["pods", "services", "persistentvolumeclaims"]
 
 
 def test_role_binding_manifest_includes_subject_namespace_only_when_given(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -475,6 +475,17 @@ def test_dns1123_label_sanitizes_invalid_usernames(monkeypatch: pytest.MonkeyPat
     slug = module._dns1123_label(username)
     assert slug != username
     _assert_valid_dns1123(slug)
+
+
+def test_user_namespace_stays_within_dns1123_length(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_module(monkeypatch)
+
+    ns = module._user_namespace("mddash", "j" * 60)
+
+    assert ns.startswith("mddash-user-")
+    assert ns.endswith("-ns")
+    assert len(ns) <= 63
+    _assert_valid_dns1123(ns)
 
 
 def test_dns1123_label_passes_through_valid_names(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -429,6 +429,48 @@ class TestDeleteWithArchive:
         mock_purge.assert_not_called()
 
 
+class TestDeleteAnalysisJobs:
+    def _add_analysis_job(self) -> None:
+        from enums import AnalysisType
+        from models import AnalysisJob
+
+        db.session.add(
+            AnalysisJob(  # type: ignore[call-arg]
+                id="abc123def456",
+                experiment_id=EXP_ID,
+                simulation_path="production/md.simulation.json",
+                analysis_name=AnalysisType.RMSDS,
+                trajectory_file="production/md.xtc",
+            )
+        )
+        db.session.commit()
+
+    def test_delete_removes_analysis_jobs(self, experiment: Experiment) -> None:
+        from models import AnalysisJob
+
+        self._add_analysis_job()
+        with (
+            patch("models.experiment.archive_submission.delete_jobs"),
+            patch("models.experiment.archive_submission.submit_purge_job"),
+            patch.object(Notebook, "stop"),
+            patch.object(AnalysisJob, "delete") as mock_delete,
+        ):
+            experiment.delete()
+        mock_delete.assert_called_once_with()
+
+    def test_failing_analysis_delete_does_not_abort(self, experiment: Experiment) -> None:
+        from models import AnalysisJob
+
+        self._add_analysis_job()
+        with (
+            patch("models.experiment.archive_submission.delete_jobs"),
+            patch("models.experiment.archive_submission.submit_purge_job"),
+            patch.object(Notebook, "stop"),
+            patch.object(AnalysisJob, "delete", side_effect=RuntimeError("k8s down")),
+        ):
+            experiment.delete()
+
+
 class TestArchivedJobSerialization:
     def test_archived_job_serves_persisted_columns_without_manifest_io(
         self, experiment: Experiment, tmp_path: Path, caplog: pytest.LogCaptureFixture

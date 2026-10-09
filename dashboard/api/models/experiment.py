@@ -583,6 +583,14 @@ class Experiment(db.Model):  # type: ignore
             except Exception:
                 logger.exception(f"Failed to delete simulation job {sim_job.id}")
 
+        # Delete analysis jobs; their K8s Jobs have no TTL, so rows cascading
+        # away without this would orphan them in the namespace.
+        for analysis_job in self.analysis_jobs:
+            try:
+                analysis_job.delete()
+            except Exception:
+                logger.exception(f"Failed to delete analysis job {analysis_job.id}")
+
         def del_dir(dir: Path) -> None:
             try:
                 rmtree(dir, ignore_errors=True)

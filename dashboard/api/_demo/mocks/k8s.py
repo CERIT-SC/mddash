@@ -171,11 +171,12 @@ def _create_notebook_pod(
     notebook_resources: dict | None = None,  # ruff:ignore[unused-function-argument]
     gpu: bool = False,  # ruff:ignore[unused-function-argument]
     tier: str | None = None,  # ruff:ignore[unused-function-argument]
-) -> None:
+) -> str:
     """Create a mock notebook pod."""
     logger.debug("Mock creating notebook pod %s for experiment %s", name, experiment_id)
     demo_state.notebook_status[experiment_id] = PodStatus.RUNNING
     demo_state.notebook_started_at[experiment_id] = datetime.now(timezone.utc)
+    return f"demo-uid-{name}"
 
 
 def _delete_pod(name: str) -> None:
@@ -187,7 +188,7 @@ def _delete_pod(name: str) -> None:
     demo_state.notebook_started_at.pop(experiment_id, None)
 
 
-def _create_service(name: str, target_name: str) -> None:  # ruff:ignore[unused-function-argument]
+def _create_service(name: str, target_name: str, target_uid: str) -> None:  # ruff:ignore[unused-function-argument]
     """Create a mock service (no-op)."""
     logger.debug("Mock creating service %s", name)
 

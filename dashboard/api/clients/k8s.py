@@ -19,6 +19,7 @@ if TYPE_CHECKING:
         V1DeleteOptions,
         V1Job,
         V1ObjectMeta,
+        V1OwnerReference,
         V1Pod,
         V1PodList,
         V1Service,
@@ -61,6 +62,7 @@ def _load_k8s() -> None:
         CoreV1Api,
         V1DeleteOptions,
         V1ObjectMeta,
+        V1OwnerReference,
         V1Service,
         V1ServicePort,
         V1ServiceSpec,
@@ -74,6 +76,7 @@ def _load_k8s() -> None:
         CoreV1Api=CoreV1Api,
         V1DeleteOptions=V1DeleteOptions,
         V1ObjectMeta=V1ObjectMeta,
+        V1OwnerReference=V1OwnerReference,
         V1Service=V1Service,
         V1ServicePort=V1ServicePort,
         V1ServiceSpec=V1ServiceSpec,
@@ -185,7 +188,7 @@ def create_notebook_pod(
     notebook_resources: dict | None = None,
     gpu: bool = False,
     tier: "NotebookTier | None" = None,
-) -> None:
+) -> str:
     """
     Create a JupyterLab notebook pod for experiment setup.
 
@@ -201,10 +204,17 @@ def create_notebook_pod(
         gpu: Whether to attach a GPU to the jupyter container.
         tier: The resource tier for pod labeling.
 
+    Returns:
+        The UID of the pod, for use as an owner reference on its service.
     """
-    if ping_resource("pod", name):
+    core_v1 = get_core_v1()
+    try:
+        existing = core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE)
         logger.warning(f"Pod {name} already exists in namespace {NAMESPACE}. Skipping creation.")
-        return
+        return str(existing.metadata.uid)
+    except ApiException as e:
+        if e.status != HTTPStatus.NOT_FOUND:
+            raise
 
     volume_name = "shared-data"
 
@@ -261,8 +271,8 @@ def create_notebook_pod(
         },
     }
 
-    core_v1 = get_core_v1()
-    core_v1.create_namespaced_pod(namespace=NAMESPACE, body=pod_manifest)
+    created = core_v1.create_namespaced_pod(namespace=NAMESPACE, body=pod_manifest)
+    return str(created.metadata.uid)
 
 
 def create_job(
@@ -406,30 +416,49 @@ def delete_service(name: str) -> None:
     core_v1.delete_namespaced_service(name=name, namespace=NAMESPACE)
 
 
-def create_service(name: str, target_name: str) -> None:
+def create_service(name: str, target_name: str, target_uid: str) -> None:
     """
     Create a Kubernetes service to expose a pod.
 
     Creates a service that routes TCP traffic on port 80 to port 8888 of pods
-    matching the target app label.
+    matching the target app label, owned by the target pod so K8s GC deletes
+    both together.
+
+    A lingering service owned by a deleted pod awaits GC, so existence alone must not skip creation.
 
     Args:
         name: The name of the service to create.
-        target_name: The app label value of pods to target.
+        target_name: The app label value of pods to target. Must be the owning
+            pod's name; it names the ownerReference.
+        target_uid: The UID of the owning pod.
 
     """
-    if ping_resource("svc", name):
-        logger.warning(f"Service {name} already exists in namespace {NAMESPACE}. Skipping creation.")
-        return
+    core_v1 = get_core_v1()
+    try:
+        existing = cast("V1Service", core_v1.read_namespaced_service(name=name, namespace=NAMESPACE))
+        owner_references = (existing.metadata and existing.metadata.owner_references) or []
+        if owner_references and owner_references[0].uid == target_uid:
+            logger.warning(f"Service {name} already exists in namespace {NAMESPACE}. Skipping creation.")
+            return
+        try:
+            core_v1.delete_namespaced_service(name=name, namespace=NAMESPACE)
+        except ApiException as e:
+            if e.status != HTTPStatus.NOT_FOUND:
+                raise
+    except ApiException as e:
+        if e.status != HTTPStatus.NOT_FOUND:
+            raise
 
     service = V1Service(
-        metadata=V1ObjectMeta(name=name, namespace=NAMESPACE),
+        metadata=V1ObjectMeta(
+            name=name,
+            namespace=NAMESPACE,
+            owner_references=[V1OwnerReference(api_version="v1", kind="Pod", name=target_name, uid=target_uid)],
+        ),
         spec=V1ServiceSpec(
             selector={"app": target_name}, ports=[V1ServicePort(protocol="TCP", port=80, target_port=8888)]
         ),
     )
-
-    core_v1 = get_core_v1()
     core_v1.create_namespaced_service(namespace=NAMESPACE, body=service)
 
 
