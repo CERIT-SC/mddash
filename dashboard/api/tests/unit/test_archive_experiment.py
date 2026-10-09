@@ -430,8 +430,6 @@ class TestDeleteWithArchive:
 
 
 class TestDeleteAnalysisJobs:
-    """Experiment.delete must tear down analysis K8s jobs, which have no TTL of their own."""
-
     def _add_analysis_job(self) -> None:
         from enums import AnalysisType
         from models import AnalysisJob
@@ -470,7 +468,7 @@ class TestDeleteAnalysisJobs:
             patch.object(Notebook, "stop"),
             patch.object(AnalysisJob, "delete", side_effect=RuntimeError("k8s down")),
         ):
-            experiment.delete()  # must not raise
+            experiment.delete()
 
 
 class TestArchivedJobSerialization:

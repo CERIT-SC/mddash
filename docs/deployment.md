@@ -85,7 +85,7 @@ Set up the hub service account permissions:
 1. Create the role template from `helm/rbac/roletemplate.yaml` on the management cluster (Rancher UI: Global → Security → Role Templates).
 2. Bind it in the project to the group `system:serviceaccounts:<NAMESPACE>` (project members, custom principal with that exact name).
 
-Rancher replicates the binding into every project namespace, including spawn-time user namespaces. `./install.sh` creates or updates both automatically when the kubeconfig is Rancher-backed, and prints the manifest for an admin otherwise.
+Rancher replicates the binding into every project namespace, including spawn-time user namespaces. When the kubeconfig is Rancher-backed, `./install.sh` creates the template and binding itself and updates a stale template; otherwise it prints the manifest and binding instructions for an admin.
 
 Create the secrets, replacing placeholders with actual values:
 

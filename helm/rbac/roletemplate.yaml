@@ -5,21 +5,19 @@ metadata:
 description: Permissions for the MDDash hub service account.
 context: project
 rules:
-  # The hooks create and patch namespaces; Rancher's webhook authorizes create via manage-namespaces.
+  # The hooks create and patch user namespaces.
   - apiGroups: [""]
     resources: ["namespaces"]
     verbs: ["create", "patch", "get", "list", "watch"]
+  # Rancher's webhook only lets principals holding this verb create namespaces in the project.
   - apiGroups: ["management.cattle.io"]
     resources: ["projects"]
     verbs: ["manage-namespaces"]
-  # Hook polls quota activation.
-  - apiGroups: [""]
-    resources: ["resourcequotas"]
-    verbs: ["list"]
+  # The hook polls until the namespace ResourceQuota becomes active.
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "rolebindings"]
     verbs: ["create", "get"]
-  # KubeSpawner pod lifecycle and post_stop cleanup.
+  # KubeSpawner drives the pod lifecycle; post_stop deletes what remains.
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["create", "delete", "get", "list", "watch"]

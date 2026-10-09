@@ -41,9 +41,8 @@ prompt() {
   printf -v "$var" '%s' "${reply:-$default}"
 }
 
-# Read a line into the named variable without echoing it, printing '*' per character.
-# Backspace removes the last character. EOF without a terminator keeps what was typed
-# (piped input needs no trailing newline) and fails only when nothing was read.
+# Masked read into the named variable ('*' per character, backspace edits).
+# EOF keeps what was typed and fails only when it is empty.
 read_masked() {
   local out="" ch
   while :; do
@@ -280,11 +279,6 @@ rancher_api() {
   printf '%s' "$out"
 }
 
-# Canonicalize a rules array so ordering never registers as drift.
-normalize_rules() {
-  yq -o=json -I=0 'map({"a": (.apiGroups | sort), "r": (.resources | sort), "v": (.verbs | sort)}) | sort_by(.a[0], .r[0])'
-}
-
 if ! kubectl get rolebindings -n "$NAMESPACE" -o json 2>/dev/null \
      | grep -q "\"system:serviceaccounts:$NAMESPACE\""; then
   warn "no project binding grants the hub service account a role template in $NAMESPACE"
@@ -306,12 +300,12 @@ if ! kubectl get rolebindings -n "$NAMESPACE" -o json 2>/dev/null \
     prtb_body="$(PROJECT="$RANCHER_PROJECT_ID" TEMPLATE="$TEMPLATE_ID" GROUP="system:serviceaccounts:$NAMESPACE" NAME="$NAMESPACE-sa" \
       yq -n -o=json -I=0 '{"name": strenv(NAME), "roleTemplateId": strenv(TEMPLATE), "projectId": strenv(PROJECT), "groupPrincipalId": strenv(GROUP)}')"
     template_ready=false
+    # The template may predate the repo file; PUT converges it, resourceVersion from GET satisfies optimistic concurrency.
     if live="$(curl -fsS -H "Authorization: Bearer $KCFG_TOKEN" "$RANCHER_API/roletemplates/$TEMPLATE_ID" 2>/dev/null)"; then
-      # An existing template may predate the repo file; rules drift leaves the hub SA
-      # without permissions the per-spawn Roles grant.
-      if [[ "$(printf '%s' "$live" | yq -o=json -I=0 '.rules' | normalize_rules)" == "$(printf '%s' "$template_body" | yq -o=json -I=0 '.rules' | normalize_rules)" ]]; then
-        template_ready=true
-      elif rancher_api PUT "/roletemplates/$TEMPLATE_ID" "$template_body" >/dev/null; then
+      put_body="$template_body"
+      live_rv="$(printf '%s' "$live" | yq -r '.resourceVersion // ""')"
+      [[ -z "$live_rv" ]] || put_body="$(RV="$live_rv" yq -o=json -I=0 '.resourceVersion = strenv(RV)' <<<"$template_body")"
+      if rancher_api PUT "/roletemplates/$TEMPLATE_ID" "$put_body" >/dev/null; then
         ok "updated role template $TEMPLATE_ID to match helm/rbac/roletemplate.yaml"
         template_ready=true
       fi
@@ -340,9 +334,14 @@ fi
 
 # Secrets.
 
+# Mask --from-literal values in the display copy. The class keeps printf %q escapes atomic.
+mask_literals() {
+  sed -E 's/(--from-literal=[A-Za-z0-9_]+)=(\\.|[^ \t\\])*/\1=<hidden>/g' <<<"$1"
+}
+
 # Create a secret. Prompt for values only when the secret is missing and not in dry-run.
 create_secret() {
-  local name="$1" args="" masked="" key label value pair
+  local name="$1" args="" key label value pair
   shift
   if kubectl get secret "$name" -n "$NAMESPACE" >/dev/null 2>&1; then
     ok "secret $name exists, keeping"
@@ -350,13 +349,15 @@ create_secret() {
   fi
   for pair in "$@"; do
     key="${pair%%:*}"; label="${pair#*:}"
-    masked+=" --from-literal=$key=<hidden>"
-    [[ $DRY_RUN -eq 1 ]] && continue
+    if [[ $DRY_RUN -eq 1 ]]; then
+      args+=" --from-literal=$key=<hidden>"
+      continue
+    fi
     prompt_secret value "$label"
     args+=" --from-literal=$key=$(printf '%q' "$value")"
   done
-  run "kubectl create secret generic '$name'$args -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -" \
-      "kubectl create secret generic '$name'$masked -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -"
+  local cmd="kubectl create secret generic '$name'$args -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -"
+  run "$cmd" "$(mask_literals "$cmd")"
 }
 
 create_secret oidc-credentials "client_id:OIDC client ID" "client_secret:OIDC client secret"
@@ -367,8 +368,8 @@ if [[ "$S3_SEAWEEDFS" == "true" ]]; then
   else
     s3_access_key="$(openssl rand -hex 20)"
     s3_secret_key="$(openssl rand -hex 40)"
-    run "kubectl create secret generic '${PACKAGE}-s3-creds' --from-literal=S3_ACCESS_KEY=$(printf '%q' "$s3_access_key") --from-literal=S3_SECRET_KEY=$(printf '%q' "$s3_secret_key") -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -" \
-        "kubectl create secret generic '${PACKAGE}-s3-creds' --from-literal=S3_ACCESS_KEY=<hidden> --from-literal=S3_SECRET_KEY=<hidden> -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -"
+    cmd="kubectl create secret generic '${PACKAGE}-s3-creds' --from-literal=S3_ACCESS_KEY=$(printf '%q' "$s3_access_key") --from-literal=S3_SECRET_KEY=$(printf '%q' "$s3_secret_key") -n '$NAMESPACE' --dry-run=client -o yaml | kubectl apply -f -"
+    run "$cmd" "$(mask_literals "$cmd")"
   fi
 else
   create_secret "${PACKAGE}-s3-creds" "S3_ACCESS_KEY:S3 access key" "S3_SECRET_KEY:S3 secret key"

@@ -299,6 +299,14 @@ DNS1123_LABEL_MAX = 63
 _HASH_SUFFIX_LEN = 9  # "-" + 8 hex chars from sha256
 
 
+def _user_slug(helm_package: str, username: str) -> str:
+    return _dns1123_label(username, max_length=DNS1123_LABEL_MAX - len(f"{helm_package}-user-") - len("-ns"))
+
+
+def _user_namespace(helm_package: str, username: str) -> str:
+    return f"{helm_package}-user-{_user_slug(helm_package, username)}-ns"
+
+
 def _dns1123_label(value: str, max_length: int = DNS1123_LABEL_MAX) -> str:
     """
     Map a username to a valid Kubernetes DNS-1123 label no longer than ``max_length``.
@@ -598,8 +606,8 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # ruff:ignore[too-man
         hub_namespace = getenv("POD_NAMESPACE", "default")
         rancher_project_id = getenv("RANCHER_PROJECT_ID", "")
 
-        user_slug = _dns1123_label(username, max_length=DNS1123_LABEL_MAX - len(f"{helm_package}-user-") - len("-ns"))
-        user_namespace = f"{helm_package}-user-{user_slug}-ns"
+        user_slug = _user_slug(helm_package, username)
+        user_namespace = _user_namespace(helm_package, username)
         bucket_name = f"{helm_package}-user-{user_slug}"
         pvc_name = f"{helm_package}-user-pvc"
         volume_name = "mddash-volume"
@@ -743,7 +751,7 @@ async def post_stop_hook(spawner: "KubeSpawner", **kwargs: object) -> None:  # r
     try:
         username: str = spawner.user.name  # type: ignore[union-attr]
         helm_package = getenv("HELM_PACKAGE", "mddash")
-        user_namespace = f"{helm_package}-user-{_dns1123_label(username, max_length=DNS1123_LABEL_MAX - len(f'{helm_package}-user-') - len('-ns'))}-ns"
+        user_namespace = _user_namespace(helm_package, username)
         rancher_project_id = getenv("RANCHER_PROJECT_ID", "")
 
         zero_quota_manifest = _get_namespace_manifest(user_namespace, rancher_project_id, "0", "0", "0", "0")

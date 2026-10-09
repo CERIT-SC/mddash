@@ -100,16 +100,14 @@ class TestGetPodInfo:
 
         assert k8s.get_pod_info("notebook-exp1") == (PodStatus.PENDING, None)
 
-    def test_missing_pod_is_down_without_start_time(self, mocker: MockerFixture) -> None:
-        from clients import k8s
+    def test_missing_pod_is_down_without_start_time(self, mocker: MockerFixture, k8s_module) -> None:
         from kubernetes.client.rest import ApiException
 
-        k8s._load_k8s()  # populate the module-global ApiException the except clause catches
         core = MagicMock()
         core.read_namespaced_pod.side_effect = ApiException(status=404)
         mocker.patch("clients.k8s.get_core_v1", return_value=core)
 
-        assert k8s.get_pod_info("notebook-exp1") == (PodStatus.DOWN, None)
+        assert k8s_module.get_pod_info("notebook-exp1") == (PodStatus.DOWN, None)
 
 
 class TestCreateServiceOwnerReference:
@@ -128,57 +126,49 @@ class TestCreateServiceOwnerReference:
         assert owner_refs[0].name == "notebook-exp1"
         assert owner_refs[0].uid == "uid-123"
 
-    def test_service_carries_pod_owner_reference(self, mocker: MockerFixture) -> None:
-        from clients import k8s
+    def test_service_carries_pod_owner_reference(self, mocker: MockerFixture, k8s_module) -> None:
         from kubernetes.client.rest import ApiException
 
-        k8s._load_k8s()  # populate the module-global ApiException and V1* symbols
         core = MagicMock()
         core.read_namespaced_service.side_effect = ApiException(status=404)
         mocker.patch("clients.k8s.get_core_v1", return_value=core)
 
-        k8s.create_service("svc-exp1", "notebook-exp1", "uid-123")
+        k8s_module.create_service("svc-exp1", "notebook-exp1", "uid-123")
 
         self._assert_created_owner_reference(core)
 
-    def test_existing_service_with_matching_owner_is_kept(self, mocker: MockerFixture) -> None:
-        from clients import k8s
-
-        k8s._load_k8s()
+    def test_existing_service_with_matching_owner_is_kept(self, mocker: MockerFixture, k8s_module) -> None:
         core = MagicMock()
         core.read_namespaced_service.return_value = self._existing_service("uid-123")
         mocker.patch("clients.k8s.get_core_v1", return_value=core)
 
-        k8s.create_service("svc-exp1", "notebook-exp1", "uid-123")
+        k8s_module.create_service("svc-exp1", "notebook-exp1", "uid-123")
 
         core.create_namespaced_service.assert_not_called()
         core.delete_namespaced_service.assert_not_called()
 
     @pytest.mark.parametrize("uid", ["deleted-pod-uid", None], ids=["stale-owner", "no-owner"])
-    def test_existing_service_with_foreign_owner_is_recreated(self, mocker: MockerFixture, uid: str | None) -> None:
-        from clients import k8s
-
-        k8s._load_k8s()
+    def test_existing_service_with_foreign_owner_is_recreated(
+        self, mocker: MockerFixture, uid: str | None, k8s_module
+    ) -> None:
         core = MagicMock()
         core.read_namespaced_service.return_value = self._existing_service(uid)
         mocker.patch("clients.k8s.get_core_v1", return_value=core)
 
-        k8s.create_service("svc-exp1", "notebook-exp1", "uid-123")
+        k8s_module.create_service("svc-exp1", "notebook-exp1", "uid-123")
 
         core.delete_namespaced_service.assert_called_once()
         self._assert_created_owner_reference(core)
 
-    def test_gc_removed_stale_service_mid_delete_is_tolerated(self, mocker: MockerFixture) -> None:
-        from clients import k8s
+    def test_gc_removed_stale_service_mid_delete_is_tolerated(self, mocker: MockerFixture, k8s_module) -> None:
         from kubernetes.client.rest import ApiException
 
-        k8s._load_k8s()  # populate the module-global ApiException the except clause catches
         core = MagicMock()
         core.read_namespaced_service.return_value = self._existing_service("deleted-pod-uid")
         core.delete_namespaced_service.side_effect = ApiException(status=404)
         mocker.patch("clients.k8s.get_core_v1", return_value=core)
 
-        k8s.create_service("svc-exp1", "notebook-exp1", "uid-123")
+        k8s_module.create_service("svc-exp1", "notebook-exp1", "uid-123")
 
         self._assert_created_owner_reference(core)
 
@@ -186,17 +176,15 @@ class TestCreateServiceOwnerReference:
 class TestCreateNotebookPodUid:
     """create_notebook_pod returns the pod UID for the service owner reference."""
 
-    def test_returns_uid_of_newly_created_pod(self, mocker: MockerFixture) -> None:
-        from clients import k8s
+    def test_returns_uid_of_newly_created_pod(self, mocker: MockerFixture, k8s_module) -> None:
         from kubernetes.client.rest import ApiException
 
-        k8s._load_k8s()  # populate the module-global ApiException the except clause catches
         core = MagicMock()
         core.read_namespaced_pod.side_effect = ApiException(status=404)
         core.create_namespaced_pod.return_value.metadata.uid = "new-uid"
         mocker.patch("clients.k8s.get_core_v1", return_value=core)
 
-        assert k8s.create_notebook_pod("notebook-exp1", "exp1", "/dash/notebook/exp1", "tok") == "new-uid"
+        assert k8s_module.create_notebook_pod("notebook-exp1", "exp1", "/dash/notebook/exp1", "tok") == "new-uid"
 
     def test_returns_uid_of_existing_pod(self, mocker: MockerFixture) -> None:
         from clients import k8s

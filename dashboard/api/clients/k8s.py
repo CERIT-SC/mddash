@@ -421,16 +421,15 @@ def create_service(name: str, target_name: str, target_uid: str) -> None:
     Create a Kubernetes service to expose a pod.
 
     Creates a service that routes TCP traffic on port 80 to port 8888 of pods
-    matching the target app label. The service is owned by the target pod via
-    ownerReferences, so Kubernetes garbage collection deletes the service
-    whenever the pod is deleted, regardless of who deletes it.
+    matching the target app label, owned by the target pod so K8s GC deletes
+    both together.
 
     A lingering service owned by a deleted pod awaits GC, so existence alone must not skip creation.
 
     Args:
         name: The name of the service to create.
-        target_name: The app label value of pods to target. For notebook
-            services this is also the owning pod's name.
+        target_name: The app label value of pods to target. Must be the owning
+            pod's name; it names the ownerReference.
         target_uid: The UID of the owning pod.
 
     """
@@ -460,8 +459,6 @@ def create_service(name: str, target_name: str, target_uid: str) -> None:
             selector={"app": target_name}, ports=[V1ServicePort(protocol="TCP", port=80, target_port=8888)]
         ),
     )
-
-    core_v1 = get_core_v1()
     core_v1.create_namespaced_service(namespace=NAMESPACE, body=service)
 
 

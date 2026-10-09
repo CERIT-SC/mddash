@@ -11,6 +11,7 @@ This module provides:
 import os
 import sys
 import tempfile
+import types
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Generator
@@ -60,6 +61,16 @@ with (
         simulations_bp,
         tuner_bp,
     )
+
+
+@pytest.fixture
+def k8s_module() -> Generator[types.ModuleType, None, None]:
+    """clients.k8s with module-global symbols loaded; resets so later tests re-load under the session mock."""
+    from clients import k8s
+
+    k8s._load_k8s()
+    yield k8s
+    k8s.reset_k8s_clients_for_tests()
 
 
 @pytest.fixture(scope="session")

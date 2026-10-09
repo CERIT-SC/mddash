@@ -477,6 +477,17 @@ def test_dns1123_label_sanitizes_invalid_usernames(monkeypatch: pytest.MonkeyPat
     _assert_valid_dns1123(slug)
 
 
+def test_user_namespace_stays_within_dns1123_length(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load_module(monkeypatch)
+
+    ns = module._user_namespace("mddash", "j" * 60)
+
+    assert ns.startswith("mddash-user-")
+    assert ns.endswith("-ns")
+    assert len(ns) <= 63
+    _assert_valid_dns1123(ns)
+
+
 def test_dns1123_label_passes_through_valid_names(monkeypatch: pytest.MonkeyPatch) -> None:
     """Valid names pass through unchanged so existing deployments keep their namespaces."""
     module = _load_module(monkeypatch)

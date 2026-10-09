@@ -15,9 +15,10 @@ export interface LogEntry {
 
 export type ProgressStatus = "connecting" | "streaming" | "ready" | "failed"
 
-// Hub 400s progress requests that land during spawn-failure cleanup; reconnecting replays
-// the terminal failed event. Budget counts connect attempts that never produced a message;
-// resetting on open would let a proxy that accepts then dies retry forever.
+// The hub rejects progress requests that land during spawn-failure cleanup, and
+// reconnecting replays the terminal failed event. The budget counts consecutive connects
+// that never produced a message; resetting it on open would let a proxy that accepts
+// connections and immediately dies retry forever.
 const MAX_CONNECT_FAILURES = 5
 const RETRY_BASE_DELAY_MS = 1000
 

@@ -4,7 +4,7 @@
 
 Deploys a multi-tenant JupyterHub environment for MDDash: isolated per-user namespaces with sidecar services (proxy/auth/api/s3-sync) around the notebook.
 
-Before first install, a Rancher admin must create the role template in `helm/rbac/roletemplate.yaml` on the management cluster and bind it in the project to the group `system:serviceaccounts:<HUB_NAMESPACE>`; the file documents why each permission is needed. RBAC escalation blocks the pre-spawn hook from granting in per-user Roles anything the template does not cover.
+Before first install, a Rancher admin must create the role template in `helm/rbac/roletemplate.yaml` on the management cluster and bind it in the project to the group `system:serviceaccounts:<HUB_NAMESPACE>`; the file documents why each permission is needed. The template must cover every rule the pre-spawn hook grants in per-user Roles: RBAC escalation rejects granting permissions the hub service account lacks.
 
 ## Patterns
 

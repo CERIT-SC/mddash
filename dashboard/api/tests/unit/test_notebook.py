@@ -104,7 +104,6 @@ class TestNotebookStartQuotaCheck:
             mock_create.assert_called_once()
 
     def test_service_is_owned_by_the_pod(self) -> None:
-        """start() must hand the pod UID to create_service so K8s GC reaps the service with the pod."""
         with (
             patch("models.notebook.k8s.count_notebook_pods", return_value=0),
             patch("models.notebook.MAX_NOTEBOOKS", 2),
@@ -190,12 +189,10 @@ class TestNotebookStartTierAndGpu:
 class TestCreateNotebookPodLifecycleFlags:
     """Verify that create_notebook_pod() injects idle-culling flags and MY_POD_NAME into the pod spec."""
 
-    def test_lifecycle_flags_in_pod_spec(self) -> None:
+    def test_lifecycle_flags_in_pod_spec(self, k8s_module) -> None:
         """create_notebook_pod() must include cull_idle_timeout, shutdown_no_activity_timeout, and MY_POD_NAME."""
-        from clients import k8s
         from kubernetes.client.rest import ApiException
 
-        k8s._load_k8s()  # populate the module-global ApiException the except clause catches
         mock_core = MagicMock()
         mock_core.read_namespaced_pod.side_effect = ApiException(status=404)
         with patch("clients.k8s.get_core_v1", return_value=mock_core):
