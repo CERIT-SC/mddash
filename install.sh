@@ -42,11 +42,16 @@ prompt() {
 }
 
 # Read a line into the named variable without echoing it, printing '*' per character.
-# Backspace removes the last character. Returns non-zero when stdin ends without a newline.
+# Backspace removes the last character. EOF without a terminator keeps what was typed
+# (piped input needs no trailing newline) and fails only when nothing was read.
 read_masked() {
   local out="" ch
   while :; do
-    IFS= read -rsn1 ch || return 1
+    if ! IFS= read -rsn1 ch; then
+      printf -v "$1" '%s' "$out"
+      [[ -n "$out" ]]
+      return
+    fi
     [[ -z "$ch" ]] && break
     case "$ch" in
       $'\177' | $'\b')
@@ -66,7 +71,7 @@ prompt_secret() {
   local var="$1" question="$2" secret=""
   while :; do
     printf '  %s: ' "$(cyan "$question")"
-    read_masked secret || [[ -n "$secret" ]] || die "no input on stdin"
+    read_masked secret || die "no input on stdin"
     printf '\n'
     [[ -n "$secret" ]] && break
     warn "empty value, try again"
@@ -264,6 +269,22 @@ print_role_template() {
   while IFS= read -r line; do printf '    %s\n' "$(cyan "$line")"; done < helm/rbac/roletemplate.yaml
 }
 
+# Call the Rancher v3 API; print the response body, warn with curl's error text on failure.
+rancher_api() {
+  local method="$1" path="$2" body="${3:-}" curl_args=(-fsS -X "$method" -H "Authorization: Bearer $KCFG_TOKEN") out
+  [[ -n "$body" ]] && curl_args+=(-H "Content-Type: application/json" -d "$body")
+  if ! out="$(curl "${curl_args[@]}" "$RANCHER_API$path" 2>&1)"; then
+    warn "Rancher API $method $path: $out"
+    return 1
+  fi
+  printf '%s' "$out"
+}
+
+# Canonicalize a rules array so ordering never registers as drift.
+normalize_rules() {
+  yq -o=json -I=0 'map({"a": (.apiGroups | sort), "r": (.resources | sort), "v": (.verbs | sort)}) | sort_by(.a[0], .r[0])'
+}
+
 if ! kubectl get rolebindings -n "$NAMESPACE" -o json 2>/dev/null \
      | grep -q "\"system:serviceaccounts:$NAMESPACE\""; then
   warn "no project binding grants the hub service account a role template in $NAMESPACE"
@@ -284,15 +305,25 @@ if ! kubectl get rolebindings -n "$NAMESPACE" -o json 2>/dev/null \
     template_body="$(yq -o=json -I=0 '{"name": .metadata.name, "description": .description, "context": .context, "rules": .rules}' helm/rbac/roletemplate.yaml)"
     prtb_body="$(PROJECT="$RANCHER_PROJECT_ID" TEMPLATE="$TEMPLATE_ID" GROUP="system:serviceaccounts:$NAMESPACE" NAME="$NAMESPACE-sa" \
       yq -n -o=json -I=0 '{"name": strenv(NAME), "roleTemplateId": strenv(TEMPLATE), "projectId": strenv(PROJECT), "groupPrincipalId": strenv(GROUP)}')"
-    if (curl -fsS -H "Authorization: Bearer $KCFG_TOKEN" "$RANCHER_API/roletemplates/$TEMPLATE_ID" >/dev/null 2>&1 \
-        || curl -fsS -H "Authorization: Bearer $KCFG_TOKEN" -H "Content-Type: application/json" -d "$template_body" "$RANCHER_API/roletemplates" >/dev/null 2>&1) \
-       && curl -fsS -H "Authorization: Bearer $KCFG_TOKEN" -H "Content-Type: application/json" -d "$prtb_body" "$RANCHER_API/projectroletemplatebindings" >/dev/null 2>&1; then
+    template_ready=false
+    if live="$(curl -fsS -H "Authorization: Bearer $KCFG_TOKEN" "$RANCHER_API/roletemplates/$TEMPLATE_ID" 2>/dev/null)"; then
+      # An existing template may predate the repo file; rules drift leaves the hub SA
+      # without permissions the per-spawn Roles grant.
+      if [[ "$(printf '%s' "$live" | yq -o=json -I=0 '.rules' | normalize_rules)" == "$(printf '%s' "$template_body" | yq -o=json -I=0 '.rules' | normalize_rules)" ]]; then
+        template_ready=true
+      elif rancher_api PUT "/roletemplates/$TEMPLATE_ID" "$template_body" >/dev/null; then
+        ok "updated role template $TEMPLATE_ID to match helm/rbac/roletemplate.yaml"
+        template_ready=true
+      fi
+    elif rancher_api POST "/roletemplates" "$template_body" >/dev/null; then
+      ok "created role template $TEMPLATE_ID"
+      template_ready=true
+    fi
+    if [[ "$template_ready" == true ]] && rancher_api POST "/projectroletemplatebindings" "$prtb_body" >/dev/null; then
       rbac_done=true
       ok "bound system:serviceaccounts:$NAMESPACE to role template $TEMPLATE_ID in project $RANCHER_PROJECT_ID"
       rancher_wait "role-template binding in $NAMESPACE" \
         "kubectl get rolebindings -n '$NAMESPACE' -o json 2>/dev/null | grep -q '\"system:serviceaccounts:$NAMESPACE\"'"
-    else
-      warn "Rancher API call failed; falling back to manual setup"
     fi
   fi
   if [[ "$rbac_done" == false ]]; then
