@@ -16,7 +16,8 @@ export interface LogEntry {
 export type ProgressStatus = "connecting" | "streaming" | "ready" | "failed"
 
 // Hub 400s progress requests that land during spawn-failure cleanup; reconnecting replays
-// the terminal failed event. Budget counts consecutive failed connects (reset on open).
+// the terminal failed event. Budget counts connect attempts that never produced a message;
+// resetting on open would let a proxy that accepts then dies retry forever.
 const MAX_CONNECT_FAILURES = 5
 const RETRY_BASE_DELAY_MS = 1000
 
@@ -44,12 +45,9 @@ export function useSpawnProgress(progressUrl: string) {
       const es = new EventSource(progressUrl)
       source = es
 
-      es.onopen = () => {
-        connectFailures = 0
-      }
-
       es.onmessage = (event: MessageEvent<string>) => {
         if (disposed) return
+        connectFailures = 0
         setStatus("streaming")
         const evt: ProgressEvent = JSON.parse(event.data)
         if (evt.progress !== undefined) setProgress(evt.progress)
