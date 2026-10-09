@@ -206,7 +206,6 @@ def create_notebook_pod(
 
     Returns:
         The UID of the pod, for use as an owner reference on its service.
-
     """
     core_v1 = get_core_v1()
     try:
@@ -426,6 +425,8 @@ def create_service(name: str, target_name: str, target_uid: str) -> None:
     ownerReferences, so Kubernetes garbage collection deletes the service
     whenever the pod is deleted, regardless of who deletes it.
 
+    A lingering service owned by a deleted pod awaits GC, so existence alone must not skip creation.
+
     Args:
         name: The name of the service to create.
         target_name: The app label value of pods to target. For notebook
@@ -433,9 +434,21 @@ def create_service(name: str, target_name: str, target_uid: str) -> None:
         target_uid: The UID of the owning pod.
 
     """
-    if ping_resource("svc", name):
-        logger.warning(f"Service {name} already exists in namespace {NAMESPACE}. Skipping creation.")
-        return
+    core_v1 = get_core_v1()
+    try:
+        existing = cast("V1Service", core_v1.read_namespaced_service(name=name, namespace=NAMESPACE))
+        owner_references = (existing.metadata and existing.metadata.owner_references) or []
+        if owner_references and owner_references[0].uid == target_uid:
+            logger.warning(f"Service {name} already exists in namespace {NAMESPACE}. Skipping creation.")
+            return
+        try:
+            core_v1.delete_namespaced_service(name=name, namespace=NAMESPACE)
+        except ApiException as e:
+            if e.status != HTTPStatus.NOT_FOUND:
+                raise
+    except ApiException as e:
+        if e.status != HTTPStatus.NOT_FOUND:
+            raise
 
     service = V1Service(
         metadata=V1ObjectMeta(
