@@ -31,4 +31,4 @@ CodeQL for Actions, JS/TS, Python on PRs + weekly schedule.
 - **k8s-hub lockstep.** The `quay.io/jupyterhub/k8s-hub` tag in `hub/Dockerfile` must equal the `jupyterhub` dependency version in `helm/charts/mddash/Chart.yaml`; merge the two Dependabot PRs together.
 - **zizmor runs with `--min-severity high`.** Medium/warning findings don't fail CI.
 - **Secrets are repo-scoped.** No GitHub Environments (repo lacks admin rights). Created in-namespace during deployment.
-- **Helm v4.** `--atomic` is deprecated. Use `--rollback-on-failure` on `helm upgrade` and `--wait` on `helm install`.
+- **Helm v4.** `--atomic` is deprecated. Use `--rollback-on-failure` on `helm upgrade` and `--wait` on `helm install`. Upgrades also carry `--force-conflicts`: the KubeRay autoscaler takes field ownership of `spec.workerGroupSpecs` on the RayCluster CR, and server-side apply would otherwise conflict and fail the deploy.

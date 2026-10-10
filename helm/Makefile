@@ -48,11 +48,11 @@ endif
 upgrade: render ## Upgrade Helm release
 ifeq ($(ENV),prod)
 		helm upgrade --install $(package) oci://$(chart_registry)/$(chart_name) --version $(IMAGE_TAG) \
-		--namespace $(namespace) $(values_file) $(timeout) --rollback-on-failure --wait \
+		--namespace $(namespace) $(values_file) $(timeout) --rollback-on-failure --wait --force-conflicts \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 else
 	helm upgrade --install $(package) $(chart_path) --namespace $(namespace) \
-		$(values_file) $(timeout) --rollback-on-failure --wait \
+		$(values_file) $(timeout) --rollback-on-failure --wait --force-conflicts \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 endif
 
