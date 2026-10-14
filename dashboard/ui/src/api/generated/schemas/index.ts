@@ -438,7 +438,7 @@ export const UpdateExperimentParams = zod.object({
 
 export const UpdateExperimentBody = zod.object({
   "name": zod.string()
-}).describe('Editable experiment properties (other fields are ignored).')
+}).describe('Editable experiment properties.')
 
 export const updateExperimentResponseSourceOneFilesItemSizeMin = 0;
 

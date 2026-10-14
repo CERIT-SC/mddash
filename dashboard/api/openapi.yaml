@@ -3714,10 +3714,11 @@ components:
       properties:
         name:
           type: string
+      additionalProperties: false
       type: object
       required:
       - name
-      description: Editable experiment properties (other fields are ignored).
+      description: Editable experiment properties.
 tags:
 - name: System
 - name: Experiments

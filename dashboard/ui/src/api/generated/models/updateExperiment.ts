@@ -7,7 +7,7 @@
  */
 
 /**
- * Editable experiment properties (other fields are ignored).
+ * Editable experiment properties.
  */
 export interface UpdateExperiment {
   name: string;
