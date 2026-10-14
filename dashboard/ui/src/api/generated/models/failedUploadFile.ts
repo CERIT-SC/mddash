@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * A file that failed to upload.
+ */
 export interface FailedUploadFile {
   key: string;
   error: string;

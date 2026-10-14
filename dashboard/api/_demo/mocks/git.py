@@ -2,13 +2,17 @@
 
 from pathlib import Path
 
-
-def _stub_clone(_git_url: str, target_dir: Path, _access_token: "str | None" = None) -> None:
-    target_dir.mkdir(parents=True, exist_ok=True)
+import anyio
 
 
-def _stub_clone_module(_git_url: str, _module_path: str, target_dir: Path, _access_token: "str | None" = None) -> None:
-    target_dir.mkdir(parents=True, exist_ok=True)
+async def _stub_clone(_git_url: str, target_dir: Path, _access_token: "str | None" = None) -> None:
+    await anyio.Path(target_dir).mkdir(parents=True, exist_ok=True)
+
+
+async def _stub_clone_module(
+    _git_url: str, _module_path: str, target_dir: Path, _access_token: "str | None" = None
+) -> None:
+    await anyio.Path(target_dir).mkdir(parents=True, exist_ok=True)
 
 
 def install_git_mocks() -> None:

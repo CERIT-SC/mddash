@@ -1,7 +1,7 @@
 """Unit tests for upload Job submission."""
 
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from upload import submission
@@ -63,22 +63,22 @@ class TestIsUploadActive:
     """Tests for is_upload_active."""
 
     @patch("upload.submission.k8s.read_job")
-    def test_returns_true_when_job_active(self, mock_read: Mock) -> None:
+    async def test_returns_true_when_job_active(self, mock_read: Mock) -> None:
         """Active Job (status.active > 0) returns True."""
         mock_read.return_value = Mock(status=Mock(active=1))
-        assert is_upload_active("abcde") is True
+        assert await is_upload_active("abcde") is True
 
     @patch("upload.submission.k8s.read_job")
-    def test_returns_false_when_job_not_found(self, mock_read: Mock) -> None:
+    async def test_returns_false_when_job_not_found(self, mock_read: Mock) -> None:
         """Missing Job returns False."""
         mock_read.return_value = None
-        assert is_upload_active("abcde") is False
+        assert await is_upload_active("abcde") is False
 
     @patch("upload.submission.k8s.read_job")
-    def test_returns_false_when_job_finished(self, mock_read: Mock) -> None:
+    async def test_returns_false_when_job_finished(self, mock_read: Mock) -> None:
         """Completed Job (status.active = 0) returns False."""
         mock_read.return_value = Mock(status=Mock(active=0))
-        assert is_upload_active("abcde") is False
+        assert await is_upload_active("abcde") is False
 
 
 class TestSubmitUploadJob:
@@ -86,10 +86,12 @@ class TestSubmitUploadJob:
 
     @patch("upload.submission.is_upload_active", return_value=True)
     @patch("upload.submission.read_status")
-    def test_returns_existing_attempt_when_active(self, mock_read: Mock, mock_active: Mock, tmp_path: Path) -> None:
+    async def test_returns_existing_attempt_when_active(
+        self, mock_read: Mock, mock_active: Mock, tmp_path: Path
+    ) -> None:
         """When a Job is already active, returns the existing attempt ID."""
         mock_read.return_value = Mock(attempt_id="existing-att")
-        result = submission.submit_upload_job(
+        result = await submission.submit_upload_job(
             experiment_id="abcde",
             mdrepo_id="rec1",
             credential_data={},
@@ -102,9 +104,9 @@ class TestSubmitUploadJob:
     @patch("upload.submission.read_status", return_value=None)
     @patch("upload.submission.write_status")
     @patch("upload.submission.create_queued_status")
-    @patch("upload.submission.k8s")
+    @patch("upload.submission.k8s", new_callable=AsyncMock)
     @patch("upload.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
-    def test_creates_job_with_env_credentials_and_waits_for_admission(
+    async def test_creates_job_with_env_credentials_and_waits_for_admission(
         self,
         mock_k8s: Mock,
         mock_create_queued: Mock,
@@ -127,7 +129,7 @@ class TestSubmitUploadJob:
             "token_url": "https://mdrepo/oauth/token",
         }
 
-        result = submission.submit_upload_job(
+        result = await submission.submit_upload_job(
             experiment_id="abcde",
             mdrepo_id="rec1",
             credential_data=credential_data,
@@ -161,9 +163,9 @@ class TestSubmitUploadJob:
     @patch("upload.submission.read_status", return_value=None)
     @patch("upload.submission.write_status")
     @patch("upload.submission.create_queued_status")
-    @patch("upload.submission.k8s")
+    @patch("upload.submission.k8s", new_callable=AsyncMock)
     @patch("upload.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
-    def test_admission_timeout_cleans_up(
+    async def test_admission_timeout_cleans_up(
         self,
         mock_k8s: Mock,
         mock_create_queued: Mock,
@@ -178,7 +180,7 @@ class TestSubmitUploadJob:
         mock_create_queued.return_value = Mock()
 
         with pytest.raises(SubmissionError, match="not admitted"):
-            submission.submit_upload_job(
+            await submission.submit_upload_job(
                 experiment_id="abcde",
                 mdrepo_id="rec1",
                 credential_data={},
@@ -188,14 +190,14 @@ class TestSubmitUploadJob:
         # Called at least once for the timeout cleanup (also once before creating).
         assert mock_delete.call_count >= 1
 
-    @patch("upload.submission.k8s")
+    @patch("upload.submission.k8s", new_callable=AsyncMock)
     @patch("upload.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
     @patch("upload.submission.is_upload_active", return_value=False)
     @patch("upload.submission.read_status", return_value=None)
     @patch("upload.submission.write_status")
     @patch("upload.submission.create_queued_status")
     @patch("upload.submission.delete_upload_resources")
-    def test_job_manifest_has_preserve_label(
+    async def test_job_manifest_has_preserve_label(
         self,
         mock_delete: Mock,
         mock_create_queued: Mock,
@@ -209,7 +211,7 @@ class TestSubmitUploadJob:
         mock_k8s.wait_for_pod_admission.return_value = True
         mock_create_queued.return_value = Mock()
 
-        submission.submit_upload_job(
+        await submission.submit_upload_job(
             experiment_id="abcde",
             mdrepo_id="rec1",
             credential_data={},
@@ -223,14 +225,14 @@ class TestSubmitUploadJob:
         pod_labels = job_manifest["spec"]["template"]["metadata"]["labels"]
         assert pod_labels["mddash.io/preserve-on-stop"] == "true"
 
-    @patch("upload.submission.k8s")
+    @patch("upload.submission.k8s", new_callable=AsyncMock)
     @patch("upload.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
     @patch("upload.submission.is_upload_active", return_value=False)
     @patch("upload.submission.read_status", return_value=None)
     @patch("upload.submission.write_status")
     @patch("upload.submission.create_queued_status")
     @patch("upload.submission.delete_upload_resources")
-    def test_job_uses_tokenless_service_account(
+    async def test_job_uses_tokenless_service_account(
         self,
         mock_delete: Mock,
         mock_create_queued: Mock,
@@ -244,7 +246,7 @@ class TestSubmitUploadJob:
         mock_k8s.wait_for_pod_admission.return_value = True
         mock_create_queued.return_value = Mock()
 
-        submission.submit_upload_job(
+        await submission.submit_upload_job(
             experiment_id="abcde",
             mdrepo_id="rec1",
             credential_data={},

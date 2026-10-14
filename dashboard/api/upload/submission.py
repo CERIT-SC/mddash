@@ -70,7 +70,7 @@ def build_credential_env(credential_data: dict[str, str]) -> list[dict[str, Any]
     return [{"name": key_map[key], "value": value} for key, value in credential_data.items()]
 
 
-def submit_upload_job(
+async def submit_upload_job(
     experiment_id: str,
     mdrepo_id: str,
     credential_data: dict[str, str],
@@ -80,12 +80,12 @@ def submit_upload_job(
     j_name = job_name(experiment_id)
 
     existing_status = _read_attempt_id(experiment_id, data_dir)
-    if is_upload_active(experiment_id):
+    if await is_upload_active(experiment_id):
         logger.info("Upload Job %s already active for experiment %s", j_name, experiment_id)
         return existing_status or ""
 
     # Clean up any terminal Job from a previous attempt before retrying.
-    delete_upload_resources(experiment_id)
+    await delete_upload_resources(experiment_id)
 
     attempt_id = secrets.token_hex(8)
     write_status(create_queued_status(attempt_id), experiment_id, data_dir)
@@ -152,12 +152,12 @@ def submit_upload_job(
     }
 
     try:
-        k8s.create_job_raw(job_manifest)
+        await k8s.create_job_raw(job_manifest)
 
         label_selector = f"{EXPERIMENT_LABEL}={experiment_id}"
-        if not k8s.wait_for_pod_admission(label_selector, timeout=UPLOAD_ADMISSION_TIMEOUT):
+        if not await k8s.wait_for_pod_admission(label_selector, max_wait=UPLOAD_ADMISSION_TIMEOUT):
             logger.error("Pod admission timeout for Job %s", j_name)
-            delete_upload_resources(experiment_id)
+            await delete_upload_resources(experiment_id)
             raise SubmissionError(f"Upload pod not admitted within {UPLOAD_ADMISSION_TIMEOUT}s")
 
         logger.info("Upload Job %s admitted for experiment %s", j_name, experiment_id)
@@ -167,13 +167,13 @@ def submit_upload_job(
         raise
     except Exception as e:
         logger.error("Failed to submit upload Job %s: %s", j_name, e)
-        delete_upload_resources(experiment_id)
+        await delete_upload_resources(experiment_id)
         raise SubmissionError(f"Failed to submit upload Job: {e}") from e
 
 
-def is_upload_active(experiment_id: str) -> bool:
+async def is_upload_active(experiment_id: str) -> bool:
     j_name = job_name(experiment_id)
-    job_obj = k8s.read_job(j_name)
+    job_obj = await k8s.read_job(j_name)
     if job_obj is None:
         return False
     status = getattr(job_obj, "status", None)
@@ -181,11 +181,11 @@ def is_upload_active(experiment_id: str) -> bool:
     return (active or 0) > 0
 
 
-def delete_upload_resources(experiment_id: str) -> None:
+async def delete_upload_resources(experiment_id: str) -> None:
     """Foreground-delete the upload Job."""
     j_name = job_name(experiment_id)
-    k8s.delete_job_foreground(j_name)
-    k8s.wait_for_resource_absence("job", j_name, timeout=30)
+    await k8s.delete_job_foreground(j_name)
+    await k8s.wait_for_resource_absence("job", j_name, max_wait=30)
 
 
 def _read_attempt_id(experiment_id: str, data_dir: Path) -> str | None:

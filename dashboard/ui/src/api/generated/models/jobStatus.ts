@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Status values for all kinds of jobs.
+ */
 export type JobStatus = typeof JobStatus[keyof typeof JobStatus];
 
 

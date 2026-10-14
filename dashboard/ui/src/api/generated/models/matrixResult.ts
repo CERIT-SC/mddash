@@ -7,6 +7,9 @@
  */
 import type { NumberMatrix } from './numberMatrix.ts';
 
+/**
+ * Per-residue matrix (RMSD per residue or SASA per frame).
+ */
 export type MatrixResult = (unknown & ({
   start?: number;
   step?: number;

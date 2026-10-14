@@ -6,9 +6,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-/**
- * @nullable
- */
 export type ExperimentArchiveState = typeof ExperimentArchiveState[keyof typeof ExperimentArchiveState] | null;
 
 

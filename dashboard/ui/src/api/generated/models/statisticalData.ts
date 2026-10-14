@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Summary statistics of a series.
+ */
 export interface StatisticalData {
   average: number;
   stddev: number;

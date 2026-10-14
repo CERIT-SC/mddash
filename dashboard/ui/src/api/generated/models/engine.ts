@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Molecular dynamics engine types.
+ */
 export type Engine = typeof Engine[keyof typeof Engine];
 
 

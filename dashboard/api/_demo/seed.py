@@ -5,8 +5,8 @@ from datetime import datetime, timedelta, timezone
 
 from config import DATA_DIR
 from enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus, PodStatus, SourceType
-from extensions import db
 from models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook, TunerJob
+from sqlalchemy.orm import Session
 
 from .analysis_data import materialize_analysis, start_analysis_thread
 from .files import (
@@ -35,7 +35,7 @@ RUNNING_SEEDED_ANALYSIS_IDS = {"analysis-dna-clusters", "analysis-villin-cluster
 SEEDED_ANALYSIS_DURATION_SEC = 25.0
 
 
-def seed_data() -> None:  # ruff:ignore[too-many-locals]
+def seed_data(session: Session) -> None:  # ruff:ignore[too-many-locals]
     demo_state.reset()
 
     now = datetime.now()
@@ -649,7 +649,7 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         topology_file=None,
     )
 
-    db.session.add_all([
+    session.add_all([
         membrane,
         membrane_notebook,
         enzyme,
@@ -680,8 +680,8 @@ def seed_data() -> None:  # ruff:ignore[too-many-locals]
         archived,
         archived_notebook,
     ])
-    db.session.add_all(e2e_models)
-    db.session.commit()
+    session.add_all(e2e_models)
+    session.commit()
 
     # Register seeded analysis jobs so the mock K8s layer reports real statuses
     # (one finished, one still calculating for the DNA study).

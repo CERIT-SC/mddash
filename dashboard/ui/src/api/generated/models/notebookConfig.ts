@@ -8,6 +8,9 @@
 import type { NotebookConfigDefaultTier } from './notebookConfigDefaultTier.ts';
 import type { NotebookTier } from './notebookTier.ts';
 
+/**
+ * Notebook tiers, the default tier, and the concurrent-notebook limit.
+ */
 export interface NotebookConfig {
   /** @minItems 1 */
   tiers: NotebookTier[];

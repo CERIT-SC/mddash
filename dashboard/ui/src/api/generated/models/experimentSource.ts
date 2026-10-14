@@ -8,6 +8,9 @@
 import type { ExperimentSourceType } from './experimentSourceType.ts';
 import type { FileInfo } from './fileInfo.ts';
 
+/**
+ * Structured experiment provenance.
+ */
 export interface ExperimentSource {
   type: ExperimentSourceType;
   pdb_id?: string;

@@ -1,79 +1,107 @@
 from http import HTTPStatus
+from typing import Annotated
 
+import anyio
 from config import API_PREFIX
-from flask import Blueprint, Response, jsonify, request
-from flask.typing import ResponseReturnValue
+from dependencies import ExperimentDep, SessionDep
+from fastapi import APIRouter, Path, Response
 from models import Simulation
-from werkzeug.exceptions import BadRequest
+from pydantic import TypeAdapter
+from schemas.simulation import Simulation as SimulationOut
+from schemas.simulation import SimulationWrite
 
-simulations_bp = Blueprint("simulations", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/simulations")
+from routes._responses import problems
 
+router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/simulations", tags=["Simulations"])
 
-@simulations_bp.route("", methods=["GET"])
-def list_simulations_route(experiment_id: str) -> Response:
-    """
-    List all simulations for an experiment.
-
-    Returns:
-        Response: JSON response with the list of simulations.
-    """
-    return jsonify([s.to_dict() for s in Simulation.list(experiment_id)])
+SimulationPath = Annotated[str, Path(min_length=1)]
+_simulations = TypeAdapter(list[SimulationOut])
 
 
-@simulations_bp.route("/<path:simulation_path>", methods=["GET"])
-def get_simulation_route(experiment_id: str, simulation_path: str) -> Response:
-    """
-    Get a single simulation by its experiment-relative path.
-
-    Returns:
-        Response: JSON response with the simulation data.
-    """
-    return jsonify(Simulation.get(experiment_id, simulation_path).to_dict())
-
-
-@simulations_bp.route("", methods=["POST"])
-def create_simulation_route(experiment_id: str) -> ResponseReturnValue:
-    """
-    Create a new simulation manifest.
-
-    Returns:
-        JSON response with the created simulation.
-
-    Raises:
-        BadRequest: If the body is invalid or the simulation is locked.
-    """
-    data = request.get_json()
-    if not isinstance(data, dict):
-        raise BadRequest("Request body must be a JSON object.")
-    simulation = Simulation.write(experiment_id, data)
-    return jsonify(simulation.to_dict()), HTTPStatus.CREATED
+@router.get(
+    "",
+    summary="List simulation manifests",
+    operation_id="listSimulations",
+    response_description="Simulations",
+    responses=problems(),
+)
+async def list_simulations(session: SessionDep, experiment: ExperimentDep) -> list[SimulationOut]:
+    """List all simulations of an experiment."""
+    await experiment.refresh_jobs()
+    result = await anyio.to_thread.run_sync(
+        lambda: _simulations.validate_python([s.to_dict() for s in Simulation.list(experiment.id, experiment)])
+    )
+    await session.commit()
+    return result
 
 
-@simulations_bp.route("/<path:simulation_path>", methods=["PATCH"])
-def update_simulation_route(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
-    """
-    Edit an unlocked simulation manifest.
+@router.post(
+    "",
+    status_code=HTTPStatus.CREATED,
+    summary="Create a simulation manifest",
+    operation_id="createSimulation",
+    response_description="Created simulation",
+    responses=problems(400, 404, 409),
+)
+async def create_simulation(session: SessionDep, experiment: ExperimentDep, body: SimulationWrite) -> SimulationOut:
+    """Create a new simulation manifest."""
+    await experiment.refresh_jobs()
+    result = await anyio.to_thread.run_sync(
+        lambda: SimulationOut.model_validate(Simulation.write(experiment, body.model_dump()).to_dict())
+    )
+    await session.commit()
+    return result
 
-    Returns:
-        JSON response with the updated simulation.
 
-    Raises:
-        BadRequest: If the body is not a JSON object.
-    """
-    data = request.get_json()
-    if not isinstance(data, dict):
-        raise BadRequest("Request body must be a JSON object.")
-    simulation = Simulation.update(experiment_id, simulation_path, data)
-    return jsonify(simulation.to_dict())
+@router.get(
+    "/{simulation_path:path}",
+    summary="Get a simulation manifest",
+    operation_id="getSimulation",
+    response_description="Simulation",
+    responses=problems(404),
+)
+async def get_simulation(
+    session: SessionDep, experiment: ExperimentDep, simulation_path: SimulationPath
+) -> SimulationOut:
+    """Get a single simulation by its experiment-relative path."""
+    await experiment.refresh_jobs()
+    result = await anyio.to_thread.run_sync(
+        lambda: SimulationOut.model_validate(Simulation.get(experiment.id, simulation_path, experiment).to_dict())
+    )
+    await session.commit()
+    return result
 
 
-@simulations_bp.route("/<path:simulation_path>", methods=["DELETE"])
-def delete_simulation_route(experiment_id: str, simulation_path: str) -> ResponseReturnValue:
-    """
-    Delete a simulation manifest and cascade-delete all related jobs.
+@router.patch(
+    "/{simulation_path:path}",
+    summary="Update a simulation manifest",
+    operation_id="updateSimulation",
+    response_description="Updated simulation",
+    responses=problems(400, 404, 409),
+)
+async def update_simulation(
+    session: SessionDep, experiment: ExperimentDep, simulation_path: SimulationPath, body: SimulationWrite
+) -> SimulationOut:
+    """Edit an unlocked simulation manifest."""
+    await experiment.refresh_jobs()
+    result = await anyio.to_thread.run_sync(
+        lambda: SimulationOut.model_validate(
+            Simulation.update(experiment, simulation_path, body.model_dump()).to_dict()
+        )
+    )
+    await session.commit()
+    return result
 
-    Returns:
-        Empty 204 response.
-    """
-    Simulation.delete(experiment_id, simulation_path)
-    return "", HTTPStatus.NO_CONTENT
+
+@router.delete(
+    "/{simulation_path:path}",
+    status_code=HTTPStatus.NO_CONTENT,
+    response_class=Response,
+    summary="Delete a simulation manifest",
+    operation_id="deleteSimulation",
+    response_description="Operation completed successfully",
+    responses=problems(400, 404),
+)
+async def delete_simulation(session: SessionDep, experiment: ExperimentDep, simulation_path: SimulationPath) -> None:
+    """Delete a simulation manifest and cascade-delete all related jobs."""
+    await Simulation.delete(session, experiment, simulation_path)

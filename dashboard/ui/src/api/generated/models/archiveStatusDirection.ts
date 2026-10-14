@@ -6,9 +6,6 @@
  * OpenAPI spec version: 1.0.0
  */
 
-/**
- * @nullable
- */
 export type ArchiveStatusDirection = typeof ArchiveStatusDirection[keyof typeof ArchiveStatusDirection] | null;
 
 

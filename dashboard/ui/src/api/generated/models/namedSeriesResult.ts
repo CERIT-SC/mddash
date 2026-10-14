@@ -7,6 +7,9 @@
  */
 import type { NamedSeriesResultDataItem } from './namedSeriesResultDataItem.ts';
 
+/**
+ * Series keyed by reference and group.
+ */
 export interface NamedSeriesResult {
   start: number;
   step: number;

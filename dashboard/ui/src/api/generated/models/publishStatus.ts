@@ -6,15 +6,16 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { FailedUploadFile } from './failedUploadFile.ts';
-import type { NullableString } from './nullableString.ts';
 
+/**
+ * Durable MDRepo upload status merged with live Job state.
+ */
 export interface PublishStatus {
   experiment_id: string;
-  mdrepo_id: NullableString | null;
-  draft_url: NullableString | null;
-  /** @nullable */
+  mdrepo_id: string | null;
+  draft_url: string | null;
   upload_state: string | null;
-  reason: NullableString | null;
+  reason: string | null;
   /** @minimum 0 */
   total_files: number;
   /** @minimum 0 */
@@ -23,8 +24,6 @@ export interface PublishStatus {
   total_bytes: number;
   /** @minimum 0 */
   completed_bytes: number;
-  current_file?: NullableString | null;
-  error?: NullableString | null;
   upload_attempt_id?: string;
   failed_files?: FailedUploadFile[];
   [key: string]: unknown;

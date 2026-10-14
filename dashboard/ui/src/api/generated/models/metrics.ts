@@ -6,16 +6,13 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Storage usage and server uptime.
+ */
 export interface Metrics {
-  /**
-     * Bytes used; null until the du monitor records a measurement
-     * @nullable
-     */
+  /** Bytes used; null until the du monitor records a measurement */
   storage_used_bytes: number | null;
-  /**
-     * Configured storage quota in bytes
-     * @nullable
-     */
+  /** Configured storage quota in bytes */
   storage_limit_bytes: number | null;
   uptime_seconds: number;
 }

@@ -1,12 +1,11 @@
 """Unit tests for the MDPosit client module (clients/mdposit.py)."""
 
-from http import HTTPStatus
-from io import BytesIO
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
+import httpx
 import pytest
-import requests
+import respx
 from clients.mdposit import (
     download_file,
     extract_accession,
@@ -16,6 +15,13 @@ from clients.mdposit import (
 )
 
 REST_URL = "https://mdrepo.eu/api/rest/v1"
+
+
+@pytest.fixture(autouse=True)
+def _rest_url():
+    with patch("clients.mdposit.MDPOSIT_REST_URL", REST_URL):
+        yield
+
 
 # ---------------------------------------------------------------------------
 # is_mdposit_url
@@ -102,39 +108,23 @@ class TestExtractAccession:
 
 
 class TestGetProject:
-    """Tests for get_project metadata lookup."""
+    """Tests for get_project metadata lookup (served from /api/rest/v1/projects/{accession})."""
 
-    @patch("clients.mdposit.requests.get")
-    def test_returns_project_metadata(self, mock_get: Mock) -> None:
-        """Successful response returns parsed JSON dict."""
-        mock_resp = Mock()
-        mock_resp.status_code = HTTPStatus.OK
-        mock_resp.json.return_value = {"accession": "ABC", "title": "Test"}
-        mock_get.return_value = mock_resp
+    async def test_returns_project_metadata(self, http_mock: respx.MockRouter) -> None:
+        http_mock.get(f"{REST_URL}/projects/ABC").mock(
+            return_value=httpx.Response(200, json={"accession": "ABC", "title": "Test"})
+        )
+        assert await get_project("ABC") == {"accession": "ABC", "title": "Test"}
 
-        result = get_project("ABC")
-        assert result == {"accession": "ABC", "title": "Test"}
-
-    @patch("clients.mdposit.requests.get")
-    def test_not_found_raises_value_error(self, mock_get: Mock) -> None:
-        """404 response should raise ValueError."""
-        mock_resp = Mock()
-        mock_resp.status_code = HTTPStatus.NOT_FOUND
-        mock_get.return_value = mock_resp
-
+    async def test_not_found_raises_value_error(self, http_mock: respx.MockRouter) -> None:
+        http_mock.get(f"{REST_URL}/projects/MISSING").mock(return_value=httpx.Response(404))
         with pytest.raises(ValueError, match="not found"):
-            get_project("MISSING")
+            await get_project("MISSING")
 
-    @patch("clients.mdposit.requests.get")
-    def test_server_error_raises_http_error(self, mock_get: Mock) -> None:
-        """Non-404 error status should raise via raise_for_status."""
-        mock_resp = Mock()
-        mock_resp.status_code = HTTPStatus.INTERNAL_SERVER_ERROR
-        mock_resp.raise_for_status.side_effect = requests.HTTPError("500")
-        mock_get.return_value = mock_resp
-
-        with pytest.raises(requests.HTTPError):
-            get_project("ABC")
+    async def test_server_error_raises_http_error(self, http_mock: respx.MockRouter) -> None:
+        http_mock.get(f"{REST_URL}/projects/ABC").mock(return_value=httpx.Response(500))
+        with pytest.raises(httpx.HTTPStatusError):
+            await get_project("ABC")
 
 
 # ---------------------------------------------------------------------------
@@ -143,59 +133,35 @@ class TestGetProject:
 
 
 class TestListFiles:
-    """Tests for list_files file-list retrieval."""
+    """Tests for list_files file-list retrieval (served from /api/rest/v1/projects/{accession}/files)."""
 
-    @patch("clients.mdposit.requests.get")
-    def test_returns_file_names(self, mock_get: Mock) -> None:
-        """Should return list of file names from the API response."""
-        mock_resp = Mock()
-        mock_resp.status_code = HTTPStatus.OK
-        mock_resp.json.return_value = [{"name": "a.gro"}, {"name": "b.xtc"}]
-        mock_get.return_value = mock_resp
+    async def test_returns_file_names(self, http_mock: respx.MockRouter) -> None:
+        http_mock.get(f"{REST_URL}/projects/ABC/files").mock(
+            return_value=httpx.Response(200, json=[{"name": "a.gro"}, {"name": "b.xtc"}])
+        )
+        assert await list_files("ABC") == ["a.gro", "b.xtc"]
 
-        result = list_files("ABC")
-        assert result == ["a.gro", "b.xtc"]
+    async def test_not_found_returns_empty(self, http_mock: respx.MockRouter) -> None:
+        """A project may have no files."""
+        http_mock.get(f"{REST_URL}/projects/ABC/files").mock(return_value=httpx.Response(404))
+        assert await list_files("ABC") == []
 
-    @patch("clients.mdposit.requests.get")
-    def test_not_found_returns_empty(self, mock_get: Mock) -> None:
-        """404 response should return empty list (project may have no files)."""
-        mock_resp = Mock()
-        mock_resp.status_code = HTTPStatus.NOT_FOUND
-        mock_get.return_value = mock_resp
+    async def test_non_list_response_returns_empty(self, http_mock: respx.MockRouter) -> None:
+        http_mock.get(f"{REST_URL}/projects/ABC/files").mock(
+            return_value=httpx.Response(200, json={"error": "unexpected"})
+        )
+        assert await list_files("ABC") == []
 
-        assert list_files("ABC") == []
+    async def test_string_items_converted(self, http_mock: respx.MockRouter) -> None:
+        http_mock.get(f"{REST_URL}/projects/ABC/files").mock(
+            return_value=httpx.Response(200, json=["file1.gro", "file2.top"])
+        )
+        assert await list_files("ABC") == ["file1.gro", "file2.top"]
 
-    @patch("clients.mdposit.requests.get")
-    def test_non_list_response_returns_empty(self, mock_get: Mock) -> None:
-        """If the response body is not a list, return empty."""
-        mock_resp = Mock()
-        mock_resp.status_code = HTTPStatus.OK
-        mock_resp.json.return_value = {"error": "unexpected"}
-        mock_get.return_value = mock_resp
-
-        assert list_files("ABC") == []
-
-    @patch("clients.mdposit.requests.get")
-    def test_string_items_converted(self, mock_get: Mock) -> None:
-        """If items are plain strings instead of dicts, they should still be returned."""
-        mock_resp = Mock()
-        mock_resp.status_code = HTTPStatus.OK
-        mock_resp.json.return_value = ["file1.gro", "file2.top"]
-        mock_get.return_value = mock_resp
-
-        result = list_files("ABC")
-        assert result == ["file1.gro", "file2.top"]
-
-    @patch("clients.mdposit.requests.get")
-    def test_server_error_raises_http_error(self, mock_get: Mock) -> None:
-        """Server error on list_files should propagate."""
-        mock_resp = Mock()
-        mock_resp.status_code = HTTPStatus.INTERNAL_SERVER_ERROR
-        mock_resp.raise_for_status.side_effect = requests.HTTPError("500")
-        mock_get.return_value = mock_resp
-
-        with pytest.raises(requests.HTTPError):
-            list_files("ABC")
+    async def test_server_error_raises_http_error(self, http_mock: respx.MockRouter) -> None:
+        http_mock.get(f"{REST_URL}/projects/ABC/files").mock(return_value=httpx.Response(500))
+        with pytest.raises(httpx.HTTPStatusError):
+            await list_files("ABC")
 
 
 # ---------------------------------------------------------------------------
@@ -206,107 +172,33 @@ class TestListFiles:
 class TestDownloadFile:
     """Tests for download_file with traversal protection."""
 
-    def test_traversal_path_rejected(self, tmp_path: Path) -> None:
-        """Path traversal in filename must raise ValueError."""
+    async def test_traversal_path_rejected(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="Invalid MDPosit file path"):
-            download_file("ABC", "../../../etc/passwd", tmp_path)
+            await download_file("ABC", "../../../etc/passwd", tmp_path)
 
-    def test_absolute_path_rejected(self, tmp_path: Path) -> None:
-        """Absolute paths must raise ValueError."""
+    async def test_absolute_path_rejected(self, tmp_path: Path) -> None:
         with pytest.raises(ValueError, match="Invalid MDPosit file path"):
-            download_file("ABC", "/etc/passwd", tmp_path)
+            await download_file("ABC", "/etc/passwd", tmp_path)
 
-    @patch("clients.mdposit.requests.get")
-    def test_successful_download(self, mock_get: Mock, tmp_path: Path) -> None:
-        """Valid file download should write to output_dir and return path."""
-        # Build a mock streaming response whose .raw yields bytes
-        raw_stream = BytesIO(b"sim-data-content")
-        mock_resp = Mock()
-        mock_resp.status_code = HTTPStatus.OK
-        mock_resp.raise_for_status.return_value = None
-        mock_resp.raw = raw_stream
-        mock_resp.__enter__ = Mock(return_value=mock_resp)
-        mock_resp.__exit__ = Mock(return_value=False)
-        mock_get.return_value = mock_resp
-
-        result = download_file("ABC", "sim.gro", tmp_path)
+    async def test_successful_download(self, http_mock: respx.MockRouter, tmp_path: Path) -> None:
+        route = http_mock.get(f"{REST_URL}/projects/ABC/files/sim.gro").mock(
+            return_value=httpx.Response(200, content=b"sim-data-content")
+        )
+        result = await download_file("ABC", "sim.gro", tmp_path)
+        assert route.call_count == 1
         assert result == tmp_path / "sim.gro"
         assert (tmp_path / "sim.gro").read_bytes() == b"sim-data-content"
 
-    @patch("clients.mdposit.requests.get")
-    def test_nested_subdirectory(self, mock_get: Mock, tmp_path: Path) -> None:
-        """Nested relative paths should be allowed and directories created."""
-        raw_stream = BytesIO(b"nested-data")
-        mock_resp = Mock()
-        mock_resp.status_code = HTTPStatus.OK
-        mock_resp.raise_for_status.return_value = None
-        mock_resp.raw = raw_stream
-        mock_resp.__enter__ = Mock(return_value=mock_resp)
-        mock_resp.__exit__ = Mock(return_value=False)
-        mock_get.return_value = mock_resp
-
-        result = download_file("ABC", "sub/dir/file.gro", tmp_path)
+    async def test_nested_subdirectory(self, http_mock: respx.MockRouter, tmp_path: Path) -> None:
+        """Nested relative paths are allowed and their directories created."""
+        http_mock.get(f"{REST_URL}/projects/ABC/files/sub/dir/file.gro").mock(
+            return_value=httpx.Response(200, content=b"nested-data")
+        )
+        result = await download_file("ABC", "sub/dir/file.gro", tmp_path)
         assert result == tmp_path / "sub" / "dir" / "file.gro"
-        assert result.exists()
         assert result.read_bytes() == b"nested-data"
 
-    @patch("clients.mdposit.requests.get")
-    def test_http_error_propagates(self, mock_get: Mock, tmp_path: Path) -> None:
-        """HTTP errors from the download request should propagate."""
-        mock_resp = Mock()
-        mock_resp.status_code = HTTPStatus.INTERNAL_SERVER_ERROR
-        mock_resp.raise_for_status.side_effect = requests.HTTPError("500")
-        mock_resp.__enter__ = Mock(return_value=mock_resp)
-        mock_resp.__exit__ = Mock(return_value=False)
-        mock_get.return_value = mock_resp
-
-        with pytest.raises(requests.HTTPError):
-            download_file("ABC", "sim.gro", tmp_path)
-
-
-# ---------------------------------------------------------------------------
-# URL construction
-# ---------------------------------------------------------------------------
-
-
-class TestUrlConstruction:
-    """Guards the MDPosit REST endpoint paths against regression."""
-
-    @patch("clients.mdposit.MDPOSIT_REST_URL", REST_URL)
-    @patch("clients.mdposit.requests.get")
-    def test_get_project_uses_rest_v1_path(self, mock_get: Mock) -> None:
-        """Project metadata must be fetched from /api/rest/v1/projects/{accession}."""
-        mock_resp = Mock(status_code=HTTPStatus.OK)
-        mock_resp.json.return_value = {"accession": "A0001"}
-        mock_get.return_value = mock_resp
-
-        get_project("A0001")
-
-        assert mock_get.call_args.args[0] == f"{REST_URL}/projects/A0001"
-
-    @patch("clients.mdposit.MDPOSIT_REST_URL", REST_URL)
-    @patch("clients.mdposit.requests.get")
-    def test_list_files_uses_rest_v1_path(self, mock_get: Mock) -> None:
-        """File listing must be fetched from /api/rest/v1/projects/{accession}/files."""
-        mock_resp = Mock(status_code=HTTPStatus.OK)
-        mock_resp.json.return_value = ["structure.pdb"]
-        mock_get.return_value = mock_resp
-
-        list_files("A0001")
-
-        assert mock_get.call_args.args[0] == f"{REST_URL}/projects/A0001/files"
-
-    @patch("clients.mdposit.MDPOSIT_REST_URL", REST_URL)
-    @patch("clients.mdposit.requests.get")
-    def test_download_file_uses_rest_v1_path(self, mock_get: Mock, tmp_path: Path) -> None:
-        """File download must target /api/rest/v1/projects/{accession}/files/{name}."""
-        mock_resp = Mock(status_code=HTTPStatus.OK)
-        mock_resp.raise_for_status.return_value = None
-        mock_resp.raw = BytesIO(b"data")
-        mock_resp.__enter__ = Mock(return_value=mock_resp)
-        mock_resp.__exit__ = Mock(return_value=False)
-        mock_get.return_value = mock_resp
-
-        download_file("A0001", "structure.pdb", tmp_path)
-
-        assert mock_get.call_args.args[0] == f"{REST_URL}/projects/A0001/files/structure.pdb"
+    async def test_http_error_propagates(self, http_mock: respx.MockRouter, tmp_path: Path) -> None:
+        http_mock.get(f"{REST_URL}/projects/ABC/files/sim.gro").mock(return_value=httpx.Response(500))
+        with pytest.raises(httpx.HTTPStatusError):
+            await download_file("ABC", "sim.gro", tmp_path)

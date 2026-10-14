@@ -8,6 +8,9 @@
 import type { Engine } from './engine.ts';
 import type { NotebookModuleCategory } from './notebookModuleCategory.ts';
 
+/**
+ * Curated notebook module display metadata (no internal paths or URLs).
+ */
 export interface NotebookModule {
   id: string;
   name: string;

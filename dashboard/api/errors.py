@@ -1,12 +1,13 @@
-"""RFC 9457 problem-details error handling. Body: `{type, title, detail[, solution]}`."""
+"""RFC 9457 problem-details error handling (FastAPI/Starlette). Body: `{type, title, detail[, solution]}`."""
 
 import logging
 from http import HTTPStatus
+from typing import ClassVar
 
-from extensions import db
-from flask import Flask, Response, jsonify, request
-from marshmallow import ValidationError
-from werkzeug.exceptions import HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -16,91 +17,148 @@ class ApiError(HTTPException):
     HTTPException with a value-add type token and optional user-facing solution.
 
     Raise at known-error sites; the global handler renders it as RFC 9457 JSON.
-    Plain werkzeug exceptions (Conflict/NotFound/...) also work. The handler
-    upgrades them to an ApiError with a token derived from the HTTP phrase.
+    Plain HTTPExceptions (404/405/...) also work. The handler upgrades them to an
+    ApiError with a token derived from the HTTP phrase.
     """
 
     problem_type: str
     problem_solution: str | None
-    code: int  # type: ignore[assignment]  # narrows the base HTTPException.code (int | None)
 
     def __init__(self, code: int, description: str, type_: str, solution: str | None = None) -> None:
         """Construct a known error: HTTP `code`, `description` (cause), `type_` token, optional `solution`."""
-        super().__init__(description=description)
-        self.code = code
+        super().__init__(status_code=code, detail=description)
         self.problem_type = type_
         self.problem_solution = solution
 
-    def to_response(self) -> Response:
+    @property
+    def description(self) -> str:
+        """The problem detail (cause)."""
+        return str(self.detail)
+
+    def to_response(self) -> JSONResponse:
         """Render this error as an RFC 9457 problem-details JSON response."""
         body: dict[str, str] = {
             "type": self.problem_type,
-            "title": HTTPStatus(self.code).phrase,
-            "detail": self.description or "An error occurred.",
+            "title": HTTPStatus(self.status_code).phrase,
+            "detail": str(self.detail) or "An error occurred.",
         }
         if self.problem_solution is not None:
             body["solution"] = self.problem_solution
-        resp = jsonify(body)
-        resp.mimetype = "application/problem+json"
-        resp.status_code = self.code
-        return resp
+        return JSONResponse(
+            status_code=self.status_code,
+            content=body,
+            media_type="application/problem+json",
+            headers=self.headers,
+        )
 
 
-def flatten_messages(messages: object) -> str:
-    """Flatten marshmallow ValidationError.messages into a single string."""
-    if isinstance(messages, str):
-        return messages
-    if isinstance(messages, list):
-        return "; ".join(flatten_messages(m) for m in messages)
-    if isinstance(messages, dict):
-        parts: list[str] = []
-        for key, value in messages.items():
-            flat = flatten_messages(value)
-            parts.append(f"{key}: {flat}" if flat else str(key))
-        return "; ".join(parts)
-    return str(messages)
+class _StatusError(ApiError):
+    """Generic error for one HTTP status; the type token is derived from the status name."""
+
+    status: ClassVar[HTTPStatus]
+    token: ClassVar[str]
+
+    def __init__(self, description: str | None = None) -> None:
+        super().__init__(self.status, description or self.status.phrase, f"urn:mddash:{self.token}")
 
 
-def register_error_handlers(app: Flask) -> None:
-    """Register global error handlers returning RFC 9457 problem details."""
+class BadRequest(_StatusError):  # ruff:ignore[error-suffix-on-exception-name]
+    """400 with token `bad-request`."""
 
-    @app.errorhandler(ValidationError)
-    def _validation(exc: ValidationError) -> Response:
-        detail = flatten_messages(exc.messages)
-        logger.warning("Validation error on %s %s: %s", request.method, request.path, detail)
-        return ApiError(400, detail, "urn:mddash:validation-error").to_response()
+    status = HTTPStatus.BAD_REQUEST
+    token = "bad-request"
 
-    @app.errorhandler(HTTPException)
-    def _http(exc: HTTPException) -> Response:
+
+class Unauthorized(_StatusError):  # ruff:ignore[error-suffix-on-exception-name]
+    """401 with token `unauthorized`."""
+
+    status = HTTPStatus.UNAUTHORIZED
+    token = "unauthorized"
+
+
+class Forbidden(_StatusError):  # ruff:ignore[error-suffix-on-exception-name]
+    """403 with token `forbidden`."""
+
+    status = HTTPStatus.FORBIDDEN
+    token = "forbidden"
+
+
+class NotFound(_StatusError):  # ruff:ignore[error-suffix-on-exception-name]
+    """404 with token `not-found`."""
+
+    status = HTTPStatus.NOT_FOUND
+    token = "not-found"
+
+
+class Conflict(_StatusError):  # ruff:ignore[error-suffix-on-exception-name]
+    """409 with token `conflict`."""
+
+    status = HTTPStatus.CONFLICT
+    token = "conflict"
+
+
+class UnprocessableEntity(_StatusError):  # ruff:ignore[error-suffix-on-exception-name]
+    """422 with token `unprocessable-entity`."""
+
+    status = HTTPStatus.UNPROCESSABLE_ENTITY
+    token = "unprocessable-entity"
+
+
+class InternalServerError(_StatusError):
+    """500 with token `internal-server-error`."""
+
+    status = HTTPStatus.INTERNAL_SERVER_ERROR
+    token = "internal-server-error"
+
+
+def flatten_validation(errors: list[dict]) -> str:
+    """Flatten FastAPI RequestValidationError errors into a single readable line."""
+    parts: list[str] = []
+    for err in errors:
+        loc = ".".join(str(p) for p in err.get("loc", []) if p not in {"body", "query", "path", "form"})
+        msg = err.get("msg", "")
+        parts.append(f"{loc}: {msg}" if loc else msg)
+    return "; ".join(p for p in parts if p)
+
+
+def register_exception_handlers(app: FastAPI) -> None:
+    """Register global exception handlers returning RFC 9457 problem details."""
+
+    @app.exception_handler(RequestValidationError)
+    def _validation(request: Request, exc: RequestValidationError) -> JSONResponse:
+        detail = flatten_validation(list(exc.errors()))
+        logger.warning("Validation error on %s %s: %s", request.method, request.url.path, detail)
+        return ApiError(400, detail or "Invalid request.", "urn:mddash:validation-error").to_response()
+
+    @app.exception_handler(StarletteHTTPException)
+    def _http(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         if not isinstance(exc, ApiError):
-            name = exc.name or "Internal Server Error"
-            exc = ApiError(
-                exc.code or 500,
-                exc.description or "An error occurred.",
+            name = HTTPStatus(exc.status_code).phrase
+            api_err = ApiError(
+                exc.status_code,
+                str(exc.detail) if exc.detail is not None else "An error occurred.",
                 f"urn:mddash:{name.lower().replace(' ', '-')}",
             )
-        code = exc.code or 500
+            api_err.headers = exc.headers
+        else:
+            api_err = exc
+        code = api_err.status_code
         logger.log(
             logging.WARNING if code < HTTPStatus.INTERNAL_SERVER_ERROR else logging.ERROR,
             "%s %s -> %s [%s]: %s",
             request.method,
-            request.path,
+            request.url.path,
             code,
-            exc.problem_type,
-            exc.description,
+            api_err.problem_type,
+            api_err.detail,
             exc_info=code >= HTTPStatus.INTERNAL_SERVER_ERROR,
         )
-        return exc.to_response()
+        return api_err.to_response()
 
-    @app.errorhandler(Exception)
-    def _unhandled(_exc: Exception) -> Response:
-        db.session.rollback()
-        logger.error(
-            "Unhandled exception on %s %s",
-            request.method,
-            request.path,
-            exc_info=True,  # ruff:ignore[exc-info-outside-except-handler]
-        )
+    @app.exception_handler(Exception)
+    def _unhandled(request: Request, exc: Exception) -> JSONResponse:
+        # Starlette calls this outside the `except` block: pass the exception itself.
+        logger.error("Unhandled exception on %s %s", request.method, request.url.path, exc_info=exc)
         return ApiError(
             500,
             "Internal server error. Please try again later.",

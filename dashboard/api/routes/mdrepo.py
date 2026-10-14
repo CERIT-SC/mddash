@@ -1,17 +1,16 @@
-"""
-MDRepo OAuth2 routes for authentication with the InvenioRDM repository.
-
-This module handles the OAuth2 authorization code flow to obtain access tokens
-for the MDRepo API.
-"""
+"""MDRepo OAuth2 authorization code flow for the InvenioRDM repository."""
 
 import logging
 import secrets
 import time
 from http import HTTPStatus
+from typing import Annotated, Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-import requests
+import httpx
+from cache import mdrepo_status_cache
+from clients import mdrepo
+from clients.http import client
 from config import (
     API_PREFIX,
     MDREPO_AUTHORIZE_URL,
@@ -23,8 +22,10 @@ from config import (
     MDREPO_URL,
 )
 from errors import ApiError
-from flask import Blueprint, Response, jsonify, redirect, request, session
-from models.experiment import mdrepo_status_cache
+from fastapi import APIRouter, Query, Request
+from fastapi.responses import RedirectResponse
+from schemas.common import Message
+from schemas.experiment import MDRepoStatus
 from token_manager import (
     MDREPO_REFRESH_TOKEN_KEY,
     MDREPO_STATE_KEY,
@@ -32,19 +33,32 @@ from token_manager import (
     MDREPO_TOKEN_KEY,
     MDRepoTokenManager,
 )
-from werkzeug.wrappers import Response as WerkzeugResponse
+
+from routes._responses import problems
 
 logger = logging.getLogger(__name__)
 
-mdrepo_bp = Blueprint("mdrepo", __name__, url_prefix=f"{API_PREFIX}/mdrepo")
+router = APIRouter(prefix=f"{API_PREFIX}/mdrepo", tags=["MDRepo"])
+
+RETURN_URL_KEY = "mdrepo_return_url"
+
+_REDIRECT_RESPONSE: dict[int | str, dict[str, Any]] = {
+    HTTPStatus.FOUND: {
+        "description": "Redirect",
+        "headers": {"Location": {"required": True, "schema": {"type": "string"}}},
+    }
+}
 
 
-def _redirect_with_query(url: str, **params: str) -> WerkzeugResponse:
+def redirect_with_query(url: str, **params: str) -> RedirectResponse:
     """Redirect to a URL with query params merged in. The return URL may already carry its own query string."""
     parts = urlsplit(url)
     query = dict(parse_qsl(parts.query, keep_blank_values=True))
     query.update(params)
-    return redirect(urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)))
+    return RedirectResponse(
+        urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment)),
+        status_code=HTTPStatus.FOUND,
+    )
 
 
 def _safe_return_url(url: str) -> str:
@@ -55,54 +69,45 @@ def _safe_return_url(url: str) -> str:
     return url
 
 
-def get_mdrepo_token() -> str | None:
-    """
-    Get the MDRepo access token from the current session.
-
-    Returns:
-        The access token string if present in the session, or None.
-    """
-    return session.get(MDREPO_TOKEN_KEY)
-
-
-@mdrepo_bp.route("/status", methods=["GET"])
-def get_status() -> Response:
-    """
-    Check if user has a valid MDRepo token.
-
-    Returns:
-        Response: JSON response with authentication status and MDRepo URL if authenticated.
-    """
-    token = session.get(MDREPO_TOKEN_KEY)
-
+@router.get(
+    "/status",
+    summary="Get MDRepo authentication status",
+    operation_id="getMDRepoStatus",
+    response_description="Authentication status",
+    responses=problems(),
+)
+async def get_status(request: Request) -> MDRepoStatus:
+    """Whether the session holds a token MDRepo accepts."""
+    token = request.session.get(MDREPO_TOKEN_KEY)
     if not token:
-        return jsonify({"authenticated": False})
+        return {"authenticated": False}
 
     try:
-        resp = requests.get(f"{MDREPO_URL}/api/me", headers={"Authorization": f"Bearer {token}"}, timeout=10)
-
-        if resp.status_code == HTTPStatus.OK:
-            return jsonify({"authenticated": True, "mdrepo_url": MDREPO_URL})
-
-        # Token invalid or expired
-        session.pop(MDREPO_TOKEN_KEY, None)
-        return jsonify({"authenticated": False})
-
-    except Exception as e:
+        if await mdrepo.is_token_valid(token):
+            return {"authenticated": True, "mdrepo_url": MDREPO_URL}
+    except httpx.HTTPError as e:
         logger.error(f"MDRepo token validation failed: {e}")
-        return jsonify({"authenticated": False})
+        return {"authenticated": False}
+
+    # Token invalid or expired
+    request.session.pop(MDREPO_TOKEN_KEY, None)
+    return {"authenticated": False}
 
 
-@mdrepo_bp.route("/auth", methods=["GET"])
-def initiate_auth() -> Response | WerkzeugResponse:
+@router.get(
+    "/auth",
+    summary="Begin MDRepo OAuth authorization",
+    operation_id="authorizeMDRepo",
+    response_class=RedirectResponse,
+    status_code=HTTPStatus.FOUND,
+    responses={**_REDIRECT_RESPONSE, **problems(503)},
+)
+async def initiate_auth(request: Request, return_url: str = "/") -> RedirectResponse:
     """
-    Initiate OAuth2 authorization flow with MDRepo.
+    Redirect to MDRepo's authorization page; `return_url` is where the callback lands afterwards.
 
-    Query params:
-        return_url: URL to redirect to after successful authentication.
-
-    Returns:
-        Response: Redirect to the MDRepo authorization URL, or a JSON error if OAuth is not configured.
+    Raises:
+        ApiError: 503 if MDRepo OAuth is not configured.
     """
     if not all([MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET, MDREPO_REDIRECT_URI]):
         raise ApiError(
@@ -113,12 +118,10 @@ def initiate_auth() -> Response | WerkzeugResponse:
         )
 
     # The stored return URL becomes the post-OAuth 302 target.
-    return_url = _safe_return_url(request.args.get("return_url", "/"))
     state = secrets.token_urlsafe(32)
-    session[MDREPO_STATE_KEY] = state
-    session["mdrepo_return_url"] = return_url
+    request.session[MDREPO_STATE_KEY] = state
+    request.session[RETURN_URL_KEY] = _safe_return_url(return_url)
 
-    # Build authorization URL
     params = {
         "client_id": MDREPO_CLIENT_ID,
         "redirect_uri": MDREPO_REDIRECT_URI,
@@ -126,96 +129,95 @@ def initiate_auth() -> Response | WerkzeugResponse:
         "state": state,
         "scope": MDREPO_SCOPES,
     }
-
-    auth_url = f"{MDREPO_AUTHORIZE_URL}?{urlencode(params)}"
     logger.info(f"Redirecting to MDRepo OAuth: {MDREPO_AUTHORIZE_URL}")
+    return RedirectResponse(f"{MDREPO_AUTHORIZE_URL}?{urlencode(params)}", status_code=HTTPStatus.FOUND)
 
-    return redirect(auth_url)
 
+@router.get(
+    "/callback",
+    summary="Complete MDRepo OAuth authorization",
+    operation_id="completeMDRepoAuthorization",
+    response_class=RedirectResponse,
+    status_code=HTTPStatus.FOUND,
+    responses=_REDIRECT_RESPONSE,
+)
+async def oauth_callback(
+    request: Request,
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = None,
+    error_description: Annotated[str, Query()] = "Authorization denied",
+) -> RedirectResponse:
+    """Exchange the authorization code for tokens and redirect back with a success or error query parameter."""
+    return_url = request.session.pop(RETURN_URL_KEY, "/")
+    stored_state = request.session.pop(MDREPO_STATE_KEY, None)
 
-@mdrepo_bp.route("/callback", methods=["GET"])
-def oauth_callback() -> WerkzeugResponse:
-    """
-    Handle OAuth2 callback from MDRepo.
-
-    Returns:
-        WerkzeugResponse: Redirect to the return URL with a success or error query parameter.
-    """
-    code = request.args.get("code")
-    state = request.args.get("state")
-    error = request.args.get("error")
-
-    return_url = session.pop("mdrepo_return_url", "/")
-    stored_state = session.pop(MDREPO_STATE_KEY, None)
-
-    # Check for OAuth errors
     if error:
-        error_description = request.args.get("error_description", "Authorization denied")
         logger.error(f"MDRepo OAuth error: {error} - {error_description}")
-        return _redirect_with_query(return_url, mdrepo_error=error_description)
+        return redirect_with_query(return_url, mdrepo_error=error_description)
 
     # Validate state to prevent CSRF
     if not state or state != stored_state:
         logger.error("MDRepo OAuth: Invalid state parameter")
-        return _redirect_with_query(return_url, mdrepo_error="Invalid state parameter")
+        return redirect_with_query(return_url, mdrepo_error="Invalid state parameter")
 
     if not code:
         logger.error("MDRepo OAuth: No authorization code received")
-        return _redirect_with_query(return_url, mdrepo_error="No authorization code")
+        return redirect_with_query(return_url, mdrepo_error="No authorization code")
 
-    # Exchange code for token
+    token_data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": MDREPO_REDIRECT_URI,
+        "client_id": MDREPO_CLIENT_ID,
+        "client_secret": MDREPO_CLIENT_SECRET,
+    }
     try:
-        token_data = {
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": MDREPO_REDIRECT_URI,
-            "client_id": MDREPO_CLIENT_ID,
-            "client_secret": MDREPO_CLIENT_SECRET,
-        }
-
-        response = requests.post(MDREPO_TOKEN_URL, data=token_data, timeout=30)
-
-        if not response.ok:
-            logger.error(f"MDRepo token exchange failed: {response.status_code} - {response.text}")
-            return _redirect_with_query(return_url, mdrepo_error="Token exchange failed")
-
-        token_response = response.json()
-        access_token = token_response.get("access_token")
-        refresh_token = token_response.get("refresh_token")
-        expires_in = token_response.get("expires_in", 3600)  # Default 1 hour
-
-        if not access_token:
-            logger.error("MDRepo OAuth: No access token in response")
-            return _redirect_with_query(return_url, mdrepo_error="No access token")
-
-        # Store complete token information in session
-        session[MDREPO_TOKEN_KEY] = access_token
-        if refresh_token:
-            session[MDREPO_REFRESH_TOKEN_KEY] = refresh_token
-            logger.info("MDRepo OAuth: Successfully obtained access and refresh tokens")
-        else:
-            logger.warning("MDRepo OAuth: No refresh token in response - token refresh will not be available")
-        session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + expires_in
-
-        # Clear MDRepo status cache to force re-sync with new token
-        mdrepo_status_cache.clear()
-        logger.info("MDRepo OAuth: Cleared mdrepo_status_cache")
-
-        return _redirect_with_query(return_url, mdrepo_auth="success")
-
-    except requests.RequestException as e:
+        response = await client().post(MDREPO_TOKEN_URL, data=token_data, timeout=30)
+    except httpx.HTTPError as e:
         logger.error(f"MDRepo OAuth request error: {e}")
-        return _redirect_with_query(return_url, mdrepo_error="Request failed")
+        return redirect_with_query(return_url, mdrepo_error="Request failed")
+
+    if not response.is_success:
+        logger.error(f"MDRepo token exchange failed: {response.status_code} - {response.text}")
+        return redirect_with_query(return_url, mdrepo_error="Token exchange failed")
+
+    try:
+        token_response = response.json()
+    except ValueError as e:
+        logger.error(f"MDRepo OAuth token response is not JSON: {e}")
+        return redirect_with_query(return_url, mdrepo_error="Request failed")
+    access_token = token_response.get("access_token")
+    refresh_token = token_response.get("refresh_token")
+    expires_in = token_response.get("expires_in", 3600)  # Default 1 hour
+
+    if not access_token:
+        logger.error("MDRepo OAuth: No access token in response")
+        return redirect_with_query(return_url, mdrepo_error="No access token")
+
+    request.session[MDREPO_TOKEN_KEY] = access_token
+    if refresh_token:
+        request.session[MDREPO_REFRESH_TOKEN_KEY] = refresh_token
+        logger.info("MDRepo OAuth: Successfully obtained access and refresh tokens")
+    else:
+        logger.warning("MDRepo OAuth: No refresh token in response - token refresh will not be available")
+    request.session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + expires_in
+
+    # Force a re-sync of publication state with the new token
+    mdrepo_status_cache.clear()
+    logger.info("MDRepo OAuth: Cleared mdrepo_status_cache")
+
+    return redirect_with_query(return_url, mdrepo_auth="success")
 
 
-@mdrepo_bp.route("/logout", methods=["POST"])
-def logout() -> Response:
-    """
-    Remove all MDRepo tokens from session.
-
-    Returns:
-        Response: JSON response confirming successful logout.
-    """
-    token_manager = MDRepoTokenManager(session)
-    token_manager.clear_tokens()
-    return jsonify({"message": "Logged out from MDRepo"})
+@router.post(
+    "/logout",
+    summary="Clear MDRepo credentials",
+    operation_id="logoutMDRepo",
+    response_description="Logout confirmation",
+    responses=problems(),
+)
+async def logout(request: Request) -> Message:
+    """Remove all MDRepo tokens from the session."""
+    MDRepoTokenManager(request.session).clear_tokens()
+    return {"message": "Logged out from MDRepo"}

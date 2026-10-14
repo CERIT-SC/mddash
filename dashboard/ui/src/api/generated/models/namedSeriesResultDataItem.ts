@@ -6,8 +6,11 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type NamedSeriesResultDataItem = {
+/**
+ * One reference/group series.
+ */
+export interface NamedSeriesResultDataItem {
   reference: string;
   group: string;
   values: number[];
-};
+}

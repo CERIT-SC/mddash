@@ -2,14 +2,18 @@
 
 ## Mission
 
-Flask REST API that orchestrates molecular dynamics experiments across Kubernetes, manages MDRepo OAuth, and coordinates with external services (MDRun, Tuner). Runs as a sidecar in the user pod.
+Fully async FastAPI service that orchestrates molecular dynamics experiments across Kubernetes, manages MDRepo OAuth, and coordinates with external services (MDRun, Tuner). Runs as a sidecar in the user pod.
 
 ## Core practices
 
 - Business logic lives on SQLAlchemy models (e.g. `Experiment.from_pdb()`, `Experiment.publish()`).
-- Routes raise `HTTPException` subclasses or marshmallow `ValidationError`. The global `@app.errorhandler` handlers (in `errors.py`, registered via `register_error_handlers(app)`) convert them to RFC 9457 problem-details responses: `{"type": "urn:mddash:<token>", "title": "<Problem>", "detail": "<Cause>"[, "solution"]}`. No `@handle_exceptions` decorator needed. Rollback is automatic on uncaught exceptions. Success returns `jsonify(data)`; use marshmallow `schema.load()` for request parsing. The `type` token is the support-reportable code; raise value-add errors as `ApiError(code, description, type_, solution=...)` (renders itself); otherwise the token derives from the HTTP status phrase. Redirect-only OAuth routes handle redirects directly.
+- Routes raise `errors.py` exceptions (`BadRequest`, `NotFound`, `Conflict`, ... or `ApiError(code, description, type_, solution=...)` for value-add tokens); handlers from `register_exception_handlers(app)` render RFC 9457 problem details `{"type": "urn:mddash:<token>", "title", "detail"[, "solution"]}`. Pydantic request validation renders as 400 `urn:mddash:validation-error`, never FastAPI's 422 shape. Routes with established hand-written messages render them via `@invalid_request(...)` (renderers in `routes/_invalid.py`). Uncommitted work rolls back when the request session closes.
+- Request/response models live in `schemas/`; class names are the OpenAPI component names the UI client is generated from (renaming one renames a generated TS type). Inline enums use `enum_schema()` so generated clients keep field-derived names. `openapi.yaml` is generated (`make openapi`; `tests/contract` fails on drift), never hand-edited.
+- **Request shape: refresh, serialize, commit.** Models fetch remote state (MDRun/tuner status, pods, archive Jobs, MDRepo) in async `refresh*()` methods that store it on the instance; properties then only read rows, loaded jobs, and files, and fail loudly when read unrefreshed. Routes gather refreshes concurrently, serialize via `dependencies.dump()`/`dump_many()` in a worker thread (properties parse logs/scan files), then commit values the properties cached on the rows. A property that raises during serialization is logged and its optional field falls back to its default (`schemas.common.OrmModel`).
+- **Async ORM.** `expire_on_commit=False`; an experiment loads its notebook and jobs eagerly (`lazy="selectin"`, polymorphic selectin for GROMACS/AMBER columns). Child→experiment relationships are `raise_on_sql`: query jobs on their own through `Model.query()`, which loads the experiment. Set both `experiment_id` and `experiment` on new rows (file cleanup runs before the flush fills the FK).
+- Upstreams go through the shared `httpx.AsyncClient` (`clients/http.py`) and `kubernetes_asyncio`; blocking file/subprocess work runs in threads or `asyncio` subprocesses.
 - MDRepo file uploads run as durable Kubernetes Jobs (`upload/submission.py`); credentials are passed to the worker via container environment variables in the Job manifest.
-- Experiment archive/restore/purge run as durable K8s Jobs mirroring the upload pattern (`archive/`, worker `dashboard/archive-worker`) at the bisync-excluded S3 prefix `_archives/<id>/`. Durable state is DB columns reconciled in the schema's `pre_dump` (the status doc dies with the dir, Jobs TTL-expire); restore retry keys off a non-completed status doc in the leftover dir. Worker/filter invariants (sync-vs-copy, sentinel no-write, doc exclusions) are test-pinned; design rationale lives in `docs/specs/2026-09-17-experiment-archivation-design.md`.
+- Experiment archive/restore/purge run as durable K8s Jobs mirroring the upload pattern (`archive/`, worker `dashboard/archive-worker`) at the bisync-excluded S3 prefix `_archives/<id>/`. Durable state is DB columns reconciled in `Experiment.refresh_archive_state()` (the status doc dies with the dir, Jobs TTL-expire); restore retry keys off a non-completed status doc in the leftover dir. Worker/filter invariants (sync-vs-copy, sentinel no-write, doc exclusions) are test-pinned; design rationale lives in `docs/specs/2026-09-17-experiment-archivation-design.md`.
 
 ## Non-obvious gotchas
 
@@ -29,14 +33,14 @@ Flask REST API that orchestrates molecular dynamics experiments across Kubernete
 - **Appended logs.** `mdrun -cpi` appends each extension's block to the same `.log`. Full-file parsers take the last match, tail parsers use a byte budget (`utils.tail_bytes`) because engine trailers push markers past any line window. `performance` and the `nsteps_done` shortcut only trust a parse when `status == FINISHED` (a TERM-stopped run also prints a `Performance:` line).
 
 ### Migrations
-- `create_app()` runs `flask_migrate.upgrade()` on startup (skipped at head). Fresh databases are created by the same migrations. There is no `db.create_all()` fallback. A failed migration fails startup loudly. Add a migration file in `migrations/versions/` when adding columns. Do NOT manually run `flask db upgrade`.
+- The app lifespan runs `db.run_migrations()` before serving (skipped at head). Fresh databases are created by the same migrations. There is no `create_all()` fallback. A failed migration fails startup loudly. Add a migration file in `migrations/versions/` when adding columns. Do NOT run migrations manually.
 - `db.Enum(PyEnum)` stores enum member NAMES in the DB (no `values_callable`, cf. 006), never `.value` strings. SQLite emits no CHECK, so nothing rejects wrong values at write time. Migration DDL (`sa.Enum("PDB", ...)`) and any raw-SQL writes must use names; storing a value makes every ORM read of that row fail with LookupError.
 
 ### Authentication
-- MDRepo OAuth tokens live in the Flask session, NOT the database. Use `MDRepoTokenManager(session).get_valid_token()`; refresh is automatic with exponential backoff (3 retries).
+- MDRepo OAuth tokens live in the signed session cookie (Starlette `SessionMiddleware`, keyed by `MDREPO_CLIENT_SECRET`), NOT the database. Use `await MDRepoTokenManager(request.session).get_valid_token()` (or `get_credentials()` for the upload worker); refresh is automatic with exponential backoff (3 retries), serialized by an asyncio lock.
 
 ### Kubernetes
-- **Lazy in-cluster config.** `config.load_incluster_config()` and client construction are deferred until first use. Importing `clients.k8s` does not trigger K8s init. Tests must call `reset_k8s_clients_for_tests()` to clear cached clients between assertions.
+- **Lazy in-cluster config.** `kubernetes_asyncio` import, `load_incluster_config()`, and the shared `ApiClient` are deferred until first use and closed on shutdown (`k8s.aclose()`). Importing `clients.k8s` does not trigger K8s init. Tests get AsyncMock Core/Batch clients from the `mock_k8s` fixture.
 - Jobs have `backoffLimit: 0` (no retries on failure).
 
 ### File operations

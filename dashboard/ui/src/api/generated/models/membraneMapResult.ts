@@ -7,6 +7,9 @@
  */
 import type { MembraneMapResultMems } from './membraneMapResultMems.ts';
 
+/**
+ * Membrane assignment of lipids.
+ */
 export interface MembraneMapResult {
   n_mems: number;
   mems: MembraneMapResultMems;

@@ -15,7 +15,4 @@ import type { PCAResult } from './pCAResult.ts';
 import type { StatisticalSeriesResult } from './statisticalSeriesResult.ts';
 import type { ThicknessResult } from './thicknessResult.ts';
 
-/**
- * Closed catalog of analysis result shapes currently supported by the dashboard.
- */
 export type AnalysisResult = StatisticalSeriesResult | NamedSeriesResult | NamedDataResult | MatrixResult | PCAResult | ClustersResult | MembraneMapResult | ThicknessResult | InteractionResult;

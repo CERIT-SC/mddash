@@ -1,273 +1,266 @@
+import asyncio
 from http import HTTPStatus
+from typing import Annotated, Literal
 
 from config import API_PREFIX, DEFAULT_NOTEBOOKS_REPO
+from dependencies import ExperimentDep, SessionDep, dump, dump_many, list_experiments, mdrepo_token
 from enums import Engine
-from extensions import db
-from flask import Blueprint, Response, jsonify, request, session
-from flask.typing import ResponseReturnValue
-from models import AmberJob, Experiment, GromacsJob
+from errors import BadRequest, Conflict, Unauthorized
+from fastapi import APIRouter, File, Form, Request, Response, UploadFile
+from fastapi.responses import JSONResponse
+from models import Experiment
 from notebook_modules import load_catalog
-from schemas import ExperimentSchema, PublishSchema
-from sqlalchemy.orm import selectinload
+from pydantic import TypeAdapter
+from schemas.experiment import (
+    ArchiveAttempt,
+    ArchiveStatus,
+    MDPositPublication,
+    MDRepoPublication,
+    PublishRequest,
+    PublishStatus,
+    UpdateExperiment,
+)
+from schemas.experiment import Experiment as ExperimentOut
 from token_manager import MDRepoTokenManager
 from validators import validate_git_url
-from werkzeug.exceptions import BadRequest, Conflict, Unauthorized
 
-experiments_bp = Blueprint("experiments", __name__, url_prefix=f"{API_PREFIX}/experiments")
+from routes._responses import problems
+
+router = APIRouter(prefix=f"{API_PREFIX}/experiments", tags=["Experiments"])
+
+_publish_status = TypeAdapter(PublishStatus)
+_archive_status = TypeAdapter(ArchiveStatus)
 
 
-@experiments_bp.route("", methods=["GET"])
-def list_experiments() -> Response:
+@router.get(
+    "",
+    summary="List experiments",
+    operation_id="listExperiments",
+    response_description="Experiments",
+    responses=problems(),
+)
+async def list_all(request: Request, session: SessionDep) -> list[ExperimentOut]:
     """
     List all experiments.
 
-    The dashboard polls this every 5s while any job is live. Job relations
-    load eagerly so the dump costs a flat query set regardless of row count.
+    The dashboard polls this every 5s while any job is live; remote state of
+    all experiments is fetched concurrently.
     """
-    experiments: list[Experiment] = Experiment.query.options(
-        selectinload(Experiment.notebook),
-        selectinload(Experiment.tuner_jobs),
-        # JTI subclass rows need a batched select, else each dump lazy-loads one row per job.
-        selectinload(Experiment.simulation_jobs).selectin_polymorphic([GromacsJob, AmberJob]),
-        selectinload(Experiment.analysis_jobs),
-    ).all()
-    schema = ExperimentSchema(many=True)
-    return jsonify(schema.dump(experiments))
+    experiments = await list_experiments(session)
+    token = await mdrepo_token(request, experiments)
+    await asyncio.gather(*(experiment.refresh(token) for experiment in experiments))
+    return await dump_many(session, ExperimentOut, experiments)
 
 
-@experiments_bp.route("", methods=["POST"])
-def create_experiment() -> ResponseReturnValue:
+@router.post(
+    "",
+    status_code=HTTPStatus.CREATED,
+    summary="Create an experiment",
+    operation_id="createExperiment",
+    response_description="Created experiment",
+    responses=problems(400),
+)
+async def create(
+    request: Request,
+    session: SessionDep,
+    experiment_name: Annotated[str, Form(alias="experiment-name", min_length=1)],
+    source_type: Annotated[Literal["pdb", "repo", "file"], Form(alias="type")],
+    simulation_files: Annotated[list[UploadFile], File(alias="simulation-files", default_factory=list)],
+    pdb: Annotated[str | None, Form()] = None,
+    repo_url: Annotated[str | None, Form(alias="repo-url")] = None,
+    notebooks_repo: Annotated[str | None, Form(alias="notebooks-repo")] = None,
+    access_token: Annotated[str | None, Form(alias="access-token")] = None,
+    notebook_module_id: Annotated[str | None, Form(alias="notebook-module")] = None,
+    engine: Annotated[Engine, Form()] = Engine.GMX,
+) -> ExperimentOut:
     """
     Create a new experiment from PDB, repository URL, or uploaded files.
 
-    Returns:
-        Response: JSON response with the created experiment on success, or an error response for invalid input.
-
     Raises:
-        BadRequest: If the experiment type or data is invalid.
+        BadRequest: If the notebook module, repository, or source data is invalid.
     """
-    schema = ExperimentSchema()
-    form = request.form
-
-    name = form["experiment-name"]
-    pdb_source = form.get("pdb")
-    repo_url = form.get("repo-url")
-    notebooks_repo = form.get("notebooks-repo", DEFAULT_NOTEBOOKS_REPO)
-    access_token = form.get("access-token")
-    notebook_module_id = form.get("notebook-module") or None
-    simulation_files = request.files.getlist("simulation-files")
-
-    # Get engine from form, default to GMX
-    engine_str = form.get("engine", "GMX")
-    try:
-        engine = Engine.from_string(engine_str)
-    except ValueError:
-        raise BadRequest(f"Invalid engine: {engine_str}")
-
+    repo = notebooks_repo if notebooks_repo is not None else DEFAULT_NOTEBOOKS_REPO
     module = None
-    if notebook_module_id is not None:
+    if notebook_module_id:
         # Curated mode: server resolves module and repository; no client URL trusted.
         module = load_catalog().get_module_for_engine(notebook_module_id, engine.value)
         if module is None:
             raise BadRequest(f"Unknown or incompatible notebook module: {notebook_module_id}")
-        notebooks_repo = module.repository or DEFAULT_NOTEBOOKS_REPO
+        repo = module.repository or DEFAULT_NOTEBOOKS_REPO
         if module.repository is not None:
             # Guard against unsafe schemes even on trusted catalog URLs.
             validate_git_url(module.repository)
         # Never forward a client token to a curated (server-trusted) repository.
         access_token = None
     else:
-        validate_git_url(notebooks_repo)
+        validate_git_url(repo)
 
-    match form["type"]:
-        case "pdb" if pdb_source:
-            experiment = Experiment.from_pdb(
-                name, pdb_source, notebooks_repo, access_token, engine=engine, notebook_module=module
+    match source_type:
+        case "pdb" if pdb:
+            experiment = await Experiment.from_pdb(
+                session, experiment_name, pdb, repo, access_token, engine=engine, notebook_module=module
             )
         case "repo" if repo_url:
-            experiment = Experiment.from_repo(
-                name, repo_url, notebooks_repo, access_token, engine=engine, notebook_module=module
+            experiment = await Experiment.from_repo(
+                session, experiment_name, repo_url, repo, access_token, engine=engine, notebook_module=module
             )
         case "file" if simulation_files:
-            experiment = Experiment.from_files(
-                name,
-                simulation_files,
-                notebooks_repo,
-                access_token,
-                engine=engine,
-                notebook_module=module,
+            experiment = await Experiment.from_files(
+                session, experiment_name, simulation_files, repo, access_token, engine=engine, notebook_module=module
             )
         case _:
             raise BadRequest("Invalid experiment type or missing data.")
 
-    db.session.add(experiment)
-    db.session.commit()
-    return jsonify(schema.dump(experiment)), HTTPStatus.CREATED
+    await experiment.refresh(await mdrepo_token(request, [experiment]))
+    return await dump(session, ExperimentOut, experiment)
 
 
-@experiments_bp.route("/<experiment_id>", methods=["GET"])
-def get_experiment(experiment_id: str) -> Response:
-    """
-    Get an experiment by ID.
-
-    Returns:
-        Response: JSON response with the experiment data.
-    """
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
-    schema = ExperimentSchema()
-    return jsonify(schema.dump(experiment))
+@router.get(
+    "/{experiment_id}",
+    summary="Get an experiment",
+    operation_id="getExperiment",
+    response_description="Experiment",
+    responses=problems(404),
+)
+async def get(request: Request, session: SessionDep, experiment: ExperimentDep) -> ExperimentOut:
+    """Get an experiment by ID."""
+    await experiment.refresh(await mdrepo_token(request, [experiment]))
+    return await dump(session, ExperimentOut, experiment)
 
 
-@experiments_bp.route("/<experiment_id>", methods=["DELETE"])
-def delete_experiment(experiment_id: str) -> ResponseReturnValue:
-    """
-    Delete an experiment and all associated resources.
-
-    Returns:
-        Response: Empty JSON response with 204 No Content on success.
-    """
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
-    experiment.delete()
-    db.session.delete(experiment)
-    db.session.commit()
-    return "", HTTPStatus.NO_CONTENT
-
-
-@experiments_bp.route("/<experiment_id>", methods=["PATCH"])
-def edit_experiment(experiment_id: str) -> Response:
-    """
-    Update experiment properties.
-
-    Returns:
-        Response: JSON response with the updated experiment data, or an error response for invalid input.
-
-    Raises:
-        BadRequest: If no valid fields are provided for update.
-    """
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
-    data = request.get_json()
-    if not data:
-        raise BadRequest("No data provided.")
-
-    updated = False
-    # Currently only name can be edited
-    if "name" in data:
-        experiment.name = data["name"]
-        updated = True
-
-    if not updated:
-        raise BadRequest("No valid fields to update.")
-
-    db.session.commit()
-    schema = ExperimentSchema()
-    return jsonify(schema.dump(experiment))
+@router.patch(
+    "/{experiment_id}",
+    summary="Update an experiment",
+    operation_id="updateExperiment",
+    response_description="Updated experiment",
+    responses=problems(400, 404),
+)
+async def update(
+    request: Request, session: SessionDep, experiment: ExperimentDep, body: UpdateExperiment
+) -> ExperimentOut:
+    """Update experiment properties (currently only the name)."""
+    experiment.name = body.name
+    await session.commit()
+    await experiment.refresh(await mdrepo_token(request, [experiment]))
+    return await dump(session, ExperimentOut, experiment)
 
 
-@experiments_bp.route("/<experiment_id>/publish", methods=["POST"])
-def publish_experiment(experiment_id: str) -> ResponseReturnValue:
+@router.delete(
+    "/{experiment_id}",
+    status_code=HTTPStatus.NO_CONTENT,
+    response_class=Response,
+    summary="Delete an experiment",
+    operation_id="deleteExperiment",
+    response_description="Operation completed successfully",
+    responses=problems(404),
+)
+async def delete(session: SessionDep, experiment: ExperimentDep) -> None:
+    """Delete an experiment and all associated resources."""
+    await experiment.delete()
+    await session.delete(experiment)
+    await session.commit()
+
+
+@router.post(
+    "/{experiment_id}/publish",
+    summary="Publish an experiment",
+    operation_id="publishExperiment",
+    response_model=None,
+    responses={
+        201: {"model": MDPositPublication, "description": "MDPosit publication package"},
+        202: {"model": MDRepoPublication, "description": "MDRepo publication accepted"},
+        **problems(400, 401, 404),
+    },
+)
+async def publish(
+    request: Request, session: SessionDep, experiment: ExperimentDep, body: PublishRequest | None = None
+) -> JSONResponse:
     """
     Publish experiment to the requested target.
 
-    Returns:
-        Response: JSON response with the publication metadata.
-
     Raises:
-        BadRequest: If the publish target or selected files are invalid.
+        BadRequest: If MDPosit publishing lacks a simulation_path.
         Unauthorized: If the user is not authenticated with MDRepo for Invenio publishing.
+        Conflict: If there is nothing publishable yet.
     """
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
-    data = PublishSchema().load(request.get_json(silent=True) or {})
-    target = data["target"]
+    body = body or PublishRequest()
 
-    if target == "invenio":
-        token_manager = MDRepoTokenManager(session)
-        token = token_manager.get_valid_token()
-        if not token:
+    if body.target == "invenio":
+        credentials = await MDRepoTokenManager(request.session).get_credentials()
+        if credentials is None:
             raise Unauthorized("Not authenticated with MDRepo. Please authenticate first.")
 
         # Same gate as the wizard's can_publish unlock. A stale URL/bookmark
         # must not create an MDRepo draft for an experiment with nothing publishable.
+        await experiment.refresh_jobs()
         if not experiment.can_publish:
             raise Conflict("Nothing to publish yet: no finished or stopped run and no existing publication.")
 
         # TODO: Add endpoint to fetch available communities from MDRepo and allow user to select from a dropdown in the publish UI.
         #       Pass the selected community to this endpoint and use it when publishing the experiment instead of hardcoding 'ceitec'.
-        result = experiment.publish(target="invenio", community="ceitec")
-        return jsonify(result), HTTPStatus.ACCEPTED
-    if target == "mdposit":
-        simulation_path = data.get("simulation_path")
-        if not simulation_path:
-            raise BadRequest("MDPosit publish requires simulation_path.")
+        result = await experiment.publish(session, target="invenio", community="ceitec", credentials=credentials)
+        await session.commit()
+        return JSONResponse(result, status_code=HTTPStatus.ACCEPTED)
 
-        result = experiment.publish(target="mdposit", simulation_path=simulation_path)
-        return jsonify(result), HTTPStatus.CREATED
-    raise BadRequest(f"Unknown publish target: {target}")
-
-
-@experiments_bp.route("/<experiment_id>/publish/status", methods=["GET"])
-def get_publish_status(experiment_id: str) -> Response:
-    """
-    Get the durable MDRepo upload status for an experiment.
-
-    Merges the PVC state document with live Kubernetes Job state.
-
-    Returns:
-        Response: JSON response with upload state, progress, and draft metadata.
-    """
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
-    status = experiment.get_publish_status()
-    return jsonify(status)
+    if not body.simulation_path:
+        raise BadRequest("MDPosit publish requires simulation_path.")
+    result = await experiment.publish(session, target="mdposit", simulation_path=body.simulation_path)
+    await session.commit()
+    return JSONResponse(result, status_code=HTTPStatus.CREATED)
 
 
-@experiments_bp.route("/<experiment_id>/archive", methods=["POST"])
-def archive_experiment(experiment_id: str) -> ResponseReturnValue:
-    """
-    Archive an experiment: mirror its data to S3 at _archives/<id>/ and free the local PVC.
-
-    Returns:
-        Response: 202 with the archive attempt ID.
-    """
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
-    attempt_id = experiment.archive()
-    return jsonify({"attempt_id": attempt_id}), HTTPStatus.ACCEPTED
+@router.get(
+    "/{experiment_id}/publish/status",
+    summary="Get MDRepo upload status",
+    operation_id="getPublishStatus",
+    response_description="Publication status",
+    responses=problems(404),
+)
+async def publish_status(experiment: ExperimentDep) -> PublishStatus:
+    """Durable MDRepo upload status: the PVC state document merged with live Kubernetes Job state."""
+    return _publish_status.validate_python(await experiment.get_publish_status())
 
 
-@experiments_bp.route("/<experiment_id>/restore", methods=["POST"])
-def restore_experiment(experiment_id: str) -> ResponseReturnValue:
-    """
-    Restore an archived experiment from S3 back onto the local PVC.
+@router.post(
+    "/{experiment_id}/archive",
+    status_code=HTTPStatus.ACCEPTED,
+    summary="Archive an experiment",
+    description="Mirror the experiment to S3 at _archives/<id>/ and free the local PVC (verified before deletion).",
+    operation_id="archiveExperiment",
+    response_description="Archive accepted",
+    responses=problems(400, 404, 409),
+)
+async def archive(session: SessionDep, experiment: ExperimentDep) -> ArchiveAttempt:
+    """Archive an experiment."""
+    attempt_id = await experiment.archive(session)
+    return {"attempt_id": attempt_id}
 
-    Returns:
-        Response: 202 with the restore attempt ID.
-    """
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
-    attempt_id = experiment.restore()
-    return jsonify({"attempt_id": attempt_id}), HTTPStatus.ACCEPTED
+
+@router.post(
+    "/{experiment_id}/restore",
+    status_code=HTTPStatus.ACCEPTED,
+    summary="Restore an archived experiment",
+    description="Copy the S3 archive back onto the local PVC and unfreeze the experiment.",
+    operation_id="restoreExperiment",
+    response_description="Restore accepted",
+    responses=problems(400, 404, 409),
+)
+async def restore(session: SessionDep, experiment: ExperimentDep) -> ArchiveAttempt:
+    """Restore an archived experiment."""
+    attempt_id = await experiment.restore()
+    await session.commit()
+    return {"attempt_id": attempt_id}
 
 
-@experiments_bp.route("/<experiment_id>/archive/status", methods=["GET"])
-def get_archive_status(experiment_id: str) -> Response:
-    """
-    Get the archive/restore status for an experiment (status doc reconciled with live Jobs).
-
-    Returns:
-        Response: JSON with archive_state, attempt_id, direction, and reason.
-    """
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
-    return jsonify(experiment.get_archive_status())
+@router.get(
+    "/{experiment_id}/archive/status",
+    summary="Get archive/restore status",
+    operation_id="getArchiveStatus",
+    response_description="Archive status",
+    responses=problems(404),
+)
+async def archive_status(session: SessionDep, experiment: ExperimentDep) -> ArchiveStatus:
+    """Archive/restore status (status doc reconciled with live Jobs)."""
+    status = await experiment.get_archive_status()
+    await session.commit()
+    return _archive_status.validate_python(status)

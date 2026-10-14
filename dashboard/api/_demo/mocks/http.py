@@ -1,7 +1,7 @@
 """
-HTTP mocking for external services using the responses library.
+HTTP mocking for external services via a respx-backed callback router.
 
-Intercepts all requests calls at the network level, providing realistic
+Intercepts all httpx calls at the transport level, providing realistic
 responses based on actual API specifications.
 """
 
@@ -12,11 +12,9 @@ import time
 from functools import partial
 from http import HTTPStatus
 from pathlib import Path
-from typing import TYPE_CHECKING
 from urllib.parse import unquote
 from uuid import uuid4
 
-import responses
 from clients.caddy import CADDY_ADMIN_API_URL
 from config import (
     DATA_DIR,
@@ -29,6 +27,8 @@ from config import (
     METADUMP_API_URL,
     TUNER_URL,
 )
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from ..files import (
     DEFAULT_PDB_FILE,
@@ -39,9 +39,7 @@ from ..files import (
     write_running_amber_log,
 )
 from ..state import E2E, demo_state
-
-if TYPE_CHECKING:
-    from responses import ResponsesProxy
+from .router import CallbackRouter, MockRequest
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +55,7 @@ DEMO_RATE_GPU_HOUR = 3.0
 DEMO_RATE_GB_RAM_HOUR = 0.005
 
 
-def install_http_mocks(rsps: responses.RequestsMock) -> None:
+def install_http_mocks(rsps: CallbackRouter) -> None:
     """
     Install all HTTP response mocks.
 
@@ -73,10 +71,10 @@ def install_http_mocks(rsps: responses.RequestsMock) -> None:
     _install_external_download_mocks(rsps)
 
 
-def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
+def _install_mdrun_mocks(rsps: CallbackRouter) -> None:
     """Install MDRun API response mocks."""
 
-    def create_gmx_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def create_gmx_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Create a new GROMACS MDRun job.
 
@@ -123,7 +121,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
-    def create_amber_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def create_amber_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Create a new AMBER MDRun job.
 
@@ -174,7 +172,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
-    def get_gmx_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_gmx_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Get GROMACS job status.
 
@@ -204,7 +202,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         response_body = {"id": job_id, "status": job_data["status"]}
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
-    def get_amber_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_amber_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Get AMBER job status.
 
@@ -234,7 +232,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         response_body = {"id": job_id, "status": job_data["status"]}
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
-    def delete_gmx_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def delete_gmx_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Delete a GROMACS job.
 
@@ -246,7 +244,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             demo_state.mdrun_jobs.pop(match.group("job_id"), None)
         return (HTTPStatus.NO_CONTENT, {}, "")
 
-    def delete_amber_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def delete_amber_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Delete an AMBER job.
 
@@ -258,7 +256,7 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
             demo_state.mdrun_jobs.pop(match.group("job_id"), None)
         return (HTTPStatus.NO_CONTENT, {}, "")
 
-    def stop_job(request: "ResponsesProxy", engine: str) -> tuple[int, dict[str, str], str]:
+    def stop_job(request: MockRequest, engine: str) -> tuple[int, dict[str, str], str]:
         """
         Mirrors MDRun stop: marks job STOPPED, keeps the row.
 
@@ -287,36 +285,30 @@ def _install_mdrun_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.NO_CONTENT, {}, "")
 
     # GROMACS-specific endpoints
-    rsps.add_callback(responses.POST, f"{MDRUN_API_URL}/jobs/gmx", callback=create_gmx_job)
-    rsps.add_callback(responses.GET, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+"), callback=get_gmx_job)
+    rsps.add_callback("POST", f"{MDRUN_API_URL}/jobs/gmx", callback=create_gmx_job)
+    rsps.add_callback("GET", re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+"), callback=get_gmx_job)
+    rsps.add_callback("DELETE", re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+"), callback=delete_gmx_job)
     rsps.add_callback(
-        responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+"), callback=delete_gmx_job
-    )
-    rsps.add_callback(
-        responses.POST,
+        "POST",
         re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+/stop"),
         callback=partial(stop_job, engine="gmx"),
     )
 
     # AMBER-specific endpoints
-    rsps.add_callback(responses.POST, f"{MDRUN_API_URL}/jobs/amber", callback=create_amber_job)
+    rsps.add_callback("POST", f"{MDRUN_API_URL}/jobs/amber", callback=create_amber_job)
+    rsps.add_callback("GET", re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=get_amber_job)
+    rsps.add_callback("DELETE", re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=delete_amber_job)
     rsps.add_callback(
-        responses.GET, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=get_amber_job
-    )
-    rsps.add_callback(
-        responses.DELETE, re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=delete_amber_job
-    )
-    rsps.add_callback(
-        responses.POST,
+        "POST",
         re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+/stop"),
         callback=partial(stop_job, engine="amber"),
     )
 
 
-def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
+def _install_tuner_mocks(rsps: CallbackRouter) -> None:
     """Install Tuner API response mocks for GMX and AMBER engines."""
 
-    def submit_gmx_tuner_job(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def submit_gmx_tuner_job(_request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Submit a GROMACS tuning job.
 
@@ -369,7 +361,7 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
         response_body = {"id": job_id, "status": "PENDING"}
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
-    def submit_amber_tuner_job(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def submit_amber_tuner_job(_request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Submit an AMBER tuning job.
 
@@ -422,7 +414,7 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
         response_body = {"id": job_id, "status": "PENDING"}
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
-    def get_gmx_tuner_status(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_gmx_tuner_status(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Get GROMACS tuning job status.
 
@@ -456,7 +448,7 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
-    def get_amber_tuner_status(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_amber_tuner_status(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Get AMBER tuning job status.
 
@@ -492,7 +484,7 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
-    def delete_gmx_tuner_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def delete_gmx_tuner_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Delete a GROMACS tuning job.
 
@@ -504,7 +496,7 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
             demo_state.tuner_jobs.pop(match.group("job_id"), None)
         return (HTTPStatus.NO_CONTENT, {}, "")
 
-    def delete_amber_tuner_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def delete_amber_tuner_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Delete an AMBER tuning job.
 
@@ -516,32 +508,32 @@ def _install_tuner_mocks(rsps: responses.RequestsMock) -> None:
             demo_state.tuner_jobs.pop(match.group("job_id"), None)
         return (HTTPStatus.NO_CONTENT, {}, "")
 
-    rsps.add_callback(responses.POST, f"{TUNER_URL}/tuning-jobs/gmx", callback=submit_gmx_tuner_job)
+    rsps.add_callback("POST", f"{TUNER_URL}/tuning-jobs/gmx", callback=submit_gmx_tuner_job)
     rsps.add_callback(
-        responses.GET,
+        "GET",
         re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+/status"),
         callback=get_gmx_tuner_status,
     )
     rsps.add_callback(
-        responses.DELETE, re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+"), callback=delete_gmx_tuner_job
+        "DELETE", re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+"), callback=delete_gmx_tuner_job
     )
-    rsps.add_callback(responses.POST, f"{TUNER_URL}/tuning-jobs/amber", callback=submit_amber_tuner_job)
+    rsps.add_callback("POST", f"{TUNER_URL}/tuning-jobs/amber", callback=submit_amber_tuner_job)
     rsps.add_callback(
-        responses.GET,
+        "GET",
         re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/amber/[^/]+/status"),
         callback=get_amber_tuner_status,
     )
     rsps.add_callback(
-        responses.DELETE,
+        "DELETE",
         re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/amber/[^/]+"),
         callback=delete_amber_tuner_job,
     )
 
 
-def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
+def _install_mdrepo_mocks(rsps: CallbackRouter) -> None:
     """Install MDRepo (InvenioRDM) API response mocks."""
 
-    def create_mdrepo_experiment(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def create_mdrepo_experiment(_request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Create a draft record in MDRepo.
 
@@ -565,7 +557,7 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
-    def get_mdrepo_user(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_mdrepo_user(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Get current MDRepo user info.
 
@@ -577,7 +569,7 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
             return (HTTPStatus.OK, {}, json.dumps({"user": "demo"}))
         return (HTTPStatus.UNAUTHORIZED, {}, json.dumps({"message": "Unauthorized"}))
 
-    def get_mdrepo_published_record(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_mdrepo_published_record(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Check if record is published.
 
@@ -595,7 +587,7 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
             return (HTTPStatus.OK, {}, json.dumps({"id": record_id, "state": "published"}))
         return (HTTPStatus.NOT_FOUND, {}, json.dumps({"message": "Not found"}))
 
-    def get_mdrepo_draft_record(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_mdrepo_draft_record(request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Check if record exists as draft.
 
@@ -613,7 +605,7 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
             return (HTTPStatus.OK, {}, json.dumps({"id": record_id, "state": "draft"}))
         return (HTTPStatus.NOT_FOUND, {}, json.dumps({"message": "Not found"}))
 
-    def mdrepo_token_exchange(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def mdrepo_token_exchange(_request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Exchange OAuth code for token.
 
@@ -628,26 +620,26 @@ def _install_mdrepo_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
-    rsps.add_callback(responses.POST, f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}", callback=create_mdrepo_experiment)
-    rsps.add_callback(responses.GET, f"{MDREPO_URL}/api/me", callback=get_mdrepo_user)
+    rsps.add_callback("POST", f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}", callback=create_mdrepo_experiment)
+    rsps.add_callback("GET", f"{MDREPO_URL}/api/me", callback=get_mdrepo_user)
     rsps.add_callback(
-        responses.GET,
+        "GET",
         re.compile(rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/[^/]+$"),
         callback=get_mdrepo_published_record,
     )
     rsps.add_callback(
-        responses.GET,
+        "GET",
         re.compile(rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/[^/]+/draft"),
         callback=get_mdrepo_draft_record,
     )
     if MDREPO_TOKEN_URL:
-        rsps.add_callback(responses.POST, MDREPO_TOKEN_URL, callback=mdrepo_token_exchange)
+        rsps.add_callback("POST", MDREPO_TOKEN_URL, callback=mdrepo_token_exchange)
 
 
-def _install_metadump_mocks(rsps: responses.RequestsMock) -> None:
+def _install_metadump_mocks(rsps: CallbackRouter) -> None:
     """Install MetaDump API response mocks."""
 
-    def annotate_tpr(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def annotate_tpr(_request: MockRequest) -> tuple[int, dict[str, str], str]:
         job_uuid = str(uuid4())
         response_body = {
             "uuid": job_uuid,
@@ -657,7 +649,7 @@ def _install_metadump_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.CREATED, {}, json.dumps(response_body))
 
-    def get_annotate_status(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_annotate_status(request: MockRequest) -> tuple[int, dict[str, str], str]:
         match = re.search(r"/api/annotate/(?P<uuid>[^/]+)$", request.url)
         job_uuid = match.group("uuid") if match else "unknown"
         response_body = {
@@ -668,7 +660,7 @@ def _install_metadump_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
-    def get_annotate_results(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_annotate_results(request: MockRequest) -> tuple[int, dict[str, str], str]:
         match = re.search(r"/api/annotate/(?P<uuid>[^/]+)/results", request.url)
         job_uuid = match.group("uuid") if match else "unknown"
         response_body = {
@@ -682,35 +674,35 @@ def _install_metadump_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
-    def delete_annotate_job(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def delete_annotate_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
         match = re.search(r"/api/annotate/(?P<uuid>[^/]+)", request.url)
         job_uuid = match.group("uuid") if match else "unknown"
         return (HTTPStatus.OK, {}, json.dumps({"message": f"Job {job_uuid} deleted"}))
 
     if METADUMP_API_URL:
-        rsps.add_callback(responses.POST, f"{METADUMP_API_URL}/api/annotate", callback=annotate_tpr)
-        # /results must be registered before the status route — responses matches in registration order
+        rsps.add_callback("POST", f"{METADUMP_API_URL}/api/annotate", callback=annotate_tpr)
+        # /results must be registered before the status route — routes match in registration order
         rsps.add_callback(
-            responses.GET,
+            "GET",
             re.compile(rf"{re.escape(METADUMP_API_URL)}/api/annotate/[^/]+/results"),
             callback=get_annotate_results,
         )
         rsps.add_callback(
-            responses.GET,
+            "GET",
             re.compile(rf"{re.escape(METADUMP_API_URL)}/api/annotate/[^/]+$"),
             callback=get_annotate_status,
         )
         rsps.add_callback(
-            responses.DELETE,
+            "DELETE",
             re.compile(rf"{re.escape(METADUMP_API_URL)}/api/annotate/[^/]+"),
             callback=delete_annotate_job,
         )
 
 
-def _install_caddy_mocks(rsps: responses.RequestsMock) -> None:
+def _install_caddy_mocks(rsps: CallbackRouter) -> None:
     """Install Caddy admin API response mocks."""
 
-    def get_caddy_config(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_caddy_config(_request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Get current Caddy configuration.
 
@@ -734,7 +726,7 @@ def _install_caddy_mocks(rsps: responses.RequestsMock) -> None:
         }
         return (HTTPStatus.OK, {}, json.dumps(response_body))
 
-    def update_caddy_config(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def update_caddy_config(_request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Update Caddy configuration.
 
@@ -743,7 +735,7 @@ def _install_caddy_mocks(rsps: responses.RequestsMock) -> None:
         """
         return (HTTPStatus.OK, {}, "")
 
-    def delete_caddy_route(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def delete_caddy_route(_request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Delete a Caddy route.
 
@@ -752,19 +744,19 @@ def _install_caddy_mocks(rsps: responses.RequestsMock) -> None:
         """
         return (HTTPStatus.OK, {}, "")
 
-    rsps.add_callback(responses.GET, f"{CADDY_ADMIN_API_URL}/config/", callback=get_caddy_config)
-    rsps.add_callback(responses.POST, f"{CADDY_ADMIN_API_URL}/load", callback=update_caddy_config)
+    rsps.add_callback("GET", f"{CADDY_ADMIN_API_URL}/config/", callback=get_caddy_config)
+    rsps.add_callback("POST", f"{CADDY_ADMIN_API_URL}/load", callback=update_caddy_config)
     rsps.add_callback(
-        responses.DELETE,
+        "DELETE",
         re.compile(rf"{re.escape(CADDY_ADMIN_API_URL)}/id/[a-zA-Z0-9_-]+"),
         callback=delete_caddy_route,
     )
 
 
-def _install_external_download_mocks(rsps: responses.RequestsMock) -> None:
+def _install_external_download_mocks(rsps: CallbackRouter) -> None:
     """Install mocks for external file downloads (PDB, Zenodo)."""
 
-    def download_pdb_file(_request: "ResponsesProxy") -> tuple[int, dict[str, str], bytes]:
+    def download_pdb_file(_request: MockRequest) -> tuple[int, dict[str, str], bytes]:
         """
         Download a PDB file from RCSB.
 
@@ -775,7 +767,7 @@ def _install_external_download_mocks(rsps: responses.RequestsMock) -> None:
             return (HTTPStatus.OK, {}, DEFAULT_PDB_FILE.read_bytes())
         return (HTTPStatus.NOT_FOUND, {}, b"")
 
-    def download_zenodo_archive(_request: "ResponsesProxy") -> tuple[int, dict[str, str], bytes]:
+    def download_zenodo_archive(_request: MockRequest) -> tuple[int, dict[str, str], bytes]:
         """
         Download a Zenodo files archive.
 
@@ -784,7 +776,7 @@ def _install_external_download_mocks(rsps: responses.RequestsMock) -> None:
         """
         return (HTTPStatus.OK, {}, build_demo_archive_bytes())
 
-    def head_request(_request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def head_request(_request: MockRequest) -> tuple[int, dict[str, str], str]:
         """
         Handle HEAD requests for URL validation.
 
@@ -794,17 +786,17 @@ def _install_external_download_mocks(rsps: responses.RequestsMock) -> None:
         return (HTTPStatus.OK, {}, "")
 
     rsps.add_callback(
-        responses.GET, re.compile(r"https://files\.rcsb\.org/download/[A-Za-z0-9]+\.pdb"), callback=download_pdb_file
+        "GET", re.compile(r"https://files\.rcsb\.org/download/[A-Za-z0-9]+\.pdb"), callback=download_pdb_file
     )
     rsps.add_callback(
-        responses.GET,
+        "GET",
         re.compile(r"https://zenodo\.org/api/records/[0-9]+/files-archive"),
         callback=download_zenodo_archive,
     )
-    rsps.add_callback(responses.HEAD, re.compile(r"https://.*"), callback=head_request)
+    rsps.add_callback("HEAD", re.compile(r"https://.*"), callback=head_request)
 
 
-def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
+def _install_mdposit_mocks(rsps: CallbackRouter) -> None:
     """
     Install deterministic MDPosit mocks for offline demo imports.
 
@@ -812,7 +804,7 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
     real MDPosit API so the seeded analysis graphs carry real data.
     """
 
-    def get_project(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def get_project(request: MockRequest) -> tuple[int, dict[str, str], str]:
         accession = _extract_mdposit_accession(request.url)
         project = demo_state.mdposit_projects.get(accession)
         if project is None:
@@ -824,7 +816,7 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
         response_body = {key: value for key, value in project.items() if key != "files"}
         return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(response_body))
 
-    def list_project_files(request: "ResponsesProxy") -> tuple[int, dict[str, str], str]:
+    def list_project_files(request: MockRequest) -> tuple[int, dict[str, str], str]:
         accession = _extract_mdposit_accession(request.url)
         project = demo_state.mdposit_projects.get(accession)
         if project is None:
@@ -836,7 +828,7 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
         response_body = [{"name": filename} for filename in project.get("files", [])]
         return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(response_body))
 
-    def download_project_file(request: "ResponsesProxy") -> tuple[int, dict[str, str], bytes]:
+    def download_project_file(request: MockRequest) -> tuple[int, dict[str, str], bytes]:
         match = re.search(r"/projects/[^/]+/files/(?P<filename>.+)$", request.url)
         if not match:
             return (HTTPStatus.NOT_FOUND, {}, b"")
@@ -854,17 +846,17 @@ def _install_mdposit_mocks(rsps: responses.RequestsMock) -> None:
 
     project_base_pattern = _mdposit_project_base_pattern()
     rsps.add_callback(
-        responses.GET,
+        "GET",
         re.compile(rf"{project_base_pattern}/(?P<accession>[^/]+)/files/(?P<filename>.+)$"),
         callback=download_project_file,
     )
     rsps.add_callback(
-        responses.GET,
+        "GET",
         re.compile(rf"{project_base_pattern}/(?P<accession>[^/]+)/files$"),
         callback=list_project_files,
     )
     rsps.add_callback(
-        responses.GET,
+        "GET",
         re.compile(rf"{project_base_pattern}/(?P<accession>[^/]+)$"),
         callback=get_project,
     )
@@ -951,27 +943,22 @@ def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
             deffnm = str(tpr_name).removesuffix(".tpr")
             write_gmx_checkpoint(str(job_data.get("experiment_id", "")), deffnm)
 
-        try:
-            from extensions import db  # ruff:ignore[import-outside-top-level]
-            from models import AmberJob, GromacsJob  # ruff:ignore[import-outside-top-level]
+        _persist_finished_metrics(job_id)
 
-            # Determine job type by checking for engine-specific fields
-            if job_data.get("prmtop_name"):
-                # AMBER job
-                amber_job = AmberJob.query.filter_by(id=job_id).first()
-                if amber_job is not None:
-                    amber_job._performance = 62.5  # ruff:ignore[private-member-access]
-                    amber_job._finish_timestamp = int(time.time())  # ruff:ignore[private-member-access]
-                    db.session.commit()
-            else:
-                # GROMACS job (default)
-                gmx_job = GromacsJob.query.filter_by(id=job_id).first()
-                if gmx_job is not None:
-                    gmx_job._performance = 62.5  # ruff:ignore[private-member-access]
-                    gmx_job._finish_timestamp = int(time.time())  # ruff:ignore[private-member-access]
-                    db.session.commit()
-        except Exception:
-            pass
+
+def _persist_finished_metrics(job_id: str) -> None:
+    """Store the finished run's performance and finish time the way the API would cache them (best effort)."""
+    engine = create_engine(f"sqlite:///{DATA_DIR / 'experiments.db'}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE simulation_jobs SET performance = 62.5, finish_timestamp = :finished WHERE id = :id"),
+                {"finished": int(time.time()), "id": job_id},
+            )
+    except SQLAlchemyError:
+        logger.debug("Could not persist demo metrics for job %s", job_id, exc_info=True)
+    finally:
+        engine.dispose()
 
 
 def _sync_gmx_log_progress(job_data: dict, progress_ratio: float) -> None:

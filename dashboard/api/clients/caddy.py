@@ -1,18 +1,18 @@
-import json
 import logging
 import uuid
 from http import HTTPStatus
 
-import requests
-from requests.exceptions import RequestException
+import httpx
+
+from clients.http import client
 
 logger = logging.getLogger(__name__)
 CADDY_ADMIN_API_URL = "http://localhost:2019"
 
 
-def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> str | None:
+async def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> str | None:
     """
-    Add a new proxy route inside the @protected (authenticated) Caddy route group.
+    Add a proxy route inside the @protected (authenticated) Caddy route group.
 
     Args:
         path: The path to match for the route (e.g., "/user/admin/dash/notebook/experiment1").
@@ -33,8 +33,7 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
     }
 
     try:
-        # Load current config
-        resp = requests.get(f"{CADDY_ADMIN_API_URL}/config/", timeout=5)
+        resp = await client().get(f"{CADDY_ADMIN_API_URL}/config/", timeout=5)
         resp.raise_for_status()
         config = resp.json()
 
@@ -54,35 +53,28 @@ def add_proxy_route(path: str, upstream: str, route_id: str | None = None) -> st
         )
         routes.insert(dash_index, new_route)
 
-        # Update Caddy config
-        headers = {"Content-Type": "application/json"}
-        load_resp = requests.post(f"{CADDY_ADMIN_API_URL}/load", headers=headers, data=json.dumps(config), timeout=5)
+        load_resp = await client().post(f"{CADDY_ADMIN_API_URL}/load", json=config, timeout=5)
         load_resp.raise_for_status()
         return route_id
 
-    except requests.RequestException:
+    except httpx.HTTPError:
         logger.exception(f"Error adding route '{route_id}' to Caddy")
         return None
 
 
-def remove_route(route_id: str) -> bool:
+async def remove_route(route_id: str) -> bool:
     """
-    Remove a route from the Caddy configuration using its ID.
-
-    Args:
-        route_id: The ID of the route to remove.
+    Remove a route from the Caddy configuration by ID.
 
     Returns:
-        True if the route was removed successfully, False otherwise.
+        True if the route was removed (or was already gone), False otherwise.
     """
-    url = f"{CADDY_ADMIN_API_URL}/id/{route_id}"
-
     try:
-        response = requests.delete(url, timeout=5)
+        response = await client().delete(f"{CADDY_ADMIN_API_URL}/id/{route_id}", timeout=5)
         if response.status_code == HTTPStatus.NOT_FOUND:
             return True  # Already gone; deletion stays idempotent.
         response.raise_for_status()
         return True
-    except RequestException:
+    except httpx.HTTPError:
         logger.exception(f"Error when removing route '{route_id}' from Caddy")
         return False

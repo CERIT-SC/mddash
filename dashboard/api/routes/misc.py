@@ -1,53 +1,91 @@
 import time
+from typing import Literal
 
-from config import API_PREFIX, DATA_DIR, PVC_SIZE
-from flask import Blueprint, Response, jsonify
+from clients.k8s import parse_memory
+from config import API_PREFIX, DATA_DIR, MAX_NOTEBOOKS, PVC_SIZE
+from enums import NotebookTier as NotebookTierValue
+from fastapi import APIRouter
+from models.notebook import get_tier_resources
 from notebook_modules import load_catalog
+from pydantic import TypeAdapter
+from schemas.experiment import Metrics, NotebookConfig, NotebookModule, NotebookTier
 from utils import get_du_size
 
-misc_bp = Blueprint("misc", __name__, url_prefix=API_PREFIX)
+from routes._responses import problems
+
+router = APIRouter(prefix=API_PREFIX)
 
 # The API sidecar starts with the user server pod, so process uptime ≈ server uptime.
 _STARTED_AT = time.monotonic()
 
-
-@misc_bp.route("/", methods=["GET"])
-@misc_bp.route("/health", methods=["GET"])
-def index() -> Response:
-    """
-    Health check endpoint.
-
-    Returns:
-        Response: JSON response confirming the API is running.
-    """
-    return jsonify("API is up!")
+Health = Literal["API is up!"]
+_modules = TypeAdapter(list[NotebookModule])
 
 
-@misc_bp.route("/notebook-modules", methods=["GET"])
-def get_notebook_modules() -> Response:
-    """
-    Return curated notebook module display metadata (no internal paths or URLs).
-
-    Returns:
-        JSON response with the list of curated notebook modules.
-    """
-    catalog = load_catalog()
-    return jsonify(catalog.to_public())
+@router.get(
+    "/", tags=["System"], summary="Check API health", operation_id="getApiRoot", response_description="API is running"
+)
+async def index() -> Health:
+    """Health check."""
+    return "API is up!"
 
 
-@misc_bp.route("/metrics", methods=["GET"])
-def get_metrics() -> Response:
-    """
-    Get storage usage and server uptime for the current user.
+@router.get(
+    "/health",
+    tags=["System"],
+    summary="Check API health",
+    operation_id="getHealth",
+    response_description="API is running",
+)
+async def health() -> Health:
+    """Health check."""
+    return "API is up!"
 
-    Returns:
-        Response: JSON response with used/limit storage in bytes (used is null
-        until the du monitor records a measurement) and the server uptime in seconds.
-    """
-    from clients import k8s  # ruff:ignore[import-outside-top-level]
 
-    return jsonify({
-        "storage_used_bytes": get_du_size(DATA_DIR),
-        "storage_limit_bytes": k8s.parse_memory(PVC_SIZE),
-        "uptime_seconds": round(time.monotonic() - _STARTED_AT),
-    })
+@router.get(
+    "/notebook-modules",
+    tags=["Notebooks"],
+    summary="List curated notebook modules",
+    operation_id="listNotebookModules",
+    response_description="Public notebook module catalog",
+    responses=problems(),
+)
+async def get_notebook_modules() -> list[NotebookModule]:
+    """Curated notebook module display metadata (no internal paths or URLs)."""
+    return _modules.validate_python(load_catalog().to_public())
+
+
+@router.get(
+    "/metrics",
+    tags=["System"],
+    summary="Get resource usage and limits",
+    operation_id="getMetrics",
+    response_description="Resource metrics",
+    responses=problems(),
+)
+async def get_metrics() -> Metrics:
+    """Storage used/limit in bytes (used is null until the du monitor measures) and server uptime."""
+    return Metrics(
+        storage_used_bytes=get_du_size(DATA_DIR),
+        storage_limit_bytes=parse_memory(PVC_SIZE),
+        uptime_seconds=round(time.monotonic() - _STARTED_AT),
+    )
+
+
+@router.get(
+    "/notebook-config",
+    tags=["Notebooks"],
+    summary="Get notebook resource configuration",
+    operation_id="getNotebookConfig",
+    response_description="Notebook tiers and default",
+    responses=problems(),
+)
+async def get_notebook_config() -> NotebookConfig:
+    """Available notebook resource tiers, the default tier, and the concurrent-notebook limit."""
+    tiers = []
+    for tier in NotebookTierValue:
+        resources = get_tier_resources(tier)
+        tiers.append(
+            NotebookTier(value=tier, cpuLimit=resources["limits"]["cpu"], memoryLimit=resources["limits"]["memory"])
+        )
+    return NotebookConfig(tiers=tiers, defaultTier=NotebookTierValue.SMALL, concurrentLimit=MAX_NOTEBOOKS)

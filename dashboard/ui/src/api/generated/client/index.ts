@@ -38,21 +38,17 @@ import type {
   ArchiveAttempt,
   ArchiveStatus,
   AuthorizeMDRepoParams,
-  BadRequestResponse,
   CompleteMDRepoAuthorizationParams,
-  ConflictResponse,
   CreateExperimentForm,
   Experiment,
   ExtendGromacsJobRequest,
   FileInfo,
-  ForbiddenResponse,
   GetAmberJobLogParams,
   GetAnalysisJobLogsParams,
   GetAnalysisResultParams,
   GetGromacsJobLogParams,
   GromacsJob,
   GromacsJobRequest,
-  HealthResponse,
   ListAnalysisJobsParams,
   ListAnalysisResultVariantsParams,
   ListAnalysisResultsParams,
@@ -62,25 +58,17 @@ import type {
   MDRepoStatus,
   Message,
   Metrics,
-  NoContentResponse,
-  NotFoundResponse,
   Notebook,
   NotebookConfig,
   NotebookModule,
-  ProblemResponse,
+  Problem,
   PublishRequest,
   PublishStatus,
-  RedirectResponse,
-  ServiceUnavailableResponse,
   Simulation,
   SimulationWrite,
   StartNotebookRequest,
-  StartTunerJobParams,
-  TextValueResponse,
   TunerJob,
   TunerJobRequest,
-  UnauthorizedResponse,
-  UnprocessableEntityResponse,
   UpdateExperiment
 } from '../models';
 
@@ -115,7 +103,7 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
 };
 
 export type getApiRootResponse200 = {
-  data: HealthResponse
+  data: 'API is up!'
   status: 200
 }
 
@@ -133,6 +121,7 @@ export const getGetApiRootUrl = () => {
 }
 
 /**
+ * Health check.
  * @summary Check API health
  */
 export const getApiRoot = async ( options?: RequestInit): Promise<getApiRootResponseSuccess> => {
@@ -241,7 +230,7 @@ export function useGetApiRoot<TData = Awaited<ReturnType<typeof getApiRoot>>, TE
 
 
 export type getHealthResponse200 = {
-  data: HealthResponse
+  data: 'API is up!'
   status: 200
 }
 
@@ -259,6 +248,7 @@ export const getGetHealthUrl = () => {
 }
 
 /**
+ * Health check.
  * @summary Check API health
  */
 export const getHealth = async ( options?: RequestInit): Promise<getHealthResponseSuccess> => {
@@ -372,7 +362,7 @@ export type listNotebookModulesResponse200 = {
 }
 
 export type listNotebookModulesResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200>
 }
 
@@ -392,6 +382,7 @@ export const getListNotebookModulesUrl = () => {
 }
 
 /**
+ * Curated notebook module display metadata (no internal paths or URLs).
  * @summary List curated notebook modules
  */
 export const listNotebookModules = async ( options?: RequestInit): Promise<listNotebookModulesResponseSuccess> => {
@@ -431,7 +422,7 @@ export const getListNotebookModulesQueryKey = () => {
     }
 
 
-export const getListNotebookModulesQueryOptions = <TData = Awaited<ReturnType<typeof listNotebookModules>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listNotebookModules>>, TError, TData>>, fetch?: RequestInit}
+export const getListNotebookModulesQueryOptions = <TData = Awaited<ReturnType<typeof listNotebookModules>>, TError = globalThis.Error & { info?: Problem; status?: number }>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listNotebookModules>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -450,10 +441,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListNotebookModulesQueryResult = NonNullable<Awaited<ReturnType<typeof listNotebookModules>>>
-export type ListNotebookModulesQueryError = globalThis.Error & { info?: ProblemResponse; status?: number }
+export type ListNotebookModulesQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useListNotebookModules<TData = Awaited<ReturnType<typeof listNotebookModules>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListNotebookModules<TData = Awaited<ReturnType<typeof listNotebookModules>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listNotebookModules>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listNotebookModules>>,
@@ -463,7 +454,7 @@ export function useListNotebookModules<TData = Awaited<ReturnType<typeof listNot
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListNotebookModules<TData = Awaited<ReturnType<typeof listNotebookModules>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListNotebookModules<TData = Awaited<ReturnType<typeof listNotebookModules>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listNotebookModules>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listNotebookModules>>,
@@ -473,7 +464,7 @@ export function useListNotebookModules<TData = Awaited<ReturnType<typeof listNot
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListNotebookModules<TData = Awaited<ReturnType<typeof listNotebookModules>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListNotebookModules<TData = Awaited<ReturnType<typeof listNotebookModules>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listNotebookModules>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -481,7 +472,7 @@ export function useListNotebookModules<TData = Awaited<ReturnType<typeof listNot
  * @summary List curated notebook modules
  */
 
-export function useListNotebookModules<TData = Awaited<ReturnType<typeof listNotebookModules>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListNotebookModules<TData = Awaited<ReturnType<typeof listNotebookModules>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listNotebookModules>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -505,7 +496,7 @@ export type getMetricsResponse200 = {
 }
 
 export type getMetricsResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200>
 }
 
@@ -525,6 +516,7 @@ export const getGetMetricsUrl = () => {
 }
 
 /**
+ * Storage used/limit in bytes (used is null until the du monitor measures) and server uptime.
  * @summary Get resource usage and limits
  */
 export const getMetrics = async ( options?: RequestInit): Promise<getMetricsResponseSuccess> => {
@@ -564,7 +556,7 @@ export const getGetMetricsQueryKey = () => {
     }
 
 
-export const getGetMetricsQueryOptions = <TData = Awaited<ReturnType<typeof getMetrics>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMetrics>>, TError, TData>>, fetch?: RequestInit}
+export const getGetMetricsQueryOptions = <TData = Awaited<ReturnType<typeof getMetrics>>, TError = globalThis.Error & { info?: Problem; status?: number }>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMetrics>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -583,10 +575,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetMetricsQueryResult = NonNullable<Awaited<ReturnType<typeof getMetrics>>>
-export type GetMetricsQueryError = globalThis.Error & { info?: ProblemResponse; status?: number }
+export type GetMetricsQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetMetrics<TData = Awaited<ReturnType<typeof getMetrics>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useGetMetrics<TData = Awaited<ReturnType<typeof getMetrics>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMetrics>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getMetrics>>,
@@ -596,7 +588,7 @@ export function useGetMetrics<TData = Awaited<ReturnType<typeof getMetrics>>, TE
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetMetrics<TData = Awaited<ReturnType<typeof getMetrics>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useGetMetrics<TData = Awaited<ReturnType<typeof getMetrics>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMetrics>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getMetrics>>,
@@ -606,7 +598,7 @@ export function useGetMetrics<TData = Awaited<ReturnType<typeof getMetrics>>, TE
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetMetrics<TData = Awaited<ReturnType<typeof getMetrics>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useGetMetrics<TData = Awaited<ReturnType<typeof getMetrics>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMetrics>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -614,7 +606,7 @@ export function useGetMetrics<TData = Awaited<ReturnType<typeof getMetrics>>, TE
  * @summary Get resource usage and limits
  */
 
-export function useGetMetrics<TData = Awaited<ReturnType<typeof getMetrics>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useGetMetrics<TData = Awaited<ReturnType<typeof getMetrics>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMetrics>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -638,7 +630,7 @@ export type getNotebookConfigResponse200 = {
 }
 
 export type getNotebookConfigResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200>
 }
 
@@ -658,6 +650,7 @@ export const getGetNotebookConfigUrl = () => {
 }
 
 /**
+ * Available notebook resource tiers, the default tier, and the concurrent-notebook limit.
  * @summary Get notebook resource configuration
  */
 export const getNotebookConfig = async ( options?: RequestInit): Promise<getNotebookConfigResponseSuccess> => {
@@ -697,7 +690,7 @@ export const getGetNotebookConfigQueryKey = () => {
     }
 
 
-export const getGetNotebookConfigQueryOptions = <TData = Awaited<ReturnType<typeof getNotebookConfig>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotebookConfig>>, TError, TData>>, fetch?: RequestInit}
+export const getGetNotebookConfigQueryOptions = <TData = Awaited<ReturnType<typeof getNotebookConfig>>, TError = globalThis.Error & { info?: Problem; status?: number }>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotebookConfig>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -716,10 +709,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetNotebookConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getNotebookConfig>>>
-export type GetNotebookConfigQueryError = globalThis.Error & { info?: ProblemResponse; status?: number }
+export type GetNotebookConfigQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetNotebookConfig<TData = Awaited<ReturnType<typeof getNotebookConfig>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useGetNotebookConfig<TData = Awaited<ReturnType<typeof getNotebookConfig>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotebookConfig>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getNotebookConfig>>,
@@ -729,7 +722,7 @@ export function useGetNotebookConfig<TData = Awaited<ReturnType<typeof getNotebo
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetNotebookConfig<TData = Awaited<ReturnType<typeof getNotebookConfig>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useGetNotebookConfig<TData = Awaited<ReturnType<typeof getNotebookConfig>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotebookConfig>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getNotebookConfig>>,
@@ -739,7 +732,7 @@ export function useGetNotebookConfig<TData = Awaited<ReturnType<typeof getNotebo
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetNotebookConfig<TData = Awaited<ReturnType<typeof getNotebookConfig>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useGetNotebookConfig<TData = Awaited<ReturnType<typeof getNotebookConfig>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotebookConfig>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -747,7 +740,7 @@ export function useGetNotebookConfig<TData = Awaited<ReturnType<typeof getNotebo
  * @summary Get notebook resource configuration
  */
 
-export function useGetNotebookConfig<TData = Awaited<ReturnType<typeof getNotebookConfig>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useGetNotebookConfig<TData = Awaited<ReturnType<typeof getNotebookConfig>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotebookConfig>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -771,7 +764,7 @@ export type listExperimentsResponse200 = {
 }
 
 export type listExperimentsResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200>
 }
 
@@ -791,6 +784,10 @@ export const getListExperimentsUrl = () => {
 }
 
 /**
+ * List all experiments.
+ *
+ * The dashboard polls this every 5s while any job is live; remote state of
+ * all experiments is fetched concurrently.
  * @summary List experiments
  */
 export const listExperiments = async ( options?: RequestInit): Promise<listExperimentsResponseSuccess> => {
@@ -830,7 +827,7 @@ export const getListExperimentsQueryKey = () => {
     }
 
 
-export const getListExperimentsQueryOptions = <TData = Awaited<ReturnType<typeof listExperiments>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExperiments>>, TError, TData>>, fetch?: RequestInit}
+export const getListExperimentsQueryOptions = <TData = Awaited<ReturnType<typeof listExperiments>>, TError = globalThis.Error & { info?: Problem; status?: number }>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExperiments>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -849,10 +846,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListExperimentsQueryResult = NonNullable<Awaited<ReturnType<typeof listExperiments>>>
-export type ListExperimentsQueryError = globalThis.Error & { info?: ProblemResponse; status?: number }
+export type ListExperimentsQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useListExperiments<TData = Awaited<ReturnType<typeof listExperiments>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListExperiments<TData = Awaited<ReturnType<typeof listExperiments>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExperiments>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listExperiments>>,
@@ -862,7 +859,7 @@ export function useListExperiments<TData = Awaited<ReturnType<typeof listExperim
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListExperiments<TData = Awaited<ReturnType<typeof listExperiments>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListExperiments<TData = Awaited<ReturnType<typeof listExperiments>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExperiments>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listExperiments>>,
@@ -872,7 +869,7 @@ export function useListExperiments<TData = Awaited<ReturnType<typeof listExperim
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListExperiments<TData = Awaited<ReturnType<typeof listExperiments>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListExperiments<TData = Awaited<ReturnType<typeof listExperiments>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExperiments>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -880,7 +877,7 @@ export function useListExperiments<TData = Awaited<ReturnType<typeof listExperim
  * @summary List experiments
  */
 
-export function useListExperiments<TData = Awaited<ReturnType<typeof listExperiments>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListExperiments<TData = Awaited<ReturnType<typeof listExperiments>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExperiments>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -904,12 +901,12 @@ export type createExperimentResponse201 = {
 }
 
 export type createExperimentResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type createExperimentResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 201 | 400>
 }
 
@@ -929,32 +926,33 @@ export const getCreateExperimentUrl = () => {
 }
 
 /**
+ * Create a new experiment from PDB, repository URL, or uploaded files.
  * @summary Create an experiment
  */
 export const createExperiment = async (createExperimentForm: CreateExperimentForm, options?: RequestInit): Promise<createExperimentResponseSuccess> => {
     const formData = new FormData();
 formData.append(`experiment-name`, createExperimentForm['experiment-name']);
 formData.append(`type`, createExperimentForm.type);
-if(createExperimentForm.pdb !== undefined) {
+if(createExperimentForm['simulation-files'] !== undefined) {
+ createExperimentForm['simulation-files'].forEach(value => formData.append(`simulation-files`, value));
+ }
+if(createExperimentForm.pdb !== undefined && createExperimentForm.pdb !== null) {
  formData.append(`pdb`, createExperimentForm.pdb);
  }
-if(createExperimentForm['repo-url'] !== undefined) {
+if(createExperimentForm['repo-url'] !== undefined && createExperimentForm['repo-url'] !== null) {
  formData.append(`repo-url`, createExperimentForm['repo-url']);
  }
-if(createExperimentForm['notebooks-repo'] !== undefined) {
+if(createExperimentForm['notebooks-repo'] !== undefined && createExperimentForm['notebooks-repo'] !== null) {
  formData.append(`notebooks-repo`, createExperimentForm['notebooks-repo']);
  }
-if(createExperimentForm['access-token'] !== undefined) {
+if(createExperimentForm['access-token'] !== undefined && createExperimentForm['access-token'] !== null) {
  formData.append(`access-token`, createExperimentForm['access-token']);
  }
-if(createExperimentForm['notebook-module'] !== undefined) {
+if(createExperimentForm['notebook-module'] !== undefined && createExperimentForm['notebook-module'] !== null) {
  formData.append(`notebook-module`, createExperimentForm['notebook-module']);
  }
 if(createExperimentForm.engine !== undefined) {
  formData.append(`engine`, createExperimentForm.engine);
- }
-if(createExperimentForm['simulation-files'] !== undefined) {
- createExperimentForm['simulation-files'].forEach(value => formData.append(`simulation-files`, value));
  }
 
   const res = await fetch(getCreateExperimentUrl(),
@@ -987,7 +985,7 @@ if(createExperimentForm['simulation-files'] !== undefined) {
 
 export const getCreateExperimentMutationKey = () => ['createExperiment'] as const;
 
-export const getCreateExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number },
+export const getCreateExperimentMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExperiment>>, TError,CreateExperimentMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof createExperiment>>, TError,CreateExperimentMutationVariables, TContext> => {
 
@@ -1016,13 +1014,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type CreateExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof createExperiment>>>
     export type CreateExperimentMutationBody = CreateExperimentForm
-    export type CreateExperimentMutationError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }
+    export type CreateExperimentMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type CreateExperimentMutationVariables = {data: CreateExperimentForm}
 
     /**
  * @summary Create an experiment
  */
-export const useCreateExperiment = <TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number },
+export const useCreateExperiment = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createExperiment>>, TError,CreateExperimentMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createExperiment>>,
@@ -1039,12 +1037,12 @@ export type getExperimentResponse200 = {
 }
 
 export type getExperimentResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type getExperimentResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 404>
 }
 
@@ -1064,6 +1062,7 @@ export const getGetExperimentUrl = (experimentId: string,) => {
 }
 
 /**
+ * Get an experiment by ID.
  * @summary Get an experiment
  */
 export const getExperiment = async (experimentId: string, options?: RequestInit): Promise<getExperimentResponseSuccess> => {
@@ -1103,7 +1102,7 @@ export const getGetExperimentQueryKey = (experimentId: string,) => {
     }
 
 
-export const getGetExperimentQueryOptions = <TData = Awaited<ReturnType<typeof getExperiment>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperiment>>, TError, TData>>, fetch?: RequestInit}
+export const getGetExperimentQueryOptions = <TData = Awaited<ReturnType<typeof getExperiment>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperiment>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -1122,10 +1121,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetExperimentQueryResult = NonNullable<Awaited<ReturnType<typeof getExperiment>>>
-export type GetExperimentQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+export type GetExperimentQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetExperiment<TData = Awaited<ReturnType<typeof getExperiment>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetExperiment<TData = Awaited<ReturnType<typeof getExperiment>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperiment>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getExperiment>>,
@@ -1135,7 +1134,7 @@ export function useGetExperiment<TData = Awaited<ReturnType<typeof getExperiment
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetExperiment<TData = Awaited<ReturnType<typeof getExperiment>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetExperiment<TData = Awaited<ReturnType<typeof getExperiment>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperiment>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getExperiment>>,
@@ -1145,7 +1144,7 @@ export function useGetExperiment<TData = Awaited<ReturnType<typeof getExperiment
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetExperiment<TData = Awaited<ReturnType<typeof getExperiment>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetExperiment<TData = Awaited<ReturnType<typeof getExperiment>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperiment>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -1153,7 +1152,7 @@ export function useGetExperiment<TData = Awaited<ReturnType<typeof getExperiment
  * @summary Get an experiment
  */
 
-export function useGetExperiment<TData = Awaited<ReturnType<typeof getExperiment>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetExperiment<TData = Awaited<ReturnType<typeof getExperiment>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getExperiment>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -1177,17 +1176,17 @@ export type updateExperimentResponse200 = {
 }
 
 export type updateExperimentResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type updateExperimentResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type updateExperimentResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 400 | 404>
 }
 
@@ -1207,6 +1206,7 @@ export const getUpdateExperimentUrl = (experimentId: string,) => {
 }
 
 /**
+ * Update experiment properties (currently only the name).
  * @summary Update an experiment
  */
 export const updateExperiment = async (experimentId: string,
@@ -1256,7 +1256,7 @@ const res = await fetch(getUpdateExperimentUrl(experimentId),
 
 export const getUpdateExperimentMutationKey = () => ['updateExperiment'] as const;
 
-export const getUpdateExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const getUpdateExperimentMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExperiment>>, TError,UpdateExperimentMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateExperiment>>, TError,UpdateExperimentMutationVariables, TContext> => {
 
@@ -1285,13 +1285,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type UpdateExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof updateExperiment>>>
     export type UpdateExperimentMutationBody = UpdateExperiment
-    export type UpdateExperimentMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type UpdateExperimentMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type UpdateExperimentMutationVariables = {experimentId: string;data: UpdateExperiment}
 
     /**
  * @summary Update an experiment
  */
-export const useUpdateExperiment = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const useUpdateExperiment = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExperiment>>, TError,UpdateExperimentMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateExperiment>>,
@@ -1303,17 +1303,17 @@ export const useUpdateExperiment = <TError = globalThis.Error & { info?: BadRequ
     }
 
 export type deleteExperimentResponse204 = {
-  data: NoContentResponse
+  data: void
   status: 204
 }
 
 export type deleteExperimentResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type deleteExperimentResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 204 | 404>
 }
 
@@ -1333,6 +1333,7 @@ export const getDeleteExperimentUrl = (experimentId: string,) => {
 }
 
 /**
+ * Delete an experiment and all associated resources.
  * @summary Delete an experiment
  */
 export const deleteExperiment = async (experimentId: string, options?: RequestInit): Promise<deleteExperimentResponseSuccess> => {
@@ -1357,7 +1358,7 @@ export const deleteExperiment = async (experimentId: string, options?: RequestIn
     err.status = res.status;
     throw err;
   }
-  const data: deleteExperimentResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  const data: deleteExperimentResponseSuccess['data'] = body ? JSON.parse(body) : undefined
   return { data, status: res.status, headers: res.headers } as deleteExperimentResponseSuccess
 }
 
@@ -1367,7 +1368,7 @@ export const deleteExperiment = async (experimentId: string, options?: RequestIn
 
 export const getDeleteExperimentMutationKey = () => ['deleteExperiment'] as const;
 
-export const getDeleteExperimentMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+export const getDeleteExperimentMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteExperiment>>, TError,DeleteExperimentMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteExperiment>>, TError,DeleteExperimentMutationVariables, TContext> => {
 
@@ -1396,13 +1397,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type DeleteExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteExperiment>>>
 
-    export type DeleteExperimentMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+    export type DeleteExperimentMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type DeleteExperimentMutationVariables = {experimentId: string}
 
     /**
  * @summary Delete an experiment
  */
-export const useDeleteExperiment = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+export const useDeleteExperiment = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteExperiment>>, TError,DeleteExperimentMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteExperiment>>,
@@ -1424,22 +1425,22 @@ export type publishExperimentResponse202 = {
 }
 
 export type publishExperimentResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type publishExperimentResponse401 = {
-  data: UnauthorizedResponse
+  data: Problem
   status: 401
 }
 
 export type publishExperimentResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type publishExperimentResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 201 | 202 | 400 | 401 | 404>
 }
 
@@ -1459,6 +1460,7 @@ export const getPublishExperimentUrl = (experimentId: string,) => {
 }
 
 /**
+ * Publish experiment to the requested target.
  * @summary Publish an experiment
  */
 export const publishExperiment = async (experimentId: string,
@@ -1508,7 +1510,7 @@ const res = await fetch(getPublishExperimentUrl(experimentId),
 
 export const getPublishExperimentMutationKey = () => ['publishExperiment'] as const;
 
-export const getPublishExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | UnauthorizedResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const getPublishExperimentMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishExperiment>>, TError,PublishExperimentMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof publishExperiment>>, TError,PublishExperimentMutationVariables, TContext> => {
 
@@ -1537,13 +1539,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type PublishExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof publishExperiment>>>
     export type PublishExperimentMutationBody = PublishRequest | undefined
-    export type PublishExperimentMutationError = globalThis.Error & { info?: BadRequestResponse | UnauthorizedResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type PublishExperimentMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type PublishExperimentMutationVariables = {experimentId: string;data?: PublishRequest}
 
     /**
  * @summary Publish an experiment
  */
-export const usePublishExperiment = <TError = globalThis.Error & { info?: BadRequestResponse | UnauthorizedResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const usePublishExperiment = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof publishExperiment>>, TError,PublishExperimentMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof publishExperiment>>,
@@ -1560,12 +1562,12 @@ export type getPublishStatusResponse200 = {
 }
 
 export type getPublishStatusResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type getPublishStatusResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 404>
 }
 
@@ -1585,6 +1587,7 @@ export const getGetPublishStatusUrl = (experimentId: string,) => {
 }
 
 /**
+ * Durable MDRepo upload status: the PVC state document merged with live Kubernetes Job state.
  * @summary Get MDRepo upload status
  */
 export const getPublishStatus = async (experimentId: string, options?: RequestInit): Promise<getPublishStatusResponseSuccess> => {
@@ -1624,7 +1627,7 @@ export const getGetPublishStatusQueryKey = (experimentId: string,) => {
     }
 
 
-export const getGetPublishStatusQueryOptions = <TData = Awaited<ReturnType<typeof getPublishStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublishStatus>>, TError, TData>>, fetch?: RequestInit}
+export const getGetPublishStatusQueryOptions = <TData = Awaited<ReturnType<typeof getPublishStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublishStatus>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -1643,10 +1646,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetPublishStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getPublishStatus>>>
-export type GetPublishStatusQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+export type GetPublishStatusQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetPublishStatus<TData = Awaited<ReturnType<typeof getPublishStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetPublishStatus<TData = Awaited<ReturnType<typeof getPublishStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublishStatus>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getPublishStatus>>,
@@ -1656,7 +1659,7 @@ export function useGetPublishStatus<TData = Awaited<ReturnType<typeof getPublish
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetPublishStatus<TData = Awaited<ReturnType<typeof getPublishStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetPublishStatus<TData = Awaited<ReturnType<typeof getPublishStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublishStatus>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getPublishStatus>>,
@@ -1666,7 +1669,7 @@ export function useGetPublishStatus<TData = Awaited<ReturnType<typeof getPublish
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetPublishStatus<TData = Awaited<ReturnType<typeof getPublishStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetPublishStatus<TData = Awaited<ReturnType<typeof getPublishStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublishStatus>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -1674,7 +1677,7 @@ export function useGetPublishStatus<TData = Awaited<ReturnType<typeof getPublish
  * @summary Get MDRepo upload status
  */
 
-export function useGetPublishStatus<TData = Awaited<ReturnType<typeof getPublishStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetPublishStatus<TData = Awaited<ReturnType<typeof getPublishStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getPublishStatus>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -1698,22 +1701,22 @@ export type archiveExperimentResponse202 = {
 }
 
 export type archiveExperimentResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type archiveExperimentResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type archiveExperimentResponse409 = {
-  data: ConflictResponse
+  data: Problem
   status: 409
 }
 
 export type archiveExperimentResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 202 | 400 | 404 | 409>
 }
 
@@ -1768,7 +1771,7 @@ export const archiveExperiment = async (experimentId: string, options?: RequestI
 
 export const getArchiveExperimentMutationKey = () => ['archiveExperiment'] as const;
 
-export const getArchiveExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+export const getArchiveExperimentMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveExperiment>>, TError,ArchiveExperimentMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof archiveExperiment>>, TError,ArchiveExperimentMutationVariables, TContext> => {
 
@@ -1797,13 +1800,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type ArchiveExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof archiveExperiment>>>
 
-    export type ArchiveExperimentMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number }
+    export type ArchiveExperimentMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type ArchiveExperimentMutationVariables = {experimentId: string}
 
     /**
  * @summary Archive an experiment
  */
-export const useArchiveExperiment = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+export const useArchiveExperiment = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveExperiment>>, TError,ArchiveExperimentMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof archiveExperiment>>,
@@ -1820,22 +1823,22 @@ export type restoreExperimentResponse202 = {
 }
 
 export type restoreExperimentResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type restoreExperimentResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type restoreExperimentResponse409 = {
-  data: ConflictResponse
+  data: Problem
   status: 409
 }
 
 export type restoreExperimentResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 202 | 400 | 404 | 409>
 }
 
@@ -1890,7 +1893,7 @@ export const restoreExperiment = async (experimentId: string, options?: RequestI
 
 export const getRestoreExperimentMutationKey = () => ['restoreExperiment'] as const;
 
-export const getRestoreExperimentMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+export const getRestoreExperimentMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreExperiment>>, TError,RestoreExperimentMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof restoreExperiment>>, TError,RestoreExperimentMutationVariables, TContext> => {
 
@@ -1919,13 +1922,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type RestoreExperimentMutationResult = NonNullable<Awaited<ReturnType<typeof restoreExperiment>>>
 
-    export type RestoreExperimentMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number }
+    export type RestoreExperimentMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type RestoreExperimentMutationVariables = {experimentId: string}
 
     /**
  * @summary Restore an archived experiment
  */
-export const useRestoreExperiment = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+export const useRestoreExperiment = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreExperiment>>, TError,RestoreExperimentMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof restoreExperiment>>,
@@ -1942,12 +1945,12 @@ export type getArchiveStatusResponse200 = {
 }
 
 export type getArchiveStatusResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type getArchiveStatusResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 404>
 }
 
@@ -1967,6 +1970,7 @@ export const getGetArchiveStatusUrl = (experimentId: string,) => {
 }
 
 /**
+ * Archive/restore status (status doc reconciled with live Jobs).
  * @summary Get archive/restore status
  */
 export const getArchiveStatus = async (experimentId: string, options?: RequestInit): Promise<getArchiveStatusResponseSuccess> => {
@@ -2006,7 +2010,7 @@ export const getGetArchiveStatusQueryKey = (experimentId: string,) => {
     }
 
 
-export const getGetArchiveStatusQueryOptions = <TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getArchiveStatus>>, TError, TData>>, fetch?: RequestInit}
+export const getGetArchiveStatusQueryOptions = <TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getArchiveStatus>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -2025,10 +2029,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetArchiveStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getArchiveStatus>>>
-export type GetArchiveStatusQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+export type GetArchiveStatusQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getArchiveStatus>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getArchiveStatus>>,
@@ -2038,7 +2042,7 @@ export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchive
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getArchiveStatus>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getArchiveStatus>>,
@@ -2048,7 +2052,7 @@ export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchive
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getArchiveStatus>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -2056,7 +2060,7 @@ export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchive
  * @summary Get archive/restore status
  */
 
-export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetArchiveStatus<TData = Awaited<ReturnType<typeof getArchiveStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getArchiveStatus>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -2080,7 +2084,7 @@ export type getMDRepoStatusResponse200 = {
 }
 
 export type getMDRepoStatusResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200>
 }
 
@@ -2100,6 +2104,7 @@ export const getGetMDRepoStatusUrl = () => {
 }
 
 /**
+ * Whether the session holds a token MDRepo accepts.
  * @summary Get MDRepo authentication status
  */
 export const getMDRepoStatus = async ( options?: RequestInit): Promise<getMDRepoStatusResponseSuccess> => {
@@ -2139,7 +2144,7 @@ export const getGetMDRepoStatusQueryKey = () => {
     }
 
 
-export const getGetMDRepoStatusQueryOptions = <TData = Awaited<ReturnType<typeof getMDRepoStatus>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMDRepoStatus>>, TError, TData>>, fetch?: RequestInit}
+export const getGetMDRepoStatusQueryOptions = <TData = Awaited<ReturnType<typeof getMDRepoStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMDRepoStatus>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -2158,10 +2163,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetMDRepoStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getMDRepoStatus>>>
-export type GetMDRepoStatusQueryError = globalThis.Error & { info?: ProblemResponse; status?: number }
+export type GetMDRepoStatusQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetMDRepoStatus<TData = Awaited<ReturnType<typeof getMDRepoStatus>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useGetMDRepoStatus<TData = Awaited<ReturnType<typeof getMDRepoStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMDRepoStatus>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getMDRepoStatus>>,
@@ -2171,7 +2176,7 @@ export function useGetMDRepoStatus<TData = Awaited<ReturnType<typeof getMDRepoSt
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetMDRepoStatus<TData = Awaited<ReturnType<typeof getMDRepoStatus>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useGetMDRepoStatus<TData = Awaited<ReturnType<typeof getMDRepoStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMDRepoStatus>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getMDRepoStatus>>,
@@ -2181,7 +2186,7 @@ export function useGetMDRepoStatus<TData = Awaited<ReturnType<typeof getMDRepoSt
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetMDRepoStatus<TData = Awaited<ReturnType<typeof getMDRepoStatus>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useGetMDRepoStatus<TData = Awaited<ReturnType<typeof getMDRepoStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMDRepoStatus>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -2189,7 +2194,7 @@ export function useGetMDRepoStatus<TData = Awaited<ReturnType<typeof getMDRepoSt
  * @summary Get MDRepo authentication status
  */
 
-export function useGetMDRepoStatus<TData = Awaited<ReturnType<typeof getMDRepoStatus>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useGetMDRepoStatus<TData = Awaited<ReturnType<typeof getMDRepoStatus>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
   options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getMDRepoStatus>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -2208,17 +2213,17 @@ export function useGetMDRepoStatus<TData = Awaited<ReturnType<typeof getMDRepoSt
 
 
 export type authorizeMDRepoResponse302 = {
-  data: RedirectResponse
+  data: void
   status: 302
 }
 
 export type authorizeMDRepoResponse503 = {
-  data: ServiceUnavailableResponse
+  data: Problem
   status: 503
 }
 
 export type authorizeMDRepoResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 302 | 503>
 }
 
@@ -2245,6 +2250,7 @@ export const getAuthorizeMDRepoUrl = (params?: AuthorizeMDRepoParams,) => {
 }
 
 /**
+ * Redirect to MDRepo's authorization page; `return_url` is where the callback lands afterwards.
  * @summary Begin MDRepo OAuth authorization
  */
 export const authorizeMDRepo = async (params?: AuthorizeMDRepoParams, options?: RequestInit): Promise<authorizeMDRepoResponse> => {
@@ -2284,7 +2290,7 @@ export const getAuthorizeMDRepoQueryKey = (params?: AuthorizeMDRepoParams,) => {
     }
 
 
-export const getAuthorizeMDRepoQueryOptions = <TData = Awaited<ReturnType<typeof authorizeMDRepo>>, TError = globalThis.Error & { info?: RedirectResponse | ServiceUnavailableResponse | ProblemResponse; status?: number }>(params?: AuthorizeMDRepoParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof authorizeMDRepo>>, TError, TData>>, fetch?: RequestInit}
+export const getAuthorizeMDRepoQueryOptions = <TData = Awaited<ReturnType<typeof authorizeMDRepo>>, TError = globalThis.Error & { info?: void | Problem; status?: number }>(params?: AuthorizeMDRepoParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof authorizeMDRepo>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -2303,10 +2309,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type AuthorizeMDRepoQueryResult = NonNullable<Awaited<ReturnType<typeof authorizeMDRepo>>>
-export type AuthorizeMDRepoQueryError = globalThis.Error & { info?: RedirectResponse | ServiceUnavailableResponse | ProblemResponse; status?: number }
+export type AuthorizeMDRepoQueryError = globalThis.Error & { info?: void | Problem; status?: number }
 
 
-export function useAuthorizeMDRepo<TData = Awaited<ReturnType<typeof authorizeMDRepo>>, TError = globalThis.Error & { info?: RedirectResponse | ServiceUnavailableResponse | ProblemResponse; status?: number }>(
+export function useAuthorizeMDRepo<TData = Awaited<ReturnType<typeof authorizeMDRepo>>, TError = globalThis.Error & { info?: void | Problem; status?: number }>(
  params: undefined |  AuthorizeMDRepoParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof authorizeMDRepo>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof authorizeMDRepo>>,
@@ -2316,7 +2322,7 @@ export function useAuthorizeMDRepo<TData = Awaited<ReturnType<typeof authorizeMD
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useAuthorizeMDRepo<TData = Awaited<ReturnType<typeof authorizeMDRepo>>, TError = globalThis.Error & { info?: RedirectResponse | ServiceUnavailableResponse | ProblemResponse; status?: number }>(
+export function useAuthorizeMDRepo<TData = Awaited<ReturnType<typeof authorizeMDRepo>>, TError = globalThis.Error & { info?: void | Problem; status?: number }>(
  params?: AuthorizeMDRepoParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof authorizeMDRepo>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof authorizeMDRepo>>,
@@ -2326,7 +2332,7 @@ export function useAuthorizeMDRepo<TData = Awaited<ReturnType<typeof authorizeMD
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useAuthorizeMDRepo<TData = Awaited<ReturnType<typeof authorizeMDRepo>>, TError = globalThis.Error & { info?: RedirectResponse | ServiceUnavailableResponse | ProblemResponse; status?: number }>(
+export function useAuthorizeMDRepo<TData = Awaited<ReturnType<typeof authorizeMDRepo>>, TError = globalThis.Error & { info?: void | Problem; status?: number }>(
  params?: AuthorizeMDRepoParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof authorizeMDRepo>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -2334,7 +2340,7 @@ export function useAuthorizeMDRepo<TData = Awaited<ReturnType<typeof authorizeMD
  * @summary Begin MDRepo OAuth authorization
  */
 
-export function useAuthorizeMDRepo<TData = Awaited<ReturnType<typeof authorizeMDRepo>>, TError = globalThis.Error & { info?: RedirectResponse | ServiceUnavailableResponse | ProblemResponse; status?: number }>(
+export function useAuthorizeMDRepo<TData = Awaited<ReturnType<typeof authorizeMDRepo>>, TError = globalThis.Error & { info?: void | Problem; status?: number }>(
  params?: AuthorizeMDRepoParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof authorizeMDRepo>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -2353,7 +2359,7 @@ export function useAuthorizeMDRepo<TData = Awaited<ReturnType<typeof authorizeMD
 
 
 export type completeMDRepoAuthorizationResponse302 = {
-  data: RedirectResponse
+  data: void
   status: 302
 }
 
@@ -2380,6 +2386,7 @@ export const getCompleteMDRepoAuthorizationUrl = (params?: CompleteMDRepoAuthori
 }
 
 /**
+ * Exchange the authorization code for tokens and redirect back with a success or error query parameter.
  * @summary Complete MDRepo OAuth authorization
  */
 export const completeMDRepoAuthorization = async (params?: CompleteMDRepoAuthorizationParams, options?: RequestInit): Promise<completeMDRepoAuthorizationResponse> => {
@@ -2419,7 +2426,7 @@ export const getCompleteMDRepoAuthorizationQueryKey = (params?: CompleteMDRepoAu
     }
 
 
-export const getCompleteMDRepoAuthorizationQueryOptions = <TData = Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError = globalThis.Error & { info?: RedirectResponse; status?: number }>(params?: CompleteMDRepoAuthorizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError, TData>>, fetch?: RequestInit}
+export const getCompleteMDRepoAuthorizationQueryOptions = <TData = Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError = globalThis.Error & { info?: void; status?: number }>(params?: CompleteMDRepoAuthorizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -2438,10 +2445,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type CompleteMDRepoAuthorizationQueryResult = NonNullable<Awaited<ReturnType<typeof completeMDRepoAuthorization>>>
-export type CompleteMDRepoAuthorizationQueryError = globalThis.Error & { info?: RedirectResponse; status?: number }
+export type CompleteMDRepoAuthorizationQueryError = globalThis.Error & { info?: void; status?: number }
 
 
-export function useCompleteMDRepoAuthorization<TData = Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError = globalThis.Error & { info?: RedirectResponse; status?: number }>(
+export function useCompleteMDRepoAuthorization<TData = Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError = globalThis.Error & { info?: void; status?: number }>(
  params: undefined |  CompleteMDRepoAuthorizationParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof completeMDRepoAuthorization>>,
@@ -2451,7 +2458,7 @@ export function useCompleteMDRepoAuthorization<TData = Awaited<ReturnType<typeof
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useCompleteMDRepoAuthorization<TData = Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError = globalThis.Error & { info?: RedirectResponse; status?: number }>(
+export function useCompleteMDRepoAuthorization<TData = Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError = globalThis.Error & { info?: void; status?: number }>(
  params?: CompleteMDRepoAuthorizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof completeMDRepoAuthorization>>,
@@ -2461,7 +2468,7 @@ export function useCompleteMDRepoAuthorization<TData = Awaited<ReturnType<typeof
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useCompleteMDRepoAuthorization<TData = Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError = globalThis.Error & { info?: RedirectResponse; status?: number }>(
+export function useCompleteMDRepoAuthorization<TData = Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError = globalThis.Error & { info?: void; status?: number }>(
  params?: CompleteMDRepoAuthorizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -2469,7 +2476,7 @@ export function useCompleteMDRepoAuthorization<TData = Awaited<ReturnType<typeof
  * @summary Complete MDRepo OAuth authorization
  */
 
-export function useCompleteMDRepoAuthorization<TData = Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError = globalThis.Error & { info?: RedirectResponse; status?: number }>(
+export function useCompleteMDRepoAuthorization<TData = Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError = globalThis.Error & { info?: void; status?: number }>(
  params?: CompleteMDRepoAuthorizationParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof completeMDRepoAuthorization>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -2493,7 +2500,7 @@ export type logoutMDRepoResponse200 = {
 }
 
 export type logoutMDRepoResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200>
 }
 
@@ -2513,6 +2520,7 @@ export const getLogoutMDRepoUrl = () => {
 }
 
 /**
+ * Remove all MDRepo tokens from the session.
  * @summary Clear MDRepo credentials
  */
 export const logoutMDRepo = async ( options?: RequestInit): Promise<logoutMDRepoResponseSuccess> => {
@@ -2547,7 +2555,7 @@ export const logoutMDRepo = async ( options?: RequestInit): Promise<logoutMDRepo
 
 export const getLogoutMDRepoMutationKey = () => ['logoutMDRepo'] as const;
 
-export const getLogoutMDRepoMutationOptions = <TError = globalThis.Error & { info?: ProblemResponse; status?: number },
+export const getLogoutMDRepoMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logoutMDRepo>>, TError,void, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof logoutMDRepo>>, TError,void, TContext> => {
 
@@ -2576,13 +2584,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type LogoutMDRepoMutationResult = NonNullable<Awaited<ReturnType<typeof logoutMDRepo>>>
 
-    export type LogoutMDRepoMutationError = globalThis.Error & { info?: ProblemResponse; status?: number }
+    export type LogoutMDRepoMutationError = globalThis.Error & { info?: Problem; status?: number }
 
 
     /**
  * @summary Clear MDRepo credentials
  */
-export const useLogoutMDRepo = <TError = globalThis.Error & { info?: ProblemResponse; status?: number },
+export const useLogoutMDRepo = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logoutMDRepo>>, TError,void, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof logoutMDRepo>>,
@@ -2599,12 +2607,12 @@ export type listExperimentFilesResponse200 = {
 }
 
 export type listExperimentFilesResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type listExperimentFilesResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 400>
 }
 
@@ -2632,6 +2640,7 @@ export const getListExperimentFilesUrl = (experimentId: string,
 }
 
 /**
+ * List files in an experiment directory, optionally filtered by extension.
  * @summary List experiment files
  */
 export const listExperimentFiles = async (experimentId: string,
@@ -2673,7 +2682,7 @@ export const getListExperimentFilesQueryKey = (experimentId: string,
     }
 
 
-export const getListExperimentFilesQueryOptions = <TData = Awaited<ReturnType<typeof listExperimentFiles>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(experimentId: string,
+export const getListExperimentFilesQueryOptions = <TData = Awaited<ReturnType<typeof listExperimentFiles>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
     params?: ListExperimentFilesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExperimentFiles>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
@@ -2693,10 +2702,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListExperimentFilesQueryResult = NonNullable<Awaited<ReturnType<typeof listExperimentFiles>>>
-export type ListExperimentFilesQueryError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }
+export type ListExperimentFilesQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useListExperimentFiles<TData = Awaited<ReturnType<typeof listExperimentFiles>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(
+export function useListExperimentFiles<TData = Awaited<ReturnType<typeof listExperimentFiles>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     params: undefined |  ListExperimentFilesParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExperimentFiles>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
@@ -2707,7 +2716,7 @@ export function useListExperimentFiles<TData = Awaited<ReturnType<typeof listExp
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListExperimentFiles<TData = Awaited<ReturnType<typeof listExperimentFiles>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(
+export function useListExperimentFiles<TData = Awaited<ReturnType<typeof listExperimentFiles>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     params?: ListExperimentFilesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExperimentFiles>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
@@ -2718,7 +2727,7 @@ export function useListExperimentFiles<TData = Awaited<ReturnType<typeof listExp
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListExperimentFiles<TData = Awaited<ReturnType<typeof listExperimentFiles>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(
+export function useListExperimentFiles<TData = Awaited<ReturnType<typeof listExperimentFiles>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     params?: ListExperimentFilesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExperimentFiles>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
@@ -2727,7 +2736,7 @@ export function useListExperimentFiles<TData = Awaited<ReturnType<typeof listExp
  * @summary List experiment files
  */
 
-export function useListExperimentFiles<TData = Awaited<ReturnType<typeof listExperimentFiles>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(
+export function useListExperimentFiles<TData = Awaited<ReturnType<typeof listExperimentFiles>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     params?: ListExperimentFilesParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listExperimentFiles>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
@@ -2752,17 +2761,17 @@ export type downloadExperimentFileResponse200 = {
 }
 
 export type downloadExperimentFileResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type downloadExperimentFileResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type downloadExperimentFileResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 400 | 404>
 }
 
@@ -2783,6 +2792,7 @@ export const getDownloadExperimentFileUrl = (experimentId: string,
 }
 
 /**
+ * Serve a file from an experiment directory inline.
  * @summary Download an experiment file
  */
 export const downloadExperimentFile = async (experimentId: string,
@@ -2824,7 +2834,7 @@ export const getDownloadExperimentFileQueryKey = (experimentId: string,
     }
 
 
-export const getDownloadExperimentFileQueryOptions = <TData = Awaited<ReturnType<typeof downloadExperimentFile>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string,
+export const getDownloadExperimentFileQueryOptions = <TData = Awaited<ReturnType<typeof downloadExperimentFile>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
     path: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExperimentFile>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
@@ -2844,10 +2854,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type DownloadExperimentFileQueryResult = NonNullable<Awaited<ReturnType<typeof downloadExperimentFile>>>
-export type DownloadExperimentFileQueryError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+export type DownloadExperimentFileQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useDownloadExperimentFile<TData = Awaited<ReturnType<typeof downloadExperimentFile>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
+export function useDownloadExperimentFile<TData = Awaited<ReturnType<typeof downloadExperimentFile>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     path: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExperimentFile>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
@@ -2858,7 +2868,7 @@ export function useDownloadExperimentFile<TData = Awaited<ReturnType<typeof down
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useDownloadExperimentFile<TData = Awaited<ReturnType<typeof downloadExperimentFile>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
+export function useDownloadExperimentFile<TData = Awaited<ReturnType<typeof downloadExperimentFile>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     path: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExperimentFile>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
@@ -2869,7 +2879,7 @@ export function useDownloadExperimentFile<TData = Awaited<ReturnType<typeof down
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useDownloadExperimentFile<TData = Awaited<ReturnType<typeof downloadExperimentFile>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
+export function useDownloadExperimentFile<TData = Awaited<ReturnType<typeof downloadExperimentFile>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     path: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExperimentFile>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
@@ -2878,7 +2888,7 @@ export function useDownloadExperimentFile<TData = Awaited<ReturnType<typeof down
  * @summary Download an experiment file
  */
 
-export function useDownloadExperimentFile<TData = Awaited<ReturnType<typeof downloadExperimentFile>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
+export function useDownloadExperimentFile<TData = Awaited<ReturnType<typeof downloadExperimentFile>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     path: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExperimentFile>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
@@ -2903,7 +2913,7 @@ export type listSimulationsResponse200 = {
 }
 
 export type listSimulationsResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200>
 }
 
@@ -2923,6 +2933,7 @@ export const getListSimulationsUrl = (experimentId: string,) => {
 }
 
 /**
+ * List all simulations of an experiment.
  * @summary List simulation manifests
  */
 export const listSimulations = async (experimentId: string, options?: RequestInit): Promise<listSimulationsResponseSuccess> => {
@@ -2962,7 +2973,7 @@ export const getListSimulationsQueryKey = (experimentId: string,) => {
     }
 
 
-export const getListSimulationsQueryOptions = <TData = Awaited<ReturnType<typeof listSimulations>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSimulations>>, TError, TData>>, fetch?: RequestInit}
+export const getListSimulationsQueryOptions = <TData = Awaited<ReturnType<typeof listSimulations>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSimulations>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -2981,10 +2992,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListSimulationsQueryResult = NonNullable<Awaited<ReturnType<typeof listSimulations>>>
-export type ListSimulationsQueryError = globalThis.Error & { info?: ProblemResponse; status?: number }
+export type ListSimulationsQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useListSimulations<TData = Awaited<ReturnType<typeof listSimulations>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListSimulations<TData = Awaited<ReturnType<typeof listSimulations>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSimulations>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listSimulations>>,
@@ -2994,7 +3005,7 @@ export function useListSimulations<TData = Awaited<ReturnType<typeof listSimulat
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListSimulations<TData = Awaited<ReturnType<typeof listSimulations>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListSimulations<TData = Awaited<ReturnType<typeof listSimulations>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSimulations>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listSimulations>>,
@@ -3004,7 +3015,7 @@ export function useListSimulations<TData = Awaited<ReturnType<typeof listSimulat
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListSimulations<TData = Awaited<ReturnType<typeof listSimulations>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListSimulations<TData = Awaited<ReturnType<typeof listSimulations>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSimulations>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -3012,7 +3023,7 @@ export function useListSimulations<TData = Awaited<ReturnType<typeof listSimulat
  * @summary List simulation manifests
  */
 
-export function useListSimulations<TData = Awaited<ReturnType<typeof listSimulations>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListSimulations<TData = Awaited<ReturnType<typeof listSimulations>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listSimulations>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -3036,22 +3047,22 @@ export type createSimulationResponse201 = {
 }
 
 export type createSimulationResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type createSimulationResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type createSimulationResponse409 = {
-  data: ConflictResponse
+  data: Problem
   status: 409
 }
 
 export type createSimulationResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 201 | 400 | 404 | 409>
 }
 
@@ -3071,6 +3082,7 @@ export const getCreateSimulationUrl = (experimentId: string,) => {
 }
 
 /**
+ * Create a new simulation manifest.
  * @summary Create a simulation manifest
  */
 export const createSimulation = async (experimentId: string,
@@ -3120,7 +3132,7 @@ const res = await fetch(getCreateSimulationUrl(experimentId),
 
 export const getCreateSimulationMutationKey = () => ['createSimulation'] as const;
 
-export const getCreateSimulationMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+export const getCreateSimulationMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSimulation>>, TError,CreateSimulationMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof createSimulation>>, TError,CreateSimulationMutationVariables, TContext> => {
 
@@ -3149,13 +3161,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type CreateSimulationMutationResult = NonNullable<Awaited<ReturnType<typeof createSimulation>>>
     export type CreateSimulationMutationBody = SimulationWrite
-    export type CreateSimulationMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number }
+    export type CreateSimulationMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type CreateSimulationMutationVariables = {experimentId: string;data: SimulationWrite}
 
     /**
  * @summary Create a simulation manifest
  */
-export const useCreateSimulation = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+export const useCreateSimulation = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createSimulation>>, TError,CreateSimulationMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof createSimulation>>,
@@ -3172,12 +3184,12 @@ export type getSimulationResponse200 = {
 }
 
 export type getSimulationResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type getSimulationResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 404>
 }
 
@@ -3198,6 +3210,7 @@ export const getGetSimulationUrl = (experimentId: string,
 }
 
 /**
+ * Get a single simulation by its experiment-relative path.
  * @summary Get a simulation manifest
  */
 export const getSimulation = async (experimentId: string,
@@ -3239,7 +3252,7 @@ export const getGetSimulationQueryKey = (experimentId: string,
     }
 
 
-export const getGetSimulationQueryOptions = <TData = Awaited<ReturnType<typeof getSimulation>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string,
+export const getGetSimulationQueryOptions = <TData = Awaited<ReturnType<typeof getSimulation>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
     simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSimulation>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
@@ -3259,10 +3272,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetSimulationQueryResult = NonNullable<Awaited<ReturnType<typeof getSimulation>>>
-export type GetSimulationQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+export type GetSimulationQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetSimulation<TData = Awaited<ReturnType<typeof getSimulation>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetSimulation<TData = Awaited<ReturnType<typeof getSimulation>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSimulation>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
@@ -3273,7 +3286,7 @@ export function useGetSimulation<TData = Awaited<ReturnType<typeof getSimulation
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetSimulation<TData = Awaited<ReturnType<typeof getSimulation>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetSimulation<TData = Awaited<ReturnType<typeof getSimulation>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSimulation>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
@@ -3284,7 +3297,7 @@ export function useGetSimulation<TData = Awaited<ReturnType<typeof getSimulation
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetSimulation<TData = Awaited<ReturnType<typeof getSimulation>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetSimulation<TData = Awaited<ReturnType<typeof getSimulation>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSimulation>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
@@ -3293,7 +3306,7 @@ export function useGetSimulation<TData = Awaited<ReturnType<typeof getSimulation
  * @summary Get a simulation manifest
  */
 
-export function useGetSimulation<TData = Awaited<ReturnType<typeof getSimulation>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetSimulation<TData = Awaited<ReturnType<typeof getSimulation>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getSimulation>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
@@ -3318,22 +3331,22 @@ export type updateSimulationResponse200 = {
 }
 
 export type updateSimulationResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type updateSimulationResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type updateSimulationResponse409 = {
-  data: ConflictResponse
+  data: Problem
   status: 409
 }
 
 export type updateSimulationResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 400 | 404 | 409>
 }
 
@@ -3354,6 +3367,7 @@ export const getUpdateSimulationUrl = (experimentId: string,
 }
 
 /**
+ * Edit an unlocked simulation manifest.
  * @summary Update a simulation manifest
  */
 export const updateSimulation = async (experimentId: string,
@@ -3404,7 +3418,7 @@ const res = await fetch(getUpdateSimulationUrl(experimentId,simulationPath),
 
 export const getUpdateSimulationMutationKey = () => ['updateSimulation'] as const;
 
-export const getUpdateSimulationMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+export const getUpdateSimulationMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSimulation>>, TError,UpdateSimulationMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof updateSimulation>>, TError,UpdateSimulationMutationVariables, TContext> => {
 
@@ -3433,13 +3447,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type UpdateSimulationMutationResult = NonNullable<Awaited<ReturnType<typeof updateSimulation>>>
     export type UpdateSimulationMutationBody = SimulationWrite
-    export type UpdateSimulationMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number }
+    export type UpdateSimulationMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type UpdateSimulationMutationVariables = {experimentId: string;simulationPath: string;data: SimulationWrite}
 
     /**
  * @summary Update a simulation manifest
  */
-export const useUpdateSimulation = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+export const useUpdateSimulation = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateSimulation>>, TError,UpdateSimulationMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof updateSimulation>>,
@@ -3451,22 +3465,22 @@ export const useUpdateSimulation = <TError = globalThis.Error & { info?: BadRequ
     }
 
 export type deleteSimulationResponse204 = {
-  data: NoContentResponse
+  data: void
   status: 204
 }
 
 export type deleteSimulationResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type deleteSimulationResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type deleteSimulationResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 204 | 400 | 404>
 }
 
@@ -3487,6 +3501,7 @@ export const getDeleteSimulationUrl = (experimentId: string,
 }
 
 /**
+ * Delete a simulation manifest and cascade-delete all related jobs.
  * @summary Delete a simulation manifest
  */
 export const deleteSimulation = async (experimentId: string,
@@ -3512,7 +3527,7 @@ export const deleteSimulation = async (experimentId: string,
     err.status = res.status;
     throw err;
   }
-  const data: deleteSimulationResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  const data: deleteSimulationResponseSuccess['data'] = body ? JSON.parse(body) : undefined
   return { data, status: res.status, headers: res.headers } as deleteSimulationResponseSuccess
 }
 
@@ -3522,7 +3537,7 @@ export const deleteSimulation = async (experimentId: string,
 
 export const getDeleteSimulationMutationKey = () => ['deleteSimulation'] as const;
 
-export const getDeleteSimulationMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const getDeleteSimulationMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSimulation>>, TError,DeleteSimulationMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteSimulation>>, TError,DeleteSimulationMutationVariables, TContext> => {
 
@@ -3551,13 +3566,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type DeleteSimulationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteSimulation>>>
 
-    export type DeleteSimulationMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type DeleteSimulationMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type DeleteSimulationMutationVariables = {experimentId: string;simulationPath: string}
 
     /**
  * @summary Delete a simulation manifest
  */
-export const useDeleteSimulation = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const useDeleteSimulation = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteSimulation>>, TError,DeleteSimulationMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteSimulation>>,
@@ -3574,7 +3589,7 @@ export type listGromacsJobsResponse200 = {
 }
 
 export type listGromacsJobsResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200>
 }
 
@@ -3594,6 +3609,7 @@ export const getListGromacsJobsUrl = (experimentId: string,) => {
 }
 
 /**
+ * List all GROMACS jobs of an experiment.
  * @summary List GROMACS jobs
  */
 export const listGromacsJobs = async (experimentId: string, options?: RequestInit): Promise<listGromacsJobsResponseSuccess> => {
@@ -3633,7 +3649,7 @@ export const getListGromacsJobsQueryKey = (experimentId: string,) => {
     }
 
 
-export const getListGromacsJobsQueryOptions = <TData = Awaited<ReturnType<typeof listGromacsJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listGromacsJobs>>, TError, TData>>, fetch?: RequestInit}
+export const getListGromacsJobsQueryOptions = <TData = Awaited<ReturnType<typeof listGromacsJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listGromacsJobs>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -3652,10 +3668,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListGromacsJobsQueryResult = NonNullable<Awaited<ReturnType<typeof listGromacsJobs>>>
-export type ListGromacsJobsQueryError = globalThis.Error & { info?: ProblemResponse; status?: number }
+export type ListGromacsJobsQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useListGromacsJobs<TData = Awaited<ReturnType<typeof listGromacsJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListGromacsJobs<TData = Awaited<ReturnType<typeof listGromacsJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listGromacsJobs>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listGromacsJobs>>,
@@ -3665,7 +3681,7 @@ export function useListGromacsJobs<TData = Awaited<ReturnType<typeof listGromacs
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListGromacsJobs<TData = Awaited<ReturnType<typeof listGromacsJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListGromacsJobs<TData = Awaited<ReturnType<typeof listGromacsJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listGromacsJobs>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listGromacsJobs>>,
@@ -3675,7 +3691,7 @@ export function useListGromacsJobs<TData = Awaited<ReturnType<typeof listGromacs
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListGromacsJobs<TData = Awaited<ReturnType<typeof listGromacsJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListGromacsJobs<TData = Awaited<ReturnType<typeof listGromacsJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listGromacsJobs>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -3683,7 +3699,7 @@ export function useListGromacsJobs<TData = Awaited<ReturnType<typeof listGromacs
  * @summary List GROMACS jobs
  */
 
-export function useListGromacsJobs<TData = Awaited<ReturnType<typeof listGromacsJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListGromacsJobs<TData = Awaited<ReturnType<typeof listGromacsJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listGromacsJobs>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -3701,420 +3717,23 @@ export function useListGromacsJobs<TData = Awaited<ReturnType<typeof listGromacs
 
 
 
-export type getGromacsJobResponse200 = {
-  data: GromacsJob
-  status: 200
-}
-
-export type getGromacsJobResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type getGromacsJobResponseDefault = {
-  data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 200 | 404>
-}
-
-export type getGromacsJobResponseSuccess = (getGromacsJobResponse200) & {
-  headers: Headers;
-};
-export type getGromacsJobResponseError = (getGromacsJobResponse404 | getGromacsJobResponseDefault) & {
-  headers: Headers;
-};
-
-export const getGetGromacsJobUrl = (experimentId: string,
-    simulationPath: string,) => {
-
-
-
-
-  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/gmx/${simulationPath}`
-}
-
-/**
- * @summary Get a GROMACS job
- */
-export const getGromacsJob = async (experimentId: string,
-    simulationPath: string, options?: RequestInit): Promise<getGromacsJobResponseSuccess> => {
-
-  const res = await fetch(getGetGromacsJobUrl(experimentId,simulationPath),
-  {
-      credentials: 'same-origin',
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  if (!res.ok) {
-
-    const err: globalThis.Error & {info?: getGromacsJobResponseError['data'], status?: number} = new globalThis.Error();
-    const data : getGromacsJobResponseError['data'] = body ? JSON.parse(body) : {}
-    err.info = data;
-    err.status = res.status;
-    throw err;
-  }
-  const data: getGromacsJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getGromacsJobResponseSuccess
-}
-
-
-
-
-
-export const getGetGromacsJobQueryKey = (experimentId: string,
-    simulationPath: string,) => {
-    return [
-    `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/gmx/${simulationPath}`
-    ] as const;
-    }
-
-
-export const getGetGromacsJobQueryOptions = <TData = Awaited<ReturnType<typeof getGromacsJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string,
-    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJob>>, TError, TData>>, fetch?: RequestInit}
-) => {
-
-const {query: queryOptions, fetch: fetchOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetGromacsJobQueryKey(experimentId,simulationPath);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGromacsJob>>> = ({ signal }) => getGromacsJob(experimentId,simulationPath, { signal, ...fetchOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: experimentId !== null && experimentId !== undefined && simulationPath !== null && simulationPath !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGromacsJob>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetGromacsJobQueryResult = NonNullable<Awaited<ReturnType<typeof getGromacsJob>>>
-export type GetGromacsJobQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
-
-
-export function useGetGromacsJob<TData = Awaited<ReturnType<typeof getGromacsJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    simulationPath: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJob>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getGromacsJob>>,
-          TError,
-          Awaited<ReturnType<typeof getGromacsJob>>
-        > , 'initialData'
-      >, fetch?: RequestInit}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetGromacsJob<TData = Awaited<ReturnType<typeof getGromacsJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJob>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getGromacsJob>>,
-          TError,
-          Awaited<ReturnType<typeof getGromacsJob>>
-        > , 'initialData'
-      >, fetch?: RequestInit}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetGromacsJob<TData = Awaited<ReturnType<typeof getGromacsJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJob>>, TError, TData>>, fetch?: RequestInit}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary Get a GROMACS job
- */
-
-export function useGetGromacsJob<TData = Awaited<ReturnType<typeof getGromacsJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJob>>, TError, TData>>, fetch?: RequestInit}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getGetGromacsJobQueryOptions(experimentId,simulationPath,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export type submitGromacsJobResponse201 = {
-  data: GromacsJob
-  status: 201
-}
-
-export type submitGromacsJobResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type submitGromacsJobResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type submitGromacsJobResponse409 = {
-  data: ConflictResponse
-  status: 409
-}
-
-export type submitGromacsJobResponseDefault = {
-  data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 201 | 400 | 404 | 409>
-}
-
-export type submitGromacsJobResponseSuccess = (submitGromacsJobResponse201) & {
-  headers: Headers;
-};
-export type submitGromacsJobResponseError = (submitGromacsJobResponse400 | submitGromacsJobResponse404 | submitGromacsJobResponse409 | submitGromacsJobResponseDefault) & {
-  headers: Headers;
-};
-
-export const getSubmitGromacsJobUrl = (experimentId: string,
-    simulationPath: string,) => {
-
-
-
-
-  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/gmx/${simulationPath}`
-}
-
-/**
- * @summary Submit a GROMACS job (replaces a terminal run, 409s on a live one)
- */
-export const submitGromacsJob = async (experimentId: string,
-    simulationPath: string,
-    gromacsJobRequest?: GromacsJobRequest, options?: RequestInit): Promise<submitGromacsJobResponseSuccess> => {
-
-    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
-    if (!h) return {};
-    if (h instanceof Headers) return Object.fromEntries(h.entries());
-    if (Symbol.iterator in h) {
-      return Object.fromEntries(
-        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
-      );
-    }
-    const headers: Record<string, string | readonly string[]> = {};
-    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
-      if (value !== undefined) headers[name] = value;
-    }
-    return headers;
-  };
-const res = await fetch(getSubmitGromacsJobUrl(experimentId,simulationPath),
-  {
-      credentials: 'same-origin',
-    ...options,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
-    body: JSON.stringify(gromacsJobRequest)
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  if (!res.ok) {
-
-    const err: globalThis.Error & {info?: submitGromacsJobResponseError['data'], status?: number} = new globalThis.Error();
-    const data : submitGromacsJobResponseError['data'] = body ? JSON.parse(body) : {}
-    err.info = data;
-    err.status = res.status;
-    throw err;
-  }
-  const data: submitGromacsJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as submitGromacsJobResponseSuccess
-}
-
-
-
-
-
-export const getSubmitGromacsJobMutationKey = () => ['submitGromacsJob'] as const;
-
-export const getSubmitGromacsJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,SubmitGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,SubmitGromacsJobMutationVariables, TContext> => {
-
-const mutationKey = getSubmitGromacsJobMutationKey();
-const {mutation: mutationOptions, fetch: fetchOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, fetch: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitGromacsJob>>, SubmitGromacsJobMutationVariables> = (props) => {
-          const {experimentId,simulationPath,data} = props ?? {};
-
-          return  submitGromacsJob(experimentId,simulationPath,data,fetchOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type SubmitGromacsJobMutationResult = NonNullable<Awaited<ReturnType<typeof submitGromacsJob>>>
-    export type SubmitGromacsJobMutationBody = GromacsJobRequest | undefined
-    export type SubmitGromacsJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number }
-    export type SubmitGromacsJobMutationVariables = {experimentId: string;simulationPath: string;data?: GromacsJobRequest}
-
-    /**
- * @summary Submit a GROMACS job (replaces a terminal run, 409s on a live one)
- */
-export const useSubmitGromacsJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,SubmitGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof submitGromacsJob>>,
-        TError,
-        SubmitGromacsJobMutationVariables,
-        TContext
-      > => {
-      return useMutation(getSubmitGromacsJobMutationOptions(options), queryClient);
-    }
-
-export type deleteGromacsJobResponse204 = {
-  data: NoContentResponse
-  status: 204
-}
-
-export type deleteGromacsJobResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type deleteGromacsJobResponseDefault = {
-  data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 204 | 404>
-}
-
-export type deleteGromacsJobResponseSuccess = (deleteGromacsJobResponse204) & {
-  headers: Headers;
-};
-export type deleteGromacsJobResponseError = (deleteGromacsJobResponse404 | deleteGromacsJobResponseDefault) & {
-  headers: Headers;
-};
-
-export const getDeleteGromacsJobUrl = (experimentId: string,
-    simulationPath: string,) => {
-
-
-
-
-  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/gmx/${simulationPath}`
-}
-
-/**
- * @summary Delete a GROMACS job
- */
-export const deleteGromacsJob = async (experimentId: string,
-    simulationPath: string, options?: RequestInit): Promise<deleteGromacsJobResponseSuccess> => {
-
-  const res = await fetch(getDeleteGromacsJobUrl(experimentId,simulationPath),
-  {
-      credentials: 'same-origin',
-    ...options,
-    method: 'DELETE'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  if (!res.ok) {
-
-    const err: globalThis.Error & {info?: deleteGromacsJobResponseError['data'], status?: number} = new globalThis.Error();
-    const data : deleteGromacsJobResponseError['data'] = body ? JSON.parse(body) : {}
-    err.info = data;
-    err.status = res.status;
-    throw err;
-  }
-  const data: deleteGromacsJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteGromacsJobResponseSuccess
-}
-
-
-
-
-
-export const getDeleteGromacsJobMutationKey = () => ['deleteGromacsJob'] as const;
-
-export const getDeleteGromacsJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGromacsJob>>, TError,DeleteGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteGromacsJob>>, TError,DeleteGromacsJobMutationVariables, TContext> => {
-
-const mutationKey = getDeleteGromacsJobMutationKey();
-const {mutation: mutationOptions, fetch: fetchOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, fetch: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGromacsJob>>, DeleteGromacsJobMutationVariables> = (props) => {
-          const {experimentId,simulationPath} = props ?? {};
-
-          return  deleteGromacsJob(experimentId,simulationPath,fetchOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteGromacsJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGromacsJob>>>
-
-    export type DeleteGromacsJobMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
-    export type DeleteGromacsJobMutationVariables = {experimentId: string;simulationPath: string}
-
-    /**
- * @summary Delete a GROMACS job
- */
-export const useDeleteGromacsJob = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGromacsJob>>, TError,DeleteGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof deleteGromacsJob>>,
-        TError,
-        DeleteGromacsJobMutationVariables,
-        TContext
-      > => {
-      return useMutation(getDeleteGromacsJobMutationOptions(options), queryClient);
-    }
-
 export type stopGromacsJobResponse204 = {
-  data: NoContentResponse
+  data: void
   status: 204
 }
 
 export type stopGromacsJobResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type stopGromacsJobResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type stopGromacsJobResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 204 | 400 | 404>
 }
 
@@ -4135,6 +3754,7 @@ export const getStopGromacsJobUrl = (experimentId: string,
 }
 
 /**
+ * Stop the run gracefully, keeping all data and the job row.
  * @summary Stop a GROMACS run, preserving its data
  */
 export const stopGromacsJob = async (experimentId: string,
@@ -4160,7 +3780,7 @@ export const stopGromacsJob = async (experimentId: string,
     err.status = res.status;
     throw err;
   }
-  const data: stopGromacsJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  const data: stopGromacsJobResponseSuccess['data'] = body ? JSON.parse(body) : undefined
   return { data, status: res.status, headers: res.headers } as stopGromacsJobResponseSuccess
 }
 
@@ -4170,7 +3790,7 @@ export const stopGromacsJob = async (experimentId: string,
 
 export const getStopGromacsJobMutationKey = () => ['stopGromacsJob'] as const;
 
-export const getStopGromacsJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const getStopGromacsJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopGromacsJob>>, TError,StopGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof stopGromacsJob>>, TError,StopGromacsJobMutationVariables, TContext> => {
 
@@ -4199,13 +3819,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type StopGromacsJobMutationResult = NonNullable<Awaited<ReturnType<typeof stopGromacsJob>>>
 
-    export type StopGromacsJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type StopGromacsJobMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type StopGromacsJobMutationVariables = {experimentId: string;simulationPath: string}
 
     /**
  * @summary Stop a GROMACS run, preserving its data
  */
-export const useStopGromacsJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const useStopGromacsJob = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopGromacsJob>>, TError,StopGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof stopGromacsJob>>,
@@ -4222,17 +3842,17 @@ export type extendGromacsJobResponse201 = {
 }
 
 export type extendGromacsJobResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type extendGromacsJobResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type extendGromacsJobResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 201 | 400 | 404>
 }
 
@@ -4253,11 +3873,12 @@ export const getExtendGromacsJobUrl = (experimentId: string,
 }
 
 /**
+ * Extend a finished or stopped run by `nsteps` additional steps, resuming from its checkpoint.
  * @summary Extend a finished or stopped GROMACS run from its checkpoint
  */
 export const extendGromacsJob = async (experimentId: string,
     simulationPath: string,
-    extendGromacsJobRequest?: ExtendGromacsJobRequest, options?: RequestInit): Promise<extendGromacsJobResponseSuccess> => {
+    extendGromacsJobRequest: ExtendGromacsJobRequest, options?: RequestInit): Promise<extendGromacsJobResponseSuccess> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -4303,7 +3924,7 @@ const res = await fetch(getExtendGromacsJobUrl(experimentId,simulationPath),
 
 export const getExtendGromacsJobMutationKey = () => ['extendGromacsJob'] as const;
 
-export const getExtendGromacsJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const getExtendGromacsJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extendGromacsJob>>, TError,ExtendGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof extendGromacsJob>>, TError,ExtendGromacsJobMutationVariables, TContext> => {
 
@@ -4331,14 +3952,14 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ExtendGromacsJobMutationResult = NonNullable<Awaited<ReturnType<typeof extendGromacsJob>>>
-    export type ExtendGromacsJobMutationBody = ExtendGromacsJobRequest | undefined
-    export type ExtendGromacsJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
-    export type ExtendGromacsJobMutationVariables = {experimentId: string;simulationPath: string;data?: ExtendGromacsJobRequest}
+    export type ExtendGromacsJobMutationBody = ExtendGromacsJobRequest
+    export type ExtendGromacsJobMutationError = globalThis.Error & { info?: Problem; status?: number }
+    export type ExtendGromacsJobMutationVariables = {experimentId: string;simulationPath: string;data: ExtendGromacsJobRequest}
 
     /**
  * @summary Extend a finished or stopped GROMACS run from its checkpoint
  */
-export const useExtendGromacsJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const useExtendGromacsJob = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extendGromacsJob>>, TError,ExtendGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof extendGromacsJob>>,
@@ -4350,22 +3971,22 @@ export const useExtendGromacsJob = <TError = globalThis.Error & { info?: BadRequ
     }
 
 export type getGromacsJobLogResponse200 = {
-  data: TextValueResponse
+  data: string
   status: 200
 }
 
 export type getGromacsJobLogResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type getGromacsJobLogResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type getGromacsJobLogResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 400 | 404>
 }
 
@@ -4394,6 +4015,7 @@ export const getGetGromacsJobLogUrl = (experimentId: string,
 }
 
 /**
+ * Tail of one of the run's log streams (`gmx`, `stdout`, `stderr`).
  * @summary Get a GROMACS job log
  */
 export const getGromacsJobLog = async (experimentId: string,
@@ -4437,7 +4059,7 @@ export const getGetGromacsJobLogQueryKey = (experimentId: string,
     }
 
 
-export const getGetGromacsJobLogQueryOptions = <TData = Awaited<ReturnType<typeof getGromacsJobLog>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string,
+export const getGetGromacsJobLogQueryOptions = <TData = Awaited<ReturnType<typeof getGromacsJobLog>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
     simulationPath: string,
     params?: GetGromacsJobLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJobLog>>, TError, TData>>, fetch?: RequestInit}
 ) => {
@@ -4458,10 +4080,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetGromacsJobLogQueryResult = NonNullable<Awaited<ReturnType<typeof getGromacsJobLog>>>
-export type GetGromacsJobLogQueryError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+export type GetGromacsJobLogQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacsJobLog>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacsJobLog>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string,
     params: undefined |  GetGromacsJobLogParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJobLog>>, TError, TData>> & Pick<
@@ -4473,7 +4095,7 @@ export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacs
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacsJobLog>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacsJobLog>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string,
     params?: GetGromacsJobLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJobLog>>, TError, TData>> & Pick<
@@ -4485,7 +4107,7 @@ export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacs
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacsJobLog>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacsJobLog>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string,
     params?: GetGromacsJobLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJobLog>>, TError, TData>>, fetch?: RequestInit}
@@ -4495,7 +4117,7 @@ export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacs
  * @summary Get a GROMACS job log
  */
 
-export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacsJobLog>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacsJobLog>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string,
     params?: GetGromacsJobLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJobLog>>, TError, TData>>, fetch?: RequestInit}
@@ -4515,13 +4137,413 @@ export function useGetGromacsJobLog<TData = Awaited<ReturnType<typeof getGromacs
 
 
 
+export type getGromacsJobResponse200 = {
+  data: GromacsJob
+  status: 200
+}
+
+export type getGromacsJobResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type getGromacsJobResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 200 | 404>
+}
+
+export type getGromacsJobResponseSuccess = (getGromacsJobResponse200) & {
+  headers: Headers;
+};
+export type getGromacsJobResponseError = (getGromacsJobResponse404 | getGromacsJobResponseDefault) & {
+  headers: Headers;
+};
+
+export const getGetGromacsJobUrl = (experimentId: string,
+    simulationPath: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/gmx/${simulationPath}`
+}
+
+/**
+ * Get the GROMACS run of a simulation.
+ * @summary Get a GROMACS job
+ */
+export const getGromacsJob = async (experimentId: string,
+    simulationPath: string, options?: RequestInit): Promise<getGromacsJobResponseSuccess> => {
+
+  const res = await fetch(getGetGromacsJobUrl(experimentId,simulationPath),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: getGromacsJobResponseError['data'], status?: number} = new globalThis.Error();
+    const data : getGromacsJobResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: getGromacsJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getGromacsJobResponseSuccess
+}
+
+
+
+
+
+export const getGetGromacsJobQueryKey = (experimentId: string,
+    simulationPath: string,) => {
+    return [
+    `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/gmx/${simulationPath}`
+    ] as const;
+    }
+
+
+export const getGetGromacsJobQueryOptions = <TData = Awaited<ReturnType<typeof getGromacsJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
+    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJob>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetGromacsJobQueryKey(experimentId,simulationPath);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getGromacsJob>>> = ({ signal }) => getGromacsJob(experimentId,simulationPath, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: experimentId !== null && experimentId !== undefined && simulationPath !== null && simulationPath !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getGromacsJob>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetGromacsJobQueryResult = NonNullable<Awaited<ReturnType<typeof getGromacsJob>>>
+export type GetGromacsJobQueryError = globalThis.Error & { info?: Problem; status?: number }
+
+
+export function useGetGromacsJob<TData = Awaited<ReturnType<typeof getGromacsJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    simulationPath: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJob>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getGromacsJob>>,
+          TError,
+          Awaited<ReturnType<typeof getGromacsJob>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetGromacsJob<TData = Awaited<ReturnType<typeof getGromacsJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJob>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getGromacsJob>>,
+          TError,
+          Awaited<ReturnType<typeof getGromacsJob>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetGromacsJob<TData = Awaited<ReturnType<typeof getGromacsJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJob>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get a GROMACS job
+ */
+
+export function useGetGromacsJob<TData = Awaited<ReturnType<typeof getGromacsJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getGromacsJob>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetGromacsJobQueryOptions(experimentId,simulationPath,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type submitGromacsJobResponse201 = {
+  data: GromacsJob
+  status: 201
+}
+
+export type submitGromacsJobResponse400 = {
+  data: Problem
+  status: 400
+}
+
+export type submitGromacsJobResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type submitGromacsJobResponse409 = {
+  data: Problem
+  status: 409
+}
+
+export type submitGromacsJobResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 201 | 400 | 404 | 409>
+}
+
+export type submitGromacsJobResponseSuccess = (submitGromacsJobResponse201) & {
+  headers: Headers;
+};
+export type submitGromacsJobResponseError = (submitGromacsJobResponse400 | submitGromacsJobResponse404 | submitGromacsJobResponse409 | submitGromacsJobResponseDefault) & {
+  headers: Headers;
+};
+
+export const getSubmitGromacsJobUrl = (experimentId: string,
+    simulationPath: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/gmx/${simulationPath}`
+}
+
+/**
+ * Submit a GROMACS simulation job from a simulation manifest.
+ * @summary Submit a GROMACS job (replaces a terminal run, 409s on a live one)
+ */
+export const submitGromacsJob = async (experimentId: string,
+    simulationPath: string,
+    gromacsJobRequest: GromacsJobRequest, options?: RequestInit): Promise<submitGromacsJobResponseSuccess> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+const res = await fetch(getSubmitGromacsJobUrl(experimentId,simulationPath),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(gromacsJobRequest)
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: submitGromacsJobResponseError['data'], status?: number} = new globalThis.Error();
+    const data : submitGromacsJobResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: submitGromacsJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as submitGromacsJobResponseSuccess
+}
+
+
+
+
+
+export const getSubmitGromacsJobMutationKey = () => ['submitGromacsJob'] as const;
+
+export const getSubmitGromacsJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,SubmitGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,SubmitGromacsJobMutationVariables, TContext> => {
+
+const mutationKey = getSubmitGromacsJobMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitGromacsJob>>, SubmitGromacsJobMutationVariables> = (props) => {
+          const {experimentId,simulationPath,data} = props ?? {};
+
+          return  submitGromacsJob(experimentId,simulationPath,data,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitGromacsJobMutationResult = NonNullable<Awaited<ReturnType<typeof submitGromacsJob>>>
+    export type SubmitGromacsJobMutationBody = GromacsJobRequest
+    export type SubmitGromacsJobMutationError = globalThis.Error & { info?: Problem; status?: number }
+    export type SubmitGromacsJobMutationVariables = {experimentId: string;simulationPath: string;data: GromacsJobRequest}
+
+    /**
+ * @summary Submit a GROMACS job (replaces a terminal run, 409s on a live one)
+ */
+export const useSubmitGromacsJob = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitGromacsJob>>, TError,SubmitGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof submitGromacsJob>>,
+        TError,
+        SubmitGromacsJobMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSubmitGromacsJobMutationOptions(options), queryClient);
+    }
+
+export type deleteGromacsJobResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteGromacsJobResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type deleteGromacsJobResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 204 | 404>
+}
+
+export type deleteGromacsJobResponseSuccess = (deleteGromacsJobResponse204) & {
+  headers: Headers;
+};
+export type deleteGromacsJobResponseError = (deleteGromacsJobResponse404 | deleteGromacsJobResponseDefault) & {
+  headers: Headers;
+};
+
+export const getDeleteGromacsJobUrl = (experimentId: string,
+    simulationPath: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/gmx/${simulationPath}`
+}
+
+/**
+ * Delete the simulation's run: its MDRun job, DB row, and result files.
+ * @summary Delete a GROMACS job
+ */
+export const deleteGromacsJob = async (experimentId: string,
+    simulationPath: string, options?: RequestInit): Promise<deleteGromacsJobResponseSuccess> => {
+
+  const res = await fetch(getDeleteGromacsJobUrl(experimentId,simulationPath),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: deleteGromacsJobResponseError['data'], status?: number} = new globalThis.Error();
+    const data : deleteGromacsJobResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: deleteGromacsJobResponseSuccess['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as deleteGromacsJobResponseSuccess
+}
+
+
+
+
+
+export const getDeleteGromacsJobMutationKey = () => ['deleteGromacsJob'] as const;
+
+export const getDeleteGromacsJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGromacsJob>>, TError,DeleteGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteGromacsJob>>, TError,DeleteGromacsJobMutationVariables, TContext> => {
+
+const mutationKey = getDeleteGromacsJobMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteGromacsJob>>, DeleteGromacsJobMutationVariables> = (props) => {
+          const {experimentId,simulationPath} = props ?? {};
+
+          return  deleteGromacsJob(experimentId,simulationPath,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteGromacsJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteGromacsJob>>>
+
+    export type DeleteGromacsJobMutationError = globalThis.Error & { info?: Problem; status?: number }
+    export type DeleteGromacsJobMutationVariables = {experimentId: string;simulationPath: string}
+
+    /**
+ * @summary Delete a GROMACS job
+ */
+export const useDeleteGromacsJob = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteGromacsJob>>, TError,DeleteGromacsJobMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteGromacsJob>>,
+        TError,
+        DeleteGromacsJobMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteGromacsJobMutationOptions(options), queryClient);
+    }
+
 export type listAmberJobsResponse200 = {
   data: AmberJob[]
   status: 200
 }
 
 export type listAmberJobsResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200>
 }
 
@@ -4541,6 +4563,7 @@ export const getListAmberJobsUrl = (experimentId: string,) => {
 }
 
 /**
+ * List all AMBER jobs of an experiment.
  * @summary List AMBER jobs
  */
 export const listAmberJobs = async (experimentId: string, options?: RequestInit): Promise<listAmberJobsResponseSuccess> => {
@@ -4580,7 +4603,7 @@ export const getListAmberJobsQueryKey = (experimentId: string,) => {
     }
 
 
-export const getListAmberJobsQueryOptions = <TData = Awaited<ReturnType<typeof listAmberJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAmberJobs>>, TError, TData>>, fetch?: RequestInit}
+export const getListAmberJobsQueryOptions = <TData = Awaited<ReturnType<typeof listAmberJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAmberJobs>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -4599,10 +4622,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListAmberJobsQueryResult = NonNullable<Awaited<ReturnType<typeof listAmberJobs>>>
-export type ListAmberJobsQueryError = globalThis.Error & { info?: ProblemResponse; status?: number }
+export type ListAmberJobsQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useListAmberJobs<TData = Awaited<ReturnType<typeof listAmberJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListAmberJobs<TData = Awaited<ReturnType<typeof listAmberJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAmberJobs>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listAmberJobs>>,
@@ -4612,7 +4635,7 @@ export function useListAmberJobs<TData = Awaited<ReturnType<typeof listAmberJobs
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAmberJobs<TData = Awaited<ReturnType<typeof listAmberJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListAmberJobs<TData = Awaited<ReturnType<typeof listAmberJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAmberJobs>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listAmberJobs>>,
@@ -4622,7 +4645,7 @@ export function useListAmberJobs<TData = Awaited<ReturnType<typeof listAmberJobs
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAmberJobs<TData = Awaited<ReturnType<typeof listAmberJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListAmberJobs<TData = Awaited<ReturnType<typeof listAmberJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAmberJobs>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -4630,12 +4653,410 @@ export function useListAmberJobs<TData = Awaited<ReturnType<typeof listAmberJobs
  * @summary List AMBER jobs
  */
 
-export function useListAmberJobs<TData = Awaited<ReturnType<typeof listAmberJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListAmberJobs<TData = Awaited<ReturnType<typeof listAmberJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAmberJobs>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
 
   const queryOptions = getListAmberJobsQueryOptions(experimentId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type stopAmberJobResponse204 = {
+  data: void
+  status: 204
+}
+
+export type stopAmberJobResponse400 = {
+  data: Problem
+  status: 400
+}
+
+export type stopAmberJobResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type stopAmberJobResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 204 | 400 | 404>
+}
+
+export type stopAmberJobResponseSuccess = (stopAmberJobResponse204) & {
+  headers: Headers;
+};
+export type stopAmberJobResponseError = (stopAmberJobResponse400 | stopAmberJobResponse404 | stopAmberJobResponseDefault) & {
+  headers: Headers;
+};
+
+export const getStopAmberJobUrl = (experimentId: string,
+    simulationPath: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/amber/${simulationPath}/stop`
+}
+
+/**
+ * Stop the run gracefully, keeping all data and the job row.
+ * @summary Stop an AMBER run, preserving its data
+ */
+export const stopAmberJob = async (experimentId: string,
+    simulationPath: string, options?: RequestInit): Promise<stopAmberJobResponseSuccess> => {
+
+  const res = await fetch(getStopAmberJobUrl(experimentId,simulationPath),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: stopAmberJobResponseError['data'], status?: number} = new globalThis.Error();
+    const data : stopAmberJobResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: stopAmberJobResponseSuccess['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as stopAmberJobResponseSuccess
+}
+
+
+
+
+
+export const getStopAmberJobMutationKey = () => ['stopAmberJob'] as const;
+
+export const getStopAmberJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopAmberJob>>, TError,StopAmberJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof stopAmberJob>>, TError,StopAmberJobMutationVariables, TContext> => {
+
+const mutationKey = getStopAmberJobMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof stopAmberJob>>, StopAmberJobMutationVariables> = (props) => {
+          const {experimentId,simulationPath} = props ?? {};
+
+          return  stopAmberJob(experimentId,simulationPath,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StopAmberJobMutationResult = NonNullable<Awaited<ReturnType<typeof stopAmberJob>>>
+
+    export type StopAmberJobMutationError = globalThis.Error & { info?: Problem; status?: number }
+    export type StopAmberJobMutationVariables = {experimentId: string;simulationPath: string}
+
+    /**
+ * @summary Stop an AMBER run, preserving its data
+ */
+export const useStopAmberJob = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopAmberJob>>, TError,StopAmberJobMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof stopAmberJob>>,
+        TError,
+        StopAmberJobMutationVariables,
+        TContext
+      > => {
+      return useMutation(getStopAmberJobMutationOptions(options), queryClient);
+    }
+
+export type extendAmberJobResponse400 = {
+  data: Problem
+  status: 400
+}
+
+export type extendAmberJobResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 400>
+}
+
+;
+export type extendAmberJobResponseError = (extendAmberJobResponse400 | extendAmberJobResponseDefault) & {
+  headers: Headers;
+};
+
+export type extendAmberJobResponse = (extendAmberJobResponseError)
+
+export const getExtendAmberJobUrl = (experimentId: string,
+    simulationPath: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/amber/${simulationPath}/extend`
+}
+
+/**
+ * Reject AMBER extension: it is GROMACS-only.
+ *
+ * Exists so that ``POST .../extend`` is a clear 400 instead of falling into the
+ * greedy submit route with confusing parameter errors.
+ * @summary Extend an AMBER run (extension is GROMACS-only)
+ */
+export const extendAmberJob = async (experimentId: string,
+    simulationPath: string, options?: RequestInit): Promise<extendAmberJobResponse> => {
+
+  const res = await fetch(getExtendAmberJobUrl(experimentId,simulationPath),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'POST'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: extendAmberJobResponseError['data'], status?: number} = new globalThis.Error();
+    const data : extendAmberJobResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: extendAmberJobResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as extendAmberJobResponse
+}
+
+
+
+
+
+export const getExtendAmberJobMutationKey = () => ['extendAmberJob'] as const;
+
+export const getExtendAmberJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extendAmberJob>>, TError,ExtendAmberJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof extendAmberJob>>, TError,ExtendAmberJobMutationVariables, TContext> => {
+
+const mutationKey = getExtendAmberJobMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof extendAmberJob>>, ExtendAmberJobMutationVariables> = (props) => {
+          const {experimentId,simulationPath} = props ?? {};
+
+          return  extendAmberJob(experimentId,simulationPath,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExtendAmberJobMutationResult = NonNullable<Awaited<ReturnType<typeof extendAmberJob>>>
+
+    export type ExtendAmberJobMutationError = globalThis.Error & { info?: Problem; status?: number }
+    export type ExtendAmberJobMutationVariables = {experimentId: string;simulationPath: string}
+
+    /**
+ * @summary Extend an AMBER run (extension is GROMACS-only)
+ */
+export const useExtendAmberJob = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extendAmberJob>>, TError,ExtendAmberJobMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof extendAmberJob>>,
+        TError,
+        ExtendAmberJobMutationVariables,
+        TContext
+      > => {
+      return useMutation(getExtendAmberJobMutationOptions(options), queryClient);
+    }
+
+export type getAmberJobLogResponse200 = {
+  data: string
+  status: 200
+}
+
+export type getAmberJobLogResponse400 = {
+  data: Problem
+  status: 400
+}
+
+export type getAmberJobLogResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type getAmberJobLogResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 200 | 400 | 404>
+}
+
+export type getAmberJobLogResponseSuccess = (getAmberJobLogResponse200) & {
+  headers: Headers;
+};
+export type getAmberJobLogResponseError = (getAmberJobLogResponse400 | getAmberJobLogResponse404 | getAmberJobLogResponseDefault) & {
+  headers: Headers;
+};
+
+export const getGetAmberJobLogUrl = (experimentId: string,
+    simulationPath: string,
+    params?: GetAmberJobLogParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/amber/${simulationPath}/log?${stringifiedParams}` : `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/amber/${simulationPath}/log`
+}
+
+/**
+ * Tail of one of the run's log streams (`mdout`, `mdinfo`, `stdout`, `stderr`).
+ * @summary Get an AMBER job log
+ */
+export const getAmberJobLog = async (experimentId: string,
+    simulationPath: string,
+    params?: GetAmberJobLogParams, options?: RequestInit): Promise<getAmberJobLogResponseSuccess> => {
+
+  const res = await fetch(getGetAmberJobLogUrl(experimentId,simulationPath,params),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: getAmberJobLogResponseError['data'], status?: number} = new globalThis.Error();
+    const data : getAmberJobLogResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: getAmberJobLogResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getAmberJobLogResponseSuccess
+}
+
+
+
+
+
+export const getGetAmberJobLogQueryKey = (experimentId: string,
+    simulationPath: string,
+    params?: GetAmberJobLogParams,) => {
+    return [
+    `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/amber/${simulationPath}/log`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetAmberJobLogQueryOptions = <TData = Awaited<ReturnType<typeof getAmberJobLog>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
+    simulationPath: string,
+    params?: GetAmberJobLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJobLog>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAmberJobLogQueryKey(experimentId,simulationPath,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAmberJobLog>>> = ({ signal }) => getAmberJobLog(experimentId,simulationPath,params, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: experimentId !== null && experimentId !== undefined && simulationPath !== null && simulationPath !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAmberJobLog>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAmberJobLogQueryResult = NonNullable<Awaited<ReturnType<typeof getAmberJobLog>>>
+export type GetAmberJobLogQueryError = globalThis.Error & { info?: Problem; status?: number }
+
+
+export function useGetAmberJobLog<TData = Awaited<ReturnType<typeof getAmberJobLog>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    simulationPath: string,
+    params: undefined |  GetAmberJobLogParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJobLog>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAmberJobLog>>,
+          TError,
+          Awaited<ReturnType<typeof getAmberJobLog>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAmberJobLog<TData = Awaited<ReturnType<typeof getAmberJobLog>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    simulationPath: string,
+    params?: GetAmberJobLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJobLog>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAmberJobLog>>,
+          TError,
+          Awaited<ReturnType<typeof getAmberJobLog>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAmberJobLog<TData = Awaited<ReturnType<typeof getAmberJobLog>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    simulationPath: string,
+    params?: GetAmberJobLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJobLog>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get an AMBER job log
+ */
+
+export function useGetAmberJobLog<TData = Awaited<ReturnType<typeof getAmberJobLog>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    simulationPath: string,
+    params?: GetAmberJobLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJobLog>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAmberJobLogQueryOptions(experimentId,simulationPath,params,options)
 
   const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
@@ -4654,12 +5075,12 @@ export type getAmberJobResponse200 = {
 }
 
 export type getAmberJobResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type getAmberJobResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 404>
 }
 
@@ -4680,6 +5101,7 @@ export const getGetAmberJobUrl = (experimentId: string,
 }
 
 /**
+ * Get the AMBER run of a simulation.
  * @summary Get an AMBER job
  */
 export const getAmberJob = async (experimentId: string,
@@ -4721,7 +5143,7 @@ export const getGetAmberJobQueryKey = (experimentId: string,
     }
 
 
-export const getGetAmberJobQueryOptions = <TData = Awaited<ReturnType<typeof getAmberJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string,
+export const getGetAmberJobQueryOptions = <TData = Awaited<ReturnType<typeof getAmberJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
     simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJob>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
@@ -4741,10 +5163,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetAmberJobQueryResult = NonNullable<Awaited<ReturnType<typeof getAmberJob>>>
-export type GetAmberJobQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+export type GetAmberJobQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetAmberJob<TData = Awaited<ReturnType<typeof getAmberJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetAmberJob<TData = Awaited<ReturnType<typeof getAmberJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJob>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
@@ -4755,7 +5177,7 @@ export function useGetAmberJob<TData = Awaited<ReturnType<typeof getAmberJob>>, 
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetAmberJob<TData = Awaited<ReturnType<typeof getAmberJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetAmberJob<TData = Awaited<ReturnType<typeof getAmberJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJob>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
@@ -4766,7 +5188,7 @@ export function useGetAmberJob<TData = Awaited<ReturnType<typeof getAmberJob>>, 
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetAmberJob<TData = Awaited<ReturnType<typeof getAmberJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetAmberJob<TData = Awaited<ReturnType<typeof getAmberJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJob>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
@@ -4775,7 +5197,7 @@ export function useGetAmberJob<TData = Awaited<ReturnType<typeof getAmberJob>>, 
  * @summary Get an AMBER job
  */
 
-export function useGetAmberJob<TData = Awaited<ReturnType<typeof getAmberJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetAmberJob<TData = Awaited<ReturnType<typeof getAmberJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJob>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
@@ -4800,22 +5222,22 @@ export type submitAmberJobResponse201 = {
 }
 
 export type submitAmberJobResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type submitAmberJobResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type submitAmberJobResponse409 = {
-  data: ConflictResponse
+  data: Problem
   status: 409
 }
 
 export type submitAmberJobResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 201 | 400 | 404 | 409>
 }
 
@@ -4836,11 +5258,12 @@ export const getSubmitAmberJobUrl = (experimentId: string,
 }
 
 /**
+ * Submit an AMBER simulation job from a simulation manifest.
  * @summary Submit an AMBER job (replaces a terminal run, 409s on a live one)
  */
 export const submitAmberJob = async (experimentId: string,
     simulationPath: string,
-    amberJobRequest?: AmberJobRequest, options?: RequestInit): Promise<submitAmberJobResponseSuccess> => {
+    amberJobRequest: AmberJobRequest, options?: RequestInit): Promise<submitAmberJobResponseSuccess> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -4886,7 +5309,7 @@ const res = await fetch(getSubmitAmberJobUrl(experimentId,simulationPath),
 
 export const getSubmitAmberJobMutationKey = () => ['submitAmberJob'] as const;
 
-export const getSubmitAmberJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+export const getSubmitAmberJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAmberJob>>, TError,SubmitAmberJobMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof submitAmberJob>>, TError,SubmitAmberJobMutationVariables, TContext> => {
 
@@ -4914,14 +5337,14 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type SubmitAmberJobMutationResult = NonNullable<Awaited<ReturnType<typeof submitAmberJob>>>
-    export type SubmitAmberJobMutationBody = AmberJobRequest | undefined
-    export type SubmitAmberJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number }
-    export type SubmitAmberJobMutationVariables = {experimentId: string;simulationPath: string;data?: AmberJobRequest}
+    export type SubmitAmberJobMutationBody = AmberJobRequest
+    export type SubmitAmberJobMutationError = globalThis.Error & { info?: Problem; status?: number }
+    export type SubmitAmberJobMutationVariables = {experimentId: string;simulationPath: string;data: AmberJobRequest}
 
     /**
  * @summary Submit an AMBER job (replaces a terminal run, 409s on a live one)
  */
-export const useSubmitAmberJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ConflictResponse | ProblemResponse; status?: number },
+export const useSubmitAmberJob = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAmberJob>>, TError,SubmitAmberJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof submitAmberJob>>,
@@ -4933,17 +5356,17 @@ export const useSubmitAmberJob = <TError = globalThis.Error & { info?: BadReques
     }
 
 export type deleteAmberJobResponse204 = {
-  data: NoContentResponse
+  data: void
   status: 204
 }
 
 export type deleteAmberJobResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type deleteAmberJobResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 204 | 404>
 }
 
@@ -4964,6 +5387,7 @@ export const getDeleteAmberJobUrl = (experimentId: string,
 }
 
 /**
+ * Delete the simulation's run: its MDRun job, DB row, and result files.
  * @summary Delete an AMBER job
  */
 export const deleteAmberJob = async (experimentId: string,
@@ -4989,7 +5413,7 @@ export const deleteAmberJob = async (experimentId: string,
     err.status = res.status;
     throw err;
   }
-  const data: deleteAmberJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  const data: deleteAmberJobResponseSuccess['data'] = body ? JSON.parse(body) : undefined
   return { data, status: res.status, headers: res.headers } as deleteAmberJobResponseSuccess
 }
 
@@ -4999,7 +5423,7 @@ export const deleteAmberJob = async (experimentId: string,
 
 export const getDeleteAmberJobMutationKey = () => ['deleteAmberJob'] as const;
 
-export const getDeleteAmberJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+export const getDeleteAmberJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAmberJob>>, TError,DeleteAmberJobMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof deleteAmberJob>>, TError,DeleteAmberJobMutationVariables, TContext> => {
 
@@ -5028,13 +5452,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type DeleteAmberJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAmberJob>>>
 
-    export type DeleteAmberJobMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+    export type DeleteAmberJobMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type DeleteAmberJobMutationVariables = {experimentId: string;simulationPath: string}
 
     /**
  * @summary Delete an AMBER job
  */
-export const useDeleteAmberJob = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+export const useDeleteAmberJob = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAmberJob>>, TError,DeleteAmberJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof deleteAmberJob>>,
@@ -5045,405 +5469,13 @@ export const useDeleteAmberJob = <TError = globalThis.Error & { info?: NotFoundR
       return useMutation(getDeleteAmberJobMutationOptions(options), queryClient);
     }
 
-export type stopAmberJobResponse204 = {
-  data: NoContentResponse
-  status: 204
-}
-
-export type stopAmberJobResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type stopAmberJobResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type stopAmberJobResponseDefault = {
-  data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 204 | 400 | 404>
-}
-
-export type stopAmberJobResponseSuccess = (stopAmberJobResponse204) & {
-  headers: Headers;
-};
-export type stopAmberJobResponseError = (stopAmberJobResponse400 | stopAmberJobResponse404 | stopAmberJobResponseDefault) & {
-  headers: Headers;
-};
-
-export const getStopAmberJobUrl = (experimentId: string,
-    simulationPath: string,) => {
-
-
-
-
-  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/amber/${simulationPath}/stop`
-}
-
-/**
- * @summary Stop an AMBER run, preserving its data
- */
-export const stopAmberJob = async (experimentId: string,
-    simulationPath: string, options?: RequestInit): Promise<stopAmberJobResponseSuccess> => {
-
-  const res = await fetch(getStopAmberJobUrl(experimentId,simulationPath),
-  {
-      credentials: 'same-origin',
-    ...options,
-    method: 'POST'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  if (!res.ok) {
-
-    const err: globalThis.Error & {info?: stopAmberJobResponseError['data'], status?: number} = new globalThis.Error();
-    const data : stopAmberJobResponseError['data'] = body ? JSON.parse(body) : {}
-    err.info = data;
-    err.status = res.status;
-    throw err;
-  }
-  const data: stopAmberJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as stopAmberJobResponseSuccess
-}
-
-
-
-
-
-export const getStopAmberJobMutationKey = () => ['stopAmberJob'] as const;
-
-export const getStopAmberJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopAmberJob>>, TError,StopAmberJobMutationVariables, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof stopAmberJob>>, TError,StopAmberJobMutationVariables, TContext> => {
-
-const mutationKey = getStopAmberJobMutationKey();
-const {mutation: mutationOptions, fetch: fetchOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, fetch: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof stopAmberJob>>, StopAmberJobMutationVariables> = (props) => {
-          const {experimentId,simulationPath} = props ?? {};
-
-          return  stopAmberJob(experimentId,simulationPath,fetchOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type StopAmberJobMutationResult = NonNullable<Awaited<ReturnType<typeof stopAmberJob>>>
-
-    export type StopAmberJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
-    export type StopAmberJobMutationVariables = {experimentId: string;simulationPath: string}
-
-    /**
- * @summary Stop an AMBER run, preserving its data
- */
-export const useStopAmberJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopAmberJob>>, TError,StopAmberJobMutationVariables, TContext>, fetch?: RequestInit}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof stopAmberJob>>,
-        TError,
-        StopAmberJobMutationVariables,
-        TContext
-      > => {
-      return useMutation(getStopAmberJobMutationOptions(options), queryClient);
-    }
-
-export type extendAmberJobResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type extendAmberJobResponseDefault = {
-  data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 400>
-}
-
-;
-export type extendAmberJobResponseError = (extendAmberJobResponse400 | extendAmberJobResponseDefault) & {
-  headers: Headers;
-};
-
-export type extendAmberJobResponse = (extendAmberJobResponseError)
-
-export const getExtendAmberJobUrl = (experimentId: string,
-    simulationPath: string,) => {
-
-
-
-
-  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/amber/${simulationPath}/extend`
-}
-
-/**
- * @summary Extend an AMBER run (extension is GROMACS-only)
- */
-export const extendAmberJob = async (experimentId: string,
-    simulationPath: string, options?: RequestInit): Promise<extendAmberJobResponse> => {
-
-  const res = await fetch(getExtendAmberJobUrl(experimentId,simulationPath),
-  {
-      credentials: 'same-origin',
-    ...options,
-    method: 'POST'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  if (!res.ok) {
-
-    const err: globalThis.Error & {info?: extendAmberJobResponseError['data'], status?: number} = new globalThis.Error();
-    const data : extendAmberJobResponseError['data'] = body ? JSON.parse(body) : {}
-    err.info = data;
-    err.status = res.status;
-    throw err;
-  }
-  const data: extendAmberJobResponse['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as extendAmberJobResponse
-}
-
-
-
-
-
-export const getExtendAmberJobMutationKey = () => ['extendAmberJob'] as const;
-
-export const getExtendAmberJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extendAmberJob>>, TError,ExtendAmberJobMutationVariables, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof extendAmberJob>>, TError,ExtendAmberJobMutationVariables, TContext> => {
-
-const mutationKey = getExtendAmberJobMutationKey();
-const {mutation: mutationOptions, fetch: fetchOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, fetch: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof extendAmberJob>>, ExtendAmberJobMutationVariables> = (props) => {
-          const {experimentId,simulationPath} = props ?? {};
-
-          return  extendAmberJob(experimentId,simulationPath,fetchOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type ExtendAmberJobMutationResult = NonNullable<Awaited<ReturnType<typeof extendAmberJob>>>
-
-    export type ExtendAmberJobMutationError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }
-    export type ExtendAmberJobMutationVariables = {experimentId: string;simulationPath: string}
-
-    /**
- * @summary Extend an AMBER run (extension is GROMACS-only)
- */
-export const useExtendAmberJob = <TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof extendAmberJob>>, TError,ExtendAmberJobMutationVariables, TContext>, fetch?: RequestInit}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof extendAmberJob>>,
-        TError,
-        ExtendAmberJobMutationVariables,
-        TContext
-      > => {
-      return useMutation(getExtendAmberJobMutationOptions(options), queryClient);
-    }
-
-export type getAmberJobLogResponse200 = {
-  data: TextValueResponse
-  status: 200
-}
-
-export type getAmberJobLogResponse400 = {
-  data: BadRequestResponse
-  status: 400
-}
-
-export type getAmberJobLogResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type getAmberJobLogResponseDefault = {
-  data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 200 | 400 | 404>
-}
-
-export type getAmberJobLogResponseSuccess = (getAmberJobLogResponse200) & {
-  headers: Headers;
-};
-export type getAmberJobLogResponseError = (getAmberJobLogResponse400 | getAmberJobLogResponse404 | getAmberJobLogResponseDefault) & {
-  headers: Headers;
-};
-
-export const getGetAmberJobLogUrl = (experimentId: string,
-    simulationPath: string,
-    params?: GetAmberJobLogParams,) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0 ? `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/amber/${simulationPath}/log?${stringifiedParams}` : `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/amber/${simulationPath}/log`
-}
-
-/**
- * @summary Get an AMBER job log
- */
-export const getAmberJobLog = async (experimentId: string,
-    simulationPath: string,
-    params?: GetAmberJobLogParams, options?: RequestInit): Promise<getAmberJobLogResponseSuccess> => {
-
-  const res = await fetch(getGetAmberJobLogUrl(experimentId,simulationPath,params),
-  {
-      credentials: 'same-origin',
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  if (!res.ok) {
-
-    const err: globalThis.Error & {info?: getAmberJobLogResponseError['data'], status?: number} = new globalThis.Error();
-    const data : getAmberJobLogResponseError['data'] = body ? JSON.parse(body) : {}
-    err.info = data;
-    err.status = res.status;
-    throw err;
-  }
-  const data: getAmberJobLogResponseSuccess['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getAmberJobLogResponseSuccess
-}
-
-
-
-
-
-export const getGetAmberJobLogQueryKey = (experimentId: string,
-    simulationPath: string,
-    params?: GetAmberJobLogParams,) => {
-    return [
-    `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/amber/${simulationPath}/log`, ...(params ? [params] : [])
-    ] as const;
-    }
-
-
-export const getGetAmberJobLogQueryOptions = <TData = Awaited<ReturnType<typeof getAmberJobLog>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string,
-    simulationPath: string,
-    params?: GetAmberJobLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJobLog>>, TError, TData>>, fetch?: RequestInit}
-) => {
-
-const {query: queryOptions, fetch: fetchOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetAmberJobLogQueryKey(experimentId,simulationPath,params);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAmberJobLog>>> = ({ signal }) => getAmberJobLog(experimentId,simulationPath,params, { signal, ...fetchOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: experimentId !== null && experimentId !== undefined && simulationPath !== null && simulationPath !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAmberJobLog>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetAmberJobLogQueryResult = NonNullable<Awaited<ReturnType<typeof getAmberJobLog>>>
-export type GetAmberJobLogQueryError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
-
-
-export function useGetAmberJobLog<TData = Awaited<ReturnType<typeof getAmberJobLog>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    simulationPath: string,
-    params: undefined |  GetAmberJobLogParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJobLog>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getAmberJobLog>>,
-          TError,
-          Awaited<ReturnType<typeof getAmberJobLog>>
-        > , 'initialData'
-      >, fetch?: RequestInit}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetAmberJobLog<TData = Awaited<ReturnType<typeof getAmberJobLog>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    simulationPath: string,
-    params?: GetAmberJobLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJobLog>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getAmberJobLog>>,
-          TError,
-          Awaited<ReturnType<typeof getAmberJobLog>>
-        > , 'initialData'
-      >, fetch?: RequestInit}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetAmberJobLog<TData = Awaited<ReturnType<typeof getAmberJobLog>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    simulationPath: string,
-    params?: GetAmberJobLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJobLog>>, TError, TData>>, fetch?: RequestInit}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary Get an AMBER job log
- */
-
-export function useGetAmberJobLog<TData = Awaited<ReturnType<typeof getAmberJobLog>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    simulationPath: string,
-    params?: GetAmberJobLogParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAmberJobLog>>, TError, TData>>, fetch?: RequestInit}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getGetAmberJobLogQueryOptions(experimentId,simulationPath,params,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
 export type listTunerJobsResponse200 = {
   data: TunerJob[]
   status: 200
 }
 
 export type listTunerJobsResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200>
 }
 
@@ -5463,6 +5495,7 @@ export const getListTunerJobsUrl = (experimentId: string,) => {
 }
 
 /**
+ * List all tuner jobs of an experiment.
  * @summary List tuner jobs
  */
 export const listTunerJobs = async (experimentId: string, options?: RequestInit): Promise<listTunerJobsResponseSuccess> => {
@@ -5502,7 +5535,7 @@ export const getListTunerJobsQueryKey = (experimentId: string,) => {
     }
 
 
-export const getListTunerJobsQueryOptions = <TData = Awaited<ReturnType<typeof listTunerJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTunerJobs>>, TError, TData>>, fetch?: RequestInit}
+export const getListTunerJobsQueryOptions = <TData = Awaited<ReturnType<typeof listTunerJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTunerJobs>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -5521,10 +5554,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListTunerJobsQueryResult = NonNullable<Awaited<ReturnType<typeof listTunerJobs>>>
-export type ListTunerJobsQueryError = globalThis.Error & { info?: ProblemResponse; status?: number }
+export type ListTunerJobsQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useListTunerJobs<TData = Awaited<ReturnType<typeof listTunerJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListTunerJobs<TData = Awaited<ReturnType<typeof listTunerJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTunerJobs>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listTunerJobs>>,
@@ -5534,7 +5567,7 @@ export function useListTunerJobs<TData = Awaited<ReturnType<typeof listTunerJobs
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListTunerJobs<TData = Awaited<ReturnType<typeof listTunerJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListTunerJobs<TData = Awaited<ReturnType<typeof listTunerJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTunerJobs>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listTunerJobs>>,
@@ -5544,7 +5577,7 @@ export function useListTunerJobs<TData = Awaited<ReturnType<typeof listTunerJobs
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListTunerJobs<TData = Awaited<ReturnType<typeof listTunerJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListTunerJobs<TData = Awaited<ReturnType<typeof listTunerJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTunerJobs>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -5552,7 +5585,7 @@ export function useListTunerJobs<TData = Awaited<ReturnType<typeof listTunerJobs
  * @summary List tuner jobs
  */
 
-export function useListTunerJobs<TData = Awaited<ReturnType<typeof listTunerJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListTunerJobs<TData = Awaited<ReturnType<typeof listTunerJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listTunerJobs>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -5580,45 +5613,42 @@ export type startTunerJobResponse201 = {
   status: 201
 }
 
+export type startTunerJobResponse400 = {
+  data: Problem
+  status: 400
+}
+
 export type startTunerJobResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type startTunerJobResponseDefault = {
-  data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 200 | 201 | 404>
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 200 | 201 | 400 | 404>
 }
 
 export type startTunerJobResponseSuccess = (startTunerJobResponse200 | startTunerJobResponse201) & {
   headers: Headers;
 };
-export type startTunerJobResponseError = (startTunerJobResponse404 | startTunerJobResponseDefault) & {
+export type startTunerJobResponseError = (startTunerJobResponse400 | startTunerJobResponse404 | startTunerJobResponseDefault) & {
   headers: Headers;
 };
 
-export const getStartTunerJobUrl = (experimentId: string,
-    params?: StartTunerJobParams,) => {
-  const normalizedParams = new URLSearchParams();
+export const getStartTunerJobUrl = (experimentId: string,) => {
 
-  Object.entries(params || {}).forEach(([key, value]) => {
 
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
 
-  const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/tuner?${stringifiedParams}` : `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/tuner`
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/tuner`
 }
 
 /**
+ * Start a tuner job for a simulation manifest; an existing healthy job is returned instead (200).
  * @summary Start a tuner job
  */
 export const startTunerJob = async (experimentId: string,
-    tunerJobRequest?: TunerJobRequest,
-    params?: StartTunerJobParams, options?: RequestInit): Promise<startTunerJobResponseSuccess> => {
+    tunerJobRequest: TunerJobRequest, options?: RequestInit): Promise<startTunerJobResponseSuccess> => {
 
     const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
     if (!h) return {};
@@ -5634,7 +5664,7 @@ export const startTunerJob = async (experimentId: string,
     }
     return headers;
   };
-const res = await fetch(getStartTunerJobUrl(experimentId,params),
+const res = await fetch(getStartTunerJobUrl(experimentId),
   {
       credentials: 'same-origin',
     ...options,
@@ -5664,7 +5694,7 @@ const res = await fetch(getStartTunerJobUrl(experimentId,params),
 
 export const getStartTunerJobMutationKey = () => ['startTunerJob'] as const;
 
-export const getStartTunerJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+export const getStartTunerJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startTunerJob>>, TError,StartTunerJobMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof startTunerJob>>, TError,StartTunerJobMutationVariables, TContext> => {
 
@@ -5679,9 +5709,9 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
 
       const mutationFn: MutationFunction<Awaited<ReturnType<typeof startTunerJob>>, StartTunerJobMutationVariables> = (props) => {
-          const {experimentId,data,params} = props ?? {};
+          const {experimentId,data} = props ?? {};
 
-          return  startTunerJob(experimentId,data,params,fetchOptions)
+          return  startTunerJob(experimentId,data,fetchOptions)
         }
 
 
@@ -5692,14 +5722,14 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type StartTunerJobMutationResult = NonNullable<Awaited<ReturnType<typeof startTunerJob>>>
-    export type StartTunerJobMutationBody = TunerJobRequest | undefined
-    export type StartTunerJobMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
-    export type StartTunerJobMutationVariables = {experimentId: string;data?: TunerJobRequest;params?: StartTunerJobParams}
+    export type StartTunerJobMutationBody = TunerJobRequest
+    export type StartTunerJobMutationError = globalThis.Error & { info?: Problem; status?: number }
+    export type StartTunerJobMutationVariables = {experimentId: string;data: TunerJobRequest}
 
     /**
  * @summary Start a tuner job
  */
-export const useStartTunerJob = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+export const useStartTunerJob = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startTunerJob>>, TError,StartTunerJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof startTunerJob>>,
@@ -5710,277 +5740,18 @@ export const useStartTunerJob = <TError = globalThis.Error & { info?: NotFoundRe
       return useMutation(getStartTunerJobMutationOptions(options), queryClient);
     }
 
-export type getTunerJobResponse200 = {
-  data: TunerJob
-  status: 200
-}
-
-export type getTunerJobResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type getTunerJobResponseDefault = {
-  data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 200 | 404>
-}
-
-export type getTunerJobResponseSuccess = (getTunerJobResponse200) & {
-  headers: Headers;
-};
-export type getTunerJobResponseError = (getTunerJobResponse404 | getTunerJobResponseDefault) & {
-  headers: Headers;
-};
-
-export const getGetTunerJobUrl = (experimentId: string,
-    simulationPath: string,) => {
-
-
-
-
-  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/tuner/${simulationPath}`
-}
-
-/**
- * @summary Get a tuner job
- */
-export const getTunerJob = async (experimentId: string,
-    simulationPath: string, options?: RequestInit): Promise<getTunerJobResponseSuccess> => {
-
-  const res = await fetch(getGetTunerJobUrl(experimentId,simulationPath),
-  {
-      credentials: 'same-origin',
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  if (!res.ok) {
-
-    const err: globalThis.Error & {info?: getTunerJobResponseError['data'], status?: number} = new globalThis.Error();
-    const data : getTunerJobResponseError['data'] = body ? JSON.parse(body) : {}
-    err.info = data;
-    err.status = res.status;
-    throw err;
-  }
-  const data: getTunerJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getTunerJobResponseSuccess
-}
-
-
-
-
-
-export const getGetTunerJobQueryKey = (experimentId: string,
-    simulationPath: string,) => {
-    return [
-    `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/tuner/${simulationPath}`
-    ] as const;
-    }
-
-
-export const getGetTunerJobQueryOptions = <TData = Awaited<ReturnType<typeof getTunerJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string,
-    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerJob>>, TError, TData>>, fetch?: RequestInit}
-) => {
-
-const {query: queryOptions, fetch: fetchOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetTunerJobQueryKey(experimentId,simulationPath);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTunerJob>>> = ({ signal }) => getTunerJob(experimentId,simulationPath, { signal, ...fetchOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: experimentId !== null && experimentId !== undefined && simulationPath !== null && simulationPath !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTunerJob>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetTunerJobQueryResult = NonNullable<Awaited<ReturnType<typeof getTunerJob>>>
-export type GetTunerJobQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
-
-
-export function useGetTunerJob<TData = Awaited<ReturnType<typeof getTunerJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    simulationPath: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerJob>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getTunerJob>>,
-          TError,
-          Awaited<ReturnType<typeof getTunerJob>>
-        > , 'initialData'
-      >, fetch?: RequestInit}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetTunerJob<TData = Awaited<ReturnType<typeof getTunerJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerJob>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getTunerJob>>,
-          TError,
-          Awaited<ReturnType<typeof getTunerJob>>
-        > , 'initialData'
-      >, fetch?: RequestInit}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetTunerJob<TData = Awaited<ReturnType<typeof getTunerJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerJob>>, TError, TData>>, fetch?: RequestInit}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary Get a tuner job
- */
-
-export function useGetTunerJob<TData = Awaited<ReturnType<typeof getTunerJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerJob>>, TError, TData>>, fetch?: RequestInit}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getGetTunerJobQueryOptions(experimentId,simulationPath,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export type deleteTunerJobResponse204 = {
-  data: NoContentResponse
-  status: 204
-}
-
-export type deleteTunerJobResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type deleteTunerJobResponseDefault = {
-  data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 204 | 404>
-}
-
-export type deleteTunerJobResponseSuccess = (deleteTunerJobResponse204) & {
-  headers: Headers;
-};
-export type deleteTunerJobResponseError = (deleteTunerJobResponse404 | deleteTunerJobResponseDefault) & {
-  headers: Headers;
-};
-
-export const getDeleteTunerJobUrl = (experimentId: string,
-    simulationPath: string,) => {
-
-
-
-
-  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/tuner/${simulationPath}`
-}
-
-/**
- * @summary Delete a tuner job
- */
-export const deleteTunerJob = async (experimentId: string,
-    simulationPath: string, options?: RequestInit): Promise<deleteTunerJobResponseSuccess> => {
-
-  const res = await fetch(getDeleteTunerJobUrl(experimentId,simulationPath),
-  {
-      credentials: 'same-origin',
-    ...options,
-    method: 'DELETE'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  if (!res.ok) {
-
-    const err: globalThis.Error & {info?: deleteTunerJobResponseError['data'], status?: number} = new globalThis.Error();
-    const data : deleteTunerJobResponseError['data'] = body ? JSON.parse(body) : {}
-    err.info = data;
-    err.status = res.status;
-    throw err;
-  }
-  const data: deleteTunerJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteTunerJobResponseSuccess
-}
-
-
-
-
-
-export const getDeleteTunerJobMutationKey = () => ['deleteTunerJob'] as const;
-
-export const getDeleteTunerJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTunerJob>>, TError,DeleteTunerJobMutationVariables, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteTunerJob>>, TError,DeleteTunerJobMutationVariables, TContext> => {
-
-const mutationKey = getDeleteTunerJobMutationKey();
-const {mutation: mutationOptions, fetch: fetchOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, fetch: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTunerJob>>, DeleteTunerJobMutationVariables> = (props) => {
-          const {experimentId,simulationPath} = props ?? {};
-
-          return  deleteTunerJob(experimentId,simulationPath,fetchOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteTunerJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTunerJob>>>
-
-    export type DeleteTunerJobMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
-    export type DeleteTunerJobMutationVariables = {experimentId: string;simulationPath: string}
-
-    /**
- * @summary Delete a tuner job
- */
-export const useDeleteTunerJob = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTunerJob>>, TError,DeleteTunerJobMutationVariables, TContext>, fetch?: RequestInit}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof deleteTunerJob>>,
-        TError,
-        DeleteTunerJobMutationVariables,
-        TContext
-      > => {
-      return useMutation(getDeleteTunerJobMutationOptions(options), queryClient);
-    }
-
 export type stopTunerJobResponse204 = {
-  data: NoContentResponse
+  data: void
   status: 204
 }
 
 export type stopTunerJobResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type stopTunerJobResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 204 | 404>
 }
 
@@ -6001,6 +5772,7 @@ export const getStopTunerJobUrl = (experimentId: string,
 }
 
 /**
+ * Stop a running tuner job, keeping its observed trials.
  * @summary Stop a tuner job
  */
 export const stopTunerJob = async (experimentId: string,
@@ -6026,7 +5798,7 @@ export const stopTunerJob = async (experimentId: string,
     err.status = res.status;
     throw err;
   }
-  const data: stopTunerJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  const data: stopTunerJobResponseSuccess['data'] = body ? JSON.parse(body) : undefined
   return { data, status: res.status, headers: res.headers } as stopTunerJobResponseSuccess
 }
 
@@ -6036,7 +5808,7 @@ export const stopTunerJob = async (experimentId: string,
 
 export const getStopTunerJobMutationKey = () => ['stopTunerJob'] as const;
 
-export const getStopTunerJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+export const getStopTunerJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopTunerJob>>, TError,StopTunerJobMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof stopTunerJob>>, TError,StopTunerJobMutationVariables, TContext> => {
 
@@ -6065,13 +5837,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type StopTunerJobMutationResult = NonNullable<Awaited<ReturnType<typeof stopTunerJob>>>
 
-    export type StopTunerJobMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+    export type StopTunerJobMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type StopTunerJobMutationVariables = {experimentId: string;simulationPath: string}
 
     /**
  * @summary Stop a tuner job
  */
-export const useStopTunerJob = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+export const useStopTunerJob = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopTunerJob>>, TError,StopTunerJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof stopTunerJob>>,
@@ -6083,17 +5855,17 @@ export const useStopTunerJob = <TError = globalThis.Error & { info?: NotFoundRes
     }
 
 export type getTunerTrialStdoutResponse200 = {
-  data: TextValueResponse
+  data: string
   status: 200
 }
 
 export type getTunerTrialStdoutResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type getTunerTrialStdoutResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 404>
 }
 
@@ -6115,6 +5887,7 @@ export const getGetTunerTrialStdoutUrl = (experimentId: string,
 }
 
 /**
+ * Stdout log of a tuning trial.
  * @summary Get tuner trial standard output
  */
 export const getTunerTrialStdout = async (experimentId: string,
@@ -6158,7 +5931,7 @@ export const getGetTunerTrialStdoutQueryKey = (experimentId: string,
     }
 
 
-export const getGetTunerTrialStdoutQueryOptions = <TData = Awaited<ReturnType<typeof getTunerTrialStdout>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string,
+export const getGetTunerTrialStdoutQueryOptions = <TData = Awaited<ReturnType<typeof getTunerTrialStdout>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
     simulationPath: string,
     trialId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerTrialStdout>>, TError, TData>>, fetch?: RequestInit}
 ) => {
@@ -6179,10 +5952,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetTunerTrialStdoutQueryResult = NonNullable<Awaited<ReturnType<typeof getTunerTrialStdout>>>
-export type GetTunerTrialStdoutQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+export type GetTunerTrialStdoutQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetTunerTrialStdout<TData = Awaited<ReturnType<typeof getTunerTrialStdout>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetTunerTrialStdout<TData = Awaited<ReturnType<typeof getTunerTrialStdout>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string,
     trialId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerTrialStdout>>, TError, TData>> & Pick<
@@ -6194,7 +5967,7 @@ export function useGetTunerTrialStdout<TData = Awaited<ReturnType<typeof getTune
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetTunerTrialStdout<TData = Awaited<ReturnType<typeof getTunerTrialStdout>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetTunerTrialStdout<TData = Awaited<ReturnType<typeof getTunerTrialStdout>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string,
     trialId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerTrialStdout>>, TError, TData>> & Pick<
@@ -6206,7 +5979,7 @@ export function useGetTunerTrialStdout<TData = Awaited<ReturnType<typeof getTune
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetTunerTrialStdout<TData = Awaited<ReturnType<typeof getTunerTrialStdout>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetTunerTrialStdout<TData = Awaited<ReturnType<typeof getTunerTrialStdout>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string,
     trialId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerTrialStdout>>, TError, TData>>, fetch?: RequestInit}
@@ -6216,7 +5989,7 @@ export function useGetTunerTrialStdout<TData = Awaited<ReturnType<typeof getTune
  * @summary Get tuner trial standard output
  */
 
-export function useGetTunerTrialStdout<TData = Awaited<ReturnType<typeof getTunerTrialStdout>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetTunerTrialStdout<TData = Awaited<ReturnType<typeof getTunerTrialStdout>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string,
     trialId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerTrialStdout>>, TError, TData>>, fetch?: RequestInit}
@@ -6237,17 +6010,17 @@ export function useGetTunerTrialStdout<TData = Awaited<ReturnType<typeof getTune
 
 
 export type getTunerTrialStderrResponse200 = {
-  data: TextValueResponse
+  data: string
   status: 200
 }
 
 export type getTunerTrialStderrResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type getTunerTrialStderrResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 404>
 }
 
@@ -6269,6 +6042,7 @@ export const getGetTunerTrialStderrUrl = (experimentId: string,
 }
 
 /**
+ * Stderr log of a tuning trial.
  * @summary Get tuner trial standard error
  */
 export const getTunerTrialStderr = async (experimentId: string,
@@ -6312,7 +6086,7 @@ export const getGetTunerTrialStderrQueryKey = (experimentId: string,
     }
 
 
-export const getGetTunerTrialStderrQueryOptions = <TData = Awaited<ReturnType<typeof getTunerTrialStderr>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string,
+export const getGetTunerTrialStderrQueryOptions = <TData = Awaited<ReturnType<typeof getTunerTrialStderr>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
     simulationPath: string,
     trialId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerTrialStderr>>, TError, TData>>, fetch?: RequestInit}
 ) => {
@@ -6333,10 +6107,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetTunerTrialStderrQueryResult = NonNullable<Awaited<ReturnType<typeof getTunerTrialStderr>>>
-export type GetTunerTrialStderrQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+export type GetTunerTrialStderrQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetTunerTrialStderr<TData = Awaited<ReturnType<typeof getTunerTrialStderr>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetTunerTrialStderr<TData = Awaited<ReturnType<typeof getTunerTrialStderr>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string,
     trialId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerTrialStderr>>, TError, TData>> & Pick<
@@ -6348,7 +6122,7 @@ export function useGetTunerTrialStderr<TData = Awaited<ReturnType<typeof getTune
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetTunerTrialStderr<TData = Awaited<ReturnType<typeof getTunerTrialStderr>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetTunerTrialStderr<TData = Awaited<ReturnType<typeof getTunerTrialStderr>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string,
     trialId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerTrialStderr>>, TError, TData>> & Pick<
@@ -6360,7 +6134,7 @@ export function useGetTunerTrialStderr<TData = Awaited<ReturnType<typeof getTune
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetTunerTrialStderr<TData = Awaited<ReturnType<typeof getTunerTrialStderr>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetTunerTrialStderr<TData = Awaited<ReturnType<typeof getTunerTrialStderr>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string,
     trialId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerTrialStderr>>, TError, TData>>, fetch?: RequestInit}
@@ -6370,7 +6144,7 @@ export function useGetTunerTrialStderr<TData = Awaited<ReturnType<typeof getTune
  * @summary Get tuner trial standard error
  */
 
-export function useGetTunerTrialStderr<TData = Awaited<ReturnType<typeof getTunerTrialStderr>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetTunerTrialStderr<TData = Awaited<ReturnType<typeof getTunerTrialStderr>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     simulationPath: string,
     trialId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerTrialStderr>>, TError, TData>>, fetch?: RequestInit}
@@ -6390,18 +6164,279 @@ export function useGetTunerTrialStderr<TData = Awaited<ReturnType<typeof getTune
 
 
 
+export type getTunerJobResponse200 = {
+  data: TunerJob
+  status: 200
+}
+
+export type getTunerJobResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type getTunerJobResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 200 | 404>
+}
+
+export type getTunerJobResponseSuccess = (getTunerJobResponse200) & {
+  headers: Headers;
+};
+export type getTunerJobResponseError = (getTunerJobResponse404 | getTunerJobResponseDefault) & {
+  headers: Headers;
+};
+
+export const getGetTunerJobUrl = (experimentId: string,
+    simulationPath: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/tuner/${simulationPath}`
+}
+
+/**
+ * Get the tuner job of a simulation.
+ * @summary Get a tuner job
+ */
+export const getTunerJob = async (experimentId: string,
+    simulationPath: string, options?: RequestInit): Promise<getTunerJobResponseSuccess> => {
+
+  const res = await fetch(getGetTunerJobUrl(experimentId,simulationPath),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: getTunerJobResponseError['data'], status?: number} = new globalThis.Error();
+    const data : getTunerJobResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: getTunerJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getTunerJobResponseSuccess
+}
+
+
+
+
+
+export const getGetTunerJobQueryKey = (experimentId: string,
+    simulationPath: string,) => {
+    return [
+    `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/tuner/${simulationPath}`
+    ] as const;
+    }
+
+
+export const getGetTunerJobQueryOptions = <TData = Awaited<ReturnType<typeof getTunerJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
+    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerJob>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetTunerJobQueryKey(experimentId,simulationPath);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getTunerJob>>> = ({ signal }) => getTunerJob(experimentId,simulationPath, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: experimentId !== null && experimentId !== undefined && simulationPath !== null && simulationPath !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getTunerJob>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetTunerJobQueryResult = NonNullable<Awaited<ReturnType<typeof getTunerJob>>>
+export type GetTunerJobQueryError = globalThis.Error & { info?: Problem; status?: number }
+
+
+export function useGetTunerJob<TData = Awaited<ReturnType<typeof getTunerJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    simulationPath: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerJob>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTunerJob>>,
+          TError,
+          Awaited<ReturnType<typeof getTunerJob>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetTunerJob<TData = Awaited<ReturnType<typeof getTunerJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerJob>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getTunerJob>>,
+          TError,
+          Awaited<ReturnType<typeof getTunerJob>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetTunerJob<TData = Awaited<ReturnType<typeof getTunerJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerJob>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get a tuner job
+ */
+
+export function useGetTunerJob<TData = Awaited<ReturnType<typeof getTunerJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    simulationPath: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getTunerJob>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetTunerJobQueryOptions(experimentId,simulationPath,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type deleteTunerJobResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteTunerJobResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type deleteTunerJobResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 204 | 404>
+}
+
+export type deleteTunerJobResponseSuccess = (deleteTunerJobResponse204) & {
+  headers: Headers;
+};
+export type deleteTunerJobResponseError = (deleteTunerJobResponse404 | deleteTunerJobResponseDefault) & {
+  headers: Headers;
+};
+
+export const getDeleteTunerJobUrl = (experimentId: string,
+    simulationPath: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/tuner/${simulationPath}`
+}
+
+/**
+ * Delete a tuner job and its tuner-side resources.
+ * @summary Delete a tuner job
+ */
+export const deleteTunerJob = async (experimentId: string,
+    simulationPath: string, options?: RequestInit): Promise<deleteTunerJobResponseSuccess> => {
+
+  const res = await fetch(getDeleteTunerJobUrl(experimentId,simulationPath),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: deleteTunerJobResponseError['data'], status?: number} = new globalThis.Error();
+    const data : deleteTunerJobResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: deleteTunerJobResponseSuccess['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as deleteTunerJobResponseSuccess
+}
+
+
+
+
+
+export const getDeleteTunerJobMutationKey = () => ['deleteTunerJob'] as const;
+
+export const getDeleteTunerJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTunerJob>>, TError,DeleteTunerJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTunerJob>>, TError,DeleteTunerJobMutationVariables, TContext> => {
+
+const mutationKey = getDeleteTunerJobMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTunerJob>>, DeleteTunerJobMutationVariables> = (props) => {
+          const {experimentId,simulationPath} = props ?? {};
+
+          return  deleteTunerJob(experimentId,simulationPath,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTunerJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTunerJob>>>
+
+    export type DeleteTunerJobMutationError = globalThis.Error & { info?: Problem; status?: number }
+    export type DeleteTunerJobMutationVariables = {experimentId: string;simulationPath: string}
+
+    /**
+ * @summary Delete a tuner job
+ */
+export const useDeleteTunerJob = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTunerJob>>, TError,DeleteTunerJobMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTunerJob>>,
+        TError,
+        DeleteTunerJobMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteTunerJobMutationOptions(options), queryClient);
+    }
+
 export type getNotebookResponse200 = {
   data: Notebook
   status: 200
 }
 
 export type getNotebookResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type getNotebookResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 404>
 }
 
@@ -6421,6 +6456,7 @@ export const getGetNotebookUrl = (experimentId: string,) => {
 }
 
 /**
+ * Get the notebook instance of an experiment.
  * @summary Get an experiment notebook
  */
 export const getNotebook = async (experimentId: string, options?: RequestInit): Promise<getNotebookResponseSuccess> => {
@@ -6460,7 +6496,7 @@ export const getGetNotebookQueryKey = (experimentId: string,) => {
     }
 
 
-export const getGetNotebookQueryOptions = <TData = Awaited<ReturnType<typeof getNotebook>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotebook>>, TError, TData>>, fetch?: RequestInit}
+export const getGetNotebookQueryOptions = <TData = Awaited<ReturnType<typeof getNotebook>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotebook>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -6479,10 +6515,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetNotebookQueryResult = NonNullable<Awaited<ReturnType<typeof getNotebook>>>
-export type GetNotebookQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+export type GetNotebookQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetNotebook<TData = Awaited<ReturnType<typeof getNotebook>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetNotebook<TData = Awaited<ReturnType<typeof getNotebook>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotebook>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof getNotebook>>,
@@ -6492,7 +6528,7 @@ export function useGetNotebook<TData = Awaited<ReturnType<typeof getNotebook>>, 
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetNotebook<TData = Awaited<ReturnType<typeof getNotebook>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetNotebook<TData = Awaited<ReturnType<typeof getNotebook>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotebook>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof getNotebook>>,
@@ -6502,7 +6538,7 @@ export function useGetNotebook<TData = Awaited<ReturnType<typeof getNotebook>>, 
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetNotebook<TData = Awaited<ReturnType<typeof getNotebook>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetNotebook<TData = Awaited<ReturnType<typeof getNotebook>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotebook>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -6510,7 +6546,7 @@ export function useGetNotebook<TData = Awaited<ReturnType<typeof getNotebook>>, 
  * @summary Get an experiment notebook
  */
 
-export function useGetNotebook<TData = Awaited<ReturnType<typeof getNotebook>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetNotebook<TData = Awaited<ReturnType<typeof getNotebook>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getNotebook>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -6534,22 +6570,22 @@ export type startNotebookResponse201 = {
 }
 
 export type startNotebookResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type startNotebookResponse403 = {
-  data: ForbiddenResponse
+  data: Problem
   status: 403
 }
 
 export type startNotebookResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type startNotebookResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 201 | 400 | 403 | 404>
 }
 
@@ -6569,6 +6605,7 @@ export const getStartNotebookUrl = (experimentId: string,) => {
 }
 
 /**
+ * Start the notebook pod of an experiment (optional `tier` and `gpu`).
  * @summary Start an experiment notebook
  */
 export const startNotebook = async (experimentId: string,
@@ -6618,7 +6655,7 @@ const res = await fetch(getStartNotebookUrl(experimentId),
 
 export const getStartNotebookMutationKey = () => ['startNotebook'] as const;
 
-export const getStartNotebookMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | ForbiddenResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const getStartNotebookMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startNotebook>>, TError,StartNotebookMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof startNotebook>>, TError,StartNotebookMutationVariables, TContext> => {
 
@@ -6647,13 +6684,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type StartNotebookMutationResult = NonNullable<Awaited<ReturnType<typeof startNotebook>>>
     export type StartNotebookMutationBody = StartNotebookRequest | undefined
-    export type StartNotebookMutationError = globalThis.Error & { info?: BadRequestResponse | ForbiddenResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type StartNotebookMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type StartNotebookMutationVariables = {experimentId: string;data?: StartNotebookRequest}
 
     /**
  * @summary Start an experiment notebook
  */
-export const useStartNotebook = <TError = globalThis.Error & { info?: BadRequestResponse | ForbiddenResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const useStartNotebook = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startNotebook>>, TError,StartNotebookMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof startNotebook>>,
@@ -6665,17 +6702,17 @@ export const useStartNotebook = <TError = globalThis.Error & { info?: BadRequest
     }
 
 export type stopNotebookResponse204 = {
-  data: NoContentResponse
+  data: void
   status: 204
 }
 
 export type stopNotebookResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type stopNotebookResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 204 | 404>
 }
 
@@ -6695,6 +6732,7 @@ export const getStopNotebookUrl = (experimentId: string,) => {
 }
 
 /**
+ * Stop the notebook pod of an experiment.
  * @summary Stop an experiment notebook
  */
 export const stopNotebook = async (experimentId: string, options?: RequestInit): Promise<stopNotebookResponseSuccess> => {
@@ -6719,7 +6757,7 @@ export const stopNotebook = async (experimentId: string, options?: RequestInit):
     err.status = res.status;
     throw err;
   }
-  const data: stopNotebookResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  const data: stopNotebookResponseSuccess['data'] = body ? JSON.parse(body) : undefined
   return { data, status: res.status, headers: res.headers } as stopNotebookResponseSuccess
 }
 
@@ -6729,7 +6767,7 @@ export const stopNotebook = async (experimentId: string, options?: RequestInit):
 
 export const getStopNotebookMutationKey = () => ['stopNotebook'] as const;
 
-export const getStopNotebookMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+export const getStopNotebookMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopNotebook>>, TError,StopNotebookMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof stopNotebook>>, TError,StopNotebookMutationVariables, TContext> => {
 
@@ -6758,13 +6796,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type StopNotebookMutationResult = NonNullable<Awaited<ReturnType<typeof stopNotebook>>>
 
-    export type StopNotebookMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+    export type StopNotebookMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type StopNotebookMutationVariables = {experimentId: string}
 
     /**
  * @summary Stop an experiment notebook
  */
-export const useStopNotebook = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
+export const useStopNotebook = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof stopNotebook>>, TError,StopNotebookMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof stopNotebook>>,
@@ -6781,7 +6819,7 @@ export type listAnalysisJobsResponse200 = {
 }
 
 export type listAnalysisJobsResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200>
 }
 
@@ -6809,6 +6847,7 @@ export const getListAnalysisJobsUrl = (experimentId: string,
 }
 
 /**
+ * List analysis jobs of an experiment, optionally only those of one simulation.
  * @summary List analysis jobs
  */
 export const listAnalysisJobs = async (experimentId: string,
@@ -6850,7 +6889,7 @@ export const getListAnalysisJobsQueryKey = (experimentId: string,
     }
 
 
-export const getListAnalysisJobsQueryOptions = <TData = Awaited<ReturnType<typeof listAnalysisJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(experimentId: string,
+export const getListAnalysisJobsQueryOptions = <TData = Awaited<ReturnType<typeof listAnalysisJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
     params?: ListAnalysisJobsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisJobs>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
@@ -6870,10 +6909,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListAnalysisJobsQueryResult = NonNullable<Awaited<ReturnType<typeof listAnalysisJobs>>>
-export type ListAnalysisJobsQueryError = globalThis.Error & { info?: ProblemResponse; status?: number }
+export type ListAnalysisJobsQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useListAnalysisJobs<TData = Awaited<ReturnType<typeof listAnalysisJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListAnalysisJobs<TData = Awaited<ReturnType<typeof listAnalysisJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     params: undefined |  ListAnalysisJobsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisJobs>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
@@ -6884,7 +6923,7 @@ export function useListAnalysisJobs<TData = Awaited<ReturnType<typeof listAnalys
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAnalysisJobs<TData = Awaited<ReturnType<typeof listAnalysisJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListAnalysisJobs<TData = Awaited<ReturnType<typeof listAnalysisJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     params?: ListAnalysisJobsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisJobs>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
@@ -6895,7 +6934,7 @@ export function useListAnalysisJobs<TData = Awaited<ReturnType<typeof listAnalys
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAnalysisJobs<TData = Awaited<ReturnType<typeof listAnalysisJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListAnalysisJobs<TData = Awaited<ReturnType<typeof listAnalysisJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     params?: ListAnalysisJobsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisJobs>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
@@ -6904,7 +6943,7 @@ export function useListAnalysisJobs<TData = Awaited<ReturnType<typeof listAnalys
  * @summary List analysis jobs
  */
 
-export function useListAnalysisJobs<TData = Awaited<ReturnType<typeof listAnalysisJobs>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListAnalysisJobs<TData = Awaited<ReturnType<typeof listAnalysisJobs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     params?: ListAnalysisJobsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisJobs>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
@@ -6929,17 +6968,17 @@ export type submitAnalysisJobResponse201 = {
 }
 
 export type submitAnalysisJobResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type submitAnalysisJobResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type submitAnalysisJobResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 201 | 400 | 404>
 }
 
@@ -6959,6 +6998,7 @@ export const getSubmitAnalysisJobUrl = (experimentId: string,) => {
 }
 
 /**
+ * Submit an analysis job for a simulation's trajectory.
  * @summary Submit an analysis job
  */
 export const submitAnalysisJob = async (experimentId: string,
@@ -7008,7 +7048,7 @@ const res = await fetch(getSubmitAnalysisJobUrl(experimentId),
 
 export const getSubmitAnalysisJobMutationKey = () => ['submitAnalysisJob'] as const;
 
-export const getSubmitAnalysisJobMutationOptions = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const getSubmitAnalysisJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAnalysisJob>>, TError,SubmitAnalysisJobMutationVariables, TContext>, fetch?: RequestInit}
 ): UseMutationOptions<Awaited<ReturnType<typeof submitAnalysisJob>>, TError,SubmitAnalysisJobMutationVariables, TContext> => {
 
@@ -7037,13 +7077,13 @@ const {mutation: mutationOptions, fetch: fetchOptions} = options ?
 
     export type SubmitAnalysisJobMutationResult = NonNullable<Awaited<ReturnType<typeof submitAnalysisJob>>>
     export type SubmitAnalysisJobMutationBody = AnalysisJobRequest
-    export type SubmitAnalysisJobMutationError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number }
+    export type SubmitAnalysisJobMutationError = globalThis.Error & { info?: Problem; status?: number }
     export type SubmitAnalysisJobMutationVariables = {experimentId: string;data: AnalysisJobRequest}
 
     /**
  * @summary Submit an analysis job
  */
-export const useSubmitAnalysisJob = <TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | ProblemResponse; status?: number },
+export const useSubmitAnalysisJob = <TError = globalThis.Error & { info?: Problem; status?: number },
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitAnalysisJob>>, TError,SubmitAnalysisJobMutationVariables, TContext>, fetch?: RequestInit}
  , queryClient?: QueryClient): UseMutationResult<
         Awaited<ReturnType<typeof submitAnalysisJob>>,
@@ -7060,7 +7100,7 @@ export type listAnalysisTypesResponse200 = {
 }
 
 export type listAnalysisTypesResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200>
 }
 
@@ -7120,7 +7160,7 @@ export const getListAnalysisTypesQueryKey = (experimentId: string,) => {
     }
 
 
-export const getListAnalysisTypesQueryOptions = <TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisTypes>>, TError, TData>>, fetch?: RequestInit}
+export const getListAnalysisTypesQueryOptions = <TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisTypes>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
 const {query: queryOptions, fetch: fetchOptions} = options ?? {};
@@ -7139,10 +7179,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListAnalysisTypesQueryResult = NonNullable<Awaited<ReturnType<typeof listAnalysisTypes>>>
-export type ListAnalysisTypesQueryError = globalThis.Error & { info?: ProblemResponse; status?: number }
+export type ListAnalysisTypesQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisTypes>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
           Awaited<ReturnType<typeof listAnalysisTypes>>,
@@ -7152,7 +7192,7 @@ export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnaly
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisTypes>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
           Awaited<ReturnType<typeof listAnalysisTypes>>,
@@ -7162,7 +7202,7 @@ export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnaly
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisTypes>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
@@ -7170,7 +7210,7 @@ export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnaly
  * @summary List supported analysis types
  */
 
-export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: ProblemResponse; status?: number }>(
+export function useListAnalysisTypes<TData = Awaited<ReturnType<typeof listAnalysisTypes>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisTypes>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -7194,12 +7234,12 @@ export type listAnalysisResultsResponse200 = {
 }
 
 export type listAnalysisResultsResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type listAnalysisResultsResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 400>
 }
 
@@ -7227,6 +7267,7 @@ export const getListAnalysisResultsUrl = (experimentId: string,
 }
 
 /**
+ * Names of the analysis results available for a simulation.
  * @summary List available analysis results
  */
 export const listAnalysisResults = async (experimentId: string,
@@ -7268,7 +7309,7 @@ export const getListAnalysisResultsQueryKey = (experimentId: string,
     }
 
 
-export const getListAnalysisResultsQueryOptions = <TData = Awaited<ReturnType<typeof listAnalysisResults>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(experimentId: string,
+export const getListAnalysisResultsQueryOptions = <TData = Awaited<ReturnType<typeof listAnalysisResults>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
     params: ListAnalysisResultsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisResults>>, TError, TData>>, fetch?: RequestInit}
 ) => {
 
@@ -7288,10 +7329,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListAnalysisResultsQueryResult = NonNullable<Awaited<ReturnType<typeof listAnalysisResults>>>
-export type ListAnalysisResultsQueryError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }
+export type ListAnalysisResultsQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useListAnalysisResults<TData = Awaited<ReturnType<typeof listAnalysisResults>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(
+export function useListAnalysisResults<TData = Awaited<ReturnType<typeof listAnalysisResults>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     params: ListAnalysisResultsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisResults>>, TError, TData>> & Pick<
         DefinedInitialDataOptions<
@@ -7302,7 +7343,7 @@ export function useListAnalysisResults<TData = Awaited<ReturnType<typeof listAna
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAnalysisResults<TData = Awaited<ReturnType<typeof listAnalysisResults>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(
+export function useListAnalysisResults<TData = Awaited<ReturnType<typeof listAnalysisResults>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     params: ListAnalysisResultsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisResults>>, TError, TData>> & Pick<
         UndefinedInitialDataOptions<
@@ -7313,7 +7354,7 @@ export function useListAnalysisResults<TData = Awaited<ReturnType<typeof listAna
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAnalysisResults<TData = Awaited<ReturnType<typeof listAnalysisResults>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(
+export function useListAnalysisResults<TData = Awaited<ReturnType<typeof listAnalysisResults>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     params: ListAnalysisResultsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisResults>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
@@ -7322,7 +7363,7 @@ export function useListAnalysisResults<TData = Awaited<ReturnType<typeof listAna
  * @summary List available analysis results
  */
 
-export function useListAnalysisResults<TData = Awaited<ReturnType<typeof listAnalysisResults>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(
+export function useListAnalysisResults<TData = Awaited<ReturnType<typeof listAnalysisResults>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     params: ListAnalysisResultsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisResults>>, TError, TData>>, fetch?: RequestInit}
  , queryClient?: QueryClient
@@ -7347,12 +7388,12 @@ export type listAnalysisResultVariantsResponse200 = {
 }
 
 export type listAnalysisResultVariantsResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type listAnalysisResultVariantsResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 400>
 }
 
@@ -7381,6 +7422,7 @@ export const getListAnalysisResultVariantsUrl = (experimentId: string,
 }
 
 /**
+ * Variant options of a multi-file analysis from its summary JSON (empty when absent or not a summary).
  * @summary List variants for an analysis result
  */
 export const listAnalysisResultVariants = async (experimentId: string,
@@ -7424,7 +7466,7 @@ export const getListAnalysisResultVariantsQueryKey = (experimentId: string,
     }
 
 
-export const getListAnalysisResultVariantsQueryOptions = <TData = Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(experimentId: string,
+export const getListAnalysisResultVariantsQueryOptions = <TData = Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
     name: string,
     params: ListAnalysisResultVariantsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError, TData>>, fetch?: RequestInit}
 ) => {
@@ -7445,10 +7487,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type ListAnalysisResultVariantsQueryResult = NonNullable<Awaited<ReturnType<typeof listAnalysisResultVariants>>>
-export type ListAnalysisResultVariantsQueryError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }
+export type ListAnalysisResultVariantsQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useListAnalysisResultVariants<TData = Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(
+export function useListAnalysisResultVariants<TData = Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     name: string,
     params: ListAnalysisResultVariantsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError, TData>> & Pick<
@@ -7460,7 +7502,7 @@ export function useListAnalysisResultVariants<TData = Awaited<ReturnType<typeof 
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAnalysisResultVariants<TData = Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(
+export function useListAnalysisResultVariants<TData = Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     name: string,
     params: ListAnalysisResultVariantsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError, TData>> & Pick<
@@ -7472,7 +7514,7 @@ export function useListAnalysisResultVariants<TData = Awaited<ReturnType<typeof 
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useListAnalysisResultVariants<TData = Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(
+export function useListAnalysisResultVariants<TData = Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     name: string,
     params: ListAnalysisResultVariantsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError, TData>>, fetch?: RequestInit}
@@ -7482,7 +7524,7 @@ export function useListAnalysisResultVariants<TData = Awaited<ReturnType<typeof 
  * @summary List variants for an analysis result
  */
 
-export function useListAnalysisResultVariants<TData = Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError = globalThis.Error & { info?: BadRequestResponse | ProblemResponse; status?: number }>(
+export function useListAnalysisResultVariants<TData = Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     name: string,
     params: ListAnalysisResultVariantsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAnalysisResultVariants>>, TError, TData>>, fetch?: RequestInit}
@@ -7508,22 +7550,22 @@ export type getAnalysisResultResponse200 = {
 }
 
 export type getAnalysisResultResponse400 = {
-  data: BadRequestResponse
+  data: Problem
   status: 400
 }
 
 export type getAnalysisResultResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type getAnalysisResultResponse422 = {
-  data: UnprocessableEntityResponse
+  data: Problem
   status: 422
 }
 
 export type getAnalysisResultResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 400 | 404 | 422>
 }
 
@@ -7552,6 +7594,7 @@ export const getGetAnalysisResultUrl = (experimentId: string,
 }
 
 /**
+ * Serve the JSON content of an analysis result file as-is.
  * @summary Get a typed analysis result
  */
 export const getAnalysisResult = async (experimentId: string,
@@ -7595,7 +7638,7 @@ export const getGetAnalysisResultQueryKey = (experimentId: string,
     }
 
 
-export const getGetAnalysisResultQueryOptions = <TData = Awaited<ReturnType<typeof getAnalysisResult>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | UnprocessableEntityResponse | ProblemResponse; status?: number }>(experimentId: string,
+export const getGetAnalysisResultQueryOptions = <TData = Awaited<ReturnType<typeof getAnalysisResult>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
     name: string,
     params: GetAnalysisResultParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisResult>>, TError, TData>>, fetch?: RequestInit}
 ) => {
@@ -7616,10 +7659,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetAnalysisResultQueryResult = NonNullable<Awaited<ReturnType<typeof getAnalysisResult>>>
-export type GetAnalysisResultQueryError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | UnprocessableEntityResponse | ProblemResponse; status?: number }
+export type GetAnalysisResultQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetAnalysisResult<TData = Awaited<ReturnType<typeof getAnalysisResult>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | UnprocessableEntityResponse | ProblemResponse; status?: number }>(
+export function useGetAnalysisResult<TData = Awaited<ReturnType<typeof getAnalysisResult>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     name: string,
     params: GetAnalysisResultParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisResult>>, TError, TData>> & Pick<
@@ -7631,7 +7674,7 @@ export function useGetAnalysisResult<TData = Awaited<ReturnType<typeof getAnalys
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetAnalysisResult<TData = Awaited<ReturnType<typeof getAnalysisResult>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | UnprocessableEntityResponse | ProblemResponse; status?: number }>(
+export function useGetAnalysisResult<TData = Awaited<ReturnType<typeof getAnalysisResult>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     name: string,
     params: GetAnalysisResultParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisResult>>, TError, TData>> & Pick<
@@ -7643,7 +7686,7 @@ export function useGetAnalysisResult<TData = Awaited<ReturnType<typeof getAnalys
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetAnalysisResult<TData = Awaited<ReturnType<typeof getAnalysisResult>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | UnprocessableEntityResponse | ProblemResponse; status?: number }>(
+export function useGetAnalysisResult<TData = Awaited<ReturnType<typeof getAnalysisResult>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     name: string,
     params: GetAnalysisResultParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisResult>>, TError, TData>>, fetch?: RequestInit}
@@ -7653,7 +7696,7 @@ export function useGetAnalysisResult<TData = Awaited<ReturnType<typeof getAnalys
  * @summary Get a typed analysis result
  */
 
-export function useGetAnalysisResult<TData = Awaited<ReturnType<typeof getAnalysisResult>>, TError = globalThis.Error & { info?: BadRequestResponse | NotFoundResponse | UnprocessableEntityResponse | ProblemResponse; status?: number }>(
+export function useGetAnalysisResult<TData = Awaited<ReturnType<typeof getAnalysisResult>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     name: string,
     params: GetAnalysisResultParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisResult>>, TError, TData>>, fetch?: RequestInit}
@@ -7673,277 +7716,18 @@ export function useGetAnalysisResult<TData = Awaited<ReturnType<typeof getAnalys
 
 
 
-export type getAnalysisJobResponse200 = {
-  data: AnalysisJob
-  status: 200
-}
-
-export type getAnalysisJobResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type getAnalysisJobResponseDefault = {
-  data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 200 | 404>
-}
-
-export type getAnalysisJobResponseSuccess = (getAnalysisJobResponse200) & {
-  headers: Headers;
-};
-export type getAnalysisJobResponseError = (getAnalysisJobResponse404 | getAnalysisJobResponseDefault) & {
-  headers: Headers;
-};
-
-export const getGetAnalysisJobUrl = (experimentId: string,
-    jobId: string,) => {
-
-
-
-
-  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/analysis/${jobId}`
-}
-
-/**
- * @summary Get an analysis job
- */
-export const getAnalysisJob = async (experimentId: string,
-    jobId: string, options?: RequestInit): Promise<getAnalysisJobResponseSuccess> => {
-
-  const res = await fetch(getGetAnalysisJobUrl(experimentId,jobId),
-  {
-      credentials: 'same-origin',
-    ...options,
-    method: 'GET'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  if (!res.ok) {
-
-    const err: globalThis.Error & {info?: getAnalysisJobResponseError['data'], status?: number} = new globalThis.Error();
-    const data : getAnalysisJobResponseError['data'] = body ? JSON.parse(body) : {}
-    err.info = data;
-    err.status = res.status;
-    throw err;
-  }
-  const data: getAnalysisJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as getAnalysisJobResponseSuccess
-}
-
-
-
-
-
-export const getGetAnalysisJobQueryKey = (experimentId: string,
-    jobId: string,) => {
-    return [
-    `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/analysis/${jobId}`
-    ] as const;
-    }
-
-
-export const getGetAnalysisJobQueryOptions = <TData = Awaited<ReturnType<typeof getAnalysisJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string,
-    jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJob>>, TError, TData>>, fetch?: RequestInit}
-) => {
-
-const {query: queryOptions, fetch: fetchOptions} = options ?? {};
-
-  const queryKey =  queryOptions?.queryKey ?? getGetAnalysisJobQueryKey(experimentId,jobId);
-
-
-
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAnalysisJob>>> = ({ signal }) => getAnalysisJob(experimentId,jobId, { signal, ...fetchOptions });
-
-
-
-
-
-   return  { queryKey, queryFn, enabled: experimentId !== null && experimentId !== undefined && jobId !== null && jobId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJob>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
-}
-
-export type GetAnalysisJobQueryResult = NonNullable<Awaited<ReturnType<typeof getAnalysisJob>>>
-export type GetAnalysisJobQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
-
-
-export function useGetAnalysisJob<TData = Awaited<ReturnType<typeof getAnalysisJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    jobId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJob>>, TError, TData>> & Pick<
-        DefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getAnalysisJob>>,
-          TError,
-          Awaited<ReturnType<typeof getAnalysisJob>>
-        > , 'initialData'
-      >, fetch?: RequestInit}
- , queryClient?: QueryClient
-  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetAnalysisJob<TData = Awaited<ReturnType<typeof getAnalysisJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJob>>, TError, TData>> & Pick<
-        UndefinedInitialDataOptions<
-          Awaited<ReturnType<typeof getAnalysisJob>>,
-          TError,
-          Awaited<ReturnType<typeof getAnalysisJob>>
-        > , 'initialData'
-      >, fetch?: RequestInit}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetAnalysisJob<TData = Awaited<ReturnType<typeof getAnalysisJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJob>>, TError, TData>>, fetch?: RequestInit}
- , queryClient?: QueryClient
-  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-/**
- * @summary Get an analysis job
- */
-
-export function useGetAnalysisJob<TData = Awaited<ReturnType<typeof getAnalysisJob>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
- experimentId: string,
-    jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJob>>, TError, TData>>, fetch?: RequestInit}
- , queryClient?: QueryClient
- ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
-
-  const queryOptions = getGetAnalysisJobQueryOptions(experimentId,jobId,options)
-
-  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-
-  return withQueryKey(query, queryOptions.queryKey);
-}
-
-
-
-
-
-
-
-export type deleteAnalysisJobResponse204 = {
-  data: NoContentResponse
-  status: 204
-}
-
-export type deleteAnalysisJobResponse404 = {
-  data: NotFoundResponse
-  status: 404
-}
-
-export type deleteAnalysisJobResponseDefault = {
-  data: ProblemResponse
-  status: Exclude<HTTPStatusCodes, 204 | 404>
-}
-
-export type deleteAnalysisJobResponseSuccess = (deleteAnalysisJobResponse204) & {
-  headers: Headers;
-};
-export type deleteAnalysisJobResponseError = (deleteAnalysisJobResponse404 | deleteAnalysisJobResponseDefault) & {
-  headers: Headers;
-};
-
-export const getDeleteAnalysisJobUrl = (experimentId: string,
-    jobId: string,) => {
-
-
-
-
-  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/analysis/${jobId}`
-}
-
-/**
- * @summary Delete an analysis job
- */
-export const deleteAnalysisJob = async (experimentId: string,
-    jobId: string, options?: RequestInit): Promise<deleteAnalysisJobResponseSuccess> => {
-
-  const res = await fetch(getDeleteAnalysisJobUrl(experimentId,jobId),
-  {
-      credentials: 'same-origin',
-    ...options,
-    method: 'DELETE'
-
-
-  }
-)
-
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-  if (!res.ok) {
-
-    const err: globalThis.Error & {info?: deleteAnalysisJobResponseError['data'], status?: number} = new globalThis.Error();
-    const data : deleteAnalysisJobResponseError['data'] = body ? JSON.parse(body) : {}
-    err.info = data;
-    err.status = res.status;
-    throw err;
-  }
-  const data: deleteAnalysisJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
-  return { data, status: res.status, headers: res.headers } as deleteAnalysisJobResponseSuccess
-}
-
-
-
-
-
-export const getDeleteAnalysisJobMutationKey = () => ['deleteAnalysisJob'] as const;
-
-export const getDeleteAnalysisJobMutationOptions = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAnalysisJob>>, TError,DeleteAnalysisJobMutationVariables, TContext>, fetch?: RequestInit}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteAnalysisJob>>, TError,DeleteAnalysisJobMutationVariables, TContext> => {
-
-const mutationKey = getDeleteAnalysisJobMutationKey();
-const {mutation: mutationOptions, fetch: fetchOptions} = options ?
-      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
-      options
-      : {...options, mutation: {...options.mutation, mutationKey}}
-      : {mutation: { mutationKey, }, fetch: undefined};
-
-
-
-
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAnalysisJob>>, DeleteAnalysisJobMutationVariables> = (props) => {
-          const {experimentId,jobId} = props ?? {};
-
-          return  deleteAnalysisJob(experimentId,jobId,fetchOptions)
-        }
-
-
-
-
-
-
-  return  { mutationFn, ...mutationOptions }}
-
-    export type DeleteAnalysisJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAnalysisJob>>>
-
-    export type DeleteAnalysisJobMutationError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
-    export type DeleteAnalysisJobMutationVariables = {experimentId: string;jobId: string}
-
-    /**
- * @summary Delete an analysis job
- */
-export const useDeleteAnalysisJob = <TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number },
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAnalysisJob>>, TError,DeleteAnalysisJobMutationVariables, TContext>, fetch?: RequestInit}
- , queryClient?: QueryClient): UseMutationResult<
-        Awaited<ReturnType<typeof deleteAnalysisJob>>,
-        TError,
-        DeleteAnalysisJobMutationVariables,
-        TContext
-      > => {
-      return useMutation(getDeleteAnalysisJobMutationOptions(options), queryClient);
-    }
-
 export type getAnalysisJobLogsResponse200 = {
-  data: TextValueResponse
+  data: string
   status: 200
 }
 
 export type getAnalysisJobLogsResponse404 = {
-  data: NotFoundResponse
+  data: Problem
   status: 404
 }
 
 export type getAnalysisJobLogsResponseDefault = {
-  data: ProblemResponse
+  data: Problem
   status: Exclude<HTTPStatusCodes, 200 | 404>
 }
 
@@ -7972,6 +7756,7 @@ export const getGetAnalysisJobLogsUrl = (experimentId: string,
 }
 
 /**
+ * K8s pod logs of an analysis job, trimmed to start at the workflow start marker.
  * @summary Get analysis job logs
  */
 export const getAnalysisJobLogs = async (experimentId: string,
@@ -8015,7 +7800,7 @@ export const getGetAnalysisJobLogsQueryKey = (experimentId: string,
     }
 
 
-export const getGetAnalysisJobLogsQueryOptions = <TData = Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(experimentId: string,
+export const getGetAnalysisJobLogsQueryOptions = <TData = Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
     jobId: string,
     params?: GetAnalysisJobLogsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError, TData>>, fetch?: RequestInit}
 ) => {
@@ -8036,10 +7821,10 @@ const {query: queryOptions, fetch: fetchOptions} = options ?? {};
 }
 
 export type GetAnalysisJobLogsQueryResult = NonNullable<Awaited<ReturnType<typeof getAnalysisJobLogs>>>
-export type GetAnalysisJobLogsQueryError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }
+export type GetAnalysisJobLogsQueryError = globalThis.Error & { info?: Problem; status?: number }
 
 
-export function useGetAnalysisJobLogs<TData = Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetAnalysisJobLogs<TData = Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     jobId: string,
     params: undefined |  GetAnalysisJobLogsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError, TData>> & Pick<
@@ -8051,7 +7836,7 @@ export function useGetAnalysisJobLogs<TData = Awaited<ReturnType<typeof getAnaly
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetAnalysisJobLogs<TData = Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetAnalysisJobLogs<TData = Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     jobId: string,
     params?: GetAnalysisJobLogsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError, TData>> & Pick<
@@ -8063,7 +7848,7 @@ export function useGetAnalysisJobLogs<TData = Awaited<ReturnType<typeof getAnaly
       >, fetch?: RequestInit}
  , queryClient?: QueryClient
   ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
-export function useGetAnalysisJobLogs<TData = Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetAnalysisJobLogs<TData = Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     jobId: string,
     params?: GetAnalysisJobLogsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError, TData>>, fetch?: RequestInit}
@@ -8073,7 +7858,7 @@ export function useGetAnalysisJobLogs<TData = Awaited<ReturnType<typeof getAnaly
  * @summary Get analysis job logs
  */
 
-export function useGetAnalysisJobLogs<TData = Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError = globalThis.Error & { info?: NotFoundResponse | ProblemResponse; status?: number }>(
+export function useGetAnalysisJobLogs<TData = Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
  experimentId: string,
     jobId: string,
     params?: GetAnalysisJobLogsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJobLogs>>, TError, TData>>, fetch?: RequestInit}
@@ -8092,4 +7877,265 @@ export function useGetAnalysisJobLogs<TData = Awaited<ReturnType<typeof getAnaly
 
 
 
+
+export type getAnalysisJobResponse200 = {
+  data: AnalysisJob
+  status: 200
+}
+
+export type getAnalysisJobResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type getAnalysisJobResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 200 | 404>
+}
+
+export type getAnalysisJobResponseSuccess = (getAnalysisJobResponse200) & {
+  headers: Headers;
+};
+export type getAnalysisJobResponseError = (getAnalysisJobResponse404 | getAnalysisJobResponseDefault) & {
+  headers: Headers;
+};
+
+export const getGetAnalysisJobUrl = (experimentId: string,
+    jobId: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/analysis/${jobId}`
+}
+
+/**
+ * Get an analysis job by ID.
+ * @summary Get an analysis job
+ */
+export const getAnalysisJob = async (experimentId: string,
+    jobId: string, options?: RequestInit): Promise<getAnalysisJobResponseSuccess> => {
+
+  const res = await fetch(getGetAnalysisJobUrl(experimentId,jobId),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'GET'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: getAnalysisJobResponseError['data'], status?: number} = new globalThis.Error();
+    const data : getAnalysisJobResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: getAnalysisJobResponseSuccess['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getAnalysisJobResponseSuccess
+}
+
+
+
+
+
+export const getGetAnalysisJobQueryKey = (experimentId: string,
+    jobId: string,) => {
+    return [
+    `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/analysis/${jobId}`
+    ] as const;
+    }
+
+
+export const getGetAnalysisJobQueryOptions = <TData = Awaited<ReturnType<typeof getAnalysisJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(experimentId: string,
+    jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJob>>, TError, TData>>, fetch?: RequestInit}
+) => {
+
+const {query: queryOptions, fetch: fetchOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAnalysisJobQueryKey(experimentId,jobId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAnalysisJob>>> = ({ signal }) => getAnalysisJob(experimentId,jobId, { signal, ...fetchOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: experimentId !== null && experimentId !== undefined && jobId !== null && jobId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJob>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type GetAnalysisJobQueryResult = NonNullable<Awaited<ReturnType<typeof getAnalysisJob>>>
+export type GetAnalysisJobQueryError = globalThis.Error & { info?: Problem; status?: number }
+
+
+export function useGetAnalysisJob<TData = Awaited<ReturnType<typeof getAnalysisJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    jobId: string, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJob>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAnalysisJob>>,
+          TError,
+          Awaited<ReturnType<typeof getAnalysisJob>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAnalysisJob<TData = Awaited<ReturnType<typeof getAnalysisJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJob>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof getAnalysisJob>>,
+          TError,
+          Awaited<ReturnType<typeof getAnalysisJob>>
+        > , 'initialData'
+      >, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useGetAnalysisJob<TData = Awaited<ReturnType<typeof getAnalysisJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJob>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Get an analysis job
+ */
+
+export function useGetAnalysisJob<TData = Awaited<ReturnType<typeof getAnalysisJob>>, TError = globalThis.Error & { info?: Problem; status?: number }>(
+ experimentId: string,
+    jobId: string, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof getAnalysisJob>>, TError, TData>>, fetch?: RequestInit}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getGetAnalysisJobQueryOptions(experimentId,jobId,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export type deleteAnalysisJobResponse204 = {
+  data: void
+  status: 204
+}
+
+export type deleteAnalysisJobResponse404 = {
+  data: Problem
+  status: 404
+}
+
+export type deleteAnalysisJobResponseDefault = {
+  data: Problem
+  status: Exclude<HTTPStatusCodes, 204 | 404>
+}
+
+export type deleteAnalysisJobResponseSuccess = (deleteAnalysisJobResponse204) & {
+  headers: Headers;
+};
+export type deleteAnalysisJobResponseError = (deleteAnalysisJobResponse404 | deleteAnalysisJobResponseDefault) & {
+  headers: Headers;
+};
+
+export const getDeleteAnalysisJobUrl = (experimentId: string,
+    jobId: string,) => {
+
+
+
+
+  return `${API_RUNTIME_BASE_URL}/dash/api/experiments/${experimentId}/analysis/${jobId}`
+}
+
+/**
+ * Delete an analysis job and its temporary files.
+ * @summary Delete an analysis job
+ */
+export const deleteAnalysisJob = async (experimentId: string,
+    jobId: string, options?: RequestInit): Promise<deleteAnalysisJobResponseSuccess> => {
+
+  const res = await fetch(getDeleteAnalysisJobUrl(experimentId,jobId),
+  {
+      credentials: 'same-origin',
+    ...options,
+    method: 'DELETE'
+
+
+  }
+)
+
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  if (!res.ok) {
+
+    const err: globalThis.Error & {info?: deleteAnalysisJobResponseError['data'], status?: number} = new globalThis.Error();
+    const data : deleteAnalysisJobResponseError['data'] = body ? JSON.parse(body) : {}
+    err.info = data;
+    err.status = res.status;
+    throw err;
+  }
+  const data: deleteAnalysisJobResponseSuccess['data'] = body ? JSON.parse(body) : undefined
+  return { data, status: res.status, headers: res.headers } as deleteAnalysisJobResponseSuccess
+}
+
+
+
+
+
+export const getDeleteAnalysisJobMutationKey = () => ['deleteAnalysisJob'] as const;
+
+export const getDeleteAnalysisJobMutationOptions = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAnalysisJob>>, TError,DeleteAnalysisJobMutationVariables, TContext>, fetch?: RequestInit}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAnalysisJob>>, TError,DeleteAnalysisJobMutationVariables, TContext> => {
+
+const mutationKey = getDeleteAnalysisJobMutationKey();
+const {mutation: mutationOptions, fetch: fetchOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, fetch: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAnalysisJob>>, DeleteAnalysisJobMutationVariables> = (props) => {
+          const {experimentId,jobId} = props ?? {};
+
+          return  deleteAnalysisJob(experimentId,jobId,fetchOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteAnalysisJobMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAnalysisJob>>>
+
+    export type DeleteAnalysisJobMutationError = globalThis.Error & { info?: Problem; status?: number }
+    export type DeleteAnalysisJobMutationVariables = {experimentId: string;jobId: string}
+
+    /**
+ * @summary Delete an analysis job
+ */
+export const useDeleteAnalysisJob = <TError = globalThis.Error & { info?: Problem; status?: number },
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAnalysisJob>>, TError,DeleteAnalysisJobMutationVariables, TContext>, fetch?: RequestInit}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof deleteAnalysisJob>>,
+        TError,
+        DeleteAnalysisJobMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteAnalysisJobMutationOptions(options), queryClient);
+    }
 

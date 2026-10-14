@@ -1,120 +1,145 @@
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Self
 
-from cache import simulation_log_lines_cache, simulation_status_cache
-from cachetools import cached
+import anyio
+import sqlalchemy as sa
+from cache import simulation_log_lines_cache, simulation_log_lines_lock, simulation_status_cache
 from clients import mdrun
+from db import Base
 from enums import Engine, JobStatus
-from extensions import db
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import select
+from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 from utils import count_lines
 
 if TYPE_CHECKING:
+    from sqlalchemy import Select
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from .experiment import Experiment
 
 
 logger = logging.getLogger(__name__)
 
 
-class SimulationJob(db.Model):  # type: ignore
+class SimulationJob(Base):
     """
     Base class for molecular dynamics simulation jobs using Joined Table Inheritance.
 
-    Engine-specific subclasses (GromacsJob, AmberJob) inherit from this base model
-    and provide additional engine-specific columns and methods.
+    Engine-specific subclasses (GromacsJob, AmberJob) add engine columns and log parsing.
+    Remote status comes from `refresh_status()`; every other property is local (DB + files).
     """
 
     __tablename__ = "simulation_jobs"
     # One run per simulation; extend swaps the row in place so the PK stays the
     # current MDRun job; a second pod can never append to one trajectory.
-    __table_args__ = (db.UniqueConstraint("experiment_id", "simulation_path"),)
-    __mapper_args__: ClassVar[dict[str, Any]] = {"polymorphic_on": "engine"}
+    __table_args__ = (sa.UniqueConstraint("experiment_id", "simulation_path"),)
+    __mapper_args__ = {"polymorphic_on": "engine"}  # ruff:ignore[mutable-class-default]  # SQLAlchemy declares it an instance attribute
+
+    # MDRun API path segment of this engine (`/jobs/<engine>/...`)
+    MDRUN_ENGINE: ClassVar[str]
 
     # ID of the job inside the database
-    id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
+    id: Mapped[str] = mapped_column(sa.String(36), primary_key=True)
     # ID of the experiment this job belongs to
-    experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
+    experiment_id: Mapped[str] = mapped_column(sa.String(5), sa.ForeignKey("experiments.id"))
     # Experiment-relative path to the .simulation.json manifest (job identity)
-    simulation_path: Mapped[str] = mapped_column(db.String(255), nullable=False)
+    simulation_path: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     # Creation time
-    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, default=lambda: datetime.now(UTC))
     # Engine discriminator for JTI
-    engine: Mapped[Engine] = mapped_column(db.Enum(Engine), nullable=False)
+    engine: Mapped[Engine] = mapped_column(sa.Enum(Engine), nullable=False)
 
     # Number of MPI processes
-    np: Mapped[int] = mapped_column(db.Integer, nullable=False)
+    np: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     # Number of OpenMP threads per MPI rank
-    ntomp: Mapped[int] = mapped_column(db.Integer, nullable=False)
+    ntomp: Mapped[int] = mapped_column(sa.Integer, nullable=False)
 
     # Unix timestamp when the job started
-    _start_timestamp: Mapped[int | None] = mapped_column("start_timestamp", db.Integer, nullable=True)
+    _start_timestamp: Mapped[int | None] = mapped_column("start_timestamp", sa.Integer, nullable=True)
     # Unix timestamp when the job finished
-    _finish_timestamp: Mapped[int | None] = mapped_column("finish_timestamp", db.Integer, nullable=True)
+    _finish_timestamp: Mapped[int | None] = mapped_column("finish_timestamp", sa.Integer, nullable=True)
     # Total steps of the job
-    _nsteps: Mapped[int | None] = mapped_column("nsteps", db.Integer, nullable=True)
+    _nsteps: Mapped[int | None] = mapped_column("nsteps", sa.Integer, nullable=True)
     # Performance (ns/day)
-    _performance: Mapped[float | None] = mapped_column("performance", db.Float, nullable=True)
+    _performance: Mapped[float | None] = mapped_column("performance", sa.Float, nullable=True)
     # Last successfully-fetched non-UNKNOWN status (fallback when MDRun API is unavailable)
-    _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", db.Enum(JobStatus), nullable=True)
+    _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", sa.Enum(JobStatus), nullable=True)
 
     # Back-reference to the parent experiment
-    experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="simulation_jobs")
+    # Never lazy-loads (async); queries for jobs alone load it via `query()`.
+    experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="simulation_jobs", lazy="raise_on_sql")
+
+    # Transient: status fetched by refresh_status() for this request
+    _fetched_status: JobStatus | None = None
 
     @classmethod
-    def get(cls, experiment_id: str, simulation_path: str) -> Self | None:
+    def query(cls) -> "Select[tuple[Self]]":
+        """Select rows of this job type together with their experiments."""
+        return select(cls).options(selectinload(cls.experiment))
+
+    @classmethod
+    async def get(cls, session: "AsyncSession", experiment_id: str, simulation_path: str) -> Self | None:
         """Return the simulation's single run row (unique per experiment and path), or None."""
-        return cls.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).first()
+        stmt = cls.query().filter_by(experiment_id=experiment_id, simulation_path=simulation_path)
+        return (await session.execute(stmt)).scalars().first()
 
     @classmethod
-    def remove(cls, experiment_id: str, simulation_path: str) -> Self | None:
+    async def remove(cls, session: "AsyncSession", experiment_id: str, simulation_path: str) -> Self | None:
         """
         Delete the simulation's run: its MDRun job, DB row, and result files.
 
         Returns:
             The deleted row, or None when the simulation never ran.
         """
-        job = cls.get(experiment_id, simulation_path)
+        job = await cls.get(session, experiment_id, simulation_path)
         if job is None:
             return None
-        job.delete()
-        db.session.delete(job)
-        db.session.commit()
+        await job.delete()
+        await session.delete(job)
+        await session.commit()
         return job
 
-    @property
-    @cached(cache=simulation_status_cache)
-    def status(self) -> JobStatus:
-        """
-        Current status of the Kubernetes job.
+    async def _mdrun_get(self) -> dict:
+        raise NotImplementedError
 
-        Dispatches to the appropriate mdrun client method based on engine type.
-        Uses a short TTL cache to reduce API calls.
+    async def _mdrun_delete(self) -> None:
+        raise NotImplementedError
 
-        Returns:
-            The current JobStatus of the simulation.
-        """
-        # Terminal states never change. Skip the fetch.
+    async def refresh_status(self) -> JobStatus:
+        """Fetch the MDRun status (short TTL cache); terminal states never change, so they skip the fetch."""
         if self._last_known_status is not None and self._last_known_status.is_terminal:
-            return self._last_known_status
+            self._fetched_status = self._last_known_status
+            return self._fetched_status
 
         try:
-            match self.engine:
-                case Engine.GMX:
-                    fetched = JobStatus.from_string(mdrun.get_gmx_job(self.id)["status"])
-                case Engine.AMBER:
-                    fetched = JobStatus.from_string(mdrun.get_amber_job(self.id)["status"])
-
+            fetched = simulation_status_cache.get(self.id)
+            if fetched is None:
+                fetched = JobStatus.from_string((await self._mdrun_get())["status"])
+                simulation_status_cache[self.id] = fetched
             if fetched not in {self._last_known_status, JobStatus.UNKNOWN}:
                 self._last_known_status = fetched
-                db.session.commit()
-            return fetched
         except Exception:
             logger.exception(f"Error fetching job status for job {self.id}")
-            if self._last_known_status:
-                return self._last_known_status
-            return JobStatus.UNKNOWN
+            fetched = self._last_known_status or JobStatus.UNKNOWN
+
+        self._fetched_status = fetched
+        return fetched
+
+    @property
+    def status(self) -> JobStatus:
+        """
+        Current status of the MDRun job, as of the last `refresh_status()`.
+
+        Raises:
+            RuntimeError: If a non-terminal job was not refreshed in this request.
+        """
+        if self._last_known_status is not None and self._last_known_status.is_terminal:
+            return self._last_known_status
+        if self._fetched_status is None:
+            raise RuntimeError(f"Status of job {self.id} read before refresh_status()")
+        return self._fetched_status
 
     @property
     def is_live(self) -> bool:
@@ -126,10 +151,7 @@ class SimulationJob(db.Model):  # type: ignore
         """Parent experiment is archived: files are gone, so derived values serve persisted columns."""
         return self.experiment is not None and self.experiment.archived_at is not None
 
-    # Key by job id: ORM instances are rebuilt per request, so the default
-    # instance-hash key would never hit and every dump would stream whole logs.
     @property
-    @cached(cache=simulation_log_lines_cache, key=lambda job: job.id)
     def log_lines(self) -> dict[str, int | None]:
         """
         Line count per log stream, keyed by the log endpoint's ``type`` values.
@@ -138,14 +160,30 @@ class SimulationJob(db.Model):  # type: ignore
         None while a stream's file does not exist yet. The counts ride the job
         payload, so they stay fresh on the existing status polls.
         """
-        return {} if self._archived else {name: count_lines(path) for name, path in self._log_files().items()}
+        if self._archived:
+            return {}
+        # Keyed by job id: ORM instances are rebuilt per request.
+        with simulation_log_lines_lock:
+            cached = simulation_log_lines_cache.get(self.id)
+        if cached is not None:
+            return cached
+        counts = {name: count_lines(path) for name, path in self._log_files().items()}
+        with simulation_log_lines_lock:
+            simulation_log_lines_cache[self.id] = counts
+        return counts
 
     def _log_files(self) -> dict[str, Path]:
-        """
-        Log streams of this job, keyed by the log endpoint's ``type`` values.
+        """Log streams keyed by the log endpoint's ``type`` values (engine log key is ``gmx`` or ``mdout``)."""
+        raise NotImplementedError
 
-        Engine-specific; the engine log key is ``gmx`` or ``mdout``.
-        """
+    @property
+    def nsteps(self) -> int | None:
+        """Total steps of the run."""
+        raise NotImplementedError
+
+    @property
+    def estimated_time(self) -> int | None:
+        """Estimated seconds until completion."""
         raise NotImplementedError
 
     @property
@@ -169,7 +207,6 @@ class SimulationJob(db.Model):  # type: ignore
 
         if val := self._parse_start_timestamp():
             self._start_timestamp = val
-            db.session.commit()
 
         return self._start_timestamp
 
@@ -184,7 +221,6 @@ class SimulationJob(db.Model):  # type: ignore
 
         if val := self._parse_finish_timestamp():
             self._finish_timestamp = val
-            db.session.commit()
 
         return self._finish_timestamp
 
@@ -200,7 +236,6 @@ class SimulationJob(db.Model):  # type: ignore
 
         if val := self._parse_performance():
             self._performance = val
-            db.session.commit()
 
         return self._performance
 
@@ -216,47 +251,26 @@ class SimulationJob(db.Model):  # type: ignore
     def _parse_finish_timestamp(self) -> int | None:
         raise NotImplementedError
 
-    def delete(self) -> None:
-        """
-        Delete the simulation job and its associated resources.
+    async def delete(self) -> None:
+        """Delete the MDRun job and this run's result files (the caller deletes the row)."""
+        await self._mdrun_delete()
+        await anyio.to_thread.run_sync(self._cleanup_files)
 
-        Dispatches to the appropriate mdrun client method based on engine type,
-        then cleans up local files.
-        """
-        match self.engine:
-            case Engine.GMX:
-                mdrun.delete_gmx_job(self.id)
-            case Engine.AMBER:
-                mdrun.delete_amber_job(self.id)
-
-        self._cleanup_files()
-
-    def stop(self) -> None:
+    async def stop(self) -> None:
         """
         Stop the job gracefully, preserving all data and the DB row (row later extends, GMX, or analyzes as-is).
 
         Outcome re-read after deletion: a run that finishes first stays FINISHED, not STOPPED.
         """
-        match self.engine:
-            case Engine.GMX:
-                mdrun.stop_job(self.id, "gmx")
-                get = mdrun.get_gmx_job
-            case Engine.AMBER:
-                mdrun.stop_job(self.id, "amber")
-                get = mdrun.get_amber_job
-
+        await mdrun.stop_job(self.id, self.MDRUN_ENGINE)
         try:
-            self._last_known_status = JobStatus.from_string(get(self.id)["status"])
+            status = JobStatus.from_string((await self._mdrun_get())["status"])
         except Exception:
             logger.exception(f"Could not re-read status of job {self.id} after stop; assuming STOPPED")
-            self._last_known_status = JobStatus.STOPPED
-        db.session.commit()
+            status = JobStatus.STOPPED
+        self._last_known_status = status
+        self._fetched_status = status
+        simulation_status_cache.pop(self.id, None)
 
     def _cleanup_files(self) -> None:
-        """
-        Clean up files associated with this job.
-
-        Override in subclasses to clean up engine-specific files.
-        Base implementation does nothing.
-        """
-        pass
+        """Remove engine-specific result files of this run (subclasses override)."""

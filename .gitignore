@@ -15,3 +15,4 @@ e2e/playwright-report/
 pmemd*.tar.bz2
 ambertools*.tar.bz2
 .playwright-cli/
+.claude/

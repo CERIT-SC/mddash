@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 import pytest
 from enums import AnalysisType, PreprocessingMode
+from errors import BadRequest, Forbidden
 from validators import (
     check_experiment_id,
     check_filename,
@@ -16,7 +17,6 @@ from validators import (
     validate_git_url,
     validate_http_url,
 )
-from werkzeug.exceptions import BadRequest, Forbidden
 
 
 class TestCheckExperimentId:

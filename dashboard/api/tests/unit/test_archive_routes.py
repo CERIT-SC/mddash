@@ -1,76 +1,74 @@
 """Unit tests for archive/restore routes."""
 
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, patch
 
-from flask.testing import FlaskClient
+import pytest
+from errors import ApiError, Conflict
+from httpx import AsyncClient
+from models import Experiment, Notebook
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+@pytest.fixture(autouse=True)
+async def _experiment(db_session: AsyncSession) -> None:
+    db_session.add(Experiment(id="abcde", name="Archive Routes"))
+    db_session.add(Notebook(experiment_id="abcde"))
+    await db_session.commit()
 
 
 class TestArchiveRoute:
-    def test_conflicts_surface_as_409_problem(self, client: FlaskClient) -> None:
-        from werkzeug.exceptions import Conflict
-
-        with patch("models.Experiment.query") as mock_query:
-            experiment = Mock()
-            experiment.archive.side_effect = Conflict("live jobs running")
-            mock_query.get_or_404.return_value = experiment
-            response = client.post("/dash/api/experiments/abcde/archive")
+    async def test_conflicts_surface_as_409_problem(self, client: AsyncClient) -> None:
+        with patch.object(Experiment, "archive", AsyncMock(side_effect=Conflict("live jobs running"))):
+            response = await client.post("/dash/api/experiments/abcde/archive")
 
         assert response.status_code == 409
-        assert response.content_type == "application/problem+json"
-        assert response.get_json()["detail"] == "live jobs running"
+        assert response.headers["content-type"] == "application/problem+json"
+        assert response.json()["detail"] == "live jobs running"
 
-    def test_gate_conflicts_carry_the_contract_token(self, client: FlaskClient) -> None:
-        from errors import ApiError
-
-        with patch("models.Experiment.query") as mock_query:
-            experiment = Mock()
-            experiment.archive.side_effect = ApiError(409, "live jobs running", "urn:mddash:archive-conflict")
-            mock_query.get_or_404.return_value = experiment
-            response = client.post("/dash/api/experiments/abcde/archive")
+    async def test_gate_conflicts_carry_the_contract_token(self, client: AsyncClient) -> None:
+        error = ApiError(409, "live jobs running", "urn:mddash:archive-conflict")
+        with patch.object(Experiment, "archive", AsyncMock(side_effect=error)):
+            response = await client.post("/dash/api/experiments/abcde/archive")
 
         assert response.status_code == 409
-        body = response.get_json()
+        body = response.json()
         assert body["type"] == "urn:mddash:archive-conflict"
         assert "solution" not in body  # conflict details already imply the fix
 
-    def test_success_returns_202(self, client: FlaskClient) -> None:
-        with patch("models.Experiment.query") as mock_query:
-            experiment = Mock()
-            experiment.archive.return_value = "attempt-1"
-            mock_query.get_or_404.return_value = experiment
-            response = client.post("/dash/api/experiments/abcde/archive")
+    async def test_success_returns_202(self, client: AsyncClient) -> None:
+        with patch.object(Experiment, "archive", AsyncMock(return_value="attempt-1")):
+            response = await client.post("/dash/api/experiments/abcde/archive")
 
         assert response.status_code == 202
-        assert response.get_json()["attempt_id"] == "attempt-1"
+        assert response.json()["attempt_id"] == "attempt-1"
+
+    async def test_missing_experiment_is_404(self, client: AsyncClient) -> None:
+        response = await client.post("/dash/api/experiments/zzzzz/archive")
+        assert response.status_code == 404
 
 
 class TestRestoreRoute:
-    def test_success_returns_202(self, client: FlaskClient) -> None:
-        with patch("models.Experiment.query") as mock_query:
-            experiment = Mock()
-            experiment.restore.return_value = "attempt-2"
-            mock_query.get_or_404.return_value = experiment
-            response = client.post("/dash/api/experiments/abcde/restore")
+    async def test_success_returns_202(self, client: AsyncClient) -> None:
+        with patch.object(Experiment, "restore", AsyncMock(return_value="attempt-2")):
+            response = await client.post("/dash/api/experiments/abcde/restore")
 
         assert response.status_code == 202
-        assert response.get_json()["attempt_id"] == "attempt-2"
+        assert response.json()["attempt_id"] == "attempt-2"
 
 
 class TestArchiveStatusRoute:
-    def test_returns_status_doc(self, client: FlaskClient) -> None:
-        with patch("models.Experiment.query") as mock_query:
-            experiment = Mock()
-            experiment.get_archive_status.return_value = {
-                "experiment_id": "abcde",
-                "archive_state": "archiving",
-                "attempt_id": "a1",
-                "direction": "archive",
-                "reason": None,
-            }
-            mock_query.get_or_404.return_value = experiment
-            response = client.get("/dash/api/experiments/abcde/archive/status")
+    async def test_returns_status_doc(self, client: AsyncClient) -> None:
+        status = {
+            "experiment_id": "abcde",
+            "archive_state": "archiving",
+            "attempt_id": "a1",
+            "direction": "archive",
+            "reason": None,
+        }
+        with patch.object(Experiment, "get_archive_status", AsyncMock(return_value=status)):
+            response = await client.get("/dash/api/experiments/abcde/archive/status")
 
         assert response.status_code == 200
-        body = response.get_json()
+        body = response.json()
         assert body["archive_state"] == "archiving"
         assert body["attempt_id"] == "a1"

@@ -7,6 +7,9 @@
  */
 import type { ThicknessResultData } from './thicknessResultData.ts';
 
+/**
+ * Membrane thickness over time.
+ */
 export interface ThicknessResult {
   step?: number;
   data: ThicknessResultData;

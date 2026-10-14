@@ -6,8 +6,8 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type ClustersResultTransitionsItem = {
+export interface ClustersResultTransitionsItem {
   from: number;
   to: number;
   count: number;
-};
+}

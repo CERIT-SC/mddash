@@ -1,13 +1,11 @@
 """
 Demo mocking infrastructure.
 
-Provides unified mock installation for all external services.
-Uses `responses` library for HTTP mocking and module mutation for Kubernetes.
+HTTP goes through a respx-backed callback router; Kubernetes, tuner trial logs,
+and (E2E) git clones are replaced by module mutation.
 """
 
 import logging
-
-import responses
 
 logger = logging.getLogger(__name__)  # ruff:ignore[non-empty-init-module]
 
@@ -19,11 +17,7 @@ def install_all_mocks() -> None:  # ruff:ignore[non-empty-init-module]
     """
     Install all demo mocks for external services.
 
-    This function sets up HTTP response mocking via the `responses` library
-    and Kubernetes client mocking via module mutation.
-
-    Uses the global `responses.mock` singleton so it works with all requests.
-    Must be called before importing any modules that make HTTP requests.
+    Must run before importing any modules that bind the mocked functions.
     """
     global _mocks_installed  # ruff:ignore[global-statement]
 
@@ -33,13 +27,12 @@ def install_all_mocks() -> None:  # ruff:ignore[non-empty-init-module]
 
     from .http import install_http_mocks  # ruff:ignore[import-outside-top-level]
     from .k8s import install_k8s_mocks  # ruff:ignore[import-outside-top-level]
+    from .router import CallbackRouter  # ruff:ignore[import-outside-top-level]
     from .tuner_logs import install_tuner_log_mocks  # ruff:ignore[import-outside-top-level]
 
-    # Install HTTP mocks on the global responses.mock singleton
-    install_http_mocks(responses.mock)
-
-    # Activate the global mock - this intercepts all requests
-    responses.start()
+    router = CallbackRouter()
+    install_http_mocks(router)
+    router.start()
 
     # Install K8s mocks (module mutation for kubernetes library)
     install_k8s_mocks()

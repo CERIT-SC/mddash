@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Plain confirmation message.
+ */
 export interface Message {
   message: string;
 }

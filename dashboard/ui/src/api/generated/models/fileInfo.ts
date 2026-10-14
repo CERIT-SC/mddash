@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * A file inside an experiment directory with its download URL.
+ */
 export interface FileInfo {
   name: string;
   /** @minimum 0 */

@@ -3,8 +3,9 @@
 import json
 from urllib.parse import quote
 
+import httpx
 import pytest
-import responses
+import respx
 from _demo import analysis_data
 from _demo.state import demo_state
 from config import DATA_DIR
@@ -24,33 +25,29 @@ CLUSTERS_SUMMARY = [
 
 
 class TestFetchAnalysisPayload:
-    def test_downloads_once_and_serves_cache_afterwards(self) -> None:
+    def test_downloads_once_and_serves_cache_afterwards(self, http_mock: respx.MockRouter) -> None:
         url = f"{analysis_data.MDPOSIT_ANALYSES_URL}/{quote('rmsds', safe='')}"
-        with responses.RequestsMock() as rsps:
-            rsps.get(url, json={"data": 1}, status=200)
-            payload = analysis_data.fetch_analysis_payload("rmsds")
-            assert payload == {"data": 1}
-            assert len(rsps.calls) == 1
+        route = http_mock.get(url).mock(return_value=httpx.Response(200, json={"data": 1}))
+        payload = analysis_data.fetch_analysis_payload("rmsds")
+        assert payload == {"data": 1}
+        assert route.call_count == 1
 
-        with responses.RequestsMock() as rsps2:
-            assert analysis_data.fetch_analysis_payload("rmsds") == {"data": 1}
-            assert len(rsps2.calls) == 0
+        assert analysis_data.fetch_analysis_payload("rmsds") == {"data": 1}
+        assert route.call_count == 1
 
-    def test_returns_none_for_missing_payload(self) -> None:
+    def test_returns_none_for_missing_payload(self, http_mock: respx.MockRouter) -> None:
         url = f"{analysis_data.MDPOSIT_ANALYSES_URL}/pockets"
-        with responses.RequestsMock() as rsps:
-            rsps.get(url, status=404)
-            assert analysis_data.fetch_analysis_payload("pockets") is None
+        http_mock.get(url).mock(return_value=httpx.Response(404))
+        assert analysis_data.fetch_analysis_payload("pockets") is None
         assert not (analysis_data.ANALYSIS_CACHE_DIR / "MD-A003ZT.2" / "pockets.json").exists()
 
-    def test_corrupt_cache_refetches(self) -> None:
+    def test_corrupt_cache_refetches(self, http_mock: respx.MockRouter) -> None:
         cache_file = analysis_data.ANALYSIS_CACHE_DIR / "MD-A003ZT.2" / "rmsds.json"
         cache_file.parent.mkdir(parents=True)
         cache_file.write_text("{corrupt")
         url = f"{analysis_data.MDPOSIT_ANALYSES_URL}/rmsds"
-        with responses.RequestsMock() as rsps:
-            rsps.get(url, json={"data": 2}, status=200)
-            assert analysis_data.fetch_analysis_payload("rmsds") == {"data": 2}
+        http_mock.get(url).mock(return_value=httpx.Response(200, json={"data": 2}))
+        assert analysis_data.fetch_analysis_payload("rmsds") == {"data": 2}
 
 
 class TestWriteAnalysisResult:

@@ -7,8 +7,8 @@
  */
 
 export type CompleteMDRepoAuthorizationParams = {
-code?: string;
-state?: string;
-error?: string;
+code?: string | null;
+state?: string | null;
+error?: string | null;
 error_description?: string;
 };

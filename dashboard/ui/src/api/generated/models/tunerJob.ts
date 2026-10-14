@@ -7,21 +7,22 @@
  */
 import type { Engine } from './engine.ts';
 import type { JobStatus } from './jobStatus.ts';
-import type { NullableString } from './nullableString.ts';
 import type { TunerTrial } from './tunerTrial.ts';
 
+/**
+ * Tuner job for one simulation manifest.
+ */
 export interface TunerJob {
   id: string;
   experiment_id: string;
   simulation_path: string;
   nsteps: number;
-  error_message?: NullableString | null;
+  error_message?: string | null;
   created_at: string;
   is_stopped: boolean;
   engine: Engine;
   tuner_status: JobStatus;
   is_live: boolean;
-  /** @nullable */
   sim_length_ns?: number | null;
   trials: TunerTrial[];
 }

@@ -6,7 +6,7 @@ import threading
 import time
 from pathlib import Path
 
-import requests
+import httpx
 from config import DATA_DIR
 from enums import JobStatus
 from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
@@ -65,10 +65,14 @@ def fetch_analysis_payload(mdposit_name: str) -> JsonValue:
         # like a real upstream 404.
         return None
 
-    response = requests.get(
-        f"{MDPOSIT_ANALYSES_URL}/{mdposit_name}", headers={"Accept": "application/json"}, timeout=30
+    # Runs on the analysis completion thread, hence the sync client.
+    response = httpx.get(
+        f"{MDPOSIT_ANALYSES_URL}/{mdposit_name}",
+        headers={"Accept": "application/json"},
+        timeout=30,
+        follow_redirects=True,
     )
-    if not response.ok:
+    if not response.is_success:
         logger.warning("Failed to fetch %s from MDposit: %s", mdposit_name, response.status_code)
         return None
 
