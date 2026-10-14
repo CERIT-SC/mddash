@@ -7,21 +7,13 @@
  */
 
 /**
- * Line counts per log stream for sizing badges without fetching logs; null while a stream's file does not exist yet
+ * Line counts per log stream for sizing badges without fetching logs; null while a stream's file does not exist yet.
  */
-export type SimulationJobLogLines = {
-  /**
-     * Engine log (GROMACS only)
-     * @nullable
-     */
+export interface SimulationJobLogLines {
+  /** Engine log (GROMACS only) */
   gmx?: number | null;
-  /**
-     * Engine log (AMBER only)
-     * @nullable
-     */
+  /** Engine log (AMBER only) */
   mdout?: number | null;
-  /** @nullable */
   stdout?: number | null;
-  /** @nullable */
   stderr?: number | null;
-};
+}

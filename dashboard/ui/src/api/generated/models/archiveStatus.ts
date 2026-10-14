@@ -7,14 +7,14 @@
  */
 import type { ArchiveStatusArchiveState } from './archiveStatusArchiveState.ts';
 import type { ArchiveStatusDirection } from './archiveStatusDirection.ts';
-import type { NullableString } from './nullableString.ts';
 
+/**
+ * Archive/restore state reconciled with live Jobs.
+ */
 export interface ArchiveStatus {
   experiment_id: string;
-  /** @nullable */
   archive_state: ArchiveStatusArchiveState;
-  attempt_id: NullableString | null;
-  /** @nullable */
+  attempt_id: string | null;
   direction: ArchiveStatusDirection;
-  reason: NullableString | null;
+  reason: string | null;
 }

@@ -1,47 +1,61 @@
 import logging
 from datetime import UTC, datetime
 from http import HTTPStatus
+from typing import TYPE_CHECKING, Self
 
+import httpx
+import sqlalchemy as sa
 from cache import tuner_last_known_status, tuner_status_cache
 from clients import tuner
+from db import Base
 from enums import Engine, JobStatus
 from errors import ApiError
-from extensions import db
-from requests import HTTPError, RequestException
-from sqlalchemy import JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import JSON, Select, select
+from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 
 from models.simulation import Simulation
 
-from .experiment import Experiment
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from .experiment import Experiment
 
 logger = logging.getLogger(__name__)
 
 
-class TunerJob(db.Model):  # type: ignore
+class TunerJob(Base):
     """Tuner job for optimizing MD simulation parameters (GROMACS or AMBER)."""
 
     __tablename__ = "tuner_jobs"
 
     # ID of the tune job from the tuner API (primary key)
-    id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
+    id: Mapped[str] = mapped_column(sa.String(36), primary_key=True)
     # ID of the experiment this job belongs to
-    experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
+    experiment_id: Mapped[str] = mapped_column(sa.String(5), sa.ForeignKey("experiments.id"))
     # Experiment-relative path to the .simulation.json manifest (job identity)
-    simulation_path: Mapped[str] = mapped_column(db.String(255), nullable=False)
+    simulation_path: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     # error message if job creation failed
-    error_message: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(sa.String(512), nullable=True)
     # creation time
-    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, default=lambda: datetime.now(UTC))
     # number of steps each tuning trial runs (always caller-supplied; no default, fail fast)
-    nsteps: Mapped[int] = mapped_column(db.Integer, nullable=False)
+    nsteps: Mapped[int] = mapped_column(sa.Integer, nullable=False)
     # whether the job was stopped (preserves data but job is deleted from tuner)
-    is_stopped: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
+    is_stopped: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
     # preserved trials when job is stopped
     _preserved_trials: Mapped[list[dict] | None] = mapped_column("preserved_trials", JSON, nullable=True)
 
     # back-reference to the parent experiment
-    experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="tuner_jobs")
+    # Never lazy-loads (async); queries for jobs alone load it via `query()`.
+    experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="tuner_jobs", lazy="raise_on_sql")
+
+    # Transient: tuner status payload fetched by refresh() for this request
+    _status_data: dict | None = None
+
+    @classmethod
+    def query(cls) -> "Select[tuple[Self]]":
+        """Select tuner jobs together with their experiments."""
+        return select(cls).options(selectinload(cls.experiment))
 
     @property
     def engine(self) -> Engine:
@@ -71,99 +85,80 @@ class TunerJob(db.Model):  # type: ignore
             return self._preserved_trials
         return self._status().get("trials", [])
 
-    def _update_error_message(self, status: dict) -> None:
-        """Persist an error message when the tuner reports an error status."""
-        if status.get("status") != JobStatus.ERROR or self.error_message:
-            return
-        self.error_message = status.get("error") or "Tuning job failed on the tuner."
-        db.session.commit()
-
     def _status(self) -> dict:
         """
-        Fetch tuner job status with caching and fallback on errors.
-
-        Uses a TTL cache for normal operation and falls back to last known
-        status on timeout or other errors to prevent breaking dependent code.
-
-        Returns:
-            Status dict with 'status' and 'trials' keys, or an empty dict if
-            the job is stopped or no status is available.
+        Tuner status as of the last `refresh()`; empty once stopped.
 
         Raises:
-            ValueError: If the tuner response is missing required fields.
+            RuntimeError: If a running job was not refreshed in this request.
         """
         if self.is_stopped:
             return {}
+        if self._status_data is None:
+            raise RuntimeError(f"Status of tuner job {self.id} read before refresh()")
+        return self._status_data
 
-        cache_key = self.id
+    async def refresh(self) -> None:
+        """
+        Fetch the tuner status (short TTL cache), falling back to the last known status on errors.
 
-        # Return cached value if still fresh
-        if cache_key in tuner_status_cache:
-            return tuner_status_cache[cache_key]
+        A FINISHED job is stopped (trials persisted, tuner freed); so is one the tuner no longer knows (404).
+        """
+        if self.is_stopped:
+            return
 
+        if (cached := tuner_status_cache.get(self.id)) is not None:
+            self._status_data = cached
+            return
+
+        self._status_data = tuner_last_known_status.get(self.id, {})
         try:
             match self.engine:
                 case Engine.GMX:
-                    status = tuner.gmx_poll_status(self.id)
+                    status = await tuner.gmx_poll_status(self.id)
                 case Engine.AMBER:
-                    status = tuner.amber_poll_status(self.id)
-                case _:
-                    raise ValueError(f"Unknown engine: {self.engine}")
+                    status = await tuner.amber_poll_status(self.id)
 
-            self._update_error_message(status)
+            if status.get("status") == JobStatus.ERROR and not self.error_message:
+                self.error_message = status.get("error") or "Tuning job failed on the tuner."
 
-            # Validate response completeness
             if "status" not in status or "trials" not in status:
                 raise ValueError(f"Incomplete status response from tuner for job {self.id}")
 
-            # Update both caches on success
-            tuner_status_cache[cache_key] = status
-            tuner_last_known_status[cache_key] = status
+            tuner_status_cache[self.id] = status
+            tuner_last_known_status[self.id] = status
+            self._status_data = status
 
             # A finished job never changes again: persist trials and free the tuner.
             if status["status"] == JobStatus.FINISHED:
-                self.stop()
-                db.session.commit()
-
-            return status
+                await self.stop()
 
         except TimeoutError:
             logger.warning(f"Timeout fetching tuner status for job {self.id}")
-        except HTTPError as exc:
+        except httpx.HTTPStatusError as exc:
             # 404 means the tuner no longer has this job (reaped or restarted); stop re-polling.
-            if exc.response is not None and exc.response.status_code == HTTPStatus.NOT_FOUND:
+            if exc.response.status_code == HTTPStatus.NOT_FOUND:
                 logger.warning(f"Tuner job {self.id} not found on tuner; stopping")
-                self.stop()
-                db.session.commit()
+                await self.stop()
             else:
                 logger.exception(f"Error fetching tuner status for job {self.id}")
         except Exception:
             logger.exception(f"Error fetching tuner status for job {self.id}")
 
-        # Return last known status if available, empty dict otherwise
-        return tuner_last_known_status.get(cache_key, {})
-
     @classmethod
-    def start(cls, experiment: Experiment, simulation_path: str, nsteps: int) -> "TunerJob":
+    async def start(
+        cls, session: "AsyncSession", experiment: "Experiment", simulation_path: str, nsteps: int
+    ) -> "TunerJob":
         """
         Start a tuner job for the given experiment and simulation manifest.
 
         Launch files and ``extra_args`` are derived from the simulation JSON and
         passed to the tuner client; they are not persisted in the dashboard DB.
 
-        Args:
-            experiment: The parent experiment.
-            simulation_path: Experiment-relative path to the ``.simulation.json``.
-            nsteps: Number of steps for tuning runs (required; the caller decides, fail fast).
-
-        Returns:
-            The created TunerJob instance.
-
         Raises:
             ApiError: If the tuner is unavailable (upstream-unavailable).
-            ValueError: If the engine is unknown.
         """
-        simulation = Simulation.get(experiment.id, simulation_path)
+        simulation = Simulation.get(experiment.id, simulation_path, experiment)
         simulation.require_files(
             ["run_input"] if experiment.engine == Engine.GMX else ["topology", "coordinates", "control"]
         )
@@ -175,18 +170,18 @@ class TunerJob(db.Model):  # type: ignore
         try:
             match experiment.engine:
                 case Engine.GMX:
-                    tpr_path = simulation.resolve_role("run_input")
-                    response = tuner.gmx_submit(tpr_path, nsteps=nsteps, extra_args=extra_args)
-                case Engine.AMBER:
-                    prmtop_path = simulation.resolve_role("topology")
-                    inpcrd_path = simulation.resolve_role("coordinates")
-                    mdin_path = simulation.resolve_role("control")
-                    response = tuner.amber_submit(
-                        prmtop_path, inpcrd_path, mdin_path, nsteps=nsteps, extra_args=extra_args
+                    response = await tuner.gmx_submit(
+                        simulation.resolve_role("run_input"), nsteps=nsteps, extra_args=extra_args
                     )
-                case _:
-                    raise ValueError(f"Unknown engine: {experiment.engine}")
-        except RequestException as exc:
+                case Engine.AMBER:
+                    response = await tuner.amber_submit(
+                        simulation.resolve_role("topology"),
+                        simulation.resolve_role("coordinates"),
+                        simulation.resolve_role("control"),
+                        nsteps=nsteps,
+                        extra_args=extra_args,
+                    )
+        except httpx.HTTPError as exc:
             logger.error("Tuner submit failed for experiment %s: %s", experiment.id, exc)
             raise ApiError(
                 HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -195,14 +190,15 @@ class TunerJob(db.Model):  # type: ignore
                 "The tuning service is unavailable; try again in a moment.",
             ) from exc
 
-        job: TunerJob = cls(
+        job = cls(
             id=response["id"],
+            experiment_id=experiment.id,
             experiment=experiment,
             simulation_path=simulation_path,
             nsteps=nsteps,
         )
-        db.session.add(job)
-        db.session.commit()
+        session.add(job)
+        await session.commit()
 
         simulation.mark_readonly()
 
@@ -212,46 +208,30 @@ class TunerJob(db.Model):  # type: ignore
         )
         return job
 
-    def stop(self) -> None:
-        """Stop the tuner job and preserve observed trials."""
+    async def _delete_on_tuner(self) -> None:
+        try:
+            match self.engine:
+                case Engine.GMX:
+                    await tuner.gmx_delete_job(self.id)
+                case Engine.AMBER:
+                    await tuner.amber_delete_job(self.id)
+        except httpx.HTTPError:
+            logger.exception(f"Failed to delete tuner job {self.id}")
+
+    async def stop(self) -> None:
+        """Stop the tuner job and preserve observed trials (the caller commits)."""
         if self.is_stopped:
             return
 
         last = tuner_last_known_status.get(self.id, {})
         self._preserved_trials = [trial for trial in last.get("trials", []) if trial.get("performance") is not None]
         self.is_stopped = True
-
-        try:
-            match self.engine:
-                case Engine.GMX:
-                    tuner.gmx_delete_job(self.id)
-                case Engine.AMBER:
-                    tuner.amber_delete_job(self.id)
-                case _:
-                    pass
-        except HTTPError:
-            logger.exception(f"Failed to delete tuner job {self.id}")
-
+        await self._delete_on_tuner()
         tuner_status_cache.clear()
         logger.info(f"Stopped tuner job {self.id}")
 
-    def delete(self) -> None:
-        """
-        Delete the tuner job completely.
-
-        If running, deletes from tuner API.
-        If stopped, does nothing on tuner API.
-        """
+    async def delete(self) -> None:
+        """Delete the job on the tuner; a stopped job is already gone there (the caller deletes the row)."""
         if self.is_stopped:
             return
-
-        try:
-            match self.engine:
-                case Engine.GMX:
-                    tuner.gmx_delete_job(self.id)
-                case Engine.AMBER:
-                    tuner.amber_delete_job(self.id)
-                case _:
-                    pass  # Unknown engine, nothing to delete
-        except HTTPError:
-            logger.exception(f"Failed to delete tuner job {self.id}")
+        await self._delete_on_tuner()

@@ -8,42 +8,47 @@
 import * as zod from 'zod';
 
 /**
+ * Health check.
  * @summary Check API health
  */
 export const GetApiRootResponse = zod.literal("API is up!")
 
 
 /**
+ * Health check.
  * @summary Check API health
  */
 export const GetHealthResponse = zod.literal("API is up!")
 
 
 /**
+ * Curated notebook module display metadata (no internal paths or URLs).
  * @summary List curated notebook modules
  */
 export const ListNotebookModulesResponseItem = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "description": zod.string().optional(),
-  "engine": zod.enum(['GMX', 'AMBER']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
   "author": zod.string(),
-  "category": zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer'])
-})
+  "category": zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']).describe('Semantic system category of a curated notebook module (drives the card icon).')
+}).describe('Curated notebook module display metadata (no internal paths or URLs).')
 export const ListNotebookModulesResponse = zod.array(ListNotebookModulesResponseItem)
 
 
 /**
+ * Storage used/limit in bytes (used is null until the du monitor measures) and server uptime.
  * @summary Get resource usage and limits
  */
 export const GetMetricsResponse = zod.object({
-  "storage_used_bytes": zod.int().nullable().describe('Bytes used; null until the du monitor records a measurement'),
-  "storage_limit_bytes": zod.int().nullable().describe('Configured storage quota in bytes'),
+  "storage_used_bytes": zod.union([zod.int(),zod.null()]).describe('Bytes used; null until the du monitor records a measurement'),
+  "storage_limit_bytes": zod.union([zod.int(),zod.null()]).describe('Configured storage quota in bytes'),
   "uptime_seconds": zod.int()
-})
+}).describe('Storage usage and server uptime.')
 
 
 /**
+ * Available notebook resource tiers, the default tier, and the concurrent-notebook limit.
  * @summary Get notebook resource configuration
  */
 
@@ -55,13 +60,17 @@ export const GetNotebookConfigResponse = zod.object({
   "value": zod.enum(['1x', '2x', '4x']),
   "cpuLimit": zod.string(),
   "memoryLimit": zod.string()
-})).min(1),
+}).describe('A notebook resource tier.')).min(1),
   "defaultTier": zod.enum(['1x', '2x', '4x']),
   "concurrentLimit": zod.int().min(1).describe('Max concurrent notebook pods per user namespace')
-})
+}).describe('Notebook tiers, the default tier, and the concurrent-notebook limit.')
 
 
 /**
+ * List all experiments.
+ *
+ * The dashboard polls this every 5s while any job is live; remote state of
+ * all experiments is fetched concurrently.
  * @summary List experiments
  */
 export const listExperimentsResponseSourceOneFilesItemSizeMin = 0;
@@ -70,16 +79,18 @@ export const listExperimentsResponseSourceOneFileCountMin = 0;
 
 
 
-
+export const listExperimentsResponseStepDefault = 0;
+export const listExperimentsResponseStatusDefault = `setup`;
+export const listExperimentsResponseCanPublishDefault = false;
 
 export const ListExperimentsResponseItem = zod.object({
   "id": zod.string(),
   "created_at": zod.iso.datetime({"offset":true}),
   "updated_at": zod.iso.datetime({"offset":true}),
   "name": zod.string(),
-  "module_name": zod.string().nullish(),
-  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']),zod.null()]).optional(),
-  "latest_simulation_path": zod.string().nullable(),
+  "module_name": zod.union([zod.string(),zod.null()]).optional(),
+  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']).describe('Semantic system category of a curated notebook module (drives the card icon).'),zod.null()]).optional(),
+  "latest_simulation_path": zod.union([zod.string(),zod.null()]),
   "source": zod.union([zod.object({
   "type": zod.enum(['pdb', 'repo', 'file']),
   "pdb_id": zod.string().optional(),
@@ -89,14 +100,14 @@ export const ListExperimentsResponseItem = zod.object({
   "size": zod.int().min(listExperimentsResponseSourceOneFilesItemSizeMin),
   "path": zod.string(),
   "url": zod.string()
-})),
+}).describe('A file inside an experiment directory with its download URL.')),
   "file_count": zod.int().min(listExperimentsResponseSourceOneFileCountMin).optional()
-}),zod.null()]).optional(),
-  "size_bytes": zod.int().nullish(),
-  "notebooks_repo": zod.string().nullish(),
-  "mdrepo_id": zod.string().nullish(),
-  "mdrepo_published": zod.boolean().nullish(),
-  "engine": zod.enum(['GMX', 'AMBER']),
+}).describe('Structured experiment provenance.'),zod.null()]).optional(),
+  "size_bytes": zod.union([zod.int(),zod.null()]).optional(),
+  "notebooks_repo": zod.union([zod.string(),zod.null()]).optional(),
+  "mdrepo_id": zod.union([zod.string(),zod.null()]).optional(),
+  "mdrepo_published": zod.union([zod.boolean(),zod.null()]).optional(),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
   "notebook": zod.union([zod.object({
   "id": zod.int(),
   "experiment_id": zod.string(),
@@ -104,85 +115,89 @@ export const ListExperimentsResponseItem = zod.object({
   "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
   "gpu": zod.boolean(),
   "path": zod.string(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']),
-  "started_at": zod.iso.datetime({"offset":true}).nullable().describe('Pod start time; null while the pod is absent')
-}),zod.null()]),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']).describe('Status values for Kubernetes pods.'),
+  "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).describe('Pod start time; null while the pod is absent')
+}).describe('The experiment\'s JupyterLab notebook.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "nsteps": zod.int(),
-  "error_message": zod.string().nullish(),
+  "error_message": zod.union([zod.string(),zod.null()]).optional(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
-  "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
   "is_live": zod.boolean(),
-  "sim_length_ns": zod.number().nullish(),
+  "sim_length_ns": zod.union([zod.number(),zod.null()]).optional(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
-  "performance": zod.number().nullish()
-}))
-})),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional().describe('Status values for all kinds of jobs.'),
+  "performance": zod.union([zod.number(),zod.null()]).optional()
+}).describe('One tuning trial as reported by the tuner (engine-specific keys pass through).'))
+}).describe('Tuner job for one simulation manifest.')),
   "simulation_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "created_at": zod.iso.datetime({"offset":true}),
-  "engine": zod.enum(['GMX', 'AMBER']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "start_timestamp": zod.int().nullish(),
-  "finish_timestamp": zod.int().nullish(),
-  "nsteps": zod.int().nullish(),
-  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
-  "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "start_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "finish_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps_done": zod.union([zod.int(),zod.null()]).optional().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.union([zod.number(),zod.null()]).optional(),
+  "estimated_time": zod.union([zod.int(),zod.null()]).optional().describe('Estimated seconds until completion'),
   "is_live": zod.boolean(),
   "log_lines": zod.object({
-  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
-  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
-  "stdout": zod.int().nullish(),
-  "stderr": zod.int().nullish()
-}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
-})),
+  "gmx": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (GROMACS only)'),
+  "mdout": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (AMBER only)'),
+  "stdout": zod.union([zod.int(),zod.null()]).optional(),
+  "stderr": zod.union([zod.int(),zod.null()]).optional()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet.')
+}).describe('A production run of one simulation manifest (engine-specific fields pass through).')),
   "analysis_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
-})),
-  "step": zod.int().optional(),
-  "status": zod.string().optional(),
-  "archived_at": zod.iso.datetime({"offset":true}).nullable(),
-  "archive_state": zod.union([zod.literal('archiving'),zod.literal('archived'),zod.literal('restoring'),zod.literal('archive_failed'),zod.literal('restore_failed'),zod.literal(null)]).nullable(),
-  "can_publish": zod.boolean().optional(),
-  "mdrepo_record_url": zod.string().nullish()
-})
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "sim_progress": zod.union([zod.number(),zod.null()]).optional().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.'),
+  "structure_file": zod.union([zod.string(),zod.null()]).optional(),
+  "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
+  "topology_file": zod.union([zod.string(),zod.null()]).optional()
+}).describe('On-demand mwf analysis job (input file paths pass through).')),
+  "step": zod.int().default(listExperimentsResponseStepDefault),
+  "status": zod.string().default(listExperimentsResponseStatusDefault),
+  "archived_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]),
+  "archive_state": zod.union([zod.enum(['archiving', 'archived', 'restoring', 'archive_failed', 'restore_failed']),zod.null()]),
+  "can_publish": zod.boolean().default(listExperimentsResponseCanPublishDefault),
+  "mdrepo_record_url": zod.union([zod.string(),zod.null()]).optional()
+}).describe('A molecular dynamics experiment with its notebook and jobs.')
 export const ListExperimentsResponse = zod.array(ListExperimentsResponseItem)
 
 
 /**
+ * Create a new experiment from PDB, repository URL, or uploaded files.
  * @summary Create an experiment
  */
 
-
+export const createExperimentBodyEngineDefault = `GMX`;
 
 export const CreateExperimentBody = zod.object({
   "experiment-name": zod.string().min(1),
   "type": zod.enum(['pdb', 'repo', 'file']),
-  "pdb": zod.string().optional(),
-  "repo-url": zod.string().optional(),
-  "notebooks-repo": zod.string().optional(),
-  "access-token": zod.string().optional(),
-  "notebook-module": zod.string().optional(),
-  "engine": zod.enum(['GMX', 'AMBER']).optional(),
-  "simulation-files": zod.array(zod.instanceof(Blob)).optional()
+  "simulation-files": zod.array(zod.instanceof(Blob)).optional(),
+  "pdb": zod.union([zod.string(),zod.null()]).optional(),
+  "repo-url": zod.union([zod.string(),zod.null()]).optional(),
+  "notebooks-repo": zod.union([zod.string(),zod.null()]).optional(),
+  "access-token": zod.union([zod.string(),zod.null()]).optional(),
+  "notebook-module": zod.union([zod.string(),zod.null()]).optional(),
+  "engine": zod.enum(['GMX', 'AMBER']).default(createExperimentBodyEngineDefault).describe('Molecular dynamics engine types.')
 })
 
 export const createExperimentResponseSourceOneFilesItemSizeMin = 0;
@@ -191,16 +206,18 @@ export const createExperimentResponseSourceOneFileCountMin = 0;
 
 
 
-
+export const createExperimentResponseStepDefault = 0;
+export const createExperimentResponseStatusDefault = `setup`;
+export const createExperimentResponseCanPublishDefault = false;
 
 export const CreateExperimentResponse = zod.object({
   "id": zod.string(),
   "created_at": zod.iso.datetime({"offset":true}),
   "updated_at": zod.iso.datetime({"offset":true}),
   "name": zod.string(),
-  "module_name": zod.string().nullish(),
-  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']),zod.null()]).optional(),
-  "latest_simulation_path": zod.string().nullable(),
+  "module_name": zod.union([zod.string(),zod.null()]).optional(),
+  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']).describe('Semantic system category of a curated notebook module (drives the card icon).'),zod.null()]).optional(),
+  "latest_simulation_path": zod.union([zod.string(),zod.null()]),
   "source": zod.union([zod.object({
   "type": zod.enum(['pdb', 'repo', 'file']),
   "pdb_id": zod.string().optional(),
@@ -210,14 +227,14 @@ export const CreateExperimentResponse = zod.object({
   "size": zod.int().min(createExperimentResponseSourceOneFilesItemSizeMin),
   "path": zod.string(),
   "url": zod.string()
-})),
+}).describe('A file inside an experiment directory with its download URL.')),
   "file_count": zod.int().min(createExperimentResponseSourceOneFileCountMin).optional()
-}),zod.null()]).optional(),
-  "size_bytes": zod.int().nullish(),
-  "notebooks_repo": zod.string().nullish(),
-  "mdrepo_id": zod.string().nullish(),
-  "mdrepo_published": zod.boolean().nullish(),
-  "engine": zod.enum(['GMX', 'AMBER']),
+}).describe('Structured experiment provenance.'),zod.null()]).optional(),
+  "size_bytes": zod.union([zod.int(),zod.null()]).optional(),
+  "notebooks_repo": zod.union([zod.string(),zod.null()]).optional(),
+  "mdrepo_id": zod.union([zod.string(),zod.null()]).optional(),
+  "mdrepo_published": zod.union([zod.boolean(),zod.null()]).optional(),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
   "notebook": zod.union([zod.object({
   "id": zod.int(),
   "experiment_id": zod.string(),
@@ -225,69 +242,73 @@ export const CreateExperimentResponse = zod.object({
   "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
   "gpu": zod.boolean(),
   "path": zod.string(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']),
-  "started_at": zod.iso.datetime({"offset":true}).nullable().describe('Pod start time; null while the pod is absent')
-}),zod.null()]),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']).describe('Status values for Kubernetes pods.'),
+  "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).describe('Pod start time; null while the pod is absent')
+}).describe('The experiment\'s JupyterLab notebook.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "nsteps": zod.int(),
-  "error_message": zod.string().nullish(),
+  "error_message": zod.union([zod.string(),zod.null()]).optional(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
-  "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
   "is_live": zod.boolean(),
-  "sim_length_ns": zod.number().nullish(),
+  "sim_length_ns": zod.union([zod.number(),zod.null()]).optional(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
-  "performance": zod.number().nullish()
-}))
-})),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional().describe('Status values for all kinds of jobs.'),
+  "performance": zod.union([zod.number(),zod.null()]).optional()
+}).describe('One tuning trial as reported by the tuner (engine-specific keys pass through).'))
+}).describe('Tuner job for one simulation manifest.')),
   "simulation_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "created_at": zod.iso.datetime({"offset":true}),
-  "engine": zod.enum(['GMX', 'AMBER']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "start_timestamp": zod.int().nullish(),
-  "finish_timestamp": zod.int().nullish(),
-  "nsteps": zod.int().nullish(),
-  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
-  "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "start_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "finish_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps_done": zod.union([zod.int(),zod.null()]).optional().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.union([zod.number(),zod.null()]).optional(),
+  "estimated_time": zod.union([zod.int(),zod.null()]).optional().describe('Estimated seconds until completion'),
   "is_live": zod.boolean(),
   "log_lines": zod.object({
-  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
-  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
-  "stdout": zod.int().nullish(),
-  "stderr": zod.int().nullish()
-}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
-})),
+  "gmx": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (GROMACS only)'),
+  "mdout": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (AMBER only)'),
+  "stdout": zod.union([zod.int(),zod.null()]).optional(),
+  "stderr": zod.union([zod.int(),zod.null()]).optional()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet.')
+}).describe('A production run of one simulation manifest (engine-specific fields pass through).')),
   "analysis_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
-})),
-  "step": zod.int().optional(),
-  "status": zod.string().optional(),
-  "archived_at": zod.iso.datetime({"offset":true}).nullable(),
-  "archive_state": zod.union([zod.literal('archiving'),zod.literal('archived'),zod.literal('restoring'),zod.literal('archive_failed'),zod.literal('restore_failed'),zod.literal(null)]).nullable(),
-  "can_publish": zod.boolean().optional(),
-  "mdrepo_record_url": zod.string().nullish()
-})
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "sim_progress": zod.union([zod.number(),zod.null()]).optional().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.'),
+  "structure_file": zod.union([zod.string(),zod.null()]).optional(),
+  "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
+  "topology_file": zod.union([zod.string(),zod.null()]).optional()
+}).describe('On-demand mwf analysis job (input file paths pass through).')),
+  "step": zod.int().default(createExperimentResponseStepDefault),
+  "status": zod.string().default(createExperimentResponseStatusDefault),
+  "archived_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]),
+  "archive_state": zod.union([zod.enum(['archiving', 'archived', 'restoring', 'archive_failed', 'restore_failed']),zod.null()]),
+  "can_publish": zod.boolean().default(createExperimentResponseCanPublishDefault),
+  "mdrepo_record_url": zod.union([zod.string(),zod.null()]).optional()
+}).describe('A molecular dynamics experiment with its notebook and jobs.')
 
 
 /**
+ * Get an experiment by ID.
  * @summary Get an experiment
  */
 
@@ -303,16 +324,18 @@ export const getExperimentResponseSourceOneFileCountMin = 0;
 
 
 
-
+export const getExperimentResponseStepDefault = 0;
+export const getExperimentResponseStatusDefault = `setup`;
+export const getExperimentResponseCanPublishDefault = false;
 
 export const GetExperimentResponse = zod.object({
   "id": zod.string(),
   "created_at": zod.iso.datetime({"offset":true}),
   "updated_at": zod.iso.datetime({"offset":true}),
   "name": zod.string(),
-  "module_name": zod.string().nullish(),
-  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']),zod.null()]).optional(),
-  "latest_simulation_path": zod.string().nullable(),
+  "module_name": zod.union([zod.string(),zod.null()]).optional(),
+  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']).describe('Semantic system category of a curated notebook module (drives the card icon).'),zod.null()]).optional(),
+  "latest_simulation_path": zod.union([zod.string(),zod.null()]),
   "source": zod.union([zod.object({
   "type": zod.enum(['pdb', 'repo', 'file']),
   "pdb_id": zod.string().optional(),
@@ -322,14 +345,14 @@ export const GetExperimentResponse = zod.object({
   "size": zod.int().min(getExperimentResponseSourceOneFilesItemSizeMin),
   "path": zod.string(),
   "url": zod.string()
-})),
+}).describe('A file inside an experiment directory with its download URL.')),
   "file_count": zod.int().min(getExperimentResponseSourceOneFileCountMin).optional()
-}),zod.null()]).optional(),
-  "size_bytes": zod.int().nullish(),
-  "notebooks_repo": zod.string().nullish(),
-  "mdrepo_id": zod.string().nullish(),
-  "mdrepo_published": zod.boolean().nullish(),
-  "engine": zod.enum(['GMX', 'AMBER']),
+}).describe('Structured experiment provenance.'),zod.null()]).optional(),
+  "size_bytes": zod.union([zod.int(),zod.null()]).optional(),
+  "notebooks_repo": zod.union([zod.string(),zod.null()]).optional(),
+  "mdrepo_id": zod.union([zod.string(),zod.null()]).optional(),
+  "mdrepo_published": zod.union([zod.boolean(),zod.null()]).optional(),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
   "notebook": zod.union([zod.object({
   "id": zod.int(),
   "experiment_id": zod.string(),
@@ -337,69 +360,73 @@ export const GetExperimentResponse = zod.object({
   "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
   "gpu": zod.boolean(),
   "path": zod.string(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']),
-  "started_at": zod.iso.datetime({"offset":true}).nullable().describe('Pod start time; null while the pod is absent')
-}),zod.null()]),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']).describe('Status values for Kubernetes pods.'),
+  "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).describe('Pod start time; null while the pod is absent')
+}).describe('The experiment\'s JupyterLab notebook.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "nsteps": zod.int(),
-  "error_message": zod.string().nullish(),
+  "error_message": zod.union([zod.string(),zod.null()]).optional(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
-  "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
   "is_live": zod.boolean(),
-  "sim_length_ns": zod.number().nullish(),
+  "sim_length_ns": zod.union([zod.number(),zod.null()]).optional(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
-  "performance": zod.number().nullish()
-}))
-})),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional().describe('Status values for all kinds of jobs.'),
+  "performance": zod.union([zod.number(),zod.null()]).optional()
+}).describe('One tuning trial as reported by the tuner (engine-specific keys pass through).'))
+}).describe('Tuner job for one simulation manifest.')),
   "simulation_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "created_at": zod.iso.datetime({"offset":true}),
-  "engine": zod.enum(['GMX', 'AMBER']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "start_timestamp": zod.int().nullish(),
-  "finish_timestamp": zod.int().nullish(),
-  "nsteps": zod.int().nullish(),
-  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
-  "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "start_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "finish_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps_done": zod.union([zod.int(),zod.null()]).optional().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.union([zod.number(),zod.null()]).optional(),
+  "estimated_time": zod.union([zod.int(),zod.null()]).optional().describe('Estimated seconds until completion'),
   "is_live": zod.boolean(),
   "log_lines": zod.object({
-  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
-  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
-  "stdout": zod.int().nullish(),
-  "stderr": zod.int().nullish()
-}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
-})),
+  "gmx": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (GROMACS only)'),
+  "mdout": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (AMBER only)'),
+  "stdout": zod.union([zod.int(),zod.null()]).optional(),
+  "stderr": zod.union([zod.int(),zod.null()]).optional()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet.')
+}).describe('A production run of one simulation manifest (engine-specific fields pass through).')),
   "analysis_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
-})),
-  "step": zod.int().optional(),
-  "status": zod.string().optional(),
-  "archived_at": zod.iso.datetime({"offset":true}).nullable(),
-  "archive_state": zod.union([zod.literal('archiving'),zod.literal('archived'),zod.literal('restoring'),zod.literal('archive_failed'),zod.literal('restore_failed'),zod.literal(null)]).nullable(),
-  "can_publish": zod.boolean().optional(),
-  "mdrepo_record_url": zod.string().nullish()
-})
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "sim_progress": zod.union([zod.number(),zod.null()]).optional().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.'),
+  "structure_file": zod.union([zod.string(),zod.null()]).optional(),
+  "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
+  "topology_file": zod.union([zod.string(),zod.null()]).optional()
+}).describe('On-demand mwf analysis job (input file paths pass through).')),
+  "step": zod.int().default(getExperimentResponseStepDefault),
+  "status": zod.string().default(getExperimentResponseStatusDefault),
+  "archived_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]),
+  "archive_state": zod.union([zod.enum(['archiving', 'archived', 'restoring', 'archive_failed', 'restore_failed']),zod.null()]),
+  "can_publish": zod.boolean().default(getExperimentResponseCanPublishDefault),
+  "mdrepo_record_url": zod.union([zod.string(),zod.null()]).optional()
+}).describe('A molecular dynamics experiment with its notebook and jobs.')
 
 
 /**
+ * Update experiment properties (currently only the name).
  * @summary Update an experiment
  */
 
@@ -411,7 +438,7 @@ export const UpdateExperimentParams = zod.object({
 
 export const UpdateExperimentBody = zod.object({
   "name": zod.string()
-})
+}).describe('Editable experiment properties (other fields are ignored).')
 
 export const updateExperimentResponseSourceOneFilesItemSizeMin = 0;
 
@@ -419,16 +446,18 @@ export const updateExperimentResponseSourceOneFileCountMin = 0;
 
 
 
-
+export const updateExperimentResponseStepDefault = 0;
+export const updateExperimentResponseStatusDefault = `setup`;
+export const updateExperimentResponseCanPublishDefault = false;
 
 export const UpdateExperimentResponse = zod.object({
   "id": zod.string(),
   "created_at": zod.iso.datetime({"offset":true}),
   "updated_at": zod.iso.datetime({"offset":true}),
   "name": zod.string(),
-  "module_name": zod.string().nullish(),
-  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']),zod.null()]).optional(),
-  "latest_simulation_path": zod.string().nullable(),
+  "module_name": zod.union([zod.string(),zod.null()]).optional(),
+  "module_category": zod.union([zod.enum(['protein', 'membrane-protein', 'nucleic-acids', 'protein-ligand', 'small-molecule', 'carbohydrate', 'polymer']).describe('Semantic system category of a curated notebook module (drives the card icon).'),zod.null()]).optional(),
+  "latest_simulation_path": zod.union([zod.string(),zod.null()]),
   "source": zod.union([zod.object({
   "type": zod.enum(['pdb', 'repo', 'file']),
   "pdb_id": zod.string().optional(),
@@ -438,14 +467,14 @@ export const UpdateExperimentResponse = zod.object({
   "size": zod.int().min(updateExperimentResponseSourceOneFilesItemSizeMin),
   "path": zod.string(),
   "url": zod.string()
-})),
+}).describe('A file inside an experiment directory with its download URL.')),
   "file_count": zod.int().min(updateExperimentResponseSourceOneFileCountMin).optional()
-}),zod.null()]).optional(),
-  "size_bytes": zod.int().nullish(),
-  "notebooks_repo": zod.string().nullish(),
-  "mdrepo_id": zod.string().nullish(),
-  "mdrepo_published": zod.boolean().nullish(),
-  "engine": zod.enum(['GMX', 'AMBER']),
+}).describe('Structured experiment provenance.'),zod.null()]).optional(),
+  "size_bytes": zod.union([zod.int(),zod.null()]).optional(),
+  "notebooks_repo": zod.union([zod.string(),zod.null()]).optional(),
+  "mdrepo_id": zod.union([zod.string(),zod.null()]).optional(),
+  "mdrepo_published": zod.union([zod.boolean(),zod.null()]).optional(),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
   "notebook": zod.union([zod.object({
   "id": zod.int(),
   "experiment_id": zod.string(),
@@ -453,69 +482,73 @@ export const UpdateExperimentResponse = zod.object({
   "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
   "gpu": zod.boolean(),
   "path": zod.string(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']),
-  "started_at": zod.iso.datetime({"offset":true}).nullable().describe('Pod start time; null while the pod is absent')
-}),zod.null()]),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']).describe('Status values for Kubernetes pods.'),
+  "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).describe('Pod start time; null while the pod is absent')
+}).describe('The experiment\'s JupyterLab notebook.'),zod.null()]),
   "tuner_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "nsteps": zod.int(),
-  "error_message": zod.string().nullish(),
+  "error_message": zod.union([zod.string(),zod.null()]).optional(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
-  "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
   "is_live": zod.boolean(),
-  "sim_length_ns": zod.number().nullish(),
+  "sim_length_ns": zod.union([zod.number(),zod.null()]).optional(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
-  "performance": zod.number().nullish()
-}))
-})),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional().describe('Status values for all kinds of jobs.'),
+  "performance": zod.union([zod.number(),zod.null()]).optional()
+}).describe('One tuning trial as reported by the tuner (engine-specific keys pass through).'))
+}).describe('Tuner job for one simulation manifest.')),
   "simulation_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "created_at": zod.iso.datetime({"offset":true}),
-  "engine": zod.enum(['GMX', 'AMBER']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "start_timestamp": zod.int().nullish(),
-  "finish_timestamp": zod.int().nullish(),
-  "nsteps": zod.int().nullish(),
-  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
-  "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "start_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "finish_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps_done": zod.union([zod.int(),zod.null()]).optional().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.union([zod.number(),zod.null()]).optional(),
+  "estimated_time": zod.union([zod.int(),zod.null()]).optional().describe('Estimated seconds until completion'),
   "is_live": zod.boolean(),
   "log_lines": zod.object({
-  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
-  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
-  "stdout": zod.int().nullish(),
-  "stderr": zod.int().nullish()
-}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
-})),
+  "gmx": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (GROMACS only)'),
+  "mdout": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (AMBER only)'),
+  "stdout": zod.union([zod.int(),zod.null()]).optional(),
+  "stderr": zod.union([zod.int(),zod.null()]).optional()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet.')
+}).describe('A production run of one simulation manifest (engine-specific fields pass through).')),
   "analysis_jobs": zod.array(zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
-})),
-  "step": zod.int().optional(),
-  "status": zod.string().optional(),
-  "archived_at": zod.iso.datetime({"offset":true}).nullable(),
-  "archive_state": zod.union([zod.literal('archiving'),zod.literal('archived'),zod.literal('restoring'),zod.literal('archive_failed'),zod.literal('restore_failed'),zod.literal(null)]).nullable(),
-  "can_publish": zod.boolean().optional(),
-  "mdrepo_record_url": zod.string().nullish()
-})
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "sim_progress": zod.union([zod.number(),zod.null()]).optional().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.'),
+  "structure_file": zod.union([zod.string(),zod.null()]).optional(),
+  "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
+  "topology_file": zod.union([zod.string(),zod.null()]).optional()
+}).describe('On-demand mwf analysis job (input file paths pass through).')),
+  "step": zod.int().default(updateExperimentResponseStepDefault),
+  "status": zod.string().default(updateExperimentResponseStatusDefault),
+  "archived_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]),
+  "archive_state": zod.union([zod.enum(['archiving', 'archived', 'restoring', 'archive_failed', 'restore_failed']),zod.null()]),
+  "can_publish": zod.boolean().default(updateExperimentResponseCanPublishDefault),
+  "mdrepo_record_url": zod.union([zod.string(),zod.null()]).optional()
+}).describe('A molecular dynamics experiment with its notebook and jobs.')
 
 
 /**
+ * Delete an experiment and all associated resources.
  * @summary Delete an experiment
  */
 
@@ -529,6 +562,7 @@ export const DeleteExperimentResponse = zod.void()
 
 
 /**
+ * Publish experiment to the requested target.
  * @summary Publish an experiment
  */
 
@@ -542,25 +576,26 @@ export const publishExperimentBodyTargetDefault = `invenio`;
 
 export const PublishExperimentBody = zod.object({
   "target": zod.enum(['invenio', 'mdposit']).default(publishExperimentBodyTargetDefault),
-  "simulation_path": zod.string().nullish()
-})
+  "simulation_path": zod.union([zod.string(),zod.null()]).optional()
+}).describe('Publication target (MDPosit requires the simulation to publish).')
 
 export const PublishExperimentResponse = zod.object({
   "metadata_file": zod.object({
   "role": zod.string().optional(),
   "path": zod.string(),
   "url": zod.string()
-}),
+}).describe('A file of an MDPosit publication package.'),
   "files": zod.array(zod.object({
   "role": zod.string().optional(),
   "path": zod.string(),
   "url": zod.string()
-})),
-  "vre_lite_url": zod.string().nullable()
-})
+}).describe('A file of an MDPosit publication package.')),
+  "vre_lite_url": zod.union([zod.string(),zod.null()])
+}).describe('MDPosit publication package handed to VRE Lite.')
 
 
 /**
+ * Durable MDRepo upload status: the PVC state document merged with live Kubernetes Job state.
  * @summary Get MDRepo upload status
  */
 
@@ -582,22 +617,20 @@ export const getPublishStatusResponseCompletedBytesMin = 0;
 
 export const GetPublishStatusResponse = zod.object({
   "experiment_id": zod.string(),
-  "mdrepo_id": zod.string().nullable(),
-  "draft_url": zod.string().nullable(),
-  "upload_state": zod.string().nullable(),
-  "reason": zod.string().nullable(),
+  "mdrepo_id": zod.union([zod.string(),zod.null()]),
+  "draft_url": zod.union([zod.string(),zod.null()]),
+  "upload_state": zod.union([zod.string(),zod.null()]),
+  "reason": zod.union([zod.string(),zod.null()]),
   "total_files": zod.int().min(getPublishStatusResponseTotalFilesMin),
   "completed_files": zod.int().min(getPublishStatusResponseCompletedFilesMin),
   "total_bytes": zod.int().min(getPublishStatusResponseTotalBytesMin),
   "completed_bytes": zod.int().min(getPublishStatusResponseCompletedBytesMin),
-  "current_file": zod.string().nullish(),
-  "error": zod.string().nullish(),
   "upload_attempt_id": zod.string().optional(),
   "failed_files": zod.array(zod.object({
   "key": zod.string(),
   "error": zod.string()
-})).optional()
-})
+}).describe('A file that failed to upload.')).optional()
+}).describe('Durable MDRepo upload status merged with live Job state.')
 
 
 /**
@@ -613,7 +646,7 @@ export const ArchiveExperimentParams = zod.object({
 
 export const ArchiveExperimentResponse = zod.object({
   "attempt_id": zod.string()
-})
+}).describe('Accepted archive or restore.')
 
 
 /**
@@ -629,10 +662,11 @@ export const RestoreExperimentParams = zod.object({
 
 export const RestoreExperimentResponse = zod.object({
   "attempt_id": zod.string()
-})
+}).describe('Accepted archive or restore.')
 
 
 /**
+ * Archive/restore status (status doc reconciled with live Jobs).
  * @summary Get archive/restore status
  */
 
@@ -644,23 +678,25 @@ export const GetArchiveStatusParams = zod.object({
 
 export const GetArchiveStatusResponse = zod.object({
   "experiment_id": zod.string(),
-  "archive_state": zod.union([zod.literal('archiving'),zod.literal('archived'),zod.literal('restoring'),zod.literal('archive_failed'),zod.literal('restore_failed'),zod.literal(null)]).nullable(),
-  "attempt_id": zod.string().nullable(),
-  "direction": zod.union([zod.literal('archive'),zod.literal('restore'),zod.literal(null)]).nullable(),
-  "reason": zod.string().nullable()
-})
+  "archive_state": zod.union([zod.enum(['archiving', 'archived', 'restoring', 'archive_failed', 'restore_failed']),zod.null()]),
+  "attempt_id": zod.union([zod.string(),zod.null()]),
+  "direction": zod.union([zod.enum(['archive', 'restore']),zod.null()]),
+  "reason": zod.union([zod.string(),zod.null()])
+}).describe('Archive/restore state reconciled with live Jobs.')
 
 
 /**
+ * Whether the session holds a token MDRepo accepts.
  * @summary Get MDRepo authentication status
  */
 export const GetMDRepoStatusResponse = zod.object({
   "authenticated": zod.boolean(),
   "mdrepo_url": zod.string().optional()
-})
+}).describe('MDRepo authentication status.')
 
 
 /**
+ * Redirect to MDRepo's authorization page; `return_url` is where the callback lands afterwards.
  * @summary Begin MDRepo OAuth authorization
  */
 export const authorizeMDRepoQueryReturnUrlDefault = `/`;
@@ -673,27 +709,32 @@ export const AuthorizeMDRepoResponse = zod.void()
 
 
 /**
+ * Exchange the authorization code for tokens and redirect back with a success or error query parameter.
  * @summary Complete MDRepo OAuth authorization
  */
+export const completeMDRepoAuthorizationQueryErrorDescriptionDefault = `Authorization denied`;
+
 export const CompleteMDRepoAuthorizationQueryParams = zod.object({
-  "code": zod.string().optional(),
-  "state": zod.string().optional(),
-  "error": zod.string().optional(),
-  "error_description": zod.string().optional()
+  "code": zod.union([zod.string(),zod.null()]).optional(),
+  "state": zod.union([zod.string(),zod.null()]).optional(),
+  "error": zod.union([zod.string(),zod.null()]).optional(),
+  "error_description": zod.string().default(completeMDRepoAuthorizationQueryErrorDescriptionDefault)
 })
 
 export const CompleteMDRepoAuthorizationResponse = zod.void()
 
 
 /**
+ * Remove all MDRepo tokens from the session.
  * @summary Clear MDRepo credentials
  */
 export const LogoutMDRepoResponse = zod.object({
   "message": zod.string()
-})
+}).describe('Plain confirmation message.')
 
 
 /**
+ * List files in an experiment directory, optionally filtered by extension.
  * @summary List experiment files
  */
 
@@ -704,7 +745,7 @@ export const ListExperimentFilesParams = zod.object({
 })
 
 export const ListExperimentFilesQueryParams = zod.object({
-  "ext": zod.string().optional().describe('Comma-separated file extensions')
+  "ext": zod.union([zod.string(),zod.null()]).optional().describe('Comma-separated file extensions')
 })
 
 export const listExperimentFilesResponseSizeMin = 0;
@@ -716,11 +757,12 @@ export const ListExperimentFilesResponseItem = zod.object({
   "size": zod.int().min(listExperimentFilesResponseSizeMin),
   "path": zod.string(),
   "url": zod.string()
-})
+}).describe('A file inside an experiment directory with its download URL.')
 export const ListExperimentFilesResponse = zod.array(ListExperimentFilesResponseItem)
 
 
 /**
+ * Serve a file from an experiment directory inline.
  * @summary Download an experiment file
  */
 
@@ -736,6 +778,7 @@ export const DownloadExperimentFileResponse = zod.unknown()
 
 
 /**
+ * List all simulations of an experiment.
  * @summary List simulation manifests
  */
 
@@ -767,11 +810,12 @@ export const ListSimulationsResponseItem = zod.object({
   "status": zod.string(),
   "live": zod.boolean(),
   "last_activity": zod.number()
-})
+}).describe('A simulation manifest with its validation, lock, and wizard state.')
 export const ListSimulationsResponse = zod.array(ListSimulationsResponseItem)
 
 
 /**
+ * Create a new simulation manifest.
  * @summary Create a simulation manifest
  */
 
@@ -786,12 +830,12 @@ export const CreateSimulationParams = zod.object({
 export const createSimulationBodyExtraArgsDefault = ``;
 
 export const CreateSimulationBody = zod.object({
-  "simulation_path": zod.string().optional(),
+  "simulation_path": zod.union([zod.string(),zod.null()]).optional(),
   "name": zod.string().min(1),
-  "engine": zod.enum(['GMX', 'AMBER']).optional(),
+  "engine": zod.union([zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),zod.null()]).optional(),
   "files": zod.record(zod.string(), zod.string().min(1)),
   "extra_args": zod.string().default(createSimulationBodyExtraArgsDefault)
-})
+}).describe('Simulation manifest content to create or update.')
 
 
 
@@ -815,10 +859,11 @@ export const CreateSimulationResponse = zod.object({
   "status": zod.string(),
   "live": zod.boolean(),
   "last_activity": zod.number()
-})
+}).describe('A simulation manifest with its validation, lock, and wizard state.')
 
 
 /**
+ * Get a single simulation by its experiment-relative path.
  * @summary Get a simulation manifest
  */
 
@@ -826,8 +871,8 @@ export const CreateSimulationResponse = zod.object({
 
 
 export const GetSimulationParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "simulation_path": zod.string().min(1)
+  "simulation_path": zod.string().min(1),
+  "experiment_id": zod.string().min(1)
 })
 
 
@@ -852,10 +897,11 @@ export const GetSimulationResponse = zod.object({
   "status": zod.string(),
   "live": zod.boolean(),
   "last_activity": zod.number()
-})
+}).describe('A simulation manifest with its validation, lock, and wizard state.')
 
 
 /**
+ * Edit an unlocked simulation manifest.
  * @summary Update a simulation manifest
  */
 
@@ -863,8 +909,8 @@ export const GetSimulationResponse = zod.object({
 
 
 export const UpdateSimulationParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "simulation_path": zod.string().min(1)
+  "simulation_path": zod.string().min(1),
+  "experiment_id": zod.string().min(1)
 })
 
 
@@ -872,12 +918,12 @@ export const UpdateSimulationParams = zod.object({
 export const updateSimulationBodyExtraArgsDefault = ``;
 
 export const UpdateSimulationBody = zod.object({
-  "simulation_path": zod.string().optional(),
+  "simulation_path": zod.union([zod.string(),zod.null()]).optional(),
   "name": zod.string().min(1),
-  "engine": zod.enum(['GMX', 'AMBER']).optional(),
+  "engine": zod.union([zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),zod.null()]).optional(),
   "files": zod.record(zod.string(), zod.string().min(1)),
   "extra_args": zod.string().default(updateSimulationBodyExtraArgsDefault)
-})
+}).describe('Simulation manifest content to create or update.')
 
 
 
@@ -901,10 +947,11 @@ export const UpdateSimulationResponse = zod.object({
   "status": zod.string(),
   "live": zod.boolean(),
   "last_activity": zod.number()
-})
+}).describe('A simulation manifest with its validation, lock, and wizard state.')
 
 
 /**
+ * Delete a simulation manifest and cascade-delete all related jobs.
  * @summary Delete a simulation manifest
  */
 
@@ -912,14 +959,15 @@ export const UpdateSimulationResponse = zod.object({
 
 
 export const DeleteSimulationParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "simulation_path": zod.string().min(1)
+  "simulation_path": zod.string().min(1),
+  "experiment_id": zod.string().min(1)
 })
 
 export const DeleteSimulationResponse = zod.void()
 
 
 /**
+ * List all GROMACS jobs of an experiment.
  * @summary List GROMACS jobs
  */
 
@@ -931,152 +979,39 @@ export const ListGromacsJobsParams = zod.object({
 
 
 
-
+export const listGromacsJobsResponseInitStepDefault = 0;
 
 export const ListGromacsJobsResponseItem = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "created_at": zod.iso.datetime({"offset":true}),
-  "engine": zod.enum(['GMX', 'AMBER']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "start_timestamp": zod.int().nullish(),
-  "finish_timestamp": zod.int().nullish(),
-  "nsteps": zod.int().nullish(),
-  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
-  "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "start_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "finish_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps_done": zod.union([zod.int(),zod.null()]).optional().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.union([zod.number(),zod.null()]).optional(),
+  "estimated_time": zod.union([zod.int(),zod.null()]).optional().describe('Estimated seconds until completion'),
   "is_live": zod.boolean(),
   "log_lines": zod.object({
-  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
-  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
-  "stdout": zod.int().nullish(),
-  "stderr": zod.int().nullish()
-}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
-}).and(zod.object({
-  "pme": zod.enum(['cpu', 'gpu']),
-  "nb": zod.enum(['cpu', 'gpu'])
-}))
+  "gmx": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (GROMACS only)'),
+  "mdout": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (AMBER only)'),
+  "stdout": zod.union([zod.int(),zod.null()]).optional(),
+  "stderr": zod.union([zod.int(),zod.null()]).optional()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet.'),
+  "pme": zod.enum(['auto', 'cpu', 'gpu']),
+  "nb": zod.enum(['auto', 'cpu', 'gpu']),
+  "init_step": zod.int().default(listGromacsJobsResponseInitStepDefault).describe('Step the run resumed from (0 for fresh runs)')
+}).describe('GROMACS production run.')
 export const ListGromacsJobsResponse = zod.array(ListGromacsJobsResponseItem)
 
 
 /**
- * @summary Get a GROMACS job
- */
-
-
-
-
-export const GetGromacsJobParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "simulation_path": zod.string().min(1)
-})
-
-
-
-
-
-export const GetGromacsJobResponse = zod.object({
-  "id": zod.string(),
-  "experiment_id": zod.string(),
-  "simulation_path": zod.string(),
-  "created_at": zod.iso.datetime({"offset":true}),
-  "engine": zod.enum(['GMX', 'AMBER']),
-  "np": zod.int().min(1),
-  "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "start_timestamp": zod.int().nullish(),
-  "finish_timestamp": zod.int().nullish(),
-  "nsteps": zod.int().nullish(),
-  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
-  "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
-  "is_live": zod.boolean(),
-  "log_lines": zod.object({
-  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
-  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
-  "stdout": zod.int().nullish(),
-  "stderr": zod.int().nullish()
-}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
-}).and(zod.object({
-  "pme": zod.enum(['cpu', 'gpu']),
-  "nb": zod.enum(['cpu', 'gpu'])
-}))
-
-
-/**
- * @summary Submit a GROMACS job (replaces a terminal run, 409s on a live one)
- */
-
-
-
-
-export const SubmitGromacsJobParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "simulation_path": zod.string().min(1)
-})
-
-
-
-
-
-export const SubmitGromacsJobBody = zod.object({
-  "np": zod.int().min(1),
-  "ntomp": zod.int().min(1),
-  "pme": zod.enum(['cpu', 'gpu']),
-  "nb": zod.enum(['cpu', 'gpu'])
-})
-
-
-
-
-
-export const SubmitGromacsJobResponse = zod.object({
-  "id": zod.string(),
-  "experiment_id": zod.string(),
-  "simulation_path": zod.string(),
-  "created_at": zod.iso.datetime({"offset":true}),
-  "engine": zod.enum(['GMX', 'AMBER']),
-  "np": zod.int().min(1),
-  "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "start_timestamp": zod.int().nullish(),
-  "finish_timestamp": zod.int().nullish(),
-  "nsteps": zod.int().nullish(),
-  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
-  "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
-  "is_live": zod.boolean(),
-  "log_lines": zod.object({
-  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
-  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
-  "stdout": zod.int().nullish(),
-  "stderr": zod.int().nullish()
-}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
-}).and(zod.object({
-  "pme": zod.enum(['cpu', 'gpu']),
-  "nb": zod.enum(['cpu', 'gpu'])
-}))
-
-
-/**
- * @summary Delete a GROMACS job
- */
-
-
-
-
-export const DeleteGromacsJobParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "simulation_path": zod.string().min(1)
-})
-
-export const DeleteGromacsJobResponse = zod.void()
-
-
-/**
+ * Stop the run gracefully, keeping all data and the job row.
  * @summary Stop a GROMACS run, preserving its data
  */
 
@@ -1092,6 +1027,7 @@ export const StopGromacsJobResponse = zod.void()
 
 
 /**
+ * Extend a finished or stopped run by `nsteps` additional steps, resuming from its checkpoint.
  * @summary Extend a finished or stopped GROMACS run from its checkpoint
  */
 
@@ -1108,41 +1044,42 @@ export const ExtendGromacsJobParams = zod.object({
 
 export const ExtendGromacsJobBody = zod.object({
   "nsteps": zod.int().min(1)
-})
+}).describe('Run extension.')
 
 
 
-
+export const extendGromacsJobResponseInitStepDefault = 0;
 
 export const ExtendGromacsJobResponse = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "created_at": zod.iso.datetime({"offset":true}),
-  "engine": zod.enum(['GMX', 'AMBER']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "start_timestamp": zod.int().nullish(),
-  "finish_timestamp": zod.int().nullish(),
-  "nsteps": zod.int().nullish(),
-  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
-  "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "start_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "finish_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps_done": zod.union([zod.int(),zod.null()]).optional().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.union([zod.number(),zod.null()]).optional(),
+  "estimated_time": zod.union([zod.int(),zod.null()]).optional().describe('Estimated seconds until completion'),
   "is_live": zod.boolean(),
   "log_lines": zod.object({
-  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
-  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
-  "stdout": zod.int().nullish(),
-  "stderr": zod.int().nullish()
-}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
-}).and(zod.object({
-  "pme": zod.enum(['cpu', 'gpu']),
-  "nb": zod.enum(['cpu', 'gpu'])
-}))
+  "gmx": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (GROMACS only)'),
+  "mdout": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (AMBER only)'),
+  "stdout": zod.union([zod.int(),zod.null()]).optional(),
+  "stderr": zod.union([zod.int(),zod.null()]).optional()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet.'),
+  "pme": zod.enum(['auto', 'cpu', 'gpu']),
+  "nb": zod.enum(['auto', 'cpu', 'gpu']),
+  "init_step": zod.int().default(extendGromacsJobResponseInitStepDefault).describe('Step the run resumed from (0 for fresh runs)')
+}).describe('GROMACS production run.')
 
 
 /**
+ * Tail of one of the run's log streams (`gmx`, `stdout`, `stderr`).
  * @summary Get a GROMACS job log
  */
 
@@ -1169,6 +1106,124 @@ export const GetGromacsJobLogResponse = zod.string()
 
 
 /**
+ * Get the GROMACS run of a simulation.
+ * @summary Get a GROMACS job
+ */
+
+
+
+
+export const GetGromacsJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "simulation_path": zod.string().min(1)
+})
+
+
+
+export const getGromacsJobResponseInitStepDefault = 0;
+
+export const GetGromacsJobResponse = zod.object({
+  "id": zod.string(),
+  "experiment_id": zod.string(),
+  "simulation_path": zod.string(),
+  "created_at": zod.iso.datetime({"offset":true}),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "start_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "finish_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps_done": zod.union([zod.int(),zod.null()]).optional().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.union([zod.number(),zod.null()]).optional(),
+  "estimated_time": zod.union([zod.int(),zod.null()]).optional().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
+  "log_lines": zod.object({
+  "gmx": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (GROMACS only)'),
+  "mdout": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (AMBER only)'),
+  "stdout": zod.union([zod.int(),zod.null()]).optional(),
+  "stderr": zod.union([zod.int(),zod.null()]).optional()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet.'),
+  "pme": zod.enum(['auto', 'cpu', 'gpu']),
+  "nb": zod.enum(['auto', 'cpu', 'gpu']),
+  "init_step": zod.int().default(getGromacsJobResponseInitStepDefault).describe('Step the run resumed from (0 for fresh runs)')
+}).describe('GROMACS production run.')
+
+
+/**
+ * Submit a GROMACS simulation job from a simulation manifest.
+ * @summary Submit a GROMACS job (replaces a terminal run, 409s on a live one)
+ */
+
+
+
+
+export const SubmitGromacsJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "simulation_path": zod.string().min(1)
+})
+
+
+
+
+
+export const SubmitGromacsJobBody = zod.object({
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1),
+  "pme": zod.enum(['cpu', 'gpu']),
+  "nb": zod.enum(['cpu', 'gpu'])
+}).describe('Compute settings for a GROMACS run.')
+
+
+
+export const submitGromacsJobResponseInitStepDefault = 0;
+
+export const SubmitGromacsJobResponse = zod.object({
+  "id": zod.string(),
+  "experiment_id": zod.string(),
+  "simulation_path": zod.string(),
+  "created_at": zod.iso.datetime({"offset":true}),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "start_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "finish_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps_done": zod.union([zod.int(),zod.null()]).optional().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.union([zod.number(),zod.null()]).optional(),
+  "estimated_time": zod.union([zod.int(),zod.null()]).optional().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
+  "log_lines": zod.object({
+  "gmx": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (GROMACS only)'),
+  "mdout": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (AMBER only)'),
+  "stdout": zod.union([zod.int(),zod.null()]).optional(),
+  "stderr": zod.union([zod.int(),zod.null()]).optional()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet.'),
+  "pme": zod.enum(['auto', 'cpu', 'gpu']),
+  "nb": zod.enum(['auto', 'cpu', 'gpu']),
+  "init_step": zod.int().default(submitGromacsJobResponseInitStepDefault).describe('Step the run resumed from (0 for fresh runs)')
+}).describe('GROMACS production run.')
+
+
+/**
+ * Delete the simulation's run: its MDRun job, DB row, and result files.
+ * @summary Delete a GROMACS job
+ */
+
+
+
+
+export const DeleteGromacsJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "simulation_path": zod.string().min(1)
+})
+
+export const DeleteGromacsJobResponse = zod.void()
+
+
+/**
+ * List all AMBER jobs of an experiment.
  * @summary List AMBER jobs
  */
 
@@ -1187,145 +1242,31 @@ export const ListAmberJobsResponseItem = zod.object({
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "created_at": zod.iso.datetime({"offset":true}),
-  "engine": zod.enum(['GMX', 'AMBER']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
   "np": zod.int().min(1),
   "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "start_timestamp": zod.int().nullish(),
-  "finish_timestamp": zod.int().nullish(),
-  "nsteps": zod.int().nullish(),
-  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
-  "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "start_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "finish_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps_done": zod.union([zod.int(),zod.null()]).optional().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.union([zod.number(),zod.null()]).optional(),
+  "estimated_time": zod.union([zod.int(),zod.null()]).optional().describe('Estimated seconds until completion'),
   "is_live": zod.boolean(),
   "log_lines": zod.object({
-  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
-  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
-  "stdout": zod.int().nullish(),
-  "stderr": zod.int().nullish()
-}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
-}).and(zod.object({
+  "gmx": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (GROMACS only)'),
+  "mdout": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (AMBER only)'),
+  "stdout": zod.union([zod.int(),zod.null()]).optional(),
+  "stderr": zod.union([zod.int(),zod.null()]).optional()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet.'),
   "binary": zod.string(),
   "ewald": zod.string()
-}))
+}).describe('AMBER production run.')
 export const ListAmberJobsResponse = zod.array(ListAmberJobsResponseItem)
 
 
 /**
- * @summary Get an AMBER job
- */
-
-
-
-
-export const GetAmberJobParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "simulation_path": zod.string().min(1)
-})
-
-
-
-
-
-export const GetAmberJobResponse = zod.object({
-  "id": zod.string(),
-  "experiment_id": zod.string(),
-  "simulation_path": zod.string(),
-  "created_at": zod.iso.datetime({"offset":true}),
-  "engine": zod.enum(['GMX', 'AMBER']),
-  "np": zod.int().min(1),
-  "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "start_timestamp": zod.int().nullish(),
-  "finish_timestamp": zod.int().nullish(),
-  "nsteps": zod.int().nullish(),
-  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
-  "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
-  "is_live": zod.boolean(),
-  "log_lines": zod.object({
-  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
-  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
-  "stdout": zod.int().nullish(),
-  "stderr": zod.int().nullish()
-}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
-}).and(zod.object({
-  "binary": zod.string(),
-  "ewald": zod.string()
-}))
-
-
-/**
- * @summary Submit an AMBER job (replaces a terminal run, 409s on a live one)
- */
-
-
-
-
-export const SubmitAmberJobParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "simulation_path": zod.string().min(1)
-})
-
-
-
-
-
-export const SubmitAmberJobBody = zod.object({
-  "binary": zod.string(),
-  "ewald": zod.string(),
-  "np": zod.int().min(1),
-  "ntomp": zod.int().min(1)
-})
-
-
-
-
-
-export const SubmitAmberJobResponse = zod.object({
-  "id": zod.string(),
-  "experiment_id": zod.string(),
-  "simulation_path": zod.string(),
-  "created_at": zod.iso.datetime({"offset":true}),
-  "engine": zod.enum(['GMX', 'AMBER']),
-  "np": zod.int().min(1),
-  "ntomp": zod.int().min(1),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "start_timestamp": zod.int().nullish(),
-  "finish_timestamp": zod.int().nullish(),
-  "nsteps": zod.int().nullish(),
-  "nsteps_done": zod.int().nullish().describe('Steps completed so far (parsed from the engine log)'),
-  "performance": zod.number().nullish(),
-  "estimated_time": zod.int().nullish().describe('Estimated seconds until completion'),
-  "is_live": zod.boolean(),
-  "log_lines": zod.object({
-  "gmx": zod.int().nullish().describe('Engine log (GROMACS only)'),
-  "mdout": zod.int().nullish().describe('Engine log (AMBER only)'),
-  "stdout": zod.int().nullish(),
-  "stderr": zod.int().nullish()
-}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet')
-}).and(zod.object({
-  "binary": zod.string(),
-  "ewald": zod.string()
-}))
-
-
-/**
- * @summary Delete an AMBER job
- */
-
-
-
-
-export const DeleteAmberJobParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "simulation_path": zod.string().min(1)
-})
-
-export const DeleteAmberJobResponse = zod.void()
-
-
-/**
+ * Stop the run gracefully, keeping all data and the job row.
  * @summary Stop an AMBER run, preserving its data
  */
 
@@ -1341,6 +1282,10 @@ export const StopAmberJobResponse = zod.void()
 
 
 /**
+ * Reject AMBER extension: it is GROMACS-only.
+ *
+ * Exists so that ``POST .../extend`` is a clear 400 instead of falling into the
+ * greedy submit route with confusing parameter errors.
  * @summary Extend an AMBER run (extension is GROMACS-only)
  */
 
@@ -1356,6 +1301,7 @@ export const ExtendAmberJobResponse = zod.void()
 
 
 /**
+ * Tail of one of the run's log streams (`mdout`, `mdinfo`, `stdout`, `stderr`).
  * @summary Get an AMBER job log
  */
 
@@ -1382,6 +1328,122 @@ export const GetAmberJobLogResponse = zod.string()
 
 
 /**
+ * Get the AMBER run of a simulation.
+ * @summary Get an AMBER job
+ */
+
+
+
+
+export const GetAmberJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "simulation_path": zod.string().min(1)
+})
+
+
+
+
+
+export const GetAmberJobResponse = zod.object({
+  "id": zod.string(),
+  "experiment_id": zod.string(),
+  "simulation_path": zod.string(),
+  "created_at": zod.iso.datetime({"offset":true}),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "start_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "finish_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps_done": zod.union([zod.int(),zod.null()]).optional().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.union([zod.number(),zod.null()]).optional(),
+  "estimated_time": zod.union([zod.int(),zod.null()]).optional().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
+  "log_lines": zod.object({
+  "gmx": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (GROMACS only)'),
+  "mdout": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (AMBER only)'),
+  "stdout": zod.union([zod.int(),zod.null()]).optional(),
+  "stderr": zod.union([zod.int(),zod.null()]).optional()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet.'),
+  "binary": zod.string(),
+  "ewald": zod.string()
+}).describe('AMBER production run.')
+
+
+/**
+ * Submit an AMBER simulation job from a simulation manifest.
+ * @summary Submit an AMBER job (replaces a terminal run, 409s on a live one)
+ */
+
+
+
+
+export const SubmitAmberJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "simulation_path": zod.string().min(1)
+})
+
+
+
+
+
+export const SubmitAmberJobBody = zod.object({
+  "binary": zod.string(),
+  "ewald": zod.string(),
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1)
+}).describe('Compute settings for an AMBER run.')
+
+
+
+
+
+export const SubmitAmberJobResponse = zod.object({
+  "id": zod.string(),
+  "experiment_id": zod.string(),
+  "simulation_path": zod.string(),
+  "created_at": zod.iso.datetime({"offset":true}),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "np": zod.int().min(1),
+  "ntomp": zod.int().min(1),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "start_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "finish_timestamp": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps": zod.union([zod.int(),zod.null()]).optional(),
+  "nsteps_done": zod.union([zod.int(),zod.null()]).optional().describe('Steps completed so far (parsed from the engine log)'),
+  "performance": zod.union([zod.number(),zod.null()]).optional(),
+  "estimated_time": zod.union([zod.int(),zod.null()]).optional().describe('Estimated seconds until completion'),
+  "is_live": zod.boolean(),
+  "log_lines": zod.object({
+  "gmx": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (GROMACS only)'),
+  "mdout": zod.union([zod.int(),zod.null()]).optional().describe('Engine log (AMBER only)'),
+  "stdout": zod.union([zod.int(),zod.null()]).optional(),
+  "stderr": zod.union([zod.int(),zod.null()]).optional()
+}).optional().describe('Line counts per log stream for sizing badges without fetching logs; null while a stream\'s file does not exist yet.'),
+  "binary": zod.string(),
+  "ewald": zod.string()
+}).describe('AMBER production run.')
+
+
+/**
+ * Delete the simulation's run: its MDRun job, DB row, and result files.
+ * @summary Delete an AMBER job
+ */
+
+
+
+
+export const DeleteAmberJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "simulation_path": zod.string().min(1)
+})
+
+export const DeleteAmberJobResponse = zod.void()
+
+
+/**
+ * List all tuner jobs of an experiment.
  * @summary List tuner jobs
  */
 
@@ -1396,23 +1458,24 @@ export const ListTunerJobsResponseItem = zod.object({
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "nsteps": zod.int(),
-  "error_message": zod.string().nullish(),
+  "error_message": zod.union([zod.string(),zod.null()]).optional(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
-  "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
   "is_live": zod.boolean(),
-  "sim_length_ns": zod.number().nullish(),
+  "sim_length_ns": zod.union([zod.number(),zod.null()]).optional(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
-  "performance": zod.number().nullish()
-}))
-})
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional().describe('Status values for all kinds of jobs.'),
+  "performance": zod.union([zod.number(),zod.null()]).optional()
+}).describe('One tuning trial as reported by the tuner (engine-specific keys pass through).'))
+}).describe('Tuner job for one simulation manifest.')
 export const ListTunerJobsResponse = zod.array(ListTunerJobsResponseItem)
 
 
 /**
+ * Start a tuner job for a simulation manifest; an existing healthy job is returned instead (200).
  * @summary Start a tuner job
  */
 
@@ -1425,88 +1488,34 @@ export const StartTunerJobParams = zod.object({
 
 
 
-export const StartTunerJobQueryParams = zod.object({
-  "simulation_path": zod.string().optional(),
-  "nsteps": zod.int().min(1).optional()
-})
-
-
-
-
 
 export const StartTunerJobBody = zod.object({
   "simulation_path": zod.string().min(1),
   "nsteps": zod.int().min(1)
-})
+}).describe('Tuning job for a simulation manifest.')
 
 export const StartTunerJobResponse = zod.object({
   "id": zod.string(),
   "experiment_id": zod.string(),
   "simulation_path": zod.string(),
   "nsteps": zod.int(),
-  "error_message": zod.string().nullish(),
+  "error_message": zod.union([zod.string(),zod.null()]).optional(),
   "created_at": zod.iso.datetime({"offset":true}),
   "is_stopped": zod.boolean(),
-  "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
   "is_live": zod.boolean(),
-  "sim_length_ns": zod.number().nullish(),
+  "sim_length_ns": zod.union([zod.number(),zod.null()]).optional(),
   "trials": zod.array(zod.object({
   "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
-  "performance": zod.number().nullish()
-}))
-})
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional().describe('Status values for all kinds of jobs.'),
+  "performance": zod.union([zod.number(),zod.null()]).optional()
+}).describe('One tuning trial as reported by the tuner (engine-specific keys pass through).'))
+}).describe('Tuner job for one simulation manifest.')
 
 
 /**
- * @summary Get a tuner job
- */
-
-
-
-
-export const GetTunerJobParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "simulation_path": zod.string().min(1)
-})
-
-export const GetTunerJobResponse = zod.object({
-  "id": zod.string(),
-  "experiment_id": zod.string(),
-  "simulation_path": zod.string(),
-  "nsteps": zod.int(),
-  "error_message": zod.string().nullish(),
-  "created_at": zod.iso.datetime({"offset":true}),
-  "is_stopped": zod.boolean(),
-  "engine": zod.enum(['GMX', 'AMBER']),
-  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "is_live": zod.boolean(),
-  "sim_length_ns": zod.number().nullish(),
-  "trials": zod.array(zod.object({
-  "id": zod.string().optional(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional(),
-  "performance": zod.number().nullish()
-}))
-})
-
-
-/**
- * @summary Delete a tuner job
- */
-
-
-
-
-export const DeleteTunerJobParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "simulation_path": zod.string().min(1)
-})
-
-export const DeleteTunerJobResponse = zod.void()
-
-
-/**
+ * Stop a running tuner job, keeping its observed trials.
  * @summary Stop a tuner job
  */
 
@@ -1522,6 +1531,7 @@ export const StopTunerJobResponse = zod.void()
 
 
 /**
+ * Stdout log of a tuning trial.
  * @summary Get tuner trial standard output
  */
 
@@ -1539,6 +1549,7 @@ export const GetTunerTrialStdoutResponse = zod.string()
 
 
 /**
+ * Stderr log of a tuning trial.
  * @summary Get tuner trial standard error
  */
 
@@ -1556,6 +1567,56 @@ export const GetTunerTrialStderrResponse = zod.string()
 
 
 /**
+ * Get the tuner job of a simulation.
+ * @summary Get a tuner job
+ */
+
+
+
+
+export const GetTunerJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "simulation_path": zod.string().min(1)
+})
+
+export const GetTunerJobResponse = zod.object({
+  "id": zod.string(),
+  "experiment_id": zod.string(),
+  "simulation_path": zod.string(),
+  "nsteps": zod.int(),
+  "error_message": zod.union([zod.string(),zod.null()]).optional(),
+  "created_at": zod.iso.datetime({"offset":true}),
+  "is_stopped": zod.boolean(),
+  "engine": zod.enum(['GMX', 'AMBER']).describe('Molecular dynamics engine types.'),
+  "tuner_status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "is_live": zod.boolean(),
+  "sim_length_ns": zod.union([zod.number(),zod.null()]).optional(),
+  "trials": zod.array(zod.object({
+  "id": zod.string().optional(),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).optional().describe('Status values for all kinds of jobs.'),
+  "performance": zod.union([zod.number(),zod.null()]).optional()
+}).describe('One tuning trial as reported by the tuner (engine-specific keys pass through).'))
+}).describe('Tuner job for one simulation manifest.')
+
+
+/**
+ * Delete a tuner job and its tuner-side resources.
+ * @summary Delete a tuner job
+ */
+
+
+
+
+export const DeleteTunerJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "simulation_path": zod.string().min(1)
+})
+
+export const DeleteTunerJobResponse = zod.void()
+
+
+/**
+ * Get the notebook instance of an experiment.
  * @summary Get an experiment notebook
  */
 
@@ -1572,12 +1633,13 @@ export const GetNotebookResponse = zod.object({
   "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
   "gpu": zod.boolean(),
   "path": zod.string(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']),
-  "started_at": zod.iso.datetime({"offset":true}).nullable().describe('Pod start time; null while the pod is absent')
-})
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']).describe('Status values for Kubernetes pods.'),
+  "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).describe('Pod start time; null while the pod is absent')
+}).describe('The experiment\'s JupyterLab notebook.')
 
 
 /**
+ * Start the notebook pod of an experiment (optional `tier` and `gpu`).
  * @summary Start an experiment notebook
  */
 
@@ -1590,9 +1652,9 @@ export const StartNotebookParams = zod.object({
 export const startNotebookBodyGpuDefault = false;
 
 export const StartNotebookBody = zod.object({
-  "tier": zod.enum(['1x', '2x', '4x']).optional(),
+  "tier": zod.union([zod.enum(['1x', '2x', '4x']),zod.null()]).optional(),
   "gpu": zod.boolean().default(startNotebookBodyGpuDefault)
-})
+}).describe('Notebook start options.')
 
 export const StartNotebookResponse = zod.object({
   "id": zod.int(),
@@ -1601,12 +1663,13 @@ export const StartNotebookResponse = zod.object({
   "tier": zod.union([zod.literal('1x'),zod.literal('2x'),zod.literal('4x'),zod.literal(null)]).nullish(),
   "gpu": zod.boolean(),
   "path": zod.string(),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']),
-  "started_at": zod.iso.datetime({"offset":true}).nullable().describe('Pod start time; null while the pod is absent')
-})
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'ERROR', 'DOWN', 'TERMINATING', 'TERMINATED']).describe('Status values for Kubernetes pods.'),
+  "started_at": zod.union([zod.iso.datetime({"offset":true}),zod.null()]).describe('Pod start time; null while the pod is absent')
+}).describe('The experiment\'s JupyterLab notebook.')
 
 
 /**
+ * Stop the notebook pod of an experiment.
  * @summary Stop an experiment notebook
  */
 
@@ -1620,6 +1683,7 @@ export const StopNotebookResponse = zod.void()
 
 
 /**
+ * List analysis jobs of an experiment, optionally only those of one simulation.
  * @summary List analysis jobs
  */
 
@@ -1633,7 +1697,7 @@ export const ListAnalysisJobsParams = zod.object({
 
 
 export const ListAnalysisJobsQueryParams = zod.object({
-  "simulation_path": zod.string().min(1).optional()
+  "simulation_path": zod.union([zod.string().min(1),zod.null()]).optional()
 })
 
 export const ListAnalysisJobsResponseItem = zod.object({
@@ -1642,13 +1706,17 @@ export const ListAnalysisJobsResponseItem = zod.object({
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
-})
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "sim_progress": zod.union([zod.number(),zod.null()]).optional().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.'),
+  "structure_file": zod.union([zod.string(),zod.null()]).optional(),
+  "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
+  "topology_file": zod.union([zod.string(),zod.null()]).optional()
+}).describe('On-demand mwf analysis job (input file paths pass through).')
 export const ListAnalysisJobsResponse = zod.array(ListAnalysisJobsResponseItem)
 
 
 /**
+ * Submit an analysis job for a simulation's trajectory.
  * @summary Submit an analysis job
  */
 
@@ -1665,7 +1733,7 @@ export const SubmitAnalysisJobBody = zod.object({
   "simulation_path": zod.string().min(1),
   "analysis": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "preprocessing_mode": zod.enum(['as_is', 'image', 'image_fit']).default(submitAnalysisJobBodyPreprocessingModeDefault)
-})
+}).describe('Analysis of a simulation\'s trajectory.')
 
 export const SubmitAnalysisJobResponse = zod.object({
   "id": zod.string(),
@@ -1673,9 +1741,12 @@ export const SubmitAnalysisJobResponse = zod.object({
   "simulation_path": zod.string(),
   "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
   "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
-})
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "sim_progress": zod.union([zod.number(),zod.null()]).optional().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.'),
+  "structure_file": zod.union([zod.string(),zod.null()]).optional(),
+  "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
+  "topology_file": zod.union([zod.string(),zod.null()]).optional()
+}).describe('On-demand mwf analysis job (input file paths pass through).')
 
 
 /**
@@ -1694,6 +1765,7 @@ export const ListAnalysisTypesResponse = zod.array(ListAnalysisTypesResponseItem
 
 
 /**
+ * Names of the analysis results available for a simulation.
  * @summary List available analysis results
  */
 
@@ -1715,6 +1787,7 @@ export const ListAnalysisResultsResponse = zod.array(ListAnalysisResultsResponse
 
 
 /**
+ * Variant options of a multi-file analysis from its summary JSON (empty when absent or not a summary).
  * @summary List variants for an analysis result
  */
 
@@ -1740,11 +1813,12 @@ export const ListAnalysisResultVariantsQueryParams = zod.object({
 export const ListAnalysisResultVariantsResponseItem = zod.object({
   "analysis": zod.string().min(1),
   "name": zod.string().min(1)
-})
+}).describe('One variant of a multi-file analysis (extra summary keys pass through).')
 export const ListAnalysisResultVariantsResponse = zod.array(ListAnalysisResultVariantsResponseItem)
 
 
 /**
+ * Serve the JSON content of an analysis result file as-is.
  * @summary Get a typed analysis result
  */
 
@@ -1772,53 +1846,53 @@ export const GetAnalysisResultResponse = zod.union([zod.object({
   "min": zod.number(),
   "max": zod.number(),
   "data": zod.array(zod.number())
-}))
-}),zod.object({
+}).describe('Summary statistics of a series.'))
+}).describe('Per-key statistical series.'),zod.object({
   "start": zod.number(),
   "step": zod.number(),
   "data": zod.array(zod.object({
   "reference": zod.string(),
   "group": zod.string(),
   "values": zod.array(zod.number())
-}))
-}),zod.object({
+}).describe('One reference/group series.'))
+}).describe('Series keyed by reference and group.'),zod.object({
   "step": zod.number().optional(),
   "data": zod.array(zod.object({
   "name": zod.string()
-}))
-}),zod.union([zod.object({
+}).describe('One named data entry.'))
+}).describe('Named data entries.'),zod.union([zod.object({
   "start": zod.number().optional(),
   "step": zod.number().optional(),
   "rmsdpr": zod.array(zod.array(zod.number())),
-  "saspf": zod.array(zod.array(zod.number().nullable())).optional(),
+  "saspf": zod.array(zod.array(zod.union([zod.number(),zod.null()]))).optional(),
   "means": zod.array(zod.number()).optional(),
   "stdvs": zod.array(zod.number()).optional()
 }),zod.object({
   "start": zod.number().optional(),
   "step": zod.number().optional(),
   "rmsdpr": zod.array(zod.array(zod.number())).optional(),
-  "saspf": zod.array(zod.array(zod.number().nullable())),
+  "saspf": zod.array(zod.array(zod.union([zod.number(),zod.null()]))),
   "means": zod.array(zod.number()).optional(),
   "stdvs": zod.array(zod.number()).optional()
 })]).and(zod.object({
   "start": zod.number().optional(),
   "step": zod.number().optional(),
   "rmsdpr": zod.array(zod.array(zod.number())).optional(),
-  "saspf": zod.array(zod.array(zod.number().nullable())).optional(),
+  "saspf": zod.array(zod.array(zod.union([zod.number(),zod.null()]))).optional(),
   "means": zod.array(zod.number()).optional(),
   "stdvs": zod.array(zod.number()).optional()
-})),zod.object({
+})).describe('Per-residue matrix (RMSD per residue or SASA per frame).'),zod.object({
   "framestep": zod.number(),
   "atoms": zod.array(zod.int()),
   "eigenvalues": zod.array(zod.number()),
   "projections": zod.array(zod.array(zod.number()))
-}),zod.object({
+}).describe('Principal component analysis.'),zod.object({
   "name": zod.string(),
   "cutoff": zod.number(),
   "clusters": zod.array(zod.object({
   "frames": zod.array(zod.int()),
   "main": zod.int()
-})),
+}).describe('One cluster.')),
   "transitions": zod.array(zod.object({
   "from": zod.int(),
   "to": zod.int(),
@@ -1826,63 +1900,24 @@ export const GetAnalysisResultResponse = zod.union([zod.object({
 })),
   "step": zod.number(),
   "version": zod.string()
-}),zod.object({
+}).describe('Conformational clusters and their transitions.'),zod.object({
   "n_mems": zod.int(),
-  "mems": zod.record(zod.string(), zod.looseObject({
-
-})),
+  "mems": zod.record(zod.string(), zod.record(zod.string(), zod.unknown())),
   "no_mem_lipid": zod.array(zod.int())
-}),zod.object({
+}).describe('Membrane assignment of lipids.'),zod.object({
   "step": zod.number().optional(),
   "data": zod.record(zod.string(), zod.array(zod.number()))
-}),zod.object({
+}).describe('Membrane thickness over time.'),zod.object({
   "name": zod.string(),
   "agent_1": zod.string(),
   "agent_2": zod.string(),
   "has_cg": zod.boolean().optional(),
   "version": zod.string().optional()
-})]).describe('Closed catalog of analysis result shapes currently supported by the dashboard.')
+}).describe('Interaction between two agents.')])
 
 
 /**
- * @summary Get an analysis job
- */
-
-
-
-
-export const GetAnalysisJobParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "job_id": zod.string().min(1)
-})
-
-export const GetAnalysisJobResponse = zod.object({
-  "id": zod.string(),
-  "experiment_id": zod.string(),
-  "simulation_path": zod.string(),
-  "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
-  "created_at": zod.iso.datetime({"offset":true}),
-  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']),
-  "sim_progress": zod.number().nullish().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.')
-})
-
-
-/**
- * @summary Delete an analysis job
- */
-
-
-
-
-export const DeleteAnalysisJobParams = zod.object({
-  "experiment_id": zod.string().min(1),
-  "job_id": zod.string().min(1)
-})
-
-export const DeleteAnalysisJobResponse = zod.void()
-
-
-/**
+ * K8s pod logs of an analysis job, trimmed to start at the workflow start marker.
  * @summary Get analysis job logs
  */
 
@@ -1904,3 +1939,46 @@ export const GetAnalysisJobLogsQueryParams = zod.object({
 })
 
 export const GetAnalysisJobLogsResponse = zod.string()
+
+
+/**
+ * Get an analysis job by ID.
+ * @summary Get an analysis job
+ */
+
+
+
+
+export const GetAnalysisJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "job_id": zod.string().min(1)
+})
+
+export const GetAnalysisJobResponse = zod.object({
+  "id": zod.string(),
+  "experiment_id": zod.string(),
+  "simulation_path": zod.string(),
+  "analysis_name": zod.enum(['apl', 'clusters', 'density', 'dist', 'energies', 'hbonds', 'inter', 'linter', 'lorder', 'pairwise', 'pca', 'perres', 'pockets', 'rgyr', 'rmsds', 'rmsf', 'sas', 'thickness', 'tmscore']),
+  "created_at": zod.iso.datetime({"offset":true}),
+  "status": zod.enum(['UNKNOWN', 'PENDING', 'RUNNING', 'FINISHED', 'ERROR', 'STOPPED']).describe('Status values for all kinds of jobs.'),
+  "sim_progress": zod.union([zod.number(),zod.null()]).optional().describe('Fraction (0-1) of the simulation\'s steps available when the analysis inputs were snapshotted; null when unknown.'),
+  "structure_file": zod.union([zod.string(),zod.null()]).optional(),
+  "trajectory_file": zod.union([zod.string(),zod.null()]).optional(),
+  "topology_file": zod.union([zod.string(),zod.null()]).optional()
+}).describe('On-demand mwf analysis job (input file paths pass through).')
+
+
+/**
+ * Delete an analysis job and its temporary files.
+ * @summary Delete an analysis job
+ */
+
+
+
+
+export const DeleteAnalysisJobParams = zod.object({
+  "experiment_id": zod.string().min(1),
+  "job_id": zod.string().min(1)
+})
+
+export const DeleteAnalysisJobResponse = zod.void()

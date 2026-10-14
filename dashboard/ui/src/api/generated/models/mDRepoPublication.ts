@@ -6,12 +6,14 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { MDRepoPublicationLinks } from './mDRepoPublicationLinks.ts';
-import type { NullableString } from './nullableString.ts';
 
+/**
+ * Accepted MDRepo draft upload.
+ */
 export interface MDRepoPublication {
   id: string;
   links: MDRepoPublicationLinks;
   upload_id: string;
   upload_state: string;
-  draft_url: NullableString | null;
+  draft_url: string | null;
 }

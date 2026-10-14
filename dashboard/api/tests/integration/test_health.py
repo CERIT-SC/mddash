@@ -2,14 +2,14 @@
 
 from http import HTTPStatus
 
-from flask.testing import FlaskClient
+from httpx import AsyncClient
 
 
 class TestHealthEndpoint:
     """Tests for the /health endpoint."""
 
-    def test_health_returns_ok(self, client: FlaskClient) -> None:
+    async def test_health_returns_ok(self, client: AsyncClient) -> None:
         """Health endpoint should return 200 OK."""
-        response = client.get("/dash/api/health")
+        response = await client.get("/dash/api/health")
 
         assert response.status_code == HTTPStatus.OK

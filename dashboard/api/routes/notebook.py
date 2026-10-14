@@ -1,89 +1,66 @@
 from http import HTTPStatus
 
-from config import API_PREFIX, MAX_NOTEBOOKS
-from enums import NotebookTier
-from extensions import db
-from flask import Blueprint, Response, jsonify, request
-from flask.typing import ResponseReturnValue
-from models import Experiment
-from models.notebook import get_tier_resources
-from schemas import NotebookSchema, StartNotebookSchema
+from config import API_PREFIX
+from dependencies import ExperimentDep, SessionDep, dump
+from errors import NotFound
+from fastapi import APIRouter, Response
+from models import Experiment, Notebook
+from schemas.experiment import Notebook as NotebookOut
+from schemas.experiment import StartNotebookRequest
 
-notebook_bp = Blueprint("notebook", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/notebook")
-notebook_config_bp = Blueprint("notebook_config", __name__, url_prefix=API_PREFIX)
+from routes._responses import problems
 
-
-@notebook_config_bp.route("/notebook-config", methods=["GET"])
-def get_notebook_config() -> Response:
-    """
-    Get available notebook resource tiers, the default tier, and the concurrent-notebook limit.
-
-    Returns:
-        Response: JSON response with tiers list, default tier, and the per-user concurrent limit.
-    """
-    tiers = []
-    for t in NotebookTier:
-        nb_res = get_tier_resources(t)
-        tiers.append({
-            "value": t.value,
-            "cpuLimit": nb_res["limits"]["cpu"],
-            "memoryLimit": nb_res["limits"]["memory"],
-        })
-    return jsonify({
-        "tiers": tiers,
-        "defaultTier": NotebookTier.SMALL.value,
-        "concurrentLimit": MAX_NOTEBOOKS,
-    })
+router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/notebook", tags=["Notebooks"])
 
 
-@notebook_bp.route("", methods=["GET"])
-def get_notebook(experiment_id: str) -> Response:
-    """
-    Get the notebook instance for an experiment.
-
-    Returns:
-        Response: JSON response with the notebook data.
-    """
-    schema = NotebookSchema()
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
-    return jsonify(schema.dump(experiment.notebook))
+def _notebook(experiment: Experiment) -> Notebook:
+    if experiment.notebook is None:
+        raise NotFound(f"Experiment {experiment.id} has no notebook")
+    return experiment.notebook
 
 
-@notebook_bp.route("", methods=["POST"])
-def start_notebook(experiment_id: str) -> ResponseReturnValue:
-    """
-    Start the notebook pod for an experiment.
-
-    Accepts optional JSON body with ``tier`` (e.g. "1x", "2x", "4x") and ``gpu`` (boolean).
-
-    Returns:
-        Response: JSON response with the started notebook data.
-    """
-    schema = NotebookSchema()
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
-
-    data = StartNotebookSchema().load(request.get_json(silent=True) or {})
-    notebook = experiment.notebook
-    notebook.start(tier=data["tier"], gpu=data["gpu"])
-    db.session.commit()
-    return jsonify(schema.dump(notebook)), HTTPStatus.CREATED
+@router.get(
+    "",
+    summary="Get an experiment notebook",
+    operation_id="getNotebook",
+    response_description="Notebook",
+    responses=problems(404),
+)
+async def get_notebook(session: SessionDep, experiment: ExperimentDep) -> NotebookOut:
+    """Get the notebook instance of an experiment."""
+    notebook = _notebook(experiment)
+    await notebook.refresh()
+    return await dump(session, NotebookOut, notebook)
 
 
-@notebook_bp.route("", methods=["DELETE"])
-def stop_notebook(experiment_id: str) -> ResponseReturnValue:
-    """
-    Stop the notebook pod for an experiment.
+@router.post(
+    "",
+    status_code=HTTPStatus.CREATED,
+    summary="Start an experiment notebook",
+    operation_id="startNotebook",
+    response_description="Started notebook",
+    responses=problems(400, 403, 404),
+)
+async def start_notebook(
+    session: SessionDep, experiment: ExperimentDep, body: StartNotebookRequest | None = None
+) -> NotebookOut:
+    """Start the notebook pod of an experiment (optional `tier` and `gpu`)."""
+    body = body or StartNotebookRequest()
+    notebook = _notebook(experiment)
+    await notebook.start(tier=body.tier, gpu=body.gpu)
+    await session.commit()
+    return await dump(session, NotebookOut, notebook)
 
-    Returns:
-        Response: Empty JSON response with 204 No Content on success.
-    """
-    experiment: Experiment = Experiment.query.get_or_404(
-        experiment_id, description=f"Experiment {experiment_id} not found"
-    )
-    notebook = experiment.notebook
-    notebook.stop()
-    return "", HTTPStatus.NO_CONTENT
+
+@router.delete(
+    "",
+    status_code=HTTPStatus.NO_CONTENT,
+    response_class=Response,
+    summary="Stop an experiment notebook",
+    operation_id="stopNotebook",
+    response_description="Operation completed successfully",
+    responses=problems(404),
+)
+async def stop_notebook(experiment: ExperimentDep) -> None:
+    """Stop the notebook pod of an experiment."""
+    await _notebook(experiment).stop()

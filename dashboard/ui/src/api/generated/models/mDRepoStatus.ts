@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * MDRepo authentication status.
+ */
 export interface MDRepoStatus {
   authenticated: boolean;
   mdrepo_url?: string;

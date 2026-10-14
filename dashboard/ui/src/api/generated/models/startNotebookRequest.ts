@@ -7,6 +7,9 @@
  */
 import type { StartNotebookRequestTier } from './startNotebookRequestTier.ts';
 
+/**
+ * Notebook start options.
+ */
 export interface StartNotebookRequest {
   tier?: StartNotebookRequestTier;
   gpu?: boolean;

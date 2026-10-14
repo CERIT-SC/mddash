@@ -1,44 +1,62 @@
-from dataclasses import asdict
+import mimetypes
+from typing import Annotated
 
+import anyio
 from config import API_PREFIX, DATA_DIR
-from flask import Blueprint, Response, jsonify, request, send_file
+from errors import NotFound
+from fastapi import APIRouter, Path, Query
+from fastapi.responses import FileResponse
+from schemas.common import FileInfo
 from utils import file_download_url, get_files_with_extensions
 from validators import check_experiment_id, check_path
-from werkzeug.exceptions import NotFound
 
-files_bp = Blueprint("files", __name__, url_prefix=f"{API_PREFIX}/experiments/<experiment_id>/files")
+from routes._responses import problems
+
+router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/files", tags=["Files"])
 
 
-@files_bp.route("", methods=["GET"])
-def get_files(experiment_id: str) -> Response:
-    """
-    List files in an experiment directory, optionally filtered by extension.
-
-    Returns:
-        Response: JSON response with the list of files and their download URLs.
-    """
+@router.get(
+    "",
+    summary="List experiment files",
+    operation_id="listExperimentFiles",
+    response_description="Files",
+    responses=problems(400),
+)
+async def list_files(
+    experiment_id: Annotated[str, Path(min_length=1)],
+    ext: Annotated[str | None, Query(description="Comma-separated file extensions")] = None,
+) -> list[FileInfo]:
+    """List files in an experiment directory, optionally filtered by extension."""
     check_experiment_id(experiment_id)
-    ext_param = request.args.get("ext", "").lower()
-    extensions = [ext.strip() for ext in ext_param.split(",") if ext.strip()] if ext_param else None
-
-    files = get_files_with_extensions(DATA_DIR / experiment_id, extensions)
-
-    file_dicts = []
-    for f in files:
-        file_dict = asdict(f)
-        file_dict["url"] = file_download_url(experiment_id, f.path)
-        file_dicts.append(file_dict)
-
-    return jsonify(file_dicts)
+    extensions = [e.strip() for e in ext.lower().split(",") if e.strip()] if ext else None
+    files = await anyio.to_thread.run_sync(get_files_with_extensions, DATA_DIR / experiment_id, extensions)
+    return [
+        {"name": f.name, "size": f.size, "path": f.path, "url": file_download_url(experiment_id, f.path)} for f in files
+    ]
 
 
-@files_bp.route("/<path:path>", methods=["GET"])
-def get_file(experiment_id: str, path: str) -> Response:
+@router.get(
+    "/{path:path}",
+    summary="Download an experiment file",
+    operation_id="downloadExperimentFile",
+    response_class=FileResponse,
+    responses={
+        200: {
+            "description": "File contents; the actual media type is inferred from the file",
+            "content": {
+                "application/octet-stream": {
+                    "schema": {"type": "string", "contentMediaType": "application/octet-stream"}
+                }
+            },
+        },
+        **problems(400, 404),
+    },
+)
+async def download(
+    experiment_id: Annotated[str, Path(min_length=1)], path: Annotated[str, Path(min_length=1)]
+) -> FileResponse:
     """
-    Download a file from an experiment directory.
-
-    Returns:
-        Response: The file contents as an inline response, or a JSON error if the file does not exist.
+    Serve a file from an experiment directory inline.
 
     Raises:
         NotFound: If the requested file does not exist.
@@ -46,8 +64,7 @@ def get_file(experiment_id: str, path: str) -> Response:
     check_experiment_id(experiment_id)
     check_path(path, DATA_DIR / experiment_id)
     file_path = DATA_DIR / experiment_id / path
-
-    if not file_path.exists():
+    if not await anyio.Path(file_path).is_file():
         raise NotFound(f"File {path} does not exist.")
-
-    return send_file(file_path, as_attachment=False)
+    media_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+    return FileResponse(file_path, media_type=media_type)

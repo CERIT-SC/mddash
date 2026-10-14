@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import ParseResult, urlparse
 
 from enums import AnalysisType, PreprocessingMode
-from werkzeug.exceptions import BadRequest, Forbidden
+from errors import BadRequest, Forbidden
 
 AS_IS_TOPOLOGY_SUFFIXES = {".tpr", ".top", ".prmtop", ".psf"}
 PREPROCESSING_TOPOLOGY_SUFFIX = ".tpr"

@@ -3,30 +3,26 @@ import re
 from datetime import UTC, datetime
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
+import anyio
+import sqlalchemy as sa
 from clients import mdrun
 from config import DATA_DIR, S3_BUCKET
 from enums import DeviceType, Engine, JobStatus
-from extensions import db
+from errors import BadRequest, Conflict, Forbidden, InternalServerError, NotFound, UnprocessableEntity
 from sqlalchemy import ForeignKey
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 from utils import nsteps_override, strip_run_control_args, tail, tail_bytes
-from werkzeug.exceptions import (
-    BadRequest,
-    Conflict,
-    Forbidden,
-    InternalServerError,
-    NotFound,
-    UnprocessableEntity,
-)
 
 from models.simulation import Simulation
 
 from .simulation_job import SimulationJob
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from .experiment import Experiment
 
 
@@ -37,7 +33,8 @@ class GromacsJob(SimulationJob):
     """GROMACS molecular dynamics simulation job."""
 
     __tablename__ = "gromacs_jobs"
-    __mapper_args__: ClassVar[dict[str, Any]] = {"polymorphic_identity": Engine.GMX}
+    __mapper_args__ = {"polymorphic_identity": Engine.GMX, "polymorphic_load": "selectin"}  # ruff:ignore[mutable-class-default]  # SQLAlchemy declares it an instance attribute
+    MDRUN_ENGINE: ClassVar[str] = "gmx"
 
     # TODO: verify if files with these extensions should really be deleted
     RESULT_EXTENSIONS: ClassVar[list[str]] = ["edr", "gro", "log", "trr", "xtc", "cpt"]
@@ -45,11 +42,17 @@ class GromacsJob(SimulationJob):
     id: Mapped[str] = mapped_column(ForeignKey("simulation_jobs.id"), primary_key=True)
 
     # Device type for PME calculations
-    pme: Mapped["DeviceType"] = mapped_column(db.Enum(DeviceType), nullable=False)
+    pme: Mapped["DeviceType"] = mapped_column(sa.Enum(DeviceType), nullable=False)
     # Device type for non-bonded interactions
-    nb: Mapped["DeviceType"] = mapped_column(db.Enum(DeviceType), nullable=False)
+    nb: Mapped["DeviceType"] = mapped_column(sa.Enum(DeviceType), nullable=False)
     # Step at which the simulation started (non-zero when resuming from checkpoint)
-    _init_step: Mapped[int | None] = mapped_column("init_step", db.Integer, nullable=True)
+    _init_step: Mapped[int | None] = mapped_column("init_step", sa.Integer, nullable=True)
+
+    async def _mdrun_get(self) -> dict:
+        return await mdrun.get_gmx_job(self.id)
+
+    async def _mdrun_delete(self) -> None:
+        await mdrun.delete_gmx_job(self.id)
 
     @cached_property
     def _files(self) -> dict[str, str]:
@@ -100,7 +103,6 @@ class GromacsJob(SimulationJob):
 
         if val := self._parse_nsteps():
             self._nsteps = val
-            db.session.commit()
 
         return self._nsteps
 
@@ -114,7 +116,6 @@ class GromacsJob(SimulationJob):
         # only once per row instead of on every dump.
         if (val := self._parse_init_step()) is not None:
             self._init_step = val
-            db.session.commit()
 
         return self._init_step or 0
 
@@ -143,8 +144,9 @@ class GromacsJob(SimulationJob):
         return max(0, int(base_estimate - time_since_update))
 
     @classmethod
-    def start(
+    async def start(
         cls,
+        session: "AsyncSession",
         experiment: "Experiment",
         simulation_path: str,
         pme: DeviceType,
@@ -159,6 +161,7 @@ class GromacsJob(SimulationJob):
         passed to MDRun; only ``simulation_path`` and compute settings are persisted.
 
         Args:
+            session: The request's database session.
             experiment: The experiment to associate with the job.
             simulation_path: Experiment-relative path to the ``.simulation.json``.
             pme: Device type for PME calculations.
@@ -169,13 +172,13 @@ class GromacsJob(SimulationJob):
         Returns:
             The created GromacsJob instance.
         """
-        simulation = Simulation.get(experiment.id, simulation_path)
+        simulation = Simulation.get(experiment.id, simulation_path, experiment)
         simulation.require_files(["run_input"])
         tpr_rel_path = simulation.resolved_files["run_input"]
         # TODO: remove as soon as user testing is done (also drop _nsteps below). Force all runs to 500k steps.
         extra_args = f"{strip_run_control_args(simulation.extra_args)} -nsteps 500000"
 
-        mdrun_job = mdrun.create_job(
+        mdrun_job = await mdrun.create_gmx_job(
             experiment_id=experiment.id,
             tpr_name=tpr_rel_path,
             bucket_name=S3_BUCKET,
@@ -187,27 +190,28 @@ class GromacsJob(SimulationJob):
         )
 
         job = GromacsJob(
-            id=mdrun_job["id"],  # type: ignore[call-arg]
-            simulation_path=simulation_path,  # type: ignore[call-arg]
-            pme=pme,  # type: ignore[call-arg]
-            nb=nb,  # type: ignore[call-arg]
-            np=np,  # type: ignore[call-arg]
-            ntomp=ntomp,  # type: ignore[call-arg]
-            experiment_id=experiment.id,  # type: ignore[call-arg]
-            engine=Engine.GMX,  # type: ignore[call-arg]
-            _last_known_status=JobStatus.PENDING,  # type: ignore[call-arg]
-            _nsteps=500000,  # type: ignore[call-arg]
+            id=mdrun_job["id"],
+            simulation_path=simulation_path,
+            pme=pme,
+            nb=nb,
+            np=np,
+            ntomp=ntomp,
+            experiment_id=experiment.id,
+            experiment=experiment,
+            engine=Engine.GMX,
+            _last_known_status=JobStatus.PENDING,
+            _nsteps=500000,
         )
-        db.session.add(job)
+        session.add(job)
 
-        job._cleanup_files()
+        await anyio.to_thread.run_sync(job._cleanup_files)
 
         try:
-            db.session.commit()
+            await session.commit()
         except IntegrityError:
             # Another request committed the row first; delete our unreferenced MDRun job.
-            db.session.rollback()
-            mdrun.delete_gmx_job(job.id)
+            await session.rollback()
+            await mdrun.delete_gmx_job(job.id)
             raise Conflict("A run is already active for this simulation; stop it first to submit a new run.") from None
         simulation.mark_readonly()
         logger.info(f"Started GROMACS job {job.id} for experiment {experiment.id} (simulation {simulation_path})")
@@ -215,7 +219,9 @@ class GromacsJob(SimulationJob):
         return job
 
     @classmethod
-    def extend(cls, experiment: "Experiment", simulation_path: str, nsteps: int) -> "GromacsJob":
+    async def extend(
+        cls, session: "AsyncSession", experiment: "Experiment", simulation_path: str, nsteps: int
+    ) -> "GromacsJob":
         """
         Extend the simulation's run by ``nsteps`` additional steps, resuming from its checkpoint.
 
@@ -225,19 +231,20 @@ class GromacsJob(SimulationJob):
         Raises:
             BadRequest: No run, live run, missing checkpoint, manifest contains ``-cpi``, or concurrent extend.
         """
-        latest = cls.get(experiment.id, simulation_path)
+        latest = await cls.get(session, experiment.id, simulation_path)
         if latest is None:
             raise BadRequest("No run exists for this simulation yet; extend requires a finished or stopped run.")
+        await latest.refresh_status()
         if latest.is_live:
             raise BadRequest("The run is still active; stop it before extending.")
 
-        simulation = Simulation.get(experiment.id, simulation_path)
+        simulation = Simulation.get(experiment.id, simulation_path, experiment)
         simulation.require_files(["run_input"])
         tpr_rel_path = simulation.resolved_files["run_input"]
         deffnm = tpr_rel_path.removesuffix(".tpr")
 
         checkpoint = DATA_DIR / experiment.id / f"{deffnm}.cpt"
-        if not checkpoint.exists():
+        if not await anyio.Path(checkpoint).exists():
             raise BadRequest(
                 f"No checkpoint file ({checkpoint.name}) found to resume from; it may still be syncing — try again shortly."
             )
@@ -247,14 +254,13 @@ class GromacsJob(SimulationJob):
         except ValueError as exc:
             raise BadRequest(str(exc)) from exc
 
-        previous_total = latest.nsteps
+        previous_total, progress = await anyio.to_thread.run_sync(lambda: (latest.nsteps, latest.nsteps_done))
         if previous_total is None:
             raise BadRequest("Cannot determine the previous run's total step count from its log.")
 
         # Anchor on actual progress, not the previous target: a stopped run
         # resumes from where it stood, so "extend by N" means N more steps from
         # that point. Read before the new block appends to the shared log.
-        progress = latest.nsteps_done
         base = progress if progress is not None else previous_total
 
         # mdrun -cpi counts -nsteps as ADDITIONAL steps from the checkpoint step.
@@ -263,7 +269,7 @@ class GromacsJob(SimulationJob):
         cpt_name = f"{Path(tpr_rel_path).name.removesuffix('.tpr')}.cpt"
         extra_args = " ".join(filter(None, [base_args, f"-cpi {cpt_name}", f"-nsteps {nsteps}"]))
 
-        mdrun_job = mdrun.create_job(
+        mdrun_job = await mdrun.create_gmx_job(
             experiment_id=experiment.id,
             tpr_name=tpr_rel_path,
             bucket_name=S3_BUCKET,
@@ -275,28 +281,29 @@ class GromacsJob(SimulationJob):
         )
 
         job = GromacsJob(
-            id=mdrun_job["id"],  # type: ignore[call-arg]
-            simulation_path=simulation_path,  # type: ignore[call-arg]
-            pme=latest.pme,  # type: ignore[call-arg]
-            nb=latest.nb,  # type: ignore[call-arg]
-            np=latest.np,  # type: ignore[call-arg]
-            ntomp=latest.ntomp,  # type: ignore[call-arg]
-            experiment_id=experiment.id,  # type: ignore[call-arg]
-            engine=Engine.GMX,  # type: ignore[call-arg]
-            _last_known_status=JobStatus.PENDING,  # type: ignore[call-arg]
+            id=mdrun_job["id"],
+            simulation_path=simulation_path,
+            pme=latest.pme,
+            nb=latest.nb,
+            np=latest.np,
+            ntomp=latest.ntomp,
+            experiment_id=experiment.id,
+            engine=Engine.GMX,
+            _last_known_status=JobStatus.PENDING,
         )
         job._nsteps = total
         job._init_step = base
-        db.session.delete(latest)
+        await session.delete(latest)
         # Flush first: one flush inserts before deletes, tripping the unique constraint.
-        db.session.flush()
-        db.session.add(job)
+        await session.flush()
+        job.experiment = experiment
+        session.add(job)
         try:
-            db.session.commit()
+            await session.commit()
         except IntegrityError:
             # Another request committed the row first; delete our unreferenced cluster job.
-            db.session.rollback()
-            mdrun.delete_gmx_job(mdrun_job["id"])
+            await session.rollback()
+            await mdrun.delete_gmx_job(mdrun_job["id"])
             raise BadRequest("Another extension of this simulation is already in progress.") from None
         logger.info(
             f"Extended GROMACS simulation {simulation_path} (experiment {experiment.id}) "

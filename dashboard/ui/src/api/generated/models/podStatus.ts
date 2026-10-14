@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Status values for Kubernetes pods.
+ */
 export type PodStatus = typeof PodStatus[keyof typeof PodStatus];
 
 

@@ -4,17 +4,17 @@ Integration tests for experiment API routes.
 Tests the full request/response cycle with mocked external dependencies.
 """
 
-import io
-import json
 from http import HTTPStatus
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from flask.testing import FlaskClient
+import httpx
+import respx
+from errors import InternalServerError
+from httpx import AsyncClient
 from models import Experiment, Notebook
-from sqlalchemy.orm import Session
-from werkzeug.exceptions import InternalServerError
-from werkzeug.utils import secure_filename
+from sqlalchemy.ext.asyncio import AsyncSession as Session
+from utils import secure_filename
 
 EXPERIMENT_ID_LENGTH = 5
 
@@ -22,15 +22,15 @@ EXPERIMENT_ID_LENGTH = 5
 class TestListExperiments:
     """Tests for GET /api/experiments."""
 
-    def test_returns_empty_list_initially(self, client: FlaskClient) -> None:
+    async def test_returns_empty_list_initially(self, client: AsyncClient) -> None:
         """Should return empty list when no experiments exist."""
-        response = client.get("/dash/api/experiments")
+        response = await client.get("/dash/api/experiments")
 
         assert response.status_code == HTTPStatus.OK
-        data = json.loads(response.data)
+        data = response.json()
         assert data == []
 
-    def test_returns_experiments(self, client: FlaskClient, db_session: Session) -> None:
+    async def test_returns_experiments(self, client: AsyncClient, db_session: Session) -> None:
         """Should return list of all experiments."""
         # Create test experiment directly in DB
         exp = Experiment()
@@ -38,17 +38,17 @@ class TestListExperiments:
         exp.name = "Test Experiment"
         exp.module_category = "membrane-protein"
         db_session.add(exp)
-        db_session.flush()
+        await db_session.flush()
 
         notebook = Notebook()
         notebook.experiment_id = "testx"
         db_session.add(notebook)
-        db_session.commit()
+        await db_session.commit()
 
-        response = client.get("/dash/api/experiments")
+        response = await client.get("/dash/api/experiments")
 
         assert response.status_code == HTTPStatus.OK
-        data = json.loads(response.data)
+        data = response.json()
         assert len(data) == 1
         assert data[0]["id"] == "testx"
         assert data[0]["name"] == "Test Experiment"
@@ -57,7 +57,7 @@ class TestListExperiments:
         # curated module identity is a name+category snapshot, never an FK
         assert "module_id" not in data[0]
 
-    def test_embeds_analysis_jobs_as_objects(self, client: FlaskClient, db_session: Session) -> None:
+    async def test_embeds_analysis_jobs_as_objects(self, client: AsyncClient, db_session: Session) -> None:
         """Should embed full analysis job objects, not primary-key strings."""
         from enums import AnalysisType, JobStatus
         from models import AnalysisJob
@@ -66,7 +66,7 @@ class TestListExperiments:
         exp.id = "testx"
         exp.name = "Test Experiment"
         db_session.add(exp)
-        db_session.flush()
+        await db_session.flush()
 
         db_session.add(
             AnalysisJob(
@@ -78,12 +78,12 @@ class TestListExperiments:
                 _last_known_status=JobStatus.FINISHED,
             )
         )
-        db_session.commit()
+        await db_session.commit()
 
-        response = client.get("/dash/api/experiments")
+        response = await client.get("/dash/api/experiments")
 
         assert response.status_code == HTTPStatus.OK
-        data = json.loads(response.data)
+        data = response.json()
         jobs = data[0]["analysis_jobs"]
         assert len(jobs) == 1
         assert isinstance(jobs[0], dict)
@@ -91,7 +91,7 @@ class TestListExperiments:
         assert jobs[0]["analysis_name"] == "rmsds"
         assert jobs[0]["status"] == "FINISHED"
 
-    def test_eager_loads_relations_without_n_plus_one(self, client: FlaskClient, db_session: Session) -> None:
+    async def test_eager_loads_relations_without_n_plus_one(self, client: AsyncClient, db_session: Session) -> None:
         """The 5s dashboard poll dumps every experiment — job relations must not lazy-load per row."""
         from enums import AnalysisType, DeviceType, JobStatus
         from models import AnalysisJob, GromacsJob, TunerJob
@@ -102,7 +102,7 @@ class TestListExperiments:
             exp.id = exp_id
             exp.name = f"Test {exp_id}"
             db_session.add(exp)
-            db_session.flush()
+            await db_session.flush()
             db_session.add(Notebook(experiment_id=exp_id))
             db_session.add(
                 GromacsJob(
@@ -135,10 +135,10 @@ class TestListExperiments:
                     _last_known_status=JobStatus.FINISHED,
                 )
             )
-        db_session.commit()
+        await db_session.commit()
 
         statements: list[str] = []
-        engine = db_session.get_bind()
+        engine = db_session.bind.sync_engine
 
         def count_selects(_conn, _cursor, statement: str, _parameters, _context, _executemany) -> None:
             if statement.lstrip().upper().startswith("SELECT"):
@@ -146,12 +146,12 @@ class TestListExperiments:
 
         event.listen(engine, "before_cursor_execute", count_selects)
         try:
-            response = client.get("/dash/api/experiments")
+            response = await client.get("/dash/api/experiments")
         finally:
             event.remove(engine, "before_cursor_execute", count_selects)
 
         assert response.status_code == HTTPStatus.OK
-        assert len(json.loads(response.data)) == 2
+        assert len(response.json()) == 2
         # Eager ceiling: 1 root query + 1 selectin per relation (notebook, tuner, simulation, analysis).
         assert len(statements) <= 6, "lazy per-experiment loads detected:\n" + "\n---\n".join(statements)
 
@@ -159,29 +159,29 @@ class TestListExperiments:
 class TestGetExperiment:
     """Tests for GET /api/experiments/<id>."""
 
-    def test_returns_experiment_by_id(self, client: FlaskClient, db_session: Session) -> None:
+    async def test_returns_experiment_by_id(self, client: AsyncClient, db_session: Session) -> None:
         """Should return experiment details for valid ID."""
         exp = Experiment()
         exp.id = "abcde"
         exp.name = "My Experiment"
         db_session.add(exp)
-        db_session.flush()
+        await db_session.flush()
 
         notebook = Notebook()
         notebook.experiment_id = "abcde"
         db_session.add(notebook)
-        db_session.commit()
+        await db_session.commit()
 
-        response = client.get("/dash/api/experiments/abcde")
+        response = await client.get("/dash/api/experiments/abcde")
 
         assert response.status_code == HTTPStatus.OK
-        data = json.loads(response.data)
+        data = response.json()
         assert data["id"] == "abcde"
         assert data["name"] == "My Experiment"
 
-    def test_returns_404_for_missing_experiment(self, client: FlaskClient) -> None:
+    async def test_returns_404_for_missing_experiment(self, client: AsyncClient) -> None:
         """Should return 404 for non-existent experiment ID."""
-        response = client.get("/dash/api/experiments/zzzzz")
+        response = await client.get("/dash/api/experiments/zzzzz")
 
         assert response.status_code == HTTPStatus.NOT_FOUND
 
@@ -189,40 +189,38 @@ class TestGetExperiment:
 class TestPublishExperiment:
     """Invenio publish is gated server-side by the same can_publish rule the wizard uses."""
 
-    def test_rejects_when_nothing_publishable(self, client: FlaskClient, db_session: Session) -> None:
+    async def test_rejects_when_nothing_publishable(self, client: AsyncClient, db_session: Session) -> None:
         """Authenticated but no finished run and no existing publication → 409, no MDRepo draft."""
         exp = Experiment()
         exp.id = "pubc1"
         exp.name = "Publish Gate"
         db_session.add(exp)
-        db_session.commit()
+        await db_session.commit()
 
         token_manager = MagicMock()
-        token_manager.get_valid_token.return_value = "valid-token"
+        token_manager.get_credentials = AsyncMock(return_value=MagicMock(access_token="valid-token"))
         with patch("routes.experiments.MDRepoTokenManager", return_value=token_manager):
-            response = client.post("/dash/api/experiments/pubc1/publish", json={"target": "invenio"})
+            response = await client.post("/dash/api/experiments/pubc1/publish", json={"target": "invenio"})
 
         assert response.status_code == HTTPStatus.CONFLICT
-        assert response.mimetype == "application/problem+json"
+        assert response.headers["content-type"].split(";")[0] == "application/problem+json"
 
 
 class TestCreateExperiment:
     """Tests for POST /api/experiments."""
 
-    def test_create_from_pdb_success(self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path) -> None:
+    async def test_create_from_pdb_success(
+        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
+    ) -> None:
         """Should create experiment from valid PDB ID."""
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_clone,
         ):
             # Mock successful PDB download
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.content = sample_pdb_content
-            mock_get.return_value = mock_response
+            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -233,24 +231,23 @@ class TestCreateExperiment:
             )
 
             assert response.status_code == HTTPStatus.CREATED
-            data = json.loads(response.data)
+            data = response.json()
             assert data["name"] == "Test PDB Experiment"
             assert data["notebooks_repo"] == "https://github.com/test/repo.git"
             assert len(data["id"]) == EXPERIMENT_ID_LENGTH
             mock_clone.assert_called_once()
 
-    def test_create_from_pdb_not_found(self, client: FlaskClient, tmp_path: Path) -> None:
+    async def test_create_from_pdb_not_found(
+        self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
+    ) -> None:
         """Should return 404 when PDB ID doesn't exist."""
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
         ):
-            mock_response = MagicMock()
-            mock_response.status_code = 404
-            mock_get.return_value = mock_response
+            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(404))
 
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -262,21 +259,21 @@ class TestCreateExperiment:
 
             assert response.status_code == HTTPStatus.NOT_FOUND
 
-    def test_create_from_pdb_url_success(self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path) -> None:
+    async def test_create_from_pdb_url_success(
+        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
+    ) -> None:
         """Should create experiment from a direct URL to a PDB file."""
         pdb_url = "https://www.ebi.ac.uk/pdbe/entry-files/download/pdb3vte.ent"
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_clone,
             patch("validators._getaddrinfo_ips", return_value=["193.62.193.80"]),
         ):
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.content = sample_pdb_content
-            mock_get.return_value = mock_response
+            mock_get = http_mock.get(url__regex=r".*").mock(
+                return_value=httpx.Response(200, content=sample_pdb_content)
+            )
 
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -287,30 +284,29 @@ class TestCreateExperiment:
             )
 
             assert response.status_code == HTTPStatus.CREATED
-            data = json.loads(response.data)
+            data = response.json()
             assert data["name"] == "PDB URL Experiment"
             assert data["source"]["url"] == pdb_url
             assert len(data["id"]) == EXPERIMENT_ID_LENGTH
             # The URL should be fetched directly, not the RCSB ID URL
-            mock_get.assert_called_once_with(pdb_url, timeout=30, allow_redirects=False)
+            assert mock_get.call_count == 1
+            assert str(mock_get.calls.last.request.url) == pdb_url
             mock_clone.assert_called_once()
 
-    def test_create_from_pdb_url_rejects_html_response(self, client: FlaskClient, tmp_path: Path) -> None:
+    async def test_create_from_pdb_url_rejects_html_response(
+        self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
+    ) -> None:
         """Should return 400 when a PDB URL returns HTML instead of a PDB file."""
         pdb_url = "https://example.org/login"
         html_content = b"<!DOCTYPE html><html><body>Please log in</body></html>"
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
             patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
         ):
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.content = html_content
-            mock_get.return_value = mock_response
+            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=html_content))
 
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -322,21 +318,21 @@ class TestCreateExperiment:
 
             assert response.status_code == HTTPStatus.BAD_REQUEST
             # The invalid content must not be persisted as input.pdb
-            assert not any((tmp_path / d / "input.pdb").exists() for d in tmp_path.iterdir() if d.is_dir())
+            assert not list(tmp_path.glob("*/input.pdb"))  # ruff:ignore[blocking-path-method-in-async-function]
 
-    def test_create_from_pdb_id_rejects_non_pdb_response(self, client: FlaskClient, tmp_path: Path) -> None:
+    async def test_create_from_pdb_id_rejects_non_pdb_response(
+        self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
+    ) -> None:
         """Should return 400 when an RCSB PDB ID returns non-PDB content."""
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
         ):
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.content = b"<html><body>not a pdb</body></html>"
-            mock_get.return_value = mock_response
+            mock_get = http_mock.get(url__regex=r".*").mock(
+                return_value=httpx.Response(200, content=b"<html><body>not a pdb</body></html>")
+            )
 
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -347,24 +343,22 @@ class TestCreateExperiment:
             )
 
             assert response.status_code == HTTPStatus.BAD_REQUEST
-            mock_get.assert_called_once_with(
-                "https://files.rcsb.org/download/1ABC.pdb", timeout=30, allow_redirects=False
-            )
+            assert mock_get.call_count == 1
+            assert str(mock_get.calls.last.request.url) == "https://files.rcsb.org/download/1ABC.pdb"
 
-    def test_create_from_pdb_url_not_found(self, client: FlaskClient, tmp_path: Path) -> None:
+    async def test_create_from_pdb_url_not_found(
+        self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
+    ) -> None:
         """Should return 404 when a PDB URL returns 404."""
         pdb_url = "https://example.org/missing.pdb"
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
             patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
         ):
-            mock_response = MagicMock()
-            mock_response.status_code = 404
-            mock_get.return_value = mock_response
+            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(404))
 
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -376,14 +370,13 @@ class TestCreateExperiment:
 
             assert response.status_code == HTTPStatus.NOT_FOUND
 
-    def test_create_from_pdb_url_rejects_file_scheme(self, client: FlaskClient, tmp_path: Path) -> None:
+    async def test_create_from_pdb_url_rejects_file_scheme(self, client: AsyncClient, tmp_path: Path) -> None:
         """Should return 400 when a PDB URL uses a non-http(s) scheme."""
         with (
-            patch("models.experiment_sources.requests.get"),
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
         ):
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -395,14 +388,15 @@ class TestCreateExperiment:
 
             assert response.status_code == HTTPStatus.BAD_REQUEST
 
-    def test_create_from_pdb_url_rejects_internal_host(self, client: FlaskClient, tmp_path: Path) -> None:
+    async def test_create_from_pdb_url_rejects_internal_host(
+        self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
+    ) -> None:
         """Should return 400 when a PDB URL points at an internal SSRF target."""
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
         ):
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -413,17 +407,18 @@ class TestCreateExperiment:
             )
 
             assert response.status_code == HTTPStatus.BAD_REQUEST
-            mock_get.assert_not_called()
+            assert not http_mock.calls
 
-    def test_create_from_pdb_url_rejects_hostname_resolving_internal(self, client: FlaskClient, tmp_path: Path) -> None:
+    async def test_create_from_pdb_url_rejects_hostname_resolving_internal(
+        self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
+    ) -> None:
         """Should return 400 when a PDB URL hostname resolves to an internal IP."""
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
             patch("validators._getaddrinfo_ips", return_value=["10.43.0.1"]),
         ):
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -434,25 +429,24 @@ class TestCreateExperiment:
             )
 
             assert response.status_code == HTTPStatus.BAD_REQUEST
-            mock_get.assert_not_called()
+            assert not http_mock.calls
 
-    def test_create_from_pdb_url_rejects_redirect_to_internal(self, client: FlaskClient, tmp_path: Path) -> None:
+    async def test_create_from_pdb_url_rejects_redirect_to_internal(
+        self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
+    ) -> None:
         """Should reject a redirect chain that lands on an internal target."""
         external_url = "https://example.org/pdb3vte.ent"
         internal_url = "http://169.254.169.254/latest/meta-data/"
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo"),
             patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
         ):
-            redirect_resp = MagicMock()
-            redirect_resp.status_code = 302
-            redirect_resp.headers = {"Location": internal_url}
+            mock_get = http_mock.get(url__regex=r".*").mock(
+                side_effect=[httpx.Response(302, headers={"Location": internal_url})]
+            )
 
-            mock_get.side_effect = [redirect_resp]
-
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -464,24 +458,21 @@ class TestCreateExperiment:
 
             assert response.status_code == HTTPStatus.BAD_REQUEST
             # Only the first (external) hop should have been fetched.
-            mock_get.assert_called_once_with(external_url, timeout=30, allow_redirects=False)
+            assert mock_get.call_count == 1
+            assert str(mock_get.calls.last.request.url) == external_url
 
-    def test_create_uses_default_notebooks_repo(
-        self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path
+    async def test_create_uses_default_notebooks_repo(
+        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
     ) -> None:
         """Should use default notebooks repo when not provided."""
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_clone,
             patch("routes.experiments.DEFAULT_NOTEBOOKS_REPO", "https://github.com/default/repo.git"),
         ):
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.content = sample_pdb_content
-            mock_get.return_value = mock_response
+            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -492,25 +483,23 @@ class TestCreateExperiment:
             )
 
             assert response.status_code == HTTPStatus.CREATED
-            data = json.loads(response.data)
+            data = response.json()
             assert data["notebooks_repo"] == "https://github.com/default/repo.git"
             mock_clone.assert_called_once()
 
-    def test_create_fails_on_clone_error(self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path) -> None:
+    async def test_create_fails_on_clone_error(
+        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
+    ) -> None:
         """Should return error when git clone fails."""
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_clone,
         ):
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.content = sample_pdb_content
-            mock_get.return_value = mock_response
+            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
-            mock_clone.side_effect = InternalServerError(description="Failed to clone repository")
+            mock_clone.side_effect = InternalServerError("Failed to clone repository")
 
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -522,9 +511,9 @@ class TestCreateExperiment:
 
             assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
 
-    def test_create_rejects_invalid_notebooks_repo_url(self, client: FlaskClient) -> None:
+    async def test_create_rejects_invalid_notebooks_repo_url(self, client: AsyncClient) -> None:
         """Should return 400 for invalid notebooks repo URL."""
-        response = client.post(
+        response = await client.post(
             "/dash/api/experiments",
             data={
                 "type": "pdb",
@@ -536,9 +525,9 @@ class TestCreateExperiment:
 
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
-    def test_create_invalid_type(self, client: FlaskClient) -> None:
+    async def test_create_invalid_type(self, client: AsyncClient) -> None:
         """Should return 400 for invalid experiment type."""
-        response = client.post(
+        response = await client.post(
             "/dash/api/experiments",
             data={
                 "type": "invalid",
@@ -548,27 +537,20 @@ class TestCreateExperiment:
 
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
-    def test_create_from_files_success(self, client: FlaskClient, tmp_path: Path) -> None:
+    async def test_create_from_files_success(self, client: AsyncClient, tmp_path: Path) -> None:
         """Should create experiment from uploaded files."""
         with patch("models.experiment.DATA_DIR", tmp_path), patch("models.experiment.download_git_repo") as mock_clone:
             data = {
                 "type": "file",
                 "experiment-name": "Test File Experiment",
                 "notebooks-repo": "https://github.com/test/repo.git",
-                "simulation-files": [
-                    (io.BytesIO(b"content1"), "test1.gro"),
-                    (io.BytesIO(b"content2"), "test2.itp"),
-                ],
             }
+            files = [("simulation-files", ("test1.gro", b"content1")), ("simulation-files", ("test2.itp", b"content2"))]
 
-            response = client.post(
-                "/dash/api/experiments",
-                data=data,
-                content_type="multipart/form-data",
-            )
+            response = await client.post("/dash/api/experiments", data=data, files=files)
 
             assert response.status_code == HTTPStatus.CREATED
-            data = json.loads(response.data)
+            data = response.json()
             assert data["name"] == "Test File Experiment"
             assert data["module_category"] is None
             assert "module_id" not in data
@@ -580,7 +562,7 @@ class TestCreateExperiment:
             assert (exp_dir / "test1.gro").exists()
             assert (exp_dir / "test2.itp").exists()
 
-    def test_create_with_malicious_filenames(self, client: FlaskClient, tmp_path: Path) -> None:
+    async def test_create_with_malicious_filenames(self, client: AsyncClient, tmp_path: Path) -> None:
         """Should sanitize malicious filenames during upload."""
         with patch("models.experiment.DATA_DIR", tmp_path), patch("models.experiment.download_git_repo"):
             malicious_filename_1 = "../../../etc/passwd"
@@ -590,20 +572,16 @@ class TestCreateExperiment:
                 "type": "file",
                 "experiment-name": "Malicious Files Experiment",
                 "notebooks-repo": "https://github.com/test/repo.git",
-                "simulation-files": [
-                    (io.BytesIO(b"hack"), malicious_filename_1),
-                    (io.BytesIO(b"script"), malicious_filename_2),
-                ],
             }
+            files = [
+                ("simulation-files", (malicious_filename_1, b"hack")),
+                ("simulation-files", (malicious_filename_2, b"script")),
+            ]
 
-            response = client.post(
-                "/dash/api/experiments",
-                data=data,
-                content_type="multipart/form-data",
-            )
+            response = await client.post("/dash/api/experiments", data=data, files=files)
 
             assert response.status_code == HTTPStatus.CREATED
-            data = json.loads(response.data)
+            data = response.json()
 
             # Verify files were saved with sanitized names
             exp_id = data["id"]
@@ -623,23 +601,19 @@ class TestCreateExperiment:
 class TestCreateExperimentCuratedModule:
     """Tests for POST /api/experiments with curated notebook module selection."""
 
-    def test_curated_uses_selective_checkout(
-        self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path
+    async def test_curated_uses_selective_checkout(
+        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
     ) -> None:
         """Curated creation should use the selective module checkout, not the full clone."""
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_full,
             patch("models.experiment.download_git_repo_module") as mock_module,
             patch("routes.experiments.DEFAULT_NOTEBOOKS_REPO", "https://github.com/default/repo.git"),
         ):
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.content = sample_pdb_content
-            mock_get.return_value = mock_response
+            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -653,48 +627,43 @@ class TestCreateExperimentCuratedModule:
             assert response.status_code == HTTPStatus.CREATED
             mock_full.assert_not_called()
             mock_module.assert_called_once()
-            data = json.loads(response.data)
+            data = response.json()
             assert data["notebooks_repo"] == "https://github.com/default/repo.git"
             assert data["module_category"] == "protein"
             assert "module_id" not in data
 
-    def test_curated_rejects_invalid_module(self, client: FlaskClient, tmp_path: Path) -> None:
+    async def test_curated_rejects_invalid_module(self, client: AsyncClient, tmp_path: Path) -> None:
         """Curated creation should reject an unknown or engine-incompatible module ID."""
         with (
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo_module") as mock_module,
         ):
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "file",
                     "experiment-name": "Invalid Module",
                     "engine": "AMBER",
                     "notebook-module": "gromacs-protein",
-                    "simulation-files": [(io.BytesIO(b"content"), "test.gro")],
                 },
-                content_type="multipart/form-data",
+                files=[("simulation-files", ("test.gro", b"content"))],
             )
 
             assert response.status_code == HTTPStatus.BAD_REQUEST
             mock_module.assert_not_called()
 
-    def test_custom_mode_without_module_uses_full_clone(
-        self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path
+    async def test_custom_mode_without_module_uses_full_clone(
+        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
     ) -> None:
         """Without a module ID, custom mode should use the full clone path."""
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_full,
             patch("models.experiment.download_git_repo_module") as mock_module,
         ):
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.content = sample_pdb_content
-            mock_get.return_value = mock_response
+            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -708,8 +677,8 @@ class TestCreateExperimentCuratedModule:
             mock_full.assert_called_once()
             mock_module.assert_not_called()
 
-    def test_curated_module_with_repository_stores_module_url(
-        self, client: FlaskClient, sample_pdb_content: bytes, tmp_path: Path
+    async def test_curated_module_with_repository_stores_module_url(
+        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
     ) -> None:
         """A curated module with a repository field should store that URL in the experiment."""
         import notebook_modules
@@ -727,18 +696,14 @@ class TestCreateExperimentCuratedModule:
         catalog = notebook_modules.NotebookModulesCatalog(modules=(binder_module,))
 
         with (
-            patch("models.experiment_sources.requests.get") as mock_get,
             patch("models.experiment.DATA_DIR", tmp_path),
             patch("models.experiment.download_git_repo") as mock_full,
             patch("models.experiment.download_git_repo_module") as mock_module,
             patch("routes.experiments.load_catalog", return_value=catalog),
         ):
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.content = sample_pdb_content
-            mock_get.return_value = mock_response
+            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
-            response = client.post(
+            response = await client.post(
                 "/dash/api/experiments",
                 data={
                     "type": "pdb",
@@ -750,7 +715,7 @@ class TestCreateExperimentCuratedModule:
             )
 
             assert response.status_code == HTTPStatus.CREATED
-            data = json.loads(response.data)
+            data = response.json()
             assert data["notebooks_repo"] == "https://github.com/bioexcel/biobb_wf_md_setup_membrane.git"
             # Root-path module uses full clone, not sparse checkout
             mock_full.assert_called_once()
@@ -760,56 +725,53 @@ class TestCreateExperimentCuratedModule:
 class TestEditExperiment:
     """Tests for PATCH /api/experiments/<id>."""
 
-    def test_update_experiment_name(self, client: FlaskClient, db_session: Session) -> None:
+    async def test_update_experiment_name(self, client: AsyncClient, db_session: Session) -> None:
         """Should update experiment name."""
         exp = Experiment()
         exp.id = "editx"
         exp.name = "Original Name"
         db_session.add(exp)
-        db_session.flush()
+        await db_session.flush()
 
         notebook = Notebook()
         notebook.experiment_id = "editx"
         db_session.add(notebook)
-        db_session.commit()
+        await db_session.commit()
 
-        response = client.patch(
+        response = await client.patch(
             "/dash/api/experiments/editx",
             json={"name": "Updated Name"},
-            content_type="application/json",
         )
 
         assert response.status_code == HTTPStatus.OK
-        data = json.loads(response.data)
+        data = response.json()
         assert data["name"] == "Updated Name"
 
-    def test_update_nonexistent_experiment(self, client: FlaskClient) -> None:
+    async def test_update_nonexistent_experiment(self, client: AsyncClient) -> None:
         """Should return 404 when updating non-existent experiment."""
-        response = client.patch(
+        response = await client.patch(
             "/dash/api/experiments/nope1",
             json={"name": "New Name"},
-            content_type="application/json",
         )
 
         assert response.status_code == HTTPStatus.NOT_FOUND
 
-    def test_update_with_no_data(self, client: FlaskClient, db_session: Session) -> None:
+    async def test_update_with_no_data(self, client: AsyncClient, db_session: Session) -> None:
         """Should return 400 when no data provided."""
         exp = Experiment()
         exp.id = "nodta"
         exp.name = "Test"
         db_session.add(exp)
-        db_session.flush()
+        await db_session.flush()
 
         notebook = Notebook()
         notebook.experiment_id = "nodta"
         db_session.add(notebook)
-        db_session.commit()
+        await db_session.commit()
 
-        response = client.patch(
+        response = await client.patch(
             "/dash/api/experiments/nodta",
             json={},
-            content_type="application/json",
         )
 
         assert response.status_code == HTTPStatus.BAD_REQUEST
@@ -818,7 +780,7 @@ class TestEditExperiment:
 class TestDeleteExperiment:
     """Tests for DELETE /api/experiments/<id>."""
 
-    def test_delete_experiment(self, client: FlaskClient, db_session: Session, tmp_path: Path) -> None:
+    async def test_delete_experiment(self, client: AsyncClient, db_session: Session, tmp_path: Path) -> None:
         """Should delete experiment and return 204."""
         # Create experiment directory
         exp_dir = tmp_path / "delme"
@@ -829,20 +791,20 @@ class TestDeleteExperiment:
             exp.id = "delme"
             exp.name = "To Delete"
             db_session.add(exp)
-            db_session.flush()
+            await db_session.flush()
 
             notebook = Notebook()
             notebook.experiment_id = "delme"
             db_session.add(notebook)
-            db_session.commit()
+            await db_session.commit()
 
-            response = client.delete("/dash/api/experiments/delme")
+            response = await client.delete("/dash/api/experiments/delme")
 
             assert response.status_code == HTTPStatus.NO_CONTENT
 
-    def test_delete_nonexistent_experiment(self, client: FlaskClient) -> None:
+    async def test_delete_nonexistent_experiment(self, client: AsyncClient) -> None:
         """Should return 404 when deleting non-existent experiment."""
-        response = client.delete("/dash/api/experiments/nope2")
+        response = await client.delete("/dash/api/experiments/nope2")
 
         assert response.status_code == HTTPStatus.NOT_FOUND
 
@@ -850,74 +812,74 @@ class TestDeleteExperiment:
 class TestPublishStatus:
     """Tests for GET /api/experiments/<id>/publish/status."""
 
-    def _seed_experiment(self, db_session: Session, tmp_path: Path) -> None:
+    async def _seed_experiment(self, db_session: Session, tmp_path: Path) -> None:
         """Seed a minimal experiment for status tests."""
         (tmp_path / "pstat").mkdir(parents=True, exist_ok=True)
         exp = Experiment()
         exp.id = "pstat"
         exp.name = "Status Test"
         db_session.add(exp)
-        db_session.flush()
+        await db_session.flush()
         nb = Notebook()
         nb.experiment_id = "pstat"
         db_session.add(nb)
-        db_session.commit()
+        await db_session.commit()
 
-    def test_status_no_upload(self, client: FlaskClient, db_session: Session, tmp_path: Path) -> None:
+    async def test_status_no_upload(self, client: AsyncClient, db_session: Session, tmp_path: Path) -> None:
         """Status with no upload returns null state."""
         with patch("models.experiment.DATA_DIR", tmp_path):
-            self._seed_experiment(db_session, tmp_path)
-            response = client.get("/dash/api/experiments/pstat/publish/status")
+            await self._seed_experiment(db_session, tmp_path)
+            response = await client.get("/dash/api/experiments/pstat/publish/status")
 
         assert response.status_code == HTTPStatus.OK
-        data = json.loads(response.data)
+        data = response.json()
         assert data["upload_state"] is None
         assert data["total_files"] == 0
 
     @patch("models.experiment.is_upload_active", return_value=True)
-    def test_status_active_upload(
-        self, mock_active: MagicMock, client: FlaskClient, db_session: Session, tmp_path: Path
+    async def test_status_active_upload(
+        self, mock_active: MagicMock, client: AsyncClient, db_session: Session, tmp_path: Path
     ) -> None:
         """Status with an active upload reflects the PVC file."""
         from upload.status import create_queued_status, write_status
 
         with patch("models.experiment.DATA_DIR", tmp_path):
-            self._seed_experiment(db_session, tmp_path)
+            await self._seed_experiment(db_session, tmp_path)
             status = create_queued_status("att-1")
             write_status(status, "pstat", tmp_path)
 
-            response = client.get("/dash/api/experiments/pstat/publish/status")
+            response = await client.get("/dash/api/experiments/pstat/publish/status")
 
         assert response.status_code == HTTPStatus.OK
-        data = json.loads(response.data)
+        data = response.json()
         assert data["upload_state"] == "queued"
         assert data["upload_attempt_id"] == "att-1"
 
     @patch("models.experiment.is_upload_active", return_value=False)
-    def test_status_job_missing_reports_failed(
-        self, mock_active: MagicMock, client: FlaskClient, db_session: Session, tmp_path: Path
+    async def test_status_job_missing_reports_failed(
+        self, mock_active: MagicMock, client: AsyncClient, db_session: Session, tmp_path: Path
     ) -> None:
         """PVC says running but Job is gone → failed with job_missing reason."""
         from upload.status import UploadState, UploadStatus, write_status
 
         with patch("models.experiment.DATA_DIR", tmp_path):
-            self._seed_experiment(db_session, tmp_path)
+            await self._seed_experiment(db_session, tmp_path)
             status = UploadStatus(
                 attempt_id="att-1",
                 state=UploadState.RUNNING.value,
             )
             write_status(status, "pstat", tmp_path)
 
-            response = client.get("/dash/api/experiments/pstat/publish/status")
+            response = await client.get("/dash/api/experiments/pstat/publish/status")
 
         assert response.status_code == HTTPStatus.OK
-        data = json.loads(response.data)
+        data = response.json()
         assert data["upload_state"] == "failed"
         assert data["reason"] == "job_missing"
 
-    def test_status_nonexistent_experiment(self, client: FlaskClient) -> None:
+    async def test_status_nonexistent_experiment(self, client: AsyncClient) -> None:
         """Status for a non-existent experiment returns 404."""
-        response = client.get("/dash/api/experiments/nope3/publish/status")
+        response = await client.get("/dash/api/experiments/nope3/publish/status")
         assert response.status_code == HTTPStatus.NOT_FOUND
 
 
@@ -926,8 +888,8 @@ class TestDeleteDuringUpload:
 
     @patch("models.experiment.is_upload_active", return_value=True)
     @patch("models.experiment.read_status")
-    def test_delete_blocked_during_active_upload(
-        self, mock_read: MagicMock, mock_active: MagicMock, client: FlaskClient, db_session: Session, tmp_path: Path
+    async def test_delete_blocked_during_active_upload(
+        self, mock_read: MagicMock, mock_active: MagicMock, client: AsyncClient, db_session: Session, tmp_path: Path
     ) -> None:
         """Cannot delete an experiment with an active upload."""
         from upload.status import UploadState
@@ -940,12 +902,12 @@ class TestDeleteDuringUpload:
             exp.id = "delup"
             exp.name = "Upload Active"
             db_session.add(exp)
-            db_session.flush()
+            await db_session.flush()
             nb = Notebook()
             nb.experiment_id = "delup"
             db_session.add(nb)
-            db_session.commit()
+            await db_session.commit()
 
-            response = client.delete("/dash/api/experiments/delup")
+            response = await client.delete("/dash/api/experiments/delup")
 
         assert response.status_code == HTTPStatus.CONFLICT

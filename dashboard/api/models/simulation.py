@@ -4,21 +4,20 @@ import os
 from contextlib import suppress
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import jsonschema
-from cache import step_status_cache
-from cachetools import cached
 from config import DATA_DIR
 from enums import Engine, JobStatus
-from errors import ApiError
-from extensions import db
+from errors import ApiError, BadRequest, NotFound
 from manifest_schema import resolve_schema_url, schema_url
 from utils import FileInfo, get_files_with_extensions
 from validators import check_path
-from werkzeug.exceptions import BadRequest, NotFound
 
-from .experiment import Experiment
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from .experiment import Experiment
 
 logger = logging.getLogger(__name__)
 
@@ -132,23 +131,23 @@ class _JobRows(NamedTuple):
     analysis: list[Any]
 
 
-def _query_jobs(experiment_id: str, simulation_path: str) -> _JobRows:
-    """Scan every job table for a simulation in one call."""
-    # avoid circular dependency
-    from .analysis_job import AnalysisJob  # ruff:ignore[import-outside-top-level]
-    from .simulation_job import SimulationJob  # ruff:ignore[import-outside-top-level]
-    from .tuner_job import TunerJob  # ruff:ignore[import-outside-top-level]
+def _experiment_jobs(experiment: "Experiment", simulation_path: str) -> _JobRows:
+    """Collect the experiment's loaded job rows that reference one simulation."""
 
-    def rows(model: Any) -> list[Any]:  # ruff:ignore[any-type]
-        return model.query.filter_by(experiment_id=experiment_id, simulation_path=simulation_path).all()
+    def rows(jobs: list[Any]) -> list[Any]:
+        return [job for job in jobs if job.simulation_path == simulation_path]
 
-    return _JobRows(tuner=rows(TunerJob), simulation=rows(SimulationJob), analysis=rows(AnalysisJob))
+    return _JobRows(
+        tuner=rows(experiment.tuner_jobs),
+        simulation=rows(experiment.simulation_jobs),
+        analysis=rows(experiment.analysis_jobs),
+    )
 
 
 def _build_content(engine: Engine, payload: dict) -> dict:
     files = payload.get("files")
     if not isinstance(files, dict):
-        raise BadRequest(description="'files' must map file roles to file paths.")
+        raise BadRequest("'files' must map file roles to file paths.")
 
     return {
         "$schema": schema_url(engine),
@@ -178,21 +177,26 @@ def _validate_content_or_raise(content: dict, engine: Engine) -> None:
     schema = resolve_schema_url(content.get("$schema"))
     if schema is None:
         raise BadRequest(
-            description="The simulation file does not declare its format ('$schema' is missing or invalid), so it cannot be validated."
+            "The simulation file does not declare its format ('$schema' is missing or invalid), so it cannot be validated."
         )
     try:
         jsonschema.validate(content, schema)
     except jsonschema.ValidationError as exc:
-        raise BadRequest(description=f"Simulation content is invalid: {_describe_validation_error(exc)}") from exc
+        raise BadRequest(f"Simulation content is invalid: {_describe_validation_error(exc)}") from exc
 
     if content.get("engine") != engine.value:
         raise BadRequest(
-            description=f"The simulation engine '{content.get('engine')}' does not match the experiment's '{engine.value}' engine."
+            f"The simulation engine '{content.get('engine')}' does not match the experiment's '{engine.value}' engine."
         )
 
 
 class Simulation:  # ruff:ignore[too-many-public-methods]
-    """File-backed simulation manifest (`.simulation.json`)."""
+    """
+    File-backed simulation manifest (`.simulation.json`).
+
+    Job-derived state (lock, step, live) reads the jobs loaded on ``experiment``;
+    their remote status must be refreshed before.
+    """
 
     def __init__(
         self,
@@ -200,20 +204,30 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         simulation_path: str,
         raw: dict | None = None,
         read_error: str | None = None,
+        experiment: "Experiment | None" = None,
     ) -> None:
         """Initialize a Simulation instance from raw manifest data or a read error."""
         self.experiment_id = experiment_id
         self.simulation_path = simulation_path
         self._raw = raw if isinstance(raw, dict) else {}
         self._read_error = read_error
+        self._experiment = experiment
         self._resolved: dict[str, str] | None = None
         self._validation: tuple[bool, list[str], list[str]] | None = None
         self._memo_jobs: _JobRows | None = None
+        self._memo_step: tuple[int, str] | None = None
 
     def _cached_jobs(self) -> _JobRows:
-        """Job rows for this simulation, queried once per instance."""
+        """
+        Job rows for this simulation, collected once per instance.
+
+        Raises:
+            RuntimeError: If the simulation was built without its experiment.
+        """
+        if self._experiment is None:
+            raise RuntimeError(f"Simulation {self.simulation_path} has no experiment to read jobs from")
         if self._memo_jobs is None:
-            self._memo_jobs = _query_jobs(self.experiment_id, self.simulation_path)
+            self._memo_jobs = _experiment_jobs(self._experiment, self.simulation_path)
         return self._memo_jobs
 
     @property
@@ -313,7 +327,6 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return self.step_status[1]
 
     @property
-    @cached(cache=step_status_cache)
     def step_status(self) -> tuple[int, str]:
         """
         (step, status) from jobs referencing this ``simulation_path``.
@@ -323,6 +336,11 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         engine log. Before that, the run's files (trajectory included)
         don't exist. Publish is experiment-level, not part of this ladder.
         """
+        if self._memo_step is None:
+            self._memo_step = self._compute_step_status()
+        return self._memo_step
+
+    def _compute_step_status(self) -> tuple[int, str]:
         jobs = self._cached_jobs()
 
         # One run row per simulation: a running run dominates the ladder; a
@@ -387,7 +405,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         rel = self.files.get(role)
         if not isinstance(rel, str) or not rel:
-            raise BadRequest(description=f"The simulation does not define a '{property_label(role)}' file.")
+            raise BadRequest(f"The simulation does not define a '{property_label(role)}' file.")
         exp_dir = (DATA_DIR / self.experiment_id).resolve()
         resolved = (exp_dir / self.resolved_files.get(role, rel)).resolve()
         try:
@@ -431,7 +449,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         """
         if not self.valid:
             errors = self.errors or ["Simulation is invalid."]
-            raise BadRequest(description=f"Invalid simulation: {'; '.join(errors)}")
+            raise BadRequest(f"Invalid simulation: {'; '.join(errors)}")
         missing_files = self.missing_files
         if roles is not None:
             missing_files = [role for role in roles if role in self.missing_files or not self.files.get(role)]
@@ -498,7 +516,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             except jsonschema.ValidationError as exc:
                 errors.append(_describe_validation_error(exc))
 
-        experiment = db.session.get(Experiment, self.experiment_id)
+        experiment = self._experiment
         if experiment is not None:
             sim_engine = self._raw.get("engine")
             if sim_engine != experiment.engine.value:
@@ -532,21 +550,17 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return sorted(files, key=lambda f: f.path)
 
     @classmethod
-    def list(cls, experiment_id: str) -> list["Simulation"]:
+    def list(cls, experiment_id: str, experiment: "Experiment | None" = None) -> list["Simulation"]:
         """
         List all simulations with validation status, sorted by path.
 
         Returns:
             List of Simulation instances (includes invalid/unreadable ones).
         """
-        simulations: list[Simulation] = []
-        for file_info in cls.list_files(experiment_id):
-            sim = cls._from_file(experiment_id, file_info.path)
-            simulations.append(sim)
-        return simulations
+        return [cls._from_file(experiment_id, f.path, experiment) for f in cls.list_files(experiment_id)]
 
     @classmethod
-    def get(cls, experiment_id: str, simulation_path: str) -> "Simulation":
+    def get(cls, experiment_id: str, simulation_path: str, experiment: "Experiment | None" = None) -> "Simulation":
         """
         Get a single simulation by path.
 
@@ -560,16 +574,18 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         check_path(sim_path, DATA_DIR / experiment_id)
         simulation_file = DATA_DIR / experiment_id / sim_path
         if not simulation_file.is_file():
-            raise NotFound(description=f"Simulation '{sim_path}' not found.")
-        return cls._from_file(experiment_id, sim_path)
+            raise NotFound(f"Simulation '{sim_path}' not found.")
+        return cls._from_file(experiment_id, sim_path, experiment)
 
     @classmethod
-    def _from_file(cls, experiment_id: str, simulation_path: str) -> "Simulation":
+    def _from_file(
+        cls, experiment_id: str, simulation_path: str, experiment: "Experiment | None" = None
+    ) -> "Simulation":
         try:
             raw = json.loads((DATA_DIR / experiment_id / simulation_path).read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as exc:
-            return cls(experiment_id, simulation_path, read_error=str(exc))
-        return cls(experiment_id, simulation_path, raw=raw)
+            return cls(experiment_id, simulation_path, read_error=str(exc), experiment=experiment)
+        return cls(experiment_id, simulation_path, raw=raw, experiment=experiment)
 
     @classmethod
     def _require_unique_name(cls, experiment_id: str, name: str, *, current_name: str | None = None) -> None:
@@ -603,7 +619,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             )
 
     @classmethod
-    def write(cls, experiment_id: str, payload: dict) -> "Simulation":
+    def write(cls, experiment: "Experiment", payload: dict) -> "Simulation":
         """
         Create a simulation manifest at `{name}.simulation.json` unless a path is provided.
 
@@ -613,17 +629,17 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         Raises:
             BadRequest: If the path is unsafe, locked, or content is invalid.
         """
-        experiment = Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found")
+        experiment_id = experiment.id
         simulation_path = payload.get("simulation_path") or _safe_default_path(payload.get("name", ""))
         simulation_path = Path(simulation_path).as_posix()
         check_path(simulation_path, DATA_DIR / experiment_id)
         if not simulation_path.endswith(SIMULATION_SUFFIX):
-            raise BadRequest(description=f"Path must end with '{SIMULATION_SUFFIX}'.")
+            raise BadRequest(f"Path must end with '{SIMULATION_SUFFIX}'.")
 
         simulation_file = DATA_DIR / experiment_id / simulation_path
         if simulation_file.exists():
             display_name = payload.get("name") or simulation_path.removesuffix(SIMULATION_SUFFIX)
-            raise BadRequest(description=f"Simulation '{display_name}' already exists.")
+            raise BadRequest(f"Simulation '{display_name}' already exists.")
 
         content = _build_content(experiment.engine, payload)
         content["files"] = _rebase_files_to_manifest(content["files"], simulation_path)
@@ -632,10 +648,10 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
 
         simulation_file.parent.mkdir(parents=True, exist_ok=True)
         simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        return cls(experiment_id, simulation_path, raw=content)
+        return cls(experiment_id, simulation_path, raw=content, experiment=experiment)
 
     @classmethod
-    def delete(cls, experiment_id: str, simulation_path: str) -> None:
+    async def delete(cls, session: "AsyncSession", experiment: "Experiment", simulation_path: str) -> None:
         """
         Delete a simulation manifest and cascade-delete all related jobs.
 
@@ -645,19 +661,20 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             BadRequest: If the path is unsafe or does not end with '.simulation.json'.
             NotFound: If the manifest file does not exist.
         """
+        experiment_id = experiment.id
         simulation_path = Path(simulation_path).as_posix()
         check_path(simulation_path, DATA_DIR / experiment_id)
         if not simulation_path.endswith(SIMULATION_SUFFIX):
-            raise BadRequest(description=f"Path must end with '{SIMULATION_SUFFIX}'.")
+            raise BadRequest(f"Path must end with '{SIMULATION_SUFFIX}'.")
         simulation_file = DATA_DIR / experiment_id / simulation_path
         if not simulation_file.is_file():
-            raise NotFound(description=f"Simulation '{simulation_path}' not found.")
+            raise NotFound(f"Simulation '{simulation_path}' not found.")
 
-        jobs = _query_jobs(experiment_id, simulation_path)
+        jobs = _experiment_jobs(experiment, simulation_path)
         for job in (*jobs.tuner, *jobs.simulation, *jobs.analysis):
-            job.delete()
-            db.session.delete(job)
-        db.session.commit()
+            await job.delete()
+            await session.delete(job)
+        await session.commit()
 
         try:
             if not os.access(simulation_file, os.W_OK):
@@ -667,7 +684,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             logger.warning("Failed to delete simulation '%s'", simulation_path, exc_info=True)
 
     @classmethod
-    def update(cls, experiment_id: str, simulation_path: str, payload: dict) -> "Simulation":
+    def update(cls, experiment: "Experiment", simulation_path: str, payload: dict) -> "Simulation":
         """
         Edit an unlocked simulation manifest.
 
@@ -679,16 +696,16 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
                 is job-locked, or content is invalid.
             NotFound: If the file does not exist.
         """
-        experiment = Experiment.query.get_or_404(experiment_id, description=f"Experiment {experiment_id} not found")
+        experiment_id = experiment.id
         simulation_path = Path(simulation_path).as_posix()
         check_path(simulation_path, DATA_DIR / experiment_id)
         if not simulation_path.endswith(SIMULATION_SUFFIX):
-            raise BadRequest(description=f"Path must end with '{SIMULATION_SUFFIX}'.")
+            raise BadRequest(f"Path must end with '{SIMULATION_SUFFIX}'.")
         simulation_file = DATA_DIR / experiment_id / simulation_path
         if not simulation_file.is_file():
-            raise NotFound(description=f"Simulation '{simulation_path}' not found.")
+            raise NotFound(f"Simulation '{simulation_path}' not found.")
 
-        current = cls._from_file(experiment_id, simulation_path)
+        current = cls._from_file(experiment_id, simulation_path, experiment)
         if current.locked:
             raise ApiError(
                 HTTPStatus.BAD_REQUEST,
@@ -715,4 +732,4 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         except OSError:
             logger.warning("Failed to restore writable mode for '%s'", simulation_path, exc_info=True)
 
-        return cls(experiment_id, simulation_path, raw=content)
+        return cls(experiment_id, simulation_path, raw=content, experiment=experiment)

@@ -5,21 +5,25 @@ import uuid
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
+import anyio
+import sqlalchemy as sa
 from cache import analysis_status_cache
-from cachetools import cached
 from clients import k8s
 from clients.k8s import parse_cpu, parse_memory
 from config import ANALYSIS_IMAGE, ANALYSIS_RESOURCES, DATA_DIR
+from db import Base
 from enums import AnalysisType, Engine, JobStatus, PreprocessingMode
-from extensions import db
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from werkzeug.exceptions import Forbidden
+from errors import Forbidden
+from sqlalchemy import Select, select
+from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 
 from .simulation_job import SimulationJob
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from .experiment import Experiment
 
 
@@ -237,56 +241,87 @@ def format_mwf_analysis_command(
     return " && ".join(commands)
 
 
-class AnalysisJob(db.Model):  # type: ignore
+class AnalysisJob(Base):
     """On-demand MD analysis job running mddb-workflow in a K8s Job."""
 
     __tablename__ = "analysis_jobs"
 
-    id: Mapped[str] = mapped_column(db.String(36), primary_key=True)
-    experiment_id: Mapped[str] = mapped_column(db.String(5), db.ForeignKey("experiments.id"))
-    simulation_path: Mapped[str] = mapped_column(db.String(255), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
+    id: Mapped[str] = mapped_column(sa.String(36), primary_key=True)
+    experiment_id: Mapped[str] = mapped_column(sa.String(5), sa.ForeignKey("experiments.id"))
+    simulation_path: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, default=lambda: datetime.now(UTC))
 
-    analysis_name: Mapped[AnalysisType] = mapped_column(db.Enum(AnalysisType), nullable=False)
-    structure_file: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
-    trajectory_file: Mapped[str] = mapped_column(db.String(255), nullable=False)
-    topology_file: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
+    analysis_name: Mapped[AnalysisType] = mapped_column(sa.Enum(AnalysisType), nullable=False)
+    structure_file: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
+    trajectory_file: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    topology_file: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
     # Fraction of the simulation's steps available when the analysis inputs were
     # snapshotted; None when the run progress was unknown (or no run existed).
-    sim_progress: Mapped[float | None] = mapped_column(db.Float, nullable=True)
+    sim_progress: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
 
-    _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", db.Enum(JobStatus), nullable=True)
+    _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", sa.Enum(JobStatus), nullable=True)
 
-    experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="analysis_jobs")
+    # Never lazy-loads (async); queries for jobs alone load it via `query()`.
+    experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="analysis_jobs", lazy="raise_on_sql")
+
+    # Transient: status fetched by refresh_status() for this request
+    _fetched_status: JobStatus | None = None
+
+    @classmethod
+    def query(cls) -> "Select[tuple[Self]]":
+        """Select analysis jobs together with their experiments."""
+        return select(cls).options(selectinload(cls.experiment))
 
     @property
     def _job_name(self) -> str:
         return f"analysis-{self.id}"
 
     @property
-    @cached(cache=analysis_status_cache)
-    def status(self) -> JobStatus:
-        """Current status of the K8s job."""
-        if self._last_known_status is not None and self._last_known_status in {JobStatus.FINISHED, JobStatus.ERROR}:
-            return self._last_known_status
+    def _settled_status(self) -> JobStatus | None:
+        """FINISHED or ERROR once reached: such a job never changes again."""
+        status = self._last_known_status
+        return status if status in {JobStatus.FINISHED, JobStatus.ERROR} else None
+
+    async def refresh_status(self) -> JobStatus:
+        """Fetch the K8s Job status (short TTL cache); a finished job's temp files are cleaned once."""
+        if settled := self._settled_status:
+            self._fetched_status = settled
+            return settled
 
         try:
-            fetched = k8s.get_job_status(self._job_name)
+            fetched = analysis_status_cache.get(self.id)
+            if fetched is None:
+                fetched = await k8s.get_job_status(self._job_name)
+                analysis_status_cache[self.id] = fetched
             if fetched not in {self._last_known_status, JobStatus.UNKNOWN}:
                 self._last_known_status = fetched
-                db.session.commit()
                 if fetched == JobStatus.FINISHED:
-                    self.cleanup_temp_files()
-            return fetched
+                    await anyio.to_thread.run_sync(self.cleanup_temp_files)
         except Exception:
             logger.exception(f"Error fetching analysis job status for {self.id}")
-            if self._last_known_status:
-                return self._last_known_status
-            return JobStatus.UNKNOWN
+            fetched = self._last_known_status or JobStatus.UNKNOWN
+
+        self._fetched_status = fetched
+        return fetched
+
+    @property
+    def status(self) -> JobStatus:
+        """
+        Current status of the K8s job, as of the last `refresh_status()`.
+
+        Raises:
+            RuntimeError: If an unsettled job was not refreshed in this request.
+        """
+        if settled := self._settled_status:
+            return settled
+        if self._fetched_status is None:
+            raise RuntimeError(f"Status of analysis job {self.id} read before refresh_status()")
+        return self._fetched_status
 
     @classmethod
-    def start(
+    async def start(
         cls,
+        session: "AsyncSession",
         experiment: "Experiment",
         simulation_path: str,
         analysis_name: AnalysisType,
@@ -296,31 +331,28 @@ class AnalysisJob(db.Model):  # type: ignore
         preprocessing_mode: PreprocessingMode,
     ) -> "AnalysisJob":
         """
-        Start an analysis K8s Job for a single analysis type.
+        Start an analysis K8s Job for a single analysis type, replacing the simulation's previous analyses.
 
         Args:
+            session: The request's database session.
             experiment: The experiment to run analysis on.
             simulation_path: The simulation manifest path this analysis belongs to.
             analysis_name: The mwf analysis task name (e.g. "rmsds", "pca").
-            structure_file: Relative path to the structure file within the experiment dir.
-                May be None when topology_file serves as the structure source.
-            trajectory_file: Relative path to the trajectory file within the experiment dir.
-            topology_file: Relative path to the topology file, when required for preprocessing or analysis.
+            structure_file: Structure file within the experiment dir; None when the topology serves as structure.
+            trajectory_file: Trajectory file within the experiment dir.
+            topology_file: Topology file, when required for preprocessing or analysis.
             preprocessing_mode: Selected preprocessing mode applied before analysis.
-
-        Returns:
-            The created AnalysisJob instance.
 
         Raises:
             Forbidden: If the job cannot be started due to insufficient cluster resources.
         """
-        previous_jobs = cls.query.filter_by(experiment_id=experiment.id, simulation_path=simulation_path).all()
+        previous_jobs = [j for j in experiment.analysis_jobs if j.simulation_path == simulation_path]
         for prev in previous_jobs:
             with suppress(Exception):  # job may already be cleaned up by K8s
-                k8s.delete_job(f"analysis-{prev.id}")
-            prev.cleanup_temp_files()
-            db.session.delete(prev)
-        db.session.flush()
+                await k8s.delete_job(f"analysis-{prev.id}")
+            await anyio.to_thread.run_sync(prev.cleanup_temp_files)
+            await session.delete(prev)
+        await session.flush()
 
         job_id = str(uuid.uuid4())[:12]
         job_name = f"analysis-{job_id}"
@@ -328,16 +360,23 @@ class AnalysisJob(db.Model):  # type: ignore
         # Snapshot the run's progress now: the inputs copied at job start are
         # exactly the data this analysis will cover.
         run_job = (
-            SimulationJob.query
-            .filter_by(experiment_id=experiment.id, simulation_path=simulation_path)
-            .order_by(SimulationJob.created_at.desc())
+            (
+                await session.execute(
+                    SimulationJob
+                    .query()
+                    .filter_by(experiment_id=experiment.id, simulation_path=simulation_path)
+                    .order_by(SimulationJob.created_at.desc())
+                )
+            )
+            .scalars()
             .first()
         )
         sim_progress: float | None = None
-        if run_job is not None and run_job.nsteps is not None and run_job.nsteps > 0:
-            done = run_job.nsteps_done
-            if done is not None:
-                sim_progress = min(1.0, done / run_job.nsteps)
+        if run_job is not None:
+            await run_job.refresh_status()
+            nsteps, done = await anyio.to_thread.run_sync(lambda: (run_job.nsteps, run_job.nsteps_done))
+            if nsteps is not None and nsteps > 0 and done is not None:
+                sim_progress = min(1.0, done / nsteps)
 
         command = format_mwf_analysis_command(
             analysis_name=analysis_name,
@@ -353,10 +392,10 @@ class AnalysisJob(db.Model):  # type: ignore
         an_mem = parse_memory(ANALYSIS_RESOURCES["requests"]["memory"])
         an_cpu_limit = parse_cpu(ANALYSIS_RESOURCES["limits"]["cpu"])
         an_mem_limit = parse_memory(ANALYSIS_RESOURCES["limits"]["memory"])
-        if msg := k8s.check_quota_headroom(an_cpu, an_mem, an_cpu_limit, an_mem_limit):
-            raise Forbidden(description=f"Cannot start analysis: {msg}")
+        if msg := await k8s.check_quota_headroom(an_cpu, an_mem, an_cpu_limit, an_mem_limit):
+            raise Forbidden(f"Cannot start analysis: {msg}")
 
-        k8s.create_job(
+        await k8s.create_job(
             name=job_name,
             image=ANALYSIS_IMAGE,
             experiment_id=experiment.id,
@@ -365,17 +404,18 @@ class AnalysisJob(db.Model):  # type: ignore
         )
 
         job = AnalysisJob(
-            id=job_id,  # type: ignore[call-arg]
-            experiment_id=experiment.id,  # type: ignore[call-arg]
-            simulation_path=simulation_path,  # type: ignore[call-arg]
-            analysis_name=analysis_name,  # type: ignore[call-arg]
-            structure_file=structure_file.as_posix() if structure_file else None,  # type: ignore[call-arg]
-            trajectory_file=trajectory_file.as_posix(),  # type: ignore[call-arg]
-            topology_file=topology_file.as_posix() if topology_file else None,  # type: ignore[call-arg]
-            sim_progress=sim_progress,  # type: ignore[call-arg]
+            id=job_id,
+            experiment_id=experiment.id,
+            experiment=experiment,
+            simulation_path=simulation_path,
+            analysis_name=analysis_name,
+            structure_file=structure_file.as_posix() if structure_file else None,
+            trajectory_file=trajectory_file.as_posix(),
+            topology_file=topology_file.as_posix() if topology_file else None,
+            sim_progress=sim_progress,
         )
-        db.session.add(job)
-        db.session.commit()
+        session.add(job)
+        await session.commit()
 
         logger.info(f"Started analysis job {job_id} ({analysis_name}) for experiment {experiment.id}")
         return job
@@ -409,7 +449,7 @@ class AnalysisJob(db.Model):  # type: ignore
                     with suppress(Exception):
                         path.rmdir()
 
-    def delete(self) -> None:
-        """Delete the K8s job and clean up any temporary files it left behind."""
-        k8s.delete_job(self._job_name)
-        self.cleanup_temp_files()
+    async def delete(self) -> None:
+        """Delete the K8s job and clean up any temporary files it left behind (the caller deletes the row)."""
+        await k8s.delete_job(self._job_name)
+        await anyio.to_thread.run_sync(self.cleanup_temp_files)

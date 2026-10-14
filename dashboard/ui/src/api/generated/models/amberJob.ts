@@ -5,9 +5,35 @@
  * API for experiment, simulation, compute, analysis, notebook, file, and publication workflows.
  * OpenAPI spec version: 1.0.0
  */
-import type { SimulationJob } from './simulationJob.ts';
+import type { Engine } from './engine.ts';
+import type { JobStatus } from './jobStatus.ts';
+import type { SimulationJobLogLines } from './simulationJobLogLines.ts';
 
-export type AmberJob = SimulationJob & {
+/**
+ * AMBER production run.
+ */
+export interface AmberJob {
+  id: string;
+  experiment_id: string;
+  simulation_path: string;
+  created_at: string;
+  engine: Engine;
+  /** @minimum 1 */
+  np: number;
+  /** @minimum 1 */
+  ntomp: number;
+  status: JobStatus;
+  start_timestamp?: number | null;
+  finish_timestamp?: number | null;
+  nsteps?: number | null;
+  /** Steps completed so far (parsed from the engine log) */
+  nsteps_done?: number | null;
+  performance?: number | null;
+  /** Estimated seconds until completion */
+  estimated_time?: number | null;
+  is_live: boolean;
+  log_lines?: SimulationJobLogLines;
   binary: string;
   ewald: string;
-};
+  [key: string]: unknown;
+ }

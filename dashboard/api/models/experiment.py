@@ -1,18 +1,20 @@
+import asyncio
 import logging
 import threading
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 from shutil import rmtree
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
+import anyio
+import sqlalchemy as sa
 import yaml
 from archive import submission as archive_submission
 from archive.status import ArchiveDirection, ArchiveState
 from archive.status import read_status as read_archive_status
-from cache import archive_status_cache, mdrepo_status_cache, step_status_cache
-from cachetools import cachedmethod
+from cache import archive_status_cache, mdrepo_status_cache
 from clients import mdposit, mdrepo, metadump
 from config import (
     DATA_DIR,
@@ -26,28 +28,22 @@ from config import (
     MDREPO_URL,
     S3_BUCKET,
 )
+from db import Base
 from enums import Engine, JobStatus, PodStatus, SourceType
-from errors import ApiError
-from extensions import db
-from flask import session
+from errors import ApiError, BadRequest, Conflict, InternalServerError, NotFound
 from notebook_modules import NotebookModule
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from token_manager import MDRepoTokenManager
-from upload.status import (
-    REASON_JOB_MISSING,
-    UploadState,
-    read_status,
+from upload.status import REASON_JOB_MISSING, UploadState, read_status
+from upload.submission import delete_upload_resources, is_upload_active, submit_upload_job
+from utils import (
+    download_git_repo,
+    download_git_repo_module,
+    file_download_url,
+    get_du_size,
+    get_unique_id,
+    secure_filename,
 )
-from upload.submission import (
-    delete_upload_resources,
-    is_upload_active,
-    submit_upload_job,
-)
-from utils import download_git_repo, download_git_repo_module, file_download_url, get_du_size, get_unique_id
 from validators import validate_http_url
-from werkzeug.datastructures import FileStorage
-from werkzeug.exceptions import BadRequest, Conflict, InternalServerError, NotFound
-from werkzeug.utils import secure_filename
 
 from .experiment_sources import (
     fetch_pdb,
@@ -60,98 +56,99 @@ from .experiment_sources import (
 from .notebook import Notebook
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from fastapi import UploadFile
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from token_manager import MDRepoCredentials
+
     from .analysis_job import AnalysisJob
     from .simulation import Simulation
     from .simulation_job import SimulationJob
     from .tuner_job import TunerJob
 
-
-# Stash key for the schema's per-dump reconciliation (consumed by archive_state).
-_DUMP_ARCHIVE_STATE = "_dump_archive_state"
-_STASH_UNSET = object()
+    _Populate = Callable[[str], Awaitable[dict]]
 
 
 logger = logging.getLogger(__name__)
 
+_UPLOAD_CHUNK_BYTES = 1024 * 1024
 
-class Experiment(db.Model):  # type: ignore
+
+async def _noop() -> None:  # ruff:ignore[unused-async]
+    return None
+
+
+class Experiment(Base):  # ruff:ignore[too-many-public-methods]
     """
-    SQLAlchemy model representing a molecular dynamics experiment.
+    A molecular dynamics experiment, from setup through execution to publication.
 
-    An experiment tracks the lifecycle of a simulation from initial setup
-    through execution to publication. It can be created from PDB files,
-    Zenodo repositories, or TPR file uploads.
-
-    Attributes:
-        id: Unique 5-character experiment identifier, also used as directory name.
-        created_at: Timestamp when the experiment was created.
-        updated_at: Timestamp when the experiment was last modified.
-        name: Human-readable name of the experiment.
-        source_type: How the experiment's structure source was created.
-        notebooks_repo: Git repository URL containing setup notebooks.
-        mdrepo_id: MDRepo record ID if the experiment has been published.
-        engine: Molecular dynamics engine (GMX or AMBER).
-        notebook: Associated setup notebook for this experiment.
-        tuner_jobs: List of tuner jobs associated with this experiment.
-        simulation_jobs: List of simulation jobs for this experiment.
+    The ID is a unique 5-character identifier that is also the experiment directory name.
+    Remote state (pods, jobs, MDRepo, archive Jobs) is fetched by `refresh()`; properties
+    then only read the DB row, its loaded jobs, and the experiment files.
     """
 
     __tablename__ = "experiments"
 
     # unique ID of the experiment, also used as the directory name
-    id: Mapped[str] = mapped_column(db.String(5), primary_key=True)
+    id: Mapped[str] = mapped_column(sa.String(5), primary_key=True)
     # creation time
-    created_at: Mapped[datetime] = mapped_column(db.DateTime, default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, default=lambda: datetime.now(UTC))
     # last modification time
     updated_at: Mapped[datetime] = mapped_column(
-        db.DateTime,
+        sa.DateTime,
         default=lambda: datetime.now(UTC),
         onupdate=lambda: datetime.now(UTC),
     )
 
     # name of the experiment
-    name: Mapped[str] = mapped_column(db.String(255), nullable=False)
+    name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     # display name of the curated notebook module used at creation; None = custom workflow
-    module_name: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
+    module_name: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
     # category snapshot of the curated module at creation (drives the card icon); None = custom workflow
-    module_category: Mapped[str | None] = mapped_column(db.String(32), nullable=True)
-    source_type: Mapped[SourceType | None] = mapped_column(db.Enum(SourceType), nullable=True)
+    module_category: Mapped[str | None] = mapped_column(sa.String(32), nullable=True)
+    source_type: Mapped[SourceType | None] = mapped_column(sa.Enum(SourceType), nullable=True)
     # RCSB accession, or the resolved download URL for URL/repo sources
-    source_ref: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
+    source_ref: Mapped[str | None] = mapped_column(sa.String(512), nullable=True)
     # original uploaded filenames (source_type=file only); creation history, not derived state
-    source_files: Mapped[list[str] | None] = mapped_column(db.JSON, nullable=True)
+    source_files: Mapped[list[str] | None] = mapped_column(sa.JSON, nullable=True)
     # git repository URL containing setup notebooks (nullable for legacy experiments) TODO: make non-nullable (breaks db migration)
-    notebooks_repo: Mapped[str | None] = mapped_column(db.String(512), nullable=True)
+    notebooks_repo: Mapped[str | None] = mapped_column(sa.String(512), nullable=True)
     # ID of the experiment in MDRepo
-    mdrepo_id: Mapped[str | None] = mapped_column(db.String(255), nullable=True)
+    mdrepo_id: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
     # Whether the experiment is published in MDRepo (True=published, False=draft, None=not in MDRepo)
-    mdrepo_published: Mapped[bool | None] = mapped_column(db.Boolean, nullable=True)
+    mdrepo_published: Mapped[bool | None] = mapped_column(sa.Boolean, nullable=True)
     # Molecular dynamics engine (GMX or AMBER)
-    engine: Mapped[Engine] = mapped_column(db.Enum(Engine), nullable=False, default=Engine.GMX)
+    engine: Mapped[Engine] = mapped_column(sa.Enum(Engine), nullable=False, default=Engine.GMX)
 
     # Archive state: archived_at is the durable flag (NULL = active); the other three
     # snapshot card state at archive-submit time and double as "archive submitted" markers.
-    archived_at: Mapped[datetime | None] = mapped_column(db.DateTime, nullable=True)
-    archived_size_bytes: Mapped[int | None] = mapped_column(db.Integer, nullable=True)
-    archived_step: Mapped[int | None] = mapped_column(db.Integer, nullable=True)
-    archived_status: Mapped[str | None] = mapped_column(db.String(32), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(sa.DateTime, nullable=True)
+    archived_size_bytes: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    archived_step: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    archived_status: Mapped[str | None] = mapped_column(sa.String(32), nullable=True)
 
-    # Setup notebook status
+    # Child rows load with the experiment (async sessions cannot lazy-load on attribute access).
     notebook: Mapped["Notebook"] = relationship(
-        "Notebook", back_populates="experiment", cascade="all, delete-orphan", uselist=False
+        "Notebook", back_populates="experiment", cascade="all, delete-orphan", uselist=False, lazy="selectin"
     )
-    # Tuner jobs of the experiment
     tuner_jobs: Mapped[list["TunerJob"]] = relationship(
-        "TunerJob", back_populates="experiment", cascade="all, delete-orphan"
+        "TunerJob", back_populates="experiment", cascade="all, delete-orphan", lazy="selectin"
     )
-    # Simulation jobs of the experiment (base relationship for JTI)
+    # Base relationship for JTI; subclass columns load via polymorphic selectin
     simulation_jobs: Mapped[list["SimulationJob"]] = relationship(
-        "SimulationJob", back_populates="experiment", cascade="all, delete-orphan"
+        "SimulationJob", back_populates="experiment", cascade="all, delete-orphan", lazy="selectin"
     )
-    # Analysis jobs of the experiment
     analysis_jobs: Mapped[list["AnalysisJob"]] = relationship(
-        "AnalysisJob", back_populates="experiment", cascade="all, delete-orphan"
+        "AnalysisJob", back_populates="experiment", cascade="all, delete-orphan", lazy="selectin"
     )
+
+    # Transient per-request state filled by refresh_archive_state() / memoized derivations
+    _archive_state: str | None = None
+    _archive_state_refreshed: bool = False
+    _memo_step: tuple[int, str] | None = None
+    _memo_latest: "Simulation | None" = None
+    _memo_latest_scanned: bool = False
 
     @property
     def source(self) -> dict | None:
@@ -227,8 +224,50 @@ class Experiment(db.Model):  # type: ignore
             return self.archived_size_bytes
         return get_du_size(DATA_DIR / self.id)
 
+    # --- remote state -------------------------------------------------------------
+
+    async def refresh(self, mdrepo_token: str | None = None) -> None:
+        """Fetch every remote state the experiment's serialization reads (no DB I/O; the caller commits)."""
+        await asyncio.gather(
+            self.notebook.refresh() if self.notebook is not None else _noop(),
+            self.refresh_jobs(),
+            self.sync_mdrepo_status(mdrepo_token),
+            self.refresh_archive_state(),
+        )
+
+    async def refresh_jobs(self) -> None:
+        """Fetch the remote status of all tuner, simulation, and analysis jobs."""
+        await asyncio.gather(
+            *(job.refresh() for job in self.tuner_jobs),
+            *(job.refresh_status() for job in self.simulation_jobs),
+            *(job.refresh_status() for job in self.analysis_jobs),
+        )
+
+    def needs_mdrepo_sync(self) -> bool:
+        """Whether `sync_mdrepo_status` would contact MDRepo (a draft/record exists and is not cached)."""
+        return bool(self.mdrepo_id) and self.mdrepo_id not in mdrepo_status_cache
+
+    async def sync_mdrepo_status(self, access_token: str | None) -> None:
+        """Check whether the MDRepo record still exists and mirror its published flag (cached per record)."""
+        record_id = self.mdrepo_id
+        if not access_token or not record_id or record_id in mdrepo_status_cache:
+            return
+        mdrepo_status_cache[record_id] = True
+        try:
+            status = await mdrepo.check_experiment_status(access_token, record_id)
+        except Exception:
+            logger.exception(f"Failed to check MDRepo status for experiment '{record_id}'")
+            return
+        if status is None:
+            self.mdrepo_id = None
+            self.mdrepo_published = None
+        else:
+            self.mdrepo_published = status
+
+    # --- creation -----------------------------------------------------------------
+
     @classmethod
-    def prepare_env(
+    async def prepare_env(
         cls,
         notebooks_repo: str,
         access_token: str | None = None,
@@ -245,45 +284,61 @@ class Experiment(db.Model):  # type: ignore
         """
         experiment_id: str = get_unique_id(DATA_DIR)
         experiment_dir = DATA_DIR / experiment_id
-        experiment_dir.mkdir(parents=True, exist_ok=True)
+        await anyio.Path(experiment_dir).mkdir(parents=True, exist_ok=True)
         try:
-            if notebook_module is not None:
-                if notebook_module.is_root:
-                    download_git_repo(notebooks_repo, experiment_dir, access_token)
-                else:
-                    download_git_repo_module(notebooks_repo, notebook_module.path, experiment_dir, access_token)
+            if notebook_module is not None and not notebook_module.is_root:
+                await download_git_repo_module(notebooks_repo, notebook_module.path, experiment_dir, access_token)
             else:
-                download_git_repo(notebooks_repo, experiment_dir, access_token)
-        except Exception:
-            rmtree(experiment_dir, ignore_errors=True)
+                await download_git_repo(notebooks_repo, experiment_dir, access_token)
+        except BaseException:
+            await anyio.to_thread.run_sync(lambda: rmtree(experiment_dir, ignore_errors=True))
             raise
 
         return experiment_id
 
     @classmethod
-    def _create_with_notebook(cls, experiment: "Experiment") -> "Experiment":
-        """
-        Create experiment with auto-generated notebook.
-
-        Args:
-            experiment: The Experiment instance to create.
-
-        Returns:
-            The created Experiment instance with an associated Notebook.
-        """
-        db.session.add(experiment)
-        db.session.flush()
-
-        notebook = Notebook(experiment_id=experiment.id)  # type: ignore[call-arg]
-        db.session.add(notebook)
-        db.session.commit()
+    async def _create(
+        cls,
+        session: "AsyncSession",
+        experiment_id: str,
+        populate: "_Populate",
+        **columns: object,
+    ) -> "Experiment":
+        """Populate the prepared directory, then persist the experiment with its notebook; clean up on failure."""
+        try:
+            columns.update(await populate(experiment_id))
+            # Empty collections up front: the new row must never lazy-load them later.
+            experiment = cls(
+                id=experiment_id,
+                notebook=Notebook(experiment_id=experiment_id),
+                tuner_jobs=[],
+                simulation_jobs=[],
+                analysis_jobs=[],
+                **columns,
+            )
+            session.add(experiment)
+            await session.commit()
+        except BaseException:
+            await anyio.to_thread.run_sync(lambda: rmtree(DATA_DIR / experiment_id, ignore_errors=True))
+            await session.rollback()
+            raise
 
         logger.info(f"Created experiment {experiment.id}")
         return experiment
 
+    @staticmethod
+    def _module_columns(engine: Engine, notebooks_repo: str, notebook_module: NotebookModule | None) -> dict:
+        return {
+            "notebooks_repo": notebooks_repo,
+            "engine": engine,
+            "module_name": notebook_module.name if notebook_module else None,
+            "module_category": notebook_module.category if notebook_module else None,
+        }
+
     @classmethod
-    def from_pdb(
+    async def from_pdb(
         cls,
+        session: "AsyncSession",
         name: str,
         pdb_source: str,
         notebooks_repo: str,
@@ -292,45 +347,26 @@ class Experiment(db.Model):  # type: ignore
         notebook_module: NotebookModule | None = None,
     ) -> "Experiment":
         """
-        Create experiment from a PDB ID or a direct URL to a PDB file.
+        Create experiment from a PDB ID or a direct URL to a PDB file (404 when the source is not found).
 
         A value without a URL scheme (e.g. ``1A2B``) is treated as an RCSB PDB ID
-        and downloaded from ``files.rcsb.org``. A value with a URL scheme (e.g.
-        ``https://...``) is treated as a direct URL to a PDB file and fetched
+        and downloaded from ``files.rcsb.org``. A value with a URL scheme is fetched
         as-is; only ``http`` and ``https`` schemes are accepted.
-
-        Args:
-            name: Name of the experiment.
-            pdb_source: PDB ID (e.g., 1A2B) or a direct URL to a PDB file.
-            notebooks_repo: Git repository URL containing setup notebooks.
-            access_token: Optional access token for private repositories.
-            engine: Molecular dynamics engine (default: GMX).
-            notebook_module: Optional curated module for selective checkout.
-
-        Returns:
-            The created Experiment instance.
-
-        Raises:
-            NotFound: If the PDB ID or URL is not found.
         """
-        experiment_id: str = cls.prepare_env(notebooks_repo, access_token, notebook_module)
+        experiment_id = await cls.prepare_env(notebooks_repo, access_token, notebook_module)
         source = pdb_source.strip()
-        is_url = bool(urlparse(source).scheme)
 
-        try:
-            if is_url:
-                url: str = validate_http_url(source)
-                source_ref: str = url
+        async def populate(exp_id: str) -> dict:
+            if urlparse(source).scheme:
+                url = validate_http_url(source)
+                source_ref = url
             else:
-                pdb_id = source.upper()
-                url = f"https://files.rcsb.org/download/{pdb_id}.pdb"
-                source_ref = pdb_id
+                source_ref = source.upper()
+                url = f"https://files.rcsb.org/download/{source_ref}.pdb"
 
-            # Download PDB file
-            response = fetch_pdb(url)
-
+            response = await fetch_pdb(url)
             if response.status_code == HTTPStatus.NOT_FOUND:
-                raise NotFound(description=f"PDB source '{source}' not found.")
+                raise NotFound(f"PDB source '{source}' not found.")
             if response.status_code != HTTPStatus.OK:
                 raise ApiError(
                     HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -338,34 +374,22 @@ class Experiment(db.Model):  # type: ignore
                     "urn:mddash:upstream-download-failed",
                     "The structure source couldn't be fetched; try again, or use a different PDB ID / file.",
                 )
-
             validate_pdb_content(response.content)
+            await anyio.Path(DATA_DIR / exp_id / "input.pdb").write_bytes(response.content)
+            return {"source_type": SourceType.PDB, "source_ref": source_ref}
 
-            with (DATA_DIR / experiment_id / "input.pdb").open("wb") as f:
-                f.write(response.content)
-
-            experiment = cls(
-                id=experiment_id,
-                name=name,
-                notebooks_repo=notebooks_repo,
-                engine=engine,
-                module_name=notebook_module.name if notebook_module else None,
-                module_category=notebook_module.category if notebook_module else None,
-                source_type=SourceType.PDB,
-                source_ref=source_ref,
-            )
-
-            return cls._create_with_notebook(experiment)
-
-        except Exception:
-            # Cleanup on failure
-            rmtree(DATA_DIR / experiment_id, ignore_errors=True)
-            db.session.rollback()
-            raise
+        return await cls._create(
+            session,
+            experiment_id,
+            populate,
+            name=name,
+            **cls._module_columns(engine, notebooks_repo, notebook_module),
+        )
 
     @classmethod
-    def from_repo(
+    async def from_repo(
         cls,
+        session: "AsyncSession",
         name: str,
         repo_link: str,
         notebooks_repo: str,
@@ -373,107 +397,68 @@ class Experiment(db.Model):  # type: ignore
         engine: Engine = Engine.GMX,
         notebook_module: NotebookModule | None = None,
     ) -> "Experiment":
-        """
-        Create experiment from a supported repository URL.
+        """Create experiment from a supported repository URL (InvenioRDM or MDPosit, DOIs resolved)."""
+        experiment_id = await cls.prepare_env(notebooks_repo, access_token, notebook_module)
 
-        Args:
-            name: Name of the experiment.
-            repo_link: Repository record URL.
-            notebooks_repo: Git repository URL containing setup notebooks.
-            access_token: Optional access token for private repositories.
-            engine: Molecular dynamics engine (default: GMX).
-            notebook_module: Optional curated module for selective checkout.
-
-        Returns:
-            The created Experiment instance.
-        """
-        experiment_id: str = cls.prepare_env(notebooks_repo, access_token, notebook_module)
-
-        try:
-            resolved_repo_link = resolve_repo_link(repo_link)
+        async def populate(exp_id: str) -> dict:
+            resolved_repo_link = await resolve_repo_link(repo_link)
             if mdposit.is_mdposit_url(resolved_repo_link):
-                import_mdposit_repo(resolved_repo_link, experiment_id)
+                await import_mdposit_repo(resolved_repo_link, exp_id)
             else:
-                import_invenio_repo(resolved_repo_link, experiment_id)
+                await import_invenio_repo(resolved_repo_link, exp_id)
+            return {"source_type": SourceType.REPO, "source_ref": resolved_repo_link}
 
-            experiment = cls(
-                id=experiment_id,
-                name=name,
-                notebooks_repo=notebooks_repo,
-                engine=engine,
-                module_name=notebook_module.name if notebook_module else None,
-                module_category=notebook_module.category if notebook_module else None,
-                source_type=SourceType.REPO,
-                source_ref=resolved_repo_link,
-            )
-
-            return cls._create_with_notebook(experiment)
-
-        except Exception:
-            # Cleanup on failure
-            rmtree(DATA_DIR / experiment_id, ignore_errors=True)
-            db.session.rollback()
-            raise
+        return await cls._create(
+            session,
+            experiment_id,
+            populate,
+            name=name,
+            **cls._module_columns(engine, notebooks_repo, notebook_module),
+        )
 
     @classmethod
-    def from_files(
+    async def from_files(
         cls,
+        session: "AsyncSession",
         name: str,
-        files: list[FileStorage],
+        files: "list[UploadFile]",
         notebooks_repo: str,
         access_token: str | None = None,
         engine: Engine = Engine.GMX,
         notebook_module: NotebookModule | None = None,
     ) -> "Experiment":
         """
-        Create experiment from file uploads with database persistence.
-
-        Args:
-            name: Name of the experiment.
-            files: List of uploaded files.
-            notebooks_repo: Git repository URL containing setup notebooks.
-            access_token: Optional access token for private repositories.
-            engine: Molecular dynamics engine (default: GMX).
-            notebook_module: Optional curated module for selective checkout.
-
-        Returns:
-            The created Experiment instance.
+        Create experiment from file uploads.
 
         Raises:
             BadRequest: If no files are provided.
         """
         if not files:
-            raise BadRequest(description="No files provided")
+            raise BadRequest("No files provided")
 
-        experiment_id: str = cls.prepare_env(notebooks_repo, access_token, notebook_module)
+        experiment_id = await cls.prepare_env(notebooks_repo, access_token, notebook_module)
 
-        try:
+        async def populate(exp_id: str) -> dict:
             filenames = []
             for file in files:
                 if not file.filename:
                     continue
                 filename = secure_filename(file.filename)
-                file.save(DATA_DIR / experiment_id / filename)
+                async with await anyio.open_file(DATA_DIR / exp_id / filename, "wb") as out:
+                    while chunk := await file.read(_UPLOAD_CHUNK_BYTES):
+                        await out.write(chunk)
                 filenames.append(filename)
+            return {"source_type": SourceType.FILE, "source_files": filenames}
 
-            experiment = cls(
-                id=experiment_id,
-                name=name,
-                notebooks_repo=notebooks_repo,
-                engine=engine,
-                module_name=notebook_module.name if notebook_module else None,
-                module_category=notebook_module.category if notebook_module else None,
-                source_type=SourceType.FILE,
-                source_files=filenames,
-            )
+        return await cls._create(
+            session,
+            experiment_id,
+            populate,
+            name=name,
+            **cls._module_columns(engine, notebooks_repo, notebook_module),
+        )
 
-            return cls._create_with_notebook(experiment)
-
-        except Exception:
-            # Cleanup on failure
-            rmtree(DATA_DIR / experiment_id, ignore_errors=True)
-            db.session.rollback()
-            raise
+    # --- derived state ------------------------------------------------------------
 
     @property
     def latest_simulation_path(self) -> str | None:
@@ -481,33 +466,26 @@ class Experiment(db.Model):  # type: ignore
         latest = self._latest_simulation()
         return latest.simulation_path if latest else None
 
-    @cachedmethod(cache=lambda _: step_status_cache, key=lambda self: ("_latest_simulation", self))
     def _latest_simulation(self) -> "Simulation | None":
-        """
-        Most recently interacted-with simulation (by ``Simulation.last_activity``).
+        """Most recently interacted-with simulation (by ``Simulation.last_activity``), scanned once per instance."""
+        if not self._memo_latest_scanned:
+            simulations = list_simulations(self)
+            self._memo_latest = max(simulations, key=lambda sim: sim.last_activity) if simulations else None
+            self._memo_latest_scanned = True
+        return self._memo_latest
 
-        Cached on the same TTL as ``_step_status`` so list serialization performs
-        at most one filesystem scan per experiment per window.
-
-        Returns:
-            The most recently touched Simulation, or None if the experiment
-            has no manifests.
-        """
-        from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
-
-        simulations = Simulation.list(self.id)
-        return max(simulations, key=lambda sim: sim.last_activity) if simulations else None
-
-    # Explicit keys: shared caches would collide on the default (self,) key.
-    @cachedmethod(cache=lambda _: step_status_cache, key=lambda self: ("_step_status", self))
     def _step_status(self) -> tuple[int, str]:
         """
         Publish state overrides; otherwise inherit the latest simulation's (step, status).
 
         Returns:
-            A tuple of (step, status) where step is the phase index (0-4, with
-            publish 4) and status is a string describing the current phase.
+            (step, status): step is the phase index (0-4, with publish 4).
         """
+        if self._memo_step is None:
+            self._memo_step = self._compute_step_status()
+        return self._memo_step
+
+    def _compute_step_status(self) -> tuple[int, str]:
         if self.archived_at is not None and self.archived_step is not None:
             # Files are gone; serve the snapshot taken at archive-submit time.
             return self.archived_step, self.archived_status or "archived"
@@ -523,91 +501,56 @@ class Experiment(db.Model):  # type: ignore
 
         return 0, "setup"
 
-    @cachedmethod(cache=lambda _: mdrepo_status_cache, key=lambda self: self.mdrepo_id)
-    def _sync_mdrepo_status(self) -> None:
-        """Check if the MDRepo experiment still exists and update local database if deleted."""
-        if not self.mdrepo_id:
-            return
+    # --- deletion -----------------------------------------------------------------
 
-        token_manager = MDRepoTokenManager(session)
-        access_token = token_manager.get_valid_token()
-        if not access_token:
-            return
-
-        try:
-            status = mdrepo.check_experiment_status(access_token, self.mdrepo_id)
-
-            if status is None:
-                self.mdrepo_id = None
-                self.mdrepo_published = None
-            else:
-                self.mdrepo_published = status
-
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-            logger.exception(f"Failed to check MDRepo status for experiment '{self.mdrepo_id}'")
-
-    def delete(self) -> None:
+    async def delete(self) -> None:
         """
-        Delete the experiment and all its related resources.
+        Delete all resources of the experiment (the caller deletes the row).
 
         Raises:
             Conflict: If an MDRepo upload is queued or running.
         """
         # Reject deletion while an upload is active (check PVC + live Job).
-        upload_state = self._read_upload_state()
-        if upload_state in UploadState.active():
+        if await self._read_upload_state() in UploadState.active():
             raise Conflict(
-                description="Cannot delete experiment during active MDRepo upload. "
-                "Wait for completion or retry after failure."
+                "Cannot delete experiment during active MDRepo upload. Wait for completion or retry after failure."
             )
         # Delete wins over in-flight archive/restore work; the archive prefix is purged after.
-        archive_submission.delete_jobs(self.id)
+        await archive_submission.delete_jobs(self.id)
         needs_purge = self.archived_at is not None or self.archived_step is not None
-        # Delete notebook pod if it exists
-        if self.notebook and self.notebook.status == PodStatus.RUNNING:
-            self.notebook.stop()
 
-        # Delete tuner jobs
-        for tuner_job in self.tuner_jobs:
+        if self.notebook is not None:
+            await self.notebook.refresh()
+            if self.notebook.status == PodStatus.RUNNING:
+                await self.notebook.stop()
+
+        # Analysis K8s Jobs have no TTL: rows cascading away without this would orphan them.
+        for job in (*self.tuner_jobs, *self.simulation_jobs, *self.analysis_jobs):
             try:
-                tuner_job.delete()
+                await job.delete()
             except Exception:
-                logger.exception(f"Failed to delete tuner job {tuner_job.id}")
+                logger.exception(f"Failed to delete {type(job).__name__} {job.id}")
 
-        # Delete simulation jobs
-        for sim_job in self.simulation_jobs:
-            try:
-                sim_job.delete()
-            except Exception:
-                logger.exception(f"Failed to delete simulation job {sim_job.id}")
+        experiment_dir = DATA_DIR / self.id
 
-        # Delete analysis jobs; their K8s Jobs have no TTL, so rows cascading
-        # away without this would orphan them in the namespace.
-        for analysis_job in self.analysis_jobs:
-            try:
-                analysis_job.delete()
-            except Exception:
-                logger.exception(f"Failed to delete analysis job {analysis_job.id}")
+        def del_dir() -> None:
+            rmtree(experiment_dir, ignore_errors=True)
+            logger.info(f"Deleted experiment directory: {experiment_dir}")
 
-        def del_dir(dir: Path) -> None:
-            try:
-                rmtree(dir, ignore_errors=True)
-                logger.info(f"Deleted experiment directory: {dir}")
-            except Exception:
-                logger.exception(f"Failed to delete experiment directory {dir}")
-
-        thread = threading.Thread(target=del_dir, args=(DATA_DIR / self.id,), daemon=True)
-        thread.start()
+        # The response must not wait for a large tree to be removed.
+        threading.Thread(target=del_dir, daemon=True).start()
 
         if needs_purge:
-            archive_submission.submit_purge_job(self.id)
+            await archive_submission.submit_purge_job(self.id)
 
-    def publish(
+    # --- publishing ---------------------------------------------------------------
+
+    async def publish(
         self,
-        community: str = "ceitec",
+        session: "AsyncSession",
         target: str = "invenio",
+        community: str = "ceitec",
+        credentials: "MDRepoCredentials | None" = None,
         simulation_path: str | None = None,
     ) -> dict:
         """
@@ -621,36 +564,34 @@ class Experiment(db.Model):  # type: ignore
             Conflict: If the experiment is archived or an archive/restore is in flight
                 (publishing reads local files; restore it / wait for the Job to settle first).
         """
-        if self.archive_state is not None:
+        if await self.refresh_archive_state() is not None:
             raise Conflict(
-                description="Experiment is archived or an archive/restore is in flight. "
+                "Experiment is archived or an archive/restore is in flight. "
                 "Publishing reads the local files; restore the experiment (or wait) first."
             )
         if target == "invenio":
-            return self._publish_invenio(community)
+            return await self._publish_invenio(session, community, credentials)
         if target == "mdposit":
-            return self._publish_mdposit(simulation_path or "")
-        raise BadRequest(description=f"Unknown publish target: {target}")
+            return await anyio.to_thread.run_sync(self._publish_mdposit, simulation_path or "")
+        raise BadRequest(f"Unknown publish target: {target}")
 
-    def _publish_invenio(self, community: str) -> dict:
+    async def _publish_invenio(
+        self, session: "AsyncSession", community: str, credentials: "MDRepoCredentials | None"
+    ) -> dict:
         """Publish to MDRepo as a draft and start a durable upload Job (idempotent: returns existing active upload)."""
-        token_manager = MDRepoTokenManager(session)
-        access_token = token_manager.get_valid_token()
-
-        if not access_token:
-            raise InternalServerError(
-                description="No valid MDRepo access token available. Please authenticate with MDRepo."
-            )
+        if credentials is None:
+            raise InternalServerError("No valid MDRepo access token available. Please authenticate with MDRepo.")
+        access_token = credentials.access_token
 
         # A published record cannot be retried as a draft upload.
         if self.mdrepo_published is True:
-            raise Conflict(description="Experiment is already published. Cannot retry as draft upload.")
+            raise Conflict("Experiment is already published. Cannot retry as draft upload.")
 
-        upload_state = self._read_upload_state()
+        upload_state = await self._read_upload_state()
 
         # Skip retry only when a completed upload still has a live draft.
         if upload_state == UploadState.COMPLETED.value and self.mdrepo_id:
-            raise Conflict(description="Upload already completed. Use MDRepo to view or edit the published record.")
+            raise Conflict("Upload already completed. Use MDRepo to view or edit the published record.")
 
         # If an upload is already active, return it (idempotent retry).
         if upload_state in UploadState.active():
@@ -665,16 +606,16 @@ class Experiment(db.Model):  # type: ignore
 
         # If a previous attempt failed, clean up its K8s resources before retrying.
         if upload_state == UploadState.FAILED.value:
-            delete_upload_resources(self.id)
+            await delete_upload_resources(self.id)
 
         # Reuse the draft only if it still exists. The user may have deleted it in MDRepo.
-        if self.mdrepo_id and mdrepo.check_experiment_status(access_token, self.mdrepo_id) is not None:
+        if self.mdrepo_id and await mdrepo.check_experiment_status(access_token, self.mdrepo_id) is not None:
             mdrepo_id = self.mdrepo_id
             mdrepo_experiment: dict = {"id": mdrepo_id, "links": {}}
         else:
             self.mdrepo_id = None
             self.mdrepo_published = None
-            mdrepo_experiment = self._create_draft(access_token, community)
+            mdrepo_experiment = await self._create_draft(session, access_token, community)
             mdrepo_id = self.mdrepo_id or ""
 
         if not mdrepo_id:
@@ -686,13 +627,13 @@ class Experiment(db.Model):  # type: ignore
             )
 
         # Submit the upload Job: writes queued status, creates Secret+Job, waits for admission.
-        attempt_id = submit_upload_job(
+        attempt_id = await submit_upload_job(
             experiment_id=self.id,
             mdrepo_id=mdrepo_id,
             credential_data={
                 "access_token": access_token,
-                "refresh_token": session.get("mdrepo_refresh_token", ""),
-                "expires_at": str(session.get("mdrepo_token_expires_at", 0)),
+                "refresh_token": credentials.refresh_token,
+                "expires_at": credentials.expires_at,
                 "client_id": MDREPO_CLIENT_ID,
                 "client_secret": MDREPO_CLIENT_SECRET,
                 "api_url": MDREPO_API_URL,
@@ -711,17 +652,15 @@ class Experiment(db.Model):  # type: ignore
             "draft_url": self.mdrepo_record_url,
         }
 
-    def _create_draft(self, access_token: str, community: str) -> dict:
+    async def _create_draft(self, session: "AsyncSession", access_token: str, community: str) -> dict:
         """Create a new Invenio draft and persist its ID."""
-        gmx_simulations = [s for s in list_simulations(self.id) if s.engine == Engine.GMX.value and s.valid]
-        tpr_paths = []
-        for sim in gmx_simulations:
-            topology = sim.resolved_files.get("topology")
-            if topology:
-                tpr_paths.append(DATA_DIR / self.id / topology)
-        simulations = metadump.extract_metadata_bulk(tpr_paths) if tpr_paths else []
+        gmx_simulations = [s for s in list_simulations(self) if s.engine == Engine.GMX.value and s.valid]
+        tpr_paths = [
+            DATA_DIR / self.id / topology for sim in gmx_simulations if (topology := sim.resolved_files.get("topology"))
+        ]
+        simulations = await metadump.extract_metadata_bulk(tpr_paths) if tpr_paths else []
 
-        mdrepo_experiment = mdrepo.create_experiment(access_token, community, {"simulations": simulations})
+        mdrepo_experiment = await mdrepo.create_experiment(access_token, community, {"simulations": simulations})
         mdrepo_id = mdrepo_experiment.get("id")
         if mdrepo_id is None:
             raise ApiError(
@@ -733,13 +672,13 @@ class Experiment(db.Model):  # type: ignore
 
         self.mdrepo_id = mdrepo_id
         self.mdrepo_published = False
-        db.session.commit()
+        await session.commit()
 
         logger.info("Created MDRepo experiment with ID '%s' for experiment '%s'", mdrepo_id, self.id)
         return mdrepo_experiment
 
-    def _read_upload_state(self) -> str | None:
-        """Reconcile upload state from the PVC status file and live Job (reports failed/job_missing if the Job is gone)."""
+    async def _read_upload_state(self) -> str | None:
+        """Reconcile upload state from the PVC status file and live Job (reports failed if the Job is gone)."""
         status = read_status(self.id, DATA_DIR)
         if status is None:
             return None
@@ -747,17 +686,15 @@ class Experiment(db.Model):  # type: ignore
         if status.state in UploadState.terminal():
             return status.state
 
-        if status.state in UploadState.active() and not is_upload_active(self.id):
+        if status.state in UploadState.active() and not await is_upload_active(self.id):
             return UploadState.FAILED.value
 
         return status.state
 
-    def get_publish_status(self) -> dict:
+    async def get_publish_status(self) -> dict:
         """Return the durable MDRepo upload status, merging the PVC document with live Job state."""
         status = read_status(self.id, DATA_DIR)
-
-        # Resolve the effective state (may differ from the file if Job is gone).
-        effective_state = self._read_upload_state()
+        effective_state = await self._read_upload_state()
 
         result: dict = {
             "experiment_id": self.id,
@@ -774,7 +711,7 @@ class Experiment(db.Model):  # type: ignore
 
         if status is not None:
             result["upload_attempt_id"] = status.attempt_id
-            # If the state was overridden (job_missing), reflect that.
+            # A missing Job overrides the file's active state (job_missing).
             if effective_state == UploadState.FAILED.value and status.state in UploadState.active():
                 result["reason"] = REASON_JOB_MISSING
             else:
@@ -787,45 +724,50 @@ class Experiment(db.Model):  # type: ignore
 
         return result
 
-    if TYPE_CHECKING:
-        # Transient per-dump stash set by ExperimentSchema.sync_archive; never mapped.
-        _dump_archive_state: str | None
+    # --- archiving ----------------------------------------------------------------
 
     @property
     def archive_state(self) -> str | None:
         """
         One of: None, archiving, archived, restoring, archive_failed, restore_failed.
 
-        A schema dump reconciles once in pre_dump and stashes the answer here, so
-        archived_at and archive_state agree within one payload; direct callers reconcile fresh.
+        Raises:
+            RuntimeError: If an archive-marked experiment was not refreshed in this request.
         """
         if self.archived_at is None and self.archived_step is None:
             return None
-        stashed = self.__dict__.pop(_DUMP_ARCHIVE_STATE, _STASH_UNSET)
-        if stashed is not _STASH_UNSET:
-            return cast("str | None", stashed)
-        return self._read_archive_state()
+        if not self._archive_state_refreshed:
+            raise RuntimeError(f"Archive state of experiment {self.id} read before refresh_archive_state()")
+        return self._archive_state
 
-    def _is_archive_job_live(self, direction: str) -> bool:
+    async def refresh_archive_state(self) -> str | None:
+        """Reconcile and store the archive state; experiments without archive markers skip all I/O."""
+        self._archive_state = (
+            None if self.archived_at is None and self.archived_step is None else await self._read_archive_state()
+        )
+        self._archive_state_refreshed = True
+        return self._archive_state
+
+    async def _is_archive_job_live(self, direction: str) -> bool:
         """Job liveness with a short lookup cache (list serialization fan-out)."""
         key = (direction, self.id)
-        try:
-            return archive_status_cache[key]
-        except KeyError:
-            live = archive_submission.is_job_active(direction, self.id)
-            archive_status_cache[key] = live
-            return live
+        if (cached := archive_status_cache.get(key)) is not None:
+            return cached
+        live = await archive_submission.is_job_active(direction, self.id)
+        archive_status_cache[key] = live
+        return live
 
-    def _read_archive_state(self) -> str | None:
+    async def _read_archive_state(self) -> str | None:
         """
         Reconcile archive state from DB markers, the status doc, and live Jobs.
 
         DB markers are durable (snapshots = submitted, archived_at = completed); the
         doc dies with the dir and Jobs TTL-expire, so completion is inferred. An
-        in-flight doc with no live Job failed. Mutates the row only on terminal transitions.
+        in-flight doc with no live Job failed. Mutates the row only on terminal
+        transitions (the caller commits).
         """
         doc = read_archive_status(self.id, DATA_DIR)
-        dir_exists = (DATA_DIR / self.id).exists()
+        dir_exists = await anyio.Path(DATA_DIR / self.id).exists()
 
         if self.archived_at is not None:
             # Restore lifecycle; a non-restore doc is stale from the archive attempt.
@@ -835,28 +777,29 @@ class Experiment(db.Model):  # type: ignore
                     self.archived_step = None
                     self.archived_status = None
                     self.archived_size_bytes = None
-                    db.session.commit()
                     return None
                 # A live Job outranks a stale FAILED sentinel; an in-flight doc with
                 # no live Job failed (evicted, backoffLimit 0), as in the archive direction.
-                return "restoring" if self._is_archive_job_live(ArchiveDirection.RESTORE.value) else "restore_failed"
-            return "restoring" if self._is_archive_job_live(ArchiveDirection.RESTORE.value) else "archived"
+                live = await self._is_archive_job_live(ArchiveDirection.RESTORE.value)
+                return "restoring" if live else "restore_failed"
+            return "restoring" if await self._is_archive_job_live(ArchiveDirection.RESTORE.value) else "archived"
 
         if not dir_exists:
-            if not self._is_archive_job_live(ArchiveDirection.ARCHIVE.value):
+            if not await self._is_archive_job_live(ArchiveDirection.ARCHIVE.value):
                 self.archived_at = datetime.now(UTC)
-                db.session.commit()
                 return "archived"
             return "archiving"
 
-        if doc is not None and doc.direction == ArchiveDirection.ARCHIVE.value:
-            if doc.state == ArchiveState.FAILED.value:
-                return "archive_failed"
-            return "archiving" if self._is_archive_job_live(ArchiveDirection.ARCHIVE.value) else "archive_failed"
+        if (
+            doc is not None
+            and doc.direction == ArchiveDirection.ARCHIVE.value
+            and doc.state == ArchiveState.FAILED.value
+        ):
+            return "archive_failed"
 
-        return "archiving" if self._is_archive_job_live(ArchiveDirection.ARCHIVE.value) else "archive_failed"
+        return "archiving" if await self._is_archive_job_live(ArchiveDirection.ARCHIVE.value) else "archive_failed"
 
-    def archive(self) -> str:
+    async def archive(self, session: "AsyncSession") -> str:
         """
         Submit a durable archive Job after gating and snapshotting card state.
 
@@ -875,19 +818,20 @@ class Experiment(db.Model):  # type: ignore
                 "urn:mddash:s3-not-configured",
                 "S3 storage isn't enabled on this deployment; contact the administrator.",
             )
-        state = self.archive_state
+        state = await self.refresh_archive_state()
         if state not in {None, "archive_failed"}:
             raise ApiError(
                 HTTPStatus.CONFLICT,
                 f"Experiment cannot be archived now (state: {state}).",
                 "urn:mddash:archive-conflict",
             )
-        if self._read_upload_state() in UploadState.active():
+        if await self._read_upload_state() in UploadState.active():
             raise ApiError(
                 HTTPStatus.CONFLICT,
                 "Cannot archive during an active MDRepo upload. Wait for completion or retry after failure.",
                 "urn:mddash:archive-conflict",
             )
+        await self.refresh_jobs()
         live = (
             [j for j in self.tuner_jobs if j.is_live]
             + [j for j in self.simulation_jobs if j.is_live]
@@ -902,17 +846,19 @@ class Experiment(db.Model):  # type: ignore
             )
 
         # Stopping the notebook matches delete(): archiving freezes the files under it.
-        if self.notebook and self.notebook.status == PodStatus.RUNNING:
-            self.notebook.stop()
+        if self.notebook is not None:
+            await self.notebook.refresh()
+            if self.notebook.status == PodStatus.RUNNING:
+                await self.notebook.stop()
 
-        step, status = self._step_status()
+        step, status, size = await anyio.to_thread.run_sync(lambda: (*self._step_status(), self.size_bytes))
         self.archived_step = step
         self.archived_status = status
-        self.archived_size_bytes = self.size_bytes
-        db.session.commit()
+        self.archived_size_bytes = size
+        await session.commit()
 
         try:
-            attempt_id = archive_submission.submit_job(ArchiveDirection.ARCHIVE.value, self.id, DATA_DIR)
+            attempt_id = await archive_submission.submit_job(ArchiveDirection.ARCHIVE.value, self.id, DATA_DIR)
         except archive_submission.SubmissionError as e:
             raise ApiError(
                 HTTPStatus.CONFLICT,
@@ -923,7 +869,7 @@ class Experiment(db.Model):  # type: ignore
         logger.info("Archive Job submitted for experiment %s (attempt %s)", self.id, attempt_id)
         return attempt_id
 
-    def restore(self) -> str:
+    async def restore(self) -> str:
         """
         Submit a durable restore Job for an archived experiment.
 
@@ -942,14 +888,14 @@ class Experiment(db.Model):  # type: ignore
                 "urn:mddash:s3-not-configured",
                 "S3 storage isn't enabled on this deployment; contact the administrator.",
             )
-        state = self.archive_state
+        state = await self.refresh_archive_state()
         if state not in {"archived", "restore_failed"}:
             raise ApiError(
                 HTTPStatus.CONFLICT,
                 f"Experiment cannot be restored now (state: {state}).",
                 "urn:mddash:archive-conflict",
             )
-        if (DATA_DIR / self.id).exists():
+        if await anyio.Path(DATA_DIR / self.id).exists():
             # Worker-gate mirror: non-completed restore doc = our resumable leftover; else clobber protection.
             doc = read_archive_status(self.id, DATA_DIR)
             retryable = (
@@ -966,7 +912,7 @@ class Experiment(db.Model):  # type: ignore
                 )
 
         try:
-            attempt_id = archive_submission.submit_job(ArchiveDirection.RESTORE.value, self.id, DATA_DIR)
+            attempt_id = await archive_submission.submit_job(ArchiveDirection.RESTORE.value, self.id, DATA_DIR)
         except archive_submission.SubmissionError as e:
             raise ApiError(
                 HTTPStatus.CONFLICT,
@@ -977,20 +923,23 @@ class Experiment(db.Model):  # type: ignore
         logger.info("Restore Job submitted for experiment %s (attempt %s)", self.id, attempt_id)
         return attempt_id
 
-    def get_archive_status(self) -> dict:
+    async def get_archive_status(self) -> dict:
         """Archive/restore status for the status endpoint: reconciliation result + status doc fields."""
+        archive_state = await self.refresh_archive_state()
         doc = read_archive_status(self.id, DATA_DIR)
         return {
             "experiment_id": self.id,
-            "archive_state": self.archive_state,
+            "archive_state": archive_state,
             "attempt_id": doc.attempt_id if doc else None,
             "direction": doc.direction if doc else None,
             "reason": doc.reason if doc else None,
         }
 
+    # --- MDPosit --------------------------------------------------------------------
+
     def _publish_mdposit(self, simulation_path: str) -> dict:
         """
-        Prepare stateless MDPosit publication metadata from a simulation manifest.
+        Prepare stateless MDPosit publication metadata from a simulation manifest (sync: file I/O only).
 
         Returns:
             Metadata file and selected file descriptors for MDPosit publishing.
@@ -1009,12 +958,12 @@ class Experiment(db.Model):  # type: ignore
 
         from .simulation import Simulation, property_label  # ruff:ignore[import-outside-top-level]
 
-        simulation = Simulation.get(self.id, simulation_path)
+        simulation = Simulation.get(self.id, simulation_path, self)
         simulation.require_files(["reference_structure", "run_input", "trajectory"])
 
         exp_dir = DATA_DIR / self.id
         if not exp_dir.exists():
-            raise BadRequest(description="Experiment directory not found.")
+            raise BadRequest("Experiment directory not found.")
         exp_dir_resolved = exp_dir.resolve()
 
         publish_roles = {
@@ -1029,18 +978,18 @@ class Experiment(db.Model):  # type: ignore
         for manifest_role, (publish_role, exts) in publish_roles.items():
             if manifest_role not in simulation.files:
                 raise BadRequest(
-                    description=f"The simulation does not define a '{property_label(manifest_role)}' file, which MDPosit publishing requires."
+                    f"The simulation does not define a '{property_label(manifest_role)}' file, which MDPosit publishing requires."
                 )
 
             file_path = simulation.resolve_role(manifest_role)
             if not file_path.is_file():
-                raise BadRequest(description=f"The '{property_label(manifest_role)}' file does not exist.")
+                raise BadRequest(f"The '{property_label(manifest_role)}' file does not exist.")
 
             extension = file_path.suffix.lstrip(".").lower()
             if extension not in exts:
                 allowed = ", ".join(sorted(exts))
                 raise BadRequest(
-                    description=f"The '{property_label(manifest_role)}' file has an unsupported extension '.{extension}'. Allowed: {allowed}."
+                    f"The '{property_label(manifest_role)}' file has an unsupported extension '.{extension}'. Allowed: {allowed}."
                 )
 
             relative_path = str(file_path.relative_to(exp_dir_resolved))
@@ -1058,7 +1007,7 @@ class Experiment(db.Model):  # type: ignore
         try:
             metadata_file.write_text(yaml.safe_dump(metadata, sort_keys=False), encoding="utf-8")
         except OSError as exc:
-            raise InternalServerError(description="Failed to generate metadata file.") from exc
+            raise InternalServerError("Failed to generate metadata file.") from exc
 
         return {
             "metadata_file": {
@@ -1071,26 +1020,18 @@ class Experiment(db.Model):  # type: ignore
 
     def _build_mdposit_metadata(self, selected_paths: dict[str, Path]) -> dict:
         """
-        Build MDDB-compatible inputs.yaml metadata dict.
+        MDDB-compatible inputs.yaml metadata.
 
         Only fields we can determine without external assumptions are included.
         The user fills remaining fields in VRE Lite.
-
-        Returns:
-            Dictionary of metadata fields for the inputs.yaml file.
         """
-        structure_name = selected_paths["structure"].name
-        topology_name = selected_paths["topology"].name
-        trajectory_name = selected_paths["trajectory"].name
         program = "GROMACS" if self.engine == Engine.GMX else "AMBER"
-
-        metadata: dict[str, object] = {
+        return {
             "name": self.name,
             "program": program,
             "type": "trajectory",
             "method": "Classical MD",
-            "input_structure_filepath": structure_name,
-            "input_topology_filepath": topology_name,
-            "input_trajectory_filepaths": [trajectory_name],
+            "input_structure_filepath": selected_paths["structure"].name,
+            "input_topology_filepath": selected_paths["topology"].name,
+            "input_trajectory_filepaths": [selected_paths["trajectory"].name],
         }
-        return metadata

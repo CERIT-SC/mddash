@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import fnmatch
 import logging
 import os
@@ -6,14 +8,14 @@ import re
 import shutil
 import subprocess
 import tempfile
-import threading
-import time
+import unicodedata
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
-from werkzeug.exceptions import InternalServerError, NotFound
+import anyio
+from errors import InternalServerError, NotFound
 
 logger = logging.getLogger(__name__)
 
@@ -323,62 +325,49 @@ def get_du_size(data_dir: Path) -> int | None:
         return None
 
 
-def _du_loop(data_dir: Path, initial_delay: float = 0.0) -> None:
-    """Background thread body: measure data_dir and per-experiment sizes every DU_INTERVAL seconds."""
+def _store_du_sizes(data_dir: Path, du_output: str) -> None:
+    """Write `du -b --max-depth=1` sizes into per-directory marker files."""
+    for line in du_output.splitlines():
+        size_s, _, path_s = line.rstrip("/").partition("\t")
+        path = Path(path_s)
+        # A marker can only live inside a directory: skip top-level files,
+        # and skip hidden dirs (.rclone-bisync, .ipynb_checkpoints) entirely.
+        if path != data_dir and (path.name.startswith(".") or not path.is_dir()):
+            continue
+        try:
+            # atomic: a reader must never see a half-written marker
+            tmp = path / f"{DU_SIZE_FILENAME}.tmp{os.getpid()}"
+            tmp.write_text(size_s)
+            Path(tmp).replace(path / DU_SIZE_FILENAME)
+        except OSError:
+            continue  # entry vanished mid-scan (e.g. experiment deleted)
+        if path != data_dir:
+            logger.debug("du: %s = %s bytes", path.name, size_s)
+    logger.info("Storage size updated: %d bytes", int((data_dir / DU_SIZE_FILENAME).read_text()))
+
+
+async def _measure_du(data_dir: Path) -> None:
+    # --max-depth=1 reports each entry inside data_dir plus the total in one pass
+    proc = await asyncio.create_subprocess_exec(
+        "du", "-b", "--max-depth=1", str(data_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        raise subprocess.CalledProcessError(proc.returncode or 1, "du", stdout, stderr.decode(errors="replace"))
+    await anyio.to_thread.run_sync(_store_du_sizes, data_dir, stdout.decode(errors="replace"))
+
+
+async def du_monitor(data_dir: Path, initial_delay: float = 0.0) -> None:
+    """Measure data_dir and per-experiment sizes every DU_INTERVAL seconds (run as a background task)."""
     if initial_delay > 0:
-        time.sleep(initial_delay)
+        await asyncio.sleep(initial_delay)
     while True:
         try:
-            # --max-depth=1 reports each entry inside data_dir plus the total in one pass
-            result = subprocess.run(
-                ["du", "-b", "--max-depth=1", str(data_dir)],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            for line in result.stdout.splitlines():
-                size_s, _, path_s = line.rstrip("/").partition("\t")
-                path = Path(path_s)
-                # A marker can only live inside a directory: skip top-level files,
-                # and skip hidden dirs (.rclone-bisync, .ipynb_checkpoints) entirely.
-                if path != data_dir and (path.name.startswith(".") or not path.is_dir()):
-                    continue
-                try:
-                    # atomic: two monitor threads (Flask reloader parent + child) race on these files
-                    tmp = path / f"{DU_SIZE_FILENAME}.tmp{os.getpid()}"
-                    tmp.write_text(size_s)
-                    Path(tmp).replace(path / DU_SIZE_FILENAME)
-                except OSError:
-                    continue  # entry vanished mid-scan (e.g. experiment deleted)
-                if path != data_dir:
-                    logger.debug("du: %s = %s bytes", path.name, size_s)
-            logger.info("Storage size updated: %d bytes", int((data_dir / DU_SIZE_FILENAME).read_text()))
+            await _measure_du(data_dir)
         except Exception as e:
             stderr = getattr(e, "stderr", "") or ""
             logger.warning("du failed: %s%s", e, f" | stderr: {stderr.strip()}" if stderr.strip() else "")
-        time.sleep(DU_INTERVAL)
-
-
-def start_du_monitor(data_dir: Path, initial_delay: float = 0.0) -> None:
-    """
-    Start a daemon thread that measures data_dir size every DU_INTERVAL seconds.
-
-    Args:
-        data_dir: Directory to measure (DATA_DIR).
-        initial_delay: Seconds to wait before first measurement.
-    """
-    if any(t.name == "du-monitor" for t in threading.enumerate()):
-        logger.debug("du monitor thread already running, skipping")
-        return
-
-    thread = threading.Thread(
-        target=_du_loop,
-        args=(data_dir, initial_delay),
-        daemon=True,
-        name="du-monitor",
-    )
-    thread.start()
-    logger.info("du monitor started (interval: %ds, initial delay: %.1fs)", DU_INTERVAL, initial_delay)
+        await asyncio.sleep(DU_INTERVAL)
 
 
 # Timeout for git clone operations (seconds)
@@ -388,25 +377,26 @@ GIT_CLONE_TIMEOUT = 120
 _URL_USERINFO_RE = re.compile(r"(://)[^@\s/]+(@)")
 
 
-def download_git_repo(git_url: str, target_dir: Path, access_token: str | None = None) -> None:
+async def download_git_repo(git_url: str, target_dir: Path, access_token: str | None = None) -> None:
     """Shallow-clone a git repository into ``target_dir`` (no subdirectory, no ``.git``)."""
-    target_dir.mkdir(parents=True, exist_ok=True)
+    await anyio.Path(target_dir).mkdir(parents=True, exist_ok=True)
     clone_url = _inject_token(git_url, access_token)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         clone_dir = Path(tmp_dir) / "repo"
-        _git(
+        await _git(
             ["clone", "--depth", "1", "--single-branch", "--no-tags", "--", clone_url, str(clone_dir)],
             label="clone",
             secret=access_token,
         )
 
-        git_dir = clone_dir / ".git"
-        if git_dir.exists():
-            shutil.rmtree(git_dir)
+        def finish() -> None:
+            git_dir = clone_dir / ".git"
+            if git_dir.exists():
+                shutil.rmtree(git_dir)
+            _move_contents(clone_dir, target_dir)
 
-        _move_contents(clone_dir, target_dir)
-
+        await anyio.to_thread.run_sync(finish)
         logger.info("Downloaded git repository from %s", git_url)
 
 
@@ -439,29 +429,31 @@ def _redact(text: str | None, secret: str | None) -> str:
     return _URL_USERINFO_RE.sub(r"\1***\2", text)
 
 
-def _git(args: list[str], *, cwd: Path | None = None, label: str = "operation", secret: str | None = None) -> None:
+async def _git(
+    args: list[str], *, cwd: Path | None = None, label: str = "operation", secret: str | None = None
+) -> None:
     """
     Run a git subprocess, logging only the redacted stderr.
 
     Raises:
-        InternalServerError: If the git command fails or times out.
+        InternalServerError: If the git command fails or times out (cause: CalledProcessError/TimeoutExpired).
     """
+    proc = await asyncio.create_subprocess_exec("git", *args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
-        subprocess.run(
-            ["git", *args],
-            check=True,
-            capture_output=True,
-            text=True,
-            cwd=cwd,
-            timeout=GIT_CLONE_TIMEOUT,
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=GIT_CLONE_TIMEOUT)
+    except TimeoutError:
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+        await proc.wait()
+        raise InternalServerError(f"Git {label} timed out after {GIT_CLONE_TIMEOUT}s") from subprocess.TimeoutExpired(
+            ["git", *args], GIT_CLONE_TIMEOUT
         )
-    except subprocess.CalledProcessError as e:
-        raw = e.stderr if isinstance(e.stderr, str) else ""
-        detail = _redact((raw or str(e)).strip(), secret)
+    if proc.returncode != 0:
+        raw = stderr.decode(errors="replace")
+        error = subprocess.CalledProcessError(proc.returncode or 1, ["git", *args], stdout, raw)
+        detail = _redact((raw or str(error)).strip(), secret)
         logger.error("Git %s failed: %s", label, detail or "git operation failed")
-        raise InternalServerError(description=f"Git {label} failed: {detail or 'git operation failed'}") from e
-    except subprocess.TimeoutExpired as e:
-        raise InternalServerError(description=f"Git {label} timed out after {GIT_CLONE_TIMEOUT}s") from e
+        raise InternalServerError(f"Git {label} failed: {detail or 'git operation failed'}") from error
 
 
 def _is_partial_clone_unsupported(exc: BaseException) -> bool:
@@ -502,22 +494,23 @@ def _move_contents(src_dir: Path, target_dir: Path) -> None:
         shutil.move(item, dest)
 
 
-def download_git_repo_module(git_url: str, module_path: str, target_dir: Path, access_token: str | None = None) -> None:
+async def download_git_repo_module(
+    git_url: str, module_path: str, target_dir: Path, access_token: str | None = None
+) -> None:
     """
-    Sparse-checkout a single module subdirectory into ``target_dir``.
+    Sparse-checkout a single module subdirectory into ``target_dir`` (404 when it is missing or escapes the clone).
 
     Raises:
-        NotFound: If ``module_path`` does not exist in the repository or escapes the clone.
         InternalServerError: If a git operation fails or times out.
     """
-    target_dir.mkdir(parents=True, exist_ok=True)
+    await anyio.Path(target_dir).mkdir(parents=True, exist_ok=True)
     clone_url = _inject_token(git_url, access_token)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         clone_dir = Path(tmp_dir) / "repo"
 
         try:
-            _git(
+            await _git(
                 [
                     "clone",
                     "--depth",
@@ -537,24 +530,41 @@ def download_git_repo_module(git_url: str, module_path: str, target_dir: Path, a
             # Retry only on partial-clone-unsupported; surface all other failures.
             if not _is_partial_clone_unsupported(exc):
                 raise
-            shutil.rmtree(clone_dir, ignore_errors=True)
-            _git(
+            await anyio.to_thread.run_sync(lambda: shutil.rmtree(clone_dir, ignore_errors=True))
+            await _git(
                 ["clone", "--depth", "1", "--single-branch", "--no-tags", "--", clone_url, str(clone_dir)],
                 label="clone",
                 secret=access_token,
             )
 
         # Configure sparse checkout for the selected module directory.
-        _git(["sparse-checkout", "init", "--no-cone"], cwd=clone_dir, label="sparse-checkout init", secret=access_token)
-        _git(["sparse-checkout", "set", module_path], cwd=clone_dir, label="sparse-checkout set", secret=access_token)
-        _git(["checkout"], cwd=clone_dir, label="checkout", secret=access_token)
+        await _git(
+            ["sparse-checkout", "init", "--no-cone"], cwd=clone_dir, label="sparse-checkout init", secret=access_token
+        )
+        await _git(
+            ["sparse-checkout", "set", module_path], cwd=clone_dir, label="sparse-checkout set", secret=access_token
+        )
+        await _git(["checkout"], cwd=clone_dir, label="checkout", secret=access_token)
 
-        # Reject symlink/traversal escapes before copying (could move other tenants' data).
-        clone_root = clone_dir.resolve()
-        module_dir = clone_dir / module_path
-        if not module_dir.resolve().is_dir() or _is_outside(module_dir, clone_root):
-            raise NotFound(description=f"Notebook module path '{module_path}' not found in repository.")
+        def finish() -> None:
+            # Reject symlink/traversal escapes before copying (could move other tenants' data).
+            clone_root = clone_dir.resolve()
+            module_dir = clone_dir / module_path
+            if not module_dir.resolve().is_dir() or _is_outside(module_dir, clone_root):
+                raise NotFound(f"Notebook module path '{module_path}' not found in repository.")
+            _move_contents(module_dir, target_dir)
 
-        _move_contents(module_dir, target_dir)
-
+        await anyio.to_thread.run_sync(finish)
         logger.info("Downloaded notebook module '%s' from %s", module_path, git_url)
+
+
+_FILENAME_STRIP_RE = re.compile(r"[^A-Za-z0-9_.-]")
+
+
+def secure_filename(filename: str) -> str:
+    """ASCII-only, separator-free version of an uploaded file name (werkzeug's algorithm); may be empty."""
+    filename = unicodedata.normalize("NFKD", filename).encode("ascii", "ignore").decode("ascii")
+    for sep in (os.sep, os.path.altsep):
+        if sep:
+            filename = filename.replace(sep, " ")
+    return _FILENAME_STRIP_RE.sub("", "_".join(filename.split())).strip("._")

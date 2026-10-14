@@ -1,68 +1,90 @@
 """Unit tests for Notebook.start() quota enforcement and pod info properties."""
 
-from datetime import datetime, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime
 from typing import ClassVar
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from clients.k8s import create_notebook_pod
 from config import MAX_NOTEBOOKS
 from enums import NotebookTier, PodStatus
-from errors import ApiError
-from flask.testing import FlaskClient
+from errors import ApiError, Forbidden
+from httpx import AsyncClient
+from kubernetes_asyncio.client.exceptions import ApiException
+from models import Experiment
 from models.notebook import Notebook
-from schemas.notebook import NotebookSchema
-from werkzeug.exceptions import BadRequest, Forbidden
+from schemas.experiment import Notebook as NotebookOut
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _make_notebook() -> Notebook:
+    return Notebook(
+        experiment_id="exp-test", token="test-token", experiment=Experiment(id="exp-test", name="Notebook test")
+    )
+
+
+@pytest.fixture(autouse=True)
+def pod_info() -> Iterator[AsyncMock]:
+    """Mock the pod read start() performs after creating the pod."""
+    with patch("models.notebook.k8s.get_pod_info", AsyncMock(return_value=(PodStatus.PENDING, None))) as info:
+        yield info
 
 
 class TestNotebookConfigRoute:
     """GET /notebook-config exposes the concurrent-notebook limit to clients."""
 
-    def test_includes_concurrent_limit(self, client: FlaskClient) -> None:
-        response = client.get("/dash/api/notebook-config")
+    async def test_includes_concurrent_limit(self, client: AsyncClient) -> None:
+        response = await client.get("/dash/api/notebook-config")
 
         assert response.status_code == 200
-        assert response.get_json()["concurrentLimit"] == MAX_NOTEBOOKS
+        assert response.json()["concurrentLimit"] == MAX_NOTEBOOKS
 
 
 class TestNotebookPodInfo:
-    """status and started_at share one cached K8s read per notebook instance."""
+    """status and started_at share one K8s read per refresh."""
 
-    def test_status_and_started_at_share_one_read(self) -> None:
-        started = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+    async def test_status_and_started_at_share_one_read(self, pod_info: AsyncMock) -> None:
+        started = datetime(2026, 8, 17, 12, 0, tzinfo=UTC)
+        pod_info.return_value = (PodStatus.RUNNING, started)
         notebook = Notebook(experiment_id="exp1", token="t")
-        with patch("models.notebook.k8s.get_pod_info", return_value=(PodStatus.RUNNING, started)) as mock_info:
-            assert notebook.status == PodStatus.RUNNING
-            assert notebook.started_at == started
-            mock_info.assert_called_once_with("notebook-exp1")
 
-    def test_started_at_none_when_pod_down(self) -> None:
-        notebook = Notebook(experiment_id="exp1", token="t")
-        with patch("models.notebook.k8s.get_pod_info", return_value=(PodStatus.DOWN, None)):
-            assert notebook.status == PodStatus.DOWN
-            assert notebook.started_at is None
+        await notebook.refresh()
 
-    def test_schema_dumps_started_at_as_iso8601(self) -> None:
-        """The declared field exists so the property matches the contract's format: date-time."""
-        started = datetime(2026, 8, 17, 12, 0, tzinfo=timezone.utc)
+        assert notebook.status == PodStatus.RUNNING
+        assert notebook.started_at == started
+        pod_info.assert_awaited_once_with("notebook-exp1")
+
+    async def test_started_at_none_when_pod_down(self, pod_info: AsyncMock) -> None:
+        pod_info.return_value = (PodStatus.DOWN, None)
         notebook = Notebook(experiment_id="exp1", token="t")
-        with patch("models.notebook.k8s.get_pod_info", return_value=(PodStatus.RUNNING, started)):
-            data = NotebookSchema().dump(notebook)
-        assert data["started_at"] == started.isoformat()
+
+        await notebook.refresh()
+
+        assert notebook.status == PodStatus.DOWN
+        assert notebook.started_at is None
+
+    async def test_reading_status_before_refresh_fails_loudly(self) -> None:
+        with pytest.raises(RuntimeError, match="before refresh"):
+            _ = Notebook(experiment_id="exp1", token="t").status
+
+    async def test_schema_dumps_started_at_as_iso8601(self, pod_info: AsyncMock) -> None:
+        """started_at matches the contract's format: date-time."""
+        started = datetime(2026, 8, 17, 12, 0, tzinfo=UTC)
+        pod_info.return_value = (PodStatus.RUNNING, started)
+        notebook = Notebook(id=1, experiment_id="exp1", token="t", gpu=False)
+        await notebook.refresh()
+
+        data = NotebookOut.model_validate(notebook).model_dump(mode="json")
+
+        assert data["started_at"] == "2026-08-17T12:00:00Z"
         assert "_pod_info" not in data
 
 
 class TestNotebookStartQuotaCheck:
     """Tests for the concurrent-notebook and quota-headroom guards in Notebook.start()."""
 
-    def _make_notebook(self) -> MagicMock:
-        nb = MagicMock()
-        nb.experiment_id = "exp-test"
-        nb.token = "test-token"
-        nb.experiment.archived_at = None
-        return nb
-
-    def test_raises_forbidden_when_concurrent_limit_reached(self) -> None:
+    async def test_raises_forbidden_when_concurrent_limit_reached(self) -> None:
         """start() must raise a 403 ApiError without creating a pod when notebook count is at the limit."""
         with (
             patch("models.notebook.k8s.count_notebook_pods", return_value=2),
@@ -70,13 +92,13 @@ class TestNotebookStartQuotaCheck:
             patch("models.notebook.k8s.create_notebook_pod") as mock_create,
         ):
             with pytest.raises(ApiError) as exc_info:
-                Notebook.start(self._make_notebook())
+                await _make_notebook().start()
 
-            assert exc_info.value.code == 403
+            assert exc_info.value.status_code == 403
             assert exc_info.value.problem_type == "urn:mddash:notebook-quota-exceeded"
             mock_create.assert_not_called()
 
-    def test_raises_forbidden_when_quota_headroom_insufficient(self) -> None:
+    async def test_raises_forbidden_when_quota_headroom_insufficient(self) -> None:
         """start() must raise Forbidden without creating a pod when quota would be exceeded."""
         with (
             patch("models.notebook.k8s.count_notebook_pods", return_value=0),
@@ -85,11 +107,11 @@ class TestNotebookStartQuotaCheck:
             patch("models.notebook.k8s.create_notebook_pod") as mock_create,
         ):
             with pytest.raises(Forbidden):
-                Notebook.start(self._make_notebook())
+                await _make_notebook().start()
 
             mock_create.assert_not_called()
 
-    def test_creates_pod_when_quota_headroom_sufficient(self) -> None:
+    async def test_creates_pod_when_quota_headroom_sufficient(self) -> None:
         """start() must proceed to pod creation when all quota checks pass."""
         with (
             patch("models.notebook.k8s.count_notebook_pods", return_value=0),
@@ -99,11 +121,11 @@ class TestNotebookStartQuotaCheck:
             patch("models.notebook.k8s.create_service"),
             patch("models.notebook.caddy.add_proxy_route", return_value="route-id"),
         ):
-            Notebook.start(self._make_notebook())
+            await _make_notebook().start()
 
             mock_create.assert_called_once()
 
-    def test_service_is_owned_by_the_pod(self) -> None:
+    async def test_service_is_owned_by_the_pod(self) -> None:
         with (
             patch("models.notebook.k8s.count_notebook_pods", return_value=0),
             patch("models.notebook.MAX_NOTEBOOKS", 2),
@@ -112,7 +134,7 @@ class TestNotebookStartQuotaCheck:
             patch("models.notebook.k8s.create_service") as mock_svc,
             patch("models.notebook.caddy.add_proxy_route", return_value="route-id"),
         ):
-            Notebook.start(self._make_notebook())
+            await _make_notebook().start()
 
             mock_svc.assert_called_once_with("svc-exp-test", "notebook-exp-test", "uid-123")
 
@@ -125,14 +147,7 @@ class TestNotebookStartTierAndGpu:
         "limits": {"cpu": "2", "memory": "4Gi"},
     }
 
-    def _make_notebook(self) -> MagicMock:
-        nb = MagicMock()
-        nb.experiment_id = "exp-test"
-        nb.token = "test-token"
-        nb.experiment.archived_at = None
-        return nb
-
-    def test_default_tier_uses_small(self) -> None:
+    async def test_default_tier_uses_small(self) -> None:
         """start() with no tier argument defaults to NotebookTier.SMALL."""
         resources = self._MOCK_RESOURCES
         with (
@@ -144,10 +159,10 @@ class TestNotebookStartTierAndGpu:
             patch("models.notebook.k8s.create_service"),
             patch("models.notebook.caddy.add_proxy_route", return_value="route-id"),
         ):
-            Notebook.start(self._make_notebook())
+            await _make_notebook().start()
             mock_tier_res.assert_called_once_with(NotebookTier.SMALL)
 
-    def test_selected_tier_scales_resources(self) -> None:
+    async def test_selected_tier_scales_resources(self) -> None:
         """start() passes the requested tier to get_tier_resources."""
         resources = self._MOCK_RESOURCES
         with (
@@ -159,10 +174,10 @@ class TestNotebookStartTierAndGpu:
             patch("models.notebook.k8s.create_service"),
             patch("models.notebook.caddy.add_proxy_route", return_value="route-id"),
         ):
-            Notebook.start(self._make_notebook(), tier=NotebookTier.MEDIUM)
+            await _make_notebook().start(tier=NotebookTier.MEDIUM)
             mock_tier_res.assert_called_once_with(NotebookTier.MEDIUM)
 
-    def test_gpu_passed_to_create_pod(self) -> None:
+    async def test_gpu_passed_to_create_pod(self) -> None:
         """start() with gpu=True forwards gpu=True to create_notebook_pod."""
         resources = self._MOCK_RESOURCES
         with (
@@ -175,33 +190,32 @@ class TestNotebookStartTierAndGpu:
             patch("models.notebook.k8s.create_service"),
             patch("models.notebook.caddy.add_proxy_route", return_value="route-id"),
         ):
-            Notebook.start(self._make_notebook(), gpu=True)
+            await _make_notebook().start(gpu=True)
             assert mock_create.call_args.kwargs["gpu"] is True
 
-    def test_invalid_tier_raises_bad_request(self) -> None:
-        """start() with an unrecognized tier string raises BadRequest without creating a pod."""
+    async def test_invalid_tier_is_rejected_at_the_route(self, client: AsyncClient, db_session: AsyncSession) -> None:
+        """An unrecognized tier is a 400 before any pod is created."""
+        db_session.add(Experiment(id="exp01", name="Tier", notebook=Notebook(experiment_id="exp01")))
+        await db_session.commit()
         with patch("models.notebook.k8s.create_notebook_pod") as mock_create:
-            with pytest.raises(BadRequest):
-                Notebook.start(self._make_notebook(), tier="99x")  # type: ignore
-            mock_create.assert_not_called()
+            response = await client.post("/dash/api/experiments/exp01/notebook", json={"tier": "99x"})
+        assert response.status_code == 400
+        mock_create.assert_not_called()
 
 
 class TestCreateNotebookPodLifecycleFlags:
     """Verify that create_notebook_pod() injects idle-culling flags and MY_POD_NAME into the pod spec."""
 
-    def test_lifecycle_flags_in_pod_spec(self, k8s_module) -> None:
+    async def test_lifecycle_flags_in_pod_spec(self, mock_k8s: tuple[AsyncMock, AsyncMock]) -> None:
         """create_notebook_pod() must include cull_idle_timeout, shutdown_no_activity_timeout, and MY_POD_NAME."""
-        from kubernetes.client.rest import ApiException
-
-        mock_core = MagicMock()
+        mock_core, _ = mock_k8s
         mock_core.read_namespaced_pod.side_effect = ApiException(status=404)
-        with patch("clients.k8s.get_core_v1", return_value=mock_core):
-            create_notebook_pod(
-                name="notebook-test",
-                experiment_id="test",
-                prefix="/notebook/test",
-                token="tok",
-            )
+        await create_notebook_pod(
+            name="notebook-test",
+            experiment_id="test",
+            prefix="/notebook/test",
+            token="tok",
+        )
 
         body = mock_core.create_namespaced_pod.call_args.kwargs["body"]
         jupyter_container = next(c for c in body["spec"]["containers"] if c["name"] == "jupyter")

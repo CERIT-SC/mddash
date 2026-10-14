@@ -1,37 +1,30 @@
 """
-Pytest configuration and shared fixtures for dashboard API tests.
+Shared fixtures for dashboard API tests.
 
-This module provides:
-- Flask test client with in-memory SQLite database
-- Mocked K8s client to avoid cluster dependencies
-- Mocked external HTTP requests (mdrun-api, tuner, etc.)
-- SQLAlchemy session fixtures with automatic cleanup
+Every test gets its own DATA_DIR and SQLite file, an ASGI client, respx-mocked
+HTTP (unmocked upstream calls fail loudly), and AsyncMock Kubernetes clients.
 """
 
 import os
 import sys
 import tempfile
-import types
-from datetime import datetime, timezone
+from collections.abc import AsyncIterator, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Generator
-from unittest.mock import MagicMock, patch
+from types import ModuleType
+from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
-from flask import Flask
-from flask.testing import FlaskClient
-from pytest_mock import MockerFixture
+import respx
 
 # Add parent directory to path so we can import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# Create a temporary directory for DATA_DIR BEFORE config.py is imported
-_test_data_dir = tempfile.mkdtemp(prefix="mddash_test_")
-
-# Set environment variables BEFORE importing app modules
-# This prevents config.py from failing on missing K8s setup
-os.environ["DATA_DIR"] = _test_data_dir
+# config.py reads these at import time.
+os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="mddash_test_")
 os.environ["JUPYTERHUB_USER"] = "testuser"
+os.environ.pop("JUPYTERHUB_SERVICE_PREFIX", None)
 os.environ["POD_NAMESPACE"] = "test-namespace"
 os.environ["HUB_NAMESPACE"] = "test-hub-namespace"
 os.environ["PVC_NAME"] = "test-pvc"
@@ -40,168 +33,126 @@ os.environ["NS_MAX_NOTEBOOKS"] = "2"
 os.environ["TUNER_USER"] = "tuner"
 os.environ["TUNER_PASSWORD"] = "secret"
 
-# Mock K8s configuration to prevent failure during module import
-with (
-    patch("kubernetes.config.load_incluster_config"),
-    patch("kubernetes.client.CoreV1Api"),
-    patch("kubernetes.client.BatchV1Api"),
-):
-    from errors import register_error_handlers
-    from extensions import db, ma
-    from routes import (
-        amber_bp,
-        analysis_bp,
-        experiments_bp,
-        files_bp,
-        gmx_bp,
-        mdrepo_bp,
-        misc_bp,
-        notebook_bp,
-        notebook_config_bp,
-        simulations_bp,
-        tuner_bp,
+import cache
+import db
+from app import create_app
+from clients import http as http_client
+from clients import k8s
+from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import AsyncSession
+
+# Modules binding DATA_DIR at import (`from config import DATA_DIR`).
+_DATA_DIR_MODULES = (
+    "config",
+    "models.experiment",
+    "models.experiment_sources",
+    "models.simulation",
+    "models.analysis_job",
+    "models.gromacs_job",
+    "models.amber_job",
+    "routes.files",
+    "routes.misc",
+    "app",
+)
+
+
+@pytest.fixture(autouse=True)
+def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Point every DATA_DIR binding at the test's tmp_path."""
+    for name in _DATA_DIR_MODULES:
+        module = sys.modules.get(name)
+        if isinstance(module, ModuleType) and hasattr(module, "DATA_DIR"):
+            monkeypatch.setattr(module, "DATA_DIR", tmp_path)
+    return tmp_path
+
+
+@pytest.fixture(autouse=True)
+def _clear_caches() -> Iterator[None]:
+    caches = (
+        cache.mdrepo_status_cache,
+        cache.tuner_status_cache,
+        cache.tuner_last_known_status,
+        cache.analysis_status_cache,
+        cache.simulation_status_cache,
+        cache.simulation_log_lines_cache,
+        cache.archive_status_cache,
     )
+    for c in caches:
+        c.clear()
+    yield
+    for c in caches:
+        c.clear()
 
 
-@pytest.fixture
-def k8s_module() -> Generator[types.ModuleType, None, None]:
-    """clients.k8s with module-global symbols loaded; resets so later tests re-load under the session mock."""
-    from clients import k8s
+def _running_pod() -> MagicMock:
+    # Plausible pod shape: default MagicMock attributes produce truthy
+    # deletion_timestamps and non-datetime start_times that break serialization.
+    pod = MagicMock()
+    pod.metadata.deletion_timestamp = None
+    pod.status.phase = "Running"
+    pod.status.container_statuses = []
+    pod.status.start_time = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
+    return pod
 
+
+@pytest.fixture(autouse=True)
+def mock_k8s() -> Iterator[tuple[AsyncMock, AsyncMock]]:
+    """AsyncMock CoreV1Api/BatchV1Api clients; tests configure return values per call."""
+    k8s.reset_k8s_clients_for_tests()
     k8s._load_k8s()
-    yield k8s
+    core_v1, batch_v1 = AsyncMock(), AsyncMock()
+    core_v1.read_namespaced_pod.return_value = _running_pod()
+    core_v1.list_namespaced_pod.return_value = MagicMock(items=[])
+    k8s._core_v1, k8s._batch_v1 = core_v1, batch_v1
+    yield core_v1, batch_v1
     k8s.reset_k8s_clients_for_tests()
 
 
-@pytest.fixture(scope="session")
-def mock_k8s() -> Generator[MagicMock, None, None]:
-    """
-    Mock the Kubernetes client for all tests.
+@pytest.fixture(autouse=True)
+def http_mock() -> Iterator[respx.MockRouter]:
+    """Mock all outgoing HTTP; a request without a matching route fails like an unreachable upstream."""
+    with respx.mock(assert_all_called=False) as router:
+        resolve = router.aresolve
 
-    This prevents any actual K8s API calls during testing.
+        async def unreachable_unless_mocked(request: httpx.Request) -> object:
+            try:
+                return await resolve(request)
+            except respx.models.AllMockedAssertionError as e:
+                raise httpx.ConnectError(str(e), request=request) from e
 
-    Yields:
-        MagicMock: The mocked CoreV1Api class.
-    """
-    with (
-        patch("kubernetes.config.load_incluster_config"),
-        patch("kubernetes.client.CoreV1Api") as mock_core_api,
-        patch("kubernetes.client.BatchV1Api") as mock_batch_api,
-        patch("kubernetes.client.RbacAuthorizationV1Api") as mock_rbac_api,
-    ):
-        # Configure mock returns
-        mock_core_api.return_value = MagicMock()
-        mock_batch_api.return_value = MagicMock()
-        mock_rbac_api.return_value = MagicMock()
-        # Plausible pod shape: default MagicMock attributes produce truthy
-        # deletion_timestamps and non-datetime start_times that break serialization.
-        pod = MagicMock()
-        pod.metadata.deletion_timestamp = None
-        pod.status.phase = "Running"
-        pod.status.container_statuses = []
-        pod.status.start_time = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
-        mock_core_api.return_value.read_namespaced_pod.return_value = pod
-        yield mock_core_api
+        router.aresolve = unreachable_unless_mocked  # ty: ignore[invalid-assignment]
+        yield router
 
 
 @pytest.fixture
-def app(mock_k8s: MagicMock, tmp_path: Path) -> Generator[Flask, None, None]:
-    """
-    Create a Flask application configured for testing.
-
-    Uses an in-memory SQLite database and temporary data directory.
-    The mock_k8s fixture is required to ensure K8s is mocked before app import.
-
-    Yields:
-        Flask: The configured test application instance.
-    """
-    # Create a fresh app for each test
-    test_app = Flask(__name__)
-    test_app.config["TESTING"] = True
-    test_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    test_app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    test_app.config["SECRET_KEY"] = "test-secret-key"
-
-    db.init_app(test_app)
-    ma.init_app(test_app)
-
-    # Patch DATA_DIR and import routes with the patch active
-    with (
-        patch.dict("config.__dict__", {"DATA_DIR": tmp_path}),
-        patch("models.analysis_job.DATA_DIR", tmp_path),
-        patch("models.simulation.DATA_DIR", tmp_path),
-    ):
-        # Register blueprints
-        test_app.register_blueprint(experiments_bp)
-        test_app.register_blueprint(notebook_bp)
-        test_app.register_blueprint(notebook_config_bp)
-        test_app.register_blueprint(analysis_bp)
-        test_app.register_blueprint(tuner_bp)
-        test_app.register_blueprint(gmx_bp)
-        test_app.register_blueprint(amber_bp)
-        test_app.register_blueprint(files_bp)
-        test_app.register_blueprint(misc_bp)
-        test_app.register_blueprint(mdrepo_bp)
-        test_app.register_blueprint(simulations_bp)
-        register_error_handlers(test_app)
-
-        with test_app.app_context():
-            db.create_all()
-            yield test_app
-            db.drop_all()
+async def db_session(tmp_path: Path) -> AsyncIterator[AsyncSession]:
+    """Provide a session on the test's own database; requests use separate sessions on the same file."""
+    engine = db.init_engine(tmp_path / "test.db")
+    async with engine.begin() as conn:
+        await conn.run_sync(db.Base.metadata.create_all)
+    async with db.session_factory()() as session:
+        yield session
+    await http_client.aclose()
+    await engine.dispose()
 
 
 @pytest.fixture
-def client(app: Flask) -> FlaskClient:
-    """
-    Provide a Flask test client for making requests.
-
-    Returns:
-        FlaskClient: A test client bound to the test application.
-    """
-    return app.test_client()
+def app(db_session: AsyncSession) -> FastAPI:
+    """Build the real application bound to the test database (lifespan startup is not run)."""
+    return create_app()
 
 
 @pytest.fixture
-def db_session(app: Flask) -> Generator:
-    """
-    Provide a database session for direct model testing.
-
-    Automatically rolls back changes after each test.
-
-    Yields:
-        Generator: The active SQLAlchemy session.
-    """
-    with app.app_context():
-        yield db.session
-        db.session.rollback()
-
-
-@pytest.fixture
-def mock_requests(mocker: MockerFixture) -> tuple:
-    """
-    Mock the requests library for external HTTP calls.
-
-    Use this to simulate responses from:
-    - RCSB PDB API
-    - Zenodo API
-    - mdrun-api
-    - Tuner API
-
-    Returns:
-        tuple: A pair of (mock_get, mock_post) patch objects.
-    """
-    return mocker.patch("requests.get"), mocker.patch("requests.post")
+async def client(app: FastAPI) -> AsyncIterator[httpx.AsyncClient]:
+    """ASGI client; https so the Secure session cookie round-trips."""
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    async with httpx.AsyncClient(transport=transport, base_url="https://testserver") as c:
+        yield c
 
 
 @pytest.fixture
 def sample_pdb_content() -> bytes:
-    """
-    Return minimal valid PDB file content for testing.
-
-    Returns:
-        bytes: Minimal valid PDB file bytes for use in upload tests.
-    """
+    """Minimal valid PDB file content."""
     return b"""HEADER    TEST PROTEIN
 ATOM      1  N   ALA A   1       0.000   0.000   0.000  1.00  0.00           N
 ATOM      2  CA  ALA A   1       1.458   0.000   0.000  1.00  0.00           C

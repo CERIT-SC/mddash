@@ -17,40 +17,35 @@ from shutil import move
 from typing import TYPE_CHECKING
 from urllib.parse import urljoin, urlparse
 
-import requests
+import anyio
+import httpx
 from clients import mdposit
+from clients.http import client
 from config import DATA_DIR
-from errors import ApiError
+from errors import ApiError, BadRequest, InternalServerError, NotFound
 from validators import validate_fetch_target, validate_http_url
-from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 
 if TYPE_CHECKING:
+    from .experiment import Experiment
     from .simulation import Simulation
 
 logger = logging.getLogger(__name__)
 
 _REDIRECT_STATUSES = {301, 302, 303, 307, 308}
 _PDB_STRUCTURE_RECORDS = {"ATOM", "HETATM"}
+_DOWNLOAD_CHUNK_BYTES = 128 * 1024
 
 
-def list_simulations(experiment_id: str) -> list["Simulation"]:
-    """
-    Deferred import to avoid a circular dependency with the Simulation model.
-
-    Returns:
-        List of Simulation instances.
-    """
+def list_simulations(experiment: Experiment) -> list[Simulation]:
+    """List the simulations of an experiment (deferred import: Simulation imports the Experiment model)."""
     from .simulation import Simulation  # ruff:ignore[import-outside-top-level]
 
-    return Simulation.list(experiment_id)
+    return Simulation.list(experiment.id, experiment)
 
 
-def fetch_pdb(url: str, *, max_redirects: int = 5) -> requests.Response:
+async def fetch_pdb(url: str, *, max_redirects: int = 5) -> httpx.Response:
     """
-    Fetch a PDB URL without auto-following redirects.
-
-    Each hop is SSRF-validated to prevent internal-network access via
-    redirect chains.
+    Fetch a PDB URL, following redirects manually so every hop is SSRF-validated.
 
     Returns:
         The final non-redirect response.
@@ -59,15 +54,15 @@ def fetch_pdb(url: str, *, max_redirects: int = 5) -> requests.Response:
         InternalServerError: If the redirect chain exceeds max_redirects.
     """
     for _ in range(max_redirects + 1):
-        validate_fetch_target(url)
-        response = requests.get(url, timeout=30, allow_redirects=False)
+        await anyio.to_thread.run_sync(validate_fetch_target, url)
+        response = await client().get(url, timeout=30, follow_redirects=False)
         if response.status_code not in _REDIRECT_STATUSES:
             return response
         location = response.headers.get("Location")
         if not location:
             return response
         url = validate_http_url(urljoin(url, location))
-    raise InternalServerError(description="Too many redirects while downloading PDB file.")
+    raise InternalServerError("Too many redirects while downloading PDB file.")
 
 
 def validate_pdb_content(content: bytes) -> None:
@@ -85,20 +80,15 @@ def validate_pdb_content(content: bytes) -> None:
     for line in text.splitlines():
         if line[:6].strip() in _PDB_STRUCTURE_RECORDS:
             return
-    raise BadRequest(description="Downloaded content is not a valid PDB file (no ATOM or HETATM records).")
+    raise BadRequest("Downloaded content is not a valid PDB file (no ATOM or HETATM records).")
 
 
-def resolve_repo_link(repo_link: str) -> str:
-    """
-    Follow DOI redirects to reach the final repository URL.
-
-    Returns:
-        The resolved URL.
-    """
+async def resolve_repo_link(repo_link: str) -> str:
+    """Follow DOI redirects to reach the final repository URL."""
     resolved = repo_link.strip().rstrip("/")
     if urlparse(resolved).netloc == "doi.org":
-        response = requests.head(resolved, allow_redirects=True, timeout=30)
-        resolved = response.url.rstrip("/")
+        response = await client().head(resolved, follow_redirects=True, timeout=30)
+        resolved = str(response.url).rstrip("/")
     return resolved
 
 
@@ -115,11 +105,16 @@ def safe_extract_zip(zf: zipfile.ZipFile, output_dir: Path) -> None:
         try:
             output_path.relative_to(resolved_output_dir)
         except ValueError as exc:
-            raise BadRequest(description=f"Unsafe path in repository archive: {member.filename}") from exc
+            raise BadRequest(f"Unsafe path in repository archive: {member.filename}") from exc
         zf.extract(member, output_dir)
 
 
-def import_invenio_repo(repo_link: str, experiment_id: str) -> None:
+def _extract_zip_file(zip_path: Path, output_dir: Path) -> None:
+    with zipfile.ZipFile(zip_path) as zf:
+        safe_extract_zip(zf, output_dir)
+
+
+async def import_invenio_repo(repo_link: str, experiment_id: str) -> None:
     """
     Download and extract an InvenioRDM-compatible repository (Zenodo, MDRepo, etc.).
 
@@ -136,9 +131,9 @@ def import_invenio_repo(repo_link: str, experiment_id: str) -> None:
 
     with tempfile.NamedTemporaryFile(suffix=".zip") as tmp_file:
         tmp_path = Path(tmp_file.name)
-        with requests.get(url, stream=True, timeout=300) as response:
+        async with client().stream("GET", url, timeout=300) as response:
             if response.status_code == HTTPStatus.NOT_FOUND:
-                raise NotFound(description=f"Repository '{repo_link}' not found.")
+                raise NotFound(f"Repository '{repo_link}' not found.")
             if response.status_code != HTTPStatus.OK:
                 raise ApiError(
                     HTTPStatus.INTERNAL_SERVER_ERROR,
@@ -146,16 +141,23 @@ def import_invenio_repo(repo_link: str, experiment_id: str) -> None:
                     "urn:mddash:upstream-download-failed",
                     "The repository couldn't be fetched; check the URL or try again in a moment.",
                 )
+            async with await anyio.open_file(tmp_path, "wb") as out:
+                async for chunk in response.aiter_bytes(_DOWNLOAD_CHUNK_BYTES):
+                    await out.write(chunk)
 
-            for chunk in response.iter_content(chunk_size=128 * 1024):
-                tmp_file.write(chunk)
-
-        tmp_file.flush()
-        with zipfile.ZipFile(tmp_path) as zf:
-            safe_extract_zip(zf, DATA_DIR / experiment_id)
+        await anyio.to_thread.run_sync(_extract_zip_file, tmp_path, DATA_DIR / experiment_id)
 
 
-def import_mdposit_repo(repo_link: str, experiment_id: str) -> None:
+def _move_downloads(downloaded_paths: list[Path], tmp_dir: Path, output_dir: Path) -> None:
+    resolved_tmp_dir = tmp_dir.resolve()
+    for downloaded_path in downloaded_paths:
+        relative_path = downloaded_path.resolve().relative_to(resolved_tmp_dir)
+        destination_path = output_dir / relative_path
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        move(downloaded_path, destination_path)
+
+
+async def import_mdposit_repo(repo_link: str, experiment_id: str) -> None:
     """
     Download an MDPosit project into the experiment directory.
 
@@ -164,27 +166,20 @@ def import_mdposit_repo(repo_link: str, experiment_id: str) -> None:
     """
     accession = mdposit.extract_accession(repo_link)
     if not accession:
-        raise BadRequest(description="Missing MDPosit project accession.")
+        raise BadRequest("Missing MDPosit project accession.")
 
     output_dir = DATA_DIR / experiment_id
-    output_dir.mkdir(parents=True, exist_ok=True)
+    await anyio.Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     try:
-        mdposit.get_project(accession)
+        await mdposit.get_project(accession)
         with tempfile.TemporaryDirectory(dir=output_dir) as tmp_dir_name:
             tmp_dir = Path(tmp_dir_name)
-            downloaded_paths = mdposit.download_project(accession, tmp_dir)
-            resolved_tmp_dir = tmp_dir.resolve()
-
-            for downloaded_path in downloaded_paths:
-                source_path = Path(downloaded_path)
-                relative_path = source_path.resolve().relative_to(resolved_tmp_dir)
-                destination_path = output_dir / relative_path
-                destination_path.parent.mkdir(parents=True, exist_ok=True)
-                move(source_path, destination_path)
+            downloaded_paths = await mdposit.download_project(accession, tmp_dir)
+            await anyio.to_thread.run_sync(_move_downloads, downloaded_paths, tmp_dir, output_dir)
     except ValueError as exc:
-        raise BadRequest(description=str(exc)) from exc
-    except requests.HTTPError as exc:
+        raise BadRequest(str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
         raise ApiError(
             HTTPStatus.INTERNAL_SERVER_ERROR,
             "Failed to download MDPosit project.",

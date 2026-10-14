@@ -7,6 +7,9 @@
  */
 import type { StatisticalSeriesResultY } from './statisticalSeriesResultY.ts';
 
+/**
+ * Per-key statistical series.
+ */
 export interface StatisticalSeriesResult {
   start?: number;
   step: number;

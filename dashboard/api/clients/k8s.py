@@ -1,32 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import logging
-import threading
 import time
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Callable, cast
-
-if TYPE_CHECKING:
-    from datetime import datetime
-
-    from enums import NotebookTier
-
-    # Available at runtime via _load_k8s() populating module globals.
-    from kubernetes import config  # ruff:ignore[runtime-import-in-type-checking-block]
-    from kubernetes.client import (  # ruff:ignore[runtime-import-in-type-checking-block]
-        BatchV1Api,
-        CoreV1Api,
-        V1DeleteOptions,
-        V1Job,
-        V1ObjectMeta,
-        V1OwnerReference,
-        V1Pod,
-        V1PodList,
-        V1Service,
-        V1ServicePort,
-        V1ServiceSpec,
-    )
-    from kubernetes.client.rest import ApiException  # ruff:ignore[runtime-import-in-type-checking-block]
+from typing import TYPE_CHECKING, Any, cast
 
 from config import (
     CPU_LIMIT_QUOTA,
@@ -42,22 +20,14 @@ from config import (
 )
 from enums import JobStatus, PodStatus
 
-logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from datetime import datetime
 
-_k8s_lock = threading.Lock()
-_k8s_loaded = False
-_k8s_config_loaded = False
-_core_v1: CoreV1Api | None = None
-_batch_v1: BatchV1Api | None = None
+    from enums import NotebookTier
 
-
-def _load_k8s() -> None:
-    """Import kubernetes symbols into module globals on first k8s use."""
-    global _k8s_loaded  # ruff:ignore[global-statement]
-    if _k8s_loaded:
-        return
-    import kubernetes.config  # ruff:ignore[import-outside-top-level]
-    from kubernetes.client import (  # ruff:ignore[import-outside-top-level]
+    # Available at runtime via _load_k8s() populating module globals.
+    from kubernetes_asyncio.client import (  # ruff:ignore[runtime-import-in-type-checking-block]
+        ApiClient,
         BatchV1Api,
         CoreV1Api,
         V1DeleteOptions,
@@ -67,11 +37,36 @@ def _load_k8s() -> None:
         V1ServicePort,
         V1ServiceSpec,
     )
-    from kubernetes.client.rest import ApiException  # ruff:ignore[import-outside-top-level]
+    from kubernetes_asyncio.client.exceptions import ApiException  # ruff:ignore[runtime-import-in-type-checking-block]
 
-    g = globals()
-    g["config"] = kubernetes.config
-    g.update(
+logger = logging.getLogger(__name__)
+
+_k8s_loaded = False
+_api_client: ApiClient | None = None
+_core_v1: CoreV1Api | None = None
+_batch_v1: BatchV1Api | None = None
+
+
+def _load_k8s() -> None:
+    """Import kubernetes_asyncio symbols into module globals on first k8s use (the import is slow)."""
+    global _k8s_loaded  # ruff:ignore[global-statement]
+    if _k8s_loaded:
+        return
+    from kubernetes_asyncio.client import (  # ruff:ignore[import-outside-top-level]
+        ApiClient,
+        BatchV1Api,
+        CoreV1Api,
+        V1DeleteOptions,
+        V1ObjectMeta,
+        V1OwnerReference,
+        V1Service,
+        V1ServicePort,
+        V1ServiceSpec,
+    )
+    from kubernetes_asyncio.client.exceptions import ApiException  # ruff:ignore[import-outside-top-level]
+
+    globals().update(
+        ApiClient=ApiClient,
         BatchV1Api=BatchV1Api,
         CoreV1Api=CoreV1Api,
         V1DeleteOptions=V1DeleteOptions,
@@ -85,22 +80,22 @@ def _load_k8s() -> None:
     _k8s_loaded = True
 
 
-def _ensure_k8s_config() -> None:
-    global _k8s_config_loaded  # ruff:ignore[global-statement]
-    if not _k8s_config_loaded:
+def _get_api_client() -> ApiClient:
+    global _api_client  # ruff:ignore[global-statement]
+    if _api_client is None:
         _load_k8s()
+        from kubernetes_asyncio import config  # ruff:ignore[import-outside-top-level]
+
         config.load_incluster_config()
-        _k8s_config_loaded = True
+        _api_client = ApiClient()
+    return _api_client
 
 
 def get_core_v1() -> CoreV1Api:
     """Return a cached CoreV1Api client, loading in-cluster config on first use."""
     global _core_v1  # ruff:ignore[global-statement]
     if _core_v1 is None:
-        with _k8s_lock:
-            if _core_v1 is None:
-                _ensure_k8s_config()
-                _core_v1 = CoreV1Api()
+        _core_v1 = CoreV1Api(_get_api_client())
     return _core_v1
 
 
@@ -108,20 +103,30 @@ def get_batch_v1() -> BatchV1Api:
     """Return a cached BatchV1Api client, loading in-cluster config on first use."""
     global _batch_v1  # ruff:ignore[global-statement]
     if _batch_v1 is None:
-        with _k8s_lock:
-            if _batch_v1 is None:
-                _ensure_k8s_config()
-                _batch_v1 = BatchV1Api()
+        _batch_v1 = BatchV1Api(_get_api_client())
     return _batch_v1
 
 
+async def aclose() -> None:
+    """Close the shared API client (application shutdown)."""
+    if _api_client is not None:
+        await _api_client.close()
+    reset_k8s_clients_for_tests()
+
+
 def reset_k8s_clients_for_tests() -> None:
-    """Reset cached Kubernetes clients for isolated unit tests."""
-    global _batch_v1, _core_v1, _k8s_config_loaded, _k8s_loaded  # ruff:ignore[global-statement]
+    """Drop cached Kubernetes clients so the next call re-initializes them."""
+    global _api_client, _batch_v1, _core_v1, _k8s_loaded  # ruff:ignore[global-statement]
+    _api_client = None
     _core_v1 = None
     _batch_v1 = None
-    _k8s_config_loaded = False
     _k8s_loaded = False
+
+
+def is_api_exception(exc: BaseException, status: int | None = None) -> bool:
+    """Whether `exc` is a Kubernetes ApiException (optionally with a given HTTP status)."""
+    _load_k8s()
+    return isinstance(exc, ApiException) and (status is None or exc.status == status)
 
 
 def get_container(
@@ -135,10 +140,7 @@ def get_container(
     resources: dict | None = None,
 ) -> dict:
     """
-    Create a container specification with security context and volume mounts.
-
-    Generates a Kubernetes container spec with security best practices (non-root user,
-    dropped capabilities, seccomp profile) and mounts the shared volume at /mddash.
+    Container spec with the e-INFRA security context and the shared volume at /mddash.
 
     Args:
         name: The name of the container.
@@ -148,12 +150,9 @@ def get_container(
         command: The command to run in the container.
         env: Optional list of environment variable dictionaries with 'name' and 'value' keys.
         set_working_dir: Whether to set the working directory to /mddash/{experiment_id}.
-        resources: Optional resource requests/limits dict. Defaults to 100m CPU and 128Mi memory.
-
-    Returns:
-        dict: Container specification dictionary for Kubernetes pod/job manifest.
+        resources: Optional resource requests/limits dict.
     """
-    container = {
+    container: dict[str, Any] = {
         "securityContext": {
             "runAsUser": 1000,
             "runAsGroup": 1000,
@@ -180,36 +179,26 @@ def get_container(
     return container
 
 
-def create_notebook_pod(
+async def create_notebook_pod(
     name: str,
     experiment_id: str,
     prefix: str,
     token: str,
     notebook_resources: dict | None = None,
     gpu: bool = False,
-    tier: "NotebookTier | None" = None,
+    tier: NotebookTier | None = None,
 ) -> str:
     """
     Create a JupyterLab notebook pod for experiment setup.
 
-    Creates a pod with a single Jupyter container. GROMACS and AmberTools
-    binaries are bundled in the notebook image, so no sidecar is needed.
-
-    Args:
-        name: The name of the pod to create.
-        experiment_id: The ID of the experiment (used for directory path).
-        prefix: The base URL prefix for the notebook server.
-        token: Authentication token for accessing the notebook.
-        notebook_resources: Resource requests/limits for the Jupyter container.
-        gpu: Whether to attach a GPU to the jupyter container.
-        tier: The resource tier for pod labeling.
+    GROMACS and AmberTools binaries are bundled in the notebook image, so no sidecar is needed.
 
     Returns:
         The UID of the pod, for use as an owner reference on its service.
     """
     core_v1 = get_core_v1()
     try:
-        existing = core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE)
+        existing = await core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE)
         logger.warning(f"Pod {name} already exists in namespace {NAMESPACE}. Skipping creation.")
         return str(existing.metadata.uid)
     except ApiException as e:
@@ -218,7 +207,7 @@ def create_notebook_pod(
 
     volume_name = "shared-data"
 
-    # Deep copy notebook resources to avoid mutating the original when adding GPU
+    # Copy notebook resources to avoid mutating the original when adding GPU
     effective_nb = {k: dict(v) for k, v in (notebook_resources or {}).items()}
     if gpu and GPU_TYPE:
         effective_nb.setdefault("requests", {})[GPU_TYPE] = "1"
@@ -271,11 +260,12 @@ def create_notebook_pod(
         },
     }
 
-    created = core_v1.create_namespaced_pod(namespace=NAMESPACE, body=pod_manifest)
+    # The client accepts plain manifest dicts; its stubs only declare model objects.
+    created = await core_v1.create_namespaced_pod(namespace=NAMESPACE, body=cast("Any", pod_manifest))
     return str(created.metadata.uid)
 
 
-def create_job(
+async def create_job(
     name: str,
     image: str,
     experiment_id: str,
@@ -283,28 +273,21 @@ def create_job(
     resources: dict | None = None,
 ) -> None:
     """
-    Create a Kubernetes job that runs a command in the experiment directory.
-
-    Creates a batch job with a single container that executes the specified command
-    in /mddash/{experiment_id}. The job uses the shared PVC for persistent storage
-    and has backoffLimit set to 0 (no retries on failure).
+    Create a Job running `sh -c command` in /mddash/{experiment_id} (no retries, shared PVC).
 
     Args:
         name: The name of the job to create.
         image: The container image to use for the job.
         experiment_id: The ID of the experiment, used to set the working directory.
-        command: The shell command to run (will be wrapped in sh -c).
-        resources: Optional resource requests/limits dict. Defaults to 50m CPU and 64Mi memory.
-
+        command: The shell command to run.
+        resources: Optional resource requests/limits dict.
     """
-    if ping_resource("job", name):
+    if await ping_resource("job", name):
         logger.warning(f"Job {name} already exists in namespace {NAMESPACE}. Skipping creation.")
         return
 
     volume_name = "shared-data"
-
     job_container = get_container(name, image, experiment_id, volume_name, ["sh", "-c", command], resources=resources)
-
     job_manifest = {
         "apiVersion": "batch/v1",
         "kind": "Job",
@@ -322,41 +305,30 @@ def create_job(
             },
         },
     }
-
-    batch_v1 = get_batch_v1()
-    batch_v1.create_namespaced_job(namespace=NAMESPACE, body=job_manifest)
+    await get_batch_v1().create_namespaced_job(namespace=NAMESPACE, body=cast("Any", job_manifest))
 
 
-def ping_resource(resource_type: str, name: str) -> bool:
+async def ping_resource(resource_type: str, name: str) -> bool:
     """
-    Check if a Kubernetes resource exists in the namespace.
-
-    Args:
-        resource_type: The type of resource ('svc', 'pod', 'configmap', 'secret', 'pvc', or 'job').
-        name: The name of the resource to check.
-
-    Returns:
-        bool: True if the resource exists, False if not found or on API error.
+    Whether a resource exists in the namespace (False on any API error).
 
     Raises:
         ValueError: If resource_type is not a supported type.
     """
     try:
-        core_v1 = get_core_v1()
-        batch_v1 = get_batch_v1()
         match resource_type:
             case "svc":
-                core_v1.read_namespaced_service(name=name, namespace=NAMESPACE)
+                await get_core_v1().read_namespaced_service(name=name, namespace=NAMESPACE)
             case "pod":
-                core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE)
+                await get_core_v1().read_namespaced_pod(name=name, namespace=NAMESPACE)
             case "configmap":
-                core_v1.read_namespaced_config_map(name=name, namespace=NAMESPACE)
+                await get_core_v1().read_namespaced_config_map(name=name, namespace=NAMESPACE)
             case "secret":
-                core_v1.read_namespaced_secret(name=name, namespace=NAMESPACE)
+                await get_core_v1().read_namespaced_secret(name=name, namespace=NAMESPACE)
             case "pvc":
-                core_v1.read_namespaced_persistent_volume_claim(name=name, namespace=NAMESPACE)
+                await get_core_v1().read_namespaced_persistent_volume_claim(name=name, namespace=NAMESPACE)
             case "job":
-                batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE)
+                await get_batch_v1().read_namespaced_job(name=name, namespace=NAMESPACE)
             case _:
                 raise ValueError(f"Unsupported resource type: {resource_type}")
         return True
@@ -364,84 +336,51 @@ def ping_resource(resource_type: str, name: str) -> bool:
         return False
 
 
-def delete_pod(name: str) -> None:
-    """
-    Delete a pod from the namespace.
-
-    Args:
-        name: The name of the pod to delete.
-
-    """
-    if not ping_resource("pod", name):
+async def delete_pod(name: str) -> None:
+    """Delete a pod if it exists."""
+    if not await ping_resource("pod", name):
         return
-
-    core_v1 = get_core_v1()
-    core_v1.delete_namespaced_pod(name=name, namespace=NAMESPACE)
+    await get_core_v1().delete_namespaced_pod(name=name, namespace=NAMESPACE)
 
 
-def delete_job(name: str) -> None:
-    """
-    Delete a job from the namespace with background propagation.
-
-    Args:
-        name: The name of the job to delete.
-
-    """
-    if not ping_resource("job", name):
+async def delete_job(name: str) -> None:
+    """Delete a job (background propagation) if it exists."""
+    if not await ping_resource("job", name):
         return
-
-    batch_v1 = get_batch_v1()
-    batch_v1.delete_namespaced_job(
+    await get_batch_v1().delete_namespaced_job(
         name=name,
         namespace=NAMESPACE,
-        body=V1DeleteOptions(
-            propagation_policy="Background",
-            grace_period_seconds=5,
-        ),
+        body=V1DeleteOptions(propagation_policy="Background", grace_period_seconds=5),
     )
 
 
-def delete_service(name: str) -> None:
-    """
-    Delete a service from the namespace.
-
-    Args:
-        name: The name of the service to delete.
-
-    """
-    if not ping_resource("svc", name):
+async def delete_service(name: str) -> None:
+    """Delete a service if it exists."""
+    if not await ping_resource("svc", name):
         return
-
-    core_v1 = get_core_v1()
-    core_v1.delete_namespaced_service(name=name, namespace=NAMESPACE)
+    await get_core_v1().delete_namespaced_service(name=name, namespace=NAMESPACE)
 
 
-def create_service(name: str, target_name: str, target_uid: str) -> None:
+async def create_service(name: str, target_name: str, target_uid: str) -> None:
     """
-    Create a Kubernetes service to expose a pod.
-
-    Creates a service that routes TCP traffic on port 80 to port 8888 of pods
-    matching the target app label, owned by the target pod so K8s GC deletes
-    both together.
+    Expose a pod (TCP 80 -> 8888), owned by the pod so K8s GC deletes both together.
 
     A lingering service owned by a deleted pod awaits GC, so existence alone must not skip creation.
 
     Args:
         name: The name of the service to create.
-        target_name: The app label value of pods to target. Must be the owning
-            pod's name; it names the ownerReference.
+        target_name: The app label value of pods to target; must be the owning pod's name.
         target_uid: The UID of the owning pod.
-
     """
     core_v1 = get_core_v1()
     try:
-        existing = cast("V1Service", core_v1.read_namespaced_service(name=name, namespace=NAMESPACE))
-        owner_references = (existing.metadata and existing.metadata.owner_references) or []
+        existing = await core_v1.read_namespaced_service(name=name, namespace=NAMESPACE)
+        owner_references = (existing.metadata.owner_references if existing.metadata else None) or []
         if owner_references and owner_references[0].uid == target_uid:
             logger.warning(f"Service {name} already exists in namespace {NAMESPACE}. Skipping creation.")
             return
         try:
-            core_v1.delete_namespaced_service(name=name, namespace=NAMESPACE)
+            await core_v1.delete_namespaced_service(name=name, namespace=NAMESPACE)
         except ApiException as e:
             if e.status != HTTPStatus.NOT_FOUND:
                 raise
@@ -459,19 +398,11 @@ def create_service(name: str, target_name: str, target_uid: str) -> None:
             selector={"app": target_name}, ports=[V1ServicePort(protocol="TCP", port=80, target_port=8888)]
         ),
     )
-    core_v1.create_namespaced_service(namespace=NAMESPACE, body=service)
+    await core_v1.create_namespaced_service(namespace=NAMESPACE, body=service)
 
 
 def parse_cpu(cpu_str: str | None) -> int:
-    """
-    Parse CPU value from Kubernetes format to millicores.
-
-    Args:
-        cpu_str: CPU value (e.g., '100m', '1', '1.5').
-
-    Returns:
-        int: CPU value in millicores.
-    """
+    """CPU value in Kubernetes format (`100m`, `1`, `1.5`) to millicores."""
     if not cpu_str:
         return 0
 
@@ -482,15 +413,7 @@ def parse_cpu(cpu_str: str | None) -> int:
 
 
 def parse_memory(mem_str: str | None) -> int:
-    """
-    Parse memory value from Kubernetes format to bytes.
-
-    Args:
-        mem_str: Memory value (e.g., '128Mi', '1Gi', '1G').
-
-    Returns:
-        int: Memory value in bytes.
-    """
+    """Memory value in Kubernetes format (`128Mi`, `1Gi`, `1G`) to bytes."""
     if not mem_str:
         return 0
 
@@ -515,7 +438,7 @@ def parse_memory(mem_str: str | None) -> int:
     if mem_str.endswith("T"):
         return int(float(mem_str[:-1]) * 1000**4)
 
-    # Try to parse as plain number (bytes)
+    # Plain number (bytes)
     try:
         return int(float(mem_str))
     except (ValueError, TypeError):
@@ -524,16 +447,7 @@ def parse_memory(mem_str: str | None) -> int:
 
 
 def _sum_container_resources(containers: list, resource_type: str) -> dict:
-    """
-    Sum CPU and memory resources for a list of containers.
-
-    Args:
-        containers: List of Kubernetes container objects.
-        resource_type: Either 'requests' or 'limits'.
-
-    Returns:
-        dict: Dictionary with 'cpu' (millicores) and 'memory' (bytes) totals.
-    """
+    """Sum CPU (millicores) and memory (bytes) of `requests` or `limits` over containers."""
     total_cpu = 0
     total_memory = 0
 
@@ -554,21 +468,12 @@ def _sum_container_resources(containers: list, resource_type: str) -> dict:
     return {"cpu": total_cpu, "memory": total_memory}
 
 
-def _get_active_pod_usage() -> dict[str, dict[str, int]]:
-    """
-    Calculate total resource requests and limits for all active pods in the namespace.
-
-    Returns:
-        dict: {"requests": {"cpu": millicores, "memory": bytes}, "limits": {...}}
-    """
-    core_v1 = get_core_v1()
-    pods = cast("V1PodList", core_v1.list_namespaced_pod(namespace=NAMESPACE))
+async def _get_active_pod_usage() -> dict[str, dict[str, int]]:
+    """Total requests/limits of all active pods: {"requests": {"cpu", "memory"}, "limits": {...}}."""
+    pods = await get_core_v1().list_namespaced_pod(namespace=NAMESPACE)
     totals: dict[str, dict[str, int]] = {"requests": {"cpu": 0, "memory": 0}, "limits": {"cpu": 0, "memory": 0}}
 
-    if not pods.items:
-        return totals
-
-    for pod in pods.items:
+    for pod in pods.items or []:
         if not pod.spec or not pod.spec.containers:
             continue
         # Skip pods whose resources are already released
@@ -584,15 +489,9 @@ def _get_active_pod_usage() -> dict[str, dict[str, int]]:
     return totals
 
 
-def count_notebook_pods() -> int:
-    """
-    Return count of Running/Pending notebook pods (excludes terminating).
-
-    Returns:
-        int: Number of active (non-terminating) notebook pods.
-    """
-    core_v1 = get_core_v1()
-    pods = core_v1.list_namespaced_pod(namespace=NAMESPACE, label_selector="type=notebook")
+async def count_notebook_pods() -> int:
+    """Count Running/Pending notebook pods (excludes terminating)."""
+    pods = await get_core_v1().list_namespaced_pod(namespace=NAMESPACE, label_selector="type=notebook")
     return sum(
         1
         for p in pods.items
@@ -600,25 +499,21 @@ def count_notebook_pods() -> int:
     )
 
 
-def check_quota_headroom(
+async def check_quota_headroom(
     cpu_request: int, memory_request: int, cpu_limit: int = 0, memory_limit: int = 0
 ) -> str | None:
     """
     Return an error message if spawning would exceed the namespace quota, else None.
 
-    This is a best-effort check before pod/job creation. The existing K8s 403 handler
-    remains the authoritative enforcement gate.
+    Best effort before pod/job creation; the K8s 403 stays the authoritative gate.
 
     Args:
         cpu_request: Additional CPU requests needed in millicores.
         memory_request: Additional memory requests needed in bytes.
         cpu_limit: Additional CPU limits needed in millicores.
         memory_limit: Additional memory limits needed in bytes.
-
-    Returns:
-        str | None: An error message if quota would be exceeded, else None.
     """
-    usage = _get_active_pod_usage()
+    usage = await _get_active_pod_usage()
 
     quota_cpu = parse_cpu(CPU_REQUEST_QUOTA)
     quota_memory = parse_memory(MEMORY_REQUEST_QUOTA)
@@ -655,199 +550,131 @@ def check_quota_headroom(
     return None
 
 
-def get_pod_info(name: str) -> tuple[PodStatus, "datetime | None"]:
+async def get_pod_info(name: str) -> tuple[PodStatus, datetime | None]:
     """Pod (status, start_time) from one API read; start_time is None while the pod is absent."""
     try:
-        core_v1 = get_core_v1()
-        pod = cast("V1Pod", core_v1.read_namespaced_pod(name=name, namespace=NAMESPACE))
+        pod = await get_core_v1().read_namespaced_pod(name=name, namespace=NAMESPACE)
+    except ApiException as e:
+        return (PodStatus.DOWN if e.status == HTTPStatus.NOT_FOUND else PodStatus.ERROR), None
 
-        if not pod.metadata or not pod.status:
-            return PodStatus.UNKNOWN, None
+    if not pod.metadata or not pod.status:
+        return PodStatus.UNKNOWN, None
 
-        start_time = pod.status.start_time
+    start_time = pod.status.start_time
+    if pod.metadata.deletion_timestamp:
+        return PodStatus.TERMINATING, start_time
 
-        if pod.metadata.deletion_timestamp:
-            return PodStatus.TERMINATING, start_time
-
-        phase = pod.status.phase
-
-        if phase == "Running":
-            # Check if all containers are ready
+    match pod.status.phase:
+        case "Running":
             if pod.status.container_statuses:
                 all_ready = all(container.ready for container in pod.status.container_statuses)
                 return (PodStatus.RUNNING if all_ready else PodStatus.PENDING), start_time
             return PodStatus.RUNNING, start_time
-        if phase == "Succeeded":
+        case "Succeeded":
             return PodStatus.TERMINATED, start_time
-        if phase == "Failed":
+        case "Failed":
             return PodStatus.ERROR, start_time
-        if phase == "Pending":
+        case "Pending":
             return PodStatus.PENDING, start_time
-
-        return PodStatus.UNKNOWN, start_time
-
-    except ApiException as e:
-        status = PodStatus.DOWN if e.status == HTTPStatus.NOT_FOUND else PodStatus.ERROR
-        return status, None
+    return PodStatus.UNKNOWN, start_time
 
 
-def get_job_status(name: str) -> JobStatus:
-    """
-    Get the current status of a job.
-
-    Args:
-        name: The name of the job.
-
-    Returns:
-        JobStatus: The current status (RUNNING, PENDING, FINISHED, ERROR, or UNKNOWN).
-    """
+async def get_job_status(name: str) -> JobStatus:
+    """Read the status of a Job (RUNNING, PENDING, FINISHED, ERROR, or UNKNOWN when absent)."""
     try:
-        batch_v1 = get_batch_v1()
-        job = cast("V1Job", batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE))
-
-        if not job.status:
-            return JobStatus.UNKNOWN
-
-        if job.status.conditions:
-            for condition in job.status.conditions:
-                if condition.type == "Complete" and condition.status == "True":
-                    return JobStatus.FINISHED
-                if condition.type == "Failed" and condition.status == "True":
-                    return JobStatus.ERROR
-
-        if job.status.succeeded and job.status.succeeded > 0:
-            return JobStatus.FINISHED
-        if job.status.failed and job.status.failed > 0:
-            return JobStatus.ERROR
-        if job.status.active and job.status.active > 0:
-            return JobStatus.RUNNING
-
-        return JobStatus.PENDING
-
+        job = await get_batch_v1().read_namespaced_job(name=name, namespace=NAMESPACE)
     except ApiException as e:
-        if e.status == HTTPStatus.NOT_FOUND:
-            return JobStatus.UNKNOWN
+        return JobStatus.UNKNOWN if e.status == HTTPStatus.NOT_FOUND else JobStatus.ERROR
+
+    if not job.status:
+        return JobStatus.UNKNOWN
+
+    for condition in job.status.conditions or []:
+        if condition.type == "Complete" and condition.status == "True":
+            return JobStatus.FINISHED
+        if condition.type == "Failed" and condition.status == "True":
+            return JobStatus.ERROR
+
+    if job.status.succeeded and job.status.succeeded > 0:
+        return JobStatus.FINISHED
+    if job.status.failed and job.status.failed > 0:
         return JobStatus.ERROR
+    if job.status.active and job.status.active > 0:
+        return JobStatus.RUNNING
+    return JobStatus.PENDING
 
 
-def get_job_logs(name: str, tail_lines: int = 200) -> str:
-    """
-    Get logs from the pod belonging to a job.
-
-    Returns:
-        Log text as a string, or empty string if the pod is not found or an error occurs.
-    """
+async def get_job_logs(name: str, tail_lines: int = 200) -> str:
+    """Read the logs of a Job's pod, or an empty string when the pod is gone or the API errors."""
     try:
         core_v1 = get_core_v1()
-        pods = core_v1.list_namespaced_pod(namespace=NAMESPACE, label_selector=f"job={name}")
+        pods = await core_v1.list_namespaced_pod(namespace=NAMESPACE, label_selector=f"job={name}")
         if not pods.items:
             return ""
         pod_name = pods.items[0].metadata.name
-        # _preload_content=False gives raw bytes so we can decode with error replacement,
-        # avoiding UnicodeDecodeError when large log output is truncated mid-stream.
-        response = core_v1.read_namespaced_pod_log(
+        # Raw bytes decoded with replacement: large logs may be truncated mid-character.
+        # Unpreloaded content is the raw aiohttp response (the stubs declare the decoded str).
+        response: Any = await core_v1.read_namespaced_pod_log(
             name=pod_name, namespace=NAMESPACE, tail_lines=tail_lines, _preload_content=False
         )
-        return response.data.decode("utf-8", errors="replace")
+        return (await response.read()).decode("utf-8", errors="replace")
     except ApiException:
         return ""
 
 
-def wait_for_job(
-    name: str, on_success: Callable[[], None], on_error: Callable[[Exception], None], timeout: int = 60
-) -> None:
-    """
-    Wait for a Kubernetes job to complete asynchronously and execute callbacks.
-
-    Spawns a daemon thread that polls the job status every 2 seconds until completion,
-    failure, or timeout. Executes the appropriate callback based on the outcome.
-
-    Args:
-        name: Name of the job to wait for.
-        on_success: Callback function to invoke when the job completes successfully.
-        on_error: Callback function to invoke with the exception when the job fails or times out.
-        timeout: Maximum time to wait in seconds (default: 60).
-    """
-
-    def wait_and_callback() -> None:
-        try:
-            start_time = time.time()
-            while time.time() - start_time < timeout:
-                status = get_job_status(name)
-                if status == JobStatus.FINISHED:
-                    on_success()
-                    return
-                if status == JobStatus.ERROR:
-                    raise RuntimeError(f"Job {name} failed")
-                time.sleep(2)
-
-            raise RuntimeError(f"Job {name} timed out after {timeout}s")
-        except Exception as e:
-            on_error(e)
-
-    thread = threading.Thread(target=wait_and_callback, daemon=True)
-    thread.start()
-
-
-def read_job(name: str) -> object | None:
-    """Return None if not found (404); re-raises other API errors."""
+async def read_job(name: str) -> object | None:
+    """Return the Job, or None if not found (404); re-raises other API errors."""
     try:
-        batch_v1 = get_batch_v1()
-        return batch_v1.read_namespaced_job(name=name, namespace=NAMESPACE)
+        return await get_batch_v1().read_namespaced_job(name=name, namespace=NAMESPACE)
     except ApiException as e:
         if e.status == HTTPStatus.NOT_FOUND:
             return None
         raise
 
 
-def delete_job_foreground(name: str) -> None:
-    """Foreground propagation; blocks until pods are deleted."""
-    if not ping_resource("job", name):
+async def delete_job_foreground(name: str) -> None:
+    """Delete a Job with foreground propagation (pods first)."""
+    if not await ping_resource("job", name):
         return
-    batch_v1 = get_batch_v1()
     try:
-        batch_v1.delete_namespaced_job(
+        await get_batch_v1().delete_namespaced_job(
             name=name,
             namespace=NAMESPACE,
-            body=V1DeleteOptions(
-                propagation_policy="Foreground",
-                grace_period_seconds=0,
-            ),
+            body=V1DeleteOptions(propagation_policy="Foreground", grace_period_seconds=0),
         )
     except ApiException as e:
         if e.status != HTTPStatus.NOT_FOUND:
             raise
 
 
-def list_pods_by_label(label_selector: str) -> list:
-    core_v1 = get_core_v1()
-    result = core_v1.list_namespaced_pod(namespace=NAMESPACE, label_selector=label_selector)
+async def list_pods_by_label(label_selector: str) -> list:
+    """Pods matching a label selector."""
+    result = await get_core_v1().list_namespaced_pod(namespace=NAMESPACE, label_selector=label_selector)
     return result.items if result and result.items else []
 
 
-def wait_for_pod_admission(label_selector: str, timeout: int = 30) -> bool:
+async def wait_for_pod_admission(label_selector: str, max_wait: int = 30) -> bool:
     """Poll until a pod reaches Running, Succeeded, or Failed (admitted, not Pending)."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        pods = list_pods_by_label(label_selector)
-        for pod in pods:
+    deadline = time.monotonic() + max_wait
+    while time.monotonic() < deadline:
+        for pod in await list_pods_by_label(label_selector):
             phase = getattr(getattr(pod, "status", None), "phase", None)
             if phase in {"Running", "Succeeded", "Failed"}:
                 return True
-        time.sleep(1)
+        await asyncio.sleep(1)
     return False
 
 
-def wait_for_resource_absence(resource_type: str, name: str, timeout: int = 30) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if not ping_resource(resource_type, name):
+async def wait_for_resource_absence(resource_type: str, name: str, max_wait: int = 30) -> bool:
+    """Poll until the resource no longer exists."""
+    deadline = time.monotonic() + max_wait
+    while time.monotonic() < deadline:
+        if not await ping_resource(resource_type, name):
             return True
-        time.sleep(1)
+        await asyncio.sleep(1)
     return False
 
 
-def create_job_raw(manifest: dict) -> None:
-    """Accept a complete manifest dict (unlike create_job which builds it from params)."""
-    batch_v1 = get_batch_v1()
-    batch_v1.create_namespaced_job(namespace=NAMESPACE, body=manifest)
+async def create_job_raw(manifest: dict) -> None:
+    """Create a Job from a complete manifest dict."""
+    await get_batch_v1().create_namespaced_job(namespace=NAMESPACE, body=cast("Any", manifest))

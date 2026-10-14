@@ -11,9 +11,11 @@ import logging
 import re
 import threading
 import time
+from collections.abc import Callable, Coroutine
 from datetime import datetime, timezone
 from shutil import rmtree
 from types import SimpleNamespace
+from typing import Any
 
 from clients import k8s
 from config import DATA_DIR
@@ -31,27 +33,39 @@ ANALYSIS_JOB_DURATION_SEC = 0.5 if E2E else 3.0
 UPLOAD_JOB_DURATION_SEC = 0.5 if E2E else 4.0
 
 
+def as_async(fn: Callable[..., Any]) -> Callable[..., Coroutine[Any, Any, Any]]:
+    """Expose a sync mock under the async signature of the client function it replaces."""
+
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:  # ruff:ignore[any-type, unused-async]
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
 def install_k8s_mocks() -> None:
     """Install Kubernetes client mocks via module mutation."""
-    # The single pod read notebooks use for both status and start time.
-    k8s.get_pod_info = _get_pod_info  # type: ignore
-    k8s.create_notebook_pod = _create_notebook_pod  # type: ignore
-    k8s.delete_pod = _delete_pod  # type: ignore
-    k8s.create_service = _create_service  # type: ignore
-    k8s.delete_service = _delete_service  # type: ignore
-
-    k8s.create_job = _create_job  # type: ignore
-    k8s.get_job_status = _get_job_status  # type: ignore
-    k8s.delete_job = _delete_job  # type: ignore
-    k8s.get_job_logs = _get_job_logs  # type: ignore
-    k8s.check_quota_headroom = lambda *_a, **_k: None  # type: ignore
-    k8s.count_notebook_pods = lambda: sum(1 for s in demo_state.notebook_status.values() if s == PodStatus.RUNNING)  # type: ignore
-    k8s.ping_resource = lambda *_a, **_k: True  # type: ignore
-    k8s.create_job_raw = _create_job_raw  # type: ignore
-    k8s.wait_for_pod_admission = lambda *_a, **_k: True  # type: ignore
-    k8s.read_job = _read_upload_job  # type: ignore
-    k8s.delete_job_foreground = lambda name: demo_state.upload_jobs.pop(name, None)  # type: ignore
-    k8s.wait_for_resource_absence = lambda *_a, **_k: True  # type: ignore
+    mocks: dict[str, Callable[..., Any]] = {
+        # The single pod read notebooks use for both status and start time.
+        "get_pod_info": _get_pod_info,
+        "create_notebook_pod": _create_notebook_pod,
+        "delete_pod": _delete_pod,
+        "create_service": _create_service,
+        "delete_service": _delete_service,
+        "create_job": _create_job,
+        "get_job_status": _get_job_status,
+        "delete_job": _delete_job,
+        "get_job_logs": _get_job_logs,
+        "check_quota_headroom": lambda *_a, **_k: None,
+        "count_notebook_pods": lambda: sum(1 for s in demo_state.notebook_status.values() if s == PodStatus.RUNNING),
+        "ping_resource": lambda *_a, **_k: True,
+        "create_job_raw": _create_job_raw,
+        "wait_for_pod_admission": lambda *_a, **_k: True,
+        "read_job": _read_upload_job,
+        "delete_job_foreground": lambda name: demo_state.upload_jobs.pop(name, None),
+        "wait_for_resource_absence": lambda *_a, **_k: True,
+    }
+    for name, mock in mocks.items():
+        setattr(k8s, name, as_async(mock))
 
 
 def _create_job_raw(manifest: dict) -> None:

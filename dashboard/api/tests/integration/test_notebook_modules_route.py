@@ -3,7 +3,7 @@
 import json
 from http import HTTPStatus
 
-from flask.testing import FlaskClient
+from httpx import AsyncClient
 
 MIN_MODULE_COUNT = 2
 
@@ -11,12 +11,12 @@ MIN_MODULE_COUNT = 2
 class TestNotebookModulesEndpoint:
     """Tests for GET /api/notebook-modules."""
 
-    def test_returns_display_metadata_without_internal_paths(self, client: FlaskClient) -> None:
+    async def test_returns_display_metadata_without_internal_paths(self, client: AsyncClient) -> None:
         """Should return modules with display fields, no internal paths/URLs, JSON-serializable."""
-        response = client.get("/dash/api/notebook-modules")
+        response = await client.get("/dash/api/notebook-modules")
 
         assert response.status_code == HTTPStatus.OK
-        data = json.loads(response.data)
+        data = response.json()
         assert isinstance(data, list)
         assert len(data) >= MIN_MODULE_COUNT
 

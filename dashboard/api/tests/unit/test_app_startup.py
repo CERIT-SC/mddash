@@ -3,157 +3,123 @@
 import importlib
 import sys
 from pathlib import Path
-from types import ModuleType
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
+import db
 import pytest
-from flask import Flask
+from alembic.util.exc import CommandError
 from pytest_mock import MockerFixture
 
 
-def _fresh_import_app(tmp_path: Path, monkeypatch, mocker: MockerFixture) -> ModuleType:
-    monkeypatch.setenv("DATA_DIR", str(tmp_path))
-    monkeypatch.setenv("JUPYTERHUB_USER", "testuser")
-    monkeypatch.setenv("JUPYTERHUB_SERVICE_PREFIX", "/user/testuser")
-    monkeypatch.setenv("POD_NAMESPACE", "test-namespace")
-    monkeypatch.setenv("HUB_NAMESPACE", "hub-namespace")
-    monkeypatch.setenv("PVC_NAME", "test-pvc")
-    monkeypatch.setenv("PVC_STORAGE_SIZE", "1Gi")
-    monkeypatch.setenv("TUNER_USER", "tuner")
-    monkeypatch.setenv("TUNER_PASSWORD", "secret")
-
+def test_importing_app_module_does_not_build_the_app(mocker: MockerFixture) -> None:
+    """The uvicorn factory import must not construct the app or touch the database."""
+    run_migrations = mocker.patch("db.run_migrations")
     sys.modules.pop("app", None)
-    mocker.patch("kubernetes.config.load_incluster_config")
-    mocker.patch("kubernetes.client.CoreV1Api")
-    mocker.patch("kubernetes.client.BatchV1Api")
-    return importlib.import_module("app")
 
-
-def test_importing_app_module_does_not_run_migrations(tmp_path: Path, monkeypatch, mocker: MockerFixture) -> None:
-    """Gunicorn factory imports should not construct the Flask app eagerly."""
-    upgrade = mocker.patch("flask_migrate.upgrade")
-
-    app_module = _fresh_import_app(tmp_path, monkeypatch, mocker)
+    app_module = importlib.import_module("app")
 
     assert hasattr(app_module, "create_app")
     assert not hasattr(app_module, "app")
-    upgrade.assert_not_called()
+    run_migrations.assert_not_called()
 
 
-def test_run_migrations_skips_upgrade_when_database_is_at_head(app: Flask, mocker: MockerFixture) -> None:
-    """Already-current databases should avoid full Alembic upgrade machinery."""
+async def test_lifespan_migrates_before_serving(tmp_path: Path, mocker: MockerFixture) -> None:
+    """Startup validates the catalog, migrates the DB file under DATA_DIR, and binds the engine to it."""
     import app as app_module
 
+    order: list[str] = []
+    mocker.patch("app.load_catalog_or_exit", side_effect=lambda: order.append("catalog"))
+    run_migrations = mocker.patch("app.run_migrations", side_effect=lambda _path: order.append("migrate"))
+    mocker.patch("app.du_monitor", AsyncMock())
+    init_engine = mocker.patch("app.init_engine")
+    mocker.patch("app.dispose_engine", AsyncMock())
+
+    application = app_module.create_app()
+    async with application.router.lifespan_context(application):
+        assert order == ["catalog", "migrate"]
+        run_migrations.assert_called_once_with(tmp_path / "experiments.db")
+        init_engine.assert_called_once_with(tmp_path / "experiments.db")
+
+
+def _patch_alembic(
+    mocker: MockerFixture, current: str | None, head: str = "006", tables: list[str] | None = None
+) -> tuple:
     migration_context = MagicMock()
-    migration_context.get_current_revision.return_value = "006"
+    migration_context.get_current_revision.return_value = current
     script = MagicMock()
-    script.get_current_head.return_value = "006"
+    script.get_current_head.return_value = head
+    inspector = MagicMock()
+    inspector.get_table_names.return_value = tables or []
+    mocker.patch("db.MigrationContext.configure", return_value=migration_context)
+    mocker.patch("db.ScriptDirectory", return_value=script)
+    inspect_db = mocker.patch("db.sa_inspect", return_value=inspector)
+    return script, inspect_db, mocker.patch("db.command.stamp"), mocker.patch("db.command.upgrade")
 
-    mocker.patch("app.MigrationContext.configure", return_value=migration_context)
-    mocker.patch("app.ScriptDirectory", return_value=script)
-    upgrade = mocker.patch("app.upgrade")
-    stamp = mocker.patch("app.stamp")
-    inspect_db = mocker.patch("app.sa_inspect")
 
-    with app.app_context():
-        app_module._run_migrations()
+def test_run_migrations_skips_upgrade_when_database_is_at_head(tmp_path: Path, mocker: MockerFixture) -> None:
+    """Already-current databases should avoid full Alembic upgrade machinery."""
+    _, inspect_db, stamp, upgrade = _patch_alembic(mocker, current="006")
+
+    db.run_migrations(tmp_path / "test.db")
 
     upgrade.assert_not_called()
     stamp.assert_not_called()
     inspect_db.assert_not_called()
 
 
-def test_run_migrations_upgrades_when_database_is_behind_head(app: Flask, mocker: MockerFixture) -> None:
+def test_run_migrations_upgrades_when_database_is_behind_head(tmp_path: Path, mocker: MockerFixture) -> None:
     """Behind-head databases must still be upgraded before serving requests."""
-    import app as app_module
+    _, _, stamp, upgrade = _patch_alembic(mocker, current="005")
 
-    migration_context = MagicMock()
-    migration_context.get_current_revision.return_value = "005"
-    script = MagicMock()
-    script.get_current_head.return_value = "006"
-    script.get_revision.return_value = MagicMock()
-
-    mocker.patch("app.MigrationContext.configure", return_value=migration_context)
-    mocker.patch("app.ScriptDirectory", return_value=script)
-    upgrade = mocker.patch("app.upgrade")
-    stamp = mocker.patch("app.stamp")
-
-    with app.app_context():
-        app_module._run_migrations()
+    db.run_migrations(tmp_path / "test.db")
 
     stamp.assert_not_called()
-    upgrade.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR))
+    upgrade.assert_called_once()
+    assert upgrade.call_args.args[1] == "head"
 
 
-def test_run_migrations_stamps_unversioned_database_with_tables(app: Flask, mocker: MockerFixture) -> None:
+def test_run_migrations_stamps_unversioned_database_with_tables(tmp_path: Path, mocker: MockerFixture) -> None:
     """Legacy unversioned DBs with existing tables keep baseline stamping behavior."""
-    import app as app_module
+    _, _, stamp, upgrade = _patch_alembic(mocker, current=None, tables=["experiments"])
 
-    migration_context = MagicMock()
-    migration_context.get_current_revision.return_value = None
-    script = MagicMock()
-    script.get_current_head.return_value = "006"
-    inspector = MagicMock()
-    inspector.get_table_names.return_value = ["experiments"]
+    db.run_migrations(tmp_path / "test.db")
 
-    mocker.patch("app.MigrationContext.configure", return_value=migration_context)
-    mocker.patch("app.ScriptDirectory", return_value=script)
-    mocker.patch("app.sa_inspect", return_value=inspector)
-    stamp = mocker.patch("app.stamp")
-    upgrade = mocker.patch("app.upgrade")
-
-    with app.app_context():
-        app_module._run_migrations()
-
-    stamp.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR), revision="001", purge=True)
-    upgrade.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR))
+    stamp.assert_called_once()
+    assert stamp.call_args.args[1] == "001"
+    assert stamp.call_args.kwargs == {"purge": True}
+    upgrade.assert_called_once()
 
 
-def test_run_migrations_restamps_unknown_revision(app: Flask, mocker: MockerFixture) -> None:
+def test_run_migrations_rejects_unknown_revision(tmp_path: Path, mocker: MockerFixture) -> None:
     """Unknown DB revisions ahead of the script directory must fail fast."""
-    import app as app_module
-    from alembic.util.exc import CommandError
-
-    migration_context = MagicMock()
-    migration_context.get_current_revision.return_value = "old-rev"
-    script = MagicMock()
-    script.get_current_head.return_value = "006"
+    script, _, stamp, upgrade = _patch_alembic(mocker, current="old-rev")
     script.get_revision.side_effect = CommandError("unknown revision")
 
-    mocker.patch("app.MigrationContext.configure", return_value=migration_context)
-    mocker.patch("app.ScriptDirectory", return_value=script)
-    stamp = mocker.patch("app.stamp")
-    upgrade = mocker.patch("app.upgrade")
-
-    with (
-        app.app_context(),
-        pytest.raises(RuntimeError, match="ahead of migration scripts"),
-    ):
-        app_module._run_migrations()
+    with pytest.raises(RuntimeError, match="ahead of migration scripts"):
+        db.run_migrations(tmp_path / "test.db")
 
     stamp.assert_not_called()
     upgrade.assert_not_called()
 
 
-def test_run_migrations_upgrades_fresh_empty_database(app: Flask, mocker: MockerFixture) -> None:
+def test_run_migrations_upgrades_fresh_empty_database(tmp_path: Path, mocker: MockerFixture) -> None:
     """Brand-new empty databases should go straight to upgrade without stamping."""
-    import app as app_module
+    _, _, stamp, upgrade = _patch_alembic(mocker, current=None, tables=[])
 
-    migration_context = MagicMock()
-    migration_context.get_current_revision.return_value = None
-    script = MagicMock()
-    script.get_current_head.return_value = "006"
-    inspector = MagicMock()
-    inspector.get_table_names.return_value = []
-
-    mocker.patch("app.MigrationContext.configure", return_value=migration_context)
-    mocker.patch("app.ScriptDirectory", return_value=script)
-    mocker.patch("app.sa_inspect", return_value=inspector)
-    stamp = mocker.patch("app.stamp")
-    upgrade = mocker.patch("app.upgrade")
-
-    with app.app_context():
-        app_module._run_migrations()
+    db.run_migrations(tmp_path / "test.db")
 
     stamp.assert_not_called()
-    upgrade.assert_called_once_with(directory=str(app_module.MIGRATIONS_DIR))
+    upgrade.assert_called_once()
+
+
+def test_run_migrations_creates_schema_on_real_database(tmp_path: Path) -> None:
+    """End to end: a fresh file reaches head and a second run is a no-op."""
+    db_path = tmp_path / "real.db"
+    db.run_migrations(db_path)
+    db.run_migrations(db_path)
+
+    import sqlite3
+
+    with sqlite3.connect(db_path) as conn:
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    assert {"experiments", "notebooks", "simulation_jobs", "alembic_version"} <= tables

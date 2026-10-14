@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Interaction between two agents.
+ */
 export interface InteractionResult {
   name: string;
   agent_1: string;

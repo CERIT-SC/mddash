@@ -10,6 +10,7 @@ import logging
 from clients import tuner
 
 from ..state import demo_state
+from .k8s import as_async
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +54,10 @@ _AMBER_STDERR_TEMPLATE = ""
 
 def install_tuner_log_mocks() -> None:
     """Install tuner trial log mocks via module mutation."""
-    tuner.gmx_get_trial_stdout = _get_trial_stdout  # type: ignore
-    tuner.gmx_get_trial_stderr = _get_trial_stderr  # type: ignore
-    tuner.amber_get_trial_stdout = _get_amber_trial_stdout  # type: ignore
-    tuner.amber_get_trial_stderr = _get_amber_trial_stderr  # type: ignore
+    tuner.gmx_get_trial_stdout = as_async(_get_trial_stdout)  # type: ignore
+    tuner.gmx_get_trial_stderr = as_async(_get_trial_stderr)  # type: ignore
+    tuner.amber_get_trial_stdout = as_async(_get_amber_trial_stdout)  # type: ignore
+    tuner.amber_get_trial_stderr = as_async(_get_amber_trial_stderr)  # type: ignore
 
 
 def _get_amber_trial_stdout(job_id: str, trial_id: str) -> str:

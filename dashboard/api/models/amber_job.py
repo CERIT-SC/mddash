@@ -3,23 +3,26 @@ import re
 from datetime import UTC, datetime
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
+import anyio
+import sqlalchemy as sa
 from clients import mdrun
 from config import DATA_DIR, S3_BUCKET
 from enums import AmberBinary, Engine, EwaldPreset, JobStatus
-from extensions import db
+from errors import BadRequest, Conflict, Forbidden, InternalServerError, NotFound, UnprocessableEntity
 from sqlalchemy import ForeignKey
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 from utils import tail, tail_bytes
-from werkzeug.exceptions import BadRequest, Conflict, Forbidden, InternalServerError, NotFound, UnprocessableEntity
 
 from models.simulation import Simulation
 
 from .simulation_job import SimulationJob
 
 if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
     from .experiment import Experiment
 
 
@@ -30,16 +33,23 @@ class AmberJob(SimulationJob):
     """AMBER molecular dynamics simulation job."""
 
     __tablename__ = "amber_jobs"
-    __mapper_args__: ClassVar[dict[str, Any]] = {"polymorphic_identity": Engine.AMBER}
+    __mapper_args__ = {"polymorphic_identity": Engine.AMBER, "polymorphic_load": "selectin"}  # ruff:ignore[mutable-class-default]  # SQLAlchemy declares it an instance attribute
+    MDRUN_ENGINE: ClassVar[str] = "amber"
 
     RESULT_EXTENSIONS: ClassVar[list[str]] = ["nc", "rst7", "mdinfo", "out"]
 
     id: Mapped[str] = mapped_column(ForeignKey("simulation_jobs.id"), primary_key=True)
 
     # AMBER binary type
-    binary: Mapped["AmberBinary"] = mapped_column(db.Enum(AmberBinary), nullable=False)
+    binary: Mapped["AmberBinary"] = mapped_column(sa.Enum(AmberBinary), nullable=False)
     # Ewald summation preset
-    ewald: Mapped["EwaldPreset"] = mapped_column(db.Enum(EwaldPreset))
+    ewald: Mapped["EwaldPreset"] = mapped_column(sa.Enum(EwaldPreset))
+
+    async def _mdrun_get(self) -> dict:
+        return await mdrun.get_amber_job(self.id)
+
+    async def _mdrun_delete(self) -> None:
+        await mdrun.delete_amber_job(self.id)
 
     @cached_property
     def _files(self) -> dict[str, str]:
@@ -82,7 +92,6 @@ class AmberJob(SimulationJob):
 
         if val := self._parse_nsteps():
             self._nsteps = val
-            db.session.commit()
 
         return self._nsteps
 
@@ -113,8 +122,9 @@ class AmberJob(SimulationJob):
         return max(0, int(base_estimate - time_since_update))
 
     @classmethod
-    def start(
+    async def start(
         cls,
+        session: "AsyncSession",
         experiment: "Experiment",
         simulation_path: str,
         binary: "AmberBinary",
@@ -128,7 +138,7 @@ class AmberJob(SimulationJob):
         Returns:
             The created AmberJob instance.
         """
-        simulation = Simulation.get(experiment.id, simulation_path)
+        simulation = Simulation.get(experiment.id, simulation_path, experiment)
         simulation.require_files(["topology", "coordinates", "control"])
         resolved = simulation.resolved_files
         prmtop_rel_path = resolved["topology"]
@@ -136,7 +146,7 @@ class AmberJob(SimulationJob):
         mdin_rel_path = resolved["control"]
         extra_args = simulation.extra_args
 
-        mdrun_job = mdrun.create_amber_job(
+        mdrun_job = await mdrun.create_amber_job(
             experiment_id=experiment.id,
             prmtop_name=prmtop_rel_path,
             inpcrd_name=inpcrd_rel_path,
@@ -157,19 +167,20 @@ class AmberJob(SimulationJob):
             np=np,
             ntomp=ntomp,
             experiment_id=experiment.id,
+            experiment=experiment,
             engine=Engine.AMBER,
             _last_known_status=JobStatus.PENDING,
         )
-        db.session.add(job)
+        session.add(job)
 
-        job._cleanup_files()
+        await anyio.to_thread.run_sync(job._cleanup_files)
 
         try:
-            db.session.commit()
+            await session.commit()
         except IntegrityError:
             # Another request committed the row first; delete our unreferenced MDRun job.
-            db.session.rollback()
-            mdrun.delete_amber_job(job.id)
+            await session.rollback()
+            await mdrun.delete_amber_job(job.id)
             raise Conflict("A run is already active for this simulation; stop it first to submit a new run.") from None
         simulation.mark_readonly()
         logger.info(f"Started AMBER job {job.id} for experiment {experiment.id} (simulation {simulation_path})")

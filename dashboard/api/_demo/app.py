@@ -1,28 +1,21 @@
 """
 Demo harness that runs the real API with deterministic seeded data and mocked integrations.
 
-This module provides a Flask application factory that:
-- Sets up demo environment variables
-- Activates HTTP response mocking via the responses library
-- Patches Kubernetes client at module level
-- Seeds the database with deterministic test data
-
 Usage:
-    # Run directly for development
-    python -m _demo.app
-
-    # Or in Flask development mode
-    FLASK_APP=_demo.app flask run
+    python _demo/app.py   # uvicorn on :8888 (auto-reload unless MDDASH_DEMO_E2E=1)
 """
 
 import os
+import secrets
 import shutil
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+import uvicorn
+
 if TYPE_CHECKING:
-    from flask import Flask
+    from fastapi import FastAPI
 
 API_DIR = Path(__file__).resolve().parents[1]
 
@@ -70,7 +63,7 @@ _DEMO_ENV_DEFAULTS = {
 def _configure_demo_env() -> None:
     """Configure environment variables for demo mode."""
     demo_data_dir = os.environ.get("MDDASH_DEMO_DATA_DIR", "/tmp/mddash")
-    # Reset on every start (including debug-reloader restarts): demo data is
+    # Reset on every start (including auto-reload restarts): demo data is
     # disposable, so there is no rehydration path to keep in sync with the seed.
     shutil.rmtree(demo_data_dir, ignore_errors=True)
     Path(demo_data_dir).mkdir(parents=True, exist_ok=True)
@@ -79,24 +72,15 @@ def _configure_demo_env() -> None:
         os.environ.setdefault(key, value)
 
 
-def create_demo_app() -> "Flask":
+def create_demo_app() -> "FastAPI":
     """
-    Create the real API app configured for local demo with mocked dependencies.
+    Create the real API app configured for local demo with mocked dependencies (uvicorn factory).
 
-    This function:
-    1. Configures environment variables for demo mode
-    2. Activates HTTP response mocking via responses library
-    3. Installs Kubernetes client mocks via module mutation
-    4. Imports and configures the real Flask application
-    5. Seeds deterministic test data
-
-    Returns:
-        Configured Flask application instance with demo profile applied.
+    Mocks must be installed before the app is imported: K8s is neutralized by
+    `clients.k8s` module mutation, not by patching the kubernetes library.
     """
     _configure_demo_env()
 
-    # K8s is neutralized by clients.k8s module mutation, not by patching the
-    # kubernetes library — mocks must be installed before the app is imported.
     from _demo.mocks import install_all_mocks  # ruff:ignore[import-outside-top-level]
     from _demo.profile import setup_demo_profile  # ruff:ignore[import-outside-top-level]
 
@@ -104,20 +88,22 @@ def create_demo_app() -> "Flask":
 
     from app import create_app  # ruff:ignore[import-outside-top-level]
 
-    app = create_app()
-
+    # Fresh key per start: stale signed cookies die with the wiped demo data,
+    # so a mock MDRepo session must be re-established after every restart.
+    app = create_app(secure_cookies=False, session_secret=secrets.token_hex(32))
     setup_demo_profile(app)
-
     return app
 
 
-# Create the demo app instance
-app = create_demo_app()
-
-
 if __name__ == "__main__":
-    from _demo.state import E2E
-
-    # E2E: no reloader/debugger — a file-watch restart would wipe and reseed
-    # demo state mid-suite.
-    app.run(debug=not E2E, host="0.0.0.0", port=8888)
+    # E2E: no auto-reload — a file-watch restart would wipe and reseed demo state mid-suite.
+    e2e = os.environ.get("MDDASH_DEMO_E2E") == "1"
+    uvicorn.run(
+        "_demo.app:create_demo_app",
+        factory=True,
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", "8888")),
+        reload=not e2e,
+        reload_dirs=[str(API_DIR)],
+        app_dir=str(API_DIR),
+    )

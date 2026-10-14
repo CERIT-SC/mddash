@@ -5,11 +5,7 @@
  * API for experiment, simulation, compute, analysis, notebook, file, and publication workflows.
  * OpenAPI spec version: 1.0.0
  */
-import type { SimulationPathQueryParameter } from './simulationPathQueryParameter.ts';
 
 export type ListAnalysisJobsParams = {
-/**
- * @minLength 1
- */
-simulation_path?: SimulationPathQueryParameter;
+simulation_path?: string | null;
 };

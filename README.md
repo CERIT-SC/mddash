@@ -20,7 +20,7 @@ Each user gets an isolated Kubernetes namespace; their pod runs sidecars (Caddy 
 ## Development
 
 ```bash
-make demo   # real Flask API, seeded demo data, mocked integrations, React dev server
+make demo   # real FastAPI app, seeded demo data, mocked integrations, React dev server
 ```
 
 Demo data is wiped and reseeded on every start.
