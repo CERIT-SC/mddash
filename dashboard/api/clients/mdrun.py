@@ -2,7 +2,7 @@
 
 from http import HTTPStatus
 
-from config import MDRUN_API_URL
+from core.config import MDRUN_API_URL
 
 from clients.http import client, raise_for_status
 

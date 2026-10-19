@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, TypeVar
 
-from enums import PodStatus
+from core.enums import PodStatus
 
 from .files import MDPOSIT_DEMO_ACCESSION, MDPOSIT_DEMO_FILES
 

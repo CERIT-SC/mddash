@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from jsonschema import ValidationError
-from notebook_modules import load_catalog
+from modules.notebooks.catalog import load_catalog
 
 MIN_MODULE_COUNT = 2
 

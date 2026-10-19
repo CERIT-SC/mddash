@@ -3,9 +3,9 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from errors import ApiError, Conflict
+from core.errors import ApiError, Conflict
 from httpx import AsyncClient
-from models import Experiment, Notebook
+from modules.models import Experiment, Notebook
 from sqlalchemy.ext.asyncio import AsyncSession
 
 

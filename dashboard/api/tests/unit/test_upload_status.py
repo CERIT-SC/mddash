@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from upload.status import (
+from modules.publishing.status import (
     STATUS_FILENAME,
     FailedFile,
     UploadState,

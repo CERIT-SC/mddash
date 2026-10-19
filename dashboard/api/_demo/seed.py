@@ -3,9 +3,9 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 
-from config import DATA_DIR
-from enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus, PodStatus, SourceType
-from models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook, TunerJob
+from core.config import DATA_DIR
+from core.enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus, PodStatus, SourceType
+from modules.models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook, TunerJob
 from sqlalchemy.orm import Session
 
 from .analysis_data import materialize_analysis, start_analysis_thread

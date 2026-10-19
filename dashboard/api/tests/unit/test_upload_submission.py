@@ -4,8 +4,8 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from upload import submission
-from upload.submission import (
+from modules.publishing import submission
+from modules.publishing.submission import (
     UPLOAD_APP_LABEL,
     SubmissionError,
     build_credential_env,
@@ -62,19 +62,19 @@ class TestBuildCredentialEnv:
 class TestIsUploadActive:
     """Tests for is_upload_active."""
 
-    @patch("upload.submission.k8s.read_job")
+    @patch("modules.publishing.submission.k8s.read_job")
     async def test_returns_true_when_job_active(self, mock_read: Mock) -> None:
         """Active Job (status.active > 0) returns True."""
         mock_read.return_value = Mock(status=Mock(active=1))
         assert await is_upload_active("abcde") is True
 
-    @patch("upload.submission.k8s.read_job")
+    @patch("modules.publishing.submission.k8s.read_job")
     async def test_returns_false_when_job_not_found(self, mock_read: Mock) -> None:
         """Missing Job returns False."""
         mock_read.return_value = None
         assert await is_upload_active("abcde") is False
 
-    @patch("upload.submission.k8s.read_job")
+    @patch("modules.publishing.submission.k8s.read_job")
     async def test_returns_false_when_job_finished(self, mock_read: Mock) -> None:
         """Completed Job (status.active = 0) returns False."""
         mock_read.return_value = Mock(status=Mock(active=0))
@@ -84,8 +84,8 @@ class TestIsUploadActive:
 class TestSubmitUploadJob:
     """Tests for the submit_upload_job flow."""
 
-    @patch("upload.submission.is_upload_active", return_value=True)
-    @patch("upload.submission.read_status")
+    @patch("modules.publishing.submission.is_upload_active", return_value=True)
+    @patch("modules.publishing.submission.read_status")
     async def test_returns_existing_attempt_when_active(
         self, mock_read: Mock, mock_active: Mock, tmp_path: Path
     ) -> None:
@@ -99,13 +99,13 @@ class TestSubmitUploadJob:
         )
         assert result == "existing-att"
 
-    @patch("upload.submission.delete_upload_resources")
-    @patch("upload.submission.is_upload_active", return_value=False)
-    @patch("upload.submission.read_status", return_value=None)
-    @patch("upload.submission.write_status")
-    @patch("upload.submission.create_queued_status")
-    @patch("upload.submission.k8s", new_callable=AsyncMock)
-    @patch("upload.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
+    @patch("modules.publishing.submission.delete_upload_resources")
+    @patch("modules.publishing.submission.is_upload_active", return_value=False)
+    @patch("modules.publishing.submission.read_status", return_value=None)
+    @patch("modules.publishing.submission.write_status")
+    @patch("modules.publishing.submission.create_queued_status")
+    @patch("modules.publishing.submission.k8s", new_callable=AsyncMock)
+    @patch("modules.publishing.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
     async def test_creates_job_with_env_credentials_and_waits_for_admission(
         self,
         mock_k8s: Mock,
@@ -158,13 +158,13 @@ class TestSubmitUploadJob:
         # Old resources were cleaned up before creating new ones.
         mock_delete.assert_called_once()
 
-    @patch("upload.submission.delete_upload_resources")
-    @patch("upload.submission.is_upload_active", return_value=False)
-    @patch("upload.submission.read_status", return_value=None)
-    @patch("upload.submission.write_status")
-    @patch("upload.submission.create_queued_status")
-    @patch("upload.submission.k8s", new_callable=AsyncMock)
-    @patch("upload.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
+    @patch("modules.publishing.submission.delete_upload_resources")
+    @patch("modules.publishing.submission.is_upload_active", return_value=False)
+    @patch("modules.publishing.submission.read_status", return_value=None)
+    @patch("modules.publishing.submission.write_status")
+    @patch("modules.publishing.submission.create_queued_status")
+    @patch("modules.publishing.submission.k8s", new_callable=AsyncMock)
+    @patch("modules.publishing.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
     async def test_admission_timeout_cleans_up(
         self,
         mock_k8s: Mock,
@@ -190,13 +190,13 @@ class TestSubmitUploadJob:
         # Called at least once for the timeout cleanup (also once before creating).
         assert mock_delete.call_count >= 1
 
-    @patch("upload.submission.k8s", new_callable=AsyncMock)
-    @patch("upload.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
-    @patch("upload.submission.is_upload_active", return_value=False)
-    @patch("upload.submission.read_status", return_value=None)
-    @patch("upload.submission.write_status")
-    @patch("upload.submission.create_queued_status")
-    @patch("upload.submission.delete_upload_resources")
+    @patch("modules.publishing.submission.k8s", new_callable=AsyncMock)
+    @patch("modules.publishing.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
+    @patch("modules.publishing.submission.is_upload_active", return_value=False)
+    @patch("modules.publishing.submission.read_status", return_value=None)
+    @patch("modules.publishing.submission.write_status")
+    @patch("modules.publishing.submission.create_queued_status")
+    @patch("modules.publishing.submission.delete_upload_resources")
     async def test_job_manifest_has_preserve_label(
         self,
         mock_delete: Mock,
@@ -225,13 +225,13 @@ class TestSubmitUploadJob:
         pod_labels = job_manifest["spec"]["template"]["metadata"]["labels"]
         assert pod_labels["mddash.io/preserve-on-stop"] == "true"
 
-    @patch("upload.submission.k8s", new_callable=AsyncMock)
-    @patch("upload.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
-    @patch("upload.submission.is_upload_active", return_value=False)
-    @patch("upload.submission.read_status", return_value=None)
-    @patch("upload.submission.write_status")
-    @patch("upload.submission.create_queued_status")
-    @patch("upload.submission.delete_upload_resources")
+    @patch("modules.publishing.submission.k8s", new_callable=AsyncMock)
+    @patch("modules.publishing.submission.MDREPO_UPLOADER_IMAGE", "registry/mddash-mdrepo-uploader:dev")
+    @patch("modules.publishing.submission.is_upload_active", return_value=False)
+    @patch("modules.publishing.submission.read_status", return_value=None)
+    @patch("modules.publishing.submission.write_status")
+    @patch("modules.publishing.submission.create_queued_status")
+    @patch("modules.publishing.submission.delete_upload_resources")
     async def test_job_uses_tokenless_service_account(
         self,
         mock_delete: Mock,

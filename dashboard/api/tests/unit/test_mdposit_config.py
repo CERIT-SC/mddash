@@ -1,6 +1,6 @@
 """Unit tests for MDPosit configuration derivation (config.py)."""
 
-import config
+from core import config
 
 
 class TestMdpositConfigConstants:

@@ -21,7 +21,7 @@ def _env(**overrides: str | None) -> dict[str, str]:
 def _import_config(extra_env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     env = _env(**extra_env)
     return subprocess.run(
-        [sys.executable, "-c", "import config; print(config.MAX_NOTEBOOKS)"],
+        [sys.executable, "-c", "from core import config; print(config.MAX_NOTEBOOKS)"],
         cwd=API_DIR,
         env=env,
         capture_output=True,

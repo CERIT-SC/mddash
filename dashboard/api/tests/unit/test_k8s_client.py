@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from clients import k8s
-from enums import JobStatus, PodStatus
+from core.enums import JobStatus, PodStatus
 from kubernetes_asyncio.client.exceptions import ApiException
 from pytest_mock import MockerFixture
 

@@ -7,23 +7,35 @@ from collections.abc import AsyncIterator
 
 import anyio
 from clients import http, k8s
-from config import API_PREFIX, DATA_DIR, LOG_FORMAT, LOG_LEVEL, MDREPO_CLIENT_SECRET
-from db import dispose_engine, init_engine, run_migrations
-from errors import register_exception_handlers
+from core.config import API_PREFIX, DATA_DIR, LOG_FORMAT, LOG_LEVEL, MDREPO_CLIENT_SECRET
+from core.db import dispose_engine, init_engine, run_migrations
+from core.errors import register_exception_handlers
+from core.logging_utils import HealthCheckFilter, configure_logging, enable_loggers
+from core.utils import du_monitor
 from fastapi import FastAPI
-from logging_utils import HealthCheckFilter, configure_logging, enable_loggers
-from notebook_modules import load_catalog_or_exit
+from modules.archive import router as archive
+from modules.experiments import router as experiments
+from modules.files import router as files
+from modules.jobs.amber import router as amber
+from modules.jobs.analysis import router as analysis
+from modules.jobs.gmx import router as gmx
+from modules.jobs.tuner import router as tuner
+from modules.mdrepo import router as mdrepo
+from modules.notebooks import router as notebooks
+from modules.notebooks.catalog import load_catalog_or_exit
+from modules.publishing import router as publishing
+from modules.simulations import router as simulations
+from modules.system import router as system
 from openapi import install_openapi
-from routes import amber, analysis, experiments, files, gmx, mdrepo, misc, notebook, simulations, tuner
 from starlette.middleware.sessions import SessionMiddleware
-from utils import du_monitor
 
 logger = logging.getLogger(__name__)
 
 DU_MONITOR_START_DELAY_SECONDS = 10.0
 DB_PATH_NAME = "experiments.db"
 
-ROUTERS = (misc, experiments, mdrepo, files, simulations, gmx, amber, tuner, notebook, analysis)
+# Inclusion order is the path order of the generated OpenAPI document.
+ROUTERS = (system, experiments, publishing, archive, mdrepo, files, simulations, gmx, amber, tuner, notebooks, analysis)
 
 
 @contextlib.asynccontextmanager

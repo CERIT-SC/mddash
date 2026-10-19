@@ -21,7 +21,7 @@ Isolated environment created for each logged-in user. All containers share a PVC
 - **UI.** `dashboard/ui/`. Graphical interface for experiment setup, monitoring, and the five-step wizard.
 - **API.** `dashboard/api/`, port `5000`. Business logic: experiment state, and coordination between the UI and the simulation services.
 - **S3 sync daemon.** `dashboard/s3-sync/`. Continuously syncs user data between the PVC and S3 (`rclone bisync`).
-- **Analysis job.** Executed from `dashboard/api/models/analysis_job.py`. Runs on-demand analysis jobs against experiment data.
+- **Analysis job.** Executed from `dashboard/api/modules/jobs/analysis/models.py`. Runs on-demand analysis jobs against experiment data.
 - **Jupyter notebooks.** `notebook/`. Interactive environment for setup tasks that need manual visualization or intervention.
 - **User PVC.** Configured in `helm/charts/mddash/files/pre_spawn_hook.py`. Persists `/mddash` across sessions.
 

@@ -3,8 +3,7 @@
 import contextlib
 from pathlib import Path
 
-from pytest_mock import MockerFixture
-from utils import (
+from core.utils import (
     count_lines,
     generate_id,
     get_files_with_extensions,
@@ -12,6 +11,7 @@ from utils import (
     is_excluded_path,
     nsteps_override,
 )
+from pytest_mock import MockerFixture
 
 DEFAULT_ID_LENGTH = 5
 CUSTOM_ID_LENGTH = 10
@@ -216,10 +216,10 @@ class TestDuMonitor:
         self, tmp_path: Path, mocker: MockerFixture
     ) -> None:
         """A configured initial delay should happen before du runs (avoids first-health IO contention)."""
-        sleep = mocker.patch("utils.asyncio.sleep", side_effect=RuntimeError("stop"))
-        measure = mocker.patch("utils._measure_du")
+        sleep = mocker.patch("core.utils.asyncio.sleep", side_effect=RuntimeError("stop"))
+        measure = mocker.patch("core.utils._measure_du")
 
-        from utils import du_monitor
+        from core.utils import du_monitor
 
         with contextlib.suppress(RuntimeError):
             await du_monitor(tmp_path, initial_delay=3.0)
@@ -230,9 +230,9 @@ class TestDuMonitor:
     async def test_du_monitor_writes_size_markers(self, tmp_path: Path, mocker: MockerFixture) -> None:
         """Each measurement stores the total and per-experiment sizes in marker files."""
         (tmp_path / "abcde").mkdir()
-        mocker.patch("utils.asyncio.sleep", side_effect=[None, RuntimeError("stop")])
+        mocker.patch("core.utils.asyncio.sleep", side_effect=[None, RuntimeError("stop")])
 
-        from utils import du_monitor, get_du_size
+        from core.utils import du_monitor, get_du_size
 
         with contextlib.suppress(RuntimeError):
             await du_monitor(tmp_path)

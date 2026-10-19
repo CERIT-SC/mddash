@@ -8,8 +8,8 @@ import tempfile
 from pathlib import Path
 from subprocess import CalledProcessError, TimeoutExpired, run
 
-from config import DEFAULT_NOTEBOOKS_REPO
-from notebook_modules import load_catalog
+from core.config import DEFAULT_NOTEBOOKS_REPO
+from modules.notebooks.catalog import load_catalog
 
 
 def _path_is_tree(repo_url: str, path: str, clone_dir: Path) -> bool:

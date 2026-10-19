@@ -18,8 +18,8 @@ from types import SimpleNamespace
 from typing import Any
 
 from clients import k8s
-from config import DATA_DIR
-from enums import JobStatus, PodStatus
+from core.config import DATA_DIR
+from core.enums import JobStatus, PodStatus
 
 from ..analysis_data import start_analysis_thread
 from ..state import E2E, demo_state
@@ -71,7 +71,7 @@ def install_k8s_mocks() -> None:
 def _create_job_raw(manifest: dict) -> None:
     """Simulate the MDRepo upload and archive workers: mark done after a short delay."""
     try:
-        from upload.submission import EXPERIMENT_LABEL  # ruff:ignore[import-outside-top-level]
+        from modules.publishing.submission import EXPERIMENT_LABEL  # ruff:ignore[import-outside-top-level]
 
         experiment_id = manifest["metadata"]["labels"][EXPERIMENT_LABEL]
         job_name = manifest["metadata"]["name"]
@@ -109,7 +109,7 @@ def _finish_archive_job(job_name: str, mode: str, experiment_id: str, attempt_id
     Archive deletes the dir like a verified worker would; restore fabricates a
     minimal dir (there is no demo S3 to fetch from).
     """
-    from archive.status import ArchiveStatus, write_status  # ruff:ignore[import-outside-top-level]
+    from modules.archive.status import ArchiveStatus, write_status  # ruff:ignore[import-outside-top-level]
 
     time.sleep(ARCHIVE_JOB_DURATION_SEC)
     demo_state.upload_jobs.pop(job_name, None)
@@ -129,12 +129,12 @@ def _finish_archive_job(job_name: str, mode: str, experiment_id: str, attempt_id
 
 
 def _finish_upload_job(job_name: str, experiment_id: str, mdrepo_id: str) -> None:
-    from upload.status import UploadStatus, write_status  # ruff:ignore[import-outside-top-level]
+    from modules.publishing.status import UploadStatus, write_status  # ruff:ignore[import-outside-top-level]
 
     time.sleep(UPLOAD_JOB_DURATION_SEC)
     demo_state.upload_jobs.pop(job_name, None)
 
-    from upload.status import read_status  # ruff:ignore[import-outside-top-level]
+    from modules.publishing.status import read_status  # ruff:ignore[import-outside-top-level]
 
     queued = read_status(experiment_id, DATA_DIR)
     exp_dir = DATA_DIR / experiment_id
@@ -155,7 +155,7 @@ def _finish_upload_job(job_name: str, experiment_id: str, mdrepo_id: str) -> Non
 
     # Stands in for MDRepo-UI finalization, which the demo lacks; the cache
     # bust makes the next serialization re-sync at once, not after the TTL.
-    from cache import mdrepo_status_cache  # ruff:ignore[import-outside-top-level]
+    from core.cache import mdrepo_status_cache  # ruff:ignore[import-outside-top-level]
 
     demo_state.mdrepo_records[mdrepo_id] = True
     mdrepo_status_cache.clear()

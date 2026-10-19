@@ -6,8 +6,8 @@ from pathlib import Path
 
 import anyio
 import httpx
-from config import METADUMP_API_URL
-from errors import InternalServerError
+from core.config import METADUMP_API_URL
+from core.errors import InternalServerError
 
 from clients.http import client
 

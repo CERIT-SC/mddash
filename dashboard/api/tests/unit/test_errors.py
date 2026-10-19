@@ -3,11 +3,11 @@
 from http import HTTPStatus
 
 import pytest
-from dependencies import SessionDep
-from errors import ApiError, BadRequest, flatten_validation
+from core.dependencies import SessionDep
+from core.errors import ApiError, BadRequest, flatten_validation
 from fastapi import FastAPI
 from httpx import AsyncClient
-from models import Experiment
+from modules.models import Experiment
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

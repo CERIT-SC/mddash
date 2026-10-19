@@ -33,25 +33,24 @@ os.environ["NS_MAX_NOTEBOOKS"] = "2"
 os.environ["TUNER_USER"] = "tuner"
 os.environ["TUNER_PASSWORD"] = "secret"
 
-import cache
-import db
 from app import create_app
 from clients import http as http_client
 from clients import k8s
+from core import cache, db
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Modules binding DATA_DIR at import (`from config import DATA_DIR`).
+# Modules binding DATA_DIR at import (`from core.config import DATA_DIR`).
 _DATA_DIR_MODULES = (
-    "config",
-    "models.experiment",
-    "models.experiment_sources",
-    "models.simulation",
-    "models.analysis_job",
-    "models.gromacs_job",
-    "models.amber_job",
-    "routes.files",
-    "routes.misc",
+    "core.config",
+    "modules.experiments.models",
+    "modules.experiments.sources",
+    "modules.simulations.manifest",
+    "modules.jobs.analysis.models",
+    "modules.jobs.gmx.models",
+    "modules.jobs.amber.models",
+    "modules.files.router",
+    "modules.system.router",
     "app",
 )
 

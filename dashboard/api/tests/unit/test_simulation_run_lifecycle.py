@@ -7,15 +7,15 @@ from http import HTTPStatus
 from pathlib import Path
 from uuid import uuid4
 
-import db as db_module
 import pytest
-from enums import AmberBinary, DeviceType, Engine, EwaldPreset, JobStatus
+from core import db as db_module
+from core.enums import AmberBinary, DeviceType, Engine, EwaldPreset, JobStatus
 from httpx import AsyncClient
-from manifest_schema import schema_url
-from models import Experiment
-from models.amber_job import AmberJob
-from models.gromacs_job import GromacsJob
-from models.simulation import Simulation
+from modules.jobs.amber.models import AmberJob
+from modules.jobs.gmx.models import GromacsJob
+from modules.models import Experiment
+from modules.simulations.manifest import Simulation
+from modules.simulations.manifest_schema import schema_url
 from pytest_mock import MockerFixture
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,8 +37,8 @@ AMBER_FILES = {
 @pytest.fixture(autouse=True)
 def _model_data_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Job models bind config.DATA_DIR at import; rebind it to the test data dir (like test_simulation.py does)."""
-    monkeypatch.setattr("models.gromacs_job.DATA_DIR", tmp_path)
-    monkeypatch.setattr("models.amber_job.DATA_DIR", tmp_path)
+    monkeypatch.setattr("modules.jobs.gmx.models.DATA_DIR", tmp_path)
+    monkeypatch.setattr("modules.jobs.amber.models.DATA_DIR", tmp_path)
 
 
 @pytest.fixture
@@ -908,7 +908,7 @@ class TestStripRunControlArgs:
     """extra_args composition for extension."""
 
     async def test_strips_nsteps_variants(self) -> None:
-        from utils import strip_run_control_args
+        from core.utils import strip_run_control_args
 
         assert strip_run_control_args("-nsteps 80000 -ntomp 4") == "-ntomp 4"
         assert strip_run_control_args("-nsteps=80000") == ""
@@ -916,14 +916,14 @@ class TestStripRunControlArgs:
 
     async def test_strips_quoted_nsteps_without_dangling_quote(self) -> None:
         """Quoted -nsteps must not leave a dangling quote that breaks MDRun's shlex.split."""
-        from utils import strip_run_control_args
+        from core.utils import strip_run_control_args
 
         assert strip_run_control_args('-nsteps "1000"') == ""
         assert strip_run_control_args("-nsteps '1000'") == ""
         assert strip_run_control_args('-v -nsteps "1000" -cpt 15') == "-v -cpt 15"
 
     async def test_rejects_cpi(self) -> None:
-        from utils import strip_run_control_args
+        from core.utils import strip_run_control_args
 
         with pytest.raises(ValueError, match=re.escape("-cpi")):
             strip_run_control_args("-cpi state.cpt")

@@ -14,10 +14,10 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from core.schemas import Problem
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from pydantic import TypeAdapter
-from schemas.common import Problem
 
 CONTRACT_PATH = Path(__file__).parent / "openapi.yaml"
 

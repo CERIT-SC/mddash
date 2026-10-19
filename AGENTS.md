@@ -52,12 +52,12 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - A local `/mddash/_archives` tree is never legitimate. `sync.sh` removes stray copies at startup, restoring the write bit first since bisync-downloaded dirs are read-only.
 
 ### Database
-- **Dashboard API.** the app lifespan runs Alembic (`db.run_migrations`) against versioned migrations in `dashboard/api/migrations/versions/` before serving (fresh databases are created by the same migrations, there is no `create_all()` fallback, see `dashboard/api/AGENTS.md`). Add a new migration file when adding columns. Do NOT run migrations manually.
+- **Dashboard API.** the app lifespan runs Alembic (`core.db.run_migrations`) against versioned migrations in `dashboard/api/migrations/versions/` before serving (fresh databases are created by the same migrations, there is no `create_all()` fallback, see `dashboard/api/AGENTS.md`). Add a new migration file when adding columns. Do NOT run migrations manually.
 - **MDRun API.** `db.create_all()` only. No Alembic migrations. SQLite WAL mode for concurrent reads/writes.
 
 ### Error handling
 - All services return RFC 9457 problem-details (`errors.py` per service): `{"type", "title", "detail"[, "solution"]}` with `Content-Type: application/problem+json`. The body carries no `status`; the HTTP status line does. `type` is the support-reportable code (`urn:mddash:<token>`, correlated in logs by `type` + time).
-- `ApiError` + handler registration is intentionally duplicated across `dashboard/api/errors.py`, `mdrun-api/errors.py`, `dashboard/auth/errors.py`, and `tuner/api/errors.py` (separate containers, no shared package). Keep all in lockstep: a contract change must be applied to all four.
+- `ApiError` + handler registration is intentionally duplicated across `dashboard/api/core/errors.py`, `mdrun-api/errors.py`, `dashboard/auth/errors.py`, and `tuner/api/errors.py` (separate containers, no shared package). Keep all in lockstep: a contract change must be applied to all four.
 - `str(e)` and internal details never reach the client: unexpected exceptions return a generic 500 detail with a retry/support `solution`, traceback logged server-side only. This includes the Tuner rayworker's persisted job error, which is a user-friendly message, never the raw exception text.
 - The dashboard API wraps Tuner and MDRepo submit failures as `urn:mddash:upstream-unavailable` (with a `solution`) rather than letting them appear as generic 500s.
 - Validation errors carry no `solution` (the `detail` already implies the fix).

@@ -16,8 +16,8 @@ async def _stub_clone_module(
 
 
 def install_git_mocks() -> None:
-    """Replace the clone functions bound in models.experiment with offline stubs."""
-    import models.experiment as experiment_model  # ruff:ignore[import-outside-top-level]
+    """Replace the clone functions bound in modules.experiments.models with offline stubs."""
+    import modules.experiments.models as experiment_model  # ruff:ignore[import-outside-top-level]
 
     experiment_model.download_git_repo = _stub_clone  # type: ignore
     experiment_model.download_git_repo_module = _stub_clone_module  # type: ignore

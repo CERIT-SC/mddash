@@ -6,7 +6,7 @@ import httpx
 import pytest
 import respx
 from clients import mdrun
-from config import MDRUN_API_URL
+from core.config import MDRUN_API_URL
 
 
 class TestStopJob:

@@ -10,14 +10,14 @@ import time
 from collections.abc import AsyncIterator
 
 import anyio
-from config import API_PREFIX, DATA_DIR
+from core.config import API_PREFIX, DATA_DIR
 from fastapi import FastAPI, Request
 from fastapi.responses import RedirectResponse
 from fastapi.routing import APIRoute
-from routes.mdrepo import redirect_with_query
+from modules.mdrepo.router import redirect_with_query
+from modules.mdrepo.tokens import MDREPO_REFRESH_TOKEN_KEY, MDREPO_TOKEN_EXPIRES_AT, MDREPO_TOKEN_KEY
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from token_manager import MDREPO_REFRESH_TOKEN_KEY, MDREPO_TOKEN_EXPIRES_AT, MDREPO_TOKEN_KEY
 
 from .mocks import install_all_mocks
 from .seed import seed_data

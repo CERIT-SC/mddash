@@ -4,11 +4,11 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
 
-import db as db_module
 import pytest
 import sqlalchemy as sa
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
+from core import db as db_module
 from sqlalchemy import Engine, create_engine
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.exc import IntegrityError
@@ -208,7 +208,7 @@ def test_migration_008_adds_simulation_path_to_analysis(tmp_path: Path) -> None:
 def test_migration_010_adds_structured_source_columns(tmp_path: Path) -> None:
     """Source columns are added empty; migrated rows must load through the ORM (enum names, not values)."""
     import sqlalchemy as sa
-    from models.experiment import Experiment
+    from modules.experiments.models import Experiment
 
     app = _make_app(tmp_path / "test.db")
     _upgrade_to(app, "009")
@@ -292,7 +292,7 @@ def test_all_migrations_reach_head(tmp_path: Path) -> None:
 
 def test_models_match_migrated_schema(tmp_path: Path) -> None:
     """metadata.create_all() on a fresh DB must produce the same columns as migrations."""
-    import models  # ruff: ignore[unused-import]  # registers every table on the metadata
+    import modules.models  # ruff: ignore[unused-import]  # registers every table on the metadata
 
     migrated_app = _make_app(tmp_path / "migrated.db")
     _upgrade_to(migrated_app, "head")

@@ -7,9 +7,9 @@ import time
 from pathlib import Path
 
 import httpx
-from config import DATA_DIR
-from enums import JobStatus
-from models.analysis_job import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
+from core.config import DATA_DIR
+from core.enums import JobStatus
+from modules.jobs.analysis.models import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
 
 from .state import E2E, demo_state
 

@@ -8,8 +8,8 @@ import pytest
 import respx
 from _demo import analysis_data
 from _demo.state import demo_state
-from config import DATA_DIR
-from enums import JobStatus
+from core.config import DATA_DIR
+from core.enums import JobStatus
 from pytest_mock import MockerFixture
 
 

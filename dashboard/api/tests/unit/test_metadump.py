@@ -9,7 +9,7 @@ import httpx
 import pytest
 import respx
 from clients.metadump import extract_metadata, extract_metadata_bulk
-from errors import InternalServerError
+from core.errors import InternalServerError
 
 TEST_URL = "http://test-metadump"
 

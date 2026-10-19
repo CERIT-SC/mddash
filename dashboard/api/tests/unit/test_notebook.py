@@ -7,14 +7,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from clients.k8s import create_notebook_pod
-from config import MAX_NOTEBOOKS
-from enums import NotebookTier, PodStatus
-from errors import ApiError, Forbidden
+from core.config import MAX_NOTEBOOKS
+from core.enums import NotebookTier, PodStatus
+from core.errors import ApiError, Forbidden
 from httpx import AsyncClient
 from kubernetes_asyncio.client.exceptions import ApiException
-from models import Experiment
-from models.notebook import Notebook
-from schemas.experiment import Notebook as NotebookOut
+from modules.models import Experiment
+from modules.notebooks.models import Notebook
+from modules.notebooks.schemas import Notebook as NotebookOut
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -27,7 +27,7 @@ def _make_notebook() -> Notebook:
 @pytest.fixture(autouse=True)
 def pod_info() -> Iterator[AsyncMock]:
     """Mock the pod read start() performs after creating the pod."""
-    with patch("models.notebook.k8s.get_pod_info", AsyncMock(return_value=(PodStatus.PENDING, None))) as info:
+    with patch("modules.notebooks.models.k8s.get_pod_info", AsyncMock(return_value=(PodStatus.PENDING, None))) as info:
         yield info
 
 
@@ -87,9 +87,9 @@ class TestNotebookStartQuotaCheck:
     async def test_raises_forbidden_when_concurrent_limit_reached(self) -> None:
         """start() must raise a 403 ApiError without creating a pod when notebook count is at the limit."""
         with (
-            patch("models.notebook.k8s.count_notebook_pods", return_value=2),
-            patch("models.notebook.MAX_NOTEBOOKS", 2),
-            patch("models.notebook.k8s.create_notebook_pod") as mock_create,
+            patch("modules.notebooks.models.k8s.count_notebook_pods", return_value=2),
+            patch("modules.notebooks.models.MAX_NOTEBOOKS", 2),
+            patch("modules.notebooks.models.k8s.create_notebook_pod") as mock_create,
         ):
             with pytest.raises(ApiError) as exc_info:
                 await _make_notebook().start()
@@ -101,10 +101,10 @@ class TestNotebookStartQuotaCheck:
     async def test_raises_forbidden_when_quota_headroom_insufficient(self) -> None:
         """start() must raise Forbidden without creating a pod when quota would be exceeded."""
         with (
-            patch("models.notebook.k8s.count_notebook_pods", return_value=0),
-            patch("models.notebook.MAX_NOTEBOOKS", 2),
-            patch("models.notebook.k8s.check_quota_headroom", return_value="Memory quota exceeded"),
-            patch("models.notebook.k8s.create_notebook_pod") as mock_create,
+            patch("modules.notebooks.models.k8s.count_notebook_pods", return_value=0),
+            patch("modules.notebooks.models.MAX_NOTEBOOKS", 2),
+            patch("modules.notebooks.models.k8s.check_quota_headroom", return_value="Memory quota exceeded"),
+            patch("modules.notebooks.models.k8s.create_notebook_pod") as mock_create,
         ):
             with pytest.raises(Forbidden):
                 await _make_notebook().start()
@@ -114,12 +114,12 @@ class TestNotebookStartQuotaCheck:
     async def test_creates_pod_when_quota_headroom_sufficient(self) -> None:
         """start() must proceed to pod creation when all quota checks pass."""
         with (
-            patch("models.notebook.k8s.count_notebook_pods", return_value=0),
-            patch("models.notebook.MAX_NOTEBOOKS", 2),
-            patch("models.notebook.k8s.check_quota_headroom", return_value=None),
-            patch("models.notebook.k8s.create_notebook_pod") as mock_create,
-            patch("models.notebook.k8s.create_service"),
-            patch("models.notebook.caddy.add_proxy_route", return_value="route-id"),
+            patch("modules.notebooks.models.k8s.count_notebook_pods", return_value=0),
+            patch("modules.notebooks.models.MAX_NOTEBOOKS", 2),
+            patch("modules.notebooks.models.k8s.check_quota_headroom", return_value=None),
+            patch("modules.notebooks.models.k8s.create_notebook_pod") as mock_create,
+            patch("modules.notebooks.models.k8s.create_service"),
+            patch("modules.notebooks.models.caddy.add_proxy_route", return_value="route-id"),
         ):
             await _make_notebook().start()
 
@@ -127,12 +127,12 @@ class TestNotebookStartQuotaCheck:
 
     async def test_service_is_owned_by_the_pod(self) -> None:
         with (
-            patch("models.notebook.k8s.count_notebook_pods", return_value=0),
-            patch("models.notebook.MAX_NOTEBOOKS", 2),
-            patch("models.notebook.k8s.check_quota_headroom", return_value=None),
-            patch("models.notebook.k8s.create_notebook_pod", return_value="uid-123"),
-            patch("models.notebook.k8s.create_service") as mock_svc,
-            patch("models.notebook.caddy.add_proxy_route", return_value="route-id"),
+            patch("modules.notebooks.models.k8s.count_notebook_pods", return_value=0),
+            patch("modules.notebooks.models.MAX_NOTEBOOKS", 2),
+            patch("modules.notebooks.models.k8s.check_quota_headroom", return_value=None),
+            patch("modules.notebooks.models.k8s.create_notebook_pod", return_value="uid-123"),
+            patch("modules.notebooks.models.k8s.create_service") as mock_svc,
+            patch("modules.notebooks.models.caddy.add_proxy_route", return_value="route-id"),
         ):
             await _make_notebook().start()
 
@@ -151,13 +151,13 @@ class TestNotebookStartTierAndGpu:
         """start() with no tier argument defaults to NotebookTier.SMALL."""
         resources = self._MOCK_RESOURCES
         with (
-            patch("models.notebook.k8s.count_notebook_pods", return_value=0),
-            patch("models.notebook.MAX_NOTEBOOKS", 2),
-            patch("models.notebook.k8s.check_quota_headroom", return_value=None),
-            patch("models.notebook.get_tier_resources", return_value=resources) as mock_tier_res,
-            patch("models.notebook.k8s.create_notebook_pod"),
-            patch("models.notebook.k8s.create_service"),
-            patch("models.notebook.caddy.add_proxy_route", return_value="route-id"),
+            patch("modules.notebooks.models.k8s.count_notebook_pods", return_value=0),
+            patch("modules.notebooks.models.MAX_NOTEBOOKS", 2),
+            patch("modules.notebooks.models.k8s.check_quota_headroom", return_value=None),
+            patch("modules.notebooks.models.get_tier_resources", return_value=resources) as mock_tier_res,
+            patch("modules.notebooks.models.k8s.create_notebook_pod"),
+            patch("modules.notebooks.models.k8s.create_service"),
+            patch("modules.notebooks.models.caddy.add_proxy_route", return_value="route-id"),
         ):
             await _make_notebook().start()
             mock_tier_res.assert_called_once_with(NotebookTier.SMALL)
@@ -166,13 +166,13 @@ class TestNotebookStartTierAndGpu:
         """start() passes the requested tier to get_tier_resources."""
         resources = self._MOCK_RESOURCES
         with (
-            patch("models.notebook.k8s.count_notebook_pods", return_value=0),
-            patch("models.notebook.MAX_NOTEBOOKS", 2),
-            patch("models.notebook.k8s.check_quota_headroom", return_value=None),
-            patch("models.notebook.get_tier_resources", return_value=resources) as mock_tier_res,
-            patch("models.notebook.k8s.create_notebook_pod"),
-            patch("models.notebook.k8s.create_service"),
-            patch("models.notebook.caddy.add_proxy_route", return_value="route-id"),
+            patch("modules.notebooks.models.k8s.count_notebook_pods", return_value=0),
+            patch("modules.notebooks.models.MAX_NOTEBOOKS", 2),
+            patch("modules.notebooks.models.k8s.check_quota_headroom", return_value=None),
+            patch("modules.notebooks.models.get_tier_resources", return_value=resources) as mock_tier_res,
+            patch("modules.notebooks.models.k8s.create_notebook_pod"),
+            patch("modules.notebooks.models.k8s.create_service"),
+            patch("modules.notebooks.models.caddy.add_proxy_route", return_value="route-id"),
         ):
             await _make_notebook().start(tier=NotebookTier.MEDIUM)
             mock_tier_res.assert_called_once_with(NotebookTier.MEDIUM)
@@ -181,14 +181,14 @@ class TestNotebookStartTierAndGpu:
         """start() with gpu=True forwards gpu=True to create_notebook_pod."""
         resources = self._MOCK_RESOURCES
         with (
-            patch("models.notebook.k8s.count_notebook_pods", return_value=0),
-            patch("models.notebook.MAX_NOTEBOOKS", 2),
-            patch("models.notebook.GPU_TYPE", "nvidia.com/gpu"),
-            patch("models.notebook.k8s.check_quota_headroom", return_value=None),
-            patch("models.notebook.get_tier_resources", return_value=resources),
-            patch("models.notebook.k8s.create_notebook_pod") as mock_create,
-            patch("models.notebook.k8s.create_service"),
-            patch("models.notebook.caddy.add_proxy_route", return_value="route-id"),
+            patch("modules.notebooks.models.k8s.count_notebook_pods", return_value=0),
+            patch("modules.notebooks.models.MAX_NOTEBOOKS", 2),
+            patch("modules.notebooks.models.GPU_TYPE", "nvidia.com/gpu"),
+            patch("modules.notebooks.models.k8s.check_quota_headroom", return_value=None),
+            patch("modules.notebooks.models.get_tier_resources", return_value=resources),
+            patch("modules.notebooks.models.k8s.create_notebook_pod") as mock_create,
+            patch("modules.notebooks.models.k8s.create_service"),
+            patch("modules.notebooks.models.caddy.add_proxy_route", return_value="route-id"),
         ):
             await _make_notebook().start(gpu=True)
             assert mock_create.call_args.kwargs["gpu"] is True
@@ -197,7 +197,7 @@ class TestNotebookStartTierAndGpu:
         """An unrecognized tier is a 400 before any pod is created."""
         db_session.add(Experiment(id="exp01", name="Tier", notebook=Notebook(experiment_id="exp01")))
         await db_session.commit()
-        with patch("models.notebook.k8s.create_notebook_pod") as mock_create:
+        with patch("modules.notebooks.models.k8s.create_notebook_pod") as mock_create:
             response = await client.post("/dash/api/experiments/exp01/notebook", json={"tier": "99x"})
         assert response.status_code == 400
         mock_create.assert_not_called()

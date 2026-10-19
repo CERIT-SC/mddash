@@ -8,12 +8,12 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from archive.status import ArchiveDirection, ArchiveState, ArchiveStatus, write_status
-from archive.submission import SubmissionError
-from enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus
-from errors import ApiError, Conflict
-from models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook
-from schemas.experiment import Experiment as ExperimentOut
+from core.enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus
+from core.errors import ApiError, Conflict
+from modules.archive.status import ArchiveDirection, ArchiveState, ArchiveStatus, write_status
+from modules.archive.submission import SubmissionError
+from modules.experiments.schemas import Experiment as ExperimentOut
+from modules.models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook
 from sqlalchemy.ext.asyncio import AsyncSession
 
 EXP_ID = "abcde"
@@ -38,12 +38,12 @@ async def experiment(db_session: AsyncSession, tmp_path: Path) -> Experiment:
 
 @pytest.fixture
 def s3() -> Iterator[None]:
-    with patch("models.experiment.S3_BUCKET", "test-bucket"):
+    with patch("modules.experiments.models.S3_BUCKET", "test-bucket"):
         yield
 
 
 def _job_active(live: bool) -> Any:
-    return patch("archive.submission.is_job_active", AsyncMock(return_value=live))
+    return patch("modules.archive.submission.is_job_active", AsyncMock(return_value=live))
 
 
 def _submit_ok(_direction: str, _experiment_id: str, _data_dir: Path) -> str:
@@ -52,7 +52,7 @@ def _submit_ok(_direction: str, _experiment_id: str, _data_dir: Path) -> str:
 
 class TestArchiveGates:
     async def test_no_s3_config_400(self, experiment: Experiment, db_session: AsyncSession) -> None:
-        with patch("models.experiment.S3_BUCKET", ""), pytest.raises(ApiError) as exc_info:
+        with patch("modules.experiments.models.S3_BUCKET", ""), pytest.raises(ApiError) as exc_info:
             await experiment.archive(db_session)
         assert exc_info.value.status_code == 400
 
@@ -71,8 +71,8 @@ class TestArchiveGates:
         )
         experiment = await _reload(db_session)
         with (
-            patch("models.experiment.S3_BUCKET", "test-bucket"),
-            patch("models.gromacs_job.mdrun.get_gmx_job", AsyncMock(return_value={"status": "RUNNING"})),
+            patch("modules.experiments.models.S3_BUCKET", "test-bucket"),
+            patch("modules.jobs.gmx.models.mdrun.get_gmx_job", AsyncMock(return_value={"status": "RUNNING"})),
             pytest.raises(ApiError) as exc_info,
         ):
             await experiment.archive(db_session)
@@ -80,9 +80,9 @@ class TestArchiveGates:
 
     async def test_active_upload_409(self, experiment: Experiment, db_session: AsyncSession) -> None:
         with (
-            patch("models.experiment.S3_BUCKET", "test-bucket"),
-            patch("models.experiment.read_status", return_value=Mock(state="running")),
-            patch("models.experiment.is_upload_active", AsyncMock(return_value=True)),
+            patch("modules.experiments.models.S3_BUCKET", "test-bucket"),
+            patch("modules.experiments.models.read_status", return_value=Mock(state="running")),
+            patch("modules.experiments.models.is_upload_active", AsyncMock(return_value=True)),
             pytest.raises(ApiError) as exc_info,
         ):
             await experiment.archive(db_session)
@@ -99,7 +99,7 @@ class TestArchiveGates:
     ) -> None:
         with (
             patch.object(Notebook, "stop") as mock_stop,
-            patch("models.experiment.archive_submission.submit_job", side_effect=_submit_ok),
+            patch("modules.experiments.models.archive_submission.submit_job", side_effect=_submit_ok),
         ):
             await experiment.archive(db_session)
         mock_stop.assert_called_once()
@@ -107,7 +107,7 @@ class TestArchiveGates:
 
 class TestArchiveSubmit:
     async def test_snapshots_and_submit(self, experiment: Experiment, db_session: AsyncSession, s3: None) -> None:
-        with patch("models.experiment.archive_submission.submit_job", side_effect=_submit_ok) as mock_submit:
+        with patch("modules.experiments.models.archive_submission.submit_job", side_effect=_submit_ok) as mock_submit:
             attempt = await experiment.archive(db_session)
         assert attempt == "attempt-1"
         mock_submit.assert_called_once()
@@ -142,7 +142,7 @@ class TestRestoreGates:
         write_status(ArchiveStatus(attempt_id="a", state=state.value, direction="restore"), EXP_ID, tmp_path)
         with (
             _job_active(False),
-            patch("models.experiment.archive_submission.submit_job", side_effect=_submit_ok) as mock_submit,
+            patch("modules.experiments.models.archive_submission.submit_job", side_effect=_submit_ok) as mock_submit,
         ):
             assert await experiment.restore() == "attempt-1"
         mock_submit.assert_called_once()
@@ -152,7 +152,7 @@ class TestRestoreGates:
         (tmp_path / EXP_ID).rmdir()
         with (
             _job_active(False),
-            patch("models.experiment.archive_submission.submit_job", side_effect=_submit_ok) as mock_submit,
+            patch("modules.experiments.models.archive_submission.submit_job", side_effect=_submit_ok) as mock_submit,
         ):
             attempt = await experiment.restore()
         assert attempt == "attempt-1"
@@ -167,7 +167,7 @@ class TestArchiveStateReconciliation:
 
     async def test_plain_experiment_no_io(self, experiment: Experiment) -> None:
         """No markers -> None without touching disk or K8s."""
-        with patch("models.experiment.archive_submission.is_job_active") as mock_active:
+        with patch("modules.experiments.models.archive_submission.is_job_active") as mock_active:
             assert await experiment.refresh_archive_state() is None
             assert experiment.archive_state is None
         mock_active.assert_not_called()
@@ -287,7 +287,7 @@ class TestSubmissionFailure:
     ) -> None:
         with (
             patch(
-                "models.experiment.archive_submission.submit_job",
+                "modules.experiments.models.archive_submission.submit_job",
                 side_effect=SubmissionError("object is being deleted"),
             ),
             pytest.raises(ApiError) as exc_info,
@@ -302,7 +302,7 @@ class TestSubmissionFailure:
         with (
             _job_active(False),
             patch(
-                "models.experiment.archive_submission.submit_job",
+                "modules.experiments.models.archive_submission.submit_job",
                 side_effect=SubmissionError("object is being deleted"),
             ),
             pytest.raises(ApiError) as exc_info,
@@ -317,8 +317,8 @@ class TestDeleteWithArchive:
         experiment.archived_at = datetime.now(UTC)
         (tmp_path / EXP_ID).rmdir()
         with (
-            patch("models.experiment.archive_submission.delete_jobs") as mock_delete,
-            patch("models.experiment.archive_submission.submit_purge_job") as mock_purge,
+            patch("modules.experiments.models.archive_submission.delete_jobs") as mock_delete,
+            patch("modules.experiments.models.archive_submission.submit_purge_job") as mock_purge,
             patch.object(Notebook, "stop"),
         ):
             await experiment.delete()
@@ -327,8 +327,8 @@ class TestDeleteWithArchive:
 
     async def test_active_delete_no_purge(self, experiment: Experiment) -> None:
         with (
-            patch("models.experiment.archive_submission.delete_jobs"),
-            patch("models.experiment.archive_submission.submit_purge_job") as mock_purge,
+            patch("modules.experiments.models.archive_submission.delete_jobs"),
+            patch("modules.experiments.models.archive_submission.submit_purge_job") as mock_purge,
             patch.object(Notebook, "stop"),
         ):
             await experiment.delete()
@@ -351,8 +351,8 @@ class TestDeleteAnalysisJobs:
     async def test_delete_removes_analysis_jobs(self, experiment: Experiment, db_session: AsyncSession) -> None:
         experiment = await self._with_analysis_job(db_session)
         with (
-            patch("models.experiment.archive_submission.delete_jobs"),
-            patch("models.experiment.archive_submission.submit_purge_job"),
+            patch("modules.experiments.models.archive_submission.delete_jobs"),
+            patch("modules.experiments.models.archive_submission.submit_purge_job"),
             patch.object(Notebook, "stop"),
             patch.object(AnalysisJob, "delete") as mock_delete,
         ):
@@ -364,8 +364,8 @@ class TestDeleteAnalysisJobs:
     ) -> None:
         experiment = await self._with_analysis_job(db_session)
         with (
-            patch("models.experiment.archive_submission.delete_jobs"),
-            patch("models.experiment.archive_submission.submit_purge_job") as mock_purge,
+            patch("modules.experiments.models.archive_submission.delete_jobs"),
+            patch("modules.experiments.models.archive_submission.submit_purge_job") as mock_purge,
             patch.object(Notebook, "stop"),
             patch.object(AnalysisJob, "delete", side_effect=RuntimeError("k8s down")),
         ):
@@ -411,7 +411,7 @@ class TestArchivedJobSerialization:
         experiment = await _reload(db_session)
         (tmp_path / EXP_ID).rmdir()
 
-        with _job_active(False), caplog.at_level(logging.WARNING, logger="schemas.common"):
+        with _job_active(False), caplog.at_level(logging.WARNING, logger="core.schemas"):
             await experiment.refresh()
             data = ExperimentOut.model_validate(experiment).model_dump(mode="json")
 

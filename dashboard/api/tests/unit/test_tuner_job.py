@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
-from cache import tuner_last_known_status
-from enums import Engine, JobStatus
-from errors import ApiError
-from models import Experiment, TunerJob
+from core.cache import tuner_last_known_status
+from core.enums import Engine, JobStatus
+from core.errors import ApiError
+from modules.models import Experiment, TunerJob
 
 EXPECTED_PERFORMANCE = 42.0
 JOB_ID = "4f6cf7a7-4120-4f6c-87fe-61313b1684df"
@@ -38,11 +38,11 @@ def _make_tuner_job(*, is_stopped: bool = False) -> TunerJob:
 
 
 def _poll(**kwargs: Any) -> Any:
-    return patch("models.tuner_job.tuner.amber_poll_status", AsyncMock(**kwargs))
+    return patch("modules.jobs.tuner.models.tuner.amber_poll_status", AsyncMock(**kwargs))
 
 
 def _delete(**kwargs: Any) -> Any:
-    return patch("models.tuner_job.tuner.amber_delete_job", AsyncMock(**kwargs))
+    return patch("modules.jobs.tuner.models.tuner.amber_delete_job", AsyncMock(**kwargs))
 
 
 class TestTunerJobNotFound:
@@ -180,8 +180,8 @@ class TestTunerJobStartFailure:
         simulation.extra_args = ""
 
         with (
-            patch("models.tuner_job.Simulation.get", return_value=simulation),
-            patch("models.tuner_job.tuner.amber_submit", AsyncMock(side_effect=exc)),
+            patch("modules.jobs.tuner.models.Simulation.get", return_value=simulation),
+            patch("modules.jobs.tuner.models.tuner.amber_submit", AsyncMock(side_effect=exc)),
             pytest.raises(ApiError) as exc_info,
         ):
             await TunerJob.start(AsyncMock(), _experiment(), "production/test.simulation.json", nsteps=1000)

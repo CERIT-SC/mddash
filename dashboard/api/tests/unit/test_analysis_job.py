@@ -4,11 +4,10 @@ from pathlib import Path
 from unittest.mock import AsyncMock, PropertyMock, patch
 
 import pytest
-from config import ANALYSIS_RESOURCES
-from enums import AnalysisType, DeviceType, Engine, JobStatus, PreprocessingMode
-from errors import Forbidden
-from models import Experiment, GromacsJob, Notebook
-from models.analysis_job import (
+from core.config import ANALYSIS_RESOURCES
+from core.enums import AnalysisType, DeviceType, Engine, JobStatus, PreprocessingMode
+from core.errors import Forbidden
+from modules.jobs.analysis.models import (
     AnalysisJob,
     format_mwf_analysis_command,
     format_mwf_inputs_yaml,
@@ -16,6 +15,7 @@ from models.analysis_job import (
     get_incomplete_task_dirs,
     get_runtime_prelude_commands,
 )
+from modules.models import Experiment, GromacsJob, Notebook
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -165,8 +165,10 @@ class TestAnalysisJobStartQuotaCheck:
         """start() must raise Forbidden and not create a job when quota is insufficient."""
         experiment = await _experiment(db_session)
         with (
-            patch("models.analysis_job.k8s.check_quota_headroom", AsyncMock(return_value="CPU quota exceeded")),
-            patch("models.analysis_job.k8s.create_job") as mock_create_job,
+            patch(
+                "modules.jobs.analysis.models.k8s.check_quota_headroom", AsyncMock(return_value="CPU quota exceeded")
+            ),
+            patch("modules.jobs.analysis.models.k8s.create_job") as mock_create_job,
             pytest.raises(Forbidden, match="CPU quota exceeded"),
         ):
             await _start(db_session, experiment, tmp_path)
@@ -179,8 +181,8 @@ class TestAnalysisJobStartQuotaCheck:
         """start() must pass ANALYSIS_RESOURCES to create_job when quota has headroom."""
         experiment = await _experiment(db_session)
         with (
-            patch("models.analysis_job.k8s.check_quota_headroom", AsyncMock(return_value=None)),
-            patch("models.analysis_job.k8s.create_job") as mock_create_job,
+            patch("modules.jobs.analysis.models.k8s.check_quota_headroom", AsyncMock(return_value=None)),
+            patch("modules.jobs.analysis.models.k8s.create_job") as mock_create_job,
         ):
             job = await _start(db_session, experiment, tmp_path)
 
@@ -192,9 +194,9 @@ class TestAnalysisJobStartQuotaCheck:
         """A new analysis deletes the simulation's previous analysis Job and row."""
         experiment = await _experiment(db_session)
         with (
-            patch("models.analysis_job.k8s.check_quota_headroom", AsyncMock(return_value=None)),
-            patch("models.analysis_job.k8s.create_job"),
-            patch("models.analysis_job.k8s.delete_job") as mock_delete_job,
+            patch("modules.jobs.analysis.models.k8s.check_quota_headroom", AsyncMock(return_value=None)),
+            patch("modules.jobs.analysis.models.k8s.create_job"),
+            patch("modules.jobs.analysis.models.k8s.delete_job") as mock_delete_job,
         ):
             first = await _start(db_session, experiment, tmp_path)
             second = await _start(db_session, experiment, tmp_path)
@@ -212,8 +214,8 @@ class TestAnalysisJobStartSimProgress:
     ) -> float | None:
         experiment = await _experiment(db_session, nsteps)
         with (
-            patch("models.analysis_job.k8s.check_quota_headroom", AsyncMock(return_value=None)),
-            patch("models.analysis_job.k8s.create_job"),
+            patch("modules.jobs.analysis.models.k8s.check_quota_headroom", AsyncMock(return_value=None)),
+            patch("modules.jobs.analysis.models.k8s.create_job"),
             patch.object(GromacsJob, "nsteps_done", new_callable=PropertyMock, return_value=done),
         ):
             job = await _start(db_session, experiment, tmp_path)
@@ -245,7 +247,9 @@ class TestAnalysisJobStatus:
         )
         (tmp_path / "exptt").mkdir()
         (tmp_path / "exptt" / "inputs.yaml").write_text("x")
-        with patch("models.analysis_job.k8s.get_job_status", AsyncMock(return_value=JobStatus.FINISHED)) as status:
+        with patch(
+            "modules.jobs.analysis.models.k8s.get_job_status", AsyncMock(return_value=JobStatus.FINISHED)
+        ) as status:
             assert await job.refresh_status() == JobStatus.FINISHED
             assert await job.refresh_status() == JobStatus.FINISHED
 
@@ -261,5 +265,5 @@ class TestAnalysisJobStatus:
             analysis_name=AnalysisType.RMSDS,
             _last_known_status=JobStatus.RUNNING,
         )
-        with patch("models.analysis_job.k8s.get_job_status", AsyncMock(side_effect=RuntimeError("down"))):
+        with patch("modules.jobs.analysis.models.k8s.get_job_status", AsyncMock(side_effect=RuntimeError("down"))):
             assert await job.refresh_status() == JobStatus.RUNNING

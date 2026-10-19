@@ -4,7 +4,7 @@ from pathlib import Path
 
 import anyio
 import httpx
-from config import TUNER_PASSWORD, TUNER_URL, TUNER_USER
+from core.config import TUNER_PASSWORD, TUNER_URL, TUNER_USER
 
 from clients.http import client, raise_for_status
 

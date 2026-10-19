@@ -7,15 +7,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from enums import Engine, JobStatus
-from errors import ApiError, BadRequest
-from manifest_schema import schema_url
-from models import Experiment, Notebook
-from models.gromacs_job import GromacsJob
-from models.simulation import Simulation
-from models.tuner_job import TunerJob
-from schemas.jobs import AmberJob as AmberJobSchema
-from schemas.jobs import GromacsJob as GromacsJobSchema
+from core.enums import Engine, JobStatus
+from core.errors import ApiError, BadRequest
+from modules.jobs.amber.schemas import AmberJob as AmberJobSchema
+from modules.jobs.gmx.models import GromacsJob
+from modules.jobs.gmx.schemas import GromacsJob as GromacsJobSchema
+from modules.jobs.tuner.models import TunerJob
+from modules.models import Experiment, Notebook
+from modules.simulations.manifest import Simulation
+from modules.simulations.manifest_schema import schema_url
 from sqlalchemy.ext.asyncio import AsyncSession
 
 GMX_SCHEMA_URL = schema_url(Engine.GMX)
@@ -589,7 +589,7 @@ def _set_mtime(path: Path, mtime: float) -> None:
 
 async def _add_gmx_job(db_session: AsyncSession, exp_id: str, simulation_path: str, **kwargs: object) -> None:
     """Persist a GromacsJob for the given simulation."""
-    from enums import DeviceType
+    from core.enums import DeviceType
 
     db_session.add(
         GromacsJob(
@@ -765,7 +765,7 @@ class TestStepStatus:
         self, db_session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """A running job with parsed nsteps_done counts the run as done: Analyze activates (partial trajectories analyzable mid-run)."""
-        monkeypatch.setattr("models.gromacs_job.DATA_DIR", tmp_path)
+        monkeypatch.setattr("modules.jobs.gmx.models.DATA_DIR", tmp_path)
         exp_id = await _seed_experiment(db_session)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True, exist_ok=True)
@@ -858,7 +858,7 @@ class TestLogLines:
         self, db_session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Missing streams report None; written streams report their line count."""
-        monkeypatch.setattr("models.gromacs_job.DATA_DIR", tmp_path)
+        monkeypatch.setattr("modules.jobs.gmx.models.DATA_DIR", tmp_path)
         exp_id = await _seed_experiment(db_session)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True)
@@ -873,7 +873,7 @@ class TestLogLines:
         (production / "protein.log").write_text("a\nb\nc\n")
         (production / f"mdrun-{job.id}.out").write_text("x\n")
 
-        from cache import simulation_log_lines_cache
+        from core.cache import simulation_log_lines_cache
 
         simulation_log_lines_cache.clear()
         assert job.log_lines == {"gmx": 3, "stdout": 1, "stderr": None}
@@ -888,7 +888,7 @@ class TestLogLines:
         independently of status, so one payload could say FINISHED with a
         step count from before the flip.
         """
-        monkeypatch.setattr("models.gromacs_job.DATA_DIR", tmp_path)
+        monkeypatch.setattr("modules.jobs.gmx.models.DATA_DIR", tmp_path)
         exp_id = await _seed_experiment(db_session)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True)
@@ -934,7 +934,7 @@ class TestLogLines:
         The UI compares these against tuner-trial configs (lowercase) when
         rendering "Configuration used"; name-cased values silently break that.
         """
-        monkeypatch.setattr("models.gromacs_job.DATA_DIR", tmp_path)
+        monkeypatch.setattr("modules.jobs.gmx.models.DATA_DIR", tmp_path)
         exp_id = await _seed_experiment(db_session)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True)
@@ -953,8 +953,8 @@ class TestLogLines:
         Re-run re-POSTs the dumped fields and trial matching compares against
         values, so name-cased payloads (PMEMD_CUDA) break both flows.
         """
-        from enums import AmberBinary, EwaldPreset
-        from models.amber_job import AmberJob
+        from core.enums import AmberBinary, EwaldPreset
+        from modules.jobs.amber.models import AmberJob
 
         job = AmberJob(
             id=str(uuid.uuid4()),
@@ -976,7 +976,7 @@ class TestLogLines:
         self, db_session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """The auto schema includes log_lines without extra schema code."""
-        monkeypatch.setattr("models.gromacs_job.DATA_DIR", tmp_path)
+        monkeypatch.setattr("modules.jobs.gmx.models.DATA_DIR", tmp_path)
         exp_id = await _seed_experiment(db_session)
         exp_dir = tmp_path / exp_id
         exp_dir.mkdir(parents=True)
@@ -1043,8 +1043,8 @@ class TestExperimentDelegation:
         _write_two_sims(tmp_path / exp_id)  # ligand manifest is newer than protein's
         from datetime import datetime
 
-        from enums import AnalysisType
-        from models import AnalysisJob
+        from core.enums import AnalysisType
+        from modules.models import AnalysisJob
 
         job = AnalysisJob(
             id=str(uuid.uuid4()),

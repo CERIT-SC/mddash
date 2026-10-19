@@ -6,7 +6,7 @@ from http import HTTPStatus
 
 import pytest
 from httpx import AsyncClient
-from models import Experiment, Notebook
+from modules.models import Experiment, Notebook
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -38,7 +38,7 @@ class TestTunerNstepsValidation:
     async def test_valid_nsteps_reaches_tuner_job_start(
         self, client: AsyncClient, experiment_id: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from models.tuner_job import TunerJob
+        from modules.jobs.tuner.models import TunerJob
 
         captured: dict[str, int] = {}
 

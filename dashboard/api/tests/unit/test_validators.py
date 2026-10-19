@@ -4,9 +4,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from enums import AnalysisType, PreprocessingMode
-from errors import BadRequest, Forbidden
-from validators import (
+from core.enums import AnalysisType, PreprocessingMode
+from core.errors import BadRequest, Forbidden
+from core.validators import (
     check_experiment_id,
     check_filename,
     check_log_type,
@@ -425,30 +425,30 @@ class TestValidateFetchTarget:
 
     def test_rejects_hostname_resolving_to_loopback(self) -> None:
         """A hostname resolving to a loopback IP must be rejected."""
-        with patch("validators._getaddrinfo_ips", return_value=["127.0.0.1"]), pytest.raises(BadRequest):
+        with patch("core.validators._getaddrinfo_ips", return_value=["127.0.0.1"]), pytest.raises(BadRequest):
             validate_fetch_target("http://localhost/file.pdb")
 
     def test_rejects_hostname_resolving_to_private(self) -> None:
         """A cluster-internal hostname resolving to a private IP must be rejected."""
-        with patch("validators._getaddrinfo_ips", return_value=["10.43.0.1"]), pytest.raises(BadRequest):
+        with patch("core.validators._getaddrinfo_ips", return_value=["10.43.0.1"]), pytest.raises(BadRequest):
             validate_fetch_target("https://kubernetes.default.svc/api")
 
     def test_rejects_hostname_resolving_to_metadata(self) -> None:
         """A hostname resolving to the link-local metadata IP must be rejected."""
-        with patch("validators._getaddrinfo_ips", return_value=["169.254.169.254"]), pytest.raises(BadRequest):
+        with patch("core.validators._getaddrinfo_ips", return_value=["169.254.169.254"]), pytest.raises(BadRequest):
             validate_fetch_target("http://metadata.google.internal/computeMetadata/v1/")
 
     def test_rejects_when_any_resolved_ip_is_reserved(self) -> None:
         """If any resolved IP is reserved, the target must be rejected."""
-        with patch("validators._getaddrinfo_ips", return_value=["8.8.8.8", "10.0.0.1"]), pytest.raises(BadRequest):
+        with patch("core.validators._getaddrinfo_ips", return_value=["8.8.8.8", "10.0.0.1"]), pytest.raises(BadRequest):
             validate_fetch_target("http://example.org/file.pdb")
 
     def test_accepts_hostname_resolving_to_public_ip(self) -> None:
         """A hostname resolving only to public IPs should be accepted."""
-        with patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]):
+        with patch("core.validators._getaddrinfo_ips", return_value=["93.184.216.34"]):
             validate_fetch_target("https://example.org/file.pdb")  # Should not raise
 
     def test_rejects_unresolvable_host(self) -> None:
         """A hostname that cannot be resolved should be rejected."""
-        with patch("validators._getaddrinfo_ips", side_effect=BadRequest("nope")), pytest.raises(BadRequest):
+        with patch("core.validators._getaddrinfo_ips", side_effect=BadRequest("nope")), pytest.raises(BadRequest):
             validate_fetch_target("http://nonexistent.invalid/file.pdb")

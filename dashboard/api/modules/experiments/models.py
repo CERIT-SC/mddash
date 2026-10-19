@@ -1,0 +1,1037 @@
+import asyncio
+import logging
+import threading
+from datetime import UTC, datetime
+from http import HTTPStatus
+from pathlib import Path
+from shutil import rmtree
+from typing import TYPE_CHECKING
+from urllib.parse import urlparse
+
+import anyio
+import sqlalchemy as sa
+import yaml
+from clients import mdposit, mdrepo, metadump
+from core.cache import archive_status_cache, mdrepo_status_cache
+from core.config import (
+    DATA_DIR,
+    MDPOSIT_URL,
+    MDPOSIT_VRE_LITE_URL,
+    MDREPO_API_URL,
+    MDREPO_CLIENT_ID,
+    MDREPO_CLIENT_SECRET,
+    MDREPO_RECORD_NAME,
+    MDREPO_TOKEN_URL,
+    MDREPO_URL,
+    S3_BUCKET,
+)
+from core.db import Base
+from core.enums import Engine, JobStatus, PodStatus, SourceType
+from core.errors import ApiError, BadRequest, Conflict, InternalServerError, NotFound
+from core.utils import (
+    download_git_repo,
+    download_git_repo_module,
+    file_download_url,
+    get_du_size,
+    get_unique_id,
+    secure_filename,
+)
+from core.validators import validate_http_url
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from modules.archive import submission as archive_submission
+from modules.archive.status import ArchiveDirection, ArchiveState
+from modules.archive.status import read_status as read_archive_status
+from modules.experiments.sources import (
+    fetch_pdb,
+    import_invenio_repo,
+    import_mdposit_repo,
+    list_simulations,
+    resolve_repo_link,
+    validate_pdb_content,
+)
+from modules.notebooks.catalog import NotebookModule
+from modules.notebooks.models import Notebook
+from modules.publishing.status import REASON_JOB_MISSING, UploadState, read_status
+from modules.publishing.submission import delete_upload_resources, is_upload_active, submit_upload_job
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
+    from fastapi import UploadFile
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from modules.jobs.analysis.models import AnalysisJob
+    from modules.jobs.models import SimulationJob
+    from modules.jobs.tuner.models import TunerJob
+    from modules.mdrepo.tokens import MDRepoCredentials
+    from modules.simulations.manifest import Simulation
+
+    _Populate = Callable[[str], Awaitable[dict]]
+
+
+logger = logging.getLogger(__name__)
+
+_UPLOAD_CHUNK_BYTES = 1024 * 1024
+
+
+async def _noop() -> None:  # ruff:ignore[unused-async]
+    return None
+
+
+class Experiment(Base):  # ruff:ignore[too-many-public-methods]
+    """
+    A molecular dynamics experiment, from setup through execution to publication.
+
+    The ID is a unique 5-character identifier that is also the experiment directory name.
+    Remote state (pods, jobs, MDRepo, archive Jobs) is fetched by `refresh()`; properties
+    then only read the DB row, its loaded jobs, and the experiment files.
+    """
+
+    __tablename__ = "experiments"
+
+    # unique ID of the experiment, also used as the directory name
+    id: Mapped[str] = mapped_column(sa.String(5), primary_key=True)
+    # creation time
+    created_at: Mapped[datetime] = mapped_column(sa.DateTime, default=lambda: datetime.now(UTC))
+    # last modification time
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime,
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )
+
+    # name of the experiment
+    name: Mapped[str] = mapped_column(sa.String(255), nullable=False)
+    # display name of the curated notebook module used at creation; None = custom workflow
+    module_name: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
+    # category snapshot of the curated module at creation (drives the card icon); None = custom workflow
+    module_category: Mapped[str | None] = mapped_column(sa.String(32), nullable=True)
+    source_type: Mapped[SourceType | None] = mapped_column(sa.Enum(SourceType), nullable=True)
+    # RCSB accession, or the resolved download URL for URL/repo sources
+    source_ref: Mapped[str | None] = mapped_column(sa.String(512), nullable=True)
+    # original uploaded filenames (source_type=file only); creation history, not derived state
+    source_files: Mapped[list[str] | None] = mapped_column(sa.JSON, nullable=True)
+    # git repository URL containing setup notebooks (nullable for legacy experiments) TODO: make non-nullable (breaks db migration)
+    notebooks_repo: Mapped[str | None] = mapped_column(sa.String(512), nullable=True)
+    # ID of the experiment in MDRepo
+    mdrepo_id: Mapped[str | None] = mapped_column(sa.String(255), nullable=True)
+    # Whether the experiment is published in MDRepo (True=published, False=draft, None=not in MDRepo)
+    mdrepo_published: Mapped[bool | None] = mapped_column(sa.Boolean, nullable=True)
+    # Molecular dynamics engine (GMX or AMBER)
+    engine: Mapped[Engine] = mapped_column(sa.Enum(Engine), nullable=False, default=Engine.GMX)
+
+    # Archive state: archived_at is the durable flag (NULL = active); the other three
+    # snapshot card state at archive-submit time and double as "archive submitted" markers.
+    archived_at: Mapped[datetime | None] = mapped_column(sa.DateTime, nullable=True)
+    archived_size_bytes: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    archived_step: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    archived_status: Mapped[str | None] = mapped_column(sa.String(32), nullable=True)
+
+    # Child rows load with the experiment (async sessions cannot lazy-load on attribute access).
+    notebook: Mapped["Notebook"] = relationship(
+        "Notebook", back_populates="experiment", cascade="all, delete-orphan", uselist=False, lazy="selectin"
+    )
+    tuner_jobs: Mapped[list["TunerJob"]] = relationship(
+        "TunerJob", back_populates="experiment", cascade="all, delete-orphan", lazy="selectin"
+    )
+    # Base relationship for JTI; subclass columns load via polymorphic selectin
+    simulation_jobs: Mapped[list["SimulationJob"]] = relationship(
+        "SimulationJob", back_populates="experiment", cascade="all, delete-orphan", lazy="selectin"
+    )
+    analysis_jobs: Mapped[list["AnalysisJob"]] = relationship(
+        "AnalysisJob", back_populates="experiment", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+    # Transient per-request state filled by refresh_archive_state() / memoized derivations
+    _archive_state: str | None = None
+    _archive_state_refreshed: bool = False
+    _memo_step: tuple[int, str] | None = None
+    _memo_latest: "Simulation | None" = None
+    _memo_latest_scanned: bool = False
+
+    @property
+    def source(self) -> dict | None:
+        """
+        Structured provenance for API payloads; None on legacy rows.
+
+        ``files`` lists source artifacts still downloadable (pdb sources always
+        download to ``input.pdb``); ``file_count`` is the creation-time upload
+        count that survives file deletions.
+        """
+        if self.source_type is None:
+            return None
+
+        result: dict[str, object] = {"type": str(self.source_type)}
+        if self.source_ref:
+            if self.source_type == SourceType.PDB and not self.source_ref.startswith(("http://", "https://")):
+                result["pdb_id"] = self.source_ref
+            else:
+                result["url"] = self.source_ref
+        if self.source_type == SourceType.FILE:
+            result["file_count"] = len(self.source_files or [])
+
+        names = ["input.pdb"] if self.source_type == SourceType.PDB else sorted(self.source_files or [])
+        files: list[dict[str, object]] = []
+        for name in names:
+            try:
+                size = (path := DATA_DIR / self.id / name).stat().st_size
+            except OSError:
+                continue  # Raced deletion. Never leak a broken entry into the payload.
+            if not path.is_file():
+                continue
+            files.append({"name": name, "size": size, "path": name, "url": file_download_url(self.id, name)})
+        result["files"] = files
+        return result
+
+    @property
+    def step(self) -> int:
+        """Step of the experiment based on its current state."""
+        return self._step_status()[0]
+
+    @property
+    def status(self) -> str:
+        """Status of the experiment based on its current state."""
+        return self._step_status()[1]
+
+    @property
+    def can_publish(self) -> bool:
+        """
+        Whether the experiment has anything publishable.
+
+        Publishing is experiment-level (the MDRepo upload covers the whole
+        experiment), so this lives here rather than on a simulation: unlocked
+        once a draft/record exists, or once any run finished or was stopped
+        anywhere in the experiment (stopped ⇔ finished: partial results are
+        publishable). The wizard also holds Publish while the SELECTED
+        simulation is live. This flag cannot express that per-simulation concern.
+        """
+        return self.mdrepo_id is not None or any(
+            job.status in {JobStatus.FINISHED, JobStatus.STOPPED} for job in self.simulation_jobs
+        )
+
+    @property
+    def mdrepo_record_url(self) -> str | None:
+        """The MDRepo record URL if published."""
+        if self.mdrepo_id:
+            return f"{MDREPO_URL}/{MDREPO_RECORD_NAME}/uploads/{self.mdrepo_id}"
+        return None
+
+    @property
+    def size_bytes(self) -> int | None:
+        """Last size of the experiment directory measured by the du monitor, in bytes."""
+        if self.archived_at is not None:
+            return self.archived_size_bytes
+        return get_du_size(DATA_DIR / self.id)
+
+    # --- remote state -------------------------------------------------------------
+
+    async def refresh(self, mdrepo_token: str | None = None) -> None:
+        """Fetch every remote state the experiment's serialization reads (no DB I/O; the caller commits)."""
+        await asyncio.gather(
+            self.notebook.refresh() if self.notebook is not None else _noop(),
+            self.refresh_jobs(),
+            self.sync_mdrepo_status(mdrepo_token),
+            self.refresh_archive_state(),
+        )
+
+    async def refresh_jobs(self) -> None:
+        """Fetch the remote status of all tuner, simulation, and analysis jobs."""
+        await asyncio.gather(
+            *(job.refresh() for job in self.tuner_jobs),
+            *(job.refresh_status() for job in self.simulation_jobs),
+            *(job.refresh_status() for job in self.analysis_jobs),
+        )
+
+    def needs_mdrepo_sync(self) -> bool:
+        """Whether `sync_mdrepo_status` would contact MDRepo (a draft/record exists and is not cached)."""
+        return bool(self.mdrepo_id) and self.mdrepo_id not in mdrepo_status_cache
+
+    async def sync_mdrepo_status(self, access_token: str | None) -> None:
+        """Check whether the MDRepo record still exists and mirror its published flag (cached per record)."""
+        record_id = self.mdrepo_id
+        if not access_token or not record_id or record_id in mdrepo_status_cache:
+            return
+        mdrepo_status_cache[record_id] = True
+        try:
+            status = await mdrepo.check_experiment_status(access_token, record_id)
+        except Exception:
+            logger.exception(f"Failed to check MDRepo status for experiment '{record_id}'")
+            return
+        if status is None:
+            self.mdrepo_id = None
+            self.mdrepo_published = None
+        else:
+            self.mdrepo_published = status
+
+    # --- creation -----------------------------------------------------------------
+
+    @classmethod
+    async def prepare_env(
+        cls,
+        notebooks_repo: str,
+        access_token: str | None = None,
+        notebook_module: NotebookModule | None = None,
+    ) -> str:
+        """
+        Create a unique experiment directory and populate it with notebooks.
+
+        Curated mode (``notebook_module`` set) sparse-checks out the module (root-path
+        ``"."`` uses full clone); custom mode clones the whole repository.
+
+        Returns:
+            The unique experiment ID.
+        """
+        experiment_id: str = get_unique_id(DATA_DIR)
+        experiment_dir = DATA_DIR / experiment_id
+        await anyio.Path(experiment_dir).mkdir(parents=True, exist_ok=True)
+        try:
+            if notebook_module is not None and not notebook_module.is_root:
+                await download_git_repo_module(notebooks_repo, notebook_module.path, experiment_dir, access_token)
+            else:
+                await download_git_repo(notebooks_repo, experiment_dir, access_token)
+        except BaseException:
+            await anyio.to_thread.run_sync(lambda: rmtree(experiment_dir, ignore_errors=True))
+            raise
+
+        return experiment_id
+
+    @classmethod
+    async def _create(
+        cls,
+        session: "AsyncSession",
+        experiment_id: str,
+        populate: "_Populate",
+        **columns: object,
+    ) -> "Experiment":
+        """Populate the prepared directory, then persist the experiment with its notebook; clean up on failure."""
+        try:
+            columns.update(await populate(experiment_id))
+            # Empty collections up front: the new row must never lazy-load them later.
+            experiment = cls(
+                id=experiment_id,
+                notebook=Notebook(experiment_id=experiment_id),
+                tuner_jobs=[],
+                simulation_jobs=[],
+                analysis_jobs=[],
+                **columns,
+            )
+            session.add(experiment)
+            await session.commit()
+        except BaseException:
+            await anyio.to_thread.run_sync(lambda: rmtree(DATA_DIR / experiment_id, ignore_errors=True))
+            await session.rollback()
+            raise
+
+        logger.info(f"Created experiment {experiment.id}")
+        return experiment
+
+    @staticmethod
+    def _module_columns(engine: Engine, notebooks_repo: str, notebook_module: NotebookModule | None) -> dict:
+        return {
+            "notebooks_repo": notebooks_repo,
+            "engine": engine,
+            "module_name": notebook_module.name if notebook_module else None,
+            "module_category": notebook_module.category if notebook_module else None,
+        }
+
+    @classmethod
+    async def from_pdb(
+        cls,
+        session: "AsyncSession",
+        name: str,
+        pdb_source: str,
+        notebooks_repo: str,
+        access_token: str | None = None,
+        engine: Engine = Engine.GMX,
+        notebook_module: NotebookModule | None = None,
+    ) -> "Experiment":
+        """
+        Create experiment from a PDB ID or a direct URL to a PDB file (404 when the source is not found).
+
+        A value without a URL scheme (e.g. ``1A2B``) is treated as an RCSB PDB ID
+        and downloaded from ``files.rcsb.org``. A value with a URL scheme is fetched
+        as-is; only ``http`` and ``https`` schemes are accepted.
+        """
+        experiment_id = await cls.prepare_env(notebooks_repo, access_token, notebook_module)
+        source = pdb_source.strip()
+
+        async def populate(exp_id: str) -> dict:
+            if urlparse(source).scheme:
+                url = validate_http_url(source)
+                source_ref = url
+            else:
+                source_ref = source.upper()
+                url = f"https://files.rcsb.org/download/{source_ref}.pdb"
+
+            response = await fetch_pdb(url)
+            if response.status_code == HTTPStatus.NOT_FOUND:
+                raise NotFound(f"PDB source '{source}' not found.")
+            if response.status_code != HTTPStatus.OK:
+                raise ApiError(
+                    HTTPStatus.INTERNAL_SERVER_ERROR,
+                    "Failed to download PDB file.",
+                    "urn:mddash:upstream-download-failed",
+                    "The structure source couldn't be fetched; try again, or use a different PDB ID / file.",
+                )
+            validate_pdb_content(response.content)
+            await anyio.Path(DATA_DIR / exp_id / "input.pdb").write_bytes(response.content)
+            return {"source_type": SourceType.PDB, "source_ref": source_ref}
+
+        return await cls._create(
+            session,
+            experiment_id,
+            populate,
+            name=name,
+            **cls._module_columns(engine, notebooks_repo, notebook_module),
+        )
+
+    @classmethod
+    async def from_repo(
+        cls,
+        session: "AsyncSession",
+        name: str,
+        repo_link: str,
+        notebooks_repo: str,
+        access_token: str | None = None,
+        engine: Engine = Engine.GMX,
+        notebook_module: NotebookModule | None = None,
+    ) -> "Experiment":
+        """Create experiment from a supported repository URL (InvenioRDM or MDPosit, DOIs resolved)."""
+        experiment_id = await cls.prepare_env(notebooks_repo, access_token, notebook_module)
+
+        async def populate(exp_id: str) -> dict:
+            resolved_repo_link = await resolve_repo_link(repo_link)
+            if mdposit.is_mdposit_url(resolved_repo_link):
+                await import_mdposit_repo(resolved_repo_link, exp_id)
+            else:
+                await import_invenio_repo(resolved_repo_link, exp_id)
+            return {"source_type": SourceType.REPO, "source_ref": resolved_repo_link}
+
+        return await cls._create(
+            session,
+            experiment_id,
+            populate,
+            name=name,
+            **cls._module_columns(engine, notebooks_repo, notebook_module),
+        )
+
+    @classmethod
+    async def from_files(
+        cls,
+        session: "AsyncSession",
+        name: str,
+        files: "list[UploadFile]",
+        notebooks_repo: str,
+        access_token: str | None = None,
+        engine: Engine = Engine.GMX,
+        notebook_module: NotebookModule | None = None,
+    ) -> "Experiment":
+        """
+        Create experiment from file uploads.
+
+        Raises:
+            BadRequest: If no files are provided.
+        """
+        if not files:
+            raise BadRequest("No files provided")
+
+        experiment_id = await cls.prepare_env(notebooks_repo, access_token, notebook_module)
+
+        async def populate(exp_id: str) -> dict:
+            filenames = []
+            for file in files:
+                if not file.filename:
+                    continue
+                filename = secure_filename(file.filename)
+                async with await anyio.open_file(DATA_DIR / exp_id / filename, "wb") as out:
+                    while chunk := await file.read(_UPLOAD_CHUNK_BYTES):
+                        await out.write(chunk)
+                filenames.append(filename)
+            return {"source_type": SourceType.FILE, "source_files": filenames}
+
+        return await cls._create(
+            session,
+            experiment_id,
+            populate,
+            name=name,
+            **cls._module_columns(engine, notebooks_repo, notebook_module),
+        )
+
+    # --- derived state ------------------------------------------------------------
+
+    @property
+    def latest_simulation_path(self) -> str | None:
+        """Path of the latest simulation manifest; step/status and card details inherit from it."""
+        latest = self._latest_simulation()
+        return latest.simulation_path if latest else None
+
+    def _latest_simulation(self) -> "Simulation | None":
+        """Most recently interacted-with simulation (by ``Simulation.last_activity``), scanned once per instance."""
+        if not self._memo_latest_scanned:
+            simulations = list_simulations(self)
+            self._memo_latest = max(simulations, key=lambda sim: sim.last_activity) if simulations else None
+            self._memo_latest_scanned = True
+        return self._memo_latest
+
+    def _step_status(self) -> tuple[int, str]:
+        """
+        Publish state overrides; otherwise inherit the latest simulation's (step, status).
+
+        Returns:
+            (step, status): step is the phase index (0-4, with publish 4).
+        """
+        if self._memo_step is None:
+            self._memo_step = self._compute_step_status()
+        return self._memo_step
+
+    def _compute_step_status(self) -> tuple[int, str]:
+        if self.archived_at is not None and self.archived_step is not None:
+            # Files are gone; serve the snapshot taken at archive-submit time.
+            return self.archived_step, self.archived_status or "archived"
+
+        if self.mdrepo_published is True:
+            return 4, "published"
+
+        if self.mdrepo_published is False:
+            return 4, "publishing"
+
+        if latest := self._latest_simulation():
+            return latest.step_status
+
+        return 0, "setup"
+
+    # --- deletion -----------------------------------------------------------------
+
+    async def delete(self) -> None:
+        """
+        Delete all resources of the experiment (the caller deletes the row).
+
+        Raises:
+            Conflict: If an MDRepo upload is queued or running.
+        """
+        # Reject deletion while an upload is active (check PVC + live Job).
+        if await self._read_upload_state() in UploadState.active():
+            raise Conflict(
+                "Cannot delete experiment during active MDRepo upload. Wait for completion or retry after failure."
+            )
+        # Delete wins over in-flight archive/restore work; the archive prefix is purged after.
+        await archive_submission.delete_jobs(self.id)
+        needs_purge = self.archived_at is not None or self.archived_step is not None
+
+        if self.notebook is not None:
+            await self.notebook.refresh()
+            if self.notebook.status == PodStatus.RUNNING:
+                await self.notebook.stop()
+
+        # Analysis K8s Jobs have no TTL: rows cascading away without this would orphan them.
+        for job in (*self.tuner_jobs, *self.simulation_jobs, *self.analysis_jobs):
+            try:
+                await job.delete()
+            except Exception:
+                logger.exception(f"Failed to delete {type(job).__name__} {job.id}")
+
+        experiment_dir = DATA_DIR / self.id
+
+        def del_dir() -> None:
+            rmtree(experiment_dir, ignore_errors=True)
+            logger.info(f"Deleted experiment directory: {experiment_dir}")
+
+        # The response must not wait for a large tree to be removed.
+        threading.Thread(target=del_dir, daemon=True).start()
+
+        if needs_purge:
+            await archive_submission.submit_purge_job(self.id)
+
+    # --- publishing ---------------------------------------------------------------
+
+    async def publish(
+        self,
+        session: "AsyncSession",
+        target: str = "invenio",
+        community: str = "ceitec",
+        credentials: "MDRepoCredentials | None" = None,
+        simulation_path: str | None = None,
+    ) -> dict:
+        """
+        Publish the experiment to the selected target.
+
+        Returns:
+            Publication metadata for the selected target.
+
+        Raises:
+            BadRequest: If the publish target is unknown.
+            Conflict: If the experiment is archived or an archive/restore is in flight
+                (publishing reads local files; restore it / wait for the Job to settle first).
+        """
+        if await self.refresh_archive_state() is not None:
+            raise Conflict(
+                "Experiment is archived or an archive/restore is in flight. "
+                "Publishing reads the local files; restore the experiment (or wait) first."
+            )
+        if target == "invenio":
+            return await self._publish_invenio(session, community, credentials)
+        if target == "mdposit":
+            return await anyio.to_thread.run_sync(self._publish_mdposit, simulation_path or "")
+        raise BadRequest(f"Unknown publish target: {target}")
+
+    async def _publish_invenio(
+        self, session: "AsyncSession", community: str, credentials: "MDRepoCredentials | None"
+    ) -> dict:
+        """Publish to MDRepo as a draft and start a durable upload Job (idempotent: returns existing active upload)."""
+        if credentials is None:
+            raise InternalServerError("No valid MDRepo access token available. Please authenticate with MDRepo.")
+        access_token = credentials.access_token
+
+        # A published record cannot be retried as a draft upload.
+        if self.mdrepo_published is True:
+            raise Conflict("Experiment is already published. Cannot retry as draft upload.")
+
+        upload_state = await self._read_upload_state()
+
+        # Skip retry only when a completed upload still has a live draft.
+        if upload_state == UploadState.COMPLETED.value and self.mdrepo_id:
+            raise Conflict("Upload already completed. Use MDRepo to view or edit the published record.")
+
+        # If an upload is already active, return it (idempotent retry).
+        if upload_state in UploadState.active():
+            status = read_status(self.id, DATA_DIR)
+            return {
+                "id": self.mdrepo_id or "",
+                "links": {},
+                "upload_id": status.attempt_id if status else "",
+                "upload_state": upload_state,
+                "draft_url": self.mdrepo_record_url,
+            }
+
+        # If a previous attempt failed, clean up its K8s resources before retrying.
+        if upload_state == UploadState.FAILED.value:
+            await delete_upload_resources(self.id)
+
+        # Reuse the draft only if it still exists. The user may have deleted it in MDRepo.
+        if self.mdrepo_id and await mdrepo.check_experiment_status(access_token, self.mdrepo_id) is not None:
+            mdrepo_id = self.mdrepo_id
+            mdrepo_experiment: dict = {"id": mdrepo_id, "links": {}}
+        else:
+            self.mdrepo_id = None
+            self.mdrepo_published = None
+            mdrepo_experiment = await self._create_draft(session, access_token, community)
+            mdrepo_id = self.mdrepo_id or ""
+
+        if not mdrepo_id:
+            raise ApiError(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "Failed to create experiment in MDRepo.",
+                "urn:mddash:upstream-unavailable",
+                "MDRepo didn't respond as expected; try again in a moment.",
+            )
+
+        # Submit the upload Job: writes queued status, creates Secret+Job, waits for admission.
+        attempt_id = await submit_upload_job(
+            experiment_id=self.id,
+            mdrepo_id=mdrepo_id,
+            credential_data={
+                "access_token": access_token,
+                "refresh_token": credentials.refresh_token,
+                "expires_at": credentials.expires_at,
+                "client_id": MDREPO_CLIENT_ID,
+                "client_secret": MDREPO_CLIENT_SECRET,
+                "api_url": MDREPO_API_URL,
+                "record_name": MDREPO_RECORD_NAME,
+                "token_url": MDREPO_TOKEN_URL,
+            },
+            data_dir=DATA_DIR,
+        )
+
+        logger.info("Durable upload Job submitted for experiment %s (attempt %s)", self.id, attempt_id)
+        return {
+            "id": mdrepo_id,
+            "links": mdrepo_experiment.get("links", {}),
+            "upload_id": attempt_id,
+            "upload_state": UploadState.QUEUED.value,
+            "draft_url": self.mdrepo_record_url,
+        }
+
+    async def _create_draft(self, session: "AsyncSession", access_token: str, community: str) -> dict:
+        """Create a new Invenio draft and persist its ID."""
+        gmx_simulations = [s for s in list_simulations(self) if s.engine == Engine.GMX.value and s.valid]
+        tpr_paths = [
+            DATA_DIR / self.id / topology for sim in gmx_simulations if (topology := sim.resolved_files.get("topology"))
+        ]
+        simulations = await metadump.extract_metadata_bulk(tpr_paths) if tpr_paths else []
+
+        mdrepo_experiment = await mdrepo.create_experiment(access_token, community, {"simulations": simulations})
+        mdrepo_id = mdrepo_experiment.get("id")
+        if mdrepo_id is None:
+            raise ApiError(
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+                "Failed to create experiment in MDRepo.",
+                "urn:mddash:upstream-unavailable",
+                "MDRepo didn't respond as expected; try again in a moment.",
+            )
+
+        self.mdrepo_id = mdrepo_id
+        self.mdrepo_published = False
+        await session.commit()
+
+        logger.info("Created MDRepo experiment with ID '%s' for experiment '%s'", mdrepo_id, self.id)
+        return mdrepo_experiment
+
+    async def _read_upload_state(self) -> str | None:
+        """Reconcile upload state from the PVC status file and live Job (reports failed if the Job is gone)."""
+        status = read_status(self.id, DATA_DIR)
+        if status is None:
+            return None
+
+        if status.state in UploadState.terminal():
+            return status.state
+
+        if status.state in UploadState.active() and not await is_upload_active(self.id):
+            return UploadState.FAILED.value
+
+        return status.state
+
+    async def get_publish_status(self) -> dict:
+        """Return the durable MDRepo upload status, merging the PVC document with live Job state."""
+        status = read_status(self.id, DATA_DIR)
+        effective_state = await self._read_upload_state()
+
+        result: dict = {
+            "experiment_id": self.id,
+            "mdrepo_id": self.mdrepo_id,
+            "draft_url": self.mdrepo_record_url,
+            "upload_state": effective_state,
+            "reason": None,
+            "total_files": 0,
+            "completed_files": 0,
+            "total_bytes": 0,
+            "completed_bytes": 0,
+            "failed_files": [],
+        }
+
+        if status is not None:
+            result["upload_attempt_id"] = status.attempt_id
+            # A missing Job overrides the file's active state (job_missing).
+            if effective_state == UploadState.FAILED.value and status.state in UploadState.active():
+                result["reason"] = REASON_JOB_MISSING
+            else:
+                result["reason"] = status.reason
+            result["total_files"] = status.total_files
+            result["completed_files"] = status.completed_files
+            result["total_bytes"] = status.total_bytes
+            result["completed_bytes"] = status.completed_bytes
+            result["failed_files"] = [{"key": f.key, "error": f.error} for f in status.failed_files]
+
+        return result
+
+    # --- archiving ----------------------------------------------------------------
+
+    @property
+    def archive_state(self) -> str | None:
+        """
+        One of: None, archiving, archived, restoring, archive_failed, restore_failed.
+
+        Raises:
+            RuntimeError: If an archive-marked experiment was not refreshed in this request.
+        """
+        if self.archived_at is None and self.archived_step is None:
+            return None
+        if not self._archive_state_refreshed:
+            raise RuntimeError(f"Archive state of experiment {self.id} read before refresh_archive_state()")
+        return self._archive_state
+
+    async def refresh_archive_state(self) -> str | None:
+        """Reconcile and store the archive state; experiments without archive markers skip all I/O."""
+        self._archive_state = (
+            None if self.archived_at is None and self.archived_step is None else await self._read_archive_state()
+        )
+        self._archive_state_refreshed = True
+        return self._archive_state
+
+    async def _is_archive_job_live(self, direction: str) -> bool:
+        """Job liveness with a short lookup cache (list serialization fan-out)."""
+        key = (direction, self.id)
+        if (cached := archive_status_cache.get(key)) is not None:
+            return cached
+        live = await archive_submission.is_job_active(direction, self.id)
+        archive_status_cache[key] = live
+        return live
+
+    async def _read_archive_state(self) -> str | None:
+        """
+        Reconcile archive state from DB markers, the status doc, and live Jobs.
+
+        DB markers are durable (snapshots = submitted, archived_at = completed); the
+        doc dies with the dir and Jobs TTL-expire, so completion is inferred. An
+        in-flight doc with no live Job failed. Mutates the row only on terminal
+        transitions (the caller commits).
+        """
+        doc = read_archive_status(self.id, DATA_DIR)
+        dir_exists = await anyio.Path(DATA_DIR / self.id).exists()
+
+        if self.archived_at is not None:
+            # Restore lifecycle; a non-restore doc is stale from the archive attempt.
+            if doc is not None and doc.direction == ArchiveDirection.RESTORE.value:
+                if doc.state == ArchiveState.COMPLETED.value:
+                    self.archived_at = None
+                    self.archived_step = None
+                    self.archived_status = None
+                    self.archived_size_bytes = None
+                    return None
+                # A live Job outranks a stale FAILED sentinel; an in-flight doc with
+                # no live Job failed (evicted, backoffLimit 0), as in the archive direction.
+                live = await self._is_archive_job_live(ArchiveDirection.RESTORE.value)
+                return "restoring" if live else "restore_failed"
+            return "restoring" if await self._is_archive_job_live(ArchiveDirection.RESTORE.value) else "archived"
+
+        if not dir_exists:
+            if not await self._is_archive_job_live(ArchiveDirection.ARCHIVE.value):
+                self.archived_at = datetime.now(UTC)
+                return "archived"
+            return "archiving"
+
+        if (
+            doc is not None
+            and doc.direction == ArchiveDirection.ARCHIVE.value
+            and doc.state == ArchiveState.FAILED.value
+        ):
+            return "archive_failed"
+
+        return "archiving" if await self._is_archive_job_live(ArchiveDirection.ARCHIVE.value) else "archive_failed"
+
+    async def archive(self, session: "AsyncSession") -> str:
+        """
+        Submit a durable archive Job after gating and snapshotting card state.
+
+        Returns:
+            The archive attempt ID.
+
+        Raises:
+            ApiError: S3 unconfigured (400 `urn:mddash:s3-not-configured`); gate
+                failures (409 `urn:mddash:archive-conflict`); submission failure
+                (409 `urn:mddash:archive-submission-failed`).
+        """
+        if not S3_BUCKET:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "S3 storage is not configured on this deployment; archiving is unavailable.",
+                "urn:mddash:s3-not-configured",
+                "S3 storage isn't enabled on this deployment; contact the administrator.",
+            )
+        state = await self.refresh_archive_state()
+        if state not in {None, "archive_failed"}:
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                f"Experiment cannot be archived now (state: {state}).",
+                "urn:mddash:archive-conflict",
+            )
+        if await self._read_upload_state() in UploadState.active():
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "Cannot archive during an active MDRepo upload. Wait for completion or retry after failure.",
+                "urn:mddash:archive-conflict",
+            )
+        await self.refresh_jobs()
+        live = (
+            [j for j in self.tuner_jobs if j.is_live]
+            + [j for j in self.simulation_jobs if j.is_live]
+            # AnalysisJob exposes only .status, no is_live shortcut.
+            + [j for j in self.analysis_jobs if j.status.is_live]
+        )
+        if live:
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "Cannot archive while tuner, simulation, or analysis jobs are running.",
+                "urn:mddash:archive-conflict",
+            )
+
+        # Stopping the notebook matches delete(): archiving freezes the files under it.
+        if self.notebook is not None:
+            await self.notebook.refresh()
+            if self.notebook.status == PodStatus.RUNNING:
+                await self.notebook.stop()
+
+        step, status, size = await anyio.to_thread.run_sync(lambda: (*self._step_status(), self.size_bytes))
+        self.archived_step = step
+        self.archived_status = status
+        self.archived_size_bytes = size
+        await session.commit()
+
+        try:
+            attempt_id = await archive_submission.submit_job(ArchiveDirection.ARCHIVE.value, self.id, DATA_DIR)
+        except archive_submission.SubmissionError as e:
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "The archive job could not be started right now.",
+                "urn:mddash:archive-submission-failed",
+                "Try again in a moment; if the problem persists, contact support.",
+            ) from e
+        logger.info("Archive Job submitted for experiment %s (attempt %s)", self.id, attempt_id)
+        return attempt_id
+
+    async def restore(self) -> str:
+        """
+        Submit a durable restore Job for an archived experiment.
+
+        Returns:
+            The restore attempt ID.
+
+        Raises:
+            ApiError: S3 unconfigured (400 `urn:mddash:s3-not-configured`); gate
+                failures (409 `urn:mddash:archive-conflict`); submission failure
+                (409 `urn:mddash:archive-submission-failed`).
+        """
+        if not S3_BUCKET:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "S3 storage is not configured on this deployment; restoring is unavailable.",
+                "urn:mddash:s3-not-configured",
+                "S3 storage isn't enabled on this deployment; contact the administrator.",
+            )
+        state = await self.refresh_archive_state()
+        if state not in {"archived", "restore_failed"}:
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                f"Experiment cannot be restored now (state: {state}).",
+                "urn:mddash:archive-conflict",
+            )
+        if await anyio.Path(DATA_DIR / self.id).exists():
+            # Worker-gate mirror: non-completed restore doc = our resumable leftover; else clobber protection.
+            doc = read_archive_status(self.id, DATA_DIR)
+            retryable = (
+                doc is not None
+                and doc.direction == ArchiveDirection.RESTORE.value
+                and doc.state != ArchiveState.COMPLETED.value
+            )
+            if not retryable:
+                raise ApiError(
+                    HTTPStatus.CONFLICT,
+                    "Local experiment directory already exists; refusing to overwrite it. "
+                    "Remove the leftover directory manually and retry.",
+                    "urn:mddash:archive-conflict",
+                )
+
+        try:
+            attempt_id = await archive_submission.submit_job(ArchiveDirection.RESTORE.value, self.id, DATA_DIR)
+        except archive_submission.SubmissionError as e:
+            raise ApiError(
+                HTTPStatus.CONFLICT,
+                "The restore job could not be started right now.",
+                "urn:mddash:archive-submission-failed",
+                "Try again in a moment; if the problem persists, contact support.",
+            ) from e
+        logger.info("Restore Job submitted for experiment %s (attempt %s)", self.id, attempt_id)
+        return attempt_id
+
+    async def get_archive_status(self) -> dict:
+        """Archive/restore status for the status endpoint: reconciliation result + status doc fields."""
+        archive_state = await self.refresh_archive_state()
+        doc = read_archive_status(self.id, DATA_DIR)
+        return {
+            "experiment_id": self.id,
+            "archive_state": archive_state,
+            "attempt_id": doc.attempt_id if doc else None,
+            "direction": doc.direction if doc else None,
+            "reason": doc.reason if doc else None,
+        }
+
+    # --- MDPosit --------------------------------------------------------------------
+
+    def _publish_mdposit(self, simulation_path: str) -> dict:
+        """
+        Prepare stateless MDPosit publication metadata from a simulation manifest (sync: file I/O only).
+
+        Returns:
+            Metadata file and selected file descriptors for MDPosit publishing.
+
+        Raises:
+            BadRequest: If MDPosit is unconfigured or required files are missing/invalid.
+            InternalServerError: If metadata generation fails.
+        """
+        if not MDPOSIT_URL:
+            raise ApiError(
+                HTTPStatus.BAD_REQUEST,
+                "MDPosit is not configured. Set MDPOSIT_URL to enable MDPosit publishing.",
+                "urn:mddash:mdposit-not-configured",
+                "MDPosit publishing isn't enabled on this deployment; contact the administrator.",
+            )
+
+        from modules.simulations.manifest import Simulation, property_label  # ruff:ignore[import-outside-top-level]
+
+        simulation = Simulation.get(self.id, simulation_path, self)
+        simulation.require_files(["reference_structure", "run_input", "trajectory"])
+
+        exp_dir = DATA_DIR / self.id
+        if not exp_dir.exists():
+            raise BadRequest("Experiment directory not found.")
+        exp_dir_resolved = exp_dir.resolve()
+
+        publish_roles = {
+            "reference_structure": ("structure", {"pdb", "gro"}),
+            "run_input": ("topology", {"top", "prmtop", "parm7", "psf", "tpr"}),
+            "trajectory": ("trajectory", {"xtc", "trr", "nc", "dcd"}),
+        }
+
+        files: list[dict[str, str]] = []
+        selected_paths: dict[str, Path] = {}
+
+        for manifest_role, (publish_role, exts) in publish_roles.items():
+            if manifest_role not in simulation.files:
+                raise BadRequest(
+                    f"The simulation does not define a '{property_label(manifest_role)}' file, which MDPosit publishing requires."
+                )
+
+            file_path = simulation.resolve_role(manifest_role)
+            if not file_path.is_file():
+                raise BadRequest(f"The '{property_label(manifest_role)}' file does not exist.")
+
+            extension = file_path.suffix.lstrip(".").lower()
+            if extension not in exts:
+                allowed = ", ".join(sorted(exts))
+                raise BadRequest(
+                    f"The '{property_label(manifest_role)}' file has an unsupported extension '.{extension}'. Allowed: {allowed}."
+                )
+
+            relative_path = str(file_path.relative_to(exp_dir_resolved))
+            selected_paths[publish_role] = file_path
+            files.append({
+                "role": publish_role,
+                "path": relative_path,
+                "url": file_download_url(self.id, relative_path),
+            })
+
+        metadata = self._build_mdposit_metadata(selected_paths)
+        metadata_file = exp_dir / "inputs.yaml"
+        metadata_relative_path = str(metadata_file.relative_to(exp_dir))
+
+        try:
+            metadata_file.write_text(yaml.safe_dump(metadata, sort_keys=False), encoding="utf-8")
+        except OSError as exc:
+            raise InternalServerError("Failed to generate metadata file.") from exc
+
+        return {
+            "metadata_file": {
+                "path": metadata_relative_path,
+                "url": file_download_url(self.id, metadata_relative_path),
+            },
+            "files": files,
+            "vre_lite_url": MDPOSIT_VRE_LITE_URL or None,
+        }
+
+    def _build_mdposit_metadata(self, selected_paths: dict[str, Path]) -> dict:
+        """
+        MDDB-compatible inputs.yaml metadata.
+
+        Only fields we can determine without external assumptions are included.
+        The user fills remaining fields in VRE Lite.
+        """
+        program = "GROMACS" if self.engine == Engine.GMX else "AMBER"
+        return {
+            "name": self.name,
+            "program": program,
+            "type": "trajectory",
+            "method": "Classical MD",
+            "input_structure_filepath": selected_paths["structure"].name,
+            "input_topology_filepath": selected_paths["topology"].name,
+            "input_trajectory_filepaths": [selected_paths["trajectory"].name],
+        }

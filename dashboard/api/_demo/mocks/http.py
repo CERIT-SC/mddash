@@ -16,7 +16,7 @@ from urllib.parse import unquote
 from uuid import uuid4
 
 from clients.caddy import CADDY_ADMIN_API_URL
-from config import (
+from core.config import (
     DATA_DIR,
     MDPOSIT_REST_URL,
     MDREPO_API_URL,

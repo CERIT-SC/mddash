@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from app import create_app
-from logging_utils import HealthCheckFilter
+from core.logging_utils import HealthCheckFilter
 
 
 def test_container_serves_the_app_factory_with_uvicorn() -> None:

@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import httpx
 import pytest
 import respx
-from token_manager import (
+from modules.mdrepo.tokens import (
     MDREPO_REFRESH_TOKEN_KEY,
     MDREPO_TOKEN_EXPIRES_AT,
     MDREPO_TOKEN_KEY,
@@ -23,7 +23,7 @@ SessionMixin = dict[str, Any]
 
 @pytest.fixture(autouse=True)
 def _token_url() -> Iterator[None]:
-    with patch("token_manager.MDREPO_TOKEN_URL", TOKEN_URL):
+    with patch("modules.mdrepo.tokens.MDREPO_TOKEN_URL", TOKEN_URL):
         yield
 
 
@@ -43,7 +43,7 @@ def mock_post(http_mock: respx.MockRouter) -> Mock:
 
 @pytest.fixture
 def mock_sleep() -> Iterator[AsyncMock]:
-    with patch("token_manager.asyncio.sleep", AsyncMock()) as sleep:
+    with patch("modules.mdrepo.tokens.asyncio.sleep", AsyncMock()) as sleep:
         yield sleep
 
 

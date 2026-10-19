@@ -15,12 +15,8 @@ import respx
 from app import create_app
 from fastapi import FastAPI
 from httpx import AsyncClient
+from modules.mdrepo.tokens import MDREPO_REFRESH_TOKEN_KEY, MDREPO_TOKEN_EXPIRES_AT, MDREPO_TOKEN_KEY
 from sqlalchemy.ext.asyncio import AsyncSession
-from token_manager import (
-    MDREPO_REFRESH_TOKEN_KEY,
-    MDREPO_TOKEN_EXPIRES_AT,
-    MDREPO_TOKEN_KEY,
-)
 
 SECRET = "test_secret_key"
 MDREPO = "https://mdrepo.test"
@@ -36,8 +32,8 @@ def app(db_session: AsyncSession) -> FastAPI:
 def _mdrepo_urls() -> Iterator[None]:
     with (
         patch("clients.mdrepo.MDREPO_URL", MDREPO),
-        patch("routes.mdrepo.MDREPO_URL", MDREPO),
-        patch("routes.mdrepo.MDREPO_TOKEN_URL", TOKEN_URL),
+        patch("modules.mdrepo.router.MDREPO_URL", MDREPO),
+        patch("modules.mdrepo.router.MDREPO_TOKEN_URL", TOKEN_URL),
     ):
         yield
 
@@ -84,19 +80,19 @@ class TestMDRepoRoutes:
         # Token should be cleared from session
         assert MDREPO_TOKEN_KEY not in get_session(client)
 
-    @patch("routes.mdrepo.MDREPO_CLIENT_ID", "")
-    @patch("routes.mdrepo.MDREPO_CLIENT_SECRET", "")
-    @patch("routes.mdrepo.MDREPO_REDIRECT_URI", "")
+    @patch("modules.mdrepo.router.MDREPO_CLIENT_ID", "")
+    @patch("modules.mdrepo.router.MDREPO_CLIENT_SECRET", "")
+    @patch("modules.mdrepo.router.MDREPO_REDIRECT_URI", "")
     async def test_initiate_auth_no_config(self, client: AsyncClient) -> None:
         response = await client.get("/dash/api/mdrepo/auth")
         assert response.status_code == HTTPStatus.SERVICE_UNAVAILABLE
         assert response.json()["type"] == "urn:mddash:mdrepo-not-configured"
 
-    @patch("routes.mdrepo.MDREPO_CLIENT_ID", "test_client_id")
-    @patch("routes.mdrepo.MDREPO_CLIENT_SECRET", "test_client_secret")
-    @patch("routes.mdrepo.MDREPO_REDIRECT_URI", "http://localhost/callback")
-    @patch("routes.mdrepo.MDREPO_AUTHORIZE_URL", "http://mdrepo.example.com/oauth/authorize")
-    @patch("routes.mdrepo.MDREPO_SCOPES", "read write")
+    @patch("modules.mdrepo.router.MDREPO_CLIENT_ID", "test_client_id")
+    @patch("modules.mdrepo.router.MDREPO_CLIENT_SECRET", "test_client_secret")
+    @patch("modules.mdrepo.router.MDREPO_REDIRECT_URI", "http://localhost/callback")
+    @patch("modules.mdrepo.router.MDREPO_AUTHORIZE_URL", "http://mdrepo.example.com/oauth/authorize")
+    @patch("modules.mdrepo.router.MDREPO_SCOPES", "read write")
     async def test_initiate_auth_with_config(self, client: AsyncClient) -> None:
         response = await client.get("/dash/api/mdrepo/auth?return_url=/test")
         assert response.status_code == HTTPStatus.FOUND
@@ -123,10 +119,10 @@ class TestMDRepoRoutes:
             pytest.param("", "/", id="empty"),
         ],
     )
-    @patch("routes.mdrepo.MDREPO_CLIENT_ID", "test_client_id")
-    @patch("routes.mdrepo.MDREPO_CLIENT_SECRET", "test_client_secret")
-    @patch("routes.mdrepo.MDREPO_REDIRECT_URI", "http://localhost/callback")
-    @patch("routes.mdrepo.MDREPO_AUTHORIZE_URL", "http://mdrepo.example.com/oauth/authorize")
+    @patch("modules.mdrepo.router.MDREPO_CLIENT_ID", "test_client_id")
+    @patch("modules.mdrepo.router.MDREPO_CLIENT_SECRET", "test_client_secret")
+    @patch("modules.mdrepo.router.MDREPO_REDIRECT_URI", "http://localhost/callback")
+    @patch("modules.mdrepo.router.MDREPO_AUTHORIZE_URL", "http://mdrepo.example.com/oauth/authorize")
     async def test_initiate_auth_return_url_open_redirect_guard(
         self, client: AsyncClient, return_url: str, expected: str
     ) -> None:

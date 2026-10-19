@@ -5,15 +5,15 @@ import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
-import db
 import pytest
 from alembic.util.exc import CommandError
+from core import db
 from pytest_mock import MockerFixture
 
 
 def test_importing_app_module_does_not_build_the_app(mocker: MockerFixture) -> None:
     """The uvicorn factory import must not construct the app or touch the database."""
-    run_migrations = mocker.patch("db.run_migrations")
+    run_migrations = mocker.patch("core.db.run_migrations")
     sys.modules.pop("app", None)
 
     app_module = importlib.import_module("app")
@@ -50,10 +50,10 @@ def _patch_alembic(
     script.get_current_head.return_value = head
     inspector = MagicMock()
     inspector.get_table_names.return_value = tables or []
-    mocker.patch("db.MigrationContext.configure", return_value=migration_context)
-    mocker.patch("db.ScriptDirectory", return_value=script)
-    inspect_db = mocker.patch("db.sa_inspect", return_value=inspector)
-    return script, inspect_db, mocker.patch("db.command.stamp"), mocker.patch("db.command.upgrade")
+    mocker.patch("core.db.MigrationContext.configure", return_value=migration_context)
+    mocker.patch("core.db.ScriptDirectory", return_value=script)
+    inspect_db = mocker.patch("core.db.sa_inspect", return_value=inspector)
+    return script, inspect_db, mocker.patch("core.db.command.stamp"), mocker.patch("core.db.command.upgrade")
 
 
 def test_run_migrations_skips_upgrade_when_database_is_at_head(tmp_path: Path, mocker: MockerFixture) -> None:

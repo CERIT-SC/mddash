@@ -8,7 +8,7 @@ and the ``mdrepo-uploader`` worker image), not in this process.
 import logging
 from http import HTTPStatus
 
-from config import MDREPO_API_URL, MDREPO_RECORD_NAME, MDREPO_URL
+from core.config import MDREPO_API_URL, MDREPO_RECORD_NAME, MDREPO_URL
 
 from clients.http import client
 

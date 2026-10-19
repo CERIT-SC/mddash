@@ -6,7 +6,7 @@ from pathlib import Path
 from urllib.parse import quote, urlparse
 
 import anyio
-from config import MDPOSIT_HOST, MDPOSIT_REST_URL, MDPOSIT_TRUSTED_PARENT_HOST
+from core.config import MDPOSIT_HOST, MDPOSIT_REST_URL, MDPOSIT_TRUSTED_PARENT_HOST
 
 from clients.http import client
 

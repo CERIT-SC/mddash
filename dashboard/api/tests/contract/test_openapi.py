@@ -143,8 +143,8 @@ async def test_empty_experiment_list_response_matches_contract(client: AsyncClie
 async def test_populated_experiment_list_response_matches_contract(
     client: AsyncClient, contract: dict[str, Any], db_session: Any
 ) -> None:
-    from enums import AnalysisType, JobStatus, SourceType
-    from models import AnalysisJob, Experiment, Notebook
+    from core.enums import AnalysisType, JobStatus, SourceType
+    from modules.models import AnalysisJob, Experiment, Notebook
 
     experiment = Experiment(id="slice", name="Vertical slice", source_type=SourceType.PDB, source_ref="1LYZ")
     db_session.add(experiment)

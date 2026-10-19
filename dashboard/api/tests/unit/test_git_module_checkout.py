@@ -8,8 +8,8 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from errors import InternalServerError, NotFound
-from utils import download_git_repo_module
+from core.errors import InternalServerError, NotFound
+from core.utils import download_git_repo_module
 
 _real_exec = asyncio.create_subprocess_exec
 
@@ -99,7 +99,7 @@ class TestDownloadGitRepoModule:
     ) -> None:
         """Clone failures must not leak the access token in exceptions or logs."""
         with (
-            patch("utils.asyncio.create_subprocess_exec", _exec_with(lambda _cmd: _FakeProcess(1, stderr))),
+            patch("core.utils.asyncio.create_subprocess_exec", _exec_with(lambda _cmd: _FakeProcess(1, stderr))),
             pytest.raises(InternalServerError) as exc_info,
         ):
             await download_git_repo_module(
@@ -121,7 +121,7 @@ class TestDownloadGitRepoModule:
             if _is_clone(cmd):
                 captured.append(cmd)
 
-        with patch("utils.asyncio.create_subprocess_exec", _exec_with(capture)):
+        with patch("core.utils.asyncio.create_subprocess_exec", _exec_with(capture)):
             await download_git_repo_module(str(repo), "gromacs/protein", tmp_path / "target")
 
         assert captured, "expected at least one git clone invocation"
@@ -143,7 +143,7 @@ class TestDownloadGitRepoModule:
                     return _FakeProcess(1, "fatal: filter not supported")
             return None
 
-        with patch("utils.asyncio.create_subprocess_exec", _exec_with(flaky)):
+        with patch("core.utils.asyncio.create_subprocess_exec", _exec_with(flaky)):
             await download_git_repo_module(str(repo), "gromacs/protein", target)
 
         assert len(clones) == 2
@@ -158,8 +158,8 @@ class TestDownloadGitRepoModule:
             return _FakeProcess(0, hang=True)
 
         with (
-            patch("utils.GIT_CLONE_TIMEOUT", 0.05),
-            patch("utils.asyncio.create_subprocess_exec", _exec_with(hang)),
+            patch("core.utils.GIT_CLONE_TIMEOUT", 0.05),
+            patch("core.utils.asyncio.create_subprocess_exec", _exec_with(hang)),
             pytest.raises(InternalServerError, match="timed out"),
         ):
             await download_git_repo_module("https://github.com/owner/repo.git", "gromacs/protein", tmp_path / "t")

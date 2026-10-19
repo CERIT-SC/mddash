@@ -3,13 +3,14 @@
 from datetime import UTC, datetime
 
 import pytest
-from enums import AnalysisType, DeviceType, Engine, JobStatus, NotebookTier, PodStatus, PreprocessingMode
-from models import AnalysisJob, Experiment, GromacsJob, Notebook
+from core.enums import AnalysisType, DeviceType, Engine, JobStatus, NotebookTier, PodStatus, PreprocessingMode
+from modules.jobs.analysis.schemas import AnalysisJob as AnalysisJobOut
+from modules.jobs.analysis.schemas import AnalysisJobRequest
+from modules.jobs.gmx.schemas import GromacsJobRequest
+from modules.jobs.schemas import SimulationJob as SimulationJobOut
+from modules.models import AnalysisJob, Experiment, GromacsJob, Notebook
+from modules.notebooks.schemas import Notebook as NotebookOut
 from pydantic import ValidationError
-from schemas.experiment import Notebook as NotebookOut
-from schemas.jobs import AnalysisJob as AnalysisJobOut
-from schemas.jobs import AnalysisJobRequest, GromacsJobRequest
-from schemas.jobs import SimulationJob as SimulationJobOut
 
 
 class TestAnalysisJobRequest:

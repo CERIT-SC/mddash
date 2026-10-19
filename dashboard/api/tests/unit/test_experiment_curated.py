@@ -4,9 +4,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from errors import InternalServerError
-from models.experiment import Experiment
-from notebook_modules import NotebookModule
+from core.errors import InternalServerError
+from modules.experiments.models import Experiment
+from modules.notebooks.catalog import NotebookModule
 
 
 def _gmx_module() -> NotebookModule:
@@ -40,9 +40,9 @@ class TestPrepareEnvCurated:
     async def test_curated_uses_selective_checkout_with_module_path(self, tmp_path: Path) -> None:
         """prepare_env with a module should selectively check out the module path."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo") as mock_full,
-            patch("models.experiment.download_git_repo_module") as mock_module,
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo") as mock_full,
+            patch("modules.experiments.models.download_git_repo_module") as mock_module,
         ):
             exp_id = await Experiment.prepare_env(
                 notebooks_repo="https://github.com/default/repo.git",
@@ -57,8 +57,8 @@ class TestPrepareEnvCurated:
     async def test_curated_cleanup_on_checkout_failure(self, tmp_path: Path) -> None:
         """A checkout failure should remove the partial experiment directory."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo_module", side_effect=InternalServerError("fail")),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo_module", side_effect=InternalServerError("fail")),
             pytest.raises(InternalServerError),
         ):
             await Experiment.prepare_env(
@@ -69,9 +69,9 @@ class TestPrepareEnvCurated:
     async def test_root_path_module_uses_full_clone(self, tmp_path: Path) -> None:
         """A module with path '.' should use full clone, not sparse checkout."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo") as mock_full,
-            patch("models.experiment.download_git_repo_module") as mock_module,
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo") as mock_full,
+            patch("modules.experiments.models.download_git_repo_module") as mock_module,
         ):
             await Experiment.prepare_env(
                 notebooks_repo="https://github.com/bioexcel/biobb_wf_md_setup_membrane.git",

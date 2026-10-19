@@ -6,7 +6,7 @@ import time
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, cast
 
-from config import (
+from core.config import (
     CPU_LIMIT_QUOTA,
     CPU_REQUEST_QUOTA,
     GPU_TYPE,
@@ -18,12 +18,12 @@ from config import (
     NOTEBOOK_IMAGE,
     PVC_NAME,
 )
-from enums import JobStatus, PodStatus
+from core.enums import JobStatus, PodStatus
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from enums import NotebookTier
+    from core.enums import NotebookTier
 
     # Available at runtime via _load_k8s() populating module globals.
     from kubernetes_asyncio.client import (  # ruff:ignore[runtime-import-in-type-checking-block]

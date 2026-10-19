@@ -10,11 +10,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import respx
-from errors import InternalServerError
+from core.errors import InternalServerError
+from core.utils import secure_filename
 from httpx import AsyncClient
-from models import Experiment, Notebook
+from modules.models import Experiment, Notebook
 from sqlalchemy.ext.asyncio import AsyncSession as Session
-from utils import secure_filename
 
 EXPERIMENT_ID_LENGTH = 5
 
@@ -59,8 +59,8 @@ class TestListExperiments:
 
     async def test_embeds_analysis_jobs_as_objects(self, client: AsyncClient, db_session: Session) -> None:
         """Should embed full analysis job objects, not primary-key strings."""
-        from enums import AnalysisType, JobStatus
-        from models import AnalysisJob
+        from core.enums import AnalysisType, JobStatus
+        from modules.models import AnalysisJob
 
         exp = Experiment()
         exp.id = "testx"
@@ -93,8 +93,8 @@ class TestListExperiments:
 
     async def test_eager_loads_relations_without_n_plus_one(self, client: AsyncClient, db_session: Session) -> None:
         """The 5s dashboard poll dumps every experiment — job relations must not lazy-load per row."""
-        from enums import AnalysisType, DeviceType, JobStatus
-        from models import AnalysisJob, GromacsJob, TunerJob
+        from core.enums import AnalysisType, DeviceType, JobStatus
+        from modules.models import AnalysisJob, GromacsJob, TunerJob
         from sqlalchemy import event
 
         for exp_id in ("exp01", "exp02"):
@@ -199,7 +199,7 @@ class TestPublishExperiment:
 
         token_manager = MagicMock()
         token_manager.get_credentials = AsyncMock(return_value=MagicMock(access_token="valid-token"))
-        with patch("routes.experiments.MDRepoTokenManager", return_value=token_manager):
+        with patch("modules.publishing.router.MDRepoTokenManager", return_value=token_manager):
             response = await client.post("/dash/api/experiments/pubc1/publish", json={"target": "invenio"})
 
         assert response.status_code == HTTPStatus.CONFLICT
@@ -214,8 +214,8 @@ class TestCreateExperiment:
     ) -> None:
         """Should create experiment from valid PDB ID."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo") as mock_clone,
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo") as mock_clone,
         ):
             # Mock successful PDB download
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
@@ -242,8 +242,8 @@ class TestCreateExperiment:
     ) -> None:
         """Should return 404 when PDB ID doesn't exist."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo"),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo"),
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(404))
 
@@ -265,9 +265,9 @@ class TestCreateExperiment:
         """Should create experiment from a direct URL to a PDB file."""
         pdb_url = "https://www.ebi.ac.uk/pdbe/entry-files/download/pdb3vte.ent"
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo") as mock_clone,
-            patch("validators._getaddrinfo_ips", return_value=["193.62.193.80"]),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo") as mock_clone,
+            patch("core.validators._getaddrinfo_ips", return_value=["193.62.193.80"]),
         ):
             mock_get = http_mock.get(url__regex=r".*").mock(
                 return_value=httpx.Response(200, content=sample_pdb_content)
@@ -300,9 +300,9 @@ class TestCreateExperiment:
         pdb_url = "https://example.org/login"
         html_content = b"<!DOCTYPE html><html><body>Please log in</body></html>"
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo"),
-            patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo"),
+            patch("core.validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=html_content))
 
@@ -325,8 +325,8 @@ class TestCreateExperiment:
     ) -> None:
         """Should return 400 when an RCSB PDB ID returns non-PDB content."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo"),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo"),
         ):
             mock_get = http_mock.get(url__regex=r".*").mock(
                 return_value=httpx.Response(200, content=b"<html><body>not a pdb</body></html>")
@@ -352,9 +352,9 @@ class TestCreateExperiment:
         """Should return 404 when a PDB URL returns 404."""
         pdb_url = "https://example.org/missing.pdb"
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo"),
-            patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo"),
+            patch("core.validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(404))
 
@@ -373,8 +373,8 @@ class TestCreateExperiment:
     async def test_create_from_pdb_url_rejects_file_scheme(self, client: AsyncClient, tmp_path: Path) -> None:
         """Should return 400 when a PDB URL uses a non-http(s) scheme."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo"),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo"),
         ):
             response = await client.post(
                 "/dash/api/experiments",
@@ -393,8 +393,8 @@ class TestCreateExperiment:
     ) -> None:
         """Should return 400 when a PDB URL points at an internal SSRF target."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo"),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo"),
         ):
             response = await client.post(
                 "/dash/api/experiments",
@@ -414,9 +414,9 @@ class TestCreateExperiment:
     ) -> None:
         """Should return 400 when a PDB URL hostname resolves to an internal IP."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo"),
-            patch("validators._getaddrinfo_ips", return_value=["10.43.0.1"]),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo"),
+            patch("core.validators._getaddrinfo_ips", return_value=["10.43.0.1"]),
         ):
             response = await client.post(
                 "/dash/api/experiments",
@@ -438,9 +438,9 @@ class TestCreateExperiment:
         external_url = "https://example.org/pdb3vte.ent"
         internal_url = "http://169.254.169.254/latest/meta-data/"
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo"),
-            patch("validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo"),
+            patch("core.validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
         ):
             mock_get = http_mock.get(url__regex=r".*").mock(
                 side_effect=[httpx.Response(302, headers={"Location": internal_url})]
@@ -466,9 +466,9 @@ class TestCreateExperiment:
     ) -> None:
         """Should use default notebooks repo when not provided."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo") as mock_clone,
-            patch("routes.experiments.DEFAULT_NOTEBOOKS_REPO", "https://github.com/default/repo.git"),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo") as mock_clone,
+            patch("modules.experiments.router.DEFAULT_NOTEBOOKS_REPO", "https://github.com/default/repo.git"),
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
@@ -492,8 +492,8 @@ class TestCreateExperiment:
     ) -> None:
         """Should return error when git clone fails."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo") as mock_clone,
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo") as mock_clone,
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
@@ -539,7 +539,10 @@ class TestCreateExperiment:
 
     async def test_create_from_files_success(self, client: AsyncClient, tmp_path: Path) -> None:
         """Should create experiment from uploaded files."""
-        with patch("models.experiment.DATA_DIR", tmp_path), patch("models.experiment.download_git_repo") as mock_clone:
+        with (
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo") as mock_clone,
+        ):
             data = {
                 "type": "file",
                 "experiment-name": "Test File Experiment",
@@ -564,7 +567,10 @@ class TestCreateExperiment:
 
     async def test_create_with_malicious_filenames(self, client: AsyncClient, tmp_path: Path) -> None:
         """Should sanitize malicious filenames during upload."""
-        with patch("models.experiment.DATA_DIR", tmp_path), patch("models.experiment.download_git_repo"):
+        with (
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo"),
+        ):
             malicious_filename_1 = "../../../etc/passwd"
             malicious_filename_2 = "<script>alert(1)</script>.js"
 
@@ -606,10 +612,10 @@ class TestCreateExperimentCuratedModule:
     ) -> None:
         """Curated creation should use the selective module checkout, not the full clone."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo") as mock_full,
-            patch("models.experiment.download_git_repo_module") as mock_module,
-            patch("routes.experiments.DEFAULT_NOTEBOOKS_REPO", "https://github.com/default/repo.git"),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo") as mock_full,
+            patch("modules.experiments.models.download_git_repo_module") as mock_module,
+            patch("modules.experiments.router.DEFAULT_NOTEBOOKS_REPO", "https://github.com/default/repo.git"),
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
@@ -635,8 +641,8 @@ class TestCreateExperimentCuratedModule:
     async def test_curated_rejects_invalid_module(self, client: AsyncClient, tmp_path: Path) -> None:
         """Curated creation should reject an unknown or engine-incompatible module ID."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo_module") as mock_module,
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo_module") as mock_module,
         ):
             response = await client.post(
                 "/dash/api/experiments",
@@ -657,9 +663,9 @@ class TestCreateExperimentCuratedModule:
     ) -> None:
         """Without a module ID, custom mode should use the full clone path."""
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo") as mock_full,
-            patch("models.experiment.download_git_repo_module") as mock_module,
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo") as mock_full,
+            patch("modules.experiments.models.download_git_repo_module") as mock_module,
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
@@ -681,7 +687,7 @@ class TestCreateExperimentCuratedModule:
         self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
     ) -> None:
         """A curated module with a repository field should store that URL in the experiment."""
-        import notebook_modules
+        from modules.notebooks import catalog as notebook_modules
 
         binder_module = notebook_modules.NotebookModule(
             id="binder-gmx",
@@ -696,10 +702,10 @@ class TestCreateExperimentCuratedModule:
         catalog = notebook_modules.NotebookModulesCatalog(modules=(binder_module,))
 
         with (
-            patch("models.experiment.DATA_DIR", tmp_path),
-            patch("models.experiment.download_git_repo") as mock_full,
-            patch("models.experiment.download_git_repo_module") as mock_module,
-            patch("routes.experiments.load_catalog", return_value=catalog),
+            patch("modules.experiments.models.DATA_DIR", tmp_path),
+            patch("modules.experiments.models.download_git_repo") as mock_full,
+            patch("modules.experiments.models.download_git_repo_module") as mock_module,
+            patch("modules.experiments.router.load_catalog", return_value=catalog),
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
@@ -786,7 +792,7 @@ class TestDeleteExperiment:
         exp_dir = tmp_path / "delme"
         exp_dir.mkdir()
 
-        with patch("models.experiment.DATA_DIR", tmp_path):
+        with patch("modules.experiments.models.DATA_DIR", tmp_path):
             exp = Experiment()
             exp.id = "delme"
             exp.name = "To Delete"
@@ -827,7 +833,7 @@ class TestPublishStatus:
 
     async def test_status_no_upload(self, client: AsyncClient, db_session: Session, tmp_path: Path) -> None:
         """Status with no upload returns null state."""
-        with patch("models.experiment.DATA_DIR", tmp_path):
+        with patch("modules.experiments.models.DATA_DIR", tmp_path):
             await self._seed_experiment(db_session, tmp_path)
             response = await client.get("/dash/api/experiments/pstat/publish/status")
 
@@ -836,14 +842,14 @@ class TestPublishStatus:
         assert data["upload_state"] is None
         assert data["total_files"] == 0
 
-    @patch("models.experiment.is_upload_active", return_value=True)
+    @patch("modules.experiments.models.is_upload_active", return_value=True)
     async def test_status_active_upload(
         self, mock_active: MagicMock, client: AsyncClient, db_session: Session, tmp_path: Path
     ) -> None:
         """Status with an active upload reflects the PVC file."""
-        from upload.status import create_queued_status, write_status
+        from modules.publishing.status import create_queued_status, write_status
 
-        with patch("models.experiment.DATA_DIR", tmp_path):
+        with patch("modules.experiments.models.DATA_DIR", tmp_path):
             await self._seed_experiment(db_session, tmp_path)
             status = create_queued_status("att-1")
             write_status(status, "pstat", tmp_path)
@@ -855,14 +861,14 @@ class TestPublishStatus:
         assert data["upload_state"] == "queued"
         assert data["upload_attempt_id"] == "att-1"
 
-    @patch("models.experiment.is_upload_active", return_value=False)
+    @patch("modules.experiments.models.is_upload_active", return_value=False)
     async def test_status_job_missing_reports_failed(
         self, mock_active: MagicMock, client: AsyncClient, db_session: Session, tmp_path: Path
     ) -> None:
         """PVC says running but Job is gone → failed with job_missing reason."""
-        from upload.status import UploadState, UploadStatus, write_status
+        from modules.publishing.status import UploadState, UploadStatus, write_status
 
-        with patch("models.experiment.DATA_DIR", tmp_path):
+        with patch("modules.experiments.models.DATA_DIR", tmp_path):
             await self._seed_experiment(db_session, tmp_path)
             status = UploadStatus(
                 attempt_id="att-1",
@@ -886,17 +892,17 @@ class TestPublishStatus:
 class TestDeleteDuringUpload:
     """Tests for experiment deletion during active upload."""
 
-    @patch("models.experiment.is_upload_active", return_value=True)
-    @patch("models.experiment.read_status")
+    @patch("modules.experiments.models.is_upload_active", return_value=True)
+    @patch("modules.experiments.models.read_status")
     async def test_delete_blocked_during_active_upload(
         self, mock_read: MagicMock, mock_active: MagicMock, client: AsyncClient, db_session: Session, tmp_path: Path
     ) -> None:
         """Cannot delete an experiment with an active upload."""
-        from upload.status import UploadState
+        from modules.publishing.status import UploadState
 
         mock_read.return_value = MagicMock(state=UploadState.RUNNING.value, attempt_id="att-1")
 
-        with patch("models.experiment.DATA_DIR", tmp_path):
+        with patch("modules.experiments.models.DATA_DIR", tmp_path):
             (tmp_path / "delup").mkdir(parents=True, exist_ok=True)
             exp = Experiment()
             exp.id = "delup"
