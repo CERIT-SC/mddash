@@ -6,7 +6,6 @@ import logging
 import secrets
 from typing import TYPE_CHECKING, Any
 
-from clients import k8s
 from core.cache import archive_status_cache
 from core.config import (
     ARCHIVE_WORKER_IMAGE,
@@ -24,6 +23,8 @@ from modules.publishing.submission import dns1123_name
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from clients.k8s import K8sClient
 
 logger = logging.getLogger(__name__)
 
@@ -104,20 +105,20 @@ def _job_manifest(name: str, direction: str, experiment_id: str, attempt_id: str
     }
 
 
-async def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
+async def _submit(k8s: K8sClient, direction: str, experiment_id: str, data_dir: Path) -> str:
     name = job_name(direction, experiment_id)
 
     if not ARCHIVE_WORKER_IMAGE:
         raise SubmissionError("ARCHIVE_WORKER_IMAGE is not set. Redeploy the Helm chart and restart the server.")
 
     try:
-        if await is_job_active(direction, experiment_id):
+        if await is_job_active(k8s, direction, experiment_id):
             logger.info("Job %s already active for experiment %s", name, experiment_id)
             archive_status_cache[direction, experiment_id] = True
             status = read_status(experiment_id, data_dir)
             return status.attempt_id if status else ""
 
-        await delete_jobs(experiment_id)
+        await delete_jobs(k8s, experiment_id)
         # Foreground deletion races a same-name recreate ("object is being deleted"); wait it out.
         if not await k8s.wait_for_resource_absence("job", name, max_wait=JOB_DELETION_TIMEOUT):
             raise SubmissionError(f"Previous archive Job {name} is still terminating; retry shortly.")
@@ -138,7 +139,7 @@ async def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
 
         if not await k8s.wait_for_pod_admission(f"{EXPERIMENT_LABEL}={experiment_id}", max_wait=ADMISSION_TIMEOUT):
             logger.error("Pod admission timeout for Job %s", name)
-            await delete_jobs(experiment_id)
+            await delete_jobs(k8s, experiment_id)
             _cleanup_own_status(direction, experiment_id, data_dir)
             raise SubmissionError(f"Archive pod not admitted within {ADMISSION_TIMEOUT}s")
 
@@ -150,7 +151,7 @@ async def _submit(direction: str, experiment_id: str, data_dir: Path) -> str:
         raise
     except Exception as e:
         logger.error("Failed to submit Job %s: %s", name, e)
-        await delete_jobs(experiment_id)
+        await delete_jobs(k8s, experiment_id)
         _cleanup_own_status(direction, experiment_id, data_dir)
         raise SubmissionError(f"Failed to submit archive Job: {e}") from e
 
@@ -165,13 +166,19 @@ def _cleanup_own_status(direction: str, experiment_id: str, data_dir: Path) -> N
         delete_status(experiment_id, data_dir)
 
 
-async def submit_job(direction: str, experiment_id: str, data_dir: Path) -> str:
+async def submit_job(k8s: K8sClient, direction: str, experiment_id: str, data_dir: Path) -> str:
+    """
+    Submit an archive or restore Job (the live one when already running).
+
+    Raises:
+        ValueError: If the direction is neither archive nor restore.
+    """
     if direction not in _TRACKED_DIRECTIONS:
         raise ValueError(f"Unknown tracked archive direction: {direction}")
-    return await _submit(direction, experiment_id, data_dir)
+    return await _submit(k8s, direction, experiment_id, data_dir)
 
 
-async def submit_purge_job(experiment_id: str) -> None:
+async def submit_purge_job(k8s: K8sClient, experiment_id: str) -> None:
     """Best-effort deletion of _archives/<id> after the DB row is gone: no status doc, no admission wait."""
     if not ARCHIVE_WORKER_IMAGE:
         logger.error("ARCHIVE_WORKER_IMAGE not set; skipping S3 archive purge for %s", experiment_id)
@@ -187,7 +194,7 @@ async def submit_purge_job(experiment_id: str) -> None:
         logger.exception("Failed to submit purge Job for experiment %s", experiment_id)
 
 
-async def is_job_active(direction: str, experiment_id: str) -> bool:
+async def is_job_active(k8s: K8sClient, direction: str, experiment_id: str) -> bool:
     """
     Live until a Complete/Failed condition lands; Pending pods (scheduling, image pull) count.
 
@@ -204,6 +211,7 @@ async def is_job_active(direction: str, experiment_id: str) -> bool:
     return True
 
 
-async def delete_jobs(experiment_id: str) -> None:
+async def delete_jobs(k8s: K8sClient, experiment_id: str) -> None:
+    """Delete every archive/restore/purge Job of the experiment."""
     for direction in _ALL_MODES:
         await k8s.delete_job_foreground(job_name(direction, experiment_id))

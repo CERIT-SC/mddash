@@ -5,8 +5,10 @@ from datetime import UTC, datetime
 from http import HTTPStatus
 
 import pytest
+from core.enums import Engine
 from httpx import AsyncClient
-from modules.models import Experiment, Notebook
+from modules.jobs.tuner.service import TunerService
+from modules.models import Experiment, Notebook, TunerJob
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -35,29 +37,28 @@ class TestTunerNstepsValidation:
         response = await client.post(self.URL, json={"simulation_path": "prod/test.simulation.json", "nsteps": nsteps})
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
-    async def test_valid_nsteps_reaches_tuner_job_start(
+    async def test_valid_nsteps_reaches_tuner_start(
         self, client: AsyncClient, experiment_id: str, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        from modules.jobs.tuner.models import TunerJob
-
         captured: dict[str, int] = {}
 
         async def fake_start(  # ruff:ignore[unused-async]
-            cls: type, session: AsyncSession, experiment: Experiment, simulation_path: str, nsteps: int
-        ) -> TunerJob:
+            _service: TunerService, experiment_id: str, simulation_path: str, nsteps: int
+        ) -> tuple[TunerJob, bool]:
             captured["nsteps"] = nsteps
-            # A stopped job skips the tuner poll the route performs before serializing.
-            return TunerJob(
+            # A stopped job serializes without a tuner poll.
+            job = TunerJob(
                 id=str(uuid.uuid4()),
-                experiment=experiment,
-                experiment_id=experiment.id,
+                experiment=Experiment(id=experiment_id, name="Tuner Route", engine=Engine.GMX),
+                experiment_id=experiment_id,
                 simulation_path=simulation_path,
                 nsteps=nsteps,
                 is_stopped=True,
                 created_at=datetime.now(UTC),
             )
+            return job, True
 
-        monkeypatch.setattr(TunerJob, "start", classmethod(fake_start))
+        monkeypatch.setattr(TunerService, "start", fake_start)
 
         response = await client.post(self.URL, json={"simulation_path": "prod/test.simulation.json", "nsteps": "1000"})
         assert response.status_code == HTTPStatus.CREATED

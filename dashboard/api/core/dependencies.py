@@ -10,13 +10,21 @@ from collections.abc import Iterable
 from typing import Annotated, Any
 
 import anyio
-from fastapi import Depends, Path
+from clients import Clients
+from fastapi import Depends, Path, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.db import get_session
 
+
+def get_clients(request: Request) -> Clients:
+    """Upstream clients the app was built with."""
+    return request.app.state.clients
+
+
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
+ClientsDep = Annotated[Clients, Depends(get_clients)]
 ExperimentIdPath = Annotated[str, Path(min_length=1)]
 
 

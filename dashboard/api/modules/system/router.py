@@ -10,8 +10,8 @@ from fastapi import APIRouter
 from pydantic import TypeAdapter
 
 from modules.notebooks.catalog import load_catalog
-from modules.notebooks.models import get_tier_resources
 from modules.notebooks.schemas import NotebookConfig, NotebookModule, NotebookTier
+from modules.notebooks.tiers import get_tier_resources
 from modules.system.schemas import Metrics
 
 router = APIRouter(prefix=API_PREFIX)

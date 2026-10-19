@@ -1,25 +1,14 @@
-"""Process-wide async HTTP client shared by all upstream clients."""
+"""Helpers shared by the HTTP upstream clients."""
 
 import httpx
 
-_client: httpx.AsyncClient | None = None
+# Per-call timeouts are explicit; this default only guards calls that forget one.
+DEFAULT_TIMEOUT = 30
 
 
-def client() -> httpx.AsyncClient:
-    """Return the shared client; created lazily so importing a client module stays side-effect free."""
-    global _client  # ruff:ignore[global-statement]
-    if _client is None or _client.is_closed:
-        # Per-call timeouts are explicit; this default only guards calls that forget one.
-        _client = httpx.AsyncClient(timeout=30)
-    return _client
-
-
-async def aclose() -> None:
-    """Close the shared client (application shutdown)."""
-    global _client  # ruff:ignore[global-statement]
-    if _client is not None:
-        await _client.aclose()
-        _client = None
+def new_client() -> httpx.AsyncClient:
+    """Create the process-wide HTTP client every upstream client shares (one connection pool)."""
+    return httpx.AsyncClient(timeout=DEFAULT_TIMEOUT)
 
 
 def detail_of(response: httpx.Response) -> str:

@@ -1,38 +1,19 @@
-import asyncio
 from http import HTTPStatus
 from typing import Annotated
 
-import anyio
 from core.config import API_PREFIX
 from core.dependencies import ExperimentIdPath, SessionDep, dump, dump_many
 from core.enums import DeviceType
-from core.errors import BadRequest, Conflict, NotFound
 from core.responses import problems
-from core.validators import check_log_type
 from fastapi import APIRouter, Path, Query, Response
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.experiments.dependencies import get_experiment_or_404
 from modules.jobs.gmx.schemas import ExtendGromacsJobRequest, GromacsJobRequest
 from modules.jobs.gmx.schemas import GromacsJob as GromacsJobOut
-from modules.models import GromacsJob
-from modules.simulations.manifest import check_simulation_path
+from modules.jobs.gmx.service import GromacsServiceDep
 
 router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/gmx", tags=["GROMACS"])
 
 SimulationPath = Annotated[str, Path(min_length=1)]
-
-
-async def _job_or_404(
-    session: AsyncSession, experiment_id: str, simulation_path: str, *, refresh: bool = True
-) -> GromacsJob:
-    """Return the simulation's single run row (status refreshed unless `refresh` is False)."""
-    job = await GromacsJob.get(session, experiment_id, simulation_path)
-    if job is None:
-        raise NotFound(f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
-    if refresh:
-        await job.refresh_status()
-    return job
 
 
 @router.get(
@@ -42,11 +23,11 @@ async def _job_or_404(
     response_description="GROMACS jobs",
     responses=problems(),
 )
-async def list_jobs(session: SessionDep, experiment_id: ExperimentIdPath) -> list[GromacsJobOut]:
+async def list_jobs(
+    session: SessionDep, service: GromacsServiceDep, experiment_id: ExperimentIdPath
+) -> list[GromacsJobOut]:
     """List all GROMACS jobs of an experiment."""
-    jobs = (await session.execute(GromacsJob.query().filter_by(experiment_id=experiment_id))).scalars().all()
-    await asyncio.gather(*(job.refresh_status() for job in jobs))
-    return await dump_many(session, GromacsJobOut, jobs)
+    return await dump_many(session, GromacsJobOut, await service.list_jobs(experiment_id))
 
 
 @router.post(
@@ -58,18 +39,11 @@ async def list_jobs(session: SessionDep, experiment_id: ExperimentIdPath) -> lis
     response_description="Operation completed successfully",
     responses=problems(400, 404),
 )
-async def stop_job(session: SessionDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath) -> None:
-    """
-    Stop the run gracefully, keeping all data and the job row.
-
-    Raises:
-        BadRequest: If the run is not live.
-    """
-    job = await _job_or_404(session, experiment_id, simulation_path)
-    if not job.is_live:
-        raise BadRequest("Only a live run can be stopped.")
-    await job.stop()
-    await session.commit()
+async def stop_job(
+    service: GromacsServiceDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath
+) -> None:
+    """Stop the run gracefully, keeping all data and the job row."""
+    await service.stop(experiment_id, simulation_path)
 
 
 @router.post(
@@ -81,12 +55,14 @@ async def stop_job(session: SessionDep, experiment_id: ExperimentIdPath, simulat
     responses=problems(400, 404),
 )
 async def extend_job(
-    session: SessionDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath, body: ExtendGromacsJobRequest
+    session: SessionDep,
+    service: GromacsServiceDep,
+    experiment_id: ExperimentIdPath,
+    simulation_path: SimulationPath,
+    body: ExtendGromacsJobRequest,
 ) -> GromacsJobOut:
     """Extend a finished or stopped run by `nsteps` additional steps, resuming from its checkpoint."""
-    experiment = await get_experiment_or_404(session, experiment_id)
-    job = await GromacsJob.extend(session, experiment=experiment, simulation_path=simulation_path, nsteps=body.nsteps)
-    await job.refresh_status()
+    job = await service.extend(experiment_id, simulation_path, body.nsteps)
     return await dump(session, GromacsJobOut, job)
 
 
@@ -98,17 +74,14 @@ async def extend_job(
     responses=problems(400, 404),
 )
 async def get_log(
-    session: SessionDep,
+    service: GromacsServiceDep,
     experiment_id: ExperimentIdPath,
     simulation_path: SimulationPath,
     log_type: Annotated[str, Query(alias="type")] = "gmx",
     tail: Annotated[int, Query(ge=1, le=100_000)] = 10_000,
 ) -> str:
     """Tail of one of the run's log streams (`gmx`, `stdout`, `stderr`)."""
-    job = await _job_or_404(session, experiment_id, simulation_path, refresh=False)
-    log_type = log_type.lower()
-    check_log_type(log_type)
-    return await anyio.to_thread.run_sync(job.get_log, log_type, tail)
+    return await service.log(experiment_id, simulation_path, log_type, tail)
 
 
 @router.get(
@@ -119,10 +92,10 @@ async def get_log(
     responses=problems(404),
 )
 async def get_job(
-    session: SessionDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath
+    session: SessionDep, service: GromacsServiceDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath
 ) -> GromacsJobOut:
     """Get the GROMACS run of a simulation."""
-    return await dump(session, GromacsJobOut, await _job_or_404(session, experiment_id, simulation_path))
+    return await dump(session, GromacsJobOut, await service.get(experiment_id, simulation_path))
 
 
 @router.post(
@@ -134,36 +107,16 @@ async def get_job(
     responses=problems(400, 404, 409),
 )
 async def submit_job(
-    session: SessionDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath, body: GromacsJobRequest
+    session: SessionDep,
+    service: GromacsServiceDep,
+    experiment_id: ExperimentIdPath,
+    simulation_path: SimulationPath,
+    body: GromacsJobRequest,
 ) -> GromacsJobOut:
-    """
-    Submit a GROMACS simulation job from a simulation manifest.
-
-    Raises:
-        Conflict: If a live run already exists for this simulation.
-    """
-    check_simulation_path(simulation_path)
-    experiment = await get_experiment_or_404(session, experiment_id)
-
-    prior = await GromacsJob.get(session, experiment_id, simulation_path)
-    if prior is not None:
-        await prior.refresh_status()
-        if prior.is_live:
-            raise Conflict("A run is already active for this simulation; stop it first to submit a new run.")
-
-    # A terminal run (finished, stopped, or failed) is replaced by the new one.
-    await GromacsJob.remove(session, experiment_id, simulation_path)
-
-    job = await GromacsJob.start(
-        session,
-        experiment=experiment,
-        simulation_path=simulation_path,
-        pme=DeviceType(body.pme),
-        nb=DeviceType(body.nb),
-        np=body.np,
-        ntomp=body.ntomp,
+    """Submit a GROMACS simulation job from a simulation manifest."""
+    job = await service.submit(
+        experiment_id, simulation_path, pme=DeviceType(body.pme), nb=DeviceType(body.nb), np=body.np, ntomp=body.ntomp
     )
-    await job.refresh_status()
     return await dump(session, GromacsJobOut, job)
 
 
@@ -176,7 +129,8 @@ async def submit_job(
     response_description="Operation completed successfully",
     responses=problems(404),
 )
-async def delete_job(session: SessionDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath) -> None:
+async def delete_job(
+    service: GromacsServiceDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath
+) -> None:
     """Delete the simulation's run: its MDRun job, DB row, and result files."""
-    if not await GromacsJob.remove(session, experiment_id, simulation_path):
-        raise NotFound(f"GROMACS job for simulation {simulation_path} in experiment {experiment_id} not found")
+    await service.delete(experiment_id, simulation_path)

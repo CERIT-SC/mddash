@@ -9,7 +9,7 @@ from pathlib import Path
 import httpx
 from core.config import DATA_DIR
 from core.enums import JobStatus
-from modules.jobs.analysis.models import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
+from modules.jobs.analysis.results import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, mwf_output_dir
 
 from .state import E2E, demo_state
 

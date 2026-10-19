@@ -8,7 +8,8 @@ import clients.metadump as metadump_module
 import httpx
 import pytest
 import respx
-from clients.metadump import extract_metadata, extract_metadata_bulk
+from clients import Clients
+from clients.metadump import MetadumpClient
 from core.errors import InternalServerError
 
 TEST_URL = "http://test-metadump"
@@ -22,9 +23,14 @@ _SAMPLE_METADATA = {
 
 
 @pytest.fixture(autouse=True)
-def _metadump() -> Iterator[None]:
-    with patch("clients.metadump.METADUMP_API_URL", TEST_URL), patch("clients.metadump.asyncio.sleep", AsyncMock()):
+def _no_poll_wait() -> Iterator[None]:
+    with patch("clients.metadump.asyncio.sleep", AsyncMock()):
         yield
+
+
+@pytest.fixture
+def metadump(clients: Clients) -> MetadumpClient:
+    return MetadumpClient(clients.http, TEST_URL)
 
 
 @pytest.fixture
@@ -61,32 +67,38 @@ def _delete(http_mock: respx.MockRouter) -> respx.Route:
 class TestExtractMetadataBulk:
     """Tests for extract_metadata_bulk."""
 
-    async def test_single_tpr_happy_path(self, http_mock: respx.MockRouter, tpr: Path) -> None:
+    async def test_single_tpr_happy_path(
+        self, http_mock: respx.MockRouter, tpr: Path, metadump: MetadumpClient
+    ) -> None:
         """POST → uuid/pin, GET status → completed, GET results, DELETE all succeed."""
         _submit(http_mock, "uuid-1")
         _results(http_mock, "uuid-1")
         _statuses(http_mock, "uuid-1", "completed")
         _delete(http_mock)
 
-        results = await extract_metadata_bulk([tpr])
+        results = await metadump.extract_metadata_bulk([tpr])
 
         assert len(results) == 1
         assert results[0]["metadata"] == _SAMPLE_METADATA
 
-    async def test_single_tpr_calls_delete_for_cleanup(self, http_mock: respx.MockRouter, tpr: Path) -> None:
+    async def test_single_tpr_calls_delete_for_cleanup(
+        self, http_mock: respx.MockRouter, tpr: Path, metadump: MetadumpClient
+    ) -> None:
         """DELETE must be called even when results are fetched successfully."""
         _submit(http_mock, "uuid-1")
         _results(http_mock, "uuid-1")
         _statuses(http_mock, "uuid-1", "completed")
         delete = _delete(http_mock)
 
-        await extract_metadata_bulk([tpr])
+        await metadump.extract_metadata_bulk([tpr])
 
         assert delete.call_count == 1
         assert "uuid-1" in str(delete.calls.last.request.url)
         assert delete.calls.last.request.url.params["pin"] == "123456"
 
-    async def test_multiple_tprs_results_in_input_order(self, http_mock: respx.MockRouter, tmp_path: Path) -> None:
+    async def test_multiple_tprs_results_in_input_order(
+        self, http_mock: respx.MockRouter, tmp_path: Path, metadump: MetadumpClient
+    ) -> None:
         """Results must be returned in the same order as the input paths."""
         tpr_a = tmp_path / "a.tpr"
         tpr_b = tmp_path / "b.tpr"
@@ -99,46 +111,54 @@ class TestExtractMetadataBulk:
         _statuses(http_mock, "uuid-b", "completed")
         _delete(http_mock)
 
-        results = await extract_metadata_bulk([tpr_a, tpr_b])
+        results = await metadump.extract_metadata_bulk([tpr_a, tpr_b])
 
         assert [r["metadata"] for r in results] == [{"nsteps": 1000}, {"nsteps": 2000}]
 
-    async def test_empty_input_returns_empty_list(self, http_mock: respx.MockRouter) -> None:
+    async def test_empty_input_returns_empty_list(self, http_mock: respx.MockRouter, metadump: MetadumpClient) -> None:
         """Empty input list should return empty list without any HTTP calls."""
-        assert await extract_metadata_bulk([]) == []
+        assert await metadump.extract_metadata_bulk([]) == []
         assert not http_mock.calls
 
-    async def test_missing_env_var_returns_empty_list(self, http_mock: respx.MockRouter, tpr: Path) -> None:
+    async def test_missing_env_var_returns_empty_list(
+        self, http_mock: respx.MockRouter, tpr: Path, metadump: MetadumpClient
+    ) -> None:
         """When METADUMP_API_URL is None, return empty list without HTTP calls."""
-        with patch("clients.metadump.METADUMP_API_URL", None):
-            assert await extract_metadata_bulk([tpr]) == []
+        assert await MetadumpClient(httpx.AsyncClient(), None).extract_metadata_bulk([tpr]) == []
         assert not http_mock.calls
 
-    async def test_timeout_raises_and_still_cleans_up(self, http_mock: respx.MockRouter, tpr: Path) -> None:
+    async def test_timeout_raises_and_still_cleans_up(
+        self, http_mock: respx.MockRouter, tpr: Path, metadump: MetadumpClient
+    ) -> None:
         """After MAX_POLLS with no completion, raise InternalServerError; DELETE still runs."""
         _submit(http_mock, "uuid-1")
         _statuses(http_mock, "uuid-1", *["pending"] * metadump_module.MAX_POLLS)
         delete = _delete(http_mock)
 
         with pytest.raises(InternalServerError) as exc_info:
-            await extract_metadata_bulk([tpr])
+            await metadump.extract_metadata_bulk([tpr])
 
         assert "timed out" in exc_info.value.description.lower()
         assert delete.call_count == 1
 
-    async def test_upload_http_error_raises_internal_server_error(self, http_mock: respx.MockRouter, tpr: Path) -> None:
+    async def test_upload_http_error_raises_internal_server_error(
+        self, http_mock: respx.MockRouter, tpr: Path, metadump: MetadumpClient
+    ) -> None:
         """When POST returns a non-2xx response, raise InternalServerError."""
         http_mock.post(f"{TEST_URL}/api/annotate").mock(
             return_value=httpx.Response(500, json={"detail": "Internal Server Error"})
         )
 
         with pytest.raises(InternalServerError) as exc_info:
-            await extract_metadata_bulk([tpr])
+            await metadump.extract_metadata_bulk([tpr])
 
         assert "500" in exc_info.value.description
 
     async def test_upload_failure_cleans_up_already_submitted_jobs(
-        self, http_mock: respx.MockRouter, tmp_path: Path
+        self,
+        http_mock: respx.MockRouter,
+        tmp_path: Path,
+        metadump: MetadumpClient,
     ) -> None:
         """A failing second upload must not leak the first remote job."""
         tpr_a = tmp_path / "a.tpr"
@@ -151,43 +171,49 @@ class TestExtractMetadataBulk:
         delete = _delete(http_mock)
 
         with pytest.raises(InternalServerError):
-            await extract_metadata_bulk([tpr_a, tpr_b])
+            await metadump.extract_metadata_bulk([tpr_a, tpr_b])
 
         assert delete.call_count == 1
         assert "uuid-a" in str(delete.calls.last.request.url)
 
-    async def test_error_status_raises_internal_server_error(self, http_mock: respx.MockRouter, tpr: Path) -> None:
+    async def test_error_status_raises_internal_server_error(
+        self, http_mock: respx.MockRouter, tpr: Path, metadump: MetadumpClient
+    ) -> None:
         """When a job enters 'error' status, raise InternalServerError."""
         _submit(http_mock, "uuid-1")
         _statuses(http_mock, "uuid-1", "error")
         _delete(http_mock)
 
         with pytest.raises(InternalServerError) as exc_info:
-            await extract_metadata_bulk([tpr])
+            await metadump.extract_metadata_bulk([tpr])
 
         assert "error status" in exc_info.value.description.lower()
 
-    async def test_running_status_continues_polling(self, http_mock: respx.MockRouter, tpr: Path) -> None:
+    async def test_running_status_continues_polling(
+        self, http_mock: respx.MockRouter, tpr: Path, metadump: MetadumpClient
+    ) -> None:
         """A 'running' status should not raise — polling should continue."""
         _submit(http_mock, "uuid-1")
         _results(http_mock, "uuid-1")
         _statuses(http_mock, "uuid-1", "running", "completed")
         _delete(http_mock)
 
-        assert len(await extract_metadata_bulk([tpr])) == 1
+        assert len(await metadump.extract_metadata_bulk([tpr])) == 1
 
 
 class TestExtractMetadata:
     """Tests for the single-file extract_metadata convenience wrapper."""
 
-    async def test_returns_single_result(self, http_mock: respx.MockRouter, tpr: Path) -> None:
+    async def test_returns_single_result(
+        self, http_mock: respx.MockRouter, tpr: Path, metadump: MetadumpClient
+    ) -> None:
         """Should unwrap the list result and return a single dict."""
         _submit(http_mock, "uuid-1")
         _results(http_mock, "uuid-1")
         _statuses(http_mock, "uuid-1", "completed")
         _delete(http_mock)
 
-        result = await extract_metadata(tpr)
+        result = await metadump.extract_metadata(tpr)
 
         assert result["metadata"] == _SAMPLE_METADATA
 

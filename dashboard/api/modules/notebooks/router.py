@@ -10,6 +10,7 @@ from modules.experiments.dependencies import ExperimentDep
 from modules.models import Experiment, Notebook
 from modules.notebooks.schemas import Notebook as NotebookOut
 from modules.notebooks.schemas import StartNotebookRequest
+from modules.notebooks.service import NotebookServiceDep
 
 router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/notebook", tags=["Notebooks"])
 
@@ -27,10 +28,10 @@ def _notebook(experiment: Experiment) -> Notebook:
     response_description="Notebook",
     responses=problems(404),
 )
-async def get_notebook(session: SessionDep, experiment: ExperimentDep) -> NotebookOut:
+async def get_notebook(session: SessionDep, experiment: ExperimentDep, service: NotebookServiceDep) -> NotebookOut:
     """Get the notebook instance of an experiment."""
     notebook = _notebook(experiment)
-    await notebook.refresh()
+    await service.refresh(notebook)
     return await dump(session, NotebookOut, notebook)
 
 
@@ -43,12 +44,15 @@ async def get_notebook(session: SessionDep, experiment: ExperimentDep) -> Notebo
     responses=problems(400, 403, 404),
 )
 async def start_notebook(
-    session: SessionDep, experiment: ExperimentDep, body: StartNotebookRequest | None = None
+    session: SessionDep,
+    experiment: ExperimentDep,
+    service: NotebookServiceDep,
+    body: StartNotebookRequest | None = None,
 ) -> NotebookOut:
     """Start the notebook pod of an experiment (optional `tier` and `gpu`)."""
     body = body or StartNotebookRequest()
     notebook = _notebook(experiment)
-    await notebook.start(tier=body.tier, gpu=body.gpu)
+    await service.start(notebook, tier=body.tier, gpu=body.gpu)
     await session.commit()
     return await dump(session, NotebookOut, notebook)
 
@@ -62,6 +66,6 @@ async def start_notebook(
     response_description="Operation completed successfully",
     responses=problems(404),
 )
-async def stop_notebook(experiment: ExperimentDep) -> None:
+async def stop_notebook(experiment: ExperimentDep, service: NotebookServiceDep) -> None:
     """Stop the notebook pod of an experiment."""
-    await _notebook(experiment).stop()
+    await service.stop(_notebook(experiment))

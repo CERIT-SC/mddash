@@ -1,52 +1,25 @@
-import asyncio
-import json
 from http import HTTPStatus
-from pathlib import Path as FilePath
-from typing import Annotated, Any
+from typing import Annotated
 
 import anyio
-from clients import k8s
 from core.config import API_PREFIX
 from core.dependencies import ExperimentIdPath, SessionDep, dump, dump_many
-from core.enums import AnalysisType, Engine, PreprocessingMode
-from core.errors import BadRequest, NotFound, UnprocessableEntity
+from core.enums import AnalysisType
 from core.responses import problems
 from fastapi import APIRouter, Path, Query, Response
 from fastapi.responses import JSONResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from modules.experiments.dependencies import ExperimentDep
-from modules.jobs.analysis.models import (
-    ANALYSIS_RESULT_PREFIX,
-    ANALYSIS_RESULT_SUFFIX,
-    find_result_file,
-    list_result_files,
-)
+from modules.jobs.analysis.results import read_result, read_variants, result_names
 from modules.jobs.analysis.schemas import AnalysisJob as AnalysisJobOut
 from modules.jobs.analysis.schemas import AnalysisJobRequest, AnalysisResult, AnalysisVariant
-from modules.models import AnalysisJob, Experiment
-from modules.simulations.manifest import Simulation
+from modules.jobs.analysis.service import AnalysisServiceDep
 
 router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/analysis", tags=["Analysis"])
 
 JobId = Annotated[str, Path(min_length=1)]
 ResultName = Annotated[str, Path(min_length=1)]
 RequiredSimulationPath = Annotated[str, Query(min_length=1)]
-
-# The MDDB workflow prints container setup noise before this line.
-_WORKFLOW_START_MARKER = "Running MDDB workflow"
-
-
-async def _job_or_404(session: AsyncSession, experiment_id: str, job_id: str) -> AnalysisJob:
-    stmt = AnalysisJob.query().filter_by(experiment_id=experiment_id, id=job_id)
-    job = (await session.execute(stmt)).scalars().first()
-    if job is None:
-        raise NotFound(f"Analysis job {job_id} in experiment {experiment_id} not found")
-    return job
-
-
-def _read_json(path: FilePath) -> Any:  # ruff:ignore[any-type]
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 @router.get(
@@ -58,46 +31,12 @@ def _read_json(path: FilePath) -> Any:  # ruff:ignore[any-type]
 )
 async def list_jobs(
     session: SessionDep,
+    service: AnalysisServiceDep,
     experiment_id: ExperimentIdPath,
     simulation_path: Annotated[str | None, Query(min_length=1)] = None,
 ) -> list[AnalysisJobOut]:
     """List analysis jobs of an experiment, optionally only those of one simulation."""
-    stmt = AnalysisJob.query().filter_by(experiment_id=experiment_id)
-    if simulation_path:
-        stmt = stmt.filter_by(simulation_path=simulation_path)
-    jobs = (await session.execute(stmt)).scalars().all()
-    await asyncio.gather(*(job.refresh_status() for job in jobs))
-    return await dump_many(session, AnalysisJobOut, jobs)
-
-
-def _analysis_inputs(
-    experiment: Experiment, simulation_path: str, preprocessing_mode: PreprocessingMode
-) -> tuple[FilePath, FilePath | None, FilePath | None]:
-    """Resolve (trajectory, structure, topology) for an analysis; sync (manifest and file checks)."""
-    simulation = Simulation.get(experiment.id, simulation_path, experiment)
-    simulation.require_files(["trajectory"])
-    trajectory_path = simulation.resolve_role("trajectory")
-    if not trajectory_path.is_file():
-        raise BadRequest(f"Trajectory file {trajectory_path} does not exist.")
-
-    topology_path: FilePath | None = None
-    if experiment.engine == Engine.GMX and "run_input" in simulation.files:
-        topology_path = simulation.resolve_role("run_input")
-    elif "topology" in simulation.files:
-        topology_path = simulation.resolve_role("topology")
-
-    structure_path: FilePath | None = None
-    if "reference_structure" in simulation.files:
-        structure_path = simulation.resolve_role("reference_structure")
-
-    if preprocessing_mode in {PreprocessingMode.IMAGE, PreprocessingMode.IMAGE_FIT} and (
-        not topology_path or topology_path.suffix.lower() != ".tpr"
-    ):
-        raise BadRequest("Trajectory preprocessing requires a simulation TPR file (.tpr).")
-
-    if experiment.engine == Engine.GMX and preprocessing_mode is PreprocessingMode.AS_IS and structure_path is not None:
-        topology_path = None
-    return trajectory_path, structure_path, topology_path
+    return await dump_many(session, AnalysisJobOut, await service.list_jobs(experiment_id, simulation_path))
 
 
 @router.post(
@@ -108,22 +47,11 @@ def _analysis_inputs(
     response_description="Submitted analysis job",
     responses=problems(400, 404),
 )
-async def submit_job(session: SessionDep, experiment: ExperimentDep, body: AnalysisJobRequest) -> AnalysisJobOut:
+async def submit_job(
+    session: SessionDep, service: AnalysisServiceDep, experiment: ExperimentDep, body: AnalysisJobRequest
+) -> AnalysisJobOut:
     """Submit an analysis job for a simulation's trajectory."""
-    trajectory, structure, topology = await anyio.to_thread.run_sync(
-        _analysis_inputs, experiment, body.simulation_path, body.preprocessing_mode
-    )
-    job = await AnalysisJob.start(
-        session,
-        experiment=experiment,
-        simulation_path=body.simulation_path,
-        analysis_name=body.analysis,
-        structure_file=structure,
-        trajectory_file=trajectory,
-        topology_file=topology,
-        preprocessing_mode=body.preprocessing_mode,
-    )
-    await job.refresh_status()
+    job = await service.submit(experiment, body.simulation_path, body.analysis, body.preprocessing_mode)
     return await dump(session, AnalysisJobOut, job)
 
 
@@ -149,8 +77,7 @@ async def list_types(experiment_id: ExperimentIdPath) -> list[str]:  # ruff:igno
 )
 async def list_results(experiment_id: ExperimentIdPath, simulation_path: RequiredSimulationPath) -> list[str]:
     """Names of the analysis results available for a simulation."""
-    files = await anyio.to_thread.run_sync(list_result_files, experiment_id, simulation_path)
-    return [f.name[len(ANALYSIS_RESULT_PREFIX) : -len(ANALYSIS_RESULT_SUFFIX)].replace("_", "-") for f in files]
+    return await anyio.to_thread.run_sync(result_names, experiment_id, simulation_path)
 
 
 @router.get(
@@ -164,18 +91,7 @@ async def get_variants(
     experiment_id: ExperimentIdPath, name: ResultName, simulation_path: RequiredSimulationPath
 ) -> list[AnalysisVariant]:
     """Variant options of a multi-file analysis from its summary JSON (empty when absent or not a summary)."""
-    result_file = await anyio.to_thread.run_sync(find_result_file, experiment_id, simulation_path, name)
-    if not result_file:
-        return []
-    try:
-        data = await anyio.to_thread.run_sync(_read_json, result_file)
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return []
-    if isinstance(data, list) and all(
-        isinstance(item, dict) and "analysis" in item and "name" in item for item in data
-    ):
-        return data
-    return []
+    return await anyio.to_thread.run_sync(read_variants, experiment_id, simulation_path, name)
 
 
 @router.get(
@@ -191,21 +107,8 @@ async def get_variants(
 async def get_result(
     experiment_id: ExperimentIdPath, name: ResultName, simulation_path: RequiredSimulationPath
 ) -> JSONResponse:
-    """
-    Serve the JSON content of an analysis result file as-is.
-
-    Raises:
-        NotFound: If the analysis result file does not exist.
-        UnprocessableEntity: If the result file cannot be parsed as JSON.
-    """
-    result_file = await anyio.to_thread.run_sync(find_result_file, experiment_id, simulation_path, name)
-    if not result_file:
-        raise NotFound(f"Analysis result '{name}' not found.")
-    try:
-        data = await anyio.to_thread.run_sync(_read_json, result_file)
-    except (json.JSONDecodeError, UnicodeDecodeError) as e:
-        raise UnprocessableEntity("Failed to read analysis result.") from e
-    return JSONResponse(data)
+    """Serve the JSON content of an analysis result file as-is."""
+    return JSONResponse(await anyio.to_thread.run_sync(read_result, experiment_id, simulation_path, name))
 
 
 @router.get(
@@ -216,16 +119,13 @@ async def get_result(
     responses=problems(404),
 )
 async def get_logs(
-    session: SessionDep,
+    service: AnalysisServiceDep,
     experiment_id: ExperimentIdPath,
     job_id: JobId,
     tail: Annotated[int, Query(ge=1, le=10_000)] = 200,
 ) -> str:
     """K8s pod logs of an analysis job, trimmed to start at the workflow start marker."""
-    job = await _job_or_404(session, experiment_id, job_id)
-    logs = await k8s.get_job_logs(f"analysis-{job.id}", tail_lines=tail)
-    idx = logs.find(_WORKFLOW_START_MARKER)
-    return logs[idx:] if idx != -1 else logs
+    return await service.logs(experiment_id, job_id, tail)
 
 
 @router.get(
@@ -235,11 +135,11 @@ async def get_logs(
     response_description="Analysis job",
     responses=problems(404),
 )
-async def get_job(session: SessionDep, experiment_id: ExperimentIdPath, job_id: JobId) -> AnalysisJobOut:
+async def get_job(
+    session: SessionDep, service: AnalysisServiceDep, experiment_id: ExperimentIdPath, job_id: JobId
+) -> AnalysisJobOut:
     """Get an analysis job by ID."""
-    job = await _job_or_404(session, experiment_id, job_id)
-    await job.refresh_status()
-    return await dump(session, AnalysisJobOut, job)
+    return await dump(session, AnalysisJobOut, await service.get(experiment_id, job_id))
 
 
 @router.delete(
@@ -251,9 +151,6 @@ async def get_job(session: SessionDep, experiment_id: ExperimentIdPath, job_id: 
     response_description="Operation completed successfully",
     responses=problems(404),
 )
-async def delete_job(session: SessionDep, experiment_id: ExperimentIdPath, job_id: JobId) -> None:
+async def delete_job(service: AnalysisServiceDep, experiment_id: ExperimentIdPath, job_id: JobId) -> None:
     """Delete an analysis job and its temporary files."""
-    job = await _job_or_404(session, experiment_id, job_id)
-    await job.delete()
-    await session.delete(job)
-    await session.commit()
+    await service.delete(experiment_id, job_id)

@@ -1,20 +1,15 @@
-import asyncio
 from http import HTTPStatus
 from typing import Annotated
 
-import anyio
 from core.config import API_PREFIX
 from core.dependencies import ExperimentIdPath, SessionDep, dump, dump_many
-from core.enums import AmberBinary, EwaldPreset
-from core.errors import BadRequest, Conflict, NotFound
+from core.errors import BadRequest
 from core.responses import problems
 from fastapi import APIRouter, Path, Query, Response
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from modules.experiments.dependencies import get_experiment_or_404
 from modules.jobs.amber.schemas import AmberJob as AmberJobOut
 from modules.jobs.amber.schemas import AmberJobRequest
-from modules.models import AmberJob
+from modules.jobs.amber.service import AmberServiceDep
 from modules.simulations.manifest import check_simulation_path
 
 router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/amber", tags=["AMBER"])
@@ -22,26 +17,14 @@ router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/amber", t
 SimulationPath = Annotated[str, Path(min_length=1)]
 
 
-async def _job_or_404(
-    session: AsyncSession, experiment_id: str, simulation_path: str, *, refresh: bool = True
-) -> AmberJob:
-    """Return the simulation's single run row (status refreshed unless `refresh` is False)."""
-    job = await AmberJob.get(session, experiment_id, simulation_path)
-    if job is None:
-        raise NotFound(f"AMBER job for simulation {simulation_path} in experiment {experiment_id} not found")
-    if refresh:
-        await job.refresh_status()
-    return job
-
-
 @router.get(
     "", summary="List AMBER jobs", operation_id="listAmberJobs", response_description="AMBER jobs", responses=problems()
 )
-async def list_jobs(session: SessionDep, experiment_id: ExperimentIdPath) -> list[AmberJobOut]:
+async def list_jobs(
+    session: SessionDep, service: AmberServiceDep, experiment_id: ExperimentIdPath
+) -> list[AmberJobOut]:
     """List all AMBER jobs of an experiment."""
-    jobs = (await session.execute(AmberJob.query().filter_by(experiment_id=experiment_id))).scalars().all()
-    await asyncio.gather(*(job.refresh_status() for job in jobs))
-    return await dump_many(session, AmberJobOut, jobs)
+    return await dump_many(session, AmberJobOut, await service.list_jobs(experiment_id))
 
 
 @router.post(
@@ -53,18 +36,9 @@ async def list_jobs(session: SessionDep, experiment_id: ExperimentIdPath) -> lis
     response_description="Operation completed successfully",
     responses=problems(400, 404),
 )
-async def stop_job(session: SessionDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath) -> None:
-    """
-    Stop the run gracefully, keeping all data and the job row.
-
-    Raises:
-        BadRequest: If the run is not live.
-    """
-    job = await _job_or_404(session, experiment_id, simulation_path)
-    if not job.is_live:
-        raise BadRequest("Only a live run can be stopped.")
-    await job.stop()
-    await session.commit()
+async def stop_job(service: AmberServiceDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath) -> None:
+    """Stop the run gracefully, keeping all data and the job row."""
+    await service.stop(experiment_id, simulation_path)
 
 
 @router.post(
@@ -99,15 +73,14 @@ async def extend_job(
     responses=problems(400, 404),
 )
 async def get_log(
-    session: SessionDep,
+    service: AmberServiceDep,
     experiment_id: ExperimentIdPath,
     simulation_path: SimulationPath,
     log_type: Annotated[str, Query(alias="type")] = "mdout",
     tail: Annotated[int, Query(ge=1, le=100_000)] = 10_000,
 ) -> str:
     """Tail of one of the run's log streams (`mdout`, `mdinfo`, `stdout`, `stderr`)."""
-    job = await _job_or_404(session, experiment_id, simulation_path, refresh=False)
-    return await anyio.to_thread.run_sync(job.get_log, log_type.lower(), tail)
+    return await service.log(experiment_id, simulation_path, log_type, tail)
 
 
 @router.get(
@@ -117,9 +90,11 @@ async def get_log(
     response_description="AMBER job",
     responses=problems(404),
 )
-async def get_job(session: SessionDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath) -> AmberJobOut:
+async def get_job(
+    session: SessionDep, service: AmberServiceDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath
+) -> AmberJobOut:
     """Get the AMBER run of a simulation."""
-    return await dump(session, AmberJobOut, await _job_or_404(session, experiment_id, simulation_path))
+    return await dump(session, AmberJobOut, await service.get(experiment_id, simulation_path))
 
 
 @router.post(
@@ -131,43 +106,16 @@ async def get_job(session: SessionDep, experiment_id: ExperimentIdPath, simulati
     responses=problems(400, 404, 409),
 )
 async def submit_job(
-    session: SessionDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath, body: AmberJobRequest
+    session: SessionDep,
+    service: AmberServiceDep,
+    experiment_id: ExperimentIdPath,
+    simulation_path: SimulationPath,
+    body: AmberJobRequest,
 ) -> AmberJobOut:
-    """
-    Submit an AMBER simulation job from a simulation manifest.
-
-    Raises:
-        BadRequest: If the binary or Ewald preset is unknown.
-        Conflict: If a live run already exists for this simulation.
-    """
-    check_simulation_path(simulation_path)
-    experiment = await get_experiment_or_404(session, experiment_id)
-
-    prior = await AmberJob.get(session, experiment_id, simulation_path)
-    if prior is not None:
-        await prior.refresh_status()
-        if prior.is_live:
-            raise Conflict("A run is already active for this simulation; stop it first to submit a new run.")
-
-    try:
-        binary = AmberBinary.from_string(body.binary)
-        ewald = EwaldPreset.from_string(body.ewald)
-    except ValueError as exc:
-        raise BadRequest("Invalid compute parameters.") from exc
-
-    # A terminal run (finished, stopped, or failed) is replaced by the new one.
-    await AmberJob.remove(session, experiment_id, simulation_path)
-
-    job = await AmberJob.start(
-        session,
-        experiment=experiment,
-        simulation_path=simulation_path,
-        binary=binary,
-        ewald=ewald,
-        np=body.np,
-        ntomp=body.ntomp,
+    """Submit an AMBER simulation job from a simulation manifest."""
+    job = await service.submit(
+        experiment_id, simulation_path, binary=body.binary, ewald=body.ewald, np=body.np, ntomp=body.ntomp
     )
-    await job.refresh_status()
     return await dump(session, AmberJobOut, job)
 
 
@@ -180,7 +128,8 @@ async def submit_job(
     response_description="Operation completed successfully",
     responses=problems(404),
 )
-async def delete_job(session: SessionDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath) -> None:
+async def delete_job(
+    service: AmberServiceDep, experiment_id: ExperimentIdPath, simulation_path: SimulationPath
+) -> None:
     """Delete the simulation's run: its MDRun job, DB row, and result files."""
-    if not await AmberJob.remove(session, experiment_id, simulation_path):
-        raise NotFound(f"AMBER job for simulation {simulation_path} in experiment {experiment_id} not found")
+    await service.delete(experiment_id, simulation_path)

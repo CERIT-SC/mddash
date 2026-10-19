@@ -8,12 +8,17 @@ from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from clients import Clients
 from core.enums import AmberBinary, AnalysisType, DeviceType, Engine, EwaldPreset, JobStatus
 from core.errors import ApiError, Conflict
+from modules.archive.service import ArchiveService
 from modules.archive.status import ArchiveDirection, ArchiveState, ArchiveStatus, write_status
 from modules.archive.submission import SubmissionError
 from modules.experiments.schemas import Experiment as ExperimentOut
+from modules.experiments.service import ExperimentService
+from modules.jobs.analysis.service import AnalysisService
 from modules.models import AmberJob, AnalysisJob, Experiment, GromacsJob, Notebook
+from modules.notebooks.service import NotebookService
 from sqlalchemy.ext.asyncio import AsyncSession
 
 EXP_ID = "abcde"
@@ -37,8 +42,13 @@ async def experiment(db_session: AsyncSession, tmp_path: Path) -> Experiment:
 
 
 @pytest.fixture
+def service(db_session: AsyncSession, clients: Clients) -> ExperimentService:
+    return ExperimentService(db_session, clients)
+
+
+@pytest.fixture
 def s3() -> Iterator[None]:
-    with patch("modules.experiments.models.S3_BUCKET", "test-bucket"):
+    with patch("modules.archive.service.S3_BUCKET", "test-bucket"):
         yield
 
 
@@ -46,17 +56,21 @@ def _job_active(live: bool) -> Any:
     return patch("modules.archive.submission.is_job_active", AsyncMock(return_value=live))
 
 
-def _submit_ok(_direction: str, _experiment_id: str, _data_dir: Path) -> str:
+def _submit_ok(_k8s: object, _direction: str, _experiment_id: str, _data_dir: Path) -> str:
     return "attempt-1"
 
 
 class TestArchiveGates:
-    async def test_no_s3_config_400(self, experiment: Experiment, db_session: AsyncSession) -> None:
-        with patch("modules.experiments.models.S3_BUCKET", ""), pytest.raises(ApiError) as exc_info:
-            await experiment.archive(db_session)
+    async def test_no_s3_config_400(
+        self, experiment: Experiment, db_session: AsyncSession, service: ExperimentService
+    ) -> None:
+        with patch("modules.archive.service.S3_BUCKET", ""), pytest.raises(ApiError) as exc_info:
+            await service.archive.archive(experiment)
         assert exc_info.value.status_code == 400
 
-    async def test_live_simulation_job_409(self, experiment: Experiment, db_session: AsyncSession) -> None:
+    async def test_live_simulation_job_409(
+        self, experiment: Experiment, db_session: AsyncSession, service: ExperimentService, clients: Clients
+    ) -> None:
         db_session.add(
             GromacsJob(
                 id="job-1",
@@ -71,47 +85,57 @@ class TestArchiveGates:
         )
         experiment = await _reload(db_session)
         with (
-            patch("modules.experiments.models.S3_BUCKET", "test-bucket"),
-            patch("modules.jobs.gmx.models.mdrun.get_gmx_job", AsyncMock(return_value={"status": "RUNNING"})),
+            patch("modules.archive.service.S3_BUCKET", "test-bucket"),
+            patch.object(clients.mdrun, "get_job", AsyncMock(return_value={"status": "RUNNING"})),
             pytest.raises(ApiError) as exc_info,
         ):
-            await experiment.archive(db_session)
+            await service.archive.archive(experiment)
         assert exc_info.value.problem_type == "urn:mddash:archive-conflict"
 
-    async def test_active_upload_409(self, experiment: Experiment, db_session: AsyncSession) -> None:
+    async def test_active_upload_409(
+        self, experiment: Experiment, db_session: AsyncSession, service: ExperimentService
+    ) -> None:
         with (
-            patch("modules.experiments.models.S3_BUCKET", "test-bucket"),
-            patch("modules.experiments.models.read_status", return_value=Mock(state="running")),
-            patch("modules.experiments.models.is_upload_active", AsyncMock(return_value=True)),
+            patch("modules.archive.service.S3_BUCKET", "test-bucket"),
+            patch("modules.publishing.submission.read_status", return_value=Mock(state="running")),
+            patch("modules.publishing.submission.is_upload_active", AsyncMock(return_value=True)),
             pytest.raises(ApiError) as exc_info,
         ):
-            await experiment.archive(db_session)
+            await service.archive.archive(experiment)
         assert exc_info.value.problem_type == "urn:mddash:archive-conflict"
 
-    async def test_already_archived_409(self, experiment: Experiment, db_session: AsyncSession, s3: None) -> None:
+    async def test_already_archived_409(
+        self, experiment: Experiment, db_session: AsyncSession, s3: None, service: ExperimentService
+    ) -> None:
         experiment.archived_at = datetime.now(UTC)
         with _job_active(False), pytest.raises(ApiError) as exc_info:
-            await experiment.archive(db_session)
+            await service.archive.archive(experiment)
         assert exc_info.value.problem_type == "urn:mddash:archive-conflict"
 
     async def test_running_notebook_is_stopped(
-        self, experiment: Experiment, db_session: AsyncSession, s3: None
+        self,
+        experiment: Experiment,
+        db_session: AsyncSession,
+        s3: None,
+        service: ExperimentService,
     ) -> None:
         with (
-            patch.object(Notebook, "stop") as mock_stop,
-            patch("modules.experiments.models.archive_submission.submit_job", side_effect=_submit_ok),
+            patch.object(NotebookService, "stop") as mock_stop,
+            patch("modules.archive.service.submission.submit_job", side_effect=_submit_ok),
         ):
-            await experiment.archive(db_session)
+            await service.archive.archive(experiment)
         mock_stop.assert_called_once()
 
 
 class TestArchiveSubmit:
-    async def test_snapshots_and_submit(self, experiment: Experiment, db_session: AsyncSession, s3: None) -> None:
-        with patch("modules.experiments.models.archive_submission.submit_job", side_effect=_submit_ok) as mock_submit:
-            attempt = await experiment.archive(db_session)
+    async def test_snapshots_and_submit(
+        self, experiment: Experiment, db_session: AsyncSession, s3: None, service: ExperimentService
+    ) -> None:
+        with patch("modules.archive.service.submission.submit_job", side_effect=_submit_ok) as mock_submit:
+            attempt = await service.archive.archive(experiment)
         assert attempt == "attempt-1"
         mock_submit.assert_called_once()
-        direction, exp_id, _ = mock_submit.call_args[0]
+        _, direction, exp_id, _ = mock_submit.call_args[0]
         assert direction == ArchiveDirection.ARCHIVE.value
         assert exp_id == EXP_ID
 
@@ -122,41 +146,48 @@ class TestArchiveSubmit:
 
 
 class TestRestoreGates:
-    async def test_not_archived_409(self, experiment: Experiment, s3: None) -> None:
+    async def test_not_archived_409(self, experiment: Experiment, s3: None, service: ExperimentService) -> None:
         with pytest.raises(ApiError) as exc_info:
-            await experiment.restore()
+            await service.archive.restore(experiment)
         assert exc_info.value.problem_type == "urn:mddash:archive-conflict"
 
-    async def test_existing_dir_409(self, experiment: Experiment, s3: None) -> None:
+    async def test_existing_dir_409(self, experiment: Experiment, s3: None, service: ExperimentService) -> None:
         experiment.archived_at = datetime.now(UTC)
         with _job_active(False), pytest.raises(ApiError) as exc_info:
-            await experiment.restore()
+            await service.archive.restore(experiment)
         assert exc_info.value.problem_type == "urn:mddash:archive-conflict"
 
     @pytest.mark.parametrize("state", [ArchiveState.FAILED, ArchiveState.RUNNING], ids=["failed", "stale-running"])
     async def test_retry_after_failed_restore(
-        self, experiment: Experiment, s3: None, tmp_path: Path, state: ArchiveState
+        self,
+        experiment: Experiment,
+        s3: None,
+        tmp_path: Path,
+        state: ArchiveState,
+        service: ExperimentService,
     ) -> None:
         """A failed restore (or one whose Job died mid-run) leaves dir + doc; that doc is the retry sentinel."""
         experiment.archived_at = datetime.now(UTC)
         write_status(ArchiveStatus(attempt_id="a", state=state.value, direction="restore"), EXP_ID, tmp_path)
         with (
             _job_active(False),
-            patch("modules.experiments.models.archive_submission.submit_job", side_effect=_submit_ok) as mock_submit,
+            patch("modules.archive.service.submission.submit_job", side_effect=_submit_ok) as mock_submit,
         ):
-            assert await experiment.restore() == "attempt-1"
+            assert await service.archive.restore(experiment) == "attempt-1"
         mock_submit.assert_called_once()
 
-    async def test_happy_path(self, experiment: Experiment, s3: None, tmp_path: Path) -> None:
+    async def test_happy_path(
+        self, experiment: Experiment, s3: None, tmp_path: Path, service: ExperimentService
+    ) -> None:
         experiment.archived_at = datetime.now(UTC)
         (tmp_path / EXP_ID).rmdir()
         with (
             _job_active(False),
-            patch("modules.experiments.models.archive_submission.submit_job", side_effect=_submit_ok) as mock_submit,
+            patch("modules.archive.service.submission.submit_job", side_effect=_submit_ok) as mock_submit,
         ):
-            attempt = await experiment.restore()
+            attempt = await service.archive.restore(experiment)
         assert attempt == "attempt-1"
-        assert mock_submit.call_args[0][0] == ArchiveDirection.RESTORE.value
+        assert mock_submit.call_args[0][1] == ArchiveDirection.RESTORE.value
 
 
 class TestArchiveStateReconciliation:
@@ -165,63 +196,73 @@ class TestArchiveStateReconciliation:
         experiment.archived_status = "running"
         experiment.archived_size_bytes = 1234
 
-    async def test_plain_experiment_no_io(self, experiment: Experiment) -> None:
+    async def test_plain_experiment_no_io(self, experiment: Experiment, service: ExperimentService) -> None:
         """No markers -> None without touching disk or K8s."""
-        with patch("modules.experiments.models.archive_submission.is_job_active") as mock_active:
-            assert await experiment.refresh_archive_state() is None
+        with patch("modules.archive.service.submission.is_job_active") as mock_active:
+            assert await service.archive.refresh_state(experiment) is None
             assert experiment.archive_state is None
         mock_active.assert_not_called()
 
-    async def test_archiving_while_job_live(self, experiment: Experiment) -> None:
+    async def test_archiving_while_job_live(self, experiment: Experiment, service: ExperimentService) -> None:
         self._snap(experiment)
         with _job_active(True):
-            assert await experiment.refresh_archive_state() == "archiving"
+            assert await service.archive.refresh_state(experiment) == "archiving"
 
     async def test_archived_after_dir_deleted(
-        self, experiment: Experiment, db_session: AsyncSession, tmp_path: Path
+        self,
+        experiment: Experiment,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        service: ExperimentService,
     ) -> None:
         self._snap(experiment)
         (tmp_path / EXP_ID).rmdir()
         with _job_active(False):
-            assert await experiment.refresh_archive_state() == "archived"
+            assert await service.archive.refresh_state(experiment) == "archived"
         assert experiment.archived_at is not None
         assert (await _reload(db_session)).archived_at is not None
 
     @pytest.mark.parametrize(
         "doc_state", [ArchiveState.FAILED, ArchiveState.RUNNING, None], ids=["failed-doc", "dead-job", "no-doc"]
     )
-    async def test_archive_failed(self, experiment: Experiment, tmp_path: Path, doc_state: ArchiveState | None) -> None:
+    async def test_archive_failed(
+        self, experiment: Experiment, tmp_path: Path, doc_state: ArchiveState | None, service: ExperimentService
+    ) -> None:
         """A FAILED doc, or any in-flight state without a live Job (evicted, backoffLimit 0), is archive_failed."""
         self._snap(experiment)
         if doc_state is not None:
             write_status(ArchiveStatus(attempt_id="a", state=doc_state.value, direction="archive"), EXP_ID, tmp_path)
         with _job_active(False):
-            assert await experiment.refresh_archive_state() == "archive_failed"
+            assert await service.archive.refresh_state(experiment) == "archive_failed"
 
-    async def test_job_liveness_cached_across_reads(self, experiment: Experiment) -> None:
+    async def test_job_liveness_cached_across_reads(self, experiment: Experiment, service: ExperimentService) -> None:
         """List serialization must not fan out K8s reads per experiment per request."""
         self._snap(experiment)
         with _job_active(False) as mock_active:
-            assert await experiment.refresh_archive_state() == "archive_failed"
-            assert await experiment.refresh_archive_state() == "archive_failed"
+            assert await service.archive.refresh_state(experiment) == "archive_failed"
+            assert await service.archive.refresh_state(experiment) == "archive_failed"
         assert mock_active.call_count == 1
 
-    async def test_archived_baseline(self, experiment: Experiment, tmp_path: Path) -> None:
+    async def test_archived_baseline(self, experiment: Experiment, tmp_path: Path, service: ExperimentService) -> None:
         experiment.archived_at = datetime.now(UTC)
         (tmp_path / EXP_ID).rmdir()
         with _job_active(False):
-            assert await experiment.refresh_archive_state() == "archived"
+            assert await service.archive.refresh_state(experiment) == "archived"
 
-    async def test_restoring(self, experiment: Experiment, tmp_path: Path) -> None:
+    async def test_restoring(self, experiment: Experiment, tmp_path: Path, service: ExperimentService) -> None:
         experiment.archived_at = datetime.now(UTC)
         write_status(
             ArchiveStatus(attempt_id="a", state=ArchiveState.RUNNING.value, direction="restore"), EXP_ID, tmp_path
         )
         with _job_active(True):
-            assert await experiment.refresh_archive_state() == "restoring"
+            assert await service.archive.refresh_state(experiment) == "restoring"
 
     async def test_restore_completion_clears_flags(
-        self, experiment: Experiment, db_session: AsyncSession, tmp_path: Path
+        self,
+        experiment: Experiment,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        service: ExperimentService,
     ) -> None:
         experiment.archived_at = datetime.now(UTC)
         self._snap(experiment)
@@ -230,13 +271,13 @@ class TestArchiveStateReconciliation:
             ArchiveStatus(attempt_id="a", state=ArchiveState.COMPLETED.value, direction="restore"), EXP_ID, tmp_path
         )
         with _job_active(False):
-            assert await experiment.refresh_archive_state() is None
+            assert await service.archive.refresh_state(experiment) is None
         stored = await _reload(db_session)
         assert stored.archived_at is None
         assert stored.archived_step is None
         assert stored.archived_size_bytes is None
 
-    async def test_restore_failed(self, experiment: Experiment, tmp_path: Path) -> None:
+    async def test_restore_failed(self, experiment: Experiment, tmp_path: Path, service: ExperimentService) -> None:
         experiment.archived_at = datetime.now(UTC)
         write_status(
             ArchiveStatus(attempt_id="a", state=ArchiveState.FAILED.value, direction="restore", reason="copy"),
@@ -244,9 +285,11 @@ class TestArchiveStateReconciliation:
             tmp_path,
         )
         with _job_active(False):
-            assert await experiment.refresh_archive_state() == "restore_failed"
+            assert await service.archive.refresh_state(experiment) == "restore_failed"
 
-    async def test_live_job_outranks_failed_sentinel(self, experiment: Experiment, tmp_path: Path) -> None:
+    async def test_live_job_outranks_failed_sentinel(
+        self, experiment: Experiment, tmp_path: Path, service: ExperimentService
+    ) -> None:
         """A retried restore reads as restoring once its Job exists, not when the worker rewrites the doc."""
         experiment.archived_at = datetime.now(UTC)
         write_status(
@@ -255,83 +298,93 @@ class TestArchiveStateReconciliation:
             tmp_path,
         )
         with _job_active(True):
-            assert await experiment.refresh_archive_state() == "restoring"
+            assert await service.archive.refresh_state(experiment) == "restoring"
 
-    async def test_stale_running_restore_doc_is_failed(self, experiment: Experiment, tmp_path: Path) -> None:
+    async def test_stale_running_restore_doc_is_failed(
+        self, experiment: Experiment, tmp_path: Path, service: ExperimentService
+    ) -> None:
         """An in-flight restore doc with no live Job (evicted, backoffLimit 0) is failed, as in the archive direction."""
         experiment.archived_at = datetime.now(UTC)
         write_status(
             ArchiveStatus(attempt_id="a", state=ArchiveState.RUNNING.value, direction="restore"), EXP_ID, tmp_path
         )
         with _job_active(False):
-            assert await experiment.refresh_archive_state() == "restore_failed"
+            assert await service.archive.refresh_state(experiment) == "restore_failed"
 
-    async def test_property_serves_one_reconciliation(self, experiment: Experiment) -> None:
+    async def test_property_serves_one_reconciliation(self, experiment: Experiment, service: ExperimentService) -> None:
         """Serialization reads the refreshed value, so archived_at and archive_state come from one reconciliation."""
         self._snap(experiment)
-        with patch.object(Experiment, "_read_archive_state", AsyncMock(return_value="archiving")) as mock_read:
-            await experiment.refresh_archive_state()
+        with patch.object(ArchiveService, "_read_state", AsyncMock(return_value="archiving")) as mock_read:
+            await service.archive.refresh_state(experiment)
             assert experiment.archive_state == "archiving"
             assert experiment.archive_state == "archiving"
         assert mock_read.call_count == 1
 
     def test_reading_marked_state_before_refresh_fails_loudly(self, experiment: Experiment) -> None:
         self._snap(experiment)
-        with pytest.raises(RuntimeError, match="before refresh_archive_state"):
+        with pytest.raises(RuntimeError, match="read before"):
             _ = experiment.archive_state
 
 
 class TestSubmissionFailure:
     async def test_archive_submit_failure_409_problem(
-        self, experiment: Experiment, db_session: AsyncSession, s3: None
+        self,
+        experiment: Experiment,
+        db_session: AsyncSession,
+        s3: None,
+        service: ExperimentService,
     ) -> None:
         with (
             patch(
-                "modules.experiments.models.archive_submission.submit_job",
+                "modules.archive.service.submission.submit_job",
                 side_effect=SubmissionError("object is being deleted"),
             ),
             pytest.raises(ApiError) as exc_info,
         ):
-            await experiment.archive(db_session)
+            await service.archive.archive(experiment)
         assert exc_info.value.status_code == 409
         assert exc_info.value.problem_type == "urn:mddash:archive-submission-failed"
 
-    async def test_restore_submit_failure_409_problem(self, experiment: Experiment, s3: None, tmp_path: Path) -> None:
+    async def test_restore_submit_failure_409_problem(
+        self, experiment: Experiment, s3: None, tmp_path: Path, service: ExperimentService
+    ) -> None:
         experiment.archived_at = datetime.now(UTC)
         (tmp_path / EXP_ID).rmdir()
         with (
             _job_active(False),
             patch(
-                "modules.experiments.models.archive_submission.submit_job",
+                "modules.archive.service.submission.submit_job",
                 side_effect=SubmissionError("object is being deleted"),
             ),
             pytest.raises(ApiError) as exc_info,
         ):
-            await experiment.restore()
+            await service.archive.restore(experiment)
         assert exc_info.value.status_code == 409
         assert exc_info.value.problem_type == "urn:mddash:archive-submission-failed"
 
 
 class TestDeleteWithArchive:
-    async def test_archived_delete_purges(self, experiment: Experiment, tmp_path: Path) -> None:
+    async def test_archived_delete_purges(
+        self, experiment: Experiment, tmp_path: Path, service: ExperimentService
+    ) -> None:
         experiment.archived_at = datetime.now(UTC)
         (tmp_path / EXP_ID).rmdir()
         with (
-            patch("modules.experiments.models.archive_submission.delete_jobs") as mock_delete,
-            patch("modules.experiments.models.archive_submission.submit_purge_job") as mock_purge,
-            patch.object(Notebook, "stop"),
+            patch.object(ArchiveService, "delete_jobs") as mock_delete,
+            patch.object(ArchiveService, "purge") as mock_purge,
+            patch.object(NotebookService, "stop"),
         ):
-            await experiment.delete()
+            await service.delete(experiment)
         mock_delete.assert_called_once_with(EXP_ID)
         mock_purge.assert_called_once_with(EXP_ID)
 
-    async def test_active_delete_no_purge(self, experiment: Experiment) -> None:
+    async def test_active_delete_no_purge(self, experiment: Experiment, service: ExperimentService) -> None:
         with (
-            patch("modules.experiments.models.archive_submission.delete_jobs"),
-            patch("modules.experiments.models.archive_submission.submit_purge_job") as mock_purge,
-            patch.object(Notebook, "stop"),
+            patch.object(ArchiveService, "delete_jobs"),
+            patch.object(ArchiveService, "purge") as mock_purge,
+            patch.object(NotebookService, "stop"),
         ):
-            await experiment.delete()
+            await service.delete(experiment)
         mock_purge.assert_not_called()
 
 
@@ -348,34 +401,44 @@ class TestDeleteAnalysisJobs:
         )
         return await _reload(db_session)
 
-    async def test_delete_removes_analysis_jobs(self, experiment: Experiment, db_session: AsyncSession) -> None:
-        experiment = await self._with_analysis_job(db_session)
-        with (
-            patch("modules.experiments.models.archive_submission.delete_jobs"),
-            patch("modules.experiments.models.archive_submission.submit_purge_job"),
-            patch.object(Notebook, "stop"),
-            patch.object(AnalysisJob, "delete") as mock_delete,
-        ):
-            await experiment.delete()
-        mock_delete.assert_called_once_with()
-
-    async def test_failing_analysis_delete_does_not_abort(
-        self, experiment: Experiment, db_session: AsyncSession
+    async def test_delete_removes_analysis_jobs(
+        self, experiment: Experiment, db_session: AsyncSession, service: ExperimentService
     ) -> None:
         experiment = await self._with_analysis_job(db_session)
         with (
-            patch("modules.experiments.models.archive_submission.delete_jobs"),
-            patch("modules.experiments.models.archive_submission.submit_purge_job") as mock_purge,
-            patch.object(Notebook, "stop"),
-            patch.object(AnalysisJob, "delete", side_effect=RuntimeError("k8s down")),
+            patch.object(ArchiveService, "delete_jobs"),
+            patch.object(ArchiveService, "purge"),
+            patch.object(NotebookService, "stop"),
+            patch.object(AnalysisService, "delete_remote") as mock_delete,
         ):
-            await experiment.delete()
+            await service.delete(experiment)
+        mock_delete.assert_called_once()
+
+    async def test_failing_analysis_delete_does_not_abort(
+        self,
+        experiment: Experiment,
+        db_session: AsyncSession,
+        service: ExperimentService,
+    ) -> None:
+        experiment = await self._with_analysis_job(db_session)
+        with (
+            patch.object(ArchiveService, "delete_jobs"),
+            patch.object(ArchiveService, "purge") as mock_purge,
+            patch.object(NotebookService, "stop"),
+            patch.object(AnalysisService, "delete_remote", side_effect=RuntimeError("k8s down")),
+        ):
+            await service.delete(experiment)
         mock_purge.assert_not_called()
 
 
 class TestArchivedJobSerialization:
     async def test_archived_job_serves_persisted_columns_without_manifest_io(
-        self, experiment: Experiment, db_session: AsyncSession, tmp_path: Path, caplog: pytest.LogCaptureFixture
+        self,
+        experiment: Experiment,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+        service: ExperimentService,
     ) -> None:
         """Archived experiments keep job rows after files are gone; serialize columns, not manifests."""
         gmx = GromacsJob(
@@ -412,7 +475,7 @@ class TestArchivedJobSerialization:
         (tmp_path / EXP_ID).rmdir()
 
         with _job_active(False), caplog.at_level(logging.WARNING, logger="core.schemas"):
-            await experiment.refresh()
+            await service.refresh(experiment)
             data = ExperimentOut.model_validate(experiment).model_dump(mode="json")
 
         assert not [r for r in caplog.records if "Failed to compute" in r.message]
@@ -432,7 +495,11 @@ class TestArchivedJobSerialization:
 
 class TestArchivedSerialization:
     async def test_snapshot_fields_served(
-        self, experiment: Experiment, db_session: AsyncSession, tmp_path: Path
+        self,
+        experiment: Experiment,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        service: ExperimentService,
     ) -> None:
         experiment.archived_at = datetime.now(UTC)
         experiment.archived_step = 4
@@ -441,7 +508,7 @@ class TestArchivedSerialization:
         experiment = await _reload(db_session)
         (tmp_path / EXP_ID).rmdir()
         with _job_active(False):
-            await experiment.refresh()
+            await service.refresh(experiment)
         data = ExperimentOut.model_validate(experiment).model_dump(mode="json")
 
         assert data["archive_state"] == "archived"
@@ -455,19 +522,23 @@ class TestArchivedSerialization:
 
 
 class TestFrozenGates:
-    async def test_publish_while_archived_409(self, experiment: Experiment, db_session: AsyncSession) -> None:
+    async def test_publish_while_archived_409(
+        self, experiment: Experiment, db_session: AsyncSession, service: ExperimentService
+    ) -> None:
         experiment.archived_at = datetime.now(UTC)
         with _job_active(False), pytest.raises(Conflict):
-            await experiment.publish(db_session, target="mdposit", simulation_path="x")
+            await service.publishing.publish_mdposit(experiment, "x")
 
-    async def test_publish_while_archiving_409(self, experiment: Experiment, db_session: AsyncSession) -> None:
+    async def test_publish_while_archiving_409(
+        self, experiment: Experiment, db_session: AsyncSession, service: ExperimentService
+    ) -> None:
         """A publish racing the archiving window would read files the worker is about to delete."""
         experiment.archived_step = 3
         experiment.archived_status = "ready"
         with _job_active(True), pytest.raises(Conflict):
-            await experiment.publish(db_session, target="mdposit", simulation_path="x")
+            await service.publishing.publish_mdposit(experiment, "x")
 
-    async def test_notebook_start_while_archived_409(self, experiment: Experiment) -> None:
+    async def test_notebook_start_while_archived_409(self, experiment: Experiment, service: ExperimentService) -> None:
         experiment.archived_at = datetime.now(UTC)
         with pytest.raises(Conflict):
-            await experiment.notebook.start()
+            await service.notebooks.start(experiment.notebook)

@@ -8,8 +8,6 @@ from typing import Annotated, Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
-from clients import mdrepo
-from clients.http import client
 from core.cache import mdrepo_status_cache
 from core.config import (
     API_PREFIX,
@@ -18,22 +16,22 @@ from core.config import (
     MDREPO_CLIENT_SECRET,
     MDREPO_REDIRECT_URI,
     MDREPO_SCOPES,
-    MDREPO_TOKEN_URL,
     MDREPO_URL,
 )
+from core.dependencies import ClientsDep
 from core.errors import ApiError
 from core.responses import problems
 from core.schemas import Message
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import RedirectResponse
 
+from modules.mdrepo.dependencies import TokensDep
 from modules.mdrepo.schemas import MDRepoStatus
 from modules.mdrepo.tokens import (
     MDREPO_REFRESH_TOKEN_KEY,
     MDREPO_STATE_KEY,
     MDREPO_TOKEN_EXPIRES_AT,
     MDREPO_TOKEN_KEY,
-    MDRepoTokenManager,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,14 +74,14 @@ def _safe_return_url(url: str) -> str:
     response_description="Authentication status",
     responses=problems(),
 )
-async def get_status(request: Request) -> MDRepoStatus:
+async def get_status(request: Request, clients: ClientsDep) -> MDRepoStatus:
     """Whether the session holds a token MDRepo accepts."""
     token = request.session.get(MDREPO_TOKEN_KEY)
     if not token:
         return {"authenticated": False}
 
     try:
-        if await mdrepo.is_token_valid(token):
+        if await clients.mdrepo.is_token_valid(token):
             return {"authenticated": True, "mdrepo_url": MDREPO_URL}
     except httpx.HTTPError as e:
         logger.error(f"MDRepo token validation failed: {e}")
@@ -143,6 +141,7 @@ async def initiate_auth(request: Request, return_url: str = "/") -> RedirectResp
 )
 async def oauth_callback(
     request: Request,
+    clients: ClientsDep,
     code: str | None = None,
     state: str | None = None,
     error: str | None = None,
@@ -173,7 +172,7 @@ async def oauth_callback(
         "client_secret": MDREPO_CLIENT_SECRET,
     }
     try:
-        response = await client().post(MDREPO_TOKEN_URL, data=token_data, timeout=30)
+        response = await clients.mdrepo.request_token(token_data)
     except httpx.HTTPError as e:
         logger.error(f"MDRepo OAuth request error: {e}")
         return redirect_with_query(return_url, mdrepo_error="Request failed")
@@ -217,7 +216,7 @@ async def oauth_callback(
     response_description="Logout confirmation",
     responses=problems(),
 )
-async def logout(request: Request) -> Message:
+async def logout(tokens: TokensDep) -> Message:
     """Remove all MDRepo tokens from the session."""
-    MDRepoTokenManager(request.session).clear_tokens()
+    tokens.clear_tokens()
     return {"message": "Logged out from MDRepo"}

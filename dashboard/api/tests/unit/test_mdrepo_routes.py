@@ -3,6 +3,7 @@
 import json
 from base64 import b64decode, b64encode
 from collections.abc import Iterator
+from dataclasses import replace
 from http import HTTPStatus
 from typing import Any
 from unittest.mock import patch
@@ -13,6 +14,8 @@ import itsdangerous
 import pytest
 import respx
 from app import create_app
+from clients import Clients
+from clients.mdrepo import MDRepoClient
 from fastapi import FastAPI
 from httpx import AsyncClient
 from modules.mdrepo.tokens import MDREPO_REFRESH_TOKEN_KEY, MDREPO_TOKEN_EXPIRES_AT, MDREPO_TOKEN_KEY
@@ -24,17 +27,14 @@ TOKEN_URL = f"{MDREPO}/oauth/token"
 
 
 @pytest.fixture
-def app(db_session: AsyncSession) -> FastAPI:
-    return create_app(session_secret=SECRET)
+def app(db_session: AsyncSession, clients: Clients) -> FastAPI:
+    mdrepo = MDRepoClient(clients.http, url=MDREPO, token_url=TOKEN_URL)
+    return create_app(clients=replace(clients, mdrepo=mdrepo), session_secret=SECRET)
 
 
 @pytest.fixture(autouse=True)
-def _mdrepo_urls() -> Iterator[None]:
-    with (
-        patch("clients.mdrepo.MDREPO_URL", MDREPO),
-        patch("modules.mdrepo.router.MDREPO_URL", MDREPO),
-        patch("modules.mdrepo.router.MDREPO_TOKEN_URL", TOKEN_URL),
-    ):
+def _mdrepo_url() -> Iterator[None]:
+    with patch("modules.mdrepo.router.MDREPO_URL", MDREPO):
         yield
 
 

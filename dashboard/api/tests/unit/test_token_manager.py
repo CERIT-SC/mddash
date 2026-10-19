@@ -8,6 +8,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import httpx
 import pytest
 import respx
+from clients import Clients
+from clients.mdrepo import MDRepoClient
 from modules.mdrepo.tokens import (
     MDREPO_REFRESH_TOKEN_KEY,
     MDREPO_TOKEN_EXPIRES_AT,
@@ -21,10 +23,9 @@ TOKEN_URL = "https://mdrepo.test/oauth/token"
 SessionMixin = dict[str, Any]
 
 
-@pytest.fixture(autouse=True)
-def _token_url() -> Iterator[None]:
-    with patch("modules.mdrepo.tokens.MDREPO_TOKEN_URL", TOKEN_URL):
-        yield
+@pytest.fixture
+def mdrepo(clients: Clients) -> MDRepoClient:
+    return MDRepoClient(clients.http, token_url=TOKEN_URL)
 
 
 @pytest.fixture
@@ -50,27 +51,29 @@ def mock_sleep() -> Iterator[AsyncMock]:
 class TestMDRepoTokenManager:
     """Test MDRepo Token Manager."""
 
-    async def test_init(self, session: SessionMixin) -> None:
+    async def test_init(self, session: SessionMixin, mdrepo: MDRepoClient) -> None:
         """Test token manager initialization."""
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         assert manager.session is session
 
-    async def test_get_valid_token_no_token(self, session: SessionMixin) -> None:
+    async def test_get_valid_token_no_token(self, session: SessionMixin, mdrepo: MDRepoClient) -> None:
         """Test get_valid_token when no token is present."""
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         token = await manager.get_valid_token()
         assert token is None
 
-    async def test_get_valid_token_valid_token(self, session: SessionMixin) -> None:
+    async def test_get_valid_token_valid_token(self, session: SessionMixin, mdrepo: MDRepoClient) -> None:
         """Test get_valid_token with valid token."""
         session[MDREPO_TOKEN_KEY] = "test_access_token"
         session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + 3600
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         token = await manager.get_valid_token()
         assert token == "test_access_token"
 
-    async def test_get_valid_token_expired_token_refresh_success(self, mock_post: Mock, session: SessionMixin) -> None:
+    async def test_get_valid_token_expired_token_refresh_success(
+        self, mock_post: Mock, session: SessionMixin, mdrepo: MDRepoClient
+    ) -> None:
         """Test get_valid_token with expired token that refreshes successfully."""
         # Set up expired token
         session[MDREPO_TOKEN_KEY] = "expired_token"
@@ -82,14 +85,16 @@ class TestMDRepoTokenManager:
             200, json={"access_token": "new_access_token", "refresh_token": "new_refresh_token", "expires_in": 3600}
         )
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         token = await manager.get_valid_token()
 
         assert token == "new_access_token"
         assert session[MDREPO_TOKEN_KEY] == "new_access_token"
         assert session[MDREPO_REFRESH_TOKEN_KEY] == "new_refresh_token"
 
-    async def test_get_valid_token_expired_token_refresh_failure(self, mock_post: Mock, session: SessionMixin) -> None:
+    async def test_get_valid_token_expired_token_refresh_failure(
+        self, mock_post: Mock, session: SessionMixin, mdrepo: MDRepoClient
+    ) -> None:
         """Test get_valid_token with expired token that fails to refresh."""
         # Set up expired token
         session[MDREPO_TOKEN_KEY] = "expired_token"
@@ -99,7 +104,7 @@ class TestMDRepoTokenManager:
         # Mock failed refresh response
         mock_post.return_value = httpx.Response(400, text="Invalid refresh token")
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         token = await manager.get_valid_token()
 
         assert token is None
@@ -108,31 +113,31 @@ class TestMDRepoTokenManager:
         assert MDREPO_REFRESH_TOKEN_KEY not in session
         assert MDREPO_TOKEN_EXPIRES_AT not in session
 
-    async def test_is_token_expired_no_expiration(self, session: SessionMixin) -> None:
+    async def test_is_token_expired_no_expiration(self, session: SessionMixin, mdrepo: MDRepoClient) -> None:
         """Test is_token_expired when no expiration info is available."""
         session[MDREPO_TOKEN_KEY] = "test_token"
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         # Should return False when no expiration info (can't verify)
         assert manager.is_token_expired() is False
 
-    async def test_is_token_expired_valid(self, session: SessionMixin) -> None:
+    async def test_is_token_expired_valid(self, session: SessionMixin, mdrepo: MDRepoClient) -> None:
         """Test is_token_expired with valid token."""
         session[MDREPO_TOKEN_KEY] = "test_token"
         session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + 3600
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         assert manager.is_token_expired() is False
 
-    async def test_is_token_expired_expired(self, session: SessionMixin) -> None:
+    async def test_is_token_expired_expired(self, session: SessionMixin, mdrepo: MDRepoClient) -> None:
         """Test is_token_expired with expired token."""
         session[MDREPO_TOKEN_KEY] = "test_token"
         session[MDREPO_TOKEN_EXPIRES_AT] = time.time() - 3600
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         assert manager.is_token_expired() is True
 
-    async def test_refresh_token_success(self, mock_post: Mock, session: SessionMixin) -> None:
+    async def test_refresh_token_success(self, mock_post: Mock, session: SessionMixin, mdrepo: MDRepoClient) -> None:
         """Test successful token refresh."""
         session[MDREPO_TOKEN_KEY] = "expired_token"
         session[MDREPO_REFRESH_TOKEN_KEY] = "refresh_token"
@@ -143,7 +148,7 @@ class TestMDRepoTokenManager:
             200, json={"access_token": "new_access_token", "refresh_token": "new_refresh_token", "expires_in": 3600}
         )
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         result = await manager.refresh_token()
 
         assert result is True
@@ -151,15 +156,19 @@ class TestMDRepoTokenManager:
         assert session[MDREPO_REFRESH_TOKEN_KEY] == "new_refresh_token"
         assert MDREPO_TOKEN_EXPIRES_AT in session
 
-    async def test_refresh_token_no_refresh_token(self, mock_post: Mock, session: SessionMixin) -> None:
+    async def test_refresh_token_no_refresh_token(
+        self, mock_post: Mock, session: SessionMixin, mdrepo: MDRepoClient
+    ) -> None:
         """Test refresh when no refresh token is available."""
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         result = await manager.refresh_token()
 
         assert result is False
         mock_post.assert_not_called()
 
-    async def test_refresh_token_invalid_refresh_token(self, mock_post: Mock, session: SessionMixin) -> None:
+    async def test_refresh_token_invalid_refresh_token(
+        self, mock_post: Mock, session: SessionMixin, mdrepo: MDRepoClient
+    ) -> None:
         """Test refresh when refresh token is invalid."""
         session[MDREPO_TOKEN_KEY] = "expired_token"
         session[MDREPO_REFRESH_TOKEN_KEY] = "invalid_refresh_token"
@@ -168,7 +177,7 @@ class TestMDRepoTokenManager:
         # Mock failed refresh response
         mock_post.return_value = httpx.Response(400, text="Invalid refresh token")
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         result = await manager.refresh_token()
 
         assert result is False
@@ -177,7 +186,11 @@ class TestMDRepoTokenManager:
         assert MDREPO_REFRESH_TOKEN_KEY not in session
 
     async def test_refresh_token_with_retry(
-        self, session: SessionMixin, mock_post: Mock, mock_sleep: AsyncMock
+        self,
+        session: SessionMixin,
+        mock_post: Mock,
+        mock_sleep: AsyncMock,
+        mdrepo: MDRepoClient,
     ) -> None:
         """Test refresh with retry on temporary failure."""
         session[MDREPO_TOKEN_KEY] = "expired_token"
@@ -193,7 +206,7 @@ class TestMDRepoTokenManager:
             ),
         ]
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         result = await manager.refresh_token()
 
         assert result is True
@@ -207,7 +220,11 @@ class TestMDRepoTokenManager:
         assert actual_delays == expected_delays
 
     async def test_refresh_token_all_retries_fail(
-        self, session: SessionMixin, mock_post: Mock, mock_sleep: AsyncMock
+        self,
+        session: SessionMixin,
+        mock_post: Mock,
+        mock_sleep: AsyncMock,
+        mdrepo: MDRepoClient,
     ) -> None:
         """Test refresh when all retries fail."""
         session[MDREPO_TOKEN_KEY] = "expired_token"
@@ -217,7 +234,7 @@ class TestMDRepoTokenManager:
         # Mock failed refresh response
         mock_post.return_value = httpx.Response(500, text="Server error")
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         result = await manager.refresh_token()
 
         assert result is False
@@ -230,7 +247,9 @@ class TestMDRepoTokenManager:
         actual_delays = [call[0][0] for call in mock_sleep.call_args_list]
         assert actual_delays == expected_delays
 
-    async def test_refresh_token_no_new_refresh_token(self, mock_post: Mock, session: SessionMixin) -> None:
+    async def test_refresh_token_no_new_refresh_token(
+        self, mock_post: Mock, session: SessionMixin, mdrepo: MDRepoClient
+    ) -> None:
         """Test refresh when response doesn't include new refresh token."""
         session[MDREPO_TOKEN_KEY] = "expired_token"
         session[MDREPO_REFRESH_TOKEN_KEY] = "refresh_token"
@@ -239,7 +258,7 @@ class TestMDRepoTokenManager:
         # Mock refresh response without new refresh token
         mock_post.return_value = httpx.Response(200, json={"access_token": "new_access_token", "expires_in": 3600})
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         result = await manager.refresh_token()
 
         assert result is True
@@ -247,27 +266,27 @@ class TestMDRepoTokenManager:
         # Old refresh token should still be there
         assert session[MDREPO_REFRESH_TOKEN_KEY] == "refresh_token"
 
-    async def test_clear_tokens(self, session: SessionMixin) -> None:
+    async def test_clear_tokens(self, session: SessionMixin, mdrepo: MDRepoClient) -> None:
         """Test clearing all tokens."""
         session[MDREPO_TOKEN_KEY] = "test_token"
         session[MDREPO_REFRESH_TOKEN_KEY] = "test_refresh_token"
         session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + 3600
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         manager.clear_tokens()
 
         assert MDREPO_TOKEN_KEY not in session
         assert MDREPO_REFRESH_TOKEN_KEY not in session
         assert MDREPO_TOKEN_EXPIRES_AT not in session
 
-    async def test_has_tokens_true(self, session: SessionMixin) -> None:
+    async def test_has_tokens_true(self, session: SessionMixin, mdrepo: MDRepoClient) -> None:
         """Test has_tokens when tokens exist."""
         session[MDREPO_TOKEN_KEY] = "test_token"
 
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         assert manager.has_tokens() is True
 
-    async def test_has_tokens_false(self, session: SessionMixin) -> None:
+    async def test_has_tokens_false(self, session: SessionMixin, mdrepo: MDRepoClient) -> None:
         """Test has_tokens when no tokens exist."""
-        manager = MDRepoTokenManager(session)
+        manager = MDRepoTokenManager(session, mdrepo)
         assert manager.has_tokens() is False

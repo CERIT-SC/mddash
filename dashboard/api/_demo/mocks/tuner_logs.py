@@ -1,5 +1,5 @@
 """
-Tuner trial log mocking via module mutation.
+Tuner trial log mocking (patches the tuner client class).
 
 Provides mock implementations for trial stdout/stderr endpoints
 that return simulated GROMACS mdrun output.
@@ -7,10 +7,9 @@ that return simulated GROMACS mdrun output.
 
 import logging
 
-from clients import tuner
+from clients.tuner import TunerClient
 
 from ..state import demo_state
-from .k8s import as_async
 
 logger = logging.getLogger(__name__)
 
@@ -50,14 +49,6 @@ Performance: {performance:.3f} ns/day
 """
 
 _AMBER_STDERR_TEMPLATE = ""
-
-
-def install_tuner_log_mocks() -> None:
-    """Install tuner trial log mocks via module mutation."""
-    tuner.gmx_get_trial_stdout = as_async(_get_trial_stdout)  # type: ignore
-    tuner.gmx_get_trial_stderr = as_async(_get_trial_stderr)  # type: ignore
-    tuner.amber_get_trial_stdout = as_async(_get_amber_trial_stdout)  # type: ignore
-    tuner.amber_get_trial_stderr = as_async(_get_amber_trial_stderr)  # type: ignore
 
 
 def _get_amber_trial_stdout(job_id: str, trial_id: str) -> str:
@@ -212,3 +203,20 @@ def _get_trial_stderr(job_id: str, trial_id: str) -> str:
         return "Error: Simulation failed due to invalid parameters.\n"
 
     return _GMX_STDERR_TEMPLATE
+
+
+_TRIAL_LOGS = {
+    ("gmx", "stdout"): _get_trial_stdout,
+    ("gmx", "stderr"): _get_trial_stderr,
+    ("amber", "stdout"): _get_amber_trial_stdout,
+    ("amber", "stderr"): _get_amber_trial_stderr,
+}
+
+
+async def _trial_log(_client: TunerClient, engine: str, job_id: str, trial_id: str, stream: str) -> str:  # ruff:ignore[unused-async]
+    return _TRIAL_LOGS[engine, stream](job_id, trial_id)
+
+
+def install_tuner_log_mocks() -> None:
+    """Replace the tuner client's trial log reads."""
+    TunerClient.trial_log = _trial_log  # type: ignore

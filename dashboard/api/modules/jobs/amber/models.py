@@ -3,27 +3,18 @@ import re
 from datetime import UTC, datetime
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
-import anyio
 import sqlalchemy as sa
-from clients import mdrun
-from core.config import DATA_DIR, S3_BUCKET
-from core.enums import AmberBinary, Engine, EwaldPreset, JobStatus
-from core.errors import BadRequest, Conflict, Forbidden, InternalServerError, NotFound, UnprocessableEntity
+from core.config import DATA_DIR
+from core.enums import AmberBinary, Engine, EwaldPreset
+from core.errors import BadRequest, Forbidden, InternalServerError, NotFound, UnprocessableEntity
 from core.utils import tail, tail_bytes
 from sqlalchemy import ForeignKey
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, mapped_column
 
 from modules.jobs.models import SimulationJob
 from modules.simulations.manifest import Simulation
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-    from modules.experiments.models import Experiment
-
 
 logger = logging.getLogger(__name__)
 
@@ -43,12 +34,6 @@ class AmberJob(SimulationJob):
     binary: Mapped["AmberBinary"] = mapped_column(sa.Enum(AmberBinary), nullable=False)
     # Ewald summation preset
     ewald: Mapped["EwaldPreset"] = mapped_column(sa.Enum(EwaldPreset))
-
-    async def _mdrun_get(self) -> dict:
-        return await mdrun.get_amber_job(self.id)
-
-    async def _mdrun_delete(self) -> None:
-        await mdrun.delete_amber_job(self.id)
 
     @cached_property
     def _files(self) -> dict[str, str]:
@@ -120,72 +105,6 @@ class AmberJob(SimulationJob):
         time_since_update = datetime.now(UTC).timestamp() - last_updated
         return max(0, int(base_estimate - time_since_update))
 
-    @classmethod
-    async def start(
-        cls,
-        session: "AsyncSession",
-        experiment: "Experiment",
-        simulation_path: str,
-        binary: "AmberBinary",
-        ewald: "EwaldPreset",
-        np: int,
-        ntomp: int,
-    ) -> "AmberJob":
-        """
-        Start an AMBER job from a simulation manifest.
-
-        Returns:
-            The created AmberJob instance.
-        """
-        simulation = Simulation.get(experiment.id, simulation_path, experiment)
-        simulation.require_files(["topology", "coordinates", "control"])
-        resolved = simulation.resolved_files
-        prmtop_rel_path = resolved["topology"]
-        inpcrd_rel_path = resolved["coordinates"]
-        mdin_rel_path = resolved["control"]
-        extra_args = simulation.extra_args
-
-        mdrun_job = await mdrun.create_amber_job(
-            experiment_id=experiment.id,
-            prmtop_name=prmtop_rel_path,
-            inpcrd_name=inpcrd_rel_path,
-            mdin_name=mdin_rel_path,
-            bucket_name=S3_BUCKET,
-            binary=binary.value,
-            ewald=ewald.value,
-            np=np,
-            ntomp=ntomp,
-            extra_args=extra_args,
-        )
-
-        job = AmberJob(
-            id=mdrun_job["id"],
-            simulation_path=simulation_path,
-            binary=binary,
-            ewald=ewald,
-            np=np,
-            ntomp=ntomp,
-            experiment_id=experiment.id,
-            experiment=experiment,
-            engine=Engine.AMBER,
-            _last_known_status=JobStatus.PENDING,
-        )
-        session.add(job)
-
-        await anyio.to_thread.run_sync(job._cleanup_files)
-
-        try:
-            await session.commit()
-        except IntegrityError:
-            # Another request committed the row first; delete our unreferenced MDRun job.
-            await session.rollback()
-            await mdrun.delete_amber_job(job.id)
-            raise Conflict("A run is already active for this simulation; stop it first to submit a new run.") from None
-        simulation.mark_readonly()
-        logger.info(f"Started AMBER job {job.id} for experiment {experiment.id} (simulation {simulation_path})")
-
-        return job
-
     def _log_files(self) -> dict[str, Path]:
         """AMBER log streams keyed by the log endpoint's ``type`` values (mdinfo is progress state, not a stream)."""
         return {"mdout": self._mdout_log, "stdout": self._stdout_log, "stderr": self._stderr_log}
@@ -234,7 +153,8 @@ class AmberJob(SimulationJob):
         except OSError as e:
             raise InternalServerError(description=f"System error reading log file: {e}")
 
-    def _cleanup_files(self) -> None:
+    def cleanup_files(self) -> None:
+        """Remove this run's result files and logs, keeping files the manifest uses as inputs."""
         base_name = Path(self._files["control"]).stem
         # Mirrors mdrun-api restart renaming: md.mdin + md.rst7 -> md_out.rst7.
         collision = Path(self._files["coordinates"]) == self._sim_dir / f"{base_name}.rst7"

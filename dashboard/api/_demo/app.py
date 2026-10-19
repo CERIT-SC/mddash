@@ -77,7 +77,7 @@ def create_demo_app() -> "FastAPI":
     Create the real API app configured for local demo with mocked dependencies (uvicorn factory).
 
     Mocks must be installed before the app is imported: K8s is neutralized by
-    `clients.k8s` module mutation, not by patching the kubernetes library.
+    patching the `K8sClient` methods, not by patching the kubernetes library.
     """
     _configure_demo_env()
 

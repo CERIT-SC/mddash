@@ -3,10 +3,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Self
 
-import anyio
 import sqlalchemy as sa
-from clients import mdrun
-from core.cache import simulation_log_lines_cache, simulation_log_lines_lock, simulation_status_cache
+from core.cache import simulation_log_lines_cache, simulation_log_lines_lock
 from core.db import Base
 from core.enums import Engine, JobStatus
 from core.utils import count_lines
@@ -15,7 +13,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 
 if TYPE_CHECKING:
     from sqlalchemy import Select
-    from sqlalchemy.ext.asyncio import AsyncSession
 
     from modules.experiments.models import Experiment
 
@@ -28,7 +25,7 @@ class SimulationJob(Base):
     Base class for molecular dynamics simulation jobs using Joined Table Inheritance.
 
     Engine-specific subclasses (GromacsJob, AmberJob) add engine columns and log parsing.
-    Remote status comes from `refresh_status()`; every other property is local (DB + files).
+    Remote status comes from `RunService.refresh_status()`; every other property is local (DB + files).
     """
 
     __tablename__ = "simulation_jobs"
@@ -71,7 +68,7 @@ class SimulationJob(Base):
     # Never lazy-loads (async); queries for jobs alone load it via `query()`.
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="simulation_jobs", lazy="raise_on_sql")
 
-    # Transient: status fetched by refresh_status() for this request
+    # Transient: status fetched by RunService.refresh_status() for this request
     _fetched_status: JobStatus | None = None
 
     @classmethod
@@ -79,53 +76,27 @@ class SimulationJob(Base):
         """Select rows of this job type together with their experiments."""
         return select(cls).options(selectinload(cls.experiment))
 
-    @classmethod
-    async def get(cls, session: "AsyncSession", experiment_id: str, simulation_path: str) -> Self | None:
-        """Return the simulation's single run row (unique per experiment and path), or None."""
-        stmt = cls.query().filter_by(experiment_id=experiment_id, simulation_path=simulation_path)
-        return (await session.execute(stmt)).scalars().first()
-
-    @classmethod
-    async def remove(cls, session: "AsyncSession", experiment_id: str, simulation_path: str) -> Self | None:
-        """
-        Delete the simulation's run: its MDRun job, DB row, and result files.
-
-        Returns:
-            The deleted row, or None when the simulation never ran.
-        """
-        job = await cls.get(session, experiment_id, simulation_path)
-        if job is None:
-            return None
-        await job.delete()
-        await session.delete(job)
-        await session.commit()
-        return job
-
-    async def _mdrun_get(self) -> dict:
-        raise NotImplementedError
-
-    async def _mdrun_delete(self) -> None:
-        raise NotImplementedError
-
-    async def refresh_status(self) -> JobStatus:
-        """Fetch the MDRun status (short TTL cache); terminal states never change, so they skip the fetch."""
-        if self._last_known_status is not None and self._last_known_status.is_terminal:
-            self._fetched_status = self._last_known_status
-            return self._fetched_status
-
-        try:
-            fetched = simulation_status_cache.get(self.id)
-            if fetched is None:
-                fetched = JobStatus.from_string((await self._mdrun_get())["status"])
-                simulation_status_cache[self.id] = fetched
-            if fetched not in {self._last_known_status, JobStatus.UNKNOWN}:
-                self._last_known_status = fetched
-        except Exception:
-            logger.exception(f"Error fetching job status for job {self.id}")
-            fetched = self._last_known_status or JobStatus.UNKNOWN
-
+    def record_status(self, fetched: JobStatus) -> bool:
+        """Store the status read for this request; True when it persisted as the new offline fallback."""
+        changed = fetched not in {self._last_known_status, JobStatus.UNKNOWN}
+        if changed:
+            self._last_known_status = fetched
         self._fetched_status = fetched
-        return fetched
+        return changed
+
+    def record_status_unavailable(self) -> None:
+        """Serve the last known status (MDRun could not be read)."""
+        self._fetched_status = self._last_known_status or JobStatus.UNKNOWN
+
+    def mark_status(self, status: JobStatus) -> None:
+        """Persist a status MDRun reported for an action (stop)."""
+        self._last_known_status = status
+        self._fetched_status = status
+
+    @property
+    def settled(self) -> bool:
+        """Terminal statuses never change, so they need no MDRun read."""
+        return self._last_known_status is not None and self._last_known_status.is_terminal
 
     @property
     def status(self) -> JobStatus:
@@ -138,7 +109,7 @@ class SimulationJob(Base):
         if self._last_known_status is not None and self._last_known_status.is_terminal:
             return self._last_known_status
         if self._fetched_status is None:
-            raise RuntimeError(f"Status of job {self.id} read before refresh_status()")
+            raise RuntimeError(f"Status of job {self.id} read before RunService.refresh_status()")
         return self._fetched_status
 
     @property
@@ -251,26 +222,5 @@ class SimulationJob(Base):
     def _parse_finish_timestamp(self) -> int | None:
         raise NotImplementedError
 
-    async def delete(self) -> None:
-        """Delete the MDRun job and this run's result files (the caller deletes the row)."""
-        await self._mdrun_delete()
-        await anyio.to_thread.run_sync(self._cleanup_files)
-
-    async def stop(self) -> None:
-        """
-        Stop the job gracefully, preserving all data and the DB row (row later extends, GMX, or analyzes as-is).
-
-        Outcome re-read after deletion: a run that finishes first stays FINISHED, not STOPPED.
-        """
-        await mdrun.stop_job(self.id, self.MDRUN_ENGINE)
-        try:
-            status = JobStatus.from_string((await self._mdrun_get())["status"])
-        except Exception:
-            logger.exception(f"Could not re-read status of job {self.id} after stop; assuming STOPPED")
-            status = JobStatus.STOPPED
-        self._last_known_status = status
-        self._fetched_status = status
-        simulation_status_cache.pop(self.id, None)
-
-    def _cleanup_files(self) -> None:
+    def cleanup_files(self) -> None:
         """Remove engine-specific result files of this run (subclasses override)."""

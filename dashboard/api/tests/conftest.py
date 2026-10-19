@@ -33,34 +33,21 @@ os.environ["NS_MAX_NOTEBOOKS"] = "2"
 os.environ["TUNER_USER"] = "tuner"
 os.environ["TUNER_PASSWORD"] = "secret"
 
+import modules.models  # ruff:ignore[unused-import]  # imports every module binding DATA_DIR
 from app import create_app
-from clients import http as http_client
-from clients import k8s
+from clients import Clients
+from clients.k8s import K8sClient
 from core import cache, db
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# Modules binding DATA_DIR at import (`from core.config import DATA_DIR`).
-_DATA_DIR_MODULES = (
-    "core.config",
-    "modules.experiments.models",
-    "modules.experiments.sources",
-    "modules.simulations.manifest",
-    "modules.jobs.analysis.models",
-    "modules.jobs.gmx.models",
-    "modules.jobs.amber.models",
-    "modules.files.router",
-    "modules.system.router",
-    "app",
-)
-
 
 @pytest.fixture(autouse=True)
 def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Point every DATA_DIR binding at the test's tmp_path."""
-    for name in _DATA_DIR_MODULES:
-        module = sys.modules.get(name)
-        if isinstance(module, ModuleType) and hasattr(module, "DATA_DIR"):
+    """Point every DATA_DIR binding (`from core.config import DATA_DIR`) at the test's tmp_path."""
+    for name, module in list(sys.modules.items()):
+        bound = name == "app" or name.startswith(("core.", "modules."))
+        if bound and isinstance(module, ModuleType) and hasattr(module, "DATA_DIR"):
             monkeypatch.setattr(module, "DATA_DIR", tmp_path)
     return tmp_path
 
@@ -94,17 +81,22 @@ def _running_pod() -> MagicMock:
     return pod
 
 
-@pytest.fixture(autouse=True)
-def mock_k8s() -> Iterator[tuple[AsyncMock, AsyncMock]]:
-    """AsyncMock CoreV1Api/BatchV1Api clients; tests configure return values per call."""
-    k8s.reset_k8s_clients_for_tests()
-    k8s._load_k8s()
+@pytest.fixture
+def mock_k8s() -> tuple[AsyncMock, AsyncMock]:
+    """AsyncMock CoreV1Api/BatchV1Api clients behind `clients.k8s`; tests configure return values per call."""
     core_v1, batch_v1 = AsyncMock(), AsyncMock()
     core_v1.read_namespaced_pod.return_value = _running_pod()
     core_v1.list_namespaced_pod.return_value = MagicMock(items=[])
-    k8s._core_v1, k8s._batch_v1 = core_v1, batch_v1
-    yield core_v1, batch_v1
-    k8s.reset_k8s_clients_for_tests()
+    return core_v1, batch_v1
+
+
+@pytest.fixture
+async def clients(mock_k8s: tuple[AsyncMock, AsyncMock]) -> AsyncIterator[Clients]:
+    """Production clients over respx-mocked HTTP, with the AsyncMock Kubernetes API."""
+    core_v1, batch_v1 = mock_k8s
+    bundle = Clients.create(k8s=K8sClient(core_v1=core_v1, batch_v1=batch_v1))
+    yield bundle
+    await bundle.http.aclose()
 
 
 @pytest.fixture(autouse=True)
@@ -131,14 +123,13 @@ async def db_session(tmp_path: Path) -> AsyncIterator[AsyncSession]:
         await conn.run_sync(db.Base.metadata.create_all)
     async with db.session_factory()() as session:
         yield session
-    await http_client.aclose()
     await engine.dispose()
 
 
 @pytest.fixture
-def app(db_session: AsyncSession) -> FastAPI:
-    """Build the real application bound to the test database (lifespan startup is not run)."""
-    return create_app()
+def app(db_session: AsyncSession, clients: Clients) -> FastAPI:
+    """Build the real application bound to the test database and clients (lifespan startup is not run)."""
+    return create_app(clients=clients)
 
 
 @pytest.fixture

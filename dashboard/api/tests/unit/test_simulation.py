@@ -5,13 +5,17 @@ import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
+from clients import Clients
+from clients.k8s import K8sClient
 from core.enums import Engine, JobStatus
 from core.errors import ApiError, BadRequest
 from modules.jobs.amber.schemas import AmberJob as AmberJobSchema
 from modules.jobs.gmx.models import GromacsJob
 from modules.jobs.gmx.schemas import GromacsJob as GromacsJobSchema
+from modules.jobs.service import JobsService
 from modules.jobs.tuner.models import TunerJob
 from modules.models import Experiment, Notebook
 from modules.simulations.manifest import Simulation
@@ -40,13 +44,18 @@ async def _seed_experiment(db_session: AsyncSession, exp_id: str = "simts") -> s
     return exp_id
 
 
+def _jobs(db_session: AsyncSession) -> JobsService:
+    """Job services over respx-mocked HTTP (MDRun status reads)."""
+    return JobsService(db_session, Clients.create(k8s=K8sClient(core_v1=AsyncMock(), batch_v1=AsyncMock())))
+
+
 async def _experiment(db_session: AsyncSession, exp_id: str) -> Experiment:
     """Load the experiment with its jobs as a request would, with remote job status refreshed."""
     await db_session.commit()
     db_session.expunge_all()
     experiment = await db_session.get(Experiment, exp_id)
     assert experiment is not None
-    await experiment.refresh_jobs()
+    await _jobs(db_session).refresh(experiment)
     return experiment
 
 
@@ -63,7 +72,7 @@ async def _job(db_session: AsyncSession) -> GromacsJob:
     await db_session.commit()
     db_session.expunge_all()
     job = (await db_session.execute(GromacsJob.query())).scalars().one()
-    await job.refresh_status()
+    await _jobs(db_session).runs.refresh_status(job)
     return job
 
 

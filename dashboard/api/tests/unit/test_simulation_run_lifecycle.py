@@ -5,14 +5,19 @@ import re
 from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from clients import Clients
+from clients.k8s import K8sClient
+from clients.mdrun import MDRunClient
 from core import db as db_module
 from core.enums import AmberBinary, DeviceType, Engine, EwaldPreset, JobStatus
 from httpx import AsyncClient
 from modules.jobs.amber.models import AmberJob
 from modules.jobs.gmx.models import GromacsJob
+from modules.jobs.service import JobsService
 from modules.models import Experiment
 from modules.simulations.manifest import Simulation
 from modules.simulations.manifest_schema import schema_url
@@ -32,13 +37,6 @@ AMBER_FILES = {
     "reference_structure": "reference.pdb",
     "trajectory": "prod.nc",
 }
-
-
-@pytest.fixture(autouse=True)
-def _model_data_dirs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    """Job models bind config.DATA_DIR at import; rebind it to the test data dir (like test_simulation.py does)."""
-    monkeypatch.setattr("modules.jobs.gmx.models.DATA_DIR", tmp_path)
-    monkeypatch.setattr("modules.jobs.amber.models.DATA_DIR", tmp_path)
 
 
 @pytest.fixture
@@ -68,7 +66,8 @@ async def _fresh[J: (GromacsJob, AmberJob)](db_session: AsyncSession, model: typ
 
 async def _run(db_session: AsyncSession, experiment_id: str, sim_path: str) -> GromacsJob | None:
     db_session.expunge_all()
-    return await GromacsJob.get(db_session, experiment_id, sim_path)
+    stmt = GromacsJob.query().filter_by(experiment_id=experiment_id, simulation_path=sim_path)
+    return (await db_session.execute(stmt)).scalars().first()
 
 
 async def _runs(db_session: AsyncSession, experiment_id: str, sim_path: str) -> list[GromacsJob]:
@@ -81,7 +80,9 @@ async def _sim(db_session: AsyncSession, experiment_id: str, sim_path: str) -> S
     db_session.expunge_all()
     experiment = await db_session.get(Experiment, experiment_id)
     assert experiment is not None
-    await experiment.refresh_jobs()
+    await JobsService(db_session, Clients.create(k8s=K8sClient(core_v1=AsyncMock(), batch_v1=AsyncMock()))).refresh(
+        experiment
+    )
     return Simulation.get(experiment_id, sim_path, experiment)
 
 
@@ -170,22 +171,41 @@ async def _add_amber_job(
 
 
 def _mock_mdrun(mocker: MockerFixture, status: str = "finished") -> dict:
-    """Patch all mdrun client entry points the job models call."""
-    return {
-        "get_gmx": mocker.patch("clients.mdrun.get_gmx_job", return_value={"id": "x", "status": status}),
-        "get_amber": mocker.patch("clients.mdrun.get_amber_job", return_value={"id": "x", "status": status}),
-        "create": mocker.patch(
-            "clients.mdrun.create_gmx_job",
-            side_effect=lambda **_: {"id": str(uuid4()), "status": "running"},
-        ),
-        "create_amber": mocker.patch(
-            "clients.mdrun.create_amber_job",
-            side_effect=lambda **_: {"id": str(uuid4()), "status": "running"},
-        ),
-        "delete_gmx": mocker.patch("clients.mdrun.delete_gmx_job"),
-        "delete_amber": mocker.patch("clients.mdrun.delete_amber_job"),
-        "stop": mocker.patch("clients.mdrun.stop_job"),
+    """Patch every MDRun call the run services make, keyed per engine (`stop` keeps `(job_id, engine)`)."""
+    mocks = {
+        "get_gmx": AsyncMock(return_value={"id": "x", "status": status}),
+        "get_amber": AsyncMock(return_value={"id": "x", "status": status}),
+        "create": AsyncMock(side_effect=lambda **_: {"id": str(uuid4()), "status": "running"}),
+        "create_amber": AsyncMock(side_effect=lambda **_: {"id": str(uuid4()), "status": "running"}),
+        "delete_gmx": AsyncMock(),
+        "delete_amber": AsyncMock(),
+        "stop": AsyncMock(),
     }
+
+    async def get_job(_client: MDRunClient, engine: str, job_id: str) -> dict:
+        return await mocks[f"get_{engine}"](job_id)
+
+    async def delete_job(_client: MDRunClient, engine: str, job_id: str) -> None:
+        await mocks[f"delete_{engine}"](job_id)
+
+    async def stop_job(_client: MDRunClient, engine: str, job_id: str) -> None:
+        await mocks["stop"](job_id, engine)
+
+    async def create_gmx_job(_client: MDRunClient, **kwargs: object) -> dict:
+        return await mocks["create"](**kwargs)
+
+    async def create_amber_job(_client: MDRunClient, **kwargs: object) -> dict:
+        return await mocks["create_amber"](**kwargs)
+
+    mocker.patch.multiple(
+        MDRunClient,
+        get_job=get_job,
+        delete_job=delete_job,
+        stop_job=stop_job,
+        create_gmx_job=create_gmx_job,
+        create_amber_job=create_amber_job,
+    )
+    return mocks
 
 
 def _stop_mocks(mocker: MockerFixture, engine: str = "gmx") -> dict:

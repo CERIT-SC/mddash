@@ -16,8 +16,6 @@ from core.validators import check_path
 from modules.simulations.manifest_schema import resolve_schema_url, schema_url
 
 if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
     from modules.experiments.models import Experiment
 
 logger = logging.getLogger(__name__)
@@ -124,7 +122,7 @@ def _safe_default_path(name: str) -> str:
     return f"{safe_name}{SIMULATION_SUFFIX}"
 
 
-class _JobRows(NamedTuple):
+class JobRows(NamedTuple):
     """Job rows for one ``simulation_path``. This is the single source of the job-model set."""
 
     tuner: list[Any]
@@ -132,13 +130,13 @@ class _JobRows(NamedTuple):
     analysis: list[Any]
 
 
-def _experiment_jobs(experiment: "Experiment", simulation_path: str) -> _JobRows:
+def experiment_jobs(experiment: "Experiment", simulation_path: str) -> JobRows:
     """Collect the experiment's loaded job rows that reference one simulation."""
 
     def rows(jobs: list[Any]) -> list[Any]:
         return [job for job in jobs if job.simulation_path == simulation_path]
 
-    return _JobRows(
+    return JobRows(
         tuner=rows(experiment.tuner_jobs),
         simulation=rows(experiment.simulation_jobs),
         analysis=rows(experiment.analysis_jobs),
@@ -215,10 +213,10 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         self._experiment = experiment
         self._resolved: dict[str, str] | None = None
         self._validation: tuple[bool, list[str], list[str]] | None = None
-        self._memo_jobs: _JobRows | None = None
+        self._memo_jobs: JobRows | None = None
         self._memo_step: tuple[int, str] | None = None
 
-    def _cached_jobs(self) -> _JobRows:
+    def _cached_jobs(self) -> JobRows:
         """
         Job rows for this simulation, collected once per instance.
 
@@ -228,7 +226,7 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         if self._experiment is None:
             raise RuntimeError(f"Simulation {self.simulation_path} has no experiment to read jobs from")
         if self._memo_jobs is None:
-            self._memo_jobs = _experiment_jobs(self._experiment, self.simulation_path)
+            self._memo_jobs = experiment_jobs(self._experiment, self.simulation_path)
         return self._memo_jobs
 
     @property
@@ -651,32 +649,27 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return cls(experiment_id, simulation_path, raw=content, experiment=experiment)
 
-    @classmethod
-    async def delete(cls, session: "AsyncSession", experiment: "Experiment", simulation_path: str) -> None:
+    @staticmethod
+    def existing_path(experiment_id: str, simulation_path: str) -> str:
         """
-        Delete a simulation manifest and cascade-delete all related jobs.
-
-        Removes TunerJob, SimulationJob, and AnalysisJob records (and their K8s resources), then removes the manifest file. Data files are left untouched.
+        Normalize and check the path of an existing manifest.
 
         Raises:
             BadRequest: If the path is unsafe or does not end with '.simulation.json'.
             NotFound: If the manifest file does not exist.
         """
-        experiment_id = experiment.id
         simulation_path = Path(simulation_path).as_posix()
         check_path(simulation_path, DATA_DIR / experiment_id)
         if not simulation_path.endswith(SIMULATION_SUFFIX):
             raise BadRequest(f"Path must end with '{SIMULATION_SUFFIX}'.")
-        simulation_file = DATA_DIR / experiment_id / simulation_path
-        if not simulation_file.is_file():
+        if not (DATA_DIR / experiment_id / simulation_path).is_file():
             raise NotFound(f"Simulation '{simulation_path}' not found.")
+        return simulation_path
 
-        jobs = _experiment_jobs(experiment, simulation_path)
-        for job in (*jobs.tuner, *jobs.simulation, *jobs.analysis):
-            await job.delete()
-            await session.delete(job)
-        await session.commit()
-
+    @staticmethod
+    def remove_file(experiment_id: str, simulation_path: str) -> None:
+        """Delete the manifest file, read-only or not (data files are left untouched)."""
+        simulation_file = DATA_DIR / experiment_id / simulation_path
         try:
             if not os.access(simulation_file, os.W_OK):
                 simulation_file.chmod(WRITABLE_MODE)

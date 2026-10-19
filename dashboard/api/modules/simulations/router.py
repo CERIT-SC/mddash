@@ -1,17 +1,15 @@
 from http import HTTPStatus
 from typing import Annotated
 
-import anyio
 from core.config import API_PREFIX
-from core.dependencies import SessionDep
 from core.responses import problems
 from fastapi import APIRouter, Path, Response
 from pydantic import TypeAdapter
 
 from modules.experiments.dependencies import ExperimentDep
-from modules.models import Simulation
 from modules.simulations.schemas import Simulation as SimulationOut
 from modules.simulations.schemas import SimulationWrite
+from modules.simulations.service import SimulationServiceDep
 
 router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/simulations", tags=["Simulations"])
 
@@ -26,14 +24,9 @@ _simulations = TypeAdapter(list[SimulationOut])
     response_description="Simulations",
     responses=problems(),
 )
-async def list_simulations(session: SessionDep, experiment: ExperimentDep) -> list[SimulationOut]:
+async def list_simulations(experiment: ExperimentDep, service: SimulationServiceDep) -> list[SimulationOut]:
     """List all simulations of an experiment."""
-    await experiment.refresh_jobs()
-    result = await anyio.to_thread.run_sync(
-        lambda: _simulations.validate_python([s.to_dict() for s in Simulation.list(experiment.id, experiment)])
-    )
-    await session.commit()
-    return result
+    return _simulations.validate_python(await service.list_simulations(experiment))
 
 
 @router.post(
@@ -44,14 +37,11 @@ async def list_simulations(session: SessionDep, experiment: ExperimentDep) -> li
     response_description="Created simulation",
     responses=problems(400, 404, 409),
 )
-async def create_simulation(session: SessionDep, experiment: ExperimentDep, body: SimulationWrite) -> SimulationOut:
+async def create_simulation(
+    experiment: ExperimentDep, service: SimulationServiceDep, body: SimulationWrite
+) -> SimulationOut:
     """Create a new simulation manifest."""
-    await experiment.refresh_jobs()
-    result = await anyio.to_thread.run_sync(
-        lambda: SimulationOut.model_validate(Simulation.write(experiment, body.model_dump()).to_dict())
-    )
-    await session.commit()
-    return result
+    return SimulationOut.model_validate(await service.create(experiment, body.model_dump()))
 
 
 @router.get(
@@ -62,15 +52,10 @@ async def create_simulation(session: SessionDep, experiment: ExperimentDep, body
     responses=problems(404),
 )
 async def get_simulation(
-    session: SessionDep, experiment: ExperimentDep, simulation_path: SimulationPath
+    experiment: ExperimentDep, service: SimulationServiceDep, simulation_path: SimulationPath
 ) -> SimulationOut:
     """Get a single simulation by its experiment-relative path."""
-    await experiment.refresh_jobs()
-    result = await anyio.to_thread.run_sync(
-        lambda: SimulationOut.model_validate(Simulation.get(experiment.id, simulation_path, experiment).to_dict())
-    )
-    await session.commit()
-    return result
+    return SimulationOut.model_validate(await service.get(experiment, simulation_path))
 
 
 @router.patch(
@@ -81,17 +66,10 @@ async def get_simulation(
     responses=problems(400, 404, 409),
 )
 async def update_simulation(
-    session: SessionDep, experiment: ExperimentDep, simulation_path: SimulationPath, body: SimulationWrite
+    experiment: ExperimentDep, service: SimulationServiceDep, simulation_path: SimulationPath, body: SimulationWrite
 ) -> SimulationOut:
     """Edit an unlocked simulation manifest."""
-    await experiment.refresh_jobs()
-    result = await anyio.to_thread.run_sync(
-        lambda: SimulationOut.model_validate(
-            Simulation.update(experiment, simulation_path, body.model_dump()).to_dict()
-        )
-    )
-    await session.commit()
-    return result
+    return SimulationOut.model_validate(await service.update(experiment, simulation_path, body.model_dump()))
 
 
 @router.delete(
@@ -103,6 +81,8 @@ async def update_simulation(
     response_description="Operation completed successfully",
     responses=problems(400, 404),
 )
-async def delete_simulation(session: SessionDep, experiment: ExperimentDep, simulation_path: SimulationPath) -> None:
+async def delete_simulation(
+    experiment: ExperimentDep, service: SimulationServiceDep, simulation_path: SimulationPath
+) -> None:
     """Delete a simulation manifest and cascade-delete all related jobs."""
-    await Simulation.delete(session, experiment, simulation_path)
+    await service.delete(experiment, simulation_path)

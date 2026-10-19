@@ -3,7 +3,7 @@ Experiment source acquisition utilities.
 
 Standalone functions for fetching, validating, and importing experiment files
 from PDB IDs, direct URLs, InvenioRDM repositories, and MDPosit projects.
-Used by the ``Experiment`` factory methods (``from_pdb``, ``from_repo``).
+Used by ``ExperimentService`` when creating experiments.
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from urllib.parse import urljoin, urlparse
 import anyio
 import httpx
 from clients import mdposit
-from clients.http import client
 from core.config import DATA_DIR
 from core.errors import ApiError, BadRequest, InternalServerError, NotFound
 from core.validators import validate_fetch_target, validate_http_url
@@ -43,7 +42,7 @@ def list_simulations(experiment: Experiment) -> list[Simulation]:
     return Simulation.list(experiment.id, experiment)
 
 
-async def fetch_pdb(url: str, *, max_redirects: int = 5) -> httpx.Response:
+async def fetch_pdb(http: httpx.AsyncClient, url: str, *, max_redirects: int = 5) -> httpx.Response:
     """
     Fetch a PDB URL, following redirects manually so every hop is SSRF-validated.
 
@@ -55,7 +54,7 @@ async def fetch_pdb(url: str, *, max_redirects: int = 5) -> httpx.Response:
     """
     for _ in range(max_redirects + 1):
         await anyio.to_thread.run_sync(validate_fetch_target, url)
-        response = await client().get(url, timeout=30, follow_redirects=False)
+        response = await http.get(url, timeout=30, follow_redirects=False)
         if response.status_code not in _REDIRECT_STATUSES:
             return response
         location = response.headers.get("Location")
@@ -83,11 +82,11 @@ def validate_pdb_content(content: bytes) -> None:
     raise BadRequest("Downloaded content is not a valid PDB file (no ATOM or HETATM records).")
 
 
-async def resolve_repo_link(repo_link: str) -> str:
+async def resolve_repo_link(http: httpx.AsyncClient, repo_link: str) -> str:
     """Follow DOI redirects to reach the final repository URL."""
     resolved = repo_link.strip().rstrip("/")
     if urlparse(resolved).netloc == "doi.org":
-        response = await client().head(resolved, follow_redirects=True, timeout=30)
+        response = await http.head(resolved, follow_redirects=True, timeout=30)
         resolved = str(response.url).rstrip("/")
     return resolved
 
@@ -114,7 +113,7 @@ def _extract_zip_file(zip_path: Path, output_dir: Path) -> None:
         safe_extract_zip(zf, output_dir)
 
 
-async def import_invenio_repo(repo_link: str, experiment_id: str) -> None:
+async def import_invenio_repo(http: httpx.AsyncClient, repo_link: str, experiment_id: str) -> None:
     """
     Download and extract an InvenioRDM-compatible repository (Zenodo, MDRepo, etc.).
 
@@ -131,7 +130,7 @@ async def import_invenio_repo(repo_link: str, experiment_id: str) -> None:
 
     with tempfile.NamedTemporaryFile(suffix=".zip") as tmp_file:
         tmp_path = Path(tmp_file.name)
-        async with client().stream("GET", url, timeout=300) as response:
+        async with http.stream("GET", url, timeout=300) as response:
             if response.status_code == HTTPStatus.NOT_FOUND:
                 raise NotFound(f"Repository '{repo_link}' not found.")
             if response.status_code != HTTPStatus.OK:
@@ -157,7 +156,7 @@ def _move_downloads(downloaded_paths: list[Path], tmp_dir: Path, output_dir: Pat
         move(downloaded_path, destination_path)
 
 
-async def import_mdposit_repo(repo_link: str, experiment_id: str) -> None:
+async def import_mdposit_repo(client: mdposit.MDPositClient, repo_link: str, experiment_id: str) -> None:
     """
     Download an MDPosit project into the experiment directory.
 
@@ -172,10 +171,10 @@ async def import_mdposit_repo(repo_link: str, experiment_id: str) -> None:
     await anyio.Path(output_dir).mkdir(parents=True, exist_ok=True)
 
     try:
-        await mdposit.get_project(accession)
+        await client.get_project(accession)
         with tempfile.TemporaryDirectory(dir=output_dir) as tmp_dir_name:
             tmp_dir = Path(tmp_dir_name)
-            downloaded_paths = await mdposit.download_project(accession, tmp_dir)
+            downloaded_paths = await client.download_project(accession, tmp_dir)
             await anyio.to_thread.run_sync(_move_downloads, downloaded_paths, tmp_dir, output_dir)
     except ValueError as exc:
         raise BadRequest(str(exc)) from exc

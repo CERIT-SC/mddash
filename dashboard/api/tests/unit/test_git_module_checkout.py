@@ -8,8 +8,8 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from clients.git import GitClient
 from core.errors import InternalServerError, NotFound
-from core.utils import download_git_repo_module
 
 _real_exec = asyncio.create_subprocess_exec
 
@@ -65,7 +65,7 @@ def _is_clone(cmd: tuple[str, ...]) -> bool:
 
 
 class TestDownloadGitRepoModule:
-    """Tests for download_git_repo_module (sparse checkout of a subdirectory)."""
+    """Tests for GitClient.clone_module (sparse checkout of a subdirectory)."""
 
     async def test_copies_only_selected_module_contents_into_target(self, tmp_path: Path) -> None:
         """Only the selected module directory's contents should appear in target_dir."""
@@ -73,7 +73,7 @@ class TestDownloadGitRepoModule:
         _make_real_repo(repo, "gromacs/protein", "amber/protein")
         target = tmp_path / "target"
 
-        await download_git_repo_module(str(repo), "gromacs/protein", target)
+        await GitClient().clone_module(str(repo), "gromacs/protein", target)
 
         assert (target / "notebook.ipynb").read_text() == "nb"
         assert (target / "gromacs.schema.json").read_text() == "{}"
@@ -87,7 +87,7 @@ class TestDownloadGitRepoModule:
         _make_real_repo(repo, "gromacs/protein", "amber/protein")
 
         with pytest.raises(NotFound):
-            await download_git_repo_module(str(repo), "does/not/exist", tmp_path / "target")
+            await GitClient().clone_module(str(repo), "does/not/exist", tmp_path / "target")
 
     @pytest.mark.parametrize(
         "stderr",
@@ -99,10 +99,10 @@ class TestDownloadGitRepoModule:
     ) -> None:
         """Clone failures must not leak the access token in exceptions or logs."""
         with (
-            patch("core.utils.asyncio.create_subprocess_exec", _exec_with(lambda _cmd: _FakeProcess(1, stderr))),
+            patch("clients.git.asyncio.create_subprocess_exec", _exec_with(lambda _cmd: _FakeProcess(1, stderr))),
             pytest.raises(InternalServerError) as exc_info,
         ):
-            await download_git_repo_module(
+            await GitClient().clone_module(
                 "https://github.com/owner/repo.git", "gromacs/protein", tmp_path / "target", access_token="ghp_secret"
             )
 
@@ -121,8 +121,8 @@ class TestDownloadGitRepoModule:
             if _is_clone(cmd):
                 captured.append(cmd)
 
-        with patch("core.utils.asyncio.create_subprocess_exec", _exec_with(capture)):
-            await download_git_repo_module(str(repo), "gromacs/protein", tmp_path / "target")
+        with patch("clients.git.asyncio.create_subprocess_exec", _exec_with(capture)):
+            await GitClient().clone_module(str(repo), "gromacs/protein", tmp_path / "target")
 
         assert captured, "expected at least one git clone invocation"
         assert "--no-checkout" in captured[0]
@@ -143,8 +143,8 @@ class TestDownloadGitRepoModule:
                     return _FakeProcess(1, "fatal: filter not supported")
             return None
 
-        with patch("core.utils.asyncio.create_subprocess_exec", _exec_with(flaky)):
-            await download_git_repo_module(str(repo), "gromacs/protein", target)
+        with patch("clients.git.asyncio.create_subprocess_exec", _exec_with(flaky)):
+            await GitClient().clone_module(str(repo), "gromacs/protein", target)
 
         assert len(clones) == 2
         assert (target / "notebook.ipynb").exists()
@@ -158,10 +158,10 @@ class TestDownloadGitRepoModule:
             return _FakeProcess(0, hang=True)
 
         with (
-            patch("core.utils.GIT_CLONE_TIMEOUT", 0.05),
-            patch("core.utils.asyncio.create_subprocess_exec", _exec_with(hang)),
+            patch("clients.git.GIT_CLONE_TIMEOUT", 0.05),
+            patch("clients.git.asyncio.create_subprocess_exec", _exec_with(hang)),
             pytest.raises(InternalServerError, match="timed out"),
         ):
-            await download_git_repo_module("https://github.com/owner/repo.git", "gromacs/protein", tmp_path / "t")
+            await GitClient().clone_module("https://github.com/owner/repo.git", "gromacs/protein", tmp_path / "t")
 
         assert len(calls) == 1

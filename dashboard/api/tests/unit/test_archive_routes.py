@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from core.errors import ApiError, Conflict
 from httpx import AsyncClient
+from modules.archive.service import ArchiveService
 from modules.models import Experiment, Notebook
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +19,7 @@ async def _experiment(db_session: AsyncSession) -> None:
 
 class TestArchiveRoute:
     async def test_conflicts_surface_as_409_problem(self, client: AsyncClient) -> None:
-        with patch.object(Experiment, "archive", AsyncMock(side_effect=Conflict("live jobs running"))):
+        with patch.object(ArchiveService, "archive", AsyncMock(side_effect=Conflict("live jobs running"))):
             response = await client.post("/dash/api/experiments/abcde/archive")
 
         assert response.status_code == 409
@@ -27,7 +28,7 @@ class TestArchiveRoute:
 
     async def test_gate_conflicts_carry_the_contract_token(self, client: AsyncClient) -> None:
         error = ApiError(409, "live jobs running", "urn:mddash:archive-conflict")
-        with patch.object(Experiment, "archive", AsyncMock(side_effect=error)):
+        with patch.object(ArchiveService, "archive", AsyncMock(side_effect=error)):
             response = await client.post("/dash/api/experiments/abcde/archive")
 
         assert response.status_code == 409
@@ -36,7 +37,7 @@ class TestArchiveRoute:
         assert "solution" not in body  # conflict details already imply the fix
 
     async def test_success_returns_202(self, client: AsyncClient) -> None:
-        with patch.object(Experiment, "archive", AsyncMock(return_value="attempt-1")):
+        with patch.object(ArchiveService, "archive", AsyncMock(return_value="attempt-1")):
             response = await client.post("/dash/api/experiments/abcde/archive")
 
         assert response.status_code == 202
@@ -49,7 +50,7 @@ class TestArchiveRoute:
 
 class TestRestoreRoute:
     async def test_success_returns_202(self, client: AsyncClient) -> None:
-        with patch.object(Experiment, "restore", AsyncMock(return_value="attempt-2")):
+        with patch.object(ArchiveService, "restore", AsyncMock(return_value="attempt-2")):
             response = await client.post("/dash/api/experiments/abcde/restore")
 
         assert response.status_code == 202
@@ -65,7 +66,7 @@ class TestArchiveStatusRoute:
             "direction": "archive",
             "reason": None,
         }
-        with patch.object(Experiment, "get_archive_status", AsyncMock(return_value=status)):
+        with patch.object(ArchiveService, "status", AsyncMock(return_value=status)):
             response = await client.get("/dash/api/experiments/abcde/archive/status")
 
         assert response.status_code == 200

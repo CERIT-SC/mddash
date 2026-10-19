@@ -6,12 +6,14 @@ import time
 from collections.abc import MutableMapping
 from dataclasses import dataclass
 from http import HTTPStatus
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import httpx
-from clients.http import client
 from core.cache import mdrepo_status_cache
-from core.config import MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET, MDREPO_TOKEN_URL
+from core.config import MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET
+
+if TYPE_CHECKING:
+    from clients.mdrepo import MDRepoClient
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +44,10 @@ _refresh_lock = asyncio.Lock()
 class MDRepoTokenManager:
     """Valid MDRepo access tokens from the session, refreshing expired ones."""
 
-    def __init__(self, session: MutableMapping[str, Any]) -> None:
-        """Bind to a request session mapping."""
+    def __init__(self, session: MutableMapping[str, Any], mdrepo: "MDRepoClient") -> None:
+        """Bind to a request session mapping and the MDRepo client that refreshes its tokens."""
         self.session = session
+        self._mdrepo = mdrepo
 
     async def get_valid_token(self) -> str | None:
         """Return the access token, refreshed when missing or expired; None when no valid token is obtainable."""
@@ -108,7 +111,7 @@ class MDRepoTokenManager:
             for attempt in range(TOKEN_REFRESH_RETRIES):
                 try:
                     logger.info(f"Attempting token refresh (attempt {attempt + 1}/{TOKEN_REFRESH_RETRIES})")
-                    response = await client().post(MDREPO_TOKEN_URL, data=token_data, timeout=30)
+                    response = await self._mdrepo.request_token(token_data)
                     if response.is_success:
                         return self._store_refreshed(response.json())
 

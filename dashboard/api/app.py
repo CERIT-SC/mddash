@@ -6,7 +6,7 @@ import time
 from collections.abc import AsyncIterator
 
 import anyio
-from clients import http, k8s
+from clients import Clients
 from core.config import API_PREFIX, DATA_DIR, LOG_FORMAT, LOG_LEVEL, MDREPO_CLIENT_SECRET
 from core.db import dispose_engine, init_engine, run_migrations
 from core.errors import register_exception_handlers
@@ -39,7 +39,7 @@ ROUTERS = (system, experiments, publishing, archive, mdrepo, files, simulations,
 
 
 @contextlib.asynccontextmanager
-async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Validate the catalog, migrate the database, and run the du monitor for the app's lifetime."""
     start = time.perf_counter()
     # Validate bundled catalog before migrations so a bad catalog fails fast.
@@ -55,16 +55,18 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         du_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await du_task
-        await http.aclose()
-        await k8s.aclose()
+        await app.state.clients.aclose()
         await dispose_engine()
 
 
-def create_app(*, secure_cookies: bool = True, session_secret: str | None = None) -> FastAPI:
+def create_app(
+    *, clients: Clients | None = None, secure_cookies: bool = True, session_secret: str | None = None
+) -> FastAPI:
     """
     Build the FastAPI application (startup work runs in the lifespan, not at import).
 
     Args:
+        clients: Upstream clients (tests and the demo pass fakes); production clients by default.
         secure_cookies: Mark the session cookie Secure (the local demo serves plain http).
         session_secret: Session signing key; defaults to the MDRepo client secret.
     """
@@ -84,6 +86,7 @@ def create_app(*, secure_cookies: bool = True, session_secret: str | None = None
         redoc_url=None,
         separate_input_output_schemas=False,
     )
+    app.state.clients = clients or Clients.create()
     # MDRepo OAuth tokens live in this signed cookie; without a configured secret
     # (MDRepo disabled) sessions only need to survive this process.
     app.add_middleware(

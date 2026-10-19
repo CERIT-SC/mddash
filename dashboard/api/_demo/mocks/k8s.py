@@ -1,5 +1,5 @@
 """
-Kubernetes client mocking via module mutation.
+Kubernetes client mocking (patches K8sClient methods).
 
 The kubernetes library doesn't use requests internally, so we replace
 module-level functions instead of using HTTP mocking.
@@ -17,7 +17,7 @@ from shutil import rmtree
 from types import SimpleNamespace
 from typing import Any
 
-from clients import k8s
+from clients.k8s import K8sClient
 from core.config import DATA_DIR
 from core.enums import JobStatus, PodStatus
 
@@ -40,6 +40,16 @@ def as_async(fn: Callable[..., Any]) -> Callable[..., Coroutine[Any, Any, Any]]:
         return fn(*args, **kwargs)
 
     return wrapper
+
+
+def _as_method(fn: Callable[..., Any]) -> Callable[..., Coroutine[Any, Any, Any]]:
+    """Expose a sync mock as an async K8sClient method."""
+    wrapped = as_async(fn)
+
+    async def method(_self: K8sClient, *args: Any, **kwargs: Any) -> Any:  # ruff:ignore[any-type]
+        return await wrapped(*args, **kwargs)
+
+    return method
 
 
 def install_k8s_mocks() -> None:
@@ -65,7 +75,7 @@ def install_k8s_mocks() -> None:
         "wait_for_resource_absence": lambda *_a, **_k: True,
     }
     for name, mock in mocks.items():
-        setattr(k8s, name, as_async(mock))
+        setattr(K8sClient, name, _as_method(mock))
 
 
 def _create_job_raw(manifest: dict) -> None:
