@@ -1,11 +1,10 @@
-"""`responses`-style callback registration on top of respx (the API's upstream client is httpx)."""
+"""`responses`-style callback registration served as an httpx transport (the API's HTTP client uses it)."""
 
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
 import httpx
-import respx
 
 
 @dataclass(frozen=True)
@@ -29,22 +28,16 @@ class CallbackRouter:
     """
 
     def __init__(self) -> None:
-        """Create an inactive router."""
-        self._respx = respx.MockRouter(assert_all_called=False, assert_all_mocked=True)
+        """Create a router without routes."""
         self._callbacks: list[tuple[str, str | re.Pattern[str], Callback]] = []
 
     def add_callback(self, method: str, url: str | re.Pattern[str], callback: Callback) -> None:
         """Answer `method url` requests with `callback`."""
         self._callbacks.append((method.upper(), url, callback))
 
-    def add_passthru(self, pattern: re.Pattern[str]) -> None:
-        """Send matching requests to the real network."""
-        self._respx.route(url__regex=pattern.pattern).pass_through()
-
-    def start(self) -> None:
-        """Intercept all httpx traffic (passthrough routes first, callbacks after)."""
-        self._respx.route().mock(side_effect=self._dispatch)
-        self._respx.start()
+    def transport(self) -> httpx.MockTransport:
+        """Transport answering every request from the registered callbacks."""
+        return httpx.MockTransport(self._dispatch)
 
     def _dispatch(self, request: httpx.Request) -> httpx.Response:
         url = str(request.url)

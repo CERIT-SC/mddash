@@ -1,5 +1,5 @@
 """
-Tuner trial log mocking (patches the tuner client class).
+Tuner client fake for trial logs (the tuner jobs themselves are served over the fake HTTP API).
 
 Provides mock implementations for trial stdout/stderr endpoints
 that return simulated GROMACS mdrun output.
@@ -213,10 +213,9 @@ _TRIAL_LOGS = {
 }
 
 
-async def _trial_log(_client: TunerClient, engine: str, job_id: str, trial_id: str, stream: str) -> str:  # ruff:ignore[unused-async]
-    return _TRIAL_LOGS[engine, stream](job_id, trial_id)
+class DemoTunerClient(TunerClient):
+    """Tuner client whose trial logs are simulated engine output."""
 
-
-def install_tuner_log_mocks() -> None:
-    """Replace the tuner client's trial log reads."""
-    TunerClient.trial_log = _trial_log  # type: ignore
+    async def trial_log(self, engine: str, job_id: str, trial_id: str, stream: str) -> str:
+        """Simulate the stdout/stderr of a demo tuning trial."""
+        return _TRIAL_LOGS[engine, stream](job_id, trial_id)

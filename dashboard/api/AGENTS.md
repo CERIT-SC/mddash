@@ -56,4 +56,4 @@ Fully async FastAPI service that orchestrates molecular dynamics experiments acr
 - Binder support: cloned repos may carry `environment.yml`/`requirements.txt`/`postBuild`; the notebook startup hook installs them at `/mddash/{experiment_id}/.binder-env`.
 
 ### Local demo
-- `make demo` runs the real API from `dashboard/api/_demo/` with mocked integrations and seeded data; all seeding, mock, and demo-state details live in `dashboard/api/_demo/AGENTS.md`.
+- `make demo` runs the real API from `dashboard/api/_demo/` with fake upstream clients and seeded data; all seeding, mock, and demo-state details live in `dashboard/api/_demo/AGENTS.md`.

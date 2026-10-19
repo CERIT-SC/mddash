@@ -65,7 +65,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 
 ## Development and feedback loop
 
-- `make demo` runs the real FastAPI app (`dashboard/api/_demo/app.py`, test-style mocks + seeded data) plus the React dev server locally. The demo data dir is wiped and reseeded on every start. Mutations never survive a restart.
+- `make demo` runs the real FastAPI app (`dashboard/api/_demo/app.py`, injected fake upstream clients + seeded data) plus the React dev server locally. The demo data dir is wiped and reseeded on every start. Mutations never survive a restart.
 - Run from repo root before claiming any code is correct. Each must pass before the next:
 
 ```bash

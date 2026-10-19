@@ -1,8 +1,4 @@
-"""
-Demo profile setup for local development.
-
-Seeds deterministic data after the real startup migrations and bypasses MDRepo OAuth.
-"""
+"""Demo profile: seeds deterministic data after the real startup migrations and bypasses MDRepo OAuth."""
 
 import contextlib
 import logging
@@ -19,20 +15,13 @@ from modules.mdrepo.tokens import MDREPO_REFRESH_TOKEN_KEY, MDREPO_TOKEN_EXPIRES
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from .mocks import install_all_mocks
-from .seed import seed_data
+from .seeds import seed_data
 
 logger = logging.getLogger(__name__)
 
 
 def setup_demo_profile(app: FastAPI) -> None:
-    """
-    Install demo mocks, the MDRepo OAuth bypass, and seeding after startup migrations.
-
-    Mocks stay installed process-wide; per-request state is not needed since
-    the demo serves a single user.
-    """
-    install_all_mocks()
+    """Install the MDRepo OAuth bypass and seeding after startup migrations."""
     _install_demo_mdrepo_auth(app)
 
     startup = app.router.lifespan_context
@@ -41,7 +30,7 @@ def setup_demo_profile(app: FastAPI) -> None:
     async def seeded_lifespan(application: FastAPI) -> AsyncIterator[None]:
         async with startup(application):
             await anyio.to_thread.run_sync(_seed)
-            logger.info("Demo profile initialized with real API routes and mocked integrations.")
+            logger.info("Demo profile initialized with real API routes and fake upstream clients.")
             yield
 
     app.router.lifespan_context = seeded_lifespan

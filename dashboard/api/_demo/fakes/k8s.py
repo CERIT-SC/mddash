@@ -1,25 +1,26 @@
 """
-Kubernetes client mocking (patches K8sClient methods).
+In-memory Kubernetes for the demo: notebook pods, analysis Jobs, and upload/archive worker Jobs.
 
-The kubernetes library doesn't use requests internally, so we replace
-module-level functions instead of using HTTP mocking.
-
-Analysis jobs fetch real data from MDposit API for realistic demo data.
+Worker Jobs finish on daemon threads; analysis Jobs finish with real MDPosit data.
 """
 
 import logging
 import re
 import threading
 import time
-from collections.abc import Callable, Coroutine
 from datetime import datetime, timezone
 from shutil import rmtree
 from types import SimpleNamespace
-from typing import Any
 
 from clients.k8s import K8sClient
+from core.cache import mdrepo_status_cache
 from core.config import DATA_DIR
-from core.enums import JobStatus, PodStatus
+from core.enums import JobStatus, NotebookTier, PodStatus
+from modules.archive.status import ArchiveStatus
+from modules.archive.status import write_status as write_archive_status
+from modules.publishing.status import UploadStatus, read_status
+from modules.publishing.status import write_status as write_upload_status
+from modules.publishing.submission import EXPERIMENT_LABEL
 
 from ..analysis_data import start_analysis_thread
 from ..state import E2E, demo_state
@@ -33,60 +34,13 @@ ANALYSIS_JOB_DURATION_SEC = 0.5 if E2E else 3.0
 UPLOAD_JOB_DURATION_SEC = 0.5 if E2E else 4.0
 
 
-def as_async(fn: Callable[..., Any]) -> Callable[..., Coroutine[Any, Any, Any]]:
-    """Expose a sync mock under the async signature of the client function it replaces."""
-
-    async def wrapper(*args: Any, **kwargs: Any) -> Any:  # ruff:ignore[any-type, unused-async]
-        return fn(*args, **kwargs)
-
-    return wrapper
-
-
-def _as_method(fn: Callable[..., Any]) -> Callable[..., Coroutine[Any, Any, Any]]:
-    """Expose a sync mock as an async K8sClient method."""
-    wrapped = as_async(fn)
-
-    async def method(_self: K8sClient, *args: Any, **kwargs: Any) -> Any:  # ruff:ignore[any-type]
-        return await wrapped(*args, **kwargs)
-
-    return method
-
-
-def install_k8s_mocks() -> None:
-    """Install Kubernetes client mocks via module mutation."""
-    mocks: dict[str, Callable[..., Any]] = {
-        # The single pod read notebooks use for both status and start time.
-        "get_pod_info": _get_pod_info,
-        "create_notebook_pod": _create_notebook_pod,
-        "delete_pod": _delete_pod,
-        "create_service": _create_service,
-        "delete_service": _delete_service,
-        "create_job": _create_job,
-        "get_job_status": _get_job_status,
-        "delete_job": _delete_job,
-        "get_job_logs": _get_job_logs,
-        "check_quota_headroom": lambda *_a, **_k: None,
-        "count_notebook_pods": lambda: sum(1 for s in demo_state.notebook_status.values() if s == PodStatus.RUNNING),
-        "ping_resource": lambda *_a, **_k: True,
-        "create_job_raw": _create_job_raw,
-        "wait_for_pod_admission": lambda *_a, **_k: True,
-        "read_job": _read_upload_job,
-        "delete_job_foreground": lambda name: demo_state.upload_jobs.pop(name, None),
-        "wait_for_resource_absence": lambda *_a, **_k: True,
-    }
-    for name, mock in mocks.items():
-        setattr(K8sClient, name, _as_method(mock))
-
-
 def _create_job_raw(manifest: dict) -> None:
     """Simulate the MDRepo upload and archive workers: mark done after a short delay."""
     try:
-        from modules.publishing.submission import EXPERIMENT_LABEL  # ruff:ignore[import-outside-top-level]
-
         experiment_id = manifest["metadata"]["labels"][EXPERIMENT_LABEL]
         job_name = manifest["metadata"]["name"]
         args = manifest["spec"]["template"]["spec"]["containers"][0]["args"]
-    except (KeyError, IndexError, ValueError, ImportError):
+    except (KeyError, IndexError, ValueError):
         return
 
     # Archive worker args start with the mode; the upload worker's with --experiment-id.
@@ -119,38 +73,32 @@ def _finish_archive_job(job_name: str, mode: str, experiment_id: str, attempt_id
     Archive deletes the dir like a verified worker would; restore fabricates a
     minimal dir (there is no demo S3 to fetch from).
     """
-    from modules.archive.status import ArchiveStatus, write_status  # ruff:ignore[import-outside-top-level]
-
     time.sleep(ARCHIVE_JOB_DURATION_SEC)
     demo_state.upload_jobs.pop(job_name, None)
 
     exp_dir = DATA_DIR / experiment_id
     if mode == "archive":
-        write_status(
+        write_archive_status(
             ArchiveStatus(attempt_id=attempt_id, state="completed", direction="archive"), experiment_id, DATA_DIR
         )
         rmtree(exp_dir, ignore_errors=True)
     elif mode == "restore":
         exp_dir.mkdir(parents=True, exist_ok=True)
         (exp_dir / "RESTORED.txt").write_text("Restored from the demo archive (contents simulated).\n")
-        write_status(
+        write_archive_status(
             ArchiveStatus(attempt_id=attempt_id, state="completed", direction="restore"), experiment_id, DATA_DIR
         )
 
 
 def _finish_upload_job(job_name: str, experiment_id: str, mdrepo_id: str) -> None:
-    from modules.publishing.status import UploadStatus, write_status  # ruff:ignore[import-outside-top-level]
-
     time.sleep(UPLOAD_JOB_DURATION_SEC)
     demo_state.upload_jobs.pop(job_name, None)
-
-    from modules.publishing.status import read_status  # ruff:ignore[import-outside-top-level]
 
     queued = read_status(experiment_id, DATA_DIR)
     exp_dir = DATA_DIR / experiment_id
     files = [p for p in exp_dir.rglob("*") if p.is_file()]
     total_bytes = sum(p.stat().st_size for p in files)
-    write_status(
+    write_upload_status(
         UploadStatus(
             attempt_id=queued.attempt_id if queued else "demo-attempt",
             state="completed",
@@ -165,8 +113,6 @@ def _finish_upload_job(job_name: str, experiment_id: str, mdrepo_id: str) -> Non
 
     # Stands in for MDRepo-UI finalization, which the demo lacks; the cache
     # bust makes the next serialization re-sync at once, not after the TTL.
-    from core.cache import mdrepo_status_cache  # ruff:ignore[import-outside-top-level]
-
     demo_state.mdrepo_records[mdrepo_id] = True
     mdrepo_status_cache.clear()
 
@@ -297,3 +243,101 @@ def _get_job_logs(name: str, tail_lines: int = 200) -> str:  # ruff:ignore[unuse
     if status == JobStatus.ERROR.value:
         return "Running MDDB workflow\nError: Failed to fetch analysis data."
     return "Running MDDB workflow\nFetching analysis data..."
+
+
+class DemoK8sClient(K8sClient):
+    """K8sClient answering from `demo_state`; it never loads cluster config."""
+
+    async def get_pod_info(self, name: str) -> "tuple[PodStatus, datetime | None]":
+        """Notebook pod (status, start time) from the demo state."""
+        return _get_pod_info(name)
+
+    async def create_notebook_pod(
+        self,
+        name: str,
+        experiment_id: str,
+        prefix: str,
+        token: str,
+        notebook_resources: dict | None = None,
+        gpu: bool = False,
+        tier: NotebookTier | None = None,
+    ) -> str:
+        """Mark the notebook running."""
+        return _create_notebook_pod(name, experiment_id, prefix, token, notebook_resources, gpu, tier)
+
+    async def delete_pod(self, name: str) -> None:
+        """Mark the notebook down."""
+        _delete_pod(name)
+
+    async def create_service(self, name: str, target_name: str, target_uid: str) -> None:
+        """No-op: notebook routing is not simulated."""
+        _create_service(name, target_name, target_uid)
+
+    async def delete_service(self, name: str) -> None:
+        """No-op: notebook routing is not simulated."""
+        _delete_service(name)
+
+    async def create_job(
+        self, name: str, image: str, experiment_id: str, command: str, resources: dict | None = None
+    ) -> None:
+        """Start an analysis Job that completes on a thread."""
+        _create_job(name, image, experiment_id, command, resources)
+
+    async def get_job_status(self, name: str) -> JobStatus:
+        """Analysis Job status from the demo state."""
+        return _get_job_status(name)
+
+    async def delete_job(self, name: str) -> None:
+        """Forget an analysis Job."""
+        _delete_job(name)
+
+    async def get_job_logs(self, name: str, tail_lines: int = 200) -> str:
+        """Canned analysis Job logs."""
+        return _get_job_logs(name, tail_lines)
+
+    async def check_quota_headroom(
+        self,
+        cpu_request: int,  # ruff:ignore[unused-method-argument]
+        memory_request: int,  # ruff:ignore[unused-method-argument]
+        cpu_limit: int = 0,  # ruff:ignore[unused-method-argument]
+        memory_limit: int = 0,  # ruff:ignore[unused-method-argument]
+    ) -> str | None:
+        """Report quota headroom: the demo namespace never runs out."""
+        return None
+
+    async def count_notebook_pods(self) -> int:
+        """Count the running demo notebooks."""
+        return sum(1 for status in demo_state.notebook_status.values() if status == PodStatus.RUNNING)
+
+    async def ping_resource(self, resource_type: str, name: str) -> bool:  # ruff:ignore[unused-method-argument]
+        """Report every resource as existing."""
+        return True
+
+    async def create_job_raw(self, manifest: dict) -> None:
+        """Run an upload/archive worker Job on a thread."""
+        _create_job_raw(manifest)
+
+    async def wait_for_pod_admission(
+        self,
+        label_selector: str,  # ruff:ignore[unused-method-argument]
+        max_wait: int = 30,  # ruff:ignore[unused-method-argument]
+    ) -> bool:
+        """Admit worker pods at once."""
+        return True
+
+    async def read_job(self, name: str) -> object | None:
+        """Upload/archive worker Job while its thread runs."""
+        return _read_upload_job(name)
+
+    async def delete_job_foreground(self, name: str) -> None:
+        """Forget a worker Job."""
+        demo_state.upload_jobs.pop(name, None)
+
+    async def wait_for_resource_absence(
+        self,
+        resource_type: str,  # ruff:ignore[unused-method-argument]
+        name: str,  # ruff:ignore[unused-method-argument]
+        max_wait: int = 30,  # ruff:ignore[unused-method-argument]
+    ) -> bool:
+        """Report deleted resources as gone at once."""
+        return True

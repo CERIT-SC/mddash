@@ -73,24 +73,18 @@ def _configure_demo_env() -> None:
 
 
 def create_demo_app() -> "FastAPI":
-    """
-    Create the real API app configured for local demo with mocked dependencies (uvicorn factory).
-
-    Mocks must be installed before the app is imported: K8s is neutralized by
-    patching the `K8sClient` methods, not by patching the kubernetes library.
-    """
+    """Create the real API app over fake upstream clients with seeded demo data (uvicorn factory)."""
+    # Config reads the environment at import, so the app imports after it is set.
     _configure_demo_env()
-
-    from _demo.mocks import install_all_mocks  # ruff:ignore[import-outside-top-level]
-    from _demo.profile import setup_demo_profile  # ruff:ignore[import-outside-top-level]
-
-    install_all_mocks()
 
     from app import create_app  # ruff:ignore[import-outside-top-level]
 
+    from _demo.fakes import demo_clients  # ruff:ignore[import-outside-top-level]
+    from _demo.profile import setup_demo_profile  # ruff:ignore[import-outside-top-level]
+
     # Fresh key per start: stale signed cookies die with the wiped demo data,
     # so a mock MDRepo session must be re-established after every restart.
-    app = create_app(secure_cookies=False, session_secret=secrets.token_hex(32))
+    app = create_app(clients=demo_clients(), secure_cookies=False, session_secret=secrets.token_hex(32))
     setup_demo_profile(app)
     return app
 

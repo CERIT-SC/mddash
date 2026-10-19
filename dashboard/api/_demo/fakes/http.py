@@ -1,8 +1,8 @@
 """
-HTTP mocking for external services via a respx-backed callback router.
+Fake upstream HTTP APIs (MDRun, tuner, MDRepo, MDPosit, MetaDump, Caddy, downloads).
 
-Intercepts all httpx calls at the transport level, providing realistic
-responses based on actual API specifications.
+Served by the callback router as the transport of the API's HTTP client, with
+responses shaped after the real API specifications.
 """
 
 import json
@@ -55,13 +55,8 @@ DEMO_RATE_GPU_HOUR = 3.0
 DEMO_RATE_GB_RAM_HOUR = 0.005
 
 
-def install_http_mocks(rsps: CallbackRouter) -> None:
-    """
-    Install all HTTP response mocks.
-
-    Args:
-        rsps: The RequestsMock instance to register mocks on.
-    """
+def register_upstreams(rsps: CallbackRouter) -> None:
+    """Register every fake upstream API on the router."""
     _install_mdrun_mocks(rsps)
     _install_tuner_mocks(rsps)
     _install_mdrepo_mocks(rsps)
@@ -800,8 +795,8 @@ def _install_mdposit_mocks(rsps: CallbackRouter) -> None:
     """
     Install deterministic MDPosit mocks for offline demo imports.
 
-    Analysis endpoints are a deliberate exception: they pass through to the
-    real MDPosit API so the seeded analysis graphs carry real data.
+    Analysis payloads are not served here: the demo's analysis threads fetch
+    them from the real MDPosit API so the seeded graphs carry real data.
     """
 
     def get_project(request: MockRequest) -> tuple[int, dict[str, str], str]:
@@ -860,18 +855,6 @@ def _install_mdposit_mocks(rsps: CallbackRouter) -> None:
         re.compile(rf"{project_base_pattern}/(?P<accession>[^/]+)$"),
         callback=get_project,
     )
-    # Analyses fetch real data from MDPosit on purpose (see docstring above).
-    # The public accession 302-redirects to the canonical host (different
-    # accession), and requests follows it — allow both URL shapes through.
-    rsps.add_passthru(re.compile(_mdposit_analysis_pattern()))
-    rsps.add_passthru(re.compile(r"https://irb-dev\.mddbr\.eu/api/rest/v1/projects/[^/]+/analyses/[^/?#]+"))
-
-
-def _mdposit_analysis_pattern() -> str:
-    if MDPOSIT_REST_URL:
-        base = re.escape(MDPOSIT_REST_URL.rstrip("/"))
-        return rf"{base}/projects/[^/]+/analyses/[^/?#]+"
-    return r"https://mdposit\.mddbr\.eu/api/rest/v1/projects/[^/]+/analyses/[^/?#]+"
 
 
 def _mdposit_project_base_pattern() -> str:
