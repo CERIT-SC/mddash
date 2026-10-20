@@ -23,7 +23,12 @@ class AmberJob(SimulationJob):
     """AMBER molecular dynamics simulation job."""
 
     __tablename__ = "amber_jobs"
-    __mapper_args__ = {"polymorphic_identity": Engine.AMBER, "polymorphic_load": "selectin"}  # ruff:ignore[mutable-class-default]  # SQLAlchemy declares it an instance attribute
+    # SQLAlchemy declares it an instance attribute.
+    __mapper_args__ = {  # ruff:ignore[mutable-class-default]
+        "polymorphic_identity": Engine.AMBER,
+        "polymorphic_load": "selectin",
+        "confirm_deleted_rows": False,
+    }
     MDRUN_ENGINE: ClassVar[str] = "amber"
 
     RESULT_EXTENSIONS: ClassVar[list[str]] = ["nc", "rst7", "mdinfo", "out"]
@@ -137,7 +142,9 @@ class AmberJob(SimulationJob):
             case "stderr":
                 log_file = self._stderr_log
             case _:
-                raise BadRequest(description=f"Invalid log type: {type}")
+                raise BadRequest(
+                    description=f"Invalid log type '{type}'. Use 'mdout', 'mdinfo', 'stdout', or 'stderr'."
+                )
 
         try:
             if tail_lines:
@@ -151,7 +158,7 @@ class AmberJob(SimulationJob):
         except UnicodeDecodeError:
             raise UnprocessableEntity(description=f"Unable to decode log file: {log_file.name}")
         except OSError as e:
-            raise InternalServerError(description=f"System error reading log file: {e}")
+            raise InternalServerError(description="System error reading log file.") from e
 
     def cleanup_files(self) -> None:
         """Remove this run's result files and logs, keeping files the manifest uses as inputs."""

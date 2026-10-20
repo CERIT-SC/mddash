@@ -13,9 +13,9 @@ from modules.simulations.manifest import Simulation, experiment_jobs
 
 class SimulationService:
     """
-    Manifest reads and writes; serialized dicts read the experiment's jobs, so those are refreshed first.
+    Manifest reads and writes; a manifest's lock/step/live state reads the experiment's jobs, so those are refreshed first.
 
-    Manifest and file work runs in a worker thread; values the job properties cache are committed after.
+    Manifest file work runs in a worker thread; routers serialize with `dump()`, which commits the job values cached on the rows.
     """
 
     def __init__(self, session: SessionDep, clients: ClientsDep) -> None:
@@ -23,39 +23,25 @@ class SimulationService:
         self._session = session
         self._jobs = JobsService(session, clients)
 
-    async def list_simulations(self, experiment: Experiment) -> list[dict]:
+    async def list_simulations(self, experiment: Experiment) -> list[Simulation]:
         """All simulations of an experiment (invalid and unreadable ones included)."""
         await self._jobs.refresh(experiment)
-        result = await anyio.to_thread.run_sync(
-            lambda: [s.to_dict() for s in Simulation.list(experiment.id, experiment)]
-        )
-        await self._session.commit()
-        return result
+        return await anyio.to_thread.run_sync(Simulation.list, experiment.id, experiment)
 
-    async def get(self, experiment: Experiment, simulation_path: str) -> dict:
+    async def get(self, experiment: Experiment, simulation_path: str) -> Simulation:
         """One simulation by its experiment-relative path."""
         await self._jobs.refresh(experiment)
-        result = await anyio.to_thread.run_sync(
-            lambda: Simulation.get(experiment.id, simulation_path, experiment).to_dict()
-        )
-        await self._session.commit()
-        return result
+        return await anyio.to_thread.run_sync(Simulation.get, experiment.id, simulation_path, experiment)
 
-    async def create(self, experiment: Experiment, payload: dict) -> dict:
+    async def create(self, experiment: Experiment, payload: dict) -> Simulation:
         """Write a new manifest."""
         await self._jobs.refresh(experiment)
-        result = await anyio.to_thread.run_sync(lambda: Simulation.write(experiment, payload).to_dict())
-        await self._session.commit()
-        return result
+        return await anyio.to_thread.run_sync(Simulation.write, experiment, payload)
 
-    async def update(self, experiment: Experiment, simulation_path: str, payload: dict) -> dict:
+    async def update(self, experiment: Experiment, simulation_path: str, payload: dict) -> Simulation:
         """Edit an unlocked manifest."""
         await self._jobs.refresh(experiment)
-        result = await anyio.to_thread.run_sync(
-            lambda: Simulation.update(experiment, simulation_path, payload).to_dict()
-        )
-        await self._session.commit()
-        return result
+        return await anyio.to_thread.run_sync(Simulation.update, experiment, simulation_path, payload)
 
     async def delete(self, experiment: Experiment, simulation_path: str) -> None:
         """

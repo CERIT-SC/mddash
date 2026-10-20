@@ -3,13 +3,14 @@
 from typing import Annotated, Any
 
 from core.enums import Engine
+from core.schemas import OrmModel
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 
 def _string_roles(value: Any) -> Any:  # ruff:ignore[any-type]
-    """Hand-edited manifests may hold non-string role values; those are reported as errors, not echoed."""
+    """Hand-edited manifests may hold non-string or empty role values; those are reported as errors, not echoed."""
     if isinstance(value, dict):
-        return {role: path for role, path in value.items() if isinstance(path, str)}
+        return {role: path for role, path in value.items() if isinstance(path, str) and path}
     return value
 
 
@@ -29,10 +30,8 @@ class SimulationWrite(BaseModel):
     extra_args: str = ""
 
 
-class Simulation(BaseModel):
+class Simulation(OrmModel):
     """A simulation manifest with its validation, lock, and wizard state."""
-
-    model_config = ConfigDict(extra="forbid")
 
     simulation_path: str
     name: str

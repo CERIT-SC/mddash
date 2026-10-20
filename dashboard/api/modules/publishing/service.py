@@ -5,6 +5,7 @@ from http import HTTPStatus
 from typing import Annotated
 
 import anyio
+import httpx
 from core.cache import mdrepo_status_cache
 from core.config import (
     DATA_DIR,
@@ -26,7 +27,12 @@ from modules.jobs.service import JobsService
 from modules.mdrepo.tokens import MDRepoCredentials, MDRepoTokenManager
 from modules.publishing import mdposit
 from modules.publishing.status import REASON_JOB_MISSING, UploadState, read_status
-from modules.publishing.submission import delete_upload_resources, read_upload_state, submit_upload_job
+from modules.publishing.submission import (
+    SubmissionError,
+    delete_upload_resources,
+    read_upload_state,
+    submit_upload_job,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +45,10 @@ def needs_mdrepo_sync(experiment: Experiment) -> bool:
     return bool(experiment.mdrepo_id) and experiment.mdrepo_id not in mdrepo_status_cache
 
 
-def _mdrepo_unavailable() -> ApiError:
+def _mdrepo_unavailable(description: str = "Failed to create experiment in MDRepo.") -> ApiError:
     return ApiError(
         HTTPStatus.INTERNAL_SERVER_ERROR,
-        "Failed to create experiment in MDRepo.",
+        description,
         "urn:mddash:upstream-unavailable",
         "MDRepo didn't respond as expected; try again in a moment.",
     )
@@ -146,7 +152,7 @@ class PublishingService:
 
         # If an upload is already active, return it (idempotent retry).
         if upload_state in UploadState.active():
-            status = read_status(experiment.id, DATA_DIR)
+            status = await anyio.to_thread.run_sync(read_status, experiment.id, DATA_DIR)
             return {
                 "id": experiment.mdrepo_id or "",
                 "links": {},
@@ -176,22 +182,26 @@ class PublishingService:
             raise _mdrepo_unavailable()
 
         # Submit the upload Job: writes queued status, creates Secret+Job, waits for admission.
-        attempt_id = await submit_upload_job(
-            self._k8s,
-            experiment_id=experiment.id,
-            mdrepo_id=mdrepo_id,
-            credential_data={
-                "access_token": access_token,
-                "refresh_token": credentials.refresh_token,
-                "expires_at": credentials.expires_at,
-                "client_id": MDREPO_CLIENT_ID,
-                "client_secret": MDREPO_CLIENT_SECRET,
-                "api_url": MDREPO_API_URL,
-                "record_name": MDREPO_RECORD_NAME,
-                "token_url": MDREPO_TOKEN_URL,
-            },
-            data_dir=DATA_DIR,
-        )
+        try:
+            attempt_id = await submit_upload_job(
+                self._k8s,
+                experiment_id=experiment.id,
+                mdrepo_id=mdrepo_id,
+                credential_data={
+                    "access_token": access_token,
+                    "refresh_token": credentials.refresh_token,
+                    "expires_at": credentials.expires_at,
+                    "client_id": MDREPO_CLIENT_ID,
+                    "client_secret": MDREPO_CLIENT_SECRET,
+                    "api_url": MDREPO_API_URL,
+                    "record_name": MDREPO_RECORD_NAME,
+                    "token_url": MDREPO_TOKEN_URL,
+                },
+                data_dir=DATA_DIR,
+            )
+        except SubmissionError as e:
+            logger.error("Upload Job submission failed for experiment %s: %s", experiment.id, e)
+            raise _mdrepo_unavailable("The MDRepo upload could not be started.") from e
 
         logger.info("Durable upload Job submitted for experiment %s (attempt %s)", experiment.id, attempt_id)
         return {
@@ -212,7 +222,13 @@ class PublishingService:
         ]
         simulations = await self._metadump.extract_metadata_bulk(tpr_paths) if tpr_paths else []
 
-        mdrepo_experiment = await self._mdrepo.create_experiment(access_token, community, {"simulations": simulations})
+        try:
+            mdrepo_experiment = await self._mdrepo.create_experiment(
+                access_token, community, {"simulations": simulations}
+            )
+        except (ValueError, httpx.HTTPError) as e:
+            logger.error("MDRepo draft creation failed for experiment %s: %s", experiment.id, e)
+            raise _mdrepo_unavailable() from e
         mdrepo_id = mdrepo_experiment.get("id")
         if mdrepo_id is None:
             raise _mdrepo_unavailable()
@@ -226,7 +242,7 @@ class PublishingService:
 
     async def status(self, experiment: Experiment) -> dict:
         """Return the durable MDRepo upload status, merging the PVC document with live Job state."""
-        status = read_status(experiment.id, DATA_DIR)
+        status = await anyio.to_thread.run_sync(read_status, experiment.id, DATA_DIR)
         effective_state = await self.upload_state(experiment.id)
 
         result: dict = {

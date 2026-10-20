@@ -1,6 +1,7 @@
 """MDRepo OAuth2 token management with on-demand refresh; tokens live in the signed session cookie."""
 
 import asyncio
+import hashlib
 import logging
 import time
 from collections.abc import MutableMapping
@@ -9,7 +10,7 @@ from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, cast
 
 import httpx
-from core.cache import mdrepo_status_cache
+from core.cache import mdrepo_spent_grants, mdrepo_status_cache
 from core.config import MDREPO_CLIENT_ID, MDREPO_CLIENT_SECRET
 
 if TYPE_CHECKING:
@@ -37,8 +38,14 @@ class MDRepoCredentials:
     expires_at: str
 
 
-# Serializes refreshes: concurrent requests would otherwise each spend the single-use refresh token.
+# Serializes refreshes; with `mdrepo_spent_grants` it keeps concurrent requests from each spending the single-use
+# refresh token. Each request holds its own snapshot of the session cookie, so the lock alone cannot tell a
+# waiter that its grant was already spent: the winner's token response is reused instead of re-posting.
 _refresh_lock = asyncio.Lock()
+
+
+def _grant_key(refresh_token: str) -> str:
+    return hashlib.sha256(refresh_token.encode()).hexdigest()
 
 
 class MDRepoTokenManager:
@@ -101,6 +108,14 @@ class MDRepoTokenManager:
             if self.session.get(MDREPO_TOKEN_KEY) and not self.is_token_expired():
                 logger.info("Token was refreshed concurrently, using existing token")
                 return True
+            if (spent := mdrepo_spent_grants.get(_grant_key(refresh_token))) is not None:
+                token_response, received_at = spent
+                logger.info("Refresh token already spent by a concurrent request, reusing its tokens")
+                elapsed = time.time() - received_at
+                return self._store_refreshed({
+                    **token_response,
+                    "expires_in": token_response.get("expires_in", 3600) - elapsed,
+                })
 
             token_data = {
                 "grant_type": "refresh_token",
@@ -113,7 +128,9 @@ class MDRepoTokenManager:
                     logger.info(f"Attempting token refresh (attempt {attempt + 1}/{TOKEN_REFRESH_RETRIES})")
                     response = await self._mdrepo.request_token(token_data)
                     if response.is_success:
-                        return self._store_refreshed(response.json())
+                        token_response = response.json()
+                        mdrepo_spent_grants[_grant_key(refresh_token)] = (token_response, time.time())
+                        return self._store_refreshed(token_response)
 
                     logger.error(f"Token refresh failed: {response.status_code} - {response.text}")
                     if response.status_code == HTTPStatus.BAD_REQUEST:

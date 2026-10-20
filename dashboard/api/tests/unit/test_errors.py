@@ -43,7 +43,7 @@ class TestProblemResponse:
         err = BadRequest("Custom bad request message")
         assert err.status_code == HTTPStatus.BAD_REQUEST
         assert err.problem_type == "urn:mddash:bad-request"
-        assert err.description == "Custom bad request message"
+        assert err.detail == "Custom bad request message"
 
     def test_flatten_validation_joins_locations(self) -> None:
         """Locations drop the body/query prefix and are joined with semicolons."""

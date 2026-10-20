@@ -1,10 +1,9 @@
 from http import HTTPStatus
-from typing import Annotated
 
 from core.config import API_PREFIX
+from core.dependencies import SessionDep, SimulationPath, dump, dump_many
 from core.responses import problems
-from fastapi import APIRouter, Path, Response
-from pydantic import TypeAdapter
+from fastapi import APIRouter, Response
 
 from modules.experiments.dependencies import ExperimentDep
 from modules.simulations.schemas import Simulation as SimulationOut
@@ -12,9 +11,6 @@ from modules.simulations.schemas import SimulationWrite
 from modules.simulations.service import SimulationServiceDep
 
 router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/simulations", tags=["Simulations"])
-
-SimulationPath = Annotated[str, Path(min_length=1)]
-_simulations = TypeAdapter(list[SimulationOut])
 
 
 @router.get(
@@ -24,9 +20,11 @@ _simulations = TypeAdapter(list[SimulationOut])
     response_description="Simulations",
     responses=problems(),
 )
-async def list_simulations(experiment: ExperimentDep, service: SimulationServiceDep) -> list[SimulationOut]:
+async def list_simulations(
+    session: SessionDep, experiment: ExperimentDep, service: SimulationServiceDep
+) -> list[SimulationOut]:
     """List all simulations of an experiment."""
-    return _simulations.validate_python(await service.list_simulations(experiment))
+    return await dump_many(session, SimulationOut, await service.list_simulations(experiment))
 
 
 @router.post(
@@ -38,10 +36,10 @@ async def list_simulations(experiment: ExperimentDep, service: SimulationService
     responses=problems(400, 404, 409),
 )
 async def create_simulation(
-    experiment: ExperimentDep, service: SimulationServiceDep, body: SimulationWrite
+    session: SessionDep, experiment: ExperimentDep, service: SimulationServiceDep, body: SimulationWrite
 ) -> SimulationOut:
     """Create a new simulation manifest."""
-    return SimulationOut.model_validate(await service.create(experiment, body.model_dump()))
+    return await dump(session, SimulationOut, await service.create(experiment, body.model_dump()))
 
 
 @router.get(
@@ -52,10 +50,10 @@ async def create_simulation(
     responses=problems(404),
 )
 async def get_simulation(
-    experiment: ExperimentDep, service: SimulationServiceDep, simulation_path: SimulationPath
+    session: SessionDep, experiment: ExperimentDep, service: SimulationServiceDep, simulation_path: SimulationPath
 ) -> SimulationOut:
     """Get a single simulation by its experiment-relative path."""
-    return SimulationOut.model_validate(await service.get(experiment, simulation_path))
+    return await dump(session, SimulationOut, await service.get(experiment, simulation_path))
 
 
 @router.patch(
@@ -66,10 +64,14 @@ async def get_simulation(
     responses=problems(400, 404, 409),
 )
 async def update_simulation(
-    experiment: ExperimentDep, service: SimulationServiceDep, simulation_path: SimulationPath, body: SimulationWrite
+    session: SessionDep,
+    experiment: ExperimentDep,
+    service: SimulationServiceDep,
+    simulation_path: SimulationPath,
+    body: SimulationWrite,
 ) -> SimulationOut:
     """Edit an unlocked simulation manifest."""
-    return SimulationOut.model_validate(await service.update(experiment, simulation_path, body.model_dump()))
+    return await dump(session, SimulationOut, await service.update(experiment, simulation_path, body.model_dump()))
 
 
 @router.delete(

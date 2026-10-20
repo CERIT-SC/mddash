@@ -1,12 +1,12 @@
 """Production run lifecycle shared by the MDRun engines (GROMACS, AMBER)."""
 
-import asyncio
 import logging
 from collections.abc import Sequence
 from typing import ClassVar, cast
 
 import anyio
 from core.cache import simulation_status_cache
+from core.concurrency import gather
 from core.dependencies import ClientsDep, SessionDep
 from core.enums import JobStatus
 from core.errors import BadRequest, Conflict, NotFound
@@ -55,7 +55,7 @@ class RunService[J: SimulationJob]:
         """List the experiment's runs of this engine, status refreshed."""
         stmt = self.model.query().filter_by(experiment_id=experiment_id)
         jobs = cast("Sequence[J]", (await self._session.execute(stmt)).scalars().all())
-        await asyncio.gather(*(self.refresh_status(job) for job in jobs))
+        await gather(*(self.refresh_status(job) for job in jobs))
         return jobs
 
     async def find(self, experiment_id: str, simulation_path: str) -> J | None:

@@ -65,6 +65,9 @@ def _component_renames(components: dict[str, Any]) -> dict[str, str]:
         short = name.rsplit("__", 1)[-1]
         if short != name and short not in components:
             renames[name] = short
+    targets = list(renames.values())
+    if collisions := {t for t in targets if targets.count(t) > 1}:
+        raise ValueError(f"Schema names collide after shortening: {sorted(collisions)}; rename a schema class.")
     return renames
 
 

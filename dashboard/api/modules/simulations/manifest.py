@@ -369,32 +369,6 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         jobs = self._cached_jobs()
         return any(j.is_live for j in jobs.tuner) or any(j.is_live for j in jobs.simulation)
 
-    def to_dict(self) -> dict:
-        """
-        Serialize to the API response dict.
-
-        Returns:
-            Dict with simulation_path, name, engine, files, resolved_files,
-            extra_args, locked, valid, errors, missing_files, step, status.
-        """
-        valid, errors, missing = self._run_validation()
-        return {
-            "simulation_path": self.simulation_path,
-            "name": self.name,
-            "engine": self.engine,
-            "files": self.files,
-            "resolved_files": self.resolved_files,
-            "extra_args": self.extra_args,
-            "locked": self.locked,
-            "valid": valid,
-            "errors": errors,
-            "missing_files": missing,
-            "step": self.step,
-            "status": self.status,
-            "live": self.live,
-            "last_activity": self.last_activity,
-        }
-
     def resolve_role(self, role: str) -> Path:
         """
         Resolve a file role to an absolute Path; the file need not exist yet (e.g. the trajectory).
@@ -456,6 +430,14 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             raise BadRequest(
                 description=f"Missing files for: {', '.join(repr(property_label(r)) for r in missing_files)}."
             )
+
+    @classmethod
+    def load_ready(cls, experiment: "Experiment", simulation_path: str, roles: list[str]) -> "Simulation":
+        """Load a manifest whose `roles` files exist (404 missing, 400 invalid), resolving its files; sync file I/O."""
+        simulation = cls.get(experiment.id, simulation_path, experiment)
+        simulation.require_files(roles)
+        _ = simulation.resolved_files
+        return simulation
 
     def mark_readonly(self) -> None:
         """Best-effort chmod the manifest read-only (0444)."""

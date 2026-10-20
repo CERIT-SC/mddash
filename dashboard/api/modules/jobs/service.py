@@ -1,9 +1,9 @@
 """All jobs of an experiment (tuner, production runs, analyses) behind one facade."""
 
-import asyncio
 from collections.abc import Iterable
 from typing import Annotated
 
+from core.concurrency import gather
 from core.dependencies import ClientsDep, SessionDep
 from fastapi import Depends
 
@@ -29,7 +29,7 @@ class JobsService:
 
     async def refresh(self, experiment: Experiment) -> None:
         """Fetch the remote status of all tuner, simulation, and analysis jobs."""
-        await asyncio.gather(
+        await gather(
             *(self.tuner.refresh(job) for job in experiment.tuner_jobs),
             *(self.runs.refresh_status(job) for job in experiment.simulation_jobs),
             *(self.analysis.refresh_status(job) for job in experiment.analysis_jobs),

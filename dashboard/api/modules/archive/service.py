@@ -70,7 +70,7 @@ class ArchiveService:
         in-flight doc with no live Job failed. Mutates the row only on terminal
         transitions (the caller commits).
         """
-        doc = read_status(experiment.id, DATA_DIR)
+        doc = await anyio.to_thread.run_sync(read_status, experiment.id, DATA_DIR)
         dir_exists = await anyio.Path(DATA_DIR / experiment.id).exists()
 
         if experiment.archived_at is not None:
@@ -186,7 +186,7 @@ class ArchiveService:
             )
         if await anyio.Path(DATA_DIR / experiment.id).exists():
             # Worker-gate mirror: non-completed restore doc = our resumable leftover; else clobber protection.
-            doc = read_status(experiment.id, DATA_DIR)
+            doc = await anyio.to_thread.run_sync(read_status, experiment.id, DATA_DIR)
             retryable = (
                 doc is not None
                 and doc.direction == ArchiveDirection.RESTORE.value
@@ -217,7 +217,7 @@ class ArchiveService:
         """Archive/restore status for the status endpoint: reconciliation result + status doc fields."""
         archive_state = await self.refresh_state(experiment)
         await self._session.commit()
-        doc = read_status(experiment.id, DATA_DIR)
+        doc = await anyio.to_thread.run_sync(read_status, experiment.id, DATA_DIR)
         return {
             "experiment_id": experiment.id,
             "archive_state": archive_state,

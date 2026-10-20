@@ -106,10 +106,10 @@ class TestDownloadGitRepoModule:
                 "https://github.com/owner/repo.git", "gromacs/protein", tmp_path / "target", access_token="ghp_secret"
             )
 
-        assert "ghp_secret" not in exc_info.value.description
+        assert "ghp_secret" not in exc_info.value.detail
         assert "ghp_secret" not in caplog.text
         if "Password" in stderr:
-            assert "***" in exc_info.value.description
+            assert "***" in exc_info.value.detail
 
     async def test_uses_partial_clone_and_sparse_checkout(self, tmp_path: Path) -> None:
         """The clone should use --no-checkout with blob filtering and sparse checkout."""

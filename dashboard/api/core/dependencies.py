@@ -26,6 +26,7 @@ def get_clients(request: Request) -> Clients:
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 ClientsDep = Annotated[Clients, Depends(get_clients)]
 ExperimentIdPath = Annotated[str, Path(min_length=1)]
+SimulationPath = Annotated[str, Path(min_length=1)]
 
 
 async def dump[M: BaseModel](session: AsyncSession, model: type[M], obj: object) -> M:

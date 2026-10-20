@@ -9,7 +9,6 @@ from core.config import DATA_DIR, S3_BUCKET
 from core.enums import DeviceType, Engine, JobStatus
 from core.errors import BadRequest
 from core.utils import strip_run_control_args
-from core.validators import check_log_type
 from fastapi import Depends
 from sqlalchemy.exc import IntegrityError
 
@@ -21,7 +20,7 @@ from modules.simulations.manifest import Simulation, check_simulation_path
 
 logger = logging.getLogger(__name__)
 
-# TODO: remove as soon as user testing is done (also drop the persisted nsteps). Force all runs to 500k steps.
+# TODO: drop after user testing (#166), with the persisted nsteps. Forces all runs to 500k steps.
 FORCED_NSTEPS = 500000
 
 
@@ -45,8 +44,7 @@ class GromacsService(RunService[GromacsJob]):
         experiment = await get_experiment_or_404(self._session, experiment_id)
         await self.replace_terminal_run(experiment.id, simulation_path)
 
-        simulation = Simulation.get(experiment.id, simulation_path, experiment)
-        simulation.require_files(["run_input"])
+        simulation = await anyio.to_thread.run_sync(Simulation.load_ready, experiment, simulation_path, ["run_input"])
         tpr_rel_path = simulation.resolved_files["run_input"]
         extra_args = f"{strip_run_control_args(simulation.extra_args)} -nsteps {FORCED_NSTEPS}"
 
@@ -95,8 +93,7 @@ class GromacsService(RunService[GromacsJob]):
         if latest.is_live:
             raise BadRequest("The run is still active; stop it before extending.")
 
-        simulation = Simulation.get(experiment.id, simulation_path, experiment)
-        simulation.require_files(["run_input"])
+        simulation = await anyio.to_thread.run_sync(Simulation.load_ready, experiment, simulation_path, ["run_input"])
         tpr_rel_path = simulation.resolved_files["run_input"]
         deffnm = tpr_rel_path.removesuffix(".tpr")
 
@@ -172,9 +169,7 @@ class GromacsService(RunService[GromacsJob]):
     async def log(self, experiment_id: str, simulation_path: str, log_type: str, tail: int) -> str:
         """Tail of one of the run's log streams (`gmx`, `stdout`, `stderr`)."""
         job = await self.get(experiment_id, simulation_path, refresh=False)
-        log_type = log_type.lower()
-        check_log_type(log_type)
-        return await anyio.to_thread.run_sync(job.get_log, log_type, tail)
+        return await anyio.to_thread.run_sync(job.get_log, log_type.lower(), tail)
 
 
 GromacsServiceDep = Annotated[GromacsService, Depends()]

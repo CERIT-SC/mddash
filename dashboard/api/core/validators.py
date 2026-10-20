@@ -148,20 +148,6 @@ def validate_analysis_topology_path(
     return topology_path
 
 
-def check_log_type(log_type: str) -> None:
-    """
-    Validate that log_type is one of the allowed values.
-
-    Args:
-        log_type: The log type to validate ('gmx', 'stdout', or 'stderr').
-
-    Raises:
-        BadRequest: If the log type is invalid.
-    """
-    if log_type not in {"gmx", "stdout", "stderr"}:
-        raise BadRequest("Invalid log type. Use 'gmx', 'stdout', or 'stderr'.")
-
-
 def check_positive_int(value: str, param_name: str = "value", max_value: int | None = None) -> None:
     """
     Validate that a string represents a positive integer within bounds.

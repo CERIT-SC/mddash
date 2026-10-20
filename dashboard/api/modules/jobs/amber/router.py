@@ -2,10 +2,10 @@ from http import HTTPStatus
 from typing import Annotated
 
 from core.config import API_PREFIX
-from core.dependencies import ExperimentIdPath, SessionDep, dump, dump_many
+from core.dependencies import ExperimentIdPath, SessionDep, SimulationPath, dump, dump_many
 from core.errors import BadRequest
 from core.responses import problems
-from fastapi import APIRouter, Path, Query, Response
+from fastapi import APIRouter, Query, Response
 
 from modules.jobs.amber.schemas import AmberJob as AmberJobOut
 from modules.jobs.amber.schemas import AmberJobRequest
@@ -13,8 +13,6 @@ from modules.jobs.amber.service import AmberServiceDep
 from modules.simulations.manifest import check_simulation_path
 
 router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/amber", tags=["AMBER"])
-
-SimulationPath = Annotated[str, Path(min_length=1)]
 
 
 @router.get(

@@ -1,19 +1,22 @@
 """Tuner jobs: submission, status mirroring, stop (trials preserved), and trial logs."""
 
-import asyncio
 import logging
 from collections.abc import Sequence
 from http import HTTPStatus
+from pathlib import Path
 from typing import Annotated
 
+import anyio
 import httpx
 from core.cache import tuner_last_known_status, tuner_status_cache
+from core.concurrency import gather
 from core.dependencies import ClientsDep, SessionDep
 from core.enums import Engine, JobStatus
 from core.errors import ApiError, NotFound
 from fastapi import Depends
 
 from modules.experiments.dependencies import get_experiment_or_404
+from modules.experiments.models import Experiment
 from modules.jobs.tuner.models import TunerJob
 from modules.simulations.manifest import Simulation
 
@@ -27,6 +30,19 @@ def _engine(job_or_engine: TunerJob | Engine) -> str:
     """Tuner API path segment of the job's engine."""
     engine = job_or_engine.engine if isinstance(job_or_engine, TunerJob) else job_or_engine
     return engine.value.lower()
+
+
+def _launch_files(experiment: Experiment, simulation_path: str) -> tuple[Simulation, dict[str, Path]]:
+    """Load the manifest and map its run inputs to the tuner's form fields (sync: file I/O)."""
+    if experiment.engine == Engine.GMX:
+        simulation = Simulation.load_ready(experiment, simulation_path, ["run_input"])
+        return simulation, {"file": simulation.resolve_role("run_input")}
+    simulation = Simulation.load_ready(experiment, simulation_path, ["topology", "coordinates", "control"])
+    return simulation, {
+        "prmtop": simulation.resolve_role("topology"),
+        "inpcrd": simulation.resolve_role("coordinates"),
+        "mdin": simulation.resolve_role("control"),
+    }
 
 
 class TunerService:
@@ -83,7 +99,7 @@ class TunerService:
     async def list_jobs(self, experiment_id: str) -> Sequence[TunerJob]:
         """List the experiment's tuner jobs, refreshed."""
         jobs = (await self._session.execute(TunerJob.query().filter_by(experiment_id=experiment_id))).scalars().all()
-        await asyncio.gather(*(self.refresh(job) for job in jobs))
+        await gather(*(self.refresh(job) for job in jobs))
         return jobs
 
     async def find(self, experiment_id: str, simulation_path: str) -> TunerJob | None:
@@ -129,23 +145,11 @@ class TunerService:
             await self._session.delete(existing)
             await self._session.commit()
 
-        simulation = Simulation.get(experiment.id, simulation_path, experiment)
-        simulation.require_files(
-            ["run_input"] if experiment.engine == Engine.GMX else ["topology", "coordinates", "control"]
-        )
+        simulation, files = await anyio.to_thread.run_sync(_launch_files, experiment, simulation_path)
         extra_args = simulation.extra_args
         if experiment.engine == Engine.GMX:
             extra_args = f"{extra_args} -nsteps {FORCED_GMX_NSTEPS}".strip()
 
-        files = (
-            {"file": simulation.resolve_role("run_input")}
-            if experiment.engine == Engine.GMX
-            else {
-                "prmtop": simulation.resolve_role("topology"),
-                "inpcrd": simulation.resolve_role("coordinates"),
-                "mdin": simulation.resolve_role("control"),
-            }
-        )
         try:
             response = await self._tuner.submit(_engine(experiment.engine), files, nsteps=nsteps, extra_args=extra_args)
         except httpx.HTTPError as exc:

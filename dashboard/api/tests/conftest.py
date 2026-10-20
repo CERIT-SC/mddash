@@ -6,6 +6,7 @@ HTTP (unmocked upstream calls fail loudly), and AsyncMock Kubernetes clients.
 """
 
 import os
+import shutil
 import sys
 import tempfile
 from collections.abc import AsyncIterator, Iterator
@@ -46,7 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Point every DATA_DIR binding (`from core.config import DATA_DIR`) at the test's tmp_path."""
     for name, module in list(sys.modules.items()):
-        bound = name == "app" or name.startswith(("core.", "modules."))
+        bound = name == "app" or name.startswith(("core.", "modules.", "_demo."))
         if bound and isinstance(module, ModuleType) and hasattr(module, "DATA_DIR"):
             monkeypatch.setattr(module, "DATA_DIR", tmp_path)
     return tmp_path
@@ -56,6 +57,7 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 def _clear_caches() -> Iterator[None]:
     caches = (
         cache.mdrepo_status_cache,
+        cache.mdrepo_spent_grants,
         cache.tuner_status_cache,
         cache.tuner_last_known_status,
         cache.analysis_status_cache,
@@ -103,24 +105,39 @@ async def clients(mock_k8s: tuple[AsyncMock, AsyncMock]) -> AsyncIterator[Client
 def http_mock() -> Iterator[respx.MockRouter]:
     """Mock all outgoing HTTP; a request without a matching route fails like an unreachable upstream."""
     with respx.mock(assert_all_called=False) as router:
-        resolve = router.aresolve
+        resolve, aresolve = router.resolve, router.aresolve
 
-        async def unreachable_unless_mocked(request: httpx.Request) -> object:
+        def unreachable_unless_mocked(request: httpx.Request) -> object:
             try:
-                return await resolve(request)
+                return resolve(request)
             except respx.models.AllMockedAssertionError as e:
                 raise httpx.ConnectError(str(e), request=request) from e
 
-        router.aresolve = unreachable_unless_mocked  # ty: ignore[invalid-assignment]
+        async def aunreachable_unless_mocked(request: httpx.Request) -> object:
+            try:
+                return await aresolve(request)
+            except respx.models.AllMockedAssertionError as e:
+                raise httpx.ConnectError(str(e), request=request) from e
+
+        router.resolve = unreachable_unless_mocked  # ty: ignore[invalid-assignment]
+        router.aresolve = aunreachable_unless_mocked  # ty: ignore[invalid-assignment]
         yield router
 
 
+@pytest.fixture(scope="session")
+def migrated_db(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """Build a database with the migrations, like production (once per worker; tests copy it)."""
+    path = tmp_path_factory.mktemp("migrated") / "template.db"
+    db.run_migrations(path)
+    return path
+
+
 @pytest.fixture
-async def db_session(tmp_path: Path) -> AsyncIterator[AsyncSession]:
+async def db_session(tmp_path: Path, migrated_db: Path) -> AsyncIterator[AsyncSession]:
     """Provide a session on the test's own database; requests use separate sessions on the same file."""
-    engine = db.init_engine(tmp_path / "test.db")
-    async with engine.begin() as conn:
-        await conn.run_sync(db.Base.metadata.create_all)
+    path = tmp_path / "test.db"
+    shutil.copyfile(migrated_db, path)
+    engine = db.init_engine(path)
     async with db.session_factory()() as session:
         yield session
     await engine.dispose()

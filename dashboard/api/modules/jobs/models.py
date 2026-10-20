@@ -11,6 +11,8 @@ from core.utils import count_lines
 from sqlalchemy import select
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 
+from modules.jobs.status import RecordedStatus
+
 if TYPE_CHECKING:
     from sqlalchemy import Select
 
@@ -20,7 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class SimulationJob(Base):
+class SimulationJob(RecordedStatus, Base):
     """
     Base class for molecular dynamics simulation jobs using Joined Table Inheritance.
 
@@ -31,8 +33,10 @@ class SimulationJob(Base):
     __tablename__ = "simulation_jobs"
     # One run per simulation; extend swaps the row in place so the PK stays the
     # current MDRun job; a second pod can never append to one trajectory.
+    # A losing concurrent extend deletes a row the winner already replaced; the unique
+    # constraint fails its insert, so the missed DELETE is expected (confirm_deleted_rows).
     __table_args__ = (sa.UniqueConstraint("experiment_id", "simulation_path"),)
-    __mapper_args__ = {"polymorphic_on": "engine"}  # ruff:ignore[mutable-class-default]  # SQLAlchemy declares it an instance attribute
+    __mapper_args__ = {"polymorphic_on": "engine", "confirm_deleted_rows": False}  # ruff:ignore[mutable-class-default]  # SQLAlchemy declares it an instance attribute
 
     # MDRun API path segment of this engine (`/jobs/<engine>/...`)
     MDRUN_ENGINE: ClassVar[str]
@@ -61,32 +65,15 @@ class SimulationJob(Base):
     _nsteps: Mapped[int | None] = mapped_column("nsteps", sa.Integer, nullable=True)
     # Performance (ns/day)
     _performance: Mapped[float | None] = mapped_column("performance", sa.Float, nullable=True)
-    # Last successfully-fetched non-UNKNOWN status (fallback when MDRun API is unavailable)
-    _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", sa.Enum(JobStatus), nullable=True)
 
     # Back-reference to the parent experiment
     # Never lazy-loads (async); queries for jobs alone load it via `query()`.
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="simulation_jobs", lazy="raise_on_sql")
 
-    # Transient: status fetched by RunService.refresh_status() for this request
-    _fetched_status: JobStatus | None = None
-
     @classmethod
     def query(cls) -> "Select[tuple[Self]]":
         """Select rows of this job type together with their experiments."""
         return select(cls).options(selectinload(cls.experiment))
-
-    def record_status(self, fetched: JobStatus) -> bool:
-        """Store the status read for this request; True when it persisted as the new offline fallback."""
-        changed = fetched not in {self._last_known_status, JobStatus.UNKNOWN}
-        if changed:
-            self._last_known_status = fetched
-        self._fetched_status = fetched
-        return changed
-
-    def record_status_unavailable(self) -> None:
-        """Serve the last known status (MDRun could not be read)."""
-        self._fetched_status = self._last_known_status or JobStatus.UNKNOWN
 
     def mark_status(self, status: JobStatus) -> None:
         """Persist a status MDRun reported for an action (stop)."""

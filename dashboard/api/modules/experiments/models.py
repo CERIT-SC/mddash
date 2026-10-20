@@ -1,4 +1,3 @@
-import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -17,9 +16,6 @@ if TYPE_CHECKING:
     from modules.jobs.tuner.models import TunerJob
     from modules.notebooks.models import Notebook
     from modules.simulations.manifest import Simulation
-
-
-logger = logging.getLogger(__name__)
 
 
 class Experiment(Base):

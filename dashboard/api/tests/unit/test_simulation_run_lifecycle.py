@@ -310,6 +310,42 @@ class TestSubmit:
         assert response.status_code == HTTPStatus.CREATED
         mdrun["create"].assert_called_once()
 
+    async def test_submit_race_loser_gets_409_and_its_mdrun_job_is_deleted(
+        self, client: AsyncClient, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        """A concurrent submit committing first wins; the loser rolls back and tears down its MDRun job."""
+        mdrun = _mock_mdrun(mocker)
+        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+
+        async def concurrent_winner(**kwargs: object) -> dict:
+            async with db_module.session_factory()() as rival_session:
+                rival_session.add(
+                    GromacsJob(
+                        id="rival-run",
+                        experiment_id=experiment_id,
+                        simulation_path=sim_path,
+                        np=8,
+                        ntomp=1,
+                        pme=DeviceType.CPU,
+                        nb=DeviceType.GPU,
+                        engine=Engine.GMX,
+                        _last_known_status=JobStatus.PENDING,
+                    )
+                )
+                await rival_session.commit()
+            return {"id": "losing-run", "status": "running"}
+
+        mdrun["create"].side_effect = concurrent_winner
+
+        response = await client.post(
+            f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}",
+            json={"np": 4, "ntomp": 2, "pme": "cpu", "nb": "gpu"},
+        )
+
+        assert response.status_code == HTTPStatus.CONFLICT
+        mdrun["delete_gmx"].assert_called_once_with("losing-run")
+        assert {j.id for j in await _runs(db_session, experiment_id, sim_path)} == {"rival-run"}
+
     @pytest.mark.parametrize("status", [JobStatus.PENDING, JobStatus.RUNNING])
     async def test_submit_live_run_conflicts(
         self,

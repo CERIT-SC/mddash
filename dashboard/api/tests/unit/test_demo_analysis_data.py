@@ -8,7 +8,6 @@ import pytest
 import respx
 from _demo import analysis_data
 from _demo.state import demo_state
-from core.config import DATA_DIR
 from core.enums import JobStatus
 from pytest_mock import MockerFixture
 
@@ -59,7 +58,7 @@ class TestWriteAnalysisResult:
 
 class TestMaterializeAnalysis:
     def _written(self, experiment_id: str, filename: str) -> list:
-        return list((DATA_DIR / experiment_id).rglob(filename))
+        return list((analysis_data.DATA_DIR / experiment_id).rglob(filename))
 
     def test_writes_the_base_payload(self, mocker: MockerFixture) -> None:
         mocker.patch.object(analysis_data, "fetch_analysis_payload", return_value={"x": 1})

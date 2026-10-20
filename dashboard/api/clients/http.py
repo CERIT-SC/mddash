@@ -8,7 +8,9 @@ DEFAULT_TIMEOUT = 30
 
 def new_client() -> httpx.AsyncClient:
     """Create the process-wide HTTP client every upstream client shares (one connection pool)."""
-    return httpx.AsyncClient(timeout=DEFAULT_TIMEOUT)
+    # Redirects are followed like the former requests client did; the SSRF-checked PDB
+    # download opts out per call and validates every hop itself.
+    return httpx.AsyncClient(timeout=DEFAULT_TIMEOUT, follow_redirects=True)
 
 
 def detail_of(response: httpx.Response) -> str:

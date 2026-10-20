@@ -2,7 +2,7 @@ from http import HTTPStatus
 from typing import Annotated
 
 from core.config import API_PREFIX
-from core.dependencies import ExperimentIdPath, SessionDep, dump, dump_many
+from core.dependencies import ExperimentIdPath, SessionDep, SimulationPath, dump, dump_many
 from core.responses import problems
 from fastapi import APIRouter, Path, Response
 
@@ -12,7 +12,6 @@ from modules.jobs.tuner.service import TunerServiceDep
 
 router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/tuner", tags=["Tuner"])
 
-SimulationPath = Annotated[str, Path(min_length=1)]
 TrialId = Annotated[str, Path(min_length=1)]
 
 

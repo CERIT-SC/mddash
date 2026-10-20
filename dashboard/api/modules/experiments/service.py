@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 
 import anyio
 from clients import mdposit
+from core.concurrency import gather
 from core.config import DATA_DIR, DEFAULT_NOTEBOOKS_REPO
 from core.dependencies import ClientsDep, SessionDep
 from core.enums import Engine, SourceType
@@ -71,11 +72,11 @@ class ExperimentService:
     async def refresh_all(self, experiments: Sequence[Experiment], tokens: MDRepoTokenManager) -> None:
         """Fetch the remote state of `experiments` (no DB I/O; the caller commits)."""
         token = await self._mdrepo_token(experiments, tokens)
-        await asyncio.gather(*(self.refresh(experiment, token) for experiment in experiments))
+        await gather(*(self.refresh(experiment, token) for experiment in experiments))
 
     async def refresh(self, experiment: Experiment, mdrepo_token: str | None = None) -> None:
         """Fetch every remote state the experiment's serialization reads (no DB I/O; the caller commits)."""
-        await asyncio.gather(
+        await gather(
             self.notebooks.refresh(experiment.notebook) if experiment.notebook is not None else asyncio.sleep(0),
             self.jobs.refresh(experiment),
             self.publishing.sync_mdrepo_status(experiment, mdrepo_token),

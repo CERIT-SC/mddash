@@ -1,6 +1,7 @@
 import time
 from typing import Literal
 
+import anyio
 from clients.k8s import parse_memory
 from core.config import API_PREFIX, DATA_DIR, MAX_NOTEBOOKS, PVC_SIZE
 from core.enums import NotebookTier as NotebookTierValue
@@ -67,7 +68,7 @@ async def get_notebook_modules() -> list[NotebookModule]:
 async def get_metrics() -> Metrics:
     """Storage used/limit in bytes (used is null until the du monitor measures) and server uptime."""
     return Metrics(
-        storage_used_bytes=get_du_size(DATA_DIR),
+        storage_used_bytes=await anyio.to_thread.run_sync(get_du_size, DATA_DIR),
         storage_limit_bytes=parse_memory(PVC_SIZE),
         uptime_seconds=round(time.monotonic() - _STARTED_AT),
     )

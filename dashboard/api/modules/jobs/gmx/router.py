@@ -2,18 +2,16 @@ from http import HTTPStatus
 from typing import Annotated
 
 from core.config import API_PREFIX
-from core.dependencies import ExperimentIdPath, SessionDep, dump, dump_many
+from core.dependencies import ExperimentIdPath, SessionDep, SimulationPath, dump, dump_many
 from core.enums import DeviceType
 from core.responses import problems
-from fastapi import APIRouter, Path, Query, Response
+from fastapi import APIRouter, Query, Response
 
 from modules.jobs.gmx.schemas import ExtendGromacsJobRequest, GromacsJobRequest
 from modules.jobs.gmx.schemas import GromacsJob as GromacsJobOut
 from modules.jobs.gmx.service import GromacsServiceDep
 
 router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/gmx", tags=["GROMACS"])
-
-SimulationPath = Annotated[str, Path(min_length=1)]
 
 
 @router.get(

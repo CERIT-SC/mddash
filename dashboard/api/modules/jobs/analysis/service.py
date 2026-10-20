@@ -1,6 +1,5 @@
 """Analysis K8s Jobs: submission (one analysis set per simulation), status, logs, and cleanup."""
 
-import asyncio
 import logging
 import uuid
 from collections.abc import Sequence
@@ -11,6 +10,7 @@ from typing import Annotated
 import anyio
 from clients.k8s import parse_cpu, parse_memory
 from core.cache import analysis_status_cache
+from core.concurrency import gather
 from core.config import ANALYSIS_IMAGE, ANALYSIS_RESOURCES
 from core.dependencies import ClientsDep, SessionDep
 from core.enums import AnalysisType, Engine, JobStatus, PreprocessingMode
@@ -93,7 +93,7 @@ class AnalysisService:
         if simulation_path:
             stmt = stmt.filter_by(simulation_path=simulation_path)
         jobs = (await self._session.execute(stmt)).scalars().all()
-        await asyncio.gather(*(self.refresh_status(job) for job in jobs))
+        await gather(*(self.refresh_status(job) for job in jobs))
         return jobs
 
     async def get(self, experiment_id: str, job_id: str, *, refresh: bool = True) -> AnalysisJob:

@@ -137,7 +137,7 @@ async def test_job_logs_decode_raw_bytes(mock_k8s: tuple[AsyncMock, AsyncMock], 
     """Logs are read unpreloaded and decoded with replacement (truncation can split a character)."""
     core, _ = mock_k8s
     core.list_namespaced_pod.return_value = MagicMock(items=[MagicMock()])
-    raw = MagicMock()
+    raw = MagicMock(status=200)
     raw.read = AsyncMock(return_value=b"Running MDDB workflow \xff")
     core.read_namespaced_pod_log.return_value = raw
 
@@ -145,6 +145,21 @@ async def test_job_logs_decode_raw_bytes(mock_k8s: tuple[AsyncMock, AsyncMock], 
 
     assert logs.startswith("Running MDDB workflow")
     assert core.read_namespaced_pod_log.call_args.kwargs["_preload_content"] is False
+
+
+@pytest.mark.parametrize("status", [400, 404])
+async def test_job_logs_error_status_reads_as_empty(
+    mock_k8s: tuple[AsyncMock, AsyncMock], clients: Clients, status: int
+) -> None:
+    """Unpreloaded reads don't raise: an initializing or vanished pod must not surface Status JSON as logs."""
+    core, _ = mock_k8s
+    core.list_namespaced_pod.return_value = MagicMock(items=[MagicMock()])
+    raw = MagicMock(status=status)
+    raw.read = AsyncMock(return_value=b'{"kind":"Status","message":"pod not found"}')
+    core.read_namespaced_pod_log.return_value = raw
+
+    assert await clients.k8s.get_job_logs("analysis-x") == ""
+    raw.release.assert_called_once()
 
 
 class TestCreateServiceOwnerReference:

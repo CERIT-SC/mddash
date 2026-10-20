@@ -3,6 +3,7 @@ from typing import Annotated
 
 import anyio
 from core.config import API_PREFIX, DATA_DIR
+from core.dependencies import ExperimentIdPath
 from core.errors import NotFound
 from core.responses import problems
 from core.schemas import FileInfo
@@ -22,7 +23,7 @@ router = APIRouter(prefix=f"{API_PREFIX}/experiments/{{experiment_id}}/files", t
     responses=problems(400),
 )
 async def list_files(
-    experiment_id: Annotated[str, Path(min_length=1)],
+    experiment_id: ExperimentIdPath,
     ext: Annotated[str | None, Query(description="Comma-separated file extensions")] = None,
 ) -> list[FileInfo]:
     """List files in an experiment directory, optionally filtered by extension."""
@@ -51,9 +52,7 @@ async def list_files(
         **problems(400, 404),
     },
 )
-async def download(
-    experiment_id: Annotated[str, Path(min_length=1)], path: Annotated[str, Path(min_length=1)]
-) -> FileResponse:
+async def download(experiment_id: ExperimentIdPath, path: Annotated[str, Path(min_length=1)]) -> FileResponse:
     """
     Serve a file from an experiment directory inline.
 

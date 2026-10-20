@@ -7,7 +7,8 @@ from core.responses import problems
 from fastapi import APIRouter, Response
 
 from modules.experiments.dependencies import ExperimentDep
-from modules.models import Experiment, Notebook
+from modules.experiments.models import Experiment
+from modules.notebooks.models import Notebook
 from modules.notebooks.schemas import Notebook as NotebookOut
 from modules.notebooks.schemas import StartNotebookRequest
 from modules.notebooks.service import NotebookServiceDep

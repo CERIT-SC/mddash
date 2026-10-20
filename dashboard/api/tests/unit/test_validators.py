@@ -9,7 +9,6 @@ from core.errors import BadRequest, Forbidden
 from core.validators import (
     check_experiment_id,
     check_filename,
-    check_log_type,
     check_path,
     check_positive_int,
     validate_analysis_topology_path,
@@ -145,32 +144,6 @@ class TestCheckPath:
         """Nested path within the base directory should be accepted."""
         (tmp_path / "a" / "b").mkdir(parents=True)
         check_path("a/b", tmp_path)  # Should not raise
-
-
-class TestCheckLogType:
-    """Tests for the check_log_type function."""
-
-    def test_accepts_gmx(self) -> None:
-        """Log type 'gmx' should be accepted."""
-        check_log_type("gmx")  # Should not raise
-
-    def test_accepts_stdout(self) -> None:
-        """Log type 'stdout' should be accepted."""
-        check_log_type("stdout")  # Should not raise
-
-    def test_accepts_stderr(self) -> None:
-        """Log type 'stderr' should be accepted."""
-        check_log_type("stderr")  # Should not raise
-
-    def test_rejects_invalid_type(self) -> None:
-        """Unknown log type should be rejected."""
-        with pytest.raises(BadRequest):
-            check_log_type("syslog")
-
-    def test_rejects_empty_string(self) -> None:
-        """Empty log type should be rejected."""
-        with pytest.raises(BadRequest):
-            check_log_type("")
 
 
 class TestValidateAnalysisTopologyPath:

@@ -59,9 +59,11 @@ class Clients:
         )
 
     async def aclose(self) -> None:
-        """Close the connection pools (application shutdown)."""
-        await self.http.aclose()
-        await self.k8s.aclose()
+        """Close the connection pools (application shutdown); one failing close never skips the other."""
+        try:
+            await self.http.aclose()
+        finally:
+            await self.k8s.aclose()
 
 
 __all__ = ["Clients"]

@@ -46,8 +46,9 @@ class AmberService(RunService[AmberJob]):
         if prior is not None:
             await self.remove(experiment.id, simulation_path)
 
-        simulation = Simulation.get(experiment.id, simulation_path, experiment)
-        simulation.require_files(["topology", "coordinates", "control"])
+        simulation = await anyio.to_thread.run_sync(
+            Simulation.load_ready, experiment, simulation_path, ["topology", "coordinates", "control"]
+        )
         resolved = simulation.resolved_files
 
         mdrun_job = await self._mdrun.create_amber_job(

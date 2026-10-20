@@ -612,6 +612,11 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
             response: Any = await core_v1.read_namespaced_pod_log(
                 name=pod_name, namespace=NAMESPACE, tail_lines=tail_lines, _preload_content=False
             )
+            # Unpreloaded reads never raise on error statuses; a gone or initializing
+            # pod would otherwise surface the apiserver's Status JSON as log text.
+            if not 200 <= response.status <= 299:  # ruff:ignore[magic-value-comparison]
+                response.release()
+                return ""
             return (await response.read()).decode("utf-8", errors="replace")
         except ApiException:
             return ""

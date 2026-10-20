@@ -13,6 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 
 from modules.jobs.analysis.command import ANALYSIS_RUNTIME_PREP_TASKS, get_incomplete_task_dirs
 from modules.jobs.analysis.results import ANALYSIS_RESULT_PREFIX, ANALYSIS_RESULT_SUFFIX, MWF_INPUTS_DIR, mwf_output_dir
+from modules.jobs.status import RecordedStatus
 
 if TYPE_CHECKING:
     from modules.experiments.models import Experiment
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class AnalysisJob(Base):
+class AnalysisJob(RecordedStatus, Base):
     """On-demand MD analysis job running mddb-workflow in a K8s Job."""
 
     __tablename__ = "analysis_jobs"
@@ -39,30 +40,13 @@ class AnalysisJob(Base):
     # snapshotted; None when the run progress was unknown (or no run existed).
     sim_progress: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
 
-    _last_known_status: Mapped[JobStatus | None] = mapped_column("last_known_status", sa.Enum(JobStatus), nullable=True)
-
     # Never lazy-loads (async); queries for jobs alone load it via `query()`.
     experiment: Mapped["Experiment"] = relationship("Experiment", back_populates="analysis_jobs", lazy="raise_on_sql")
-
-    # Transient: status fetched by AnalysisService.refresh_status() for this request
-    _fetched_status: JobStatus | None = None
 
     @classmethod
     def query(cls) -> "Select[tuple[Self]]":
         """Select analysis jobs together with their experiments."""
         return select(cls).options(selectinload(cls.experiment))
-
-    def record_status(self, fetched: JobStatus) -> bool:
-        """Store the status read for this request; True when it persisted as the new offline fallback."""
-        changed = fetched not in {self._last_known_status, JobStatus.UNKNOWN}
-        if changed:
-            self._last_known_status = fetched
-        self._fetched_status = fetched
-        return changed
-
-    def record_status_unavailable(self) -> None:
-        """Serve the last known status (the K8s Job could not be read)."""
-        self._fetched_status = self._last_known_status or JobStatus.UNKNOWN
 
     @property
     def settled_status(self) -> JobStatus | None:

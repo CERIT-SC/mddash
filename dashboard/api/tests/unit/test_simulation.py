@@ -12,6 +12,7 @@ from clients import Clients
 from clients.k8s import K8sClient
 from core.enums import Engine, JobStatus
 from core.errors import ApiError, BadRequest
+from httpx import AsyncClient
 from modules.jobs.amber.schemas import AmberJob as AmberJobSchema
 from modules.jobs.gmx.models import GromacsJob
 from modules.jobs.gmx.schemas import GromacsJob as GromacsJobSchema
@@ -225,6 +226,24 @@ class TestValidation:
 
         with pytest.raises(BadRequest, match="Missing files for: 'Reference structure', 'Trajectory'"):
             sim.require_files()
+
+
+class TestBrokenManifestRoute:
+    """A hand-broken manifest is listed as invalid, never a 500."""
+
+    async def test_empty_role_value_lists_as_invalid(
+        self, client: AsyncClient, db_session: AsyncSession, tmp_path: Path
+    ) -> None:
+        exp_id = await _seed_experiment(db_session)
+        _write_sim_file(tmp_path / exp_id, "broken.simulation.json", {**GMX_FILES, "trajectory": ""})
+
+        response = await client.get(f"/dash/api/experiments/{exp_id}/simulations")
+
+        assert response.status_code == 200
+        [simulation] = response.json()
+        assert simulation["valid"] is False
+        assert simulation["errors"]
+        assert "trajectory" not in simulation["files"]
 
 
 class TestPathResolution:
@@ -586,7 +605,7 @@ class TestWriteSimulation:
                 },
             )
 
-        message = str(exc_info.value.description)
+        message = str(exc_info.value.detail)
         assert "^[A-Za-z" not in message
         assert "unsupported characters" in message
 
@@ -712,7 +731,7 @@ class TestStepStatus:
         sim = await _sim(db_session, exp_id, "protein.simulation.json")
         assert sim.step == 1
         assert sim.status == "setup complete"
-        assert sim.to_dict()["step"] == 1
+        assert sim.step == 1
 
     async def test_invalid_manifest_is_setup(self, db_session: AsyncSession, tmp_path: Path) -> None:
         """An invalid manifest sits at step 0."""
@@ -828,7 +847,7 @@ class TestStepStatus:
 
         assert (await _sim(db_session, exp_id, "protein.simulation.json")).live is True
         assert (await _sim(db_session, exp_id, "ligand.simulation.json")).live is True
-        assert (await _sim(db_session, exp_id, "protein.simulation.json")).to_dict()["live"] is True
+        assert (await _sim(db_session, exp_id, "protein.simulation.json")).live is True
 
     async def test_terminal_jobs_are_not_live(self, db_session: AsyncSession, tmp_path: Path) -> None:
         """Finished/failed jobs and stopped tuner jobs leave the simulation settled."""

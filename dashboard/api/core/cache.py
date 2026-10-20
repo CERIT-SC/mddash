@@ -13,6 +13,10 @@ from cachetools import TTLCache
 # MDRepo publication status keyed by record id (60s TTL)
 mdrepo_status_cache: TTLCache = TTLCache(maxsize=100, ttl=60)
 
+# MDRepo token responses keyed by the hash of the refresh token they spent; overlapping
+# requests of one session cookie arrive within the 5s poll interval (60s TTL)
+mdrepo_spent_grants: TTLCache = TTLCache(maxsize=256, ttl=60)
+
 # Coalesce tuner status requests for 1s; UI polls every 5s
 tuner_status_cache: TTLCache = TTLCache(maxsize=100, ttl=1)
 

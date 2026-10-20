@@ -30,11 +30,6 @@ class ApiError(HTTPException):
         self.problem_type = type_
         self.problem_solution = solution
 
-    @property
-    def description(self) -> str:
-        """The problem detail (cause)."""
-        return str(self.detail)
-
     def to_response(self) -> JSONResponse:
         """Render this error as an RFC 9457 problem-details JSON response."""
         body: dict[str, str] = {
@@ -111,11 +106,18 @@ class InternalServerError(_StatusError):
     token = "internal-server-error"
 
 
+_LOC_KINDS = {"body", "query", "path", "header", "cookie"}
+
+
 def flatten_validation(errors: list[dict]) -> str:
     """Flatten FastAPI RequestValidationError errors into a single readable line."""
     parts: list[str] = []
     for err in errors:
-        loc = ".".join(str(p) for p in err.get("loc", []) if p not in {"body", "query", "path", "form"})
+        loc = list(err.get("loc", []))
+        # FastAPI prefixes the parameter kind; a field may itself be named "query" or "path".
+        if loc and loc[0] in _LOC_KINDS:
+            loc = loc[1:]
+        loc = ".".join(str(p) for p in loc)
         msg = err.get("msg", "")
         parts.append(f"{loc}: {msg}" if loc else msg)
     return "; ".join(p for p in parts if p)
@@ -136,7 +138,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             name = HTTPStatus(exc.status_code).phrase
             api_err = ApiError(
                 exc.status_code,
-                str(exc.detail) if exc.detail is not None else "An error occurred.",
+                str(exc.detail),
                 f"urn:mddash:{name.lower().replace(' ', '-')}",
             )
             api_err.headers = exc.headers
@@ -151,7 +153,8 @@ def register_exception_handlers(app: FastAPI) -> None:
             code,
             api_err.problem_type,
             api_err.detail,
-            exc_info=code >= HTTPStatus.INTERNAL_SERVER_ERROR,
+            # Starlette runs sync handlers outside the `except` block: pass the exception itself.
+            exc_info=exc if code >= HTTPStatus.INTERNAL_SERVER_ERROR else None,
         )
         return api_err.to_response()
 

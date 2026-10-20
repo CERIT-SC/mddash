@@ -1,5 +1,6 @@
 """Unit tests for MDRepo Token Manager."""
 
+import asyncio
 import time
 from collections.abc import Iterator
 from typing import Any
@@ -155,6 +156,30 @@ class TestMDRepoTokenManager:
         assert session[MDREPO_TOKEN_KEY] == "new_access_token"
         assert session[MDREPO_REFRESH_TOKEN_KEY] == "new_refresh_token"
         assert MDREPO_TOKEN_EXPIRES_AT in session
+
+    async def test_concurrent_requests_spend_the_refresh_token_once(
+        self, mock_post: Mock, mdrepo: MDRepoClient
+    ) -> None:
+        """Two requests of one cookie (separate session snapshots) refresh once and both get the new tokens."""
+        expired = {
+            MDREPO_TOKEN_KEY: "expired_token",
+            MDREPO_REFRESH_TOKEN_KEY: "single-use",
+            MDREPO_TOKEN_EXPIRES_AT: time.time() - 3600,
+        }
+        first, second = dict(expired), dict(expired)
+        mock_post.side_effect = [
+            httpx.Response(200, json={"access_token": "new", "refresh_token": "rotated", "expires_in": 3600}),
+            httpx.Response(400, json={"error": "invalid_grant"}),
+        ]
+
+        tokens = await asyncio.gather(
+            MDRepoTokenManager(first, mdrepo).get_valid_token(),
+            MDRepoTokenManager(second, mdrepo).get_valid_token(),
+        )
+
+        assert tokens == ["new", "new"]
+        assert mock_post.call_count == 1
+        assert first[MDREPO_REFRESH_TOKEN_KEY] == second[MDREPO_REFRESH_TOKEN_KEY] == "rotated"
 
     async def test_refresh_token_no_refresh_token(
         self, mock_post: Mock, session: SessionMixin, mdrepo: MDRepoClient

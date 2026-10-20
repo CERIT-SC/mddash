@@ -42,21 +42,25 @@ ROUTERS = (system, experiments, publishing, archive, mdrepo, files, simulations,
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Validate the catalog, migrate the database, and run the du monitor for the app's lifetime."""
     start = time.perf_counter()
-    # Validate bundled catalog before migrations so a bad catalog fails fast.
-    load_catalog_or_exit()
-    db_path = DATA_DIR / DB_PATH_NAME
-    await anyio.to_thread.run_sync(run_migrations, db_path)
-    init_engine(db_path)
-    du_task = asyncio.create_task(du_monitor(DATA_DIR, initial_delay=DU_MONITOR_START_DELAY_SECONDS))
-    logger.info("startup completed in %.3fs", time.perf_counter() - start)
+    du_task: asyncio.Task | None = None
     try:
+        # Validate bundled catalog before migrations so a bad catalog fails fast.
+        load_catalog_or_exit()
+        db_path = DATA_DIR / DB_PATH_NAME
+        await anyio.to_thread.run_sync(run_migrations, db_path)
+        init_engine(db_path)
+        du_task = asyncio.create_task(du_monitor(DATA_DIR, initial_delay=DU_MONITOR_START_DELAY_SECONDS))
+        logger.info("startup completed in %.3fs", time.perf_counter() - start)
         yield
     finally:
-        du_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await du_task
-        await app.state.clients.aclose()
-        await dispose_engine()
+        if du_task is not None:
+            du_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await du_task
+        try:
+            await app.state.clients.aclose()
+        finally:
+            await dispose_engine()
 
 
 def create_app(

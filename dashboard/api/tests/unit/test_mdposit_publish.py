@@ -10,13 +10,14 @@ from unittest.mock import Mock, patch
 import pytest
 from clients import Clients
 from core.enums import Engine
-from core.errors import BadRequest
+from core.errors import ApiError, BadRequest
 from httpx import AsyncClient
 from modules.experiments.service import ExperimentService
 from modules.mdrepo.tokens import MDRepoCredentials
 from modules.models import Experiment, Notebook
 from modules.publishing.service import PublishingService
 from modules.publishing.status import UploadStatus
+from modules.publishing.submission import SubmissionError
 from modules.simulations.manifest_schema import schema_url
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -277,6 +278,58 @@ class TestInvenioPublishUnchanged:
         assert exp.mdrepo_published is False
         assert result["id"] == "rec-999"
         assert result["upload_state"] == "queued"
+
+
+class TestInvenioPublishUpstreamFailures:
+    """MDRepo draft and upload-Job failures surface as upstream-unavailable, never a generic 500."""
+
+    @patch("modules.publishing.submission.is_upload_active", return_value=False)
+    @patch("modules.publishing.submission.read_status", return_value=None)
+    @patch("clients.mdrepo.MDRepoClient.create_experiment", side_effect=ValueError("Failed to create experiment: 500"))
+    @patch("clients.metadump.MetadumpClient.extract_metadata_bulk", return_value=[])
+    async def test_draft_creation_failure(
+        self,
+        mock_meta: Mock,
+        mock_create: Mock,
+        mock_read_status: Mock,
+        mock_active: Mock,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        clients: Clients,
+    ) -> None:
+        await _seed_experiment(db_session)
+        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+
+        with pytest.raises(ApiError) as exc_info:
+            await PublishingService(db_session, clients).publish_invenio(await _stored(db_session), CREDENTIALS)
+
+        assert exc_info.value.problem_type == "urn:mddash:upstream-unavailable"
+        assert exc_info.value.problem_solution is not None
+
+    @patch("modules.publishing.submission.is_upload_active", return_value=False)
+    @patch("modules.publishing.service.submit_upload_job", side_effect=SubmissionError("pod not admitted"))
+    @patch("modules.publishing.submission.read_status", return_value=None)
+    @patch("clients.mdrepo.MDRepoClient.create_experiment", return_value={"id": "rec-1"})
+    @patch("clients.metadump.MetadumpClient.extract_metadata_bulk", return_value=[])
+    async def test_upload_job_submission_failure(
+        self,
+        mock_meta: Mock,
+        mock_create: Mock,
+        mock_read_status: Mock,
+        mock_submit: Mock,
+        mock_active: Mock,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        clients: Clients,
+    ) -> None:
+        await _seed_experiment(db_session)
+        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+
+        with pytest.raises(ApiError) as exc_info:
+            await PublishingService(db_session, clients).publish_invenio(await _stored(db_session), CREDENTIALS)
+
+        assert exc_info.value.problem_type == "urn:mddash:upstream-unavailable"
+        assert "upload" in exc_info.value.detail
 
 
 class TestInvenioPublishRetryAfterDraftDeleted:

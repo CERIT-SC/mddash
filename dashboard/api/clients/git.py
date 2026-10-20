@@ -22,29 +22,6 @@ GIT_CLONE_TIMEOUT = 120
 _URL_USERINFO_RE = re.compile(r"(://)[^@\s/]+(@)")
 
 
-async def _clone_repo(git_url: str, target_dir: Path, access_token: str | None = None) -> None:
-    """Shallow-clone a git repository into ``target_dir`` (no subdirectory, no ``.git``)."""
-    await anyio.Path(target_dir).mkdir(parents=True, exist_ok=True)
-    clone_url = _inject_token(git_url, access_token)
-
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        clone_dir = Path(tmp_dir) / "repo"
-        await _git(
-            ["clone", "--depth", "1", "--single-branch", "--no-tags", "--", clone_url, str(clone_dir)],
-            label="clone",
-            secret=access_token,
-        )
-
-        def finish() -> None:
-            git_dir = clone_dir / ".git"
-            if git_dir.exists():
-                shutil.rmtree(git_dir)
-            _move_contents(clone_dir, target_dir)
-
-        await anyio.to_thread.run_sync(finish)
-        logger.info("Downloaded git repository from %s", git_url)
-
-
 def _inject_token(git_url: str, access_token: str | None) -> str:
     """
     Inject an access token into an HTTPS git URL for cloning.
@@ -86,10 +63,13 @@ async def _git(
     proc = await asyncio.create_subprocess_exec("git", *args, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     try:
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=GIT_CLONE_TIMEOUT)
-    except TimeoutError:
+    except (TimeoutError, asyncio.CancelledError) as exc:
+        # A cancelled request (client gone) must not leave git writing into a deleted temp dir.
         with contextlib.suppress(ProcessLookupError):
             proc.kill()
         await proc.wait()
+        if isinstance(exc, asyncio.CancelledError):
+            raise
         raise InternalServerError(f"Git {label} timed out after {GIT_CLONE_TIMEOUT}s") from subprocess.TimeoutExpired(
             ["git", *args], GIT_CLONE_TIMEOUT
         )
@@ -139,77 +119,93 @@ def _move_contents(src_dir: Path, target_dir: Path) -> None:
         shutil.move(item, dest)
 
 
-async def _clone_repo_module(git_url: str, module_path: str, target_dir: Path, access_token: str | None = None) -> None:
-    """
-    Sparse-checkout a single module subdirectory into ``target_dir`` (404 when it is missing or escapes the clone).
+class GitClient:
+    """Shallow clones into experiment directories (no subdirectory, no ``.git``)."""
 
-    Raises:
-        InternalServerError: If a git operation fails or times out.
-    """
-    await anyio.Path(target_dir).mkdir(parents=True, exist_ok=True)
-    clone_url = _inject_token(git_url, access_token)
+    async def clone(self, git_url: str, target_dir: Path, access_token: str | None = None) -> None:
+        """Clone a whole repository into ``target_dir``."""
+        await anyio.Path(target_dir).mkdir(parents=True, exist_ok=True)
+        clone_url = _inject_token(git_url, access_token)
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        clone_dir = Path(tmp_dir) / "repo"
-
-        try:
-            await _git(
-                [
-                    "clone",
-                    "--depth",
-                    "1",
-                    "--single-branch",
-                    "--no-tags",
-                    "--no-checkout",
-                    "--filter=blob:none",
-                    "--",
-                    clone_url,
-                    str(clone_dir),
-                ],
-                label="clone",
-                secret=access_token,
-            )
-        except InternalServerError as exc:
-            # Retry only on partial-clone-unsupported; surface all other failures.
-            if not _is_partial_clone_unsupported(exc):
-                raise
-            await anyio.to_thread.run_sync(lambda: shutil.rmtree(clone_dir, ignore_errors=True))
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            clone_dir = Path(tmp_dir) / "repo"
             await _git(
                 ["clone", "--depth", "1", "--single-branch", "--no-tags", "--", clone_url, str(clone_dir)],
                 label="clone",
                 secret=access_token,
             )
 
-        # Configure sparse checkout for the selected module directory.
-        await _git(
-            ["sparse-checkout", "init", "--no-cone"], cwd=clone_dir, label="sparse-checkout init", secret=access_token
-        )
-        await _git(
-            ["sparse-checkout", "set", module_path], cwd=clone_dir, label="sparse-checkout set", secret=access_token
-        )
-        await _git(["checkout"], cwd=clone_dir, label="checkout", secret=access_token)
+            def finish() -> None:
+                git_dir = clone_dir / ".git"
+                if git_dir.exists():
+                    shutil.rmtree(git_dir)
+                _move_contents(clone_dir, target_dir)
 
-        def finish() -> None:
-            # Reject symlink/traversal escapes before copying (could move other tenants' data).
-            clone_root = clone_dir.resolve()
-            module_dir = clone_dir / module_path
-            if not module_dir.resolve().is_dir() or _is_outside(module_dir, clone_root):
-                raise NotFound(f"Notebook module path '{module_path}' not found in repository.")
-            _move_contents(module_dir, target_dir)
-
-        await anyio.to_thread.run_sync(finish)
-        logger.info("Downloaded notebook module '%s' from %s", module_path, git_url)
-
-
-class GitClient:
-    """Shallow clones into experiment directories (no subdirectory, no ``.git``)."""
-
-    async def clone(self, git_url: str, target_dir: Path, access_token: str | None = None) -> None:
-        """Clone a whole repository into ``target_dir``."""
-        await _clone_repo(git_url, target_dir, access_token)
+            await anyio.to_thread.run_sync(finish)
+            logger.info("Downloaded git repository from %s", git_url)
 
     async def clone_module(
         self, git_url: str, module_path: str, target_dir: Path, access_token: str | None = None
     ) -> None:
-        """Sparse-checkout one module subdirectory into ``target_dir`` (404 when it is missing or escapes the clone)."""
-        await _clone_repo_module(git_url, module_path, target_dir, access_token)
+        """
+        Sparse-checkout one module subdirectory into ``target_dir`` (404 when it is missing or escapes the clone).
+
+        Raises:
+            InternalServerError: If a git operation fails or times out.
+        """
+        await anyio.Path(target_dir).mkdir(parents=True, exist_ok=True)
+        clone_url = _inject_token(git_url, access_token)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            clone_dir = Path(tmp_dir) / "repo"
+
+            try:
+                await _git(
+                    [
+                        "clone",
+                        "--depth",
+                        "1",
+                        "--single-branch",
+                        "--no-tags",
+                        "--no-checkout",
+                        "--filter=blob:none",
+                        "--",
+                        clone_url,
+                        str(clone_dir),
+                    ],
+                    label="clone",
+                    secret=access_token,
+                )
+            except InternalServerError as exc:
+                # Retry only on partial-clone-unsupported; surface all other failures.
+                if not _is_partial_clone_unsupported(exc):
+                    raise
+                await anyio.to_thread.run_sync(lambda: shutil.rmtree(clone_dir, ignore_errors=True))
+                await _git(
+                    ["clone", "--depth", "1", "--single-branch", "--no-tags", "--", clone_url, str(clone_dir)],
+                    label="clone",
+                    secret=access_token,
+                )
+
+            # Configure sparse checkout for the selected module directory.
+            await _git(
+                ["sparse-checkout", "init", "--no-cone"],
+                cwd=clone_dir,
+                label="sparse-checkout init",
+                secret=access_token,
+            )
+            await _git(
+                ["sparse-checkout", "set", module_path], cwd=clone_dir, label="sparse-checkout set", secret=access_token
+            )
+            await _git(["checkout"], cwd=clone_dir, label="checkout", secret=access_token)
+
+            def finish() -> None:
+                # Reject symlink/traversal escapes before copying (could move other tenants' data).
+                clone_root = clone_dir.resolve()
+                module_dir = clone_dir / module_path
+                if not module_dir.resolve().is_dir() or _is_outside(module_dir, clone_root):
+                    raise NotFound(f"Notebook module path '{module_path}' not found in repository.")
+                _move_contents(module_dir, target_dir)
+
+            await anyio.to_thread.run_sync(finish)
+            logger.info("Downloaded notebook module '%s' from %s", module_path, git_url)

@@ -23,7 +23,12 @@ class GromacsJob(SimulationJob):
     """GROMACS molecular dynamics simulation job."""
 
     __tablename__ = "gromacs_jobs"
-    __mapper_args__ = {"polymorphic_identity": Engine.GMX, "polymorphic_load": "selectin"}  # ruff:ignore[mutable-class-default]  # SQLAlchemy declares it an instance attribute
+    # SQLAlchemy declares it an instance attribute.
+    __mapper_args__ = {  # ruff:ignore[mutable-class-default]
+        "polymorphic_identity": Engine.GMX,
+        "polymorphic_load": "selectin",
+        "confirm_deleted_rows": False,
+    }
     MDRUN_ENGINE: ClassVar[str] = "gmx"
 
     # TODO: verify if files with these extensions should really be deleted
@@ -157,7 +162,7 @@ class GromacsJob(SimulationJob):
             case "stderr":
                 log_file = self._stderr_log
             case _:
-                raise BadRequest(description=f"Invalid log type: {type}")
+                raise BadRequest(description=f"Invalid log type '{type}'. Use 'gmx', 'stdout', or 'stderr'.")
 
         try:
             if tail_lines:

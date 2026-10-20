@@ -46,11 +46,18 @@ class ApiError(HTTPException):
         )
 
 
+_LOC_KINDS = {"body", "query", "path", "header", "cookie"}
+
+
 def _flatten_validation(errors: list[dict]) -> str:
     """Flatten FastAPI RequestValidationError errors into a single readable line."""
     parts: list[str] = []
     for err in errors:
-        loc = ".".join(str(p) for p in err.get("loc", []) if p != "body")
+        loc = list(err.get("loc", []))
+        # FastAPI prefixes the parameter kind; a field may itself be named "query" or "path".
+        if loc and loc[0] in _LOC_KINDS:
+            loc = loc[1:]
+        loc = ".".join(str(p) for p in loc)
         msg = err.get("msg", "")
         parts.append(f"{loc}: {msg}" if loc else msg)
     return "; ".join(p for p in parts if p)
@@ -71,7 +78,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             name = HTTPStatus(exc.status_code).phrase
             api_err = ApiError(
                 exc.status_code,
-                str(exc.detail) if exc.detail is not None else "An error occurred.",
+                str(exc.detail),
                 f"urn:mddash:{name.lower().replace(' ', '-')}",
             )
             api_err.headers = exc.headers
@@ -84,13 +91,15 @@ def register_exception_handlers(app: FastAPI) -> None:
             code,
             api_err.problem_type,
             api_err.detail,
-            exc_info=code >= HTTPStatus.INTERNAL_SERVER_ERROR,
+            # Starlette runs sync handlers outside the `except` block: pass the exception itself.
+            exc_info=exc if code >= HTTPStatus.INTERNAL_SERVER_ERROR else None,
         )
         return api_err.to_response()
 
     @app.exception_handler(Exception)
-    def _unhandled(_req: Request, _exc: Exception) -> JSONResponse:
-        logger.error("Unhandled exception", exc_info=True)  # ruff:ignore[exc-info-outside-except-handler]
+    def _unhandled(_req: Request, exc: Exception) -> JSONResponse:
+        # Starlette calls this outside the `except` block: pass the exception itself.
+        logger.error("Unhandled exception", exc_info=exc)
         return ApiError(
             500,
             "Internal server error. Please try again later.",

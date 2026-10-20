@@ -8,6 +8,7 @@ import re
 import secrets
 from typing import TYPE_CHECKING, Any
 
+import anyio
 from core.config import IMAGE_PULL_POLICY, MDREPO_UPLOADER_IMAGE, NAMESPACE, PVC_NAME
 
 from modules.publishing.status import UploadState, create_queued_status, read_status, write_status
@@ -198,7 +199,7 @@ def _read_attempt_id(experiment_id: str, data_dir: Path) -> str | None:
 
 async def read_upload_state(k8s: K8sClient, experiment_id: str, data_dir: Path) -> str | None:
     """Reconcile upload state from the PVC status file and live Job (reports failed if the Job is gone)."""
-    status = read_status(experiment_id, data_dir)
+    status = await anyio.to_thread.run_sync(read_status, experiment_id, data_dir)
     if status is None:
         return None
 

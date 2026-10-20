@@ -138,7 +138,7 @@ class TestExtractMetadataBulk:
         with pytest.raises(InternalServerError) as exc_info:
             await metadump.extract_metadata_bulk([tpr])
 
-        assert "timed out" in exc_info.value.description.lower()
+        assert "timed out" in exc_info.value.detail.lower()
         assert delete.call_count == 1
 
     async def test_upload_http_error_raises_internal_server_error(
@@ -152,7 +152,7 @@ class TestExtractMetadataBulk:
         with pytest.raises(InternalServerError) as exc_info:
             await metadump.extract_metadata_bulk([tpr])
 
-        assert "500" in exc_info.value.description
+        assert "500" in exc_info.value.detail
 
     async def test_upload_failure_cleans_up_already_submitted_jobs(
         self,
@@ -187,7 +187,7 @@ class TestExtractMetadataBulk:
         with pytest.raises(InternalServerError) as exc_info:
             await metadump.extract_metadata_bulk([tpr])
 
-        assert "error status" in exc_info.value.description.lower()
+        assert "error status" in exc_info.value.detail.lower()
 
     async def test_running_status_continues_polling(
         self, http_mock: respx.MockRouter, tpr: Path, metadump: MetadumpClient
