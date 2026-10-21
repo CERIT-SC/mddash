@@ -23,8 +23,6 @@ batch_v1 = client.BatchV1Api()
 
 _S3_SYNC_IMAGE = "rclone/rclone:1.74.4"
 _SHARED_VOLUME_NAME = "shared-data"
-# Node label (gpu-feature-discovery) selecting the configured whole-GPU product.
-_GPU_PRODUCT_LABEL = "nvidia.com/gpu.product"
 # Grace period for stop deletions: mdrun needs time to write its final checkpoint
 # and the s3-sync sidecar to upload it before the pod is torn down.
 STOP_GRACE_PERIOD_SECONDS = 60
@@ -165,8 +163,7 @@ def _build_job_manifest(
                 "spec": {
                     "restartPolicy": "Never",
                     "securityContext": {"fsGroup": 1000},
-                    # Whole GPUs are not the only GPU nodes; pin GPU jobs to the configured product.
-                    **({"nodeSelector": {_GPU_PRODUCT_LABEL: GPU_PRODUCT}} if use_gpu and GPU_PRODUCT else {}),
+                    **({"nodeSelector": {"nvidia.com/gpu.product": GPU_PRODUCT}} if use_gpu and GPU_PRODUCT else {}),
                     "initContainers": [
                         {
                             "name": "s3-init",

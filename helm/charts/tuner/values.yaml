@@ -51,7 +51,6 @@ ray:
     maxReplicas: 5
     numCpu: 32
     numGpu: 1
-    # nodeSelector pins workers to the right GPU hardware (e.g. nvidia.com/gpu.product).
     nodeSelector: {}
     resources:
       limits:
