@@ -19,6 +19,8 @@ NAMESPACE = os.environ.get("POD_NAMESPACE", "default")
 PVC_NAME = os.environ.get("PVC_NAME", "mdrun-api-pvc")
 
 GPU_TYPE = os.environ.get("GPU_TYPE", "")
+# Whole-GPU jobs pin to nodes with this nvidia.com/gpu.product label (nodeSelector). Empty = any GPU node.
+GPU_PRODUCT = os.environ.get("GPU_PRODUCT", "")
 
 S3_ENDPOINT = os.environ.get("S3_ENDPOINT")
 S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY")

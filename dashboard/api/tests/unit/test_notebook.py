@@ -215,6 +215,51 @@ class TestNotebookStartTierAndGpu:
         mock_create.assert_not_called()
 
 
+class TestCreateNotebookPodGpu:
+    """create_notebook_pod() with gpu=True requests the GPU and pins the pod to the configured GPU product."""
+
+    async def _create_pod_body(
+        self, clients: Clients, mock_k8s: tuple[AsyncMock, AsyncMock], *, gpu: bool, gpu_product: str
+    ) -> dict:
+        mock_core, _ = mock_k8s
+        mock_core.read_namespaced_pod.side_effect = ApiException(status=404)
+        with (
+            patch("clients.k8s.GPU_TYPE", "nvidia.com/gpu"),
+            patch("clients.k8s.GPU_PRODUCT", gpu_product),
+        ):
+            await clients.k8s.create_notebook_pod(
+                name="notebook-test",
+                experiment_id="test",
+                prefix="/notebook/test",
+                token="tok",
+                gpu=gpu,
+            )
+        return mock_core.create_namespaced_pod.call_args.kwargs["body"]
+
+    async def test_gpu_notebook_pins_to_configured_gpu_product(
+        self, clients: Clients, mock_k8s: tuple[AsyncMock, AsyncMock]
+    ) -> None:
+        body = await self._create_pod_body(clients, mock_k8s, gpu=True, gpu_product="NVIDIA-A40")
+
+        assert body["spec"]["nodeSelector"] == {"nvidia.com/gpu.product": "NVIDIA-A40"}
+        jupyter_container = body["spec"]["containers"][0]
+        assert jupyter_container["resources"]["requests"]["nvidia.com/gpu"] == "1"
+
+    async def test_gpu_notebook_without_configured_product_has_no_node_selector(
+        self, clients: Clients, mock_k8s: tuple[AsyncMock, AsyncMock]
+    ) -> None:
+        body = await self._create_pod_body(clients, mock_k8s, gpu=True, gpu_product="")
+
+        assert "nodeSelector" not in body["spec"]
+
+    async def test_cpu_notebook_has_no_node_selector(
+        self, clients: Clients, mock_k8s: tuple[AsyncMock, AsyncMock]
+    ) -> None:
+        body = await self._create_pod_body(clients, mock_k8s, gpu=False, gpu_product="NVIDIA-A40")
+
+        assert "nodeSelector" not in body["spec"]
+
+
 class TestCreateNotebookPodLifecycleFlags:
     """Verify that create_notebook_pod() injects idle-culling flags and MY_POD_NAME into the pod spec."""
 

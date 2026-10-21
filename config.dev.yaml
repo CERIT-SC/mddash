@@ -56,8 +56,10 @@ notebook:
 analysis:
   image: cerit.io/mddash/mddb_wf:0.1.11-gmx2026
 
-# GPU resource type used by mdrun-api jobs and Tuner workers
-gpuType: "nvidia.com/mig-1g.10gb"
+# GPU resource requested by mdrun-api jobs, Tuner workers, and GPU notebooks.
+gpuType: "nvidia.com/gpu"
+# GPU-requesting pods pin to nodes with this nvidia.com/gpu.product label via nodeSelector. Empty = any GPU node.
+gpuProduct: "NVIDIA-A40"
 
 # Container images used for mdrun-api simulation jobs
 gmxImage: "cerit.io/mddash/tuner-worker:gmx-2026.1_amber-26_ray-2.54.0_py-3.13"
@@ -218,8 +220,8 @@ tuner:
       limits:
         cpu: "4"
         memory: "16Gi"
-        nvidia.com/mig-1g.10gb: "1"
+        nvidia.com/gpu: "1"
       requests:
         cpu: "4"  # Should be same as limit.
         memory: "8Gi"
-        nvidia.com/mig-1g.10gb: "1"
+        nvidia.com/gpu: "1"

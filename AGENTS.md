@@ -41,6 +41,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - All containers run as non-root (UID 1000) for e-INFRA compliance.
 - All user-pod containers mount a shared PVC at `/mddash`.
 - User namespaces require `field.cattle.io/projectId` and `field.cattle.io/resourceQuota` annotations. The pre-spawn hook waits for `InitialRolesPopulated`, patches the namespace, then waits for ResourceQuota to become active.
+- **GPU contract.** Every GPU workload (mdrun jobs, Tuner workers, GPU notebooks) requests `gpuType: "nvidia.com/gpu"` (whole GPU, count 1) and pins to `nvidia.com/gpu.product: <gpuProduct>` via nodeSelector; without the selector the scheduler may land the pod on non-A40 GPU hardware. Both values are deployment config (`config.yaml`); the env-vars are `GPU_TYPE`/`GPU_PRODUCT` (mdrun-api, dashboard-api via hook passthrough) and `ray.worker.nodeSelector` (Tuner chart).
 
 ### S3 sync
 - The user-pod sidecar (`dashboard/s3-sync/`) runs `rclone bisync` between `/mddash` (PVC) and S3. bisync state (`--workdir /mddash/.rclone-bisync`) MUST live on the PVC. If it's ephemeral, restarts force `--resync`, which only copies and re-creates files/dirs deleted on the other side.

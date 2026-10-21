@@ -24,6 +24,8 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 NOTEBOOK_IMAGE = os.environ.get("NOTEBOOK_IMAGE", "quay.io/jupyter/base-notebook")
 NOTEBOOK_IDLE_TIMEOUT = int(os.environ.get("NOTEBOOK_IDLE_TIMEOUT", "3600"))
 GPU_TYPE = os.environ.get("GPU_TYPE", "")
+# GPU-notebook pods pin to nodes with this nvidia.com/gpu.product label (nodeSelector). Empty = any GPU node.
+GPU_PRODUCT = os.environ.get("GPU_PRODUCT", "")
 ANALYSIS_IMAGE = os.environ.get("ANALYSIS_IMAGE", "ghcr.io/mmb-irb/mddb_wf")
 
 IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Always")

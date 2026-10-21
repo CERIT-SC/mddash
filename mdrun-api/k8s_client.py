@@ -6,7 +6,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from config import AMBER_IMAGE, GMX_IMAGE, GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
+from config import AMBER_IMAGE, GMX_IMAGE, GPU_PRODUCT, GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
 from enums import JobStatus
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
@@ -23,6 +23,8 @@ batch_v1 = client.BatchV1Api()
 
 _S3_SYNC_IMAGE = "rclone/rclone:1.74.4"
 _SHARED_VOLUME_NAME = "shared-data"
+# Node label (gpu-feature-discovery) selecting the configured whole-GPU product.
+_GPU_PRODUCT_LABEL = "nvidia.com/gpu.product"
 # Grace period for stop deletions: mdrun needs time to write its final checkpoint
 # and the s3-sync sidecar to upload it before the pod is torn down.
 STOP_GRACE_PERIOD_SECONDS = 60
@@ -149,6 +151,7 @@ def _build_job_manifest(
     s3_sync = _s3_sync_command(working_dir, sync_remote)
     vol_mount = _volume_mount()
     rclone_env = _rclone_env()
+    use_gpu = bool(GPU_TYPE) and sim_resources.get("requests", {}).get(GPU_TYPE) == "1"
 
     return {
         "apiVersion": "batch/v1",
@@ -162,6 +165,8 @@ def _build_job_manifest(
                 "spec": {
                     "restartPolicy": "Never",
                     "securityContext": {"fsGroup": 1000},
+                    # Whole GPUs are not the only GPU nodes; pin GPU jobs to the configured product.
+                    **({"nodeSelector": {_GPU_PRODUCT_LABEL: GPU_PRODUCT}} if use_gpu and GPU_PRODUCT else {}),
                     "initContainers": [
                         {
                             "name": "s3-init",

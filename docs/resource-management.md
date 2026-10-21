@@ -117,7 +117,7 @@ Prints per-component breakdown, formula minimums, and a comparison against the c
 
 ## Notebook resource tiers
 
-Users choose between **1x**, **2x**, and **4x** tiers when starting a notebook. The API multiplies all CPU and memory values in `resources.notebook` by the tier factor at runtime. No per-tier config is needed. An optional **GPU toggle** attaches a single GPU (`gpuType` config key sets `GPU_TYPE` env var, e.g. `nvidia.com/mig-1g.10gb`) to the gmx container, independent of tier. GPU resources use a separate Kubernetes resource name and do not count toward CPU/memory quota.
+Users choose between **1x**, **2x**, and **4x** tiers when starting a notebook. The API multiplies all CPU and memory values in `resources.notebook` by the tier factor at runtime. No per-tier config is needed. An optional **GPU toggle** attaches one whole GPU (`gpuType` config key sets the `GPU_TYPE` env var, e.g. `nvidia.com/gpu`; the pod pins to `gpuProduct` nodes, e.g. `NVIDIA-A40`, via nodeSelector) to the jupyter container, independent of tier. GPU resources use a separate Kubernetes resource name and do not count toward CPU/memory quota.
 
 ### Pod labels
 

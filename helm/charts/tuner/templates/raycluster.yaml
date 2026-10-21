@@ -96,6 +96,10 @@ spec:
             app.kubernetes.io/name: tuner
             app.kubernetes.io/component: ray-worker
         spec:
+          {{- with .Values.ray.worker.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           securityContext:
             fsGroup: 1000
             fsGroupChangePolicy: OnRootMismatch

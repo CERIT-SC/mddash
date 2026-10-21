@@ -241,6 +241,40 @@ class TestDeleteJobGrace:
         assert body.grace_period_seconds == k8s_client.STOP_GRACE_PERIOD_SECONDS
 
 
+class TestGpuNodeSelector:
+    """GPU jobs pin to the configured GPU product; CPU jobs schedule anywhere."""
+
+    def _create_gmx(self, mocker: MockerFixture, *, gpu_product: str, nb: str, pme: str) -> dict[str, Any]:
+        mocker.patch.object(k8s_client, "GPU_TYPE", "nvidia.com/gpu")
+        mocker.patch.object(k8s_client, "GPU_PRODUCT", gpu_product)
+        batch_v1 = _create(mocker)
+        k8s_client.create_gromacs_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            deffnm="md",
+            np=1,
+            ntomp=2,
+            nb=nb,
+            pme=pme,
+            extra_args="",
+        )
+        return _manifest(batch_v1)
+
+    def test_gpu_job_pins_to_configured_gpu_product(self, mocker: MockerFixture) -> None:
+        pod_spec = self._create_gmx(mocker, gpu_product="NVIDIA-A40", nb="gpu", pme="cpu")["spec"]["template"]["spec"]
+        assert pod_spec["nodeSelector"] == {"nvidia.com/gpu.product": "NVIDIA-A40"}
+
+    def test_cpu_job_has_no_node_selector(self, mocker: MockerFixture) -> None:
+        pod_spec = self._create_gmx(mocker, gpu_product="NVIDIA-A40", nb="cpu", pme="cpu")["spec"]["template"]["spec"]
+        assert "nodeSelector" not in pod_spec
+
+    def test_gpu_job_without_configured_product_has_no_node_selector(self, mocker: MockerFixture) -> None:
+        pod_spec = self._create_gmx(mocker, gpu_product="", nb="gpu", pme="cpu")["spec"]["template"]["spec"]
+        assert "nodeSelector" not in pod_spec
+
+
 class TestAmberManifest:
     """AMBER jobs run in the mdin directory with relative input references."""
 
