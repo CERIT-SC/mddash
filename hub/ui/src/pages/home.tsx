@@ -55,24 +55,27 @@ export function HomePage() {
     }
   }, [status, cfg.baseUrl, cfg.userName])
 
+  // Set optimistic status only after the POST resolves: the redirect effect navigates away, canceling in-flight fetches.
   const start = useCallback(() => {
     setBusy(true)
-    setOptimistic("starting")
-    api.startServer(cfg.userName).catch((e: Error) => {
-      toast.error(e.message)
-      setOptimistic(null)
-      setBusy(false)
-    })
+    api
+      .startServer(cfg.userName)
+      .then(() => setOptimistic("starting"))
+      .catch((e: Error) => {
+        toast.error(e.message)
+        setBusy(false)
+      })
   }, [api, cfg.userName])
 
   const stop = useCallback(() => {
     setBusy(true)
-    setOptimistic("stopping")
-    api.stopServer(cfg.userName).catch((e: Error) => {
-      toast.error(e.message)
-      setOptimistic(null)
-      setBusy(false)
-    })
+    api
+      .stopServer(cfg.userName)
+      .then(() => setOptimistic("stopping"))
+      .catch((e: Error) => {
+        toast.error(e.message)
+        setBusy(false)
+      })
   }, [api, cfg.userName])
 
   // Dashboard "Stop server" lands here with ?stop: hub pages own the stop call
