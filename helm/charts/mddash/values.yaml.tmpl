@@ -3,7 +3,6 @@
 {{- $helmPackage := $cfg.helm.package -}}
 {{- $imageTag := getenv "IMAGE_TAG" -}}
 {{- $registry := $cfg.registry -}}
-{{- /* Configs predating the gpuProduct key leave GPU pods unpinned (empty == no nodeSelector). */ -}}
 {{- $gpuProduct := index $cfg "gpuProduct" | default "" -}}
 {{- /* Configs predating the seaweedfs section default to external (absent == disabled). */ -}}
 {{- $sws := index $cfg.s3 "seaweedfs" | default dict -}}
