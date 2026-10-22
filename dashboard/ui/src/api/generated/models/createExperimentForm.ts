@@ -12,11 +12,11 @@ export interface CreateExperimentForm {
   /** @minLength 1 */
   'experiment-name': string;
   type: CreateExperimentFormType;
-  pdb?: string;
-  'repo-url'?: string;
-  'notebooks-repo'?: string;
-  'access-token'?: string;
-  'notebook-module'?: string;
-  engine?: Engine;
   'simulation-files'?: Blob[];
+  pdb?: string | null;
+  'repo-url'?: string | null;
+  'notebooks-repo'?: string | null;
+  'access-token'?: string | null;
+  'notebook-module'?: string | null;
+  engine?: Engine;
 }

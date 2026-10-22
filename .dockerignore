@@ -17,6 +17,7 @@ config*.yaml
 **/htmlcov/
 **/*.tar.bz2
 /tuner/demo/
+/dashboard/api/_demo/
 **/tests/
 **/test/
 **/fixtures/

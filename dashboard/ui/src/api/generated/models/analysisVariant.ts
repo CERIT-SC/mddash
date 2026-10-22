@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * One variant of a multi-file analysis (extra summary keys pass through).
+ */
 export interface AnalysisVariant {
   /** @minLength 1 */
   analysis: string;

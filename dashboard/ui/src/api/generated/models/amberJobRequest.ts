@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Compute settings for an AMBER run.
+ */
 export interface AmberJobRequest {
   binary: string;
   ewald: string;

@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Accepted archive or restore.
+ */
 export interface ArchiveAttempt {
   attempt_id: string;
 }

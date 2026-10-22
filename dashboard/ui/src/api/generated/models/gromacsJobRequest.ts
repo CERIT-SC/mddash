@@ -8,6 +8,9 @@
 import type { GromacsJobRequestNb } from './gromacsJobRequestNb.ts';
 import type { GromacsJobRequestPme } from './gromacsJobRequestPme.ts';
 
+/**
+ * Compute settings for a GROMACS run.
+ */
 export interface GromacsJobRequest {
   /** @minimum 1 */
   np: number;

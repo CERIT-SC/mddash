@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * A file of an MDPosit publication package.
+ */
 export interface PublicationFile {
   role?: string;
   path: string;

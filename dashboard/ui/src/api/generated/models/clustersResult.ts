@@ -8,6 +8,9 @@
 import type { ClustersResultClustersItem } from './clustersResultClustersItem.ts';
 import type { ClustersResultTransitionsItem } from './clustersResultTransitionsItem.ts';
 
+/**
+ * Conformational clusters and their transitions.
+ */
 export interface ClustersResult {
   name: string;
   cutoff: number;

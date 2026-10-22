@@ -11,25 +11,24 @@ import type { ExperimentArchiveState } from './experimentArchiveState.ts';
 import type { ExperimentSource } from './experimentSource.ts';
 import type { Notebook } from './notebook.ts';
 import type { NotebookModuleCategory } from './notebookModuleCategory.ts';
-import type { NullableString } from './nullableString.ts';
 import type { SimulationJob } from './simulationJob.ts';
 import type { TunerJob } from './tunerJob.ts';
 
+/**
+ * A molecular dynamics experiment with its notebook and jobs.
+ */
 export interface Experiment {
   id: string;
   created_at: string;
   updated_at: string;
   name: string;
-  module_name?: NullableString | null;
+  module_name?: string | null;
   module_category?: NotebookModuleCategory | null;
-  /** @nullable */
   latest_simulation_path: string | null;
   source?: ExperimentSource | null;
-  /** @nullable */
   size_bytes?: number | null;
-  notebooks_repo?: NullableString | null;
-  mdrepo_id?: NullableString | null;
-  /** @nullable */
+  notebooks_repo?: string | null;
+  mdrepo_id?: string | null;
   mdrepo_published?: boolean | null;
   engine: Engine;
   notebook: Notebook | null;
@@ -38,10 +37,8 @@ export interface Experiment {
   analysis_jobs: AnalysisJob[];
   step?: number;
   status?: string;
-  /** @nullable */
   archived_at: string | null;
-  /** @nullable */
   archive_state: ExperimentArchiveState;
   can_publish?: boolean;
-  mdrepo_record_url?: NullableString | null;
+  mdrepo_record_url?: string | null;
 }

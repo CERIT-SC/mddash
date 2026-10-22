@@ -7,6 +7,9 @@
  */
 import type { NamedDataResultDataItem } from './namedDataResultDataItem.ts';
 
+/**
+ * Named data entries.
+ */
 export interface NamedDataResult {
   step?: number;
   data: NamedDataResultDataItem[];

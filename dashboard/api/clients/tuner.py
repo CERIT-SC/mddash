@@ -1,231 +1,78 @@
+"""Tuner API client (HTTP basic auth); `engine` is the API path segment (`gmx`, `amber`)."""
+
 from pathlib import Path
 
-import requests
-from config import TUNER_PASSWORD, TUNER_URL, TUNER_USER
-from requests import HTTPError, Response
-from requests.auth import HTTPBasicAuth
-from requests.exceptions import Timeout
+import anyio
+import httpx
+from core.config import TUNER_PASSWORD, TUNER_URL, TUNER_USER
 
-AUTH = HTTPBasicAuth(TUNER_USER, TUNER_PASSWORD)
+from clients.http import raise_for_status
 
 POLL_TIMEOUT = 5
 SUBMIT_TIMEOUT = 60
 DELETE_TIMEOUT = 15
 
 
-def _handle_response(response: Response) -> dict:
-    if response.ok:
+class TunerClient:
+    """Tuning jobs and their trial logs."""
+
+    def __init__(
+        self,
+        http: httpx.AsyncClient,
+        base_url: str = TUNER_URL,
+        auth: httpx.Auth | None = None,
+    ) -> None:
+        """Bind to the shared HTTP client."""
+        self._http = http
+        self._base_url = base_url
+        self._auth = auth or httpx.BasicAuth(TUNER_USER, TUNER_PASSWORD)
+
+    def _url(self, engine: str, path: str = "") -> str:
+        return f"{self._base_url}/tuning-jobs/{engine}{path}"
+
+    @staticmethod
+    def _json(response: httpx.Response) -> dict:
+        raise_for_status(response)
         if not response.text:
             return {}
         return response.json()
 
-    # Extract error detail from tuner response
-    try:
-        detail = response.json().get("detail", response.text)
-    except Exception:
-        detail = response.text or f"{response.status_code} {response.reason}"
-
-    raise HTTPError(detail, response=response)
-
-
-def gmx_submit(tpr_path: Path, nsteps: int, extra_args: str = "") -> dict:
-    """
-    Submit a GROMACS TPR file for parameter tuning.
-
-    Args:
-        tpr_path: The .tpr file for the simulation to be tuned.
-        nsteps: Number of steps to run in GROMACS mdrun.
-        extra_args: Additional GROMACS mdrun arguments (default: "").
-
-    Returns:
-        The response from the tuner.
-    """
-    with tpr_path.open("rb") as f:
-        files = {"file": f}
-        data = {"nsteps": nsteps, "extra_args": extra_args}
-        response = requests.post(
-            f"{TUNER_URL}/tuning-jobs/gmx", files=files, data=data, auth=AUTH, timeout=SUBMIT_TIMEOUT
+    async def submit(self, engine: str, files: dict[str, Path], nsteps: int, extra_args: str = "") -> dict:
+        """Submit run inputs for tuning; `files` maps the form field to its file (`file` for GROMACS, `prmtop`/`inpcrd`/`mdin` for AMBER)."""
+        uploads = {field: (path.name, await anyio.Path(path).read_bytes()) for field, path in files.items()}
+        response = await self._http.post(
+            self._url(engine),
+            files=uploads,
+            data={"nsteps": str(nsteps), "extra_args": extra_args},
+            auth=self._auth,
+            timeout=SUBMIT_TIMEOUT,
         )
-    return _handle_response(response)
+        return self._json(response)
 
+    async def poll_status(self, engine: str, job_id: str) -> dict:
+        """
+        Status of a tuning job with its trials.
 
-def gmx_poll_status(job_id: str) -> dict:
-    """
-    Poll the status of a submitted GROMACS tuning job.
+        Raises:
+            TimeoutError: If the tuner does not answer in time.
+        """
+        try:
+            response = await self._http.get(
+                self._url(engine, f"/{job_id}/status"), auth=self._auth, timeout=POLL_TIMEOUT
+            )
+        except httpx.TimeoutException as e:
+            raise TimeoutError(f"Tuner poll status timed out for job {job_id}") from e
+        return self._json(response)
 
-    Args:
-        job_id: The ID of the job to poll.
+    async def delete_job(self, engine: str, job_id: str) -> dict:
+        """Delete a tuning job."""
+        response = await self._http.delete(self._url(engine, f"/{job_id}"), auth=self._auth, timeout=DELETE_TIMEOUT)
+        return self._json(response)
 
-    Returns:
-        The response from the tuner.
-
-    Raises:
-        TimeoutError: If the request timed out.
-    """
-    try:
-        response = requests.get(f"{TUNER_URL}/tuning-jobs/gmx/{job_id}/status", auth=AUTH, timeout=POLL_TIMEOUT)
-        return _handle_response(response)
-    except Timeout as e:
-        raise TimeoutError(f"Tuner poll status timed out for job {job_id}") from e
-
-
-def gmx_delete_job(job_id: str) -> dict:
-    """
-    Delete a submitted GROMACS tuning job.
-
-    Args:
-        job_id: The ID of the job to delete.
-
-    Returns:
-        The response from the tuner.
-    """
-    response = requests.delete(f"{TUNER_URL}/tuning-jobs/gmx/{job_id}", auth=AUTH, timeout=DELETE_TIMEOUT)
-    return _handle_response(response)
-
-
-def amber_submit(prmtop_path: Path, inpcrd_path: Path, mdin_path: Path, nsteps: int, extra_args: str = "") -> dict:
-    """
-    Submit an AMBER simulation for parameter tuning.
-
-    Args:
-        prmtop_path: AMBER parameter/topology file (.prmtop or .parm7).
-        inpcrd_path: AMBER coordinate/restart file (.inpcrd, .rst7, or .nc).
-        mdin_path: AMBER input file (.mdin).
-        nsteps: Number of steps to run in pmemd.
-        extra_args: Additional pmemd arguments (default: "").
-
-    Returns:
-        The response from the tuner.
-    """
-    with prmtop_path.open("rb") as prmtop, inpcrd_path.open("rb") as inpcrd, mdin_path.open("rb") as mdin:
-        files = {"prmtop": prmtop, "inpcrd": inpcrd, "mdin": mdin}
-        data = {"nsteps": nsteps, "extra_args": extra_args}
-        response = requests.post(
-            f"{TUNER_URL}/tuning-jobs/amber", files=files, data=data, auth=AUTH, timeout=SUBMIT_TIMEOUT
+    async def trial_log(self, engine: str, job_id: str, trial_id: str, stream: str) -> str:
+        """`stdout` or `stderr` of a tuning trial (empty until written)."""
+        response = await self._http.get(
+            self._url(engine, f"/{job_id}/trials/{trial_id}/{stream}"), auth=self._auth, timeout=POLL_TIMEOUT
         )
-    return _handle_response(response)
-
-
-def amber_poll_status(job_id: str) -> dict:
-    """
-    Poll the status of a submitted AMBER tuning job.
-
-    Args:
-        job_id: The ID of the job to poll.
-
-    Returns:
-        The response from the tuner.
-
-    Raises:
-        TimeoutError: If the request timed out.
-    """
-    try:
-        response = requests.get(f"{TUNER_URL}/tuning-jobs/amber/{job_id}/status", auth=AUTH, timeout=POLL_TIMEOUT)
-        return _handle_response(response)
-    except Timeout as e:
-        raise TimeoutError(f"Tuner poll status timed out for job {job_id}") from e
-
-
-def amber_delete_job(job_id: str) -> dict:
-    """
-    Delete a submitted AMBER tuning job.
-
-    Args:
-        job_id: The ID of the job to delete.
-
-    Returns:
-        The response from the tuner.
-    """
-    response = requests.delete(f"{TUNER_URL}/tuning-jobs/amber/{job_id}", auth=AUTH, timeout=DELETE_TIMEOUT)
-    return _handle_response(response)
-
-
-def gmx_get_trial_stdout(job_id: str, trial_id: str) -> str:
-    """
-    Get the stdout log for a GMX tuning trial.
-
-    Args:
-        job_id: The ID of the job.
-        trial_id: The ID of the trial.
-
-    Returns:
-        The stdout content (empty string if not yet written).
-    """
-    response = requests.get(
-        f"{TUNER_URL}/tuning-jobs/gmx/{job_id}/trials/{trial_id}/stdout", auth=AUTH, timeout=POLL_TIMEOUT
-    )
-    response.raise_for_status()
-    return response.text
-
-
-def gmx_get_trial_stderr(job_id: str, trial_id: str) -> str:
-    """
-    Get the stderr log for a GMX tuning trial.
-
-    Args:
-        job_id: The ID of the job.
-        trial_id: The ID of the trial.
-
-    Returns:
-        The stderr content (empty string if not yet written).
-    """
-    response = requests.get(
-        f"{TUNER_URL}/tuning-jobs/gmx/{job_id}/trials/{trial_id}/stderr", auth=AUTH, timeout=POLL_TIMEOUT
-    )
-    response.raise_for_status()
-    return response.text
-
-
-def amber_get_trial_stdout(job_id: str, trial_id: str) -> str:
-    """
-    Get the stdout log for an AMBER tuning trial.
-
-    Args:
-        job_id: The ID of the job.
-        trial_id: The ID of the trial.
-
-    Returns:
-        The stdout content (empty string if not yet written).
-    """
-    response = requests.get(
-        f"{TUNER_URL}/tuning-jobs/amber/{job_id}/trials/{trial_id}/stdout", auth=AUTH, timeout=POLL_TIMEOUT
-    )
-    response.raise_for_status()
-    return response.text
-
-
-def amber_get_trial_stderr(job_id: str, trial_id: str) -> str:
-    """
-    Get the stderr log for an AMBER tuning trial.
-
-    Args:
-        job_id: The ID of the job.
-        trial_id: The ID of the trial.
-
-    Returns:
-        The stderr content (empty string if not yet written).
-    """
-    response = requests.get(
-        f"{TUNER_URL}/tuning-jobs/amber/{job_id}/trials/{trial_id}/stderr", auth=AUTH, timeout=POLL_TIMEOUT
-    )
-    response.raise_for_status()
-    return response.text
-
-
-if __name__ == "__main__":
-    tpr_path = Path(__file__).parent.parent / "_demo" / "data" / "md.tpr"
-
-    response = gmx_submit(tpr_path, nsteps=25000, extra_args="")
-    print("Submitted job:", response)
-
-    print("Waiting for job to start...")
-    from time import sleep
-
-    sleep(2)
-
-    run_id = response["id"]
-    status = gmx_poll_status(run_id)
-    print("Job status:", status)
-
-    delete_response = gmx_delete_job(run_id)
-    print("Deleted job:", delete_response)
+        raise_for_status(response)
+        return response.text

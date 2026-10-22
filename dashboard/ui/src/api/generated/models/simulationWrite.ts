@@ -8,11 +8,14 @@
 import type { Engine } from './engine.ts';
 import type { SimulationFiles } from './simulationFiles.ts';
 
+/**
+ * Simulation manifest content to create or update.
+ */
 export interface SimulationWrite {
-  simulation_path?: string;
+  simulation_path?: string | null;
   /** @minLength 1 */
   name: string;
-  engine?: Engine;
+  engine?: Engine | null;
   files: SimulationFiles;
   extra_args?: string;
 }

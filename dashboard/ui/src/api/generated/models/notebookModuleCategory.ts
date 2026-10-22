@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Semantic system category of a curated notebook module (drives the card icon).
+ */
 export type NotebookModuleCategory = typeof NotebookModuleCategory[keyof typeof NotebookModuleCategory];
 
 

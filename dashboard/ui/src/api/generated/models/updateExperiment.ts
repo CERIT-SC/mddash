@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Editable experiment properties.
+ */
 export interface UpdateExperiment {
   name: string;
 }

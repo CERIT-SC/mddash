@@ -7,6 +7,9 @@
  */
 import type { NotebookTierValue } from './notebookTierValue.ts';
 
+/**
+ * A notebook resource tier.
+ */
 export interface NotebookTier {
   value: NotebookTierValue;
   cpuLimit: string;

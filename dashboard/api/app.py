@@ -1,141 +1,107 @@
+import asyncio
 import contextlib
 import logging
-import os
+import secrets
 import time
-from pathlib import Path
+from collections.abc import AsyncIterator
 
-from alembic.runtime.migration import MigrationContext
-from alembic.script import ScriptDirectory
-from alembic.util.exc import CommandError
-from config import DATA_DIR, LOG_FORMAT, LOG_LEVEL
-from errors import register_error_handlers
-from extensions import db, ma, migrate
-from flask import Flask
-from flask_migrate import stamp, upgrade
-from logging_utils import configure_logging, enable_loggers
-from notebook_modules import load_catalog_or_exit
-from routes import (
-    amber_bp,
-    analysis_bp,
-    experiments_bp,
-    files_bp,
-    gmx_bp,
-    mdrepo_bp,
-    misc_bp,
-    notebook_bp,
-    notebook_config_bp,
-    simulations_bp,
-    tuner_bp,
-)
-from sqlalchemy import inspect as sa_inspect
-from utils import start_du_monitor
+import anyio
+from clients import Clients
+from core.config import API_PREFIX, DATA_DIR, LOG_FORMAT, LOG_LEVEL, MDREPO_CLIENT_SECRET
+from core.db import dispose_engine, init_engine, run_migrations
+from core.errors import register_exception_handlers
+from core.logging_utils import HealthCheckFilter, configure_logging, enable_loggers
+from core.utils import du_monitor
+from fastapi import FastAPI
+from modules.archive import router as archive
+from modules.experiments import router as experiments
+from modules.files import router as files
+from modules.jobs.amber import router as amber
+from modules.jobs.analysis import router as analysis
+from modules.jobs.gmx import router as gmx
+from modules.jobs.tuner import router as tuner
+from modules.mdrepo import router as mdrepo
+from modules.notebooks import router as notebooks
+from modules.notebooks.catalog import load_catalog_or_exit
+from modules.publishing import router as publishing
+from modules.simulations import router as simulations
+from modules.system import router as system
+from openapi import install_openapi
+from starlette.middleware.sessions import SessionMiddleware
 
 logger = logging.getLogger(__name__)
 
-MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 DU_MONITOR_START_DELAY_SECONDS = 10.0
+DB_PATH_NAME = "experiments.db"
+
+# Inclusion order is the path order of the generated OpenAPI document.
+ROUTERS = (system, experiments, publishing, archive, mdrepo, files, simulations, gmx, amber, tuner, notebooks, analysis)
 
 
-def _log_duration(phase: str, start: float) -> None:
-    with contextlib.suppress(Exception):
-        logger.info("startup phase %s completed in %.3fs", phase, time.perf_counter() - start)
-
-
-def _run_migrations() -> None:
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Validate the catalog, migrate the database, and run the du monitor for the app's lifetime."""
     start = time.perf_counter()
-    logger.info("Checking database migrations...")
-
-    script = ScriptDirectory(str(MIGRATIONS_DIR))
-    head_rev = script.get_current_head()
-
-    with db.engine.connect() as conn:
-        current_rev = MigrationContext.configure(conn).get_current_revision()
-
-    if current_rev is None:
-        if sa_inspect(db.engine).get_table_names():
-            logger.info("Unversioned DB with tables; stamping to migration baseline...")
-            stamp(directory=str(MIGRATIONS_DIR), revision="001", purge=True)
-            current_rev = "001"
-    else:
+    du_task: asyncio.Task | None = None
+    try:
+        # Validate bundled catalog before migrations so a bad catalog fails fast.
+        load_catalog_or_exit()
+        db_path = DATA_DIR / DB_PATH_NAME
+        await anyio.to_thread.run_sync(run_migrations, db_path)
+        init_engine(db_path)
+        du_task = asyncio.create_task(du_monitor(DATA_DIR, initial_delay=DU_MONITOR_START_DELAY_SECONDS))
+        logger.info("startup completed in %.3fs", time.perf_counter() - start)
+        yield
+    finally:
+        if du_task is not None:
+            du_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await du_task
         try:
-            script.get_revision(current_rev)
-        except CommandError:
-            logger.error(
-                "DB revision '%s' not in migration scripts (head: '%s'). Downgrade the DB first.",
-                current_rev,
-                head_rev,
-            )
-            raise RuntimeError(f"DB revision '{current_rev}' is ahead of migration scripts.")
-
-    _log_duration("db-revision-check", start)
-
-    if current_rev == head_rev:
-        logger.info("Database is at migration head %s; skipping upgrade", head_rev)
-        return
-
-    start = time.perf_counter()
-    logger.info("Running database migrations...")
-    upgrade(directory=str(MIGRATIONS_DIR))
-    _log_duration("migration-upgrade", start)
+            await app.state.clients.aclose()
+        finally:
+            await dispose_engine()
 
 
-def _register_blueprints(app: Flask) -> None:
-    app.register_blueprint(amber_bp)
-    app.register_blueprint(analysis_bp)
-    app.register_blueprint(experiments_bp)
-    app.register_blueprint(notebook_bp)
-    app.register_blueprint(notebook_config_bp)
-    app.register_blueprint(tuner_bp)
-    app.register_blueprint(gmx_bp)
-    app.register_blueprint(simulations_bp)
-    app.register_blueprint(files_bp)
-    app.register_blueprint(misc_bp)
-    app.register_blueprint(mdrepo_bp)
-
-
-def create_app() -> Flask:
+def create_app(
+    *, clients: Clients | None = None, secure_cookies: bool = True, session_secret: str | None = None
+) -> FastAPI:
     """
-    Create and configure the Flask application.
+    Build the FastAPI application (startup work runs in the lifespan, not at import).
 
-    Returns:
-        Flask: Configured Flask application instance.
+    Args:
+        clients: Upstream clients (tests and the demo pass fakes); production clients by default.
+        secure_cookies: Mark the session cookie Secure (the local demo serves plain http).
+        session_secret: Session signing key; defaults to the MDRepo client secret.
     """
-    startup_start = time.perf_counter()
     configure_logging(LOG_FORMAT, LOG_LEVEL)
     enable_loggers()
-    app = Flask(__name__)
-
-    db_path = DATA_DIR / "experiments.db"
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
-    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-    app.config["SECRET_KEY"] = os.environ.get("MDREPO_CLIENT_SECRET", "")
-    app.config["SESSION_COOKIE_SECURE"] = True
-    app.config["SESSION_COOKIE_HTTPONLY"] = True
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-
-    db.init_app(app)
-    ma.init_app(app)
-    migrate.init_app(app, db, directory=str(MIGRATIONS_DIR))
-
-    reg_start = time.perf_counter()
-    _register_blueprints(app)
-    register_error_handlers(app)
-    _log_duration("route-registration", reg_start)
-
-    # Validate bundled catalog before migrations so a bad catalog fails fast.
-    catalog_start = time.perf_counter()
-    load_catalog_or_exit()
-    _log_duration("notebook-catalog", catalog_start)
-
-    with app.app_context():
-        _run_migrations()
-
-    start_du_monitor(DATA_DIR, initial_delay=DU_MONITOR_START_DELAY_SECONDS)
-    _log_duration("app-factory", startup_start)
-
+    # uvicorn configures its loggers before calling the factory.
+    access_logger = logging.getLogger("uvicorn.access")
+    if not any(isinstance(f, HealthCheckFilter) for f in access_logger.filters):
+        access_logger.addFilter(HealthCheckFilter())
+    app = FastAPI(
+        title="MDDash Dashboard API",
+        version="1.0.0",
+        description="API for experiment, simulation, compute, analysis, notebook, file, and publication workflows.",
+        lifespan=lifespan,
+        openapi_url=f"{API_PREFIX}/openapi.json",
+        docs_url=f"{API_PREFIX}/docs",
+        redoc_url=None,
+        separate_input_output_schemas=False,
+    )
+    app.state.clients = clients or Clients.create()
+    # MDRepo OAuth tokens live in this signed cookie; without a configured secret
+    # (MDRepo disabled) sessions only need to survive this process.
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=session_secret or MDREPO_CLIENT_SECRET or secrets.token_hex(32),
+        https_only=secure_cookies,
+        same_site="lax",
+        max_age=None,
+    )
+    register_exception_handlers(app)
+    for module in ROUTERS:
+        app.include_router(module.router)
+    install_openapi(app)
     return app
-
-
-if __name__ == "__main__":
-    logger.info("Starting Flask development server...")
-    create_app().run(debug=True, host="0.0.0.0", port=5000)

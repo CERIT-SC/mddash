@@ -7,8 +7,10 @@
  */
 import type { PublishRequestTarget } from './publishRequestTarget.ts';
 
+/**
+ * Publication target (MDPosit requires the simulation to publish).
+ */
 export interface PublishRequest {
   target?: PublishRequestTarget;
-  /** @nullable */
   simulation_path?: string | null;
 }

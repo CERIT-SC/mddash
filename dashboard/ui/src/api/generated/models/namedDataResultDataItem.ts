@@ -6,7 +6,10 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type NamedDataResultDataItem = {
+/**
+ * One named data entry.
+ */
+export interface NamedDataResultDataItem {
   name: string;
   [key: string]: unknown;
- };
+ }

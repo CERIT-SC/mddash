@@ -123,6 +123,11 @@ test: test-dashboard-api test-dashboard-auth test-dashboard-ui test-mdrun-api te
 test-dashboard-ui: ## Run Dashboard UI tests
 	pnpm --filter dash test
 
+.PHONY: openapi
+openapi: ## Regenerate dashboard/api/openapi.yaml from the FastAPI app, then the UI client
+	cd dashboard/api && uv run python openapi.py
+	pnpm --filter dash api:generate
+
 .PHONY: test-dashboard-api
 test-dashboard-api: ## Run dashboard API tests
 	cd dashboard/api && uv run pytest
@@ -304,7 +309,7 @@ e2e: ## Run browser E2E tests against the demo harness with Playwright
 	pnpm --filter @mddash/e2e test
 
 .PHONY: demo
-demo: ## Run local demo with real Flask API in demo profile and React dev server
+demo: ## Run local demo with the real FastAPI app in demo profile and React dev server
 	@fuser -k 8888/tcp 5173/tcp 2>/dev/null || true # clean up stale listeners from previous runs
 	@echo "Demo running at http://localhost:5173/dash/ (Ctrl+C to stop)"; \
 	trap "kill 0 2>/dev/null; exit" INT TERM EXIT; \

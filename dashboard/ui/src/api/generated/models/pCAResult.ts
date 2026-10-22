@@ -7,6 +7,9 @@
  */
 import type { NumberMatrix } from './numberMatrix.ts';
 
+/**
+ * Principal component analysis.
+ */
 export interface PCAResult {
   framestep: number;
   atoms: number[];

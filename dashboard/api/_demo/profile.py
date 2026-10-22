@@ -1,94 +1,64 @@
-"""
-Demo profile setup for local development.
+"""Demo profile: seeds deterministic data after the real startup migrations and bypasses MDRepo OAuth."""
 
-Installs all mocks and seeds deterministic test data for UI development.
-"""
-
+import contextlib
 import logging
-import secrets
 import time
-from typing import TYPE_CHECKING
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from collections.abc import AsyncIterator
 
-from flask import redirect, request, session
-from token_manager import MDREPO_REFRESH_TOKEN_KEY, MDREPO_TOKEN_EXPIRES_AT, MDREPO_TOKEN_KEY
+import anyio
+from core.config import API_PREFIX, DATA_DIR
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
+from fastapi.routing import APIRoute
+from modules.mdrepo.router import redirect_with_query
+from modules.mdrepo.tokens import MDREPO_REFRESH_TOKEN_KEY, MDREPO_TOKEN_EXPIRES_AT, MDREPO_TOKEN_KEY
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
-from .mocks import install_all_mocks
-from .seed import seed_data
-from .state import demo_state
-
-if TYPE_CHECKING:
-    from flask import Flask
-    from werkzeug.wrappers import Response as WerkzeugResponse
+from .seeds import seed_data
 
 logger = logging.getLogger(__name__)
 
 
-def setup_demo_profile(app: "Flask") -> None:
-    """
-    Install demo mocks and seed deterministic local data.
-
-    Mocks stay installed process-wide; per-request state is not needed since
-    the demo serves a single user.
-
-    Args:
-        app: The Flask application instance.
-    """
-    if demo_state.initialized:
-        return
-
-    install_all_mocks()
+def setup_demo_profile(app: FastAPI) -> None:
+    """Install the MDRepo OAuth bypass and seeding after startup migrations."""
     _install_demo_mdrepo_auth(app)
 
-    # Fresh key per start: stale signed cookies die with the wiped demo data,
-    # so a mock MDRepo session must be re-established after every restart.
-    app.config["SESSION_COOKIE_SECURE"] = False
-    app.config["SECRET_KEY"] = secrets.token_hex(32)
+    startup = app.router.lifespan_context
 
-    with app.app_context():
-        seed_data()
+    @contextlib.asynccontextmanager
+    async def seeded_lifespan(application: FastAPI) -> AsyncIterator[None]:
+        async with startup(application):
+            await anyio.to_thread.run_sync(_seed)
+            logger.info("Demo profile initialized with real API routes and fake upstream clients.")
+            yield
 
-    demo_state.initialized = True
-    logger.info("Demo profile initialized with real API routes and mocked integrations.")
+    app.router.lifespan_context = seeded_lifespan
 
 
-def _install_demo_mdrepo_auth(app: "Flask") -> None:
-    """
-    Install demo MDRepo OAuth bypass.
+def _seed() -> None:
+    engine = create_engine(f"sqlite:///{DATA_DIR / 'experiments.db'}")
+    try:
+        with Session(engine, expire_on_commit=False) as session:
+            seed_data(session)
+    finally:
+        engine.dispose()
 
-    Replaces the initiate_auth endpoint to immediately set a demo token
-    and redirect back to the application without requiring actual OAuth.
-    """
-    endpoint = "mdrepo.initiate_auth"
-    if endpoint not in app.view_functions:
-        return
 
-    def _demo_mdrepo_auth() -> "WerkzeugResponse":
-        """
-        Bypass MDRepo OAuth and set demo token directly.
+def _install_demo_mdrepo_auth(app: FastAPI) -> None:
+    """Route `/mdrepo/auth` to a handler that stores a demo token instead of starting OAuth."""
 
-        Returns:
-            Redirect response to the return URL.
-        """
-        return_url = request.args.get("return_url", "/")
-        session[MDREPO_TOKEN_KEY] = "demo-access-token"
+    async def demo_mdrepo_auth(  # ruff:ignore[unused-async]
+        request: Request, return_url: str = "/"
+    ) -> RedirectResponse:
+        request.session[MDREPO_TOKEN_KEY] = "demo-access-token"
         # The signed cookie outlives the 1h token; the refresh grant lets
         # get_valid_token heal expiry via the mocked token endpoint.
-        session[MDREPO_REFRESH_TOKEN_KEY] = "demo-refresh-token"
-        session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + 3600
-        return redirect(_with_query_param(return_url, "mdrepo_auth", "success"))
+        request.session[MDREPO_REFRESH_TOKEN_KEY] = "demo-refresh-token"
+        request.session[MDREPO_TOKEN_EXPIRES_AT] = time.time() + 3600
+        return redirect_with_query(return_url, mdrepo_auth="success")
 
-    app.view_functions[endpoint] = _demo_mdrepo_auth
-
-
-def _with_query_param(url: str, key: str, value: str) -> str:
-    """
-    Add or update a query parameter in a URL.
-
-    Returns:
-        URL with the query parameter added or updated.
-    """
-    parts = urlsplit(url)
-    query = dict(parse_qsl(parts.query, keep_blank_values=True))
-    query[key] = value
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+    # Routes match in order: the bypass shadows the real OAuth start.
+    app.router.routes.insert(
+        0, APIRoute(f"{API_PREFIX}/mdrepo/auth", demo_mdrepo_auth, methods=["GET"], include_in_schema=False)
+    )

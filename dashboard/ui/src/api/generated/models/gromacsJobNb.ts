@@ -10,6 +10,7 @@ export type GromacsJobNb = typeof GromacsJobNb[keyof typeof GromacsJobNb];
 
 
 export const GromacsJobNb = {
+  auto: 'auto',
   cpu: 'cpu',
   gpu: 'gpu',
 } as const;

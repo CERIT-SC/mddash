@@ -12,7 +12,7 @@ One-way imports. `app/routes` imports from `features`, which imports from `api/s
 
 ## API
 
-- `dashboard/api/openapi.yaml` is authoritative (`pnpm api:generate` regenerates; drift fails CI). Import only `@/api/generated/{client,models,schemas}`; never edit generated files or recreate generated types/enums.
+- `dashboard/api/openapi.yaml` is authoritative. It is generated from the FastAPI app (`make openapi` rewrites it and regenerates the client; drift fails CI on both sides). Import only `@/api/generated/{client,models,schemas}`; never edit generated files or recreate generated types/enums.
 - `fetch` only outside the Dashboard API; Dashboard endpoints go through the generated client only, never hand-built URLs.
 - Query policy the contract can't express (polling, invalidation webs) lives in feature-local modules that never restate generated types.
 

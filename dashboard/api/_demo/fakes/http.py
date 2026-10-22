@@ -1,0 +1,1152 @@
+"""
+Fake upstream HTTP APIs (MDRun, tuner, MDRepo, MDPosit, MetaDump, Caddy, downloads).
+
+Served by the callback router as the transport of the API's HTTP client, with
+responses shaped after the real API specifications.
+"""
+
+import json
+import logging
+import re
+import time
+from functools import partial
+from http import HTTPStatus
+from pathlib import Path
+from urllib.parse import unquote
+from uuid import uuid4
+
+from clients.caddy import CADDY_ADMIN_API_URL
+from core.config import (
+    DATA_DIR,
+    MDPOSIT_REST_URL,
+    MDREPO_API_URL,
+    MDREPO_RECORD_NAME,
+    MDREPO_TOKEN_URL,
+    MDREPO_URL,
+    MDRUN_API_URL,
+    METADUMP_API_URL,
+    TUNER_URL,
+)
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import SQLAlchemyError
+
+from ..files import (
+    DEFAULT_PDB_FILE,
+    build_demo_archive_bytes,
+    get_mdposit_fixture_bytes,
+    write_gmx_checkpoint,
+    write_mdrun_stdio,
+    write_running_amber_log,
+)
+from ..state import E2E, demo_state
+from .router import CallbackRouter, MockRequest
+
+logger = logging.getLogger(__name__)
+
+# Default simulation parameters
+DEFAULT_GMX_NSTEPS = 100_000
+DEFAULT_GMX_DURATION_SEC = 30.0
+DEFAULT_TUNER_MAX_TRIALS = 12
+TUNER_TRIAL_DURATION_SEC = 10.0
+# Full production simulation length (ns) and hourly rates used by demo cost estimates.
+DEMO_TUNER_SIM_LENGTH_NS = 250.0
+DEMO_RATE_CPU_CORE_HOUR = 0.04
+DEMO_RATE_GPU_HOUR = 3.0
+DEMO_RATE_GB_RAM_HOUR = 0.005
+
+
+def register_upstreams(rsps: CallbackRouter) -> None:
+    """Register every fake upstream API on the router."""
+    _install_mdrun_mocks(rsps)
+    _install_tuner_mocks(rsps)
+    _install_mdrepo_mocks(rsps)
+    _install_mdposit_mocks(rsps)
+    _install_metadump_mocks(rsps)
+    _install_caddy_mocks(rsps)
+    _install_external_download_mocks(rsps)
+
+
+def _install_mdrun_mocks(rsps: CallbackRouter) -> None:
+    """Install MDRun API response mocks."""
+
+    def create_gmx_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Create a new GROMACS MDRun job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        try:
+            body = json.loads(request.body or "{}")
+        except json.JSONDecodeError:
+            body = {}
+
+        experiment_id = body.get("experiment_id", "unknown")
+        tpr_name = body.get("tpr_name", "md.tpr")
+        pme = body.get("pme", "cpu")
+        nb = body.get("nb", "cpu")
+        np_val = body.get("np", 2)
+        ntomp = body.get("ntomp", 4)
+
+        job_id = f"demo-gmx-{uuid4()}"
+        started_at = time.time()
+
+        demo_state.mdrun_jobs[job_id] = {
+            "status": "RUNNING",
+            "experiment_id": experiment_id,
+            "tpr_name": tpr_name,
+            "nsteps": DEFAULT_GMX_NSTEPS,
+            "created_at": started_at,
+            "duration_sec": DEFAULT_GMX_DURATION_SEC,
+            "log_line_index": 0,
+            "log_total_lines": 500,
+            "e2e_stage": 0,
+            "e2e_stage_at": started_at,
+        }
+
+        response_body = {
+            "id": job_id,
+            "status": "RUNNING",
+            "bucket_name": body.get("bucket_name", "demo-bucket"),
+            "pme": pme,
+            "nb": nb,
+            "np": np_val,
+            "ntomp": ntomp,
+            "extra_args": body.get("extra_args", ""),
+        }
+        return (HTTPStatus.CREATED, {}, json.dumps(response_body))
+
+    def create_amber_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Create a new AMBER MDRun job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        try:
+            body = json.loads(request.body or "{}")
+        except json.JSONDecodeError:
+            body = {}
+
+        experiment_id = body.get("experiment_id", "unknown")
+        prmtop_name = body.get("prmtop_name", "md.prmtop")
+        inpcrd_name = body.get("inpcrd_name", "md.inpcrd")
+        mdin_name = body.get("mdin_name", "md.mdin")
+        binary = body.get("binary", "pmemd.MPI")
+        ewald = body.get("ewald", "default")
+        np_val = body.get("np", 2)
+        ntomp = body.get("ntomp", 4)
+
+        job_id = f"demo-amber-{uuid4()}"
+        started_at = time.time()
+
+        demo_state.mdrun_jobs[job_id] = {
+            "status": "RUNNING",
+            "experiment_id": experiment_id,
+            "prmtop_name": prmtop_name,
+            "inpcrd_name": inpcrd_name,
+            "mdin_name": mdin_name,
+            "nsteps": DEFAULT_GMX_NSTEPS,
+            "created_at": started_at,
+            "duration_sec": DEFAULT_GMX_DURATION_SEC,
+            "log_line_index": 0,
+            "log_total_lines": 500,
+            "e2e_stage": 0,
+            "e2e_stage_at": started_at,
+        }
+
+        response_body = {
+            "id": job_id,
+            "status": "RUNNING",
+            "bucket_name": body.get("bucket_name", "demo-bucket"),
+            "binary": binary,
+            "ewald": ewald,
+            "np": np_val,
+            "ntomp": ntomp,
+            "extra_args": body.get("extra_args", ""),
+        }
+        return (HTTPStatus.CREATED, {}, json.dumps(response_body))
+
+    def get_gmx_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Get GROMACS job status.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/(?P<job_id>[^/]+)", request.url)
+        if not match:
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": "Job not found"}),
+            )
+
+        job_id = match.group("job_id")
+        job_data = demo_state.mdrun_jobs.get(job_id)
+
+        if job_data is None:
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": f"Job {job_id} not found"}),
+            )
+
+        _advance_mdrun_job(job_id, job_data)
+
+        response_body = {"id": job_id, "status": job_data["status"]}
+        return (HTTPStatus.OK, {}, json.dumps(response_body))
+
+    def get_amber_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Get AMBER job status.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/(?P<job_id>[^/]+)", request.url)
+        if not match:
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": "Job not found"}),
+            )
+
+        job_id = match.group("job_id")
+        job_data = demo_state.mdrun_jobs.get(job_id)
+
+        if job_data is None:
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": f"Job {job_id} not found"}),
+            )
+
+        _advance_mdrun_job(job_id, job_data)
+
+        response_body = {"id": job_id, "status": job_data["status"]}
+        return (HTTPStatus.OK, {}, json.dumps(response_body))
+
+    def delete_gmx_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Delete a GROMACS job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/(?P<job_id>[^/]+)", request.url)
+        if match:
+            demo_state.mdrun_jobs.pop(match.group("job_id"), None)
+        return (HTTPStatus.NO_CONTENT, {}, "")
+
+    def delete_amber_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Delete an AMBER job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/(?P<job_id>[^/]+)", request.url)
+        if match:
+            demo_state.mdrun_jobs.pop(match.group("job_id"), None)
+        return (HTTPStatus.NO_CONTENT, {}, "")
+
+    def stop_job(request: MockRequest, engine: str) -> tuple[int, dict[str, str], str]:
+        """
+        Mirrors MDRun stop: marks job STOPPED, keeps the row.
+
+        GMX also materializes the final checkpoint a later extend resumes from.
+        """
+        match = re.search(rf"{re.escape(MDRUN_API_URL)}/jobs/{engine}/(?P<job_id>[^/]+)/stop", request.url)
+        job_data = demo_state.mdrun_jobs.get(match.group("job_id")) if match else None
+        if job_data is None:
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": "Job not found"}),
+            )
+
+        job_data["status"] = "STOPPED"
+        if engine == "gmx":
+            deffnm = str(job_data.get("tpr_name", "md.tpr")).removesuffix(".tpr")
+            experiment_id = str(job_data.get("experiment_id", ""))
+            write_gmx_checkpoint(experiment_id, deffnm)
+            # A real TERM-stopped mdrun always prints a Performance: line (but never
+            # "Finished mdrun") — append it so the demo exercises the guarded parsers.
+            log_path = DATA_DIR / experiment_id / f"{deffnm}.log"
+            if log_path.exists():
+                with log_path.open("a") as f:
+                    f.write("\nPerformance:        62.5     1994.771    332.462\n")
+        return (HTTPStatus.NO_CONTENT, {}, "")
+
+    # GROMACS-specific endpoints
+    rsps.add_callback("POST", f"{MDRUN_API_URL}/jobs/gmx", callback=create_gmx_job)
+    rsps.add_callback("GET", re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+"), callback=get_gmx_job)
+    rsps.add_callback("DELETE", re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+"), callback=delete_gmx_job)
+    rsps.add_callback(
+        "POST",
+        re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/gmx/[^/]+/stop"),
+        callback=partial(stop_job, engine="gmx"),
+    )
+
+    # AMBER-specific endpoints
+    rsps.add_callback("POST", f"{MDRUN_API_URL}/jobs/amber", callback=create_amber_job)
+    rsps.add_callback("GET", re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=get_amber_job)
+    rsps.add_callback("DELETE", re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+"), callback=delete_amber_job)
+    rsps.add_callback(
+        "POST",
+        re.compile(rf"{re.escape(MDRUN_API_URL)}/jobs/amber/[^/]+/stop"),
+        callback=partial(stop_job, engine="amber"),
+    )
+
+
+def _install_tuner_mocks(rsps: CallbackRouter) -> None:
+    """Install Tuner API response mocks for GMX and AMBER engines."""
+
+    def submit_gmx_tuner_job(_request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Submit a GROMACS tuning job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        job_id = f"demo-tuner-{uuid4()}"
+        started_at = time.time()
+
+        demo_state.tuner_jobs[job_id] = {
+            "status": "RUNNING",
+            "engine": "gmx",
+            "created_at": started_at,
+            "max_trials": DEFAULT_TUNER_MAX_TRIALS,
+            "sim_length_ns": DEMO_TUNER_SIM_LENGTH_NS,
+            "trials": [
+                {
+                    "id": f"{job_id[:10]}-00000",
+                    "status": "FINISHED",
+                    "np": 8,
+                    "ntomp": 1,
+                    "nb": "gpu",
+                    "pme": "cpu",
+                    "performance": 68.5,
+                    "started_at": started_at - TUNER_TRIAL_DURATION_SEC * 2,
+                },
+                {
+                    "id": f"{job_id[:10]}-00001",
+                    "status": "ERROR",
+                    "np": 4,
+                    "ntomp": 2,
+                    "nb": "cpu",
+                    "pme": "cpu",
+                    "performance": None,
+                    "started_at": started_at - TUNER_TRIAL_DURATION_SEC,
+                },
+                {
+                    "id": f"{job_id[:10]}-00002",
+                    "status": "RUNNING",
+                    "np": 4,
+                    "ntomp": 2,
+                    "nb": "gpu",
+                    "pme": "gpu",
+                    "performance": None,
+                    "started_at": started_at,
+                },
+            ],
+        }
+
+        response_body = {"id": job_id, "status": "PENDING"}
+        return (HTTPStatus.CREATED, {}, json.dumps(response_body))
+
+    def submit_amber_tuner_job(_request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Submit an AMBER tuning job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        job_id = f"demo-amber-tuner-{uuid4()}"
+        started_at = time.time()
+
+        demo_state.tuner_jobs[job_id] = {
+            "status": "RUNNING",
+            "engine": "amber",
+            "created_at": started_at,
+            "max_trials": DEFAULT_TUNER_MAX_TRIALS,
+            "sim_length_ns": DEMO_TUNER_SIM_LENGTH_NS,
+            "trials": [
+                {
+                    "id": f"{job_id[:10]}-00000",
+                    "status": "FINISHED",
+                    "np": 4,
+                    "ntomp": 1,
+                    "binary": "pmemd.cuda",
+                    "ewald": "optimized",
+                    "performance": 72.3,
+                    "started_at": started_at - TUNER_TRIAL_DURATION_SEC * 2,
+                },
+                {
+                    "id": f"{job_id[:10]}-00001",
+                    "status": "ERROR",
+                    "np": 1,
+                    "ntomp": 4,
+                    "binary": "pmemd.MPI",
+                    "ewald": "default",
+                    "performance": None,
+                    "started_at": started_at - TUNER_TRIAL_DURATION_SEC,
+                },
+                {
+                    "id": f"{job_id[:10]}-00002",
+                    "status": "RUNNING",
+                    "np": 4,
+                    "ntomp": 1,
+                    "binary": "pmemd.cuda",
+                    "ewald": "default",
+                    "performance": None,
+                    "started_at": started_at,
+                },
+            ],
+        }
+
+        response_body = {"id": job_id, "status": "PENDING"}
+        return (HTTPStatus.CREATED, {}, json.dumps(response_body))
+
+    def get_gmx_tuner_status(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Get GROMACS tuning job status.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/(?P<job_id>[^/]+)/status", request.url)
+        job_id = match.group("job_id") if match else ""
+        job_state = demo_state.tuner_jobs.get(job_id)
+
+        if job_state is None:
+            return (
+                HTTPStatus.OK,
+                {},
+                json.dumps({"id": job_id, "status": "UNKNOWN", "sim_length_ns": None, "trials": []}),
+            )
+
+        _advance_gmx_tuner_status(job_state)
+
+        sim_length_ns = float(job_state.get("sim_length_ns", DEMO_TUNER_SIM_LENGTH_NS))
+        public_trials = [
+            _gmx_public_trial(trial, sim_length_ns) for trial in job_state.get("trials", []) if isinstance(trial, dict)
+        ]
+
+        response_body = {
+            "id": job_id,
+            "status": job_state.get("status", "UNKNOWN"),
+            "error": None,
+            "sim_length_ns": sim_length_ns,
+            "trials": public_trials,
+        }
+        return (HTTPStatus.OK, {}, json.dumps(response_body))
+
+    def get_amber_tuner_status(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Get AMBER tuning job status.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(rf"{re.escape(TUNER_URL)}/tuning-jobs/amber/(?P<job_id>[^/]+)/status", request.url)
+        job_id = match.group("job_id") if match else ""
+        job_state = demo_state.tuner_jobs.get(job_id)
+
+        if job_state is None:
+            return (
+                HTTPStatus.OK,
+                {},
+                json.dumps({"id": job_id, "status": "UNKNOWN", "sim_length_ns": None, "trials": []}),
+            )
+
+        _advance_amber_tuner_status(job_state)
+
+        sim_length_ns = float(job_state.get("sim_length_ns", DEMO_TUNER_SIM_LENGTH_NS))
+        public_trials = [
+            _amber_public_trial(trial, sim_length_ns)
+            for trial in job_state.get("trials", [])
+            if isinstance(trial, dict)
+        ]
+
+        response_body = {
+            "id": job_id,
+            "status": job_state.get("status", "UNKNOWN"),
+            "error": None,
+            "sim_length_ns": sim_length_ns,
+            "trials": public_trials,
+        }
+        return (HTTPStatus.OK, {}, json.dumps(response_body))
+
+    def delete_gmx_tuner_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Delete a GROMACS tuning job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/(?P<job_id>[^/]+)", request.url)
+        if match:
+            demo_state.tuner_jobs.pop(match.group("job_id"), None)
+        return (HTTPStatus.NO_CONTENT, {}, "")
+
+    def delete_amber_tuner_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Delete an AMBER tuning job.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(rf"{re.escape(TUNER_URL)}/tuning-jobs/amber/(?P<job_id>[^/]+)", request.url)
+        if match:
+            demo_state.tuner_jobs.pop(match.group("job_id"), None)
+        return (HTTPStatus.NO_CONTENT, {}, "")
+
+    rsps.add_callback("POST", f"{TUNER_URL}/tuning-jobs/gmx", callback=submit_gmx_tuner_job)
+    rsps.add_callback(
+        "GET",
+        re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+/status"),
+        callback=get_gmx_tuner_status,
+    )
+    rsps.add_callback(
+        "DELETE", re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/gmx/[^/]+"), callback=delete_gmx_tuner_job
+    )
+    rsps.add_callback("POST", f"{TUNER_URL}/tuning-jobs/amber", callback=submit_amber_tuner_job)
+    rsps.add_callback(
+        "GET",
+        re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/amber/[^/]+/status"),
+        callback=get_amber_tuner_status,
+    )
+    rsps.add_callback(
+        "DELETE",
+        re.compile(rf"{re.escape(TUNER_URL)}/tuning-jobs/amber/[^/]+"),
+        callback=delete_amber_tuner_job,
+    )
+
+
+def _install_mdrepo_mocks(rsps: CallbackRouter) -> None:
+    """Install MDRepo (InvenioRDM) API response mocks."""
+
+    def create_mdrepo_experiment(_request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Create a draft record in MDRepo.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        record_id = f"demo-{demo_state.mdrepo_counter:05d}"
+        demo_state.mdrepo_counter += 1
+        demo_state.mdrepo_records[record_id] = False
+
+        response_body = {
+            "id": record_id,
+            "created": "2026-04-10T12:00:00.000000",
+            "updated": "2026-04-10T12:00:00.000000",
+            "links": {
+                "self": f"{MDREPO_URL}/{MDREPO_RECORD_NAME}/{record_id}",
+                "self_html": f"{MDREPO_URL}/{MDREPO_RECORD_NAME}/records/{record_id}",
+                "edit_html": f"{MDREPO_URL}/{MDREPO_RECORD_NAME}/uploads/{record_id}",
+            },
+            "state": "draft",
+        }
+        return (HTTPStatus.CREATED, {}, json.dumps(response_body))
+
+    def get_mdrepo_user(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Get current MDRepo user info.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer demo"):
+            return (HTTPStatus.OK, {}, json.dumps({"user": "demo"}))
+        return (HTTPStatus.UNAUTHORIZED, {}, json.dumps({"message": "Unauthorized"}))
+
+    def get_mdrepo_published_record(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Check if record is published.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(
+            rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/(?P<record_id>[^/]+)$", request.url
+        )
+        if not match:
+            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"message": "Not found"}))
+
+        record_id = match.group("record_id")
+        if demo_state.mdrepo_records.get(record_id):
+            return (HTTPStatus.OK, {}, json.dumps({"id": record_id, "state": "published"}))
+        return (HTTPStatus.NOT_FOUND, {}, json.dumps({"message": "Not found"}))
+
+    def get_mdrepo_draft_record(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Check if record exists as draft.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        match = re.search(
+            rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/(?P<record_id>[^/]+)/draft", request.url
+        )
+        if not match:
+            return (HTTPStatus.NOT_FOUND, {}, json.dumps({"message": "Not found"}))
+
+        record_id = match.group("record_id")
+        if record_id in demo_state.mdrepo_records and demo_state.mdrepo_records[record_id] is False:
+            return (HTTPStatus.OK, {}, json.dumps({"id": record_id, "state": "draft"}))
+        return (HTTPStatus.NOT_FOUND, {}, json.dumps({"message": "Not found"}))
+
+    def mdrepo_token_exchange(_request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Exchange OAuth code for token.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        response_body = {
+            "access_token": "demo-access-token",
+            "refresh_token": "demo-refresh-token",
+            "expires_in": 3600,
+            "token_type": "Bearer",
+        }
+        return (HTTPStatus.OK, {}, json.dumps(response_body))
+
+    rsps.add_callback("POST", f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}", callback=create_mdrepo_experiment)
+    rsps.add_callback("GET", f"{MDREPO_URL}/api/me", callback=get_mdrepo_user)
+    rsps.add_callback(
+        "GET",
+        re.compile(rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/[^/]+$"),
+        callback=get_mdrepo_published_record,
+    )
+    rsps.add_callback(
+        "GET",
+        re.compile(rf"{re.escape(MDREPO_API_URL)}/{re.escape(MDREPO_RECORD_NAME)}/[^/]+/draft"),
+        callback=get_mdrepo_draft_record,
+    )
+    if MDREPO_TOKEN_URL:
+        rsps.add_callback("POST", MDREPO_TOKEN_URL, callback=mdrepo_token_exchange)
+
+
+def _install_metadump_mocks(rsps: CallbackRouter) -> None:
+    """Install MetaDump API response mocks."""
+
+    def annotate_tpr(_request: MockRequest) -> tuple[int, dict[str, str], str]:
+        job_uuid = str(uuid4())
+        response_body = {
+            "uuid": job_uuid,
+            "pin": "123456",
+            "status_url": f"{METADUMP_API_URL}/api/annotate/{job_uuid}",
+            "results_url": f"{METADUMP_API_URL}/api/annotate/{job_uuid}/results",
+        }
+        return (HTTPStatus.CREATED, {}, json.dumps(response_body))
+
+    def get_annotate_status(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        match = re.search(r"/api/annotate/(?P<uuid>[^/]+)$", request.url)
+        job_uuid = match.group("uuid") if match else "unknown"
+        response_body = {
+            "uuid": job_uuid,
+            "status": "completed",
+            "created": "2026-05-02T12:00:00.000000",
+            "options": {"keep": False},
+        }
+        return (HTTPStatus.OK, {}, json.dumps(response_body))
+
+    def get_annotate_results(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        match = re.search(r"/api/annotate/(?P<uuid>[^/]+)/results", request.url)
+        job_uuid = match.group("uuid") if match else "unknown"
+        response_body = {
+            "uuid": job_uuid,
+            "metadata": {
+                "forcefield": "charmm36",
+                "water_model": "tip3p",
+                "nsteps": 100000,
+                "dt": 0.002,
+            },
+        }
+        return (HTTPStatus.OK, {}, json.dumps(response_body))
+
+    def delete_annotate_job(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        match = re.search(r"/api/annotate/(?P<uuid>[^/]+)", request.url)
+        job_uuid = match.group("uuid") if match else "unknown"
+        return (HTTPStatus.OK, {}, json.dumps({"message": f"Job {job_uuid} deleted"}))
+
+    if METADUMP_API_URL:
+        rsps.add_callback("POST", f"{METADUMP_API_URL}/api/annotate", callback=annotate_tpr)
+        # /results must be registered before the status route — routes match in registration order
+        rsps.add_callback(
+            "GET",
+            re.compile(rf"{re.escape(METADUMP_API_URL)}/api/annotate/[^/]+/results"),
+            callback=get_annotate_results,
+        )
+        rsps.add_callback(
+            "GET",
+            re.compile(rf"{re.escape(METADUMP_API_URL)}/api/annotate/[^/]+$"),
+            callback=get_annotate_status,
+        )
+        rsps.add_callback(
+            "DELETE",
+            re.compile(rf"{re.escape(METADUMP_API_URL)}/api/annotate/[^/]+"),
+            callback=delete_annotate_job,
+        )
+
+
+def _install_caddy_mocks(rsps: CallbackRouter) -> None:
+    """Install Caddy admin API response mocks."""
+
+    def get_caddy_config(_request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Get current Caddy configuration.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        response_body = {
+            "apps": {
+                "http": {
+                    "servers": {
+                        "srv0": {
+                            "routes": [
+                                {"@id": "route-1"},
+                                {"@id": "route-2"},
+                                {"match": [{"path_regexp": {"name": "dash_routes"}}]},
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        return (HTTPStatus.OK, {}, json.dumps(response_body))
+
+    def update_caddy_config(_request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Update Caddy configuration.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        return (HTTPStatus.OK, {}, "")
+
+    def delete_caddy_route(_request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Delete a Caddy route.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        return (HTTPStatus.OK, {}, "")
+
+    rsps.add_callback("GET", f"{CADDY_ADMIN_API_URL}/config/", callback=get_caddy_config)
+    rsps.add_callback("POST", f"{CADDY_ADMIN_API_URL}/load", callback=update_caddy_config)
+    rsps.add_callback(
+        "DELETE",
+        re.compile(rf"{re.escape(CADDY_ADMIN_API_URL)}/id/[a-zA-Z0-9_-]+"),
+        callback=delete_caddy_route,
+    )
+
+
+def _install_external_download_mocks(rsps: CallbackRouter) -> None:
+    """Install mocks for external file downloads (PDB, Zenodo)."""
+
+    def download_pdb_file(_request: MockRequest) -> tuple[int, dict[str, str], bytes]:
+        """
+        Download a PDB file from RCSB.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        if DEFAULT_PDB_FILE.exists():
+            return (HTTPStatus.OK, {}, DEFAULT_PDB_FILE.read_bytes())
+        return (HTTPStatus.NOT_FOUND, {}, b"")
+
+    def download_zenodo_archive(_request: MockRequest) -> tuple[int, dict[str, str], bytes]:
+        """
+        Download a Zenodo files archive.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        return (HTTPStatus.OK, {}, build_demo_archive_bytes())
+
+    def head_request(_request: MockRequest) -> tuple[int, dict[str, str], str]:
+        """
+        Handle HEAD requests for URL validation.
+
+        Returns:
+            Tuple of (status_code, headers, body) for the response.
+        """
+        return (HTTPStatus.OK, {}, "")
+
+    rsps.add_callback(
+        "GET", re.compile(r"https://files\.rcsb\.org/download/[A-Za-z0-9]+\.pdb"), callback=download_pdb_file
+    )
+    rsps.add_callback(
+        "GET",
+        re.compile(r"https://zenodo\.org/api/records/[0-9]+/files-archive"),
+        callback=download_zenodo_archive,
+    )
+    rsps.add_callback("HEAD", re.compile(r"https://.*"), callback=head_request)
+
+
+def _install_mdposit_mocks(rsps: CallbackRouter) -> None:
+    """
+    Install deterministic MDPosit mocks for offline demo imports.
+
+    Analysis payloads are not served here: the demo's analysis threads fetch
+    them from the real MDPosit API so the seeded graphs carry real data.
+    """
+
+    def get_project(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        accession = _extract_mdposit_accession(request.url)
+        project = demo_state.mdposit_projects.get(accession)
+        if project is None:
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": "Project not found"}),
+            )
+        response_body = {key: value for key, value in project.items() if key != "files"}
+        return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(response_body))
+
+    def list_project_files(request: MockRequest) -> tuple[int, dict[str, str], str]:
+        accession = _extract_mdposit_accession(request.url)
+        project = demo_state.mdposit_projects.get(accession)
+        if project is None:
+            return (
+                HTTPStatus.NOT_FOUND,
+                {},
+                json.dumps({"type": "urn:mddash:not-found", "title": "Not Found", "detail": "Project not found"}),
+            )
+        response_body = [{"name": filename} for filename in project.get("files", [])]
+        return (HTTPStatus.OK, {"Content-Type": "application/json"}, json.dumps(response_body))
+
+    def download_project_file(request: MockRequest) -> tuple[int, dict[str, str], bytes]:
+        match = re.search(r"/projects/[^/]+/files/(?P<filename>.+)$", request.url)
+        if not match:
+            return (HTTPStatus.NOT_FOUND, {}, b"")
+
+        accession = _extract_mdposit_accession(request.url)
+        project = demo_state.mdposit_projects.get(accession)
+        filename = unquote(match.group("filename"))
+        if project is None or filename not in project.get("files", []):
+            return (HTTPStatus.NOT_FOUND, {}, b"")
+
+        content = get_mdposit_fixture_bytes(filename)
+        if content is None:
+            return (HTTPStatus.NOT_FOUND, {}, b"")
+        return (HTTPStatus.OK, {"Content-Type": "application/octet-stream"}, content)
+
+    project_base_pattern = _mdposit_project_base_pattern()
+    rsps.add_callback(
+        "GET",
+        re.compile(rf"{project_base_pattern}/(?P<accession>[^/]+)/files/(?P<filename>.+)$"),
+        callback=download_project_file,
+    )
+    rsps.add_callback(
+        "GET",
+        re.compile(rf"{project_base_pattern}/(?P<accession>[^/]+)/files$"),
+        callback=list_project_files,
+    )
+    rsps.add_callback(
+        "GET",
+        re.compile(rf"{project_base_pattern}/(?P<accession>[^/]+)$"),
+        callback=get_project,
+    )
+
+
+def _mdposit_project_base_pattern() -> str:
+    if MDPOSIT_REST_URL:
+        return rf"{re.escape(MDPOSIT_REST_URL.rstrip('/'))}/projects"
+    return r"https://mdposit\.mddbr\.eu/api/rest/v1/projects"
+
+
+def _extract_mdposit_accession(url: str) -> str:
+    match = re.search(r"/projects/(?P<accession>[^/]+)", url)
+    return unquote(match.group("accession")) if match else ""
+
+
+E2E_MDRUN_STAGES = 3
+E2E_MDRUN_STAGE_INTERVAL_SEC = 1.5
+
+
+def _job_progress(job_data: dict) -> "tuple[bool, float]":
+    """Whether the job is done plus its progress ratio (staged per-poll in E2E mode, else wall-clock)."""
+    if E2E and "e2e_stage" in job_data:
+        # Advance ≤1 stage per E2E_MDRUN_STAGE_INTERVAL_SEC, so post-submit read
+        # bursts cannot collapse stages.
+        now = time.time()
+        stage = int(job_data["e2e_stage"])
+        if stage < E2E_MDRUN_STAGES - 1 and now - float(job_data["e2e_stage_at"]) >= E2E_MDRUN_STAGE_INTERVAL_SEC:
+            stage += 1
+            job_data["e2e_stage"] = stage
+            job_data["e2e_stage_at"] = now
+        done = stage >= E2E_MDRUN_STAGES - 1
+        return done, 1.0 if done else stage / E2E_MDRUN_STAGES
+
+    duration_sec = float(job_data.get("duration_sec", DEFAULT_GMX_DURATION_SEC))
+    created_at = float(job_data.get("created_at", time.time()))
+    elapsed = max(0.0, time.time() - created_at)
+    progress_ratio = min(1.0, elapsed / duration_sec) if duration_sec > 0 else 1.0
+    return elapsed >= duration_sec, progress_ratio
+
+
+def _advance_mdrun_job(job_id: str, job_data: dict) -> None:
+    """Advance MDRun job state: elapsed wall-clock, or per-poll stages in E2E mode."""
+    if job_data.get("status") != "RUNNING":
+        return
+
+    done, progress_ratio = _job_progress(job_data)
+
+    log_total_lines = int(job_data.get("log_total_lines", 500))
+    job_data["log_line_index"] = int(log_total_lines * progress_ratio)
+
+    # Write log files lazily here: AmberJob/GromacsJob.start() cleans previous
+    # result files after job creation, so seeding them at submit time loses them.
+    if job_data.get("tpr_name"):
+        deffnm = str(job_data.get("tpr_name", "md.tpr")).removesuffix(".tpr")
+        write_mdrun_stdio(str(job_data.get("experiment_id", "")), str(Path(deffnm).parent), job_id)
+        _sync_gmx_log_progress(job_data, progress_ratio)
+    elif job_data.get("prmtop_name"):
+        deffnm = str(job_data.get("mdin_name", "md.mdin")).removesuffix(".mdin")
+        experiment_id = str(job_data.get("experiment_id", ""))
+        if not (DATA_DIR / experiment_id / f"{deffnm}.out").exists():
+            write_running_amber_log(experiment_id, deffnm)
+        write_mdrun_stdio(experiment_id, str(Path(deffnm).parent), job_id)
+        _sync_amber_mdinfo_progress(job_data, progress_ratio)
+
+    if done:
+        job_data["status"] = "FINISHED"
+        job_data["performance"] = 62.5
+
+        # A finished GMX run leaves its checkpoint behind — extend depends on it.
+        if tpr_name := job_data.get("tpr_name"):
+            deffnm = str(tpr_name).removesuffix(".tpr")
+            write_gmx_checkpoint(str(job_data.get("experiment_id", "")), deffnm)
+
+        _persist_finished_metrics(job_id)
+
+
+def _persist_finished_metrics(job_id: str) -> None:
+    """Store the finished run's performance and finish time the way the API would cache them (best effort)."""
+    engine = create_engine(f"sqlite:///{DATA_DIR / 'experiments.db'}")
+    try:
+        with engine.begin() as conn:
+            conn.execute(
+                text("UPDATE simulation_jobs SET performance = 62.5, finish_timestamp = :finished WHERE id = :id"),
+                {"finished": int(time.time()), "id": job_id},
+            )
+    except SQLAlchemyError:
+        logger.debug("Could not persist demo metrics for job %s", job_id, exc_info=True)
+    finally:
+        engine.dispose()
+
+
+def _sync_gmx_log_progress(job_data: dict, progress_ratio: float) -> None:
+    """Append template lines to the job's log file so progress is observable."""
+    from ..files import (  # ruff:ignore[import-outside-top-level]
+        append_gmx_log_template_until,
+        gmx_log_start_index,
+        gmx_log_steps_end_index,
+        gmx_log_template_line_count,
+    )
+
+    total = gmx_log_template_line_count()
+    steps_end = gmx_log_steps_end_index()
+    start = gmx_log_start_index()
+    # Advance the step-table region over the whole run; the perf summary and the
+    # "Finished mdrun" line are appended only on completion.
+    index = total if progress_ratio >= 1.0 else start + int((steps_end - start) * progress_ratio)
+    deffnm = str(job_data.get("tpr_name", "md.tpr")).removesuffix(".tpr")
+    append_gmx_log_template_until(str(job_data.get("experiment_id", "")), deffnm, index)
+
+
+def _sync_amber_mdinfo_progress(job_data: dict, progress_ratio: float) -> None:
+    """Rewrite the job's mdinfo with the current step so progress is observable."""
+    from ..files import write_amber_mdinfo  # ruff:ignore[import-outside-top-level]
+
+    nsteps = int(job_data.get("nsteps", 0) or 0)
+    deffnm = str(job_data.get("mdin_name", "md.mdin")).removesuffix(".mdin")
+    write_amber_mdinfo(str(job_data.get("experiment_id", "")), deffnm, int(nsteps * progress_ratio))
+
+
+def _tuner_trial_estimates(
+    performance: float | None, sim_length_ns: float, cores: int, gpus: int, ram_gb: float
+) -> tuple[float | None, float | None]:
+    """Demo estimated time (hours) and cost for a tuning trial, mirroring the tuner's pricing."""
+    if performance is None or performance <= 0:
+        return None, None
+    hours = sim_length_ns / performance * 24.0
+    cost = hours * (cores * DEMO_RATE_CPU_CORE_HOUR + gpus * DEMO_RATE_GPU_HOUR + ram_gb * DEMO_RATE_GB_RAM_HOUR)
+    return hours, cost
+
+
+def _gmx_public_trial(trial: dict, sim_length_ns: float) -> dict:
+    """Serialize a demo GMX trial with time/cost estimates."""
+    np, ntomp = trial.get("np", 2), trial.get("ntomp", 4)
+    nb, pme = trial.get("nb", "cpu"), trial.get("pme", "cpu")
+    performance = trial.get("performance")
+    estimated_time, estimated_cost = _tuner_trial_estimates(
+        performance, sim_length_ns, np * max(ntomp, 1), int(nb == "gpu" or pme == "gpu"), 4.0 * np
+    )
+    return {
+        "id": trial.get("id", ""),
+        "status": trial.get("status", "UNKNOWN"),
+        "np": np,
+        "ntomp": ntomp,
+        "nb": nb,
+        "pme": pme,
+        "performance": performance,
+        "estimated_time": estimated_time,
+        "estimated_cost": estimated_cost,
+    }
+
+
+def _amber_public_trial(trial: dict, sim_length_ns: float) -> dict:
+    """Serialize a demo AMBER trial with time/cost estimates."""
+    binary = trial.get("binary", "pmemd.MPI")
+    np, ntomp = trial.get("np", 1), trial.get("ntomp", 1)
+    performance = trial.get("performance")
+    if binary == "pmemd.MPI":
+        cores, gpus, ram_gb = np * max(ntomp, 1), 0, 4.0 * np
+    else:
+        cores, gpus, ram_gb = max(ntomp, 1), 1, 4.0
+    estimated_time, estimated_cost = _tuner_trial_estimates(performance, sim_length_ns, cores, gpus, ram_gb)
+    return {
+        "id": trial.get("id", ""),
+        "status": trial.get("status", "UNKNOWN"),
+        "np": np,
+        "ntomp": ntomp,
+        "binary": binary,
+        "ewald": trial.get("ewald", "default"),
+        "performance": performance,
+        "estimated_time": estimated_time,
+        "estimated_cost": estimated_cost,
+    }
+
+
+def _advance_gmx_tuner_status(status: dict) -> None:
+    """
+    Advance GMX tuner job state based on elapsed time.
+
+    Deterministic pattern: even-indexed trials FINISH, odd-indexed trials ERROR.
+    """
+    if status.get("status") != "RUNNING":
+        return
+
+    trials = status.get("trials")
+    if not isinstance(trials, list):
+        trials = []
+        status["trials"] = trials
+
+    running_trial = next((t for t in trials if t.get("status") == "RUNNING"), None)
+    now = time.time()
+
+    if running_trial is not None:
+        started_at = float(running_trial.get("started_at") or now)
+        if now - started_at >= TUNER_TRIAL_DURATION_SEC:
+            # Parity from creation seq, not list index: the rolling window keeps
+            # every new trial at index max_trials-1 (odd), which would make all
+            # post-fill trials ERROR.
+            seq = running_trial.get("seq")
+            trial_idx = int(seq) if seq is not None else trials.index(running_trial)
+            if trial_idx % 2 == 0:
+                running_trial["status"] = "FINISHED"
+                base_perf = 55.0
+                np = float(running_trial.get("np") or 2)
+                nb = running_trial.get("nb", "cpu")
+                if nb == "gpu":
+                    base_perf += 15.0
+                running_trial["performance"] = base_perf + (np * 2.5) + trial_idx
+            else:
+                running_trial["status"] = "ERROR"
+                running_trial["performance"] = None
+        return
+
+    max_trials = int(status.get("max_trials", DEFAULT_TUNER_MAX_TRIALS))
+    # Rolling window instead of FINISHED so a demo session never burns the job out;
+    # the seeded stopped tuner covers the finished-state UI.
+    if len(trials) >= max_trials:
+        del trials[0]
+
+    trial_configs = [
+        {"np": 8, "ntomp": 1, "nb": "cpu", "pme": "cpu"},
+        {"np": 4, "ntomp": 2, "nb": "cpu", "pme": "cpu"},
+        {"np": 2, "ntomp": 4, "nb": "cpu", "pme": "cpu"},
+        {"np": 8, "ntomp": 1, "nb": "gpu", "pme": "cpu"},
+        {"np": 4, "ntomp": 2, "nb": "gpu", "pme": "gpu"},
+        {"np": 2, "ntomp": 4, "nb": "gpu", "pme": "gpu"},
+    ]
+    seq = int(status.get("trial_seq", len(status.get("trials", []))))
+    status["trial_seq"] = seq + 1
+    config = trial_configs[seq % len(trial_configs)]
+    trials.append({
+        "id": f"trial-{seq:05d}",
+        "status": "RUNNING",
+        **config,
+        "performance": None,
+        "seq": seq,
+        "started_at": now,
+    })
+
+
+def _advance_amber_tuner_status(status: dict) -> None:
+    """
+    Advance AMBER tuner job state based on elapsed time.
+
+    Deterministic pattern: even-indexed trials TERMINATE, odd-indexed trials ERROR.
+    """
+    if status.get("status") != "RUNNING":
+        return
+
+    trials = status.get("trials")
+    if not isinstance(trials, list):
+        trials = []
+        status["trials"] = trials
+
+    running_trial = next((t for t in trials if t.get("status") == "RUNNING"), None)
+    now = time.time()
+
+    if running_trial is not None:
+        started_at = float(running_trial.get("started_at") or now)
+        if now - started_at >= TUNER_TRIAL_DURATION_SEC:
+            seq = running_trial.get("seq")
+            trial_idx = int(seq) if seq is not None else trials.index(running_trial)
+            if trial_idx % 2 == 0:
+                running_trial["status"] = "FINISHED"
+                base_perf = 60.0
+                if running_trial.get("binary") == "pmemd.cuda":
+                    base_perf += 20.0
+                if running_trial.get("ewald") == "optimized":
+                    base_perf += 5.0
+                running_trial["performance"] = base_perf + trial_idx
+            else:
+                running_trial["status"] = "ERROR"
+                running_trial["performance"] = None
+        return
+
+    max_trials = int(status.get("max_trials", DEFAULT_TUNER_MAX_TRIALS))
+    # Rolling window instead of FINISHED so a demo session never burns the job out;
+    # the seeded stopped tuner covers the finished-state UI.
+    if len(trials) >= max_trials:
+        del trials[0]
+
+    trial_configs = [
+        {"np": 4, "ntomp": 1, "binary": "pmemd.cuda", "ewald": "default"},
+        {"np": 1, "ntomp": 4, "binary": "pmemd.MPI", "ewald": "default"},
+        {"np": 4, "ntomp": 1, "binary": "pmemd.cuda", "ewald": "optimized"},
+        {"np": 2, "ntomp": 2, "binary": "pmemd.MPI", "ewald": "optimized"},
+    ]
+    seq = int(status.get("trial_seq", len(trials)))
+    status["trial_seq"] = seq + 1
+    config = trial_configs[seq % len(trial_configs)]
+    trials.append({
+        "id": f"trial-{seq:05d}",
+        "status": "RUNNING",
+        **config,
+        "performance": None,
+        "seq": seq,
+        "started_at": now,
+    })

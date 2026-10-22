@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Run extension.
+ */
 export interface ExtendGromacsJobRequest {
   /** @minimum 1 */
   nsteps: number;

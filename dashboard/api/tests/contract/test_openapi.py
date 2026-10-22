@@ -1,4 +1,4 @@
-"""Dashboard API OpenAPI contract tests."""
+"""Dashboard API OpenAPI contract tests: the committed spec is generated from the app and matches responses."""
 
 from __future__ import annotations
 
@@ -9,41 +9,22 @@ from typing import TYPE_CHECKING, Any
 import jsonschema
 import pytest
 import yaml
+from openapi import CONTRACT_PATH, build_openapi, render
 
 if TYPE_CHECKING:
-    from flask import Flask
-    from flask.testing import FlaskClient
+    from fastapi import FastAPI
+    from httpx import AsyncClient
 
-OPENAPI_PATH = Path(__file__).parents[2] / "openapi.yaml"
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 
 
 @pytest.fixture(scope="module")
 def contract() -> dict[str, Any]:
-    """Load the API-owned OpenAPI contract."""
-    with OPENAPI_PATH.open(encoding="utf-8") as stream:
+    """Load the committed OpenAPI contract."""
+    with CONTRACT_PATH.open(encoding="utf-8") as stream:
         loaded = yaml.safe_load(stream)
     assert isinstance(loaded, dict)
     return loaded
-
-
-def _openapi_operations(contract: dict[str, Any]) -> set[tuple[str, str]]:
-    return {
-        (method.upper(), path)
-        for path, path_item in contract["paths"].items()
-        for method in path_item
-        if method in HTTP_METHODS
-    }
-
-
-def _flask_operations(app: Flask) -> set[tuple[str, str]]:
-    return {
-        (method, rule.rule.replace("<path:", "{").replace("<", "{").replace(">", "}"))
-        for rule in app.url_map.iter_rules()
-        if rule.endpoint != "static"
-        for method in rule.methods or set()
-        if method not in {"HEAD", "OPTIONS"}
-    }
 
 
 def _resolve_ref(contract: dict[str, Any], ref: str) -> dict[str, Any]:
@@ -55,28 +36,35 @@ def _resolve_ref(contract: dict[str, Any], ref: str) -> dict[str, Any]:
     return value
 
 
-def _response(contract: dict[str, Any], path: str, method: str, status: int) -> dict[str, Any]:
+def _response(contract: dict[str, Any], path: str, method: str, status: int | str) -> dict[str, Any]:
     response = contract["paths"][path][method]["responses"][str(status)]
     return _resolve_ref(contract, response["$ref"]) if "$ref" in response else response
 
 
 def _response_schema(contract: dict[str, Any], path: str, method: str, status: int) -> dict[str, Any]:
-    response = _response(contract, path, method, status)
-    return response["content"]["application/json"]["schema"]
+    return _response(contract, path, method, status)["content"]["application/json"]["schema"]
 
 
 def _validate_payload(contract: dict[str, Any], schema: dict[str, Any], payload: Any) -> None:
-    registry = jsonschema.validators.validator_for(contract)(contract).evolve(schema=schema)
-    registry.validate(payload)
+    validator = jsonschema.validators.validator_for(contract)(contract).evolve(schema=schema)
+    validator.validate(payload)
 
 
-def test_flask_inventory_exactly_matches_openapi(app: Flask, contract: dict[str, Any]) -> None:
-    """Every canonical Flask method/path pair is documented, and no others exist."""
-    flask_operations = _flask_operations(app)
-    undocumented = flask_operations - _openapi_operations(contract)
-    extra = _openapi_operations(contract) - flask_operations
-    assert not undocumented, f"routes missing from openapi.yaml: {sorted(undocumented)}"
-    assert not extra, f"openapi.yaml documents non-existent routes: {sorted(extra)}"
+def _walk(value: Any):
+    yield value
+    if isinstance(value, dict):
+        for child in value.values():
+            yield from _walk(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _walk(child)
+
+
+def test_committed_contract_is_generated_from_the_app(app: FastAPI) -> None:
+    """openapi.yaml must be regenerated (`make openapi`) whenever routes or schemas change."""
+    assert CONTRACT_PATH.read_text(encoding="utf-8") == render(build_openapi(app)), (
+        "openapi.yaml is out of date; run `make openapi`"
+    )
 
 
 def test_contract_is_valid_openapi_31_with_unique_operation_ids(contract: dict[str, Any]) -> None:
@@ -99,14 +87,16 @@ def test_contract_is_valid_openapi_31_with_unique_operation_ids(contract: dict[s
             _resolve_ref(contract, node["$ref"])
 
 
-def _walk(value: Any):
-    yield value
-    if isinstance(value, dict):
-        for child in value.values():
-            yield from _walk(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from _walk(child)
+def test_errors_are_documented_as_problem_details_only(contract: dict[str, Any]) -> None:
+    """Validation errors are 400 problem details; FastAPI's 422 validation shape never leaks into the contract."""
+    assert "HTTPValidationError" not in contract["components"]["schemas"]
+    for path_item in contract["paths"].values():
+        for method, operation in path_item.items():
+            if method not in HTTP_METHODS:
+                continue
+            for status, response in operation["responses"].items():
+                if status == "default" or int(status) >= 400:
+                    assert set(response["content"]) == {"application/problem+json"}, (method, status)
 
 
 @pytest.mark.parametrize(
@@ -130,40 +120,35 @@ def test_representative_statuses_and_media_types_are_declared(
         assert media_type in response["content"]
 
 
-def test_health_response_matches_contract(client: FlaskClient, contract: dict[str, Any]) -> None:
-    response = client.get("/dash/api/health")
+async def test_health_response_matches_contract(client: AsyncClient, contract: dict[str, Any]) -> None:
+    response = await client.get("/dash/api/health")
     assert response.status_code == 200
-    assert response.mimetype == "application/json"
-    _validate_payload(contract, _response_schema(contract, "/dash/api/health", "get", 200), response.get_json())
+    assert response.headers["content-type"] == "application/json"
+    _validate_payload(contract, _response_schema(contract, "/dash/api/health", "get", 200), response.json())
 
 
-def test_notebook_config_response_matches_contract(client: FlaskClient, contract: dict[str, Any]) -> None:
-    response = client.get("/dash/api/notebook-config")
+async def test_notebook_config_response_matches_contract(client: AsyncClient, contract: dict[str, Any]) -> None:
+    response = await client.get("/dash/api/notebook-config")
     assert response.status_code == 200
-    assert response.mimetype == "application/json"
-    _validate_payload(
-        contract,
-        _response_schema(contract, "/dash/api/notebook-config", "get", 200),
-        response.get_json(),
-    )
+    _validate_payload(contract, _response_schema(contract, "/dash/api/notebook-config", "get", 200), response.json())
 
 
-def test_empty_experiment_list_response_matches_contract(client: FlaskClient, contract: dict[str, Any]) -> None:
-    response = client.get("/dash/api/experiments")
+async def test_empty_experiment_list_response_matches_contract(client: AsyncClient, contract: dict[str, Any]) -> None:
+    response = await client.get("/dash/api/experiments")
     assert response.status_code == 200
-    assert response.get_json() == []
-    _validate_payload(contract, _response_schema(contract, "/dash/api/experiments", "get", 200), response.get_json())
+    assert response.json() == []
+    _validate_payload(contract, _response_schema(contract, "/dash/api/experiments", "get", 200), response.json())
 
 
-def test_populated_experiment_list_response_matches_contract(
-    client: FlaskClient, contract: dict[str, Any], db_session: Any
+async def test_populated_experiment_list_response_matches_contract(
+    client: AsyncClient, contract: dict[str, Any], db_session: Any
 ) -> None:
-    from enums import AnalysisType, JobStatus, SourceType
-    from models import AnalysisJob, Experiment
+    from core.enums import AnalysisType, JobStatus, SourceType
+    from modules.models import AnalysisJob, Experiment, Notebook
 
     experiment = Experiment(id="slice", name="Vertical slice", source_type=SourceType.PDB, source_ref="1LYZ")
     db_session.add(experiment)
-    db_session.flush()
+    db_session.add(Notebook(experiment_id="slice"))
     # A seeded job exposes the embedded analysis_jobs shape — an empty list passes either way.
     db_session.add(
         AnalysisJob(
@@ -175,49 +160,54 @@ def test_populated_experiment_list_response_matches_contract(
             _last_known_status=JobStatus.FINISHED,
         )
     )
-    db_session.commit()
+    await db_session.commit()
 
-    response = client.get("/dash/api/experiments")
+    response = await client.get("/dash/api/experiments")
     assert response.status_code == 200
-    assert [item["id"] for item in response.get_json()] == ["slice"]
-    _validate_payload(contract, _response_schema(contract, "/dash/api/experiments", "get", 200), response.get_json())
+    assert [item["id"] for item in response.json()] == ["slice"]
+    _validate_payload(contract, _response_schema(contract, "/dash/api/experiments", "get", 200), response.json())
 
 
-def test_problem_response_matches_contract(client: FlaskClient, contract: dict[str, Any]) -> None:
-    response = client.get("/dash/api/experiments/missing")
+async def test_problem_response_matches_contract(client: AsyncClient, contract: dict[str, Any]) -> None:
+    response = await client.get("/dash/api/experiments/missing")
     assert response.status_code == 404
-    assert response.mimetype == "application/problem+json"
+    assert response.headers["content-type"] == "application/problem+json"
     schema = _response(contract, "/dash/api/experiments/{experiment_id}", "get", 404)["content"]
-    _validate_payload(contract, schema["application/problem+json"]["schema"], response.get_json())
+    _validate_payload(contract, schema["application/problem+json"]["schema"], response.json())
 
 
-def test_analysis_variants_response_matches_contract(
-    client: FlaskClient, contract: dict[str, Any], tmp_path: Path
+async def test_validation_errors_are_problem_details(client: AsyncClient, contract: dict[str, Any]) -> None:
+    response = await client.get("/dash/api/experiments/abcde/analysis/results")
+    assert response.status_code == 400
+    body = response.json()
+    assert body["type"] == "urn:mddash:validation-error"
+    _validate_payload(contract, {"$ref": "#/components/schemas/Problem"}, body)
+
+
+async def test_analysis_variants_response_matches_contract(
+    client: AsyncClient, contract: dict[str, Any], tmp_path: Path
 ) -> None:
     output = tmp_path / "abcde" / "analysis" / "mwf" / "run.simulation"
     output.mkdir(parents=True)
     (output / "mda.hbonds.json").write_text('[{"analysis":"hbonds-00","name":"Protein-Water"}]')
 
-    response = client.get(
+    response = await client.get(
         "/dash/api/experiments/abcde/analysis/results/hbonds/variants",
-        query_string={"simulation_path": "run.simulation.json"},
+        params={"simulation_path": "run.simulation.json"},
     )
     assert response.status_code == 200
-    assert response.get_json() == [{"analysis": "hbonds-00", "name": "Protein-Water"}]
+    assert response.json() == [{"analysis": "hbonds-00", "name": "Protein-Water"}]
     _validate_payload(
         contract,
         _response_schema(
-            contract,
-            "/dash/api/experiments/{experiment_id}/analysis/results/{name}/variants",
-            "get",
-            200,
+            contract, "/dash/api/experiments/{experiment_id}/analysis/results/{name}/variants", "get", 200
         ),
-        response.get_json(),
+        response.json(),
     )
 
 
-def test_typed_analysis_result_response_matches_contract(
-    client: FlaskClient, contract: dict[str, Any], tmp_path: Path
+async def test_typed_analysis_result_response_matches_contract(
+    client: AsyncClient, contract: dict[str, Any], tmp_path: Path
 ) -> None:
     output = tmp_path / "abcde" / "analysis" / "mwf" / "run.simulation"
     output.mkdir(parents=True)
@@ -228,11 +218,11 @@ def test_typed_analysis_result_response_matches_contract(
     }
     (output / "mda.rmsds.json").write_text(json.dumps(payload))
 
-    response = client.get(
+    response = await client.get(
         "/dash/api/experiments/abcde/analysis/results/rmsds",
-        query_string={"simulation_path": "run.simulation.json"},
+        params={"simulation_path": "run.simulation.json"},
     )
     assert response.status_code == 200
     schema = _response_schema(contract, "/dash/api/experiments/{experiment_id}/analysis/results/{name}", "get", 200)
-    assert "$ref" in schema or "oneOf" in schema
-    _validate_payload(contract, schema, response.get_json())
+    assert "$ref" in schema
+    _validate_payload(contract, schema, response.json())

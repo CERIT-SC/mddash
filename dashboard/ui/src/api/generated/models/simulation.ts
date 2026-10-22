@@ -7,6 +7,9 @@
  */
 import type { SimulationFiles } from './simulationFiles.ts';
 
+/**
+ * A simulation manifest with its validation, lock, and wizard state.
+ */
 export interface Simulation {
   simulation_path: string;
   name: string;

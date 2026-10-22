@@ -7,9 +7,9 @@ from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
-from config import DATA_DIR
-from enums import Engine
-from manifest_schema import schema_url
+from core.config import DATA_DIR
+from core.enums import Engine
+from modules.simulations.manifest_schema import schema_url
 
 DEMO_DATA_DIR = Path(__file__).resolve().parent / "data"
 DEFAULT_TPR_FILE = DEMO_DATA_DIR / "md.tpr"

@@ -5,11 +5,13 @@
  * API for experiment, simulation, compute, analysis, notebook, file, and publication workflows.
  * OpenAPI spec version: 1.0.0
  */
-import type { NullableString } from './nullableString.ts';
 import type { PublicationFile } from './publicationFile.ts';
 
+/**
+ * MDPosit publication package handed to VRE Lite.
+ */
 export interface MDPositPublication {
   metadata_file: PublicationFile;
   files: PublicationFile[];
-  vre_lite_url: NullableString | null;
+  vre_lite_url: string | null;
 }

@@ -10,5 +10,5 @@ export type ListExperimentFilesParams = {
 /**
  * Comma-separated file extensions
  */
-ext?: string;
+ext?: string | null;
 };

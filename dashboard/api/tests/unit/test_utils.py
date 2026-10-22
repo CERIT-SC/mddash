@@ -3,8 +3,7 @@
 import contextlib
 from pathlib import Path
 
-from pytest_mock import MockerFixture
-from utils import (
+from core.utils import (
     count_lines,
     generate_id,
     get_files_with_extensions,
@@ -12,6 +11,7 @@ from utils import (
     is_excluded_path,
     nsteps_override,
 )
+from pytest_mock import MockerFixture
 
 DEFAULT_ID_LENGTH = 5
 CUSTOM_ID_LENGTH = 10
@@ -210,32 +210,32 @@ class TestCountLines:
 
 
 class TestDuMonitor:
-    """Tests for storage-size monitor startup."""
+    """Tests for the storage-size monitor task."""
 
-    def test_start_du_monitor_passes_initial_delay_to_thread(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        """The first du scan should be delayable to avoid first-health IO contention."""
-        thread_cls = mocker.patch("utils.threading.Thread")
-        mocker.patch("utils.threading.enumerate", return_value=[])
-
-        from utils import start_du_monitor
-
-        start_du_monitor(tmp_path, initial_delay=7.5)
-
-        thread_cls.assert_called_once()
-        assert thread_cls.call_args.kwargs["args"] == (tmp_path, 7.5)
-        thread_cls.return_value.start.assert_called_once_with()
-
-    def test_du_loop_sleeps_before_first_measurement_when_initial_delay_set(
+    async def test_du_monitor_sleeps_before_first_measurement_when_initial_delay_set(
         self, tmp_path: Path, mocker: MockerFixture
     ) -> None:
-        """A configured initial delay should happen before subprocess du runs."""
-        sleep = mocker.patch("utils.time.sleep", side_effect=RuntimeError("stop"))
-        run = mocker.patch("utils.subprocess.run")
+        """A configured initial delay should happen before du runs (avoids first-health IO contention)."""
+        sleep = mocker.patch("core.utils.asyncio.sleep", side_effect=RuntimeError("stop"))
+        measure = mocker.patch("core.utils._measure_du")
 
-        from utils import _du_loop
+        from core.utils import du_monitor
 
         with contextlib.suppress(RuntimeError):
-            _du_loop(tmp_path, initial_delay=3.0)
+            await du_monitor(tmp_path, initial_delay=3.0)
 
         sleep.assert_called_once_with(3.0)
-        run.assert_not_called()
+        measure.assert_not_called()
+
+    async def test_du_monitor_writes_size_markers(self, tmp_path: Path, mocker: MockerFixture) -> None:
+        """Each measurement stores the total and per-experiment sizes in marker files."""
+        (tmp_path / "abcde").mkdir()
+        mocker.patch("core.utils.asyncio.sleep", side_effect=[None, RuntimeError("stop")])
+
+        from core.utils import du_monitor, get_du_size
+
+        with contextlib.suppress(RuntimeError):
+            await du_monitor(tmp_path)
+
+        assert get_du_size(tmp_path) is not None
+        assert get_du_size(tmp_path / "abcde") is not None

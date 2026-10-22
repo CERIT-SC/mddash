@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from archive.status import (
+from modules.archive.status import (
     STATUS_FILENAME,
     ArchiveStatus,
     create_queued_status,

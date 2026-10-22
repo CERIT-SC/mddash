@@ -1,7 +1,7 @@
 """Unit tests for the manifest schema URL resolver."""
 
-from enums import Engine
-from manifest_schema import resolve_schema_url, schema_url
+from core.enums import Engine
+from modules.simulations.manifest_schema import resolve_schema_url, schema_url
 
 GMX_URL = "https://raw.githubusercontent.com/CERIT-SC/mddash/v0.1.4/dashboard/api/manifest_schemas/gromacs.schema.json"
 AMBER_URL = "https://raw.githubusercontent.com/CERIT-SC/mddash/v0.1.4/dashboard/api/manifest_schemas/amber.schema.json"

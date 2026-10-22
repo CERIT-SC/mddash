@@ -1,20 +1,30 @@
 """Unit tests for analysis job mwf command generation."""
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, PropertyMock, patch
 
 import pytest
-from config import ANALYSIS_RESOURCES
-from enums import AnalysisType, PreprocessingMode
-from models.analysis_job import (
-    AnalysisJob,
+from clients import Clients
+from core.config import ANALYSIS_RESOURCES
+from core.enums import AnalysisType, DeviceType, Engine, JobStatus, PreprocessingMode
+from core.errors import Forbidden
+from modules.jobs.analysis.command import (
     format_mwf_analysis_command,
     format_mwf_inputs_yaml,
     get_analysis_runtime_prep_commands,
     get_incomplete_task_dirs,
     get_runtime_prelude_commands,
 )
-from werkzeug.exceptions import Forbidden
+from modules.jobs.analysis.models import AnalysisJob
+from modules.jobs.analysis.service import AnalysisService
+from modules.models import Experiment, GromacsJob, Notebook
+from sqlalchemy.ext.asyncio import AsyncSession
+from tests.support import write_simulation
+
+
+@pytest.fixture
+def service(db_session: AsyncSession, clients: Clients) -> AnalysisService:
+    return AnalysisService(db_session, clients)
 
 
 class TestFormatMwfInputsYaml:
@@ -98,7 +108,7 @@ class TestFormatMwfAnalysisCommand:
         assert "mkdir -p incomplete_inter" in command
         assert "-i hbonds" in command
 
-    def test_topology_only_command_omits_structure_flag(self) -> None:
+    def test_topology_only_command_omits_structure_flag(self, service: AnalysisService) -> None:
         """GMX analysis can derive structure from topology to avoid mismatched GRO/XTC atom sets."""
         command = format_mwf_analysis_command(
             analysis_name=AnalysisType.RMSDS,
@@ -113,125 +123,164 @@ class TestFormatMwfAnalysisCommand:
         assert "-top analysis/mwf/inputs/input_topology.tpr" in command
 
 
-class TestAnalysisJobStartQuotaCheck:
-    """Tests for the quota-headroom guard in AnalysisJob.start()."""
-
-    def _mock_experiment(self) -> MagicMock:
-        exp = MagicMock()
-        exp.id = "exp-test"
-        return exp
-
-    def test_raises_forbidden_when_quota_exceeded(self, app: object, tmp_path: Path) -> None:
-        """start() must raise Forbidden and not create a job when quota is insufficient."""
-        with (
-            patch("models.analysis_job.k8s.check_quota_headroom", return_value="CPU quota exceeded"),
-            patch("models.analysis_job.k8s.create_job") as mock_create_job,
-            patch("models.analysis_job.k8s.delete_job"),
-            patch.object(AnalysisJob, "query") as mock_query,
-            patch("models.analysis_job.db.session"),
-            patch("models.analysis_job.SimulationJob") as mock_sim_job,
-        ):
-            mock_query.filter_by.return_value.all.return_value = []
-            mock_sim_job.query.filter_by.return_value.order_by.return_value.first.return_value = None
-            structure_file = tmp_path / "input.gro"
-            structure_file.touch()
-            trajectory_file = tmp_path / "traj.xtc"
-            trajectory_file.touch()
-
-            with pytest.raises(Forbidden):
-                AnalysisJob.start(
-                    experiment=self._mock_experiment(),
-                    simulation_path="test.simulation.json",
-                    analysis_name=AnalysisType.RMSDS,
-                    structure_file=structure_file,
-                    trajectory_file=trajectory_file,
-                    topology_file=None,
-                    preprocessing_mode=PreprocessingMode.AS_IS,
-                )
-
-            mock_create_job.assert_not_called()
-
-    def test_creates_job_with_analysis_resources_when_headroom_sufficient(self, app: object, tmp_path: Path) -> None:
-        """start() must pass ANALYSIS_RESOURCES to create_job when quota has headroom."""
-        with (
-            patch("models.analysis_job.k8s.check_quota_headroom", return_value=None),
-            patch("models.analysis_job.k8s.create_job") as mock_create_job,
-            patch("models.analysis_job.k8s.delete_job"),
-            patch.object(AnalysisJob, "query") as mock_query,
-            patch("models.analysis_job.db.session"),
-            patch("models.analysis_job.SimulationJob") as mock_sim_job,
-        ):
-            mock_query.filter_by.return_value.all.return_value = []
-            mock_sim_job.query.filter_by.return_value.order_by.return_value.first.return_value = None
-            structure_file = tmp_path / "input.gro"
-            structure_file.touch()
-            trajectory_file = tmp_path / "traj.xtc"
-            trajectory_file.touch()
-
-            AnalysisJob.start(
-                experiment=self._mock_experiment(),
+async def _experiment(db_session: AsyncSession, nsteps: int | None = None) -> Experiment:
+    """Persist an experiment, reloaded with its job collections; optionally with a finished run."""
+    db_session.add(Experiment(id="exptt", name="Analysis", engine=Engine.GMX))
+    db_session.add(Notebook(experiment_id="exptt"))
+    if nsteps is not None:
+        db_session.add(
+            GromacsJob(
+                id="run-1",
+                experiment_id="exptt",
                 simulation_path="test.simulation.json",
-                analysis_name=AnalysisType.RMSDS,
-                structure_file=structure_file,
-                trajectory_file=trajectory_file,
-                topology_file=None,
-                preprocessing_mode=PreprocessingMode.AS_IS,
+                engine=Engine.GMX,
+                np=1,
+                ntomp=1,
+                pme=DeviceType.CPU,
+                nb=DeviceType.CPU,
+                _nsteps=nsteps,
+                _last_known_status=JobStatus.FINISHED,
             )
+        )
+    await db_session.commit()
+    db_session.expunge_all()
+    experiment = await db_session.get(Experiment, "exptt")
+    assert experiment is not None
+    return experiment
 
-            mock_create_job.assert_called_once()
-            assert mock_create_job.call_args.kwargs["resources"] == ANALYSIS_RESOURCES
+
+async def _start(service: AnalysisService, experiment: Experiment, tmp_path: Path) -> AnalysisJob:
+    files = {"run_input": "topol.tpr", "reference_structure": "struct.pdb", "trajectory": "traj.xtc"}
+    write_simulation(tmp_path / experiment.id, "test.simulation.json", files, inputs=tuple(files))
+    return await service.submit(experiment, "test.simulation.json", AnalysisType.RMSDS, PreprocessingMode.AS_IS)
+
+
+class TestAnalysisJobStartQuotaCheck:
+    """Tests for the quota-headroom guard in AnalysisService.submit()."""
+
+    async def test_raises_forbidden_when_quota_exceeded(
+        self, db_session: AsyncSession, tmp_path: Path, service: AnalysisService, clients: Clients
+    ) -> None:
+        """start() must raise Forbidden and not create a job when quota is insufficient."""
+        experiment = await _experiment(db_session)
+        with (
+            patch.object(clients.k8s, "check_quota_headroom", AsyncMock(return_value="CPU quota exceeded")),
+            patch.object(clients.k8s, "create_job") as mock_create_job,
+            pytest.raises(Forbidden, match="CPU quota exceeded"),
+        ):
+            await _start(service, experiment, tmp_path)
+
+        mock_create_job.assert_not_called()
+
+    async def test_creates_job_with_analysis_resources_when_headroom_sufficient(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        service: AnalysisService,
+        clients: Clients,
+    ) -> None:
+        """start() must pass ANALYSIS_RESOURCES to create_job when quota has headroom."""
+        experiment = await _experiment(db_session)
+        with (
+            patch.object(clients.k8s, "check_quota_headroom", AsyncMock(return_value=None)),
+            patch.object(clients.k8s, "create_job") as mock_create_job,
+        ):
+            job = await _start(service, experiment, tmp_path)
+
+        mock_create_job.assert_called_once()
+        assert mock_create_job.call_args.kwargs["resources"] == ANALYSIS_RESOURCES
+        assert mock_create_job.call_args.kwargs["name"] == f"analysis-{job.id}"
+
+    async def test_replaces_previous_analyses_of_the_simulation(
+        self, db_session: AsyncSession, tmp_path: Path, service: AnalysisService, clients: Clients
+    ) -> None:
+        """A new analysis deletes the simulation's previous analysis Job and row."""
+        experiment = await _experiment(db_session)
+        with (
+            patch.object(clients.k8s, "check_quota_headroom", AsyncMock(return_value=None)),
+            patch.object(clients.k8s, "create_job"),
+            patch.object(clients.k8s, "delete_job") as mock_delete_job,
+        ):
+            first = await _start(service, experiment, tmp_path)
+            second = await _start(service, experiment, tmp_path)
+
+        mock_delete_job.assert_called_once_with(f"analysis-{first.id}")
+        assert await db_session.get(AnalysisJob, first.id) is None
+        assert await db_session.get(AnalysisJob, second.id) is not None
 
 
 class TestAnalysisJobStartSimProgress:
-    """Tests for the simulation-progress snapshot in AnalysisJob.start()."""
+    """Tests for the simulation-progress snapshot in AnalysisService.submit()."""
 
-    def _start(self, mock_session: MagicMock, tmp_path: Path) -> float | None:
-        exp = MagicMock()
-        exp.id = "exp-test"
-        trajectory_file = tmp_path / "traj.xtc"
-        trajectory_file.touch()
-        topology_file = tmp_path / "topol.tpr"
-        topology_file.touch()
-        AnalysisJob.start(
-            experiment=exp,
-            simulation_path="test.simulation.json",
-            analysis_name=AnalysisType.RMSDS,
-            structure_file=None,
-            trajectory_file=trajectory_file,
-            topology_file=topology_file,
-            preprocessing_mode=PreprocessingMode.AS_IS,
-        )
-        job: AnalysisJob = mock_session.add.call_args[0][0]
+    async def _progress(
+        self,
+        db_session: AsyncSession,
+        clients: Clients,
+        service: AnalysisService,
+        tmp_path: Path,
+        nsteps: int | None,
+        done: int | None,
+    ) -> float | None:
+        experiment = await _experiment(db_session, nsteps)
+        with (
+            patch.object(clients.k8s, "check_quota_headroom", AsyncMock(return_value=None)),
+            patch.object(clients.k8s, "create_job"),
+            patch.object(GromacsJob, "nsteps_done", new_callable=PropertyMock, return_value=done),
+        ):
+            job = await _start(service, experiment, tmp_path)
         return job.sim_progress
 
-    def _patched_start(self, run_job: MagicMock | None, app: object, tmp_path: Path) -> float | None:
-        with (
-            patch("models.analysis_job.k8s.check_quota_headroom", return_value=None),
-            patch("models.analysis_job.k8s.create_job"),
-            patch("models.analysis_job.k8s.delete_job"),
-            patch.object(AnalysisJob, "query") as mock_query,
-            patch("models.analysis_job.db.session") as mock_session,
-            patch("models.analysis_job.SimulationJob") as mock_sim_job,
-        ):
-            mock_query.filter_by.return_value.all.return_value = []
-            mock_sim_job.query.filter_by.return_value.order_by.return_value.first.return_value = run_job
-            return self._start(mock_session, tmp_path)
-
-    def test_records_progress_fraction_from_run_job(self, app: object, tmp_path: Path) -> None:
+    async def test_records_progress_fraction_from_run_job(
+        self, db_session: AsyncSession, tmp_path: Path, service: AnalysisService, clients: Clients
+    ) -> None:
         """A mid-run simulation's progress is snapshotted onto the new analysis job."""
-        run_job = MagicMock(nsteps=200, nsteps_done=40)
-        assert self._patched_start(run_job, app, tmp_path) == pytest.approx(0.2)
+        assert await self._progress(db_session, clients, service, tmp_path, nsteps=200, done=40) == pytest.approx(0.2)
 
-    def test_progress_is_none_without_run_job(self, app: object, tmp_path: Path) -> None:
+    async def test_progress_is_none_without_run_job(
+        self, db_session: AsyncSession, tmp_path: Path, service: AnalysisService, clients: Clients
+    ) -> None:
         """No run job for the simulation means no progress to snapshot."""
-        assert self._patched_start(None, app, tmp_path) is None
+        assert await self._progress(db_session, clients, service, tmp_path, nsteps=None, done=None) is None
 
-    def test_progress_is_none_when_done_is_unknown(self, app: object, tmp_path: Path) -> None:
+    async def test_progress_is_none_when_done_is_unknown(
+        self, db_session: AsyncSession, tmp_path: Path, service: AnalysisService, clients: Clients
+    ) -> None:
         """Unknown nsteps_done cannot produce a truthful fraction."""
-        run_job = MagicMock(nsteps=200, nsteps_done=None)
-        assert self._patched_start(run_job, app, tmp_path) is None
+        assert await self._progress(db_session, clients, service, tmp_path, nsteps=200, done=None) is None
 
-    def test_progress_clamped_at_one(self, app: object, tmp_path: Path) -> None:
+    async def test_progress_clamped_at_one(
+        self, db_session: AsyncSession, tmp_path: Path, service: AnalysisService, clients: Clients
+    ) -> None:
         """A finished run must not report more than 100%."""
-        run_job = MagicMock(nsteps=200, nsteps_done=250)
-        assert self._patched_start(run_job, app, tmp_path) == 1.0
+        assert await self._progress(db_session, clients, service, tmp_path, nsteps=200, done=250) == 1.0
+
+
+class TestAnalysisJobStatus:
+    """Remote status is fetched once per refresh; settled jobs never ask K8s again."""
+
+    async def test_finished_job_cleans_temp_files_once(
+        self, tmp_path: Path, service: AnalysisService, clients: Clients
+    ) -> None:
+        job = AnalysisJob(
+            id="a1", experiment_id="exptt", simulation_path="x.simulation.json", analysis_name=AnalysisType.RMSDS
+        )
+        (tmp_path / "exptt").mkdir()
+        (tmp_path / "exptt" / "inputs.yaml").write_text("x")
+        with patch.object(clients.k8s, "get_job_status", AsyncMock(return_value=JobStatus.FINISHED)) as status:
+            assert await service.refresh_status(job) == JobStatus.FINISHED
+            assert await service.refresh_status(job) == JobStatus.FINISHED
+
+        status.assert_awaited_once()
+        assert job.status == JobStatus.FINISHED
+        assert not (tmp_path / "exptt" / "inputs.yaml").exists()
+
+    async def test_unreachable_k8s_falls_back_to_last_known(self, service: AnalysisService, clients: Clients) -> None:
+        job = AnalysisJob(
+            id="a2",
+            experiment_id="exptt",
+            simulation_path="x.simulation.json",
+            analysis_name=AnalysisType.RMSDS,
+            _last_known_status=JobStatus.RUNNING,
+        )
+        with patch.object(clients.k8s, "get_job_status", AsyncMock(side_effect=RuntimeError("down"))):
+            assert await service.refresh_status(job) == JobStatus.RUNNING

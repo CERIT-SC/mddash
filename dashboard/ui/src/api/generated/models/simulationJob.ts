@@ -9,6 +9,9 @@ import type { Engine } from './engine.ts';
 import type { JobStatus } from './jobStatus.ts';
 import type { SimulationJobLogLines } from './simulationJobLogLines.ts';
 
+/**
+ * A production run of one simulation manifest (engine-specific fields pass through).
+ */
 export interface SimulationJob {
   id: string;
   experiment_id: string;
@@ -20,26 +23,15 @@ export interface SimulationJob {
   /** @minimum 1 */
   ntomp: number;
   status: JobStatus;
-  /** @nullable */
   start_timestamp?: number | null;
-  /** @nullable */
   finish_timestamp?: number | null;
-  /** @nullable */
   nsteps?: number | null;
-  /**
-     * Steps completed so far (parsed from the engine log)
-     * @nullable
-     */
+  /** Steps completed so far (parsed from the engine log) */
   nsteps_done?: number | null;
-  /** @nullable */
   performance?: number | null;
-  /**
-     * Estimated seconds until completion
-     * @nullable
-     */
+  /** Estimated seconds until completion */
   estimated_time?: number | null;
   is_live: boolean;
-  /** Line counts per log stream for sizing badges without fetching logs; null while a stream's file does not exist yet */
   log_lines?: SimulationJobLogLines;
   [key: string]: unknown;
  }

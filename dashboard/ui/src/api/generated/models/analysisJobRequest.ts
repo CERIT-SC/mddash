@@ -8,6 +8,9 @@
 import type { AnalysisJobRequestAnalysis } from './analysisJobRequestAnalysis.ts';
 import type { AnalysisJobRequestPreprocessingMode } from './analysisJobRequestPreprocessingMode.ts';
 
+/**
+ * Analysis of a simulation's trajectory.
+ */
 export interface AnalysisJobRequest {
   /** @minLength 1 */
   simulation_path: string;

@@ -6,7 +6,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type StartNotebookRequestTier = typeof StartNotebookRequestTier[keyof typeof StartNotebookRequestTier];
+export type StartNotebookRequestTier = typeof StartNotebookRequestTier[keyof typeof StartNotebookRequestTier] | null;
 
 
 export const StartNotebookRequestTier = {

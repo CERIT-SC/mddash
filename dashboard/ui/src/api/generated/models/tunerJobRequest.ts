@@ -6,6 +6,9 @@
  * OpenAPI spec version: 1.0.0
  */
 
+/**
+ * Tuning job for a simulation manifest.
+ */
 export interface TunerJobRequest {
   /** @minLength 1 */
   simulation_path: string;

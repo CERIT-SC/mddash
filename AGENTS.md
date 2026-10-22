@@ -11,7 +11,7 @@ Each user gets a dedicated Kubernetes namespace with resource quotas managed via
 ```
 Admin namespace:  JupyterHub Hub, MDRun API, Tuner, Landing Page (Caddy)
                   (+ SeaweedFS all-in-one S3 store when `s3.seaweedfs.enabled`)
-User namespace:   Proxy (Caddy) -> Auth (Flask), API (Flask), S3-Sync (rclone), JupyterHub Singleuser
+User namespace:   Proxy (Caddy) -> Auth (Flask), API (FastAPI), S3-Sync (rclone), JupyterHub Singleuser
 External:         MDRepo, S3-compatible storage (unless `s3.seaweedfs.enabled`)
 ```
 
@@ -34,7 +34,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - All auth flows through JupyterHub OAuth2.
 - Auth service uses an in-memory session store (1-hour lifetime) with HMAC-signed state.
 - Caddy `forward_auth` validates sessions via the auth container before routing to API or UI.
-- MDRepo OAuth is a separate flow managed by Dashboard API; tokens live in the Flask session (not the database).
+- MDRepo OAuth is a separate flow managed by Dashboard API; tokens live in the signed session cookie (not the database).
 
 ### Kubernetes
 - Dashboard API, MDRun API, and pre_spawn_hook all use `config.load_incluster_config()`. The hub pod's service account gets its permissions from the Rancher role template in `helm/rbac/roletemplate.yaml`, bound to `system:serviceaccounts:<hub-namespace>` in the Rancher project.
@@ -52,12 +52,12 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 - A local `/mddash/_archives` tree is never legitimate. `sync.sh` removes stray copies at startup, restoring the write bit first since bisync-downloaded dirs are read-only.
 
 ### Database
-- **Dashboard API.** runs `flask_migrate.upgrade()` on startup against versioned migrations in `dashboard/api/migrations/versions/` (fresh databases are created by the same migrations, there is no `db.create_all()` fallback, see `dashboard/api/AGENTS.md`). Add a new migration file when adding columns. Do NOT manually run `flask db upgrade`.
+- **Dashboard API.** the app lifespan runs Alembic (`core.db.run_migrations`) against versioned migrations in `dashboard/api/migrations/versions/` before serving (fresh databases are created by the same migrations, there is no `create_all()` fallback, see `dashboard/api/AGENTS.md`). Add a new migration file when adding columns. Do NOT run migrations manually.
 - **MDRun API.** `db.create_all()` only. No Alembic migrations. SQLite WAL mode for concurrent reads/writes.
 
 ### Error handling
 - All services return RFC 9457 problem-details (`errors.py` per service): `{"type", "title", "detail"[, "solution"]}` with `Content-Type: application/problem+json`. The body carries no `status`; the HTTP status line does. `type` is the support-reportable code (`urn:mddash:<token>`, correlated in logs by `type` + time).
-- `ApiError` + handler registration is intentionally duplicated across `dashboard/api/errors.py`, `mdrun-api/errors.py`, `dashboard/auth/errors.py`, and `tuner/api/errors.py` (separate containers, no shared package). Keep all in lockstep: a contract change must be applied to all four.
+- `ApiError` + handler registration is intentionally duplicated across `dashboard/api/core/errors.py`, `mdrun-api/errors.py`, `dashboard/auth/errors.py`, and `tuner/api/errors.py` (separate containers, no shared package). Keep all in lockstep: a contract change must be applied to all four.
 - `str(e)` and internal details never reach the client: unexpected exceptions return a generic 500 detail with a retry/support `solution`, traceback logged server-side only. This includes the Tuner rayworker's persisted job error, which is a user-friendly message, never the raw exception text.
 - The dashboard API wraps Tuner and MDRepo submit failures as `urn:mddash:upstream-unavailable` (with a `solution`) rather than letting them appear as generic 500s.
 - Validation errors carry no `solution` (the `detail` already implies the fix).
@@ -65,7 +65,7 @@ The Proxy container serves the complete static UI (compiled React/TypeScript das
 
 ## Development and feedback loop
 
-- `make demo` runs the real Flask API (`dashboard/api/_demo/app.py`, test-style mocks + seeded data) plus the React dev server locally. The demo data dir is wiped and reseeded on every start. Mutations never survive a restart.
+- `make demo` runs the real FastAPI app (`dashboard/api/_demo/app.py`, injected fake upstream clients + seeded data) plus the React dev server locally. The demo data dir is wiped and reseeded on every start. Mutations never survive a restart.
 - Run from repo root before claiming any code is correct. Each must pass before the next:
 
 ```bash
@@ -78,6 +78,7 @@ make validate-charts  # when editing Helm charts or config (requires helm + gomp
 make lint-workflows  # when editing GitHub Actions workflows (requires actionlint + zizmor)
 ```
 
+- Dashboard API route or schema changes: `make openapi` regenerates `dashboard/api/openapi.yaml` and the UI client from the FastAPI app (the API contract test and the UI `generated:check` fail on drift).
 - Build/deploy: `make build ENV={dev,prod}`, `make deploy ENV={dev,prod}`, `make rollback ENV=prod REVISION=N`.
 - Production application releases use `make release VERSION=x.y.z`, which creates the SemVer tag and lets `release.yml` deploy prod and create the GitHub Release. `make all ENV=prod` is rejected. Operators only need `ENV=prod` for `status`/`logs`/`history`/`rollback`.
 - Helm: `make -C helm render` (render values), `make -C helm update` (update deps).

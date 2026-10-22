@@ -8,6 +8,9 @@
 import type { NotebookTierProperty } from './notebookTierProperty.ts';
 import type { PodStatus } from './podStatus.ts';
 
+/**
+ * The experiment's JupyterLab notebook.
+ */
 export interface Notebook {
   id: number;
   experiment_id: string;
@@ -17,9 +20,6 @@ export interface Notebook {
   gpu: boolean;
   path: string;
   status: PodStatus;
-  /**
-     * Pod start time; null while the pod is absent
-     * @nullable
-     */
+  /** Pod start time; null while the pod is absent */
   started_at: string | null;
 }

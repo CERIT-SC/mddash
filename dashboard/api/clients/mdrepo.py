@@ -1,98 +1,81 @@
 """
-MDRepo API client using OAuth2 Bearer token authentication.
+MDRepo (InvenioRDM) API client using OAuth2 Bearer token authentication.
 
-This module provides functions to interact with the MDRepo (InvenioRDM) API
-for creating experiment drafts and checking their publication status.
-
-File uploads are performed by a dedicated Kubernetes Job (see
-``upload/submission.py`` and the ``mdrepo-uploader`` worker image), not by
-a daemon thread in this process.
+File uploads run in a dedicated Kubernetes Job (see ``modules/publishing/submission.py``
+and the ``mdrepo-uploader`` worker image), not in this process.
 """
 
 import logging
 from http import HTTPStatus
 
-import requests
-from config import MDREPO_API_URL, MDREPO_RECORD_NAME
+import httpx
+from core.config import MDREPO_API_URL, MDREPO_RECORD_NAME, MDREPO_TOKEN_URL, MDREPO_URL
 
 logger = logging.getLogger(__name__)
 
 
 def _auth_header(token: str) -> dict[str, str]:
-    """
-    Create authorization header with Bearer token.
-
-    Args:
-        token: OAuth2 access token.
-
-    Returns:
-        Authorization header dictionary.
-    """
     return {"Authorization": f"Bearer {token}"}
 
 
-def create_experiment(access_token: str, community: str, metadata: dict) -> dict:
-    """
-    Create a new experiment (record) in MDRepo.
+class MDRepoClient:
+    """MDRepo records and the OAuth token endpoint."""
 
-    Args:
-        access_token: OAuth2 access token for authentication.
-        community: Community slug to publish under.
-        metadata: Metadata for the experiment.
+    def __init__(
+        self,
+        http: httpx.AsyncClient,
+        url: str = MDREPO_URL,
+        api_url: str = MDREPO_API_URL,
+        record_name: str = MDREPO_RECORD_NAME,
+        token_url: str = MDREPO_TOKEN_URL,
+    ) -> None:
+        """Bind to the shared HTTP client."""
+        self._http = http
+        self._url = url
+        self._api_url = api_url
+        self._record_name = record_name
+        self._token_url = token_url
 
-    Returns:
-        Server response containing the created experiment data.
+    async def request_token(self, data: dict[str, str]) -> httpx.Response:
+        """POST an OAuth grant (authorization code or refresh token) to the token endpoint."""
+        return await self._http.post(self._token_url, data=data, timeout=30)
 
-    Raises:
-        ValueError: If the experiment creation fails.
-    """
-    json_data = {
-        "files": {"enabled": True},
-        "parent": {"communities": {"default": community}},
-        "metadata": metadata,
-    }
+    async def create_experiment(self, access_token: str, community: str, metadata: dict) -> dict:
+        """
+        Create a new experiment (record draft) in MDRepo.
 
-    response = requests.post(
-        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}", json=json_data, headers=_auth_header(access_token), timeout=30
-    )
+        Raises:
+            ValueError: If the experiment creation fails.
+        """
+        json_data = {
+            "files": {"enabled": True},
+            "parent": {"communities": {"default": community}},
+            "metadata": metadata,
+        }
+        response = await self._http.post(
+            f"{self._api_url}/{self._record_name}", json=json_data, headers=_auth_header(access_token), timeout=30
+        )
+        if not response.is_success:
+            raise ValueError(f"Failed to create experiment: {response.status_code} - {response.text}")
+        return response.json()
 
-    if not response.ok:
-        raise ValueError(f"Failed to create experiment: {response.status_code} - {response.text}")
+    async def check_experiment_status(self, access_token: str, experiment_id: str) -> bool | None:
+        """
+        Check whether an MDRepo record is published or a draft.
 
-    return response.json()
+        Returns:
+            True if published, False if draft, None if deleted (404).
+        """
+        base = f"{self._api_url}/{self._record_name}/{experiment_id}"
+        for url, published in ((base, True), (f"{base}/draft", False)):
+            response = await self._http.get(url, headers=_auth_header(access_token), timeout=30)
+            if response.status_code == HTTPStatus.OK:
+                return published
+            if response.status_code != HTTPStatus.NOT_FOUND:
+                response.raise_for_status()
+        return None
 
-
-def check_experiment_status(access_token: str, experiment_id: str) -> bool | None:
-    """
-    Check if an experiment exists in MDRepo and whether it's published or draft.
-
-    Args:
-        access_token: OAuth2 access token for authentication.
-        experiment_id: Experiment (record) ID in MDRepo.
-
-    Returns:
-        True if published, False if draft, None if deleted (404).
-    """
-    # Check if published
-    response = requests.get(
-        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}",
-        headers=_auth_header(access_token),
-        timeout=30,
-    )
-    if response.status_code == HTTPStatus.OK:
-        return True
-    if response.status_code != HTTPStatus.NOT_FOUND:
-        response.raise_for_status()
-
-    # Check if draft
-    response = requests.get(
-        f"{MDREPO_API_URL}/{MDREPO_RECORD_NAME}/{experiment_id}/draft",
-        headers=_auth_header(access_token),
-        timeout=30,
-    )
-    if response.status_code == HTTPStatus.OK:
-        return False
-    if response.status_code != HTTPStatus.NOT_FOUND:
-        response.raise_for_status()
-
-    return None
+    async def is_token_valid(self, access_token: str) -> bool:
+        """Whether MDRepo accepts the token (`/api/me`)."""
+        response = await self._http.get(f"{self._url}/api/me", headers=_auth_header(access_token), timeout=10)
+        return response.status_code == HTTPStatus.OK

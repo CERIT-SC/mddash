@@ -7,10 +7,12 @@
  */
 import type { JobStatus } from './jobStatus.ts';
 
+/**
+ * One tuning trial as reported by the tuner (engine-specific keys pass through).
+ */
 export interface TunerTrial {
   id?: string;
   status?: JobStatus;
-  /** @nullable */
   performance?: number | null;
   [key: string]: unknown;
  }

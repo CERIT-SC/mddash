@@ -8,6 +8,9 @@
 import type { AnalysisJobAnalysisName } from './analysisJobAnalysisName.ts';
 import type { JobStatus } from './jobStatus.ts';
 
+/**
+ * On-demand mwf analysis job (input file paths pass through).
+ */
 export interface AnalysisJob {
   id: string;
   experiment_id: string;
@@ -15,10 +18,10 @@ export interface AnalysisJob {
   analysis_name: AnalysisJobAnalysisName;
   created_at: string;
   status: JobStatus;
-  /**
-     * Fraction (0-1) of the simulation's steps available when the analysis inputs were snapshotted; null when unknown.
-     * @nullable
-     */
+  /** Fraction (0-1) of the simulation's steps available when the analysis inputs were snapshotted; null when unknown. */
   sim_progress?: number | null;
+  structure_file?: string | null;
+  trajectory_file?: string | null;
+  topology_file?: string | null;
   [key: string]: unknown;
  }
