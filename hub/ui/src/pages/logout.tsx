@@ -1,3 +1,5 @@
+import { useEffect } from "react"
+
 import { Button, Card, CardContent, P } from "@e-infra/design-system"
 import { CircleCheck } from "lucide-react"
 
@@ -14,6 +16,16 @@ export function LogoutPage() {
   const cfg = getAppConfig<LogoutConfig>({
     loginUrl: `${DEV_FALLBACK_BASE_URL}login`,
   })
+
+  // Talqo keeps its chat credential in localStorage; don't let one user's
+  // conversation outlive sign-out on a shared machine. Same origin as /dash.
+  useEffect(() => {
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith("talqo:")) localStorage.removeItem(key)
+      }
+    } catch {}
+  }, [])
 
   return (
     <CenteredLayout announcement={cfg.announcement}>
