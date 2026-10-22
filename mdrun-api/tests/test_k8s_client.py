@@ -6,7 +6,7 @@ Verifies that simulations run in the directory of their primary input file
 storage is scoped to that simulation directory instead of the whole experiment.
 """
 
-from typing import Any
+from typing import Any, ClassVar
 from unittest.mock import MagicMock
 
 import k8s_client
@@ -219,6 +219,90 @@ class TestSimGuardAndSyncTraps:
         # Bounded wait for the sim's completion marker, then a final checksummed copy.
         assert "[ ! -f /data/job_completed ]" in sync
         assert "--checksum" in sync
+
+
+class TestOffloadScheduling:
+    """Payload jobs can target offload nodes (interLink); the default manifest stays unchanged."""
+
+    _NODE_SELECTOR: ClassVar[dict[str, str]] = {"nodeType": "interlink"}
+    _TOLERATIONS: ClassVar[list[dict[str, str]]] = [{"key": "virtual-kubelet.io/provider", "operator": "Exists"}]
+
+    def _pod_spec(self, batch_v1: MagicMock) -> dict[str, Any]:
+        return _manifest(batch_v1)["spec"]["template"]["spec"]
+
+    def test_default_manifest_has_no_scheduling_overrides(self, mocker: MockerFixture) -> None:
+        """Unset knobs keep the manifest identical to a plain single-cluster deployment."""
+        mocker.patch.object(k8s_client, "JOB_NODE_SELECTOR", None)
+        mocker.patch.object(k8s_client, "JOB_TOLERATIONS", None)
+        batch_v1 = _create(mocker)
+
+        k8s_client.create_gromacs_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            deffnm="md",
+            np=1,
+            ntomp=2,
+            nb="cpu",
+            pme="cpu",
+            extra_args="",
+        )
+
+        pod_spec = self._pod_spec(batch_v1)
+        assert "nodeSelector" not in pod_spec
+        assert "tolerations" not in pod_spec
+
+    def test_overrides_are_injected_into_gmx_jobs(self, mocker: MockerFixture) -> None:
+        """Set knobs add nodeSelector and tolerations to the pod spec, nothing else."""
+        mocker.patch.object(k8s_client, "JOB_NODE_SELECTOR", self._NODE_SELECTOR)
+        mocker.patch.object(k8s_client, "JOB_TOLERATIONS", self._TOLERATIONS)
+        batch_v1 = _create(mocker)
+
+        k8s_client.create_gromacs_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            deffnm="md",
+            np=1,
+            ntomp=2,
+            nb="cpu",
+            pme="cpu",
+            extra_args="",
+        )
+
+        pod_spec = self._pod_spec(batch_v1)
+        assert pod_spec["nodeSelector"] == self._NODE_SELECTOR
+        assert pod_spec["tolerations"] == self._TOLERATIONS
+        # The data path is untouched by offloading: emptyDir volume stays the only volume.
+        assert pod_spec["restartPolicy"] == "Never"
+        assert pod_spec["volumes"] == [{"name": "shared-data", "emptyDir": {"sizeLimit": "100Gi"}}]
+
+    def test_overrides_are_injected_into_amber_jobs(self, mocker: MockerFixture) -> None:
+        """AMBER jobs take the same overrides (both engines share one manifest builder)."""
+        mocker.patch.object(k8s_client, "JOB_NODE_SELECTOR", self._NODE_SELECTOR)
+        mocker.patch.object(k8s_client, "JOB_TOLERATIONS", self._TOLERATIONS)
+        batch_v1 = _create(mocker)
+
+        k8s_client.create_amber_job(
+            ns="ns",
+            bucket_name="bucket",
+            name="mdrun-job",
+            experiment_id="exp123",
+            prmtop_name="v.prmtop",
+            inpcrd_name="v.rst7",
+            mdin_name="prod.mdin",
+            binary="pmemd.cuda",
+            np=1,
+            ntomp=4,
+            ewald="default",
+            extra_args="",
+        )
+
+        pod_spec = self._pod_spec(batch_v1)
+        assert pod_spec["nodeSelector"] == self._NODE_SELECTOR
+        assert pod_spec["tolerations"] == self._TOLERATIONS
 
 
 class TestDeleteJobGrace:

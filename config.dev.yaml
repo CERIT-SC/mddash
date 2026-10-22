@@ -169,6 +169,10 @@ mdrunApi:
       requests:
         cpu: "50m"
         memory: "128Mi"
+  # Offload simulation jobs to nodes outside the regular scheduler, e.g.
+  # interLink virtual nodes backed by HPC/SLURM. Leave empty to keep jobs on
+  # the cluster's regular nodes (plain single-cluster deployment).
+  jobScheduling: {}
   jobHeadroom:
     # Maximum number of HPC jobs running simultaneously in the hub namespace.
     # Set cpuPerJob and memoryPerJob to the largest single job you want to allow.

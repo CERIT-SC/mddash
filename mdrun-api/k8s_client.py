@@ -6,7 +6,16 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from config import AMBER_IMAGE, GMX_IMAGE, GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
+from config import (
+    AMBER_IMAGE,
+    GMX_IMAGE,
+    GPU_TYPE,
+    JOB_NODE_SELECTOR,
+    JOB_TOLERATIONS,
+    S3_ACCESS_KEY,
+    S3_ENDPOINT,
+    S3_SECRET_KEY,
+)
 from enums import JobStatus
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
@@ -126,6 +135,17 @@ def _volume_mount(path: str = "/data") -> dict[str, str]:
     return {"name": _SHARED_VOLUME_NAME, "mountPath": path}
 
 
+def _pod_scheduling() -> dict[str, Any]:
+    """nodeSelector/tolerations for offload targets (e.g. interLink virtual nodes)."""
+    # Empty on plain Kubernetes so the manifest is unchanged from the default deployment.
+    overrides: dict[str, Any] = {}
+    if JOB_NODE_SELECTOR:
+        overrides["nodeSelector"] = JOB_NODE_SELECTOR
+    if JOB_TOLERATIONS:
+        overrides["tolerations"] = JOB_TOLERATIONS
+    return overrides
+
+
 def _sim_sync_remote(bucket_name: str, experiment_id: str, primary_file: str) -> str:
     sim_rel = Path(primary_file).parent.as_posix()
     base = f"s3remote:{bucket_name}/{experiment_id}/"
@@ -162,6 +182,7 @@ def _build_job_manifest(
                 "spec": {
                     "restartPolicy": "Never",
                     "securityContext": {"fsGroup": 1000},
+                    **_pod_scheduling(),
                     "initContainers": [
                         {
                             "name": "s3-init",

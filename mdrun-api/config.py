@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from pathlib import Path
@@ -17,6 +18,33 @@ DB_URL = f"sqlite:///{DATA_DIR}/mdrun.db?timeout=30"
 
 NAMESPACE = os.environ.get("POD_NAMESPACE", "default")
 PVC_NAME = os.environ.get("PVC_NAME", "mdrun-api-pvc")
+
+
+def _json_env(name: str) -> object | None:
+    """
+    Read a JSON-encoded environment variable.
+
+    Malformed JSON is a deployment misconfiguration, so it fails at startup
+    rather than on the first job creation.
+    """
+    raw = os.environ.get(name)
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        msg = f"{name} must be valid JSON: {exc}"
+        raise RuntimeError(msg) from exc
+
+
+# Optional scheduling overrides for simulation Job pods, used to offload them
+# to nodes outside the regular scheduler (e.g. interLink virtual nodes backed
+# by HPC/SLURM). JOB_NODE_SELECTOR becomes the pod spec's nodeSelector (a
+# string-to-string map), JOB_TOLERATIONS its tolerations (a list of maps).
+# Unset (default) = no overrides: jobs schedule anywhere and the manifest is
+# identical to a plain-K8s deployment.
+JOB_NODE_SELECTOR = _json_env("JOB_NODE_SELECTOR")
+JOB_TOLERATIONS = _json_env("JOB_TOLERATIONS")
 
 GPU_TYPE = os.environ.get("GPU_TYPE", "")
 

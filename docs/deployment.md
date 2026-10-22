@@ -46,6 +46,38 @@ UPDATE simulation_jobs SET last_known_status = 'ERROR' WHERE last_known_status =
 UPDATE mdrun_jobs SET last_status = 'FINISHED' WHERE last_status = 'STOPPED';
 ```
 
+## Offloading simulation jobs to HPC (interLink)
+
+MDRun payload jobs (GROMACS/AMBER) can be offloaded to HPC clusters reached through [interLink](https://github.com/interlink-hp), which exposes batch systems (SLURM) as virtual Kubernetes nodes. The mdrun-api head (API + poller + SQLite) always stays on regular cluster nodes; only the Job pods it creates target the virtual node — see [ADR 0001](adr/0001-mdrun-api-offload-head-local.md) for why the head is never offloaded.
+
+Payload jobs are PVC-free by design (emptyDir + S3 staging), so offloading is a scheduling concern only. Enable it in `config*.yaml`:
+
+```yaml
+mdrunApi:
+  jobScheduling:
+    nodeSelector:
+      nodeType: interlink  # a stable label on your interLink virtual node
+    tolerations:           # the virtual-kubelet taint, if any
+      - key: virtual-kubelet.io/provider
+        operator: Exists
+```
+
+Both keys are optional; an empty `jobScheduling: {}` (the default) keeps the manifest identical to a plain single-cluster deployment. Offload is all-or-nothing per deployment.
+
+Prerequisites on the interLink/HPC side:
+
+- `emptyDir` and multi-container pods supported on offloaded pods,
+- HPC compute nodes can reach `S3_ENDPOINT` (network egress) and pull the GMX/AMBER and rclone images,
+- the virtual node advertises GPU resources under the configured `gpuType` (`GPU_TYPE`) name; CPU/memory requests map 1:1 to SLURM,
+- SLURM walltime is set as a node-level default (long MD runs need generous limits), partition chosen per virtual node.
+
+### Canary procedure (run before enabling in any environment)
+
+1. `kubectl describe node <virtual-node>` — record the actual labels/taints; use them in `jobScheduling`.
+2. Submit a hello-world Job directly (`kubectl create job`, not via mdrun-api) with the selector/toleration, an `emptyDir`, and a container that writes a marker into the S3 bucket. Verify image pulls on the HPC side, that `emptyDir` materializes as shared scratch for multi-container pods, that the Job reaches `Complete`/`Failed` through the virtual kubelet, and that deleting the Job cancels the SLURM allocation (this is what `POST /jobs/{engine}/<id>/stop` relies on).
+3. Enable `jobScheduling` in the dev environment and run a one-step GROMACS minimization through mdrun-api; watch the poller move the job PENDING → RUNNING → FINISHED and the output land in S3.
+4. Only after both pass, enable in the target environment.
+
 ## Manual deployment
 
 Bypasses CI/CD. The remaining sections document the same steps `./install.sh` performs.

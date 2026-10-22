@@ -317,6 +317,14 @@ mdrun-api:
       value: "{{ $cfg.amberImage }}"
     - name: GPU_TYPE
       value: "{{ $cfg.gpuType }}"
+    {{- with index $cfg.mdrunApi.jobScheduling "nodeSelector" }}
+    - name: JOB_NODE_SELECTOR
+      value: {{ . | toJSON | quote }}
+    {{- end }}
+    {{- with index $cfg.mdrunApi.jobScheduling "tolerations" }}
+    - name: JOB_TOLERATIONS
+      value: {{ . | toJSON | quote }}
+    {{- end }}
 
 tuner:
   image:
