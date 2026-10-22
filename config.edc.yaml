@@ -197,7 +197,7 @@ tuner:
     pricing:
       # Hourly resource rates in currency units for trial cost estimates and early-stop pruning.
       cpuCoreHour: "0.04"
-      gpuHour: "0.30"
+      gpuHour: "1.20"
       gbRamHour: "0.005"
   databaseStorage:
     size: 1Gi

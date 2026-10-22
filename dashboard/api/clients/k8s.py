@@ -290,7 +290,11 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
                     "fsGroupChangePolicy": "OnRootMismatch",
                     "supplementalGroups": [1000],
                 },
-                **({"nodeSelector": {"nvidia.com/gpu.product": GPU_PRODUCT}} if gpu and GPU_TYPE and GPU_PRODUCT else {}),
+                **(
+                    {"nodeSelector": {"nvidia.com/gpu.product": GPU_PRODUCT}}
+                    if gpu and GPU_TYPE and GPU_PRODUCT
+                    else {}
+                ),
                 "containers": [jupyter_container],
                 "volumes": [{"name": volume_name, "persistentVolumeClaim": {"claimName": PVC_NAME}}],
             },
