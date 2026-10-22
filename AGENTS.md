@@ -87,3 +87,17 @@ make lint-workflows  # when editing GitHub Actions workflows (requires actionlin
 - `master` pushes trigger `cd.yml` (calls CI, then deploys dev); `v*` SemVer tags trigger `release.yml` (calls CI, deploys prod, creates GitHub Release). PRs run CI only.
 - Workflow details in `.github/workflows/AGENTS.md`.
 - Secrets are created in-namespace during deployment via GitHub Actions.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in GitHub (CERIT-SC/mddash) via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles map 1:1 to same-named GitHub labels. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
