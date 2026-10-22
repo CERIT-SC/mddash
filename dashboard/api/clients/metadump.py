@@ -123,7 +123,3 @@ class MetadumpClient:
                 await self._delete_job(uuid, pin)
 
         return results
-
-    async def extract_metadata(self, tpr_path: Path) -> dict:
-        """Extract metadata from a single TPR file via MetaDump."""
-        return (await self.extract_metadata_bulk([tpr_path]))[0]

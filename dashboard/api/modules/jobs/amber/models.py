@@ -8,7 +8,6 @@ from typing import ClassVar
 import sqlalchemy as sa
 from core.config import DATA_DIR
 from core.enums import AmberBinary, Engine, EwaldPreset
-from core.errors import BadRequest, Forbidden, InternalServerError, NotFound, UnprocessableEntity
 from core.utils import tail, tail_bytes
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
@@ -114,51 +113,8 @@ class AmberJob(SimulationJob):
         """AMBER log streams keyed by the log endpoint's ``type`` values (mdinfo is progress state, not a stream)."""
         return {"mdout": self._mdout_log, "stdout": self._stdout_log, "stderr": self._stderr_log}
 
-    def get_log(self, type: str = "mdout", tail_lines: int | None = None) -> str:
-        """
-        Get the log of the job.
-
-        Args:
-            type: Type of log to retrieve ('mdout', 'mdinfo', 'stdout', or 'stderr').
-            tail_lines: Number of lines to retrieve from the end of the log file.
-
-        Returns:
-            Log content as a string.
-
-        Raises:
-            BadRequest: If the log type is invalid.
-            NotFound: If the log file does not exist.
-            Forbidden: If access to the log file is denied.
-            UnprocessableEntity: If the log file cannot be decoded.
-            InternalServerError: If a system error occurs while reading the log file.
-        """
-        match type:
-            case "mdout":
-                log_file = self._mdout_log
-            case "mdinfo":
-                log_file = self._mdinfo_log
-            case "stdout":
-                log_file = self._stdout_log
-            case "stderr":
-                log_file = self._stderr_log
-            case _:
-                raise BadRequest(
-                    description=f"Invalid log type '{type}'. Use 'mdout', 'mdinfo', 'stdout', or 'stderr'."
-                )
-
-        try:
-            if tail_lines:
-                return tail(log_file, tail_lines)
-            with log_file.open("r") as f:
-                return f.read()
-        except FileNotFoundError:
-            raise NotFound(description=f"Log file not found: {log_file.name}")
-        except PermissionError:
-            raise Forbidden(description=f"Permission denied accessing log file: {log_file.name}")
-        except UnicodeDecodeError:
-            raise UnprocessableEntity(description=f"Unable to decode log file: {log_file.name}")
-        except OSError as e:
-            raise InternalServerError(description="System error reading log file.") from e
+    def _readable_logs(self) -> dict[str, Path]:
+        return {**self._log_files(), "mdinfo": self._mdinfo_log}
 
     def cleanup_files(self) -> None:
         """Remove this run's result files and logs, keeping files the manifest uses as inputs."""
@@ -183,12 +139,7 @@ class AmberJob(SimulationJob):
         self._stderr_log.unlink(missing_ok=True)
 
     def _parse_nsteps(self) -> int | None:
-        """
-        Parse total steps from the nstlim parameter in the mdin file.
-
-        Returns:
-            Total number of steps or None if not available.
-        """
+        """Parse total steps from the nstlim parameter in the mdin file."""
         if not self._mdin_path.exists():
             return None
 
@@ -209,9 +160,6 @@ class AmberJob(SimulationJob):
         Get the number of steps completed so far.
 
         Reads from mdinfo (updated in real-time by pmemd), falls back to mdout.
-
-        Returns:
-            Number of steps completed or None if not available.
         """
         if self._mdinfo_log.exists():
             try:
@@ -243,12 +191,7 @@ class AmberJob(SimulationJob):
         return None
 
     def _parse_performance(self) -> float | None:
-        """
-        Get the performance of the job in ns/day.
-
-        Returns:
-            Performance in ns/day or None if not available.
-        """
+        """Get the performance of the job in ns/day."""
         if not self._mdout_log.exists():
             return None
 
@@ -271,9 +214,6 @@ class AmberJob(SimulationJob):
         Parse the start timestamp from the mdout file.
 
         AMBER writes: "| Run on MM/DD/YYYY at HH:MM:SS"
-
-        Returns:
-            Start timestamp or None if not available.
         """
         if not self._mdout_log.exists():
             return None
@@ -304,9 +244,6 @@ class AmberJob(SimulationJob):
         AMBER does not write an explicit completion line. We derive the finish
         time by parsing the "Master Total wall time" and adding it to the start
         timestamp. Falls back to the mdout file's mtime.
-
-        Returns:
-            Finish timestamp or None if not available.
         """
         if not self._mdout_log.exists() or not self.start_timestamp:
             return None

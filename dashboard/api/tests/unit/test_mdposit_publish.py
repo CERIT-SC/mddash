@@ -5,23 +5,25 @@ import re
 from collections.abc import Iterator
 from http import HTTPStatus
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
 from clients import Clients
-from core.enums import Engine
 from core.errors import ApiError, BadRequest
 from httpx import AsyncClient
 from modules.experiments.service import ExperimentService
 from modules.mdrepo.tokens import MDRepoCredentials
-from modules.models import Experiment, Notebook
+from modules.models import Experiment
 from modules.publishing.service import PublishingService
 from modules.publishing.status import UploadStatus
 from modules.publishing.submission import SubmissionError
-from modules.simulations.manifest_schema import schema_url
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.support import SeedExperiment, write_simulation
 
-GMX_SCHEMA_URL = schema_url(Engine.GMX)
+EXP_ID = "pubsh"
+SIM_PATH = "sim.simulation.json"
+PUBLISH_FILES = {"run_input": "topol.tpr", "reference_structure": "struct.pdb", "trajectory": "traj.xtc"}
 CREDENTIALS = MDRepoCredentials(access_token="valid-token", refresh_token="", expires_at="0")
 
 
@@ -32,60 +34,53 @@ def _mdposit_configured() -> Iterator[None]:
         yield
 
 
-async def _seed_experiment(
-    db_session: AsyncSession, exp_id: str = "pubsh", name: str = "Publish Test", **columns: object
-) -> Experiment:
-    """Persist a minimal experiment with notebook and load it the way a request would."""
-    db_session.add(Experiment(id=exp_id, name=name, notebooks_repo="https://github.com/t/r.git", **columns))
-    db_session.add(Notebook(experiment_id=exp_id))
-    await db_session.commit()
+async def _stored(db_session: AsyncSession, exp_id: str = EXP_ID) -> Experiment:
     db_session.expunge_all()
     experiment = await db_session.get(Experiment, exp_id)
     assert experiment is not None
     return experiment
 
 
-async def _stored(db_session: AsyncSession, exp_id: str = "pubsh") -> Experiment:
-    db_session.expunge_all()
-    experiment = await db_session.get(Experiment, exp_id)
-    assert experiment is not None
-    return experiment
+@pytest.fixture
+def upload() -> Iterator[SimpleNamespace]:
+    """Patch MDRepo, MetaDump, and the upload Job for a first publish; tests adjust the mocks."""
+    with (
+        patch("modules.publishing.submission.is_upload_active", return_value=False) as active,
+        patch("modules.publishing.service.submit_upload_job", return_value="attempt-001") as submit,
+        patch("modules.publishing.submission.read_status", return_value=None) as read_status,
+        patch("clients.mdrepo.MDRepoClient.create_experiment", return_value={"id": "rec-001"}) as create,
+        patch("clients.mdrepo.MDRepoClient.check_experiment_status", return_value=None) as check,
+        patch("clients.metadump.MetadumpClient.extract_metadata_bulk", return_value=[]) as metadata,
+        patch("modules.publishing.service.delete_upload_resources") as delete_resources,
+    ):
+        yield SimpleNamespace(
+            active=active,
+            submit=submit,
+            read_status=read_status,
+            create=create,
+            check=check,
+            metadata=metadata,
+            delete_resources=delete_resources,
+        )
 
 
-def _write_gmx_simulation(
-    exp_dir: Path,
-    simulation_path: str = "sim.simulation.json",
-    name: str = "sim",
-    files: dict[str, str] | None = None,
-) -> str:
-    """
-    Write a GMX simulation manifest.
-
-    Returns:
-        The simulation_path.
-    """
-    sim_file = exp_dir / simulation_path
-    sim_file.parent.mkdir(parents=True, exist_ok=True)
-    content = {
-        "$schema": GMX_SCHEMA_URL,
-        "name": name,
-        "engine": "GMX",
-        "files": files or {"run_input": "topol.tpr", "reference_structure": "struct.pdb", "trajectory": "traj.xtc"},
-        "extra_args": "",
-    }
-    sim_file.write_text(json.dumps(content))
-    return simulation_path
+@pytest.fixture
+def clone() -> Iterator[Mock]:
+    with patch("clients.git.GitClient.clone") as clone:
+        yield clone
 
 
 class TestDefaultPublishTargetInvenio:
     """Default target=invenio requires MDRepo authentication."""
 
     async def test_publish_default_target_requires_mdrepo_token(
-        self, client: AsyncClient, db_session: AsyncSession, tmp_path: Path
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
     ) -> None:
-        """Test test_publish_default_target_requires_mdrepo_token."""
-        await _seed_experiment(db_session)
-        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+        await seed_experiment(EXP_ID, name="Publish Test")
 
         resp = await client.post("/dash/api/experiments/pubsh/publish")
         assert resp.status_code == HTTPStatus.UNAUTHORIZED
@@ -97,58 +92,50 @@ class TestDefaultPublishTargetInvenio:
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        seed_experiment: SeedExperiment,
     ) -> None:
-        """Test test_publish_explicit_invenio_also_requires_token."""
-        await _seed_experiment(db_session)
-        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+        await seed_experiment(EXP_ID, name="Publish Test")
 
         resp = await client.post("/dash/api/experiments/pubsh/publish", json={"target": "invenio"})
         assert resp.status_code == HTTPStatus.UNAUTHORIZED
 
-    @patch("modules.publishing.submission.is_upload_active", return_value=False)
-    @patch("modules.publishing.service.submit_upload_job", return_value="attempt-001")
-    @patch("modules.publishing.submission.read_status", return_value=None)
-    @patch("clients.mdrepo.MDRepoClient.create_experiment", return_value={"id": "rec-001"})
-    @patch("clients.metadump.MetadumpClient.extract_metadata_bulk", return_value=[])
     async def test_publish_invenio_with_token_succeeds(
         self,
-        mock_meta: Mock,
-        mock_create: Mock,
-        mock_read_status: Mock,
-        mock_submit: Mock,
-        mock_active: Mock,
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        seed_experiment: SeedExperiment,
+        upload: SimpleNamespace,
     ) -> None:
-        """Test test_publish_invenio_with_token_succeeds."""
-        await _seed_experiment(db_session)
-        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+        await seed_experiment(EXP_ID, name="Publish Test")
 
         exp = await _stored(db_session)
         result = await PublishingService(db_session, clients).publish_invenio(exp, CREDENTIALS)
 
         assert result["id"] == "rec-001"
         assert result["upload_state"] == "queued"
-        mock_create.assert_called_once()
+        upload.create.assert_called_once()
 
 
 class TestMdpositPublishNoOAuth:
     """MDPosit publish does not require MDRepo OAuth token."""
 
     async def test_mdposit_publish_does_not_require_mdrepo_token(
-        self, client: AsyncClient, db_session: AsyncSession, tmp_path: Path
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
     ) -> None:
-        """Test test_mdposit_publish_does_not_require_mdrepo_token."""
-        await _seed_experiment(db_session)
-        exp_dir = tmp_path / "pubsh"
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        _, exp_dir = await seed_experiment(EXP_ID, name="Publish Test")
         (exp_dir / "struct.pdb").write_text("ATOM data")
         (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
-        sim_path = _write_gmx_simulation(
+        sim_path = write_simulation(
             exp_dir,
-            files={"run_input": "topol.tpr", "reference_structure": "struct.pdb", "trajectory": "traj.xtc"},
+            SIM_PATH,
+            {"run_input": "topol.tpr", "reference_structure": "struct.pdb", "trajectory": "traj.xtc"},
+            name="sim",
         )
 
         with (
@@ -165,16 +152,17 @@ class TestMdpositPublishNoOAuth:
             assert "vre_lite_url" in data
 
     async def test_mdposit_publish_rejected_when_not_configured(
-        self, client: AsyncClient, db_session: AsyncSession, tmp_path: Path
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
     ) -> None:
-        """Test test_mdposit_publish_rejected_when_not_configured."""
-        await _seed_experiment(db_session)
-        exp_dir = tmp_path / "pubsh"
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        _, exp_dir = await seed_experiment(EXP_ID, name="Publish Test")
         (exp_dir / "struct.pdb").write_text("ATOM data")
         (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
-        sim_path = _write_gmx_simulation(exp_dir)
+        sim_path = write_simulation(exp_dir, SIM_PATH, PUBLISH_FILES, name="sim")
 
         with (
             patch("modules.publishing.mdposit.MDPOSIT_URL", ""),
@@ -189,17 +177,21 @@ class TestMdpositPublishNoDbMutation:
     """MDPosit handoff is stateless — must not change MDRepo columns."""
 
     async def test_mdposit_publish_leaves_mdrepo_fields_null(
-        self, db_session: AsyncSession, tmp_path: Path, clients: Clients
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        clients: Clients,
+        seed_experiment: SeedExperiment,
     ) -> None:
-        """Test test_mdposit_publish_leaves_mdrepo_fields_null."""
-        await _seed_experiment(db_session)
-        exp_dir = tmp_path / "pubsh"
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        _, exp_dir = await seed_experiment(EXP_ID, name="Publish Test")
         (exp_dir / "struct.gro").write_text("gro data")
         (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
-        sim_path = _write_gmx_simulation(
-            exp_dir, files={"run_input": "topol.tpr", "reference_structure": "struct.gro", "trajectory": "traj.xtc"}
+        sim_path = write_simulation(
+            exp_dir,
+            SIM_PATH,
+            {"run_input": "topol.tpr", "reference_structure": "struct.gro", "trajectory": "traj.xtc"},
+            name="sim",
         )
 
         with (
@@ -222,15 +214,13 @@ class TestMdpositPublishNoDbMutation:
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        seed_experiment: SeedExperiment,
     ) -> None:
-        """Test test_mdposit_publish_does_not_overwrite_existing_mdrepo_fields."""
-        await _seed_experiment(db_session)
-        exp_dir = tmp_path / "pubsh"
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        _, exp_dir = await seed_experiment(EXP_ID, name="Publish Test")
         (exp_dir / "struct.pdb").write_text("ATOM")
         (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
-        sim_path = _write_gmx_simulation(exp_dir)
+        sim_path = write_simulation(exp_dir, SIM_PATH, PUBLISH_FILES, name="sim")
 
         with (
             patch("modules.publishing.mdposit.MDPOSIT_VRE_LITE_URL", ""),
@@ -250,25 +240,17 @@ class TestMdpositPublishNoDbMutation:
 class TestInvenioPublishUnchanged:
     """Invenio publish still sets mdrepo_id and mdrepo_published=False."""
 
-    @patch("modules.publishing.submission.is_upload_active", return_value=False)
-    @patch("modules.publishing.service.submit_upload_job", return_value="attempt-999")
-    @patch("modules.publishing.submission.read_status", return_value=None)
-    @patch("clients.mdrepo.MDRepoClient.create_experiment", return_value={"id": "rec-999"})
-    @patch("clients.metadump.MetadumpClient.extract_metadata_bulk", return_value=[])
     async def test_invenio_publish_sets_mdrepo_fields(
         self,
-        mock_meta: Mock,
-        mock_create: Mock,
-        mock_read_status: Mock,
-        mock_submit: Mock,
-        mock_active: Mock,
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        seed_experiment: SeedExperiment,
+        upload: SimpleNamespace,
     ) -> None:
-        """Test test_invenio_publish_sets_mdrepo_fields."""
-        await _seed_experiment(db_session)
-        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+        upload.create.return_value = {"id": "rec-999"}
+        upload.submit.return_value = "attempt-999"
+        await seed_experiment(EXP_ID, name="Publish Test")
 
         exp = await _stored(db_session)
         result = await PublishingService(db_session, clients).publish_invenio(exp, CREDENTIALS)
@@ -283,22 +265,16 @@ class TestInvenioPublishUnchanged:
 class TestInvenioPublishUpstreamFailures:
     """MDRepo draft and upload-Job failures surface as upstream-unavailable, never a generic 500."""
 
-    @patch("modules.publishing.submission.is_upload_active", return_value=False)
-    @patch("modules.publishing.submission.read_status", return_value=None)
-    @patch("clients.mdrepo.MDRepoClient.create_experiment", side_effect=ValueError("Failed to create experiment: 500"))
-    @patch("clients.metadump.MetadumpClient.extract_metadata_bulk", return_value=[])
     async def test_draft_creation_failure(
         self,
-        mock_meta: Mock,
-        mock_create: Mock,
-        mock_read_status: Mock,
-        mock_active: Mock,
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        seed_experiment: SeedExperiment,
+        upload: SimpleNamespace,
     ) -> None:
-        await _seed_experiment(db_session)
-        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+        upload.create.side_effect = ValueError("Failed to create experiment: 500")
+        await seed_experiment(EXP_ID, name="Publish Test")
 
         with pytest.raises(ApiError) as exc_info:
             await PublishingService(db_session, clients).publish_invenio(await _stored(db_session), CREDENTIALS)
@@ -306,24 +282,17 @@ class TestInvenioPublishUpstreamFailures:
         assert exc_info.value.problem_type == "urn:mddash:upstream-unavailable"
         assert exc_info.value.problem_solution is not None
 
-    @patch("modules.publishing.submission.is_upload_active", return_value=False)
-    @patch("modules.publishing.service.submit_upload_job", side_effect=SubmissionError("pod not admitted"))
-    @patch("modules.publishing.submission.read_status", return_value=None)
-    @patch("clients.mdrepo.MDRepoClient.create_experiment", return_value={"id": "rec-1"})
-    @patch("clients.metadump.MetadumpClient.extract_metadata_bulk", return_value=[])
     async def test_upload_job_submission_failure(
         self,
-        mock_meta: Mock,
-        mock_create: Mock,
-        mock_read_status: Mock,
-        mock_submit: Mock,
-        mock_active: Mock,
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        seed_experiment: SeedExperiment,
+        upload: SimpleNamespace,
     ) -> None:
-        await _seed_experiment(db_session)
-        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+        upload.create.return_value = {"id": "rec-1"}
+        upload.submit.side_effect = SubmissionError("pod not admitted")
+        await seed_experiment(EXP_ID, name="Publish Test")
 
         with pytest.raises(ApiError) as exc_info:
             await PublishingService(db_session, clients).publish_invenio(await _stored(db_session), CREDENTIALS)
@@ -335,137 +304,112 @@ class TestInvenioPublishUpstreamFailures:
 class TestInvenioPublishRetryAfterDraftDeleted:
     """Retry after draft deletion in MDRepo creates a fresh draft."""
 
-    @patch("modules.publishing.service.delete_upload_resources")
-    @patch("modules.publishing.submission.is_upload_active", return_value=False)
-    @patch("modules.publishing.service.submit_upload_job", return_value="attempt-002")
-    @patch("clients.mdrepo.MDRepoClient.check_experiment_status", return_value=None)
-    @patch("clients.mdrepo.MDRepoClient.create_experiment", return_value={"id": "rec-new"})
-    @patch("clients.metadump.MetadumpClient.extract_metadata_bulk", return_value=[])
     async def test_retry_after_draft_deleted_creates_new_draft(
         self,
-        mock_meta: Mock,
-        mock_create: Mock,
-        mock_check_status: Mock,
-        mock_submit: Mock,
-        mock_active: Mock,
-        mock_delete_resources: Mock,
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        seed_experiment: SeedExperiment,
+        upload: SimpleNamespace,
     ) -> None:
-        """Test test_retry_after_draft_deleted_creates_new_draft."""
-        await _seed_experiment(db_session)
-        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+        upload.create.return_value = {"id": "rec-new"}
+        upload.submit.return_value = "attempt-002"
+        await seed_experiment(EXP_ID, name="Publish Test")
 
         failed_status = UploadStatus(attempt_id="attempt-001", state="failed", reason="remote")
 
-        with (
-            patch("modules.publishing.submission.read_status", return_value=failed_status),
-        ):
-            exp = await _stored(db_session)
-            exp.mdrepo_id = "rec-deleted"
-            exp.mdrepo_published = False
-            await db_session.commit()
+        upload.read_status.return_value = failed_status
 
-            result = await PublishingService(db_session, clients).publish_invenio(exp, CREDENTIALS)
+        exp = await _stored(db_session)
+        exp.mdrepo_id = "rec-deleted"
+        exp.mdrepo_published = False
+        await db_session.commit()
 
-            exp = await _stored(db_session)
-            assert exp.mdrepo_id == "rec-new"
-            assert result["id"] == "rec-new"
-            mock_create.assert_called_once()
-            mock_delete_resources.assert_called_once()
+        result = await PublishingService(db_session, clients).publish_invenio(exp, CREDENTIALS)
 
-    @patch("modules.publishing.service.delete_upload_resources")
-    @patch("modules.publishing.submission.is_upload_active", return_value=False)
-    @patch("modules.publishing.service.submit_upload_job", return_value="attempt-002")
-    @patch("clients.mdrepo.MDRepoClient.check_experiment_status", return_value=False)
-    @patch("clients.mdrepo.MDRepoClient.create_experiment", return_value={"id": "rec-new"})
-    @patch("clients.metadump.MetadumpClient.extract_metadata_bulk", return_value=[])
+        exp = await _stored(db_session)
+        assert exp.mdrepo_id == "rec-new"
+        assert result["id"] == "rec-new"
+        upload.create.assert_called_once()
+        upload.delete_resources.assert_called_once()
+
     async def test_retry_when_draft_exists_reuses_draft(
         self,
-        mock_meta: Mock,
-        mock_create: Mock,
-        mock_check_status: Mock,
-        mock_submit: Mock,
-        mock_active: Mock,
-        mock_delete_resources: Mock,
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        seed_experiment: SeedExperiment,
+        upload: SimpleNamespace,
     ) -> None:
-        """Test test_retry_when_draft_exists_reuses_draft."""
-        await _seed_experiment(db_session)
-        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+        upload.create.return_value = {"id": "rec-new"}
+        upload.check.return_value = False
+        upload.submit.return_value = "attempt-002"
+        await seed_experiment(EXP_ID, name="Publish Test")
 
         failed_status = UploadStatus(attempt_id="attempt-001", state="failed", reason="remote")
 
-        with (
-            patch("modules.publishing.submission.read_status", return_value=failed_status),
-        ):
-            exp = await _stored(db_session)
-            exp.mdrepo_id = "rec-existing"
-            exp.mdrepo_published = False
-            await db_session.commit()
+        upload.read_status.return_value = failed_status
 
-            result = await PublishingService(db_session, clients).publish_invenio(exp, CREDENTIALS)
+        exp = await _stored(db_session)
+        exp.mdrepo_id = "rec-existing"
+        exp.mdrepo_published = False
+        await db_session.commit()
 
-            exp = await _stored(db_session)
-            assert exp.mdrepo_id == "rec-existing"
-            assert result["id"] == "rec-existing"
-            mock_create.assert_not_called()
+        result = await PublishingService(db_session, clients).publish_invenio(exp, CREDENTIALS)
 
-    @patch("modules.publishing.submission.is_upload_active", return_value=False)
-    @patch("modules.publishing.service.submit_upload_job", return_value="attempt-002")
-    @patch("clients.mdrepo.MDRepoClient.create_experiment", return_value={"id": "rec-new"})
-    @patch("clients.metadump.MetadumpClient.extract_metadata_bulk", return_value=[])
+        exp = await _stored(db_session)
+        assert exp.mdrepo_id == "rec-existing"
+        assert result["id"] == "rec-existing"
+        upload.create.assert_not_called()
+
     async def test_retry_after_completed_status_orphaned(
         self,
-        mock_meta: Mock,
-        mock_create: Mock,
-        mock_submit: Mock,
-        mock_active: Mock,
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        seed_experiment: SeedExperiment,
+        upload: SimpleNamespace,
     ) -> None:
-        """Test test_retry_after_completed_status_orphaned."""
-        await _seed_experiment(db_session)
-        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+        upload.create.return_value = {"id": "rec-new"}
+        upload.submit.return_value = "attempt-002"
+        await seed_experiment(EXP_ID, name="Publish Test")
 
         completed_status = UploadStatus(attempt_id="attempt-001", state="completed")
 
-        with (
-            patch("modules.publishing.submission.read_status", return_value=completed_status),
-        ):
-            exp = await _stored(db_session)
-            exp.mdrepo_id = None
-            exp.mdrepo_published = None
-            await db_session.commit()
+        upload.read_status.return_value = completed_status
 
-            result = await PublishingService(db_session, clients).publish_invenio(exp, CREDENTIALS)
+        exp = await _stored(db_session)
+        exp.mdrepo_id = None
+        exp.mdrepo_published = None
+        await db_session.commit()
 
-            exp = await _stored(db_session)
-            assert exp.mdrepo_id == "rec-new"
-            assert result["id"] == "rec-new"
-            mock_create.assert_called_once()
+        result = await PublishingService(db_session, clients).publish_invenio(exp, CREDENTIALS)
+
+        exp = await _stored(db_session)
+        assert exp.mdrepo_id == "rec-new"
+        assert result["id"] == "rec-new"
+        upload.create.assert_called_once()
 
 
 class TestMdpositHandoffSelectedFiles:
     """Handoff contains individual file links and valid metadata YAML."""
 
     async def test_handoff_includes_metadata_and_files(
-        self, db_session: AsyncSession, tmp_path: Path, clients: Clients
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        clients: Clients,
+        seed_experiment: SeedExperiment,
     ) -> None:
-        """Test test_handoff_includes_metadata_and_files."""
-        await _seed_experiment(db_session)
-        exp_dir = tmp_path / "pubsh"
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        _, exp_dir = await seed_experiment(EXP_ID, name="Publish Test")
         (exp_dir / "my_struct.pdb").write_text("ATOM")
         (exp_dir / "my_top.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "my_traj.xtc").write_bytes(b"\x00" * 16)
-        sim_path = _write_gmx_simulation(
+        sim_path = write_simulation(
             exp_dir,
-            files={"run_input": "my_top.tpr", "reference_structure": "my_struct.pdb", "trajectory": "my_traj.xtc"},
+            SIM_PATH,
+            {"run_input": "my_top.tpr", "reference_structure": "my_struct.pdb", "trajectory": "my_traj.xtc"},
+            name="sim",
         )
 
         with (
@@ -484,17 +428,18 @@ class TestMdpositHandoffSelectedFiles:
             assert "my_traj.xtc" in paths
 
     async def test_metadata_yaml_contains_expected_fields(
-        self, db_session: AsyncSession, tmp_path: Path, clients: Clients
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        clients: Clients,
+        seed_experiment: SeedExperiment,
     ) -> None:
-        """Test test_metadata_yaml_contains_expected_fields."""
-        await _seed_experiment(db_session)
-        exp_dir = tmp_path / "pubsh"
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        _, exp_dir = await seed_experiment(EXP_ID, name="Publish Test")
         (exp_dir / "s.pdb").write_text("ATOM")
         (exp_dir / "t.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "r.xtc").write_bytes(b"\x00" * 16)
-        sim_path = _write_gmx_simulation(
-            exp_dir, files={"run_input": "t.tpr", "reference_structure": "s.pdb", "trajectory": "r.xtc"}
+        sim_path = write_simulation(
+            exp_dir, SIM_PATH, {"run_input": "t.tpr", "reference_structure": "s.pdb", "trajectory": "r.xtc"}, name="sim"
         )
 
         with (
@@ -519,15 +464,18 @@ class TestMdpositHandoffSelectedFiles:
 class TestMdpositPublishFileValidation:
     """Validate error messages for missing, nonexistent, unsupported files."""
 
-    async def test_missing_role_key(self, db_session: AsyncSession, tmp_path: Path, clients: Clients) -> None:
+    async def test_missing_role_key(
+        self, db_session: AsyncSession, tmp_path: Path, clients: Clients, seed_experiment: SeedExperiment
+    ) -> None:
         """Simulation missing a file role should raise BadRequest."""
-        await _seed_experiment(db_session)
-        exp_dir = tmp_path / "pubsh"
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        _, exp_dir = await seed_experiment(EXP_ID, name="Publish Test")
         (exp_dir / "struct.pdb").write_text("ATOM")
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
-        sim_path = _write_gmx_simulation(
-            exp_dir, files={"run_input": "topol.tpr", "reference_structure": "struct.pdb", "trajectory": "traj.xtc"}
+        sim_path = write_simulation(
+            exp_dir,
+            SIM_PATH,
+            {"run_input": "topol.tpr", "reference_structure": "struct.pdb", "trajectory": "traj.xtc"},
+            name="sim",
         )
         # Rewrite without topology role
         sim_file = exp_dir / sim_path
@@ -539,33 +487,37 @@ class TestMdpositPublishFileValidation:
         with pytest.raises(BadRequest, match=r"Invalid simulation"):
             await PublishingService(db_session, clients).publish_mdposit(exp, sim_path)
 
-    async def test_nonexistent_selected_file(self, db_session: AsyncSession, tmp_path: Path, clients: Clients) -> None:
+    async def test_nonexistent_selected_file(
+        self, db_session: AsyncSession, tmp_path: Path, clients: Clients, seed_experiment: SeedExperiment
+    ) -> None:
         """Simulation pointing to a nonexistent file should raise BadRequest."""
-        await _seed_experiment(db_session)
-        exp_dir = tmp_path / "pubsh"
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        _, exp_dir = await seed_experiment(EXP_ID, name="Publish Test")
         (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
-        sim_path = _write_gmx_simulation(
+        sim_path = write_simulation(
             exp_dir,
-            files={"run_input": "topol.tpr", "reference_structure": "ghost.pdb", "trajectory": "traj.xtc"},
+            SIM_PATH,
+            {"run_input": "topol.tpr", "reference_structure": "ghost.pdb", "trajectory": "traj.xtc"},
+            name="sim",
         )
 
         exp = await _stored(db_session)
         with pytest.raises(BadRequest, match="Missing files"):
             await PublishingService(db_session, clients).publish_mdposit(exp, sim_path)
 
-    async def test_unsupported_extension(self, db_session: AsyncSession, tmp_path: Path, clients: Clients) -> None:
+    async def test_unsupported_extension(
+        self, db_session: AsyncSession, tmp_path: Path, clients: Clients, seed_experiment: SeedExperiment
+    ) -> None:
         """File with wrong extension for its role should raise BadRequest."""
-        await _seed_experiment(db_session)
-        exp_dir = tmp_path / "pubsh"
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        _, exp_dir = await seed_experiment(EXP_ID, name="Publish Test")
         (exp_dir / "struct.txt").write_text("not a structure")
         (exp_dir / "topol.tpr").write_bytes(b"\x00" * 16)
         (exp_dir / "traj.xtc").write_bytes(b"\x00" * 16)
-        sim_path = _write_gmx_simulation(
+        sim_path = write_simulation(
             exp_dir,
-            files={"run_input": "topol.tpr", "reference_structure": "struct.txt", "trajectory": "traj.xtc"},
+            SIM_PATH,
+            {"run_input": "topol.tpr", "reference_structure": "struct.txt", "trajectory": "traj.xtc"},
+            name="sim",
         )
 
         exp = await _stored(db_session)
@@ -576,11 +528,14 @@ class TestMdpositPublishFileValidation:
             await PublishingService(db_session, clients).publish_mdposit(exp, sim_path)
 
     async def test_route_returns_400_for_missing_simulation_path(
-        self, client: AsyncClient, db_session: AsyncSession, tmp_path: Path
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
     ) -> None:
         """Route handler should return 400 when simulation_path is missing for mdposit target."""
-        await _seed_experiment(db_session)
-        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+        await seed_experiment(EXP_ID, name="Publish Test")
 
         resp = await client.post("/dash/api/experiments/pubsh/publish", json={"target": "mdposit"})
         assert resp.status_code == HTTPStatus.BAD_REQUEST
@@ -591,10 +546,10 @@ class TestMdpositPublishFileValidation:
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        seed_experiment: SeedExperiment,
     ) -> None:
         """Unknown publish target should return 400."""
-        await _seed_experiment(db_session)
-        (tmp_path / "pubsh").mkdir(parents=True, exist_ok=True)
+        await seed_experiment(EXP_ID, name="Publish Test")
 
         resp = await client.post("/dash/api/experiments/pubsh/publish", json={"target": "unknown_target"})
         assert resp.status_code == HTTPStatus.BAD_REQUEST
@@ -606,18 +561,16 @@ class TestImportMdpositRepo:
     @patch("clients.mdposit.MDPositClient.download_project")
     @patch("clients.mdposit.MDPositClient.get_project", return_value={"accession": "PRJ1"})
     @patch("clients.mdposit.is_mdposit_url", return_value=True)
-    @patch("clients.git.GitClient.clone")
     async def test_from_repo_mdposit_creates_experiment(
         self,
-        mock_clone: Mock,
         mock_is_url: Mock,
         mock_get_proj: Mock,
         mock_dl_proj: Mock,
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        clone: Mock,
     ) -> None:
-        """Test test_from_repo_mdposit_creates_experiment."""
         exp_dir = tmp_path / "mpcr1"
         exp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -647,17 +600,15 @@ class TestImportMdpositRepo:
 
     @patch("clients.mdposit.extract_accession", return_value="")
     @patch("clients.mdposit.is_mdposit_url", return_value=True)
-    @patch("clients.git.GitClient.clone")
     async def test_from_repo_mdposit_missing_accession_raises(
         self,
-        mock_clone: Mock,
         mock_is_url: Mock,
         mock_extract: Mock,
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        clone: Mock,
     ) -> None:
-        """Test test_from_repo_mdposit_missing_accession_raises."""
         (tmp_path / "mpacc1").mkdir(parents=True, exist_ok=True)
 
         with (
@@ -674,18 +625,16 @@ class TestImportMdpositRepo:
     @patch("clients.mdposit.MDPositClient.download_project", side_effect=ValueError("No files found"))
     @patch("clients.mdposit.MDPositClient.get_project", return_value={"accession": "EMPTY"})
     @patch("clients.mdposit.is_mdposit_url", return_value=True)
-    @patch("clients.git.GitClient.clone")
     async def test_from_repo_mdposit_no_files_raises(
         self,
-        mock_clone: Mock,
         mock_is_url: Mock,
         mock_get_proj: Mock,
         mock_dl_proj: Mock,
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        clone: Mock,
     ) -> None:
-        """Test test_from_repo_mdposit_no_files_raises."""
         (tmp_path / "mpnf1").mkdir(parents=True, exist_ok=True)
 
         with (
@@ -708,17 +657,15 @@ class TestFromRepoRouting:
 
     @patch("modules.experiments.service.import_invenio_repo")
     @patch("clients.mdposit.is_mdposit_url", return_value=False)
-    @patch("clients.git.GitClient.clone")
     async def test_from_repo_invenio_url(
         self,
-        mock_clone: Mock,
         mock_is: Mock,
         mock_import: Mock,
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        clone: Mock,
     ) -> None:
-        """Test test_from_repo_invenio_url."""
         (tmp_path / "inv01").mkdir(parents=True, exist_ok=True)
 
         with (
@@ -734,17 +681,15 @@ class TestFromRepoRouting:
 
     @patch("modules.experiments.service.import_mdposit_repo")
     @patch("clients.mdposit.is_mdposit_url", return_value=True)
-    @patch("clients.git.GitClient.clone")
     async def test_from_repo_mdposit_url(
         self,
-        mock_clone: Mock,
         mock_is: Mock,
         mock_import: Mock,
         db_session: AsyncSession,
         tmp_path: Path,
         clients: Clients,
+        clone: Mock,
     ) -> None:
-        """Test test_from_repo_mdposit_url."""
         (tmp_path / "mp01").mkdir(parents=True, exist_ok=True)
 
         with (

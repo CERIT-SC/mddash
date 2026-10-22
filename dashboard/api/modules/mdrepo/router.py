@@ -87,7 +87,6 @@ async def get_status(request: Request, clients: ClientsDep) -> MDRepoStatus:
         logger.error(f"MDRepo token validation failed: {e}")
         return {"authenticated": False}
 
-    # Token invalid or expired
     request.session.pop(MDREPO_TOKEN_KEY, None)
     return {"authenticated": False}
 

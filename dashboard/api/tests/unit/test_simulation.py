@@ -5,11 +5,9 @@ import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import AsyncMock
 
 import pytest
 from clients import Clients
-from clients.k8s import K8sClient
 from core.enums import Engine, JobStatus
 from core.errors import ApiError, BadRequest
 from httpx import AsyncClient
@@ -18,94 +16,60 @@ from modules.jobs.gmx.models import GromacsJob
 from modules.jobs.gmx.schemas import GromacsJob as GromacsJobSchema
 from modules.jobs.service import JobsService
 from modules.jobs.tuner.models import TunerJob
-from modules.models import Experiment, Notebook
+from modules.models import Experiment
 from modules.simulations.manifest import Simulation
 from modules.simulations.manifest_schema import schema_url
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.support import GMX_FILES, SeedExperiment, write_simulation
 
 GMX_SCHEMA_URL = schema_url(Engine.GMX)
 
-GMX_FILES = {
-    "run_input": "production/protein.tpr",
-    "reference_structure": "analysis/protein-reference.gro",
-    "trajectory": "production/protein.xtc",
-}
 
-
-async def _seed_experiment(db_session: AsyncSession, exp_id: str = "simts") -> str:
-    """
-    Seed a minimal experiment into the DB.
-
-    Returns:
-        The experiment ID.
-    """
-    db_session.add(Experiment(id=exp_id, name="Sim Test", notebooks_repo="https://github.com/t/r.git"))
-    db_session.add(Notebook(experiment_id=exp_id))
-    await db_session.commit()
-    return exp_id
-
-
-def _jobs(db_session: AsyncSession) -> JobsService:
-    """Job services over respx-mocked HTTP (MDRun status reads)."""
-    return JobsService(db_session, Clients.create(k8s=K8sClient(core_v1=AsyncMock(), batch_v1=AsyncMock())))
-
-
-async def _experiment(db_session: AsyncSession, exp_id: str) -> Experiment:
+async def _experiment(db_session: AsyncSession, jobs: JobsService, exp_id: str) -> Experiment:
     """Load the experiment with its jobs as a request would, with remote job status refreshed."""
     await db_session.commit()
     db_session.expunge_all()
     experiment = await db_session.get(Experiment, exp_id)
     assert experiment is not None
-    await _jobs(db_session).refresh(experiment)
+    await jobs.refresh(experiment)
     return experiment
 
 
-async def _sim(db_session: AsyncSession, exp_id: str, simulation_path: str) -> Simulation:
-    return Simulation.get(exp_id, simulation_path, await _experiment(db_session, exp_id))
+async def _sim(db_session: AsyncSession, jobs: JobsService, exp_id: str, simulation_path: str) -> Simulation:
+    return Simulation.get(exp_id, simulation_path, await _experiment(db_session, jobs, exp_id))
 
 
-async def _sims(db_session: AsyncSession, exp_id: str) -> list[Simulation]:
-    return Simulation.list(exp_id, await _experiment(db_session, exp_id))
+async def _sims(db_session: AsyncSession, jobs: JobsService, exp_id: str) -> list[Simulation]:
+    return Simulation.list(exp_id, await _experiment(db_session, jobs, exp_id))
 
 
-async def _job(db_session: AsyncSession) -> GromacsJob:
+async def _job(db_session: AsyncSession, jobs: JobsService) -> GromacsJob:
     """Load the experiment's single GROMACS job with its status refreshed."""
     await db_session.commit()
     db_session.expunge_all()
     job = (await db_session.execute(GromacsJob.query())).scalars().one()
-    await _jobs(db_session).runs.refresh_status(job)
+    await jobs.runs.refresh_status(job)
     return job
 
 
-def _write_sim_file(exp_dir: Path, simulation_path: str, files: dict, name: str = "protein") -> str:
-    """
-    Write a GMX simulation manifest.
-
-    Returns:
-        The simulation_path.
-    """
-    sim_file = exp_dir / simulation_path
-    sim_file.parent.mkdir(parents=True, exist_ok=True)
-    content = {
-        "$schema": GMX_SCHEMA_URL,
-        "name": name,
-        "engine": "GMX",
-        "files": files,
-        "extra_args": "",
-    }
-    sim_file.write_text(json.dumps(content))
-    return simulation_path
+@pytest.fixture
+def jobs(db_session: AsyncSession, clients: Clients) -> JobsService:
+    return JobsService(db_session, clients)
 
 
 class TestDiscovery:
     """Discovery finds .simulation.json anywhere under the experiment directory."""
 
-    async def test_finds_simulation_anywhere(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_finds_simulation_anywhere(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Simulations are discovered in nested directories."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(
             exp_dir,
             "protein.simulation.json",
             {
@@ -114,7 +78,7 @@ class TestDiscovery:
                 "trajectory": "production/protein.xtc",
             },
         )
-        _write_sim_file(
+        write_simulation(
             exp_dir,
             "equilibration/nvt.simulation.json",
             {
@@ -124,28 +88,32 @@ class TestDiscovery:
             },
         )
 
-        sims = await _sims(db_session, exp_id)
+        sims = await _sims(db_session, jobs, exp_id)
         paths = [s.simulation_path for s in sims]
         assert "protein.simulation.json" in paths
         assert "equilibration/nvt.simulation.json" in paths
 
-    async def test_sorted_by_path(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_sorted_by_path(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Discovery results are sorted by path."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(
             exp_dir,
             "z.simulation.json",
             {"run_input": "z.tpr", "reference_structure": "z-reference.gro", "trajectory": "z.xtc"},
         )
-        _write_sim_file(
+        write_simulation(
             exp_dir,
             "a.simulation.json",
             {"run_input": "a.tpr", "reference_structure": "a-reference.gro", "trajectory": "a.xtc"},
         )
 
-        sims = await _sims(db_session, exp_id)
+        sims = await _sims(db_session, jobs, exp_id)
         assert sims[0].simulation_path == "a.simulation.json"
         assert sims[1].simulation_path == "z.simulation.json"
 
@@ -153,11 +121,15 @@ class TestDiscovery:
 class TestValidation:
     """Missing $schema target makes simulation invalid."""
 
-    async def test_missing_schema_makes_invalid(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_missing_schema_makes_invalid(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Missing $schema target invalidates the simulation."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        exp_id, exp_dir = await seed_experiment()
         sim_path = "protein.simulation.json"
         sim_file = exp_dir / sim_path
         sim_file.parent.mkdir(parents=True, exist_ok=True)
@@ -174,16 +146,20 @@ class TestValidation:
         }
         sim_file.write_text(json.dumps(content))
 
-        sim = await _sim(db_session, exp_id, sim_path)
+        sim = await _sim(db_session, jobs, exp_id, sim_path)
         assert not sim.valid
         assert any("schema" in e.lower() or "missing" in e.lower() for e in sim.errors)
 
-    async def test_valid_simulation(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_valid_simulation(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """A complete simulation with existing files is valid."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(
             exp_dir,
             "protein.simulation.json",
             {
@@ -198,16 +174,20 @@ class TestValidation:
         (exp_dir / "analysis" / "protein-reference.gro").write_text("gro")
         (exp_dir / "production" / "protein.xtc").write_bytes(b"\x00")
 
-        sim = await _sim(db_session, exp_id, "protein.simulation.json")
+        sim = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
         assert sim.valid
         assert sim.missing_files == []
 
-    async def test_require_files_can_limit_required_roles(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_require_files_can_limit_required_roles(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Action validation only requires the roles needed by that action."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(
             exp_dir,
             "protein.simulation.json",
             {
@@ -219,7 +199,7 @@ class TestValidation:
         (exp_dir / "production").mkdir(parents=True, exist_ok=True)
         (exp_dir / "production" / "protein.tpr").write_bytes(b"\x00")
 
-        sim = await _sim(db_session, exp_id, "protein.simulation.json")
+        sim = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
         assert sim.missing_files == ["reference_structure", "trajectory"]
 
         sim.require_files(["run_input"])
@@ -232,10 +212,14 @@ class TestBrokenManifestRoute:
     """A hand-broken manifest is listed as invalid, never a 500."""
 
     async def test_empty_role_value_lists_as_invalid(
-        self, client: AsyncClient, db_session: AsyncSession, tmp_path: Path
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
     ) -> None:
-        exp_id = await _seed_experiment(db_session)
-        _write_sim_file(tmp_path / exp_id, "broken.simulation.json", {**GMX_FILES, "trajectory": ""})
+        exp_id, _ = await seed_experiment()
+        write_simulation(tmp_path / exp_id, "broken.simulation.json", {**GMX_FILES, "trajectory": ""})
 
         response = await client.get(f"/dash/api/experiments/{exp_id}/simulations")
 
@@ -249,12 +233,16 @@ class TestBrokenManifestRoute:
 class TestPathResolution:
     """Role paths resolve relative to the manifest directory, with an experiment-relative fallback."""
 
-    async def test_nested_manifest_paths_are_manifest_relative(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_nested_manifest_paths_are_manifest_relative(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Notebook-written manifests live beside their outputs and reference them cwd-relative."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(
             exp_dir,
             "gromacs/dnarna/hammerhead.simulation.json",
             {
@@ -271,7 +259,7 @@ class TestPathResolution:
         reference.parent.mkdir(parents=True, exist_ok=True)
         reference.write_text("gro")
 
-        sim = await _sim(db_session, exp_id, "gromacs/dnarna/hammerhead.simulation.json")
+        sim = await _sim(db_session, jobs, exp_id, "gromacs/dnarna/hammerhead.simulation.json")
         assert sim.resolved_files["run_input"] == "gromacs/dnarna/production/hammerhead.tpr"
         assert sim.resolved_files["reference_structure"] == "gromacs/dnarna/analysis/hammerhead-reference.gro"
         # Not-yet-created outputs (trajectory is produced by the run) resolve manifest-relative too.
@@ -281,13 +269,15 @@ class TestPathResolution:
         assert sim.resolve_role("run_input") == tpr
 
     async def test_experiment_relative_paths_resolve_via_fallback(
-        self, db_session: AsyncSession, tmp_path: Path
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
     ) -> None:
         """The fallback keeps mixed conventions (e.g. hand-fixed manifests) resolving."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(
             exp_dir,
             "equilibration/nvt.simulation.json",
             {
@@ -301,16 +291,20 @@ class TestPathResolution:
         (exp_dir / "equilibration/nvt-reference.gro").write_text("gro")
         (exp_dir / "equilibration/nvt.xtc").write_bytes(b"\x00")
 
-        sim = await _sim(db_session, exp_id, "equilibration/nvt.simulation.json")
+        sim = await _sim(db_session, jobs, exp_id, "equilibration/nvt.simulation.json")
         assert sim.resolved_files["run_input"] == "equilibration/nvt.tpr"
         assert sim.valid
         assert sim.missing_files == []
 
-    async def test_missing_everywhere_reports_manifest_relative(self, db_session: AsyncSession, tmp_path: Path) -> None:
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(
+    async def test_missing_everywhere_reports_manifest_relative(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(
             exp_dir,
             "gromacs/dnarna/hammerhead.simulation.json",
             {
@@ -321,15 +315,19 @@ class TestPathResolution:
             name="hammerhead",
         )
 
-        sim = await _sim(db_session, exp_id, "gromacs/dnarna/hammerhead.simulation.json")
+        sim = await _sim(db_session, jobs, exp_id, "gromacs/dnarna/hammerhead.simulation.json")
         assert sim.resolved_files["run_input"] == "gromacs/dnarna/production/hammerhead.tpr"
         assert sim.missing_files == ["run_input", "reference_structure", "trajectory"]
 
-    async def test_escaping_path_is_rejected(self, db_session: AsyncSession, tmp_path: Path) -> None:
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        sim_path = _write_sim_file(
+    async def test_escaping_path_is_rejected(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
+        exp_id, exp_dir = await seed_experiment()
+        sim_path = write_simulation(
             exp_dir,
             "nested/hammerhead.simulation.json",
             {
@@ -340,7 +338,7 @@ class TestPathResolution:
             name="hammerhead",
         )
 
-        sim = await _sim(db_session, exp_id, sim_path)
+        sim = await _sim(db_session, jobs, exp_id, sim_path)
         assert sim.resolved_files["run_input"] == "/etc/passwd"
         with pytest.raises(BadRequest, match="outside the experiment folder"):
             sim.resolve_role("run_input")
@@ -349,13 +347,18 @@ class TestPathResolution:
 class TestWriteRebase:
     """write()/update() store submitted experiment-relative values manifest-relative."""
 
-    async def test_create_rebases_prefixed_values(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_create_rebases_prefixed_values(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Form-submitted experiment-relative values are stripped of the manifest-dir prefix."""
-        exp_id = await _seed_experiment(db_session)
-        (tmp_path / exp_id).mkdir(parents=True, exist_ok=True)
+        exp_id, _ = await seed_experiment()
 
         sim = Simulation.write(
-            await _experiment(db_session, exp_id),
+            await _experiment(db_session, jobs, exp_id),
             {
                 "name": "hammerhead",
                 "simulation_path": "gromacs/dnarna/hammerhead.simulation.json",
@@ -376,12 +379,17 @@ class TestWriteRebase:
         on_disk = json.loads((tmp_path / exp_id / sim.simulation_path).read_text())
         assert on_disk["files"]["run_input"] == "production/hammerhead.tpr"
 
-    async def test_create_keeps_manifest_relative_values(self, db_session: AsyncSession, tmp_path: Path) -> None:
-        exp_id = await _seed_experiment(db_session)
-        (tmp_path / exp_id).mkdir(parents=True, exist_ok=True)
+    async def test_create_keeps_manifest_relative_values(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
+        exp_id, _ = await seed_experiment()
 
         sim = Simulation.write(
-            await _experiment(db_session, exp_id),
+            await _experiment(db_session, jobs, exp_id),
             {
                 "name": "hammerhead",
                 "simulation_path": "gromacs/dnarna/hammerhead.simulation.json",
@@ -397,12 +405,17 @@ class TestWriteRebase:
         assert sim.files["run_input"] == "production/hammerhead.tpr"
         assert sim.files["trajectory"] == "shared/hammerhead.xtc"
 
-    async def test_create_at_root_keeps_values(self, db_session: AsyncSession, tmp_path: Path) -> None:
-        exp_id = await _seed_experiment(db_session)
-        (tmp_path / exp_id).mkdir(parents=True, exist_ok=True)
+    async def test_create_at_root_keeps_values(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
+        exp_id, _ = await seed_experiment()
 
         sim = Simulation.write(
-            await _experiment(db_session, exp_id),
+            await _experiment(db_session, jobs, exp_id),
             {
                 "name": "protein",
                 "simulation_path": "protein.simulation.json",
@@ -417,11 +430,15 @@ class TestWriteRebase:
 
         assert sim.files["run_input"] == "production/protein.tpr"
 
-    async def test_update_rebases_prefixed_values(self, db_session: AsyncSession, tmp_path: Path) -> None:
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        sim_path = _write_sim_file(
+    async def test_update_rebases_prefixed_values(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
+        exp_id, exp_dir = await seed_experiment()
+        sim_path = write_simulation(
             exp_dir,
             "gromacs/dnarna/hammerhead.simulation.json",
             {
@@ -433,7 +450,7 @@ class TestWriteRebase:
         )
 
         sim = Simulation.update(
-            await _experiment(db_session, exp_id),
+            await _experiment(db_session, jobs, exp_id),
             sim_path,
             {
                 "name": "hammerhead",
@@ -451,13 +468,15 @@ class TestWriteRebase:
         assert on_disk["files"]["trajectory"] == "production/hammerhead.xtc"
 
     async def test_resolve_role_matches_resolved_files_when_both_candidates_exist(
-        self, db_session: AsyncSession, tmp_path: Path
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
     ) -> None:
         """With both candidates on disk, manifest-relative wins — identically for every consumer."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        sim_path = _write_sim_file(
+        exp_id, exp_dir = await seed_experiment()
+        sim_path = write_simulation(
             exp_dir,
             "gromacs/dnarna/hammerhead.simulation.json",
             {
@@ -472,7 +491,7 @@ class TestWriteRebase:
         (exp_dir / "production").mkdir(parents=True, exist_ok=True)
         (exp_dir / "production/hammerhead.tpr").write_bytes(b"\x00")
 
-        sim = await _sim(db_session, exp_id, sim_path)
+        sim = await _sim(db_session, jobs, exp_id, sim_path)
         assert sim.resolved_files["run_input"] == "gromacs/dnarna/production/hammerhead.tpr"
         assert sim.resolve_role("run_input") == exp_dir / "gromacs/dnarna/production/hammerhead.tpr"
 
@@ -480,48 +499,60 @@ class TestWriteRebase:
 class TestLocking:
     """Lock inference from file permissions and job references."""
 
-    async def test_readonly_file_without_jobs_is_locked(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_readonly_file_without_jobs_is_locked(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """A read-only file with no jobs is locked by file permissions."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        sim_path = _write_sim_file(
+        exp_id, exp_dir = await seed_experiment()
+        sim_path = write_simulation(
             exp_dir,
             "protein.simulation.json",
             {"run_input": "p.tpr", "reference_structure": "p-reference.gro", "trajectory": "p.xtc"},
         )
 
-        sim = await _sim(db_session, exp_id, sim_path)
+        sim = await _sim(db_session, jobs, exp_id, sim_path)
         assert not sim.locked
         sim.mark_readonly()
         assert sim.locked
 
-    async def test_writable_unlocked_file_not_locked(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_writable_unlocked_file_not_locked(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """A writable file with no jobs is not locked."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        sim_path = _write_sim_file(
+        exp_id, exp_dir = await seed_experiment()
+        sim_path = write_simulation(
             exp_dir,
             "protein.simulation.json",
             {"run_input": "p.tpr", "reference_structure": "p-reference.gro", "trajectory": "p.xtc"},
         )
 
-        sim = await _sim(db_session, exp_id, sim_path)
+        sim = await _sim(db_session, jobs, exp_id, sim_path)
         assert not sim.locked
 
 
 class TestWriteSimulation:
     """Create simulation JSON via Simulation.write."""
 
-    async def test_create_simulation(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_create_simulation(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Simulation.write creates a valid manifest at the default path."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        exp_id, _exp_dir = await seed_experiment()
 
         sim = Simulation.write(
-            await _experiment(db_session, exp_id),
+            await _experiment(db_session, jobs, exp_id),
             {
                 "name": "protein",
                 "files": {
@@ -536,14 +567,18 @@ class TestWriteSimulation:
         assert sim.name == "protein"
         assert sim.valid
 
-    async def test_create_rejects_existing_simulation_path(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_create_rejects_existing_simulation_path(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Creating a simulation must not silently overwrite an existing manifest."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        exp_id, _exp_dir = await seed_experiment()
 
         Simulation.write(
-            await _experiment(db_session, exp_id),
+            await _experiment(db_session, jobs, exp_id),
             {
                 "name": "protein",
                 "files": {
@@ -557,7 +592,7 @@ class TestWriteSimulation:
 
         with pytest.raises(BadRequest, match="already exists"):
             Simulation.write(
-                await _experiment(db_session, exp_id),
+                await _experiment(db_session, jobs, exp_id),
                 {
                     "name": "protein",
                     "files": {
@@ -569,15 +604,19 @@ class TestWriteSimulation:
                 },
             )
 
-    async def test_create_rejects_invalid_content(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_create_rejects_invalid_content(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Invalid content is rejected before writing."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        exp_id, _exp_dir = await seed_experiment()
 
         with pytest.raises(BadRequest, match="Missing required file role: 'Reference structure'"):
             Simulation.write(
-                await _experiment(db_session, exp_id),
+                await _experiment(db_session, jobs, exp_id),
                 {
                     "name": "protein",
                     "files": {"run_input": "production/protein.tpr"},
@@ -585,15 +624,19 @@ class TestWriteSimulation:
                 },
             )
 
-    async def test_validation_message_is_human_readable(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_validation_message_is_human_readable(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Regexes and jsonschema wording must not leak into user-facing errors."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        exp_id, _exp_dir = await seed_experiment()
 
         with pytest.raises(BadRequest) as exc_info:
             Simulation.write(
-                await _experiment(db_session, exp_id),
+                await _experiment(db_session, jobs, exp_id),
                 {
                     "name": "🙋🏿",
                     "files": {
@@ -637,19 +680,23 @@ async def _add_gmx_job(db_session: AsyncSession, exp_id: str, simulation_path: s
 class TestUniqueName:
     """Simulation names must be unique per experiment — they are the wizard tab identity."""
 
-    async def test_create_rejects_duplicate_name(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_create_rejects_duplicate_name(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """A second manifest with an existing name is rejected with a conflict."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        exp_id, _exp_dir = await seed_experiment()
 
         Simulation.write(
-            await _experiment(db_session, exp_id), {"name": "protein", "files": GMX_FILES, "extra_args": ""}
+            await _experiment(db_session, jobs, exp_id), {"name": "protein", "files": GMX_FILES, "extra_args": ""}
         )
 
         with pytest.raises(ApiError, match="already exists") as exc_info:
             Simulation.write(
-                await _experiment(db_session, exp_id),
+                await _experiment(db_session, jobs, exp_id),
                 {
                     "name": "protein",
                     "simulation_path": "other.simulation.json",
@@ -661,57 +708,75 @@ class TestUniqueName:
         assert exc_info.value.status_code == 409
         assert exc_info.value.problem_type == "urn:mddash:duplicate-simulation-name"
 
-    async def test_update_rejects_duplicate_name(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_update_rejects_duplicate_name(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Renaming a manifest to another manifest's name is rejected."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES, name="protein")
-        _write_sim_file(exp_dir, "ligand.simulation.json", GMX_FILES, name="ligand")
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES, name="protein")
+        write_simulation(exp_dir, "ligand.simulation.json", GMX_FILES, name="ligand")
 
         with pytest.raises(ApiError, match="already exists"):
             Simulation.update(
-                await _experiment(db_session, exp_id), "ligand.simulation.json", {"name": "protein", "files": GMX_FILES}
+                await _experiment(db_session, jobs, exp_id),
+                "ligand.simulation.json",
+                {"name": "protein", "files": GMX_FILES},
             )
 
-    async def test_update_allows_keeping_own_name(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_update_allows_keeping_own_name(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Updating a manifest without changing its name is fine."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES, name="protein")
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES, name="protein")
 
         sim = Simulation.update(
-            await _experiment(db_session, exp_id), "protein.simulation.json", {"name": "protein", "files": GMX_FILES}
+            await _experiment(db_session, jobs, exp_id),
+            "protein.simulation.json",
+            {"name": "protein", "files": GMX_FILES},
         )
         assert sim.name == "protein"
 
-    async def test_reserved_new_name_rejected(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_reserved_new_name_rejected(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """`_new` is reserved for the wizard's create tab."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
+        exp_id, exp_dir = await seed_experiment()
 
         with pytest.raises(ApiError, match="reserved") as exc_info:
             Simulation.write(
-                await _experiment(db_session, exp_id), {"name": "_new", "files": GMX_FILES, "extra_args": ""}
+                await _experiment(db_session, jobs, exp_id), {"name": "_new", "files": GMX_FILES, "extra_args": ""}
             )
 
         assert exc_info.value.status_code == 409
         assert exc_info.value.problem_type == "urn:mddash:duplicate-simulation-name"
 
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES, name="protein")
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES, name="protein")
         with pytest.raises(ApiError, match="reserved"):
             Simulation.update(
-                await _experiment(db_session, exp_id), "protein.simulation.json", {"name": "_new", "files": GMX_FILES}
+                await _experiment(db_session, jobs, exp_id),
+                "protein.simulation.json",
+                {"name": "_new", "files": GMX_FILES},
             )
 
 
 def _write_two_sims(exp_dir: Path) -> None:
     """Write 'protein' and 'ligand' manifests with protein's mtime older."""
     exp_dir.mkdir(parents=True, exist_ok=True)
-    _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES, name="protein")
-    _write_sim_file(exp_dir, "ligand.simulation.json", GMX_FILES, name="ligand")
+    write_simulation(exp_dir, "protein.simulation.json", GMX_FILES, name="protein")
+    write_simulation(exp_dir, "ligand.simulation.json", GMX_FILES, name="ligand")
     _set_mtime(exp_dir / "protein.simulation.json", 1_700_000_000)
     _set_mtime(exp_dir / "ligand.simulation.json", 1_700_100_000)
 
@@ -720,33 +785,45 @@ class TestStepStatus:
     """Per-simulation ladder: each manifest infers its own step from its own jobs."""
 
     async def test_valid_manifest_without_jobs_is_setup_complete(
-        self, db_session: AsyncSession, tmp_path: Path
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
     ) -> None:
         """A valid manifest with no jobs sits at step 1."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
 
-        sim = await _sim(db_session, exp_id, "protein.simulation.json")
+        sim = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
         assert sim.step == 1
         assert sim.status == "setup complete"
         assert sim.step == 1
 
-    async def test_invalid_manifest_is_setup(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_invalid_manifest_is_setup(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """An invalid manifest sits at step 0."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "broken.simulation.json", {"run_input": "production/p.tpr"})
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "broken.simulation.json", {"run_input": "production/p.tpr"})
 
-        sim = await _sim(db_session, exp_id, "broken.simulation.json")
+        sim = await _sim(db_session, jobs, exp_id, "broken.simulation.json")
         assert sim.step == 0
         assert sim.status == "setup"
 
-    async def test_ladder_is_scoped_per_manifest(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_ladder_is_scoped_per_manifest(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """A finished job only moves its own simulation to the analyze step."""
-        exp_id = await _seed_experiment(db_session)
+        exp_id, _ = await seed_experiment()
         _write_two_sims(tmp_path / exp_id)
         await _add_gmx_job(
             db_session,
@@ -756,48 +833,56 @@ class TestStepStatus:
             _start_timestamp=1_700_000_100,
         )
 
-        protein = await _sim(db_session, exp_id, "protein.simulation.json")
-        ligand = await _sim(db_session, exp_id, "ligand.simulation.json")
+        protein = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
+        ligand = await _sim(db_session, jobs, exp_id, "ligand.simulation.json")
         assert protein.step == 3
         assert protein.status == "analyzing"
         assert ligand.step == 1
         assert ligand.status == "setup complete"
 
-    async def test_pending_sim_job_stays_at_step_two(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_pending_sim_job_stays_at_step_two(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """A submitted job counts toward the ladder only once it is actually running."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json")
 
-        sim = await _sim(db_session, exp_id, "protein.simulation.json")
+        sim = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
         assert sim.step == 2
         assert sim.status == "simulating"
 
     async def test_running_sim_job_stays_at_step_two_until_progress_is_known(
-        self, db_session: AsyncSession, tmp_path: Path
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
     ) -> None:
         """A just-started run has no engine log yet: Analyze waits for parsed progress (implies the trajectory exists)."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json", _last_known_status=JobStatus.RUNNING)
 
-        sim = await _sim(db_session, exp_id, "protein.simulation.json")
+        sim = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
         assert sim.step == 2
         assert sim.status == "simulating"
 
     async def test_running_sim_job_activates_analyze_once_progress_is_known(
-        self, db_session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
     ) -> None:
         """A running job with parsed nsteps_done counts the run as done: Analyze activates (partial trajectories analyzable mid-run)."""
-        monkeypatch.setattr("modules.jobs.gmx.models.DATA_DIR", tmp_path)
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json", _last_known_status=JobStatus.RUNNING)
 
         production = exp_dir / "production"
@@ -809,16 +894,20 @@ class TestStepStatus:
             "           40000     800.00000    Thu Aug 21 09:10:00 2026\n"
         )
 
-        sim = await _sim(db_session, exp_id, "protein.simulation.json")
+        sim = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
         assert sim.step == 3
         assert sim.status == "simulating"
 
-    async def test_tuner_trials_give_step_two(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_tuner_trials_give_step_two(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """A tuner trial with performance lifts only its own simulation to step 2 (no live API call)."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
 
         job = TunerJob(
             id=str(uuid.uuid4()),
@@ -831,30 +920,38 @@ class TestStepStatus:
         db_session.add(job)
         await db_session.commit()
 
-        sim = await _sim(db_session, exp_id, "protein.simulation.json")
+        sim = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
         assert sim.step == 2
         assert sim.status == "tuning"
 
-    async def test_pending_and_running_jobs_are_live(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_pending_and_running_jobs_are_live(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Non-terminal jobs keep the simulation live; the dict carries the flag."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
-        _write_sim_file(exp_dir, "ligand.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
+        write_simulation(exp_dir, "ligand.simulation.json", GMX_FILES)
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json")
         await _add_gmx_job(db_session, exp_id, "ligand.simulation.json", _last_known_status=JobStatus.RUNNING)
 
-        assert (await _sim(db_session, exp_id, "protein.simulation.json")).live is True
-        assert (await _sim(db_session, exp_id, "ligand.simulation.json")).live is True
-        assert (await _sim(db_session, exp_id, "protein.simulation.json")).live is True
+        assert (await _sim(db_session, jobs, exp_id, "protein.simulation.json")).live is True
+        assert (await _sim(db_session, jobs, exp_id, "ligand.simulation.json")).live is True
+        assert (await _sim(db_session, jobs, exp_id, "protein.simulation.json")).live is True
 
-    async def test_terminal_jobs_are_not_live(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_terminal_jobs_are_not_live(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Finished/failed jobs and stopped tuner jobs leave the simulation settled."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json", _last_known_status=JobStatus.FINISHED)
 
         tuner = TunerJob(
@@ -867,33 +964,39 @@ class TestStepStatus:
         db_session.add(tuner)
         await db_session.commit()
 
-        assert (await _sim(db_session, exp_id, "protein.simulation.json")).live is False
+        assert (await _sim(db_session, jobs, exp_id, "protein.simulation.json")).live is False
 
-    async def test_no_jobs_is_not_live(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_no_jobs_is_not_live(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """A bare manifest has nothing in flight."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
 
-        assert (await _sim(db_session, exp_id, "protein.simulation.json")).live is False
+        assert (await _sim(db_session, jobs, exp_id, "protein.simulation.json")).live is False
 
 
 class TestLogLines:
     """SimulationJob.log_lines rides the job payload so the UI shows log sizes without fetching them."""
 
     async def test_none_until_logs_exist_and_counts_afterwards(
-        self, db_session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
     ) -> None:
         """Missing streams report None; written streams report their line count."""
-        monkeypatch.setattr("modules.jobs.gmx.models.DATA_DIR", tmp_path)
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json")
 
-        job = await _job(db_session)
+        job = await _job(db_session, jobs)
         assert job.log_lines == {"gmx": None, "stdout": None, "stderr": None}
 
         production = exp_dir / "production"
@@ -907,7 +1010,12 @@ class TestLogLines:
         assert job.log_lines == {"gmx": 3, "stdout": 1, "stderr": None}
 
     async def test_finished_count_reflects_immediately_without_stale_caches(
-        self, db_session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
     ) -> None:
         """
         Regression: a dump right after the finish flip must not serve a stale step count.
@@ -916,11 +1024,8 @@ class TestLogLines:
         independently of status, so one payload could say FINISHED with a
         step count from before the flip.
         """
-        monkeypatch.setattr("modules.jobs.gmx.models.DATA_DIR", tmp_path)
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json", _last_known_status=JobStatus.RUNNING)
 
         production = exp_dir / "production"
@@ -933,7 +1038,7 @@ class TestLogLines:
             "           40000     800.00000    Thu Aug 21 09:10:00 2026\n"
         )
 
-        job = await _job(db_session)
+        job = await _job(db_session, jobs)
         assert GromacsJobSchema.model_validate(job).model_dump(mode="json")["nsteps_done"] == 40000
 
         # The finish flip lands between two polls (status swap + performance persist).
@@ -948,13 +1053,18 @@ class TestLogLines:
         job._performance = 62.5
         await db_session.commit()
 
-        fresh = await _job(db_session)
+        fresh = await _job(db_session, jobs)
         dumped = GromacsJobSchema.model_validate(fresh).model_dump(mode="json")
         assert dumped["nsteps_done"] == 50000
         assert dumped["performance"] == 62.5
 
     async def test_pme_and_nb_serialize_by_contract_value(
-        self, db_session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
     ) -> None:
         """
         OpenAPI declares pme/nb as lowercase [cpu, gpu] — the payload must match.
@@ -962,14 +1072,11 @@ class TestLogLines:
         The UI compares these against tuner-trial configs (lowercase) when
         rendering "Configuration used"; name-cased values silently break that.
         """
-        monkeypatch.setattr("modules.jobs.gmx.models.DATA_DIR", tmp_path)
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json")
 
-        job = await _job(db_session)
+        job = await _job(db_session, jobs)
         dumped = GromacsJobSchema.model_validate(job).model_dump(mode="json")
         assert dumped["pme"] == "cpu"
         assert dumped["nb"] == "cpu"
@@ -1001,17 +1108,19 @@ class TestLogLines:
         assert dumped["ewald"] == "default"
 
     async def test_serialized_with_the_job_payload(
-        self, db_session: AsyncSession, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
     ) -> None:
         """The auto schema includes log_lines without extra schema code."""
-        monkeypatch.setattr("modules.jobs.gmx.models.DATA_DIR", tmp_path)
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json")
 
-        job = await _job(db_session)
+        job = await _job(db_session, jobs)
         dumped = GromacsJobSchema.model_validate(job).model_dump(mode="json")
         assert dumped["log_lines"] == {"gmx": None, "stdout": None, "stderr": None}
 
@@ -1019,20 +1128,26 @@ class TestLogLines:
 class TestExperimentDelegation:
     """Experiment step inherits the latest simulation's step; publish state overrides."""
 
-    async def test_no_manifests_is_setup(self, db_session: AsyncSession) -> None:
+    async def test_no_manifests_is_setup(
+        self, db_session: AsyncSession, seed_experiment: SeedExperiment, jobs: JobsService
+    ) -> None:
         """An experiment without manifests sits at step 0."""
-        exp_id = await _seed_experiment(db_session)
-        experiment = await _experiment(db_session, exp_id)
+        exp_id, _ = await seed_experiment()
+        experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
         assert experiment.step == 0
         assert experiment.status == "setup"
 
-    async def test_experiment_inherits_latest_simulation(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_experiment_inherits_latest_simulation(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Activity on the older simulation does not lift the experiment — the newer simulation leads."""
-        exp_id = await _seed_experiment(db_session)
+        exp_id, _ = await seed_experiment()
         _write_two_sims(tmp_path / exp_id)
-        from datetime import datetime
-
         await _add_gmx_job(
             db_session,
             exp_id,
@@ -1042,35 +1157,43 @@ class TestExperimentDelegation:
             created_at=datetime.fromtimestamp(1_700_000_000),
         )
 
-        experiment = await _experiment(db_session, exp_id)
+        experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
         assert experiment.step == 1
         assert experiment.status == "setup complete"
 
-    async def test_just_started_job_makes_its_sim_latest(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_just_started_job_makes_its_sim_latest(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """A freshly submitted job has no start/finish timestamps yet — its creation time must count."""
-        exp_id = await _seed_experiment(db_session)
+        exp_id, _ = await seed_experiment()
         _write_two_sims(tmp_path / exp_id)  # ligand manifest is newer than protein's
-        from datetime import datetime
-
         await _add_gmx_job(
             db_session, exp_id, "protein.simulation.json", created_at=datetime.fromtimestamp(1_700_200_000)
         )
 
-        experiment = await _experiment(db_session, exp_id)
+        experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
-        protein = await _sim(db_session, exp_id, "protein.simulation.json")
+        protein = await _sim(db_session, jobs, exp_id, "protein.simulation.json")
         assert protein.last_activity >= 1_700_200_000
         # job row without timestamps still lifts its simulation (created_at) to latest — step 2
         assert experiment.step == 2
         assert experiment.status == "simulating"
 
-    async def test_analysis_job_makes_its_sim_latest(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_analysis_job_makes_its_sim_latest(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """An analysis job's creation time lifts its own simulation's last_activity."""
-        exp_id = await _seed_experiment(db_session)
+        exp_id, _ = await seed_experiment()
         _write_two_sims(tmp_path / exp_id)  # ligand manifest is newer than protein's
-        from datetime import datetime
-
         from core.enums import AnalysisType
         from modules.models import AnalysisJob
 
@@ -1086,20 +1209,24 @@ class TestExperimentDelegation:
         db_session.add(job)
         await db_session.commit()
 
-        experiment = await _experiment(db_session, exp_id)
+        experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
         latest = experiment._latest_simulation()
         assert latest is not None
         assert latest.name == "protein"
 
-    async def test_publish_state_overrides(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_publish_state_overrides(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Published/publishing (step 4) beats the latest simulation's step."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
 
-        experiment = await _experiment(db_session, exp_id)
+        experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
 
         experiment.mdrepo_published = True
@@ -1116,42 +1243,59 @@ class TestExperimentDelegation:
 class TestCanPublish:
     """can_publish is the experiment-level Publish unlock: a draft exists, or any run finished."""
 
-    async def test_false_without_draft_or_finished_run(self, db_session: AsyncSession) -> None:
-        exp_id = await _seed_experiment(db_session)
-        experiment = await _experiment(db_session, exp_id)
+    async def test_false_without_draft_or_finished_run(
+        self,
+        db_session: AsyncSession,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
+        exp_id, _ = await seed_experiment()
+        experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
         assert experiment.can_publish is False
 
-    async def test_running_run_does_not_unlock(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_running_run_does_not_unlock(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """A running run is still in the Run phase — Analyze (and Publish) wait for the finish."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json", _last_known_status=JobStatus.RUNNING)
 
-        experiment = await _experiment(db_session, exp_id)
+        experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
         assert experiment.can_publish is False
 
-    async def test_stopped_run_unlocks_publish(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_stopped_run_unlocks_publish(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """Stopped ⇔ finished: partial results are publishable (mirrors the step ladder's analyzing handling)."""
-        exp_id = await _seed_experiment(db_session)
-        exp_dir = tmp_path / exp_id
-        exp_dir.mkdir(parents=True, exist_ok=True)
-        _write_sim_file(exp_dir, "protein.simulation.json", GMX_FILES)
+        exp_id, exp_dir = await seed_experiment()
+        write_simulation(exp_dir, "protein.simulation.json", GMX_FILES)
         await _add_gmx_job(db_session, exp_id, "protein.simulation.json", _last_known_status=JobStatus.STOPPED)
 
-        experiment = await _experiment(db_session, exp_id)
+        experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
         assert experiment.can_publish is True
 
-    async def test_finished_run_unlocks_even_when_not_latest(self, db_session: AsyncSession, tmp_path: Path) -> None:
+    async def test_finished_run_unlocks_even_when_not_latest(
+        self,
+        db_session: AsyncSession,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
         """A finished non-latest run leaves the ladder at the latest sim but unlocks Publish."""
-        exp_id = await _seed_experiment(db_session)
+        exp_id, _ = await seed_experiment()
         _write_two_sims(tmp_path / exp_id)
-        from datetime import datetime
-
         await _add_gmx_job(
             db_session,
             exp_id,
@@ -1161,14 +1305,19 @@ class TestCanPublish:
             created_at=datetime.fromtimestamp(1_700_000_000),
         )
 
-        experiment = await _experiment(db_session, exp_id)
+        experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
         assert experiment.step == 1  # ligand is newer — the ladder follows it
         assert experiment.can_publish is True
 
-    async def test_draft_unlocks_without_any_run(self, db_session: AsyncSession) -> None:
-        exp_id = await _seed_experiment(db_session)
-        experiment = await _experiment(db_session, exp_id)
+    async def test_draft_unlocks_without_any_run(
+        self,
+        db_session: AsyncSession,
+        seed_experiment: SeedExperiment,
+        jobs: JobsService,
+    ) -> None:
+        exp_id, _ = await seed_experiment()
+        experiment = await _experiment(db_session, jobs, exp_id)
         assert experiment is not None
         experiment.mdrepo_id = "rec123"
         assert experiment.can_publish is True

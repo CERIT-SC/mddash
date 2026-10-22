@@ -10,7 +10,6 @@ import shutil
 import sys
 import tempfile
 from collections.abc import AsyncIterator, Iterator
-from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import AsyncMock, MagicMock
@@ -34,13 +33,14 @@ os.environ["NS_MAX_NOTEBOOKS"] = "2"
 os.environ["TUNER_USER"] = "tuner"
 os.environ["TUNER_PASSWORD"] = "secret"
 
-import modules.models  # ruff:ignore[unused-import]  # imports every module binding DATA_DIR
 from app import create_app
 from clients import Clients
 from clients.k8s import K8sClient
 from core import cache, db
 from fastapi import FastAPI
+from modules.models import Experiment, Notebook  # importing every model also binds every DATA_DIR
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.support import SeedExperiment, pod
 
 
 @pytest.fixture(autouse=True)
@@ -72,22 +72,11 @@ def _clear_caches() -> Iterator[None]:
         c.clear()
 
 
-def _running_pod() -> MagicMock:
-    # Plausible pod shape: default MagicMock attributes produce truthy
-    # deletion_timestamps and non-datetime start_times that break serialization.
-    pod = MagicMock()
-    pod.metadata.deletion_timestamp = None
-    pod.status.phase = "Running"
-    pod.status.container_statuses = []
-    pod.status.start_time = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
-    return pod
-
-
 @pytest.fixture
 def mock_k8s() -> tuple[AsyncMock, AsyncMock]:
     """AsyncMock CoreV1Api/BatchV1Api clients behind `clients.k8s`; tests configure return values per call."""
     core_v1, batch_v1 = AsyncMock(), AsyncMock()
-    core_v1.read_namespaced_pod.return_value = _running_pod()
+    core_v1.read_namespaced_pod.return_value = pod()
     core_v1.list_namespaced_pod.return_value = MagicMock(items=[])
     return core_v1, batch_v1
 
@@ -141,6 +130,22 @@ async def db_session(tmp_path: Path, migrated_db: Path) -> AsyncIterator[AsyncSe
     async with db.session_factory()() as session:
         yield session
     await engine.dispose()
+
+
+@pytest.fixture
+def seed_experiment(db_session: AsyncSession, tmp_path: Path) -> SeedExperiment:
+    """Persist an experiment with its notebook and create its directory; returns (id, directory)."""
+
+    async def seed(exp_id: str = "simts", *, name: str = "Test experiment", **columns: object) -> tuple[str, Path]:
+        columns.setdefault("notebooks_repo", "https://github.com/t/r.git")
+        db_session.add(Experiment(id=exp_id, name=name, **columns))
+        db_session.add(Notebook(experiment_id=exp_id))
+        await db_session.commit()
+        exp_dir = tmp_path / exp_id
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        return exp_id, exp_dir
+
+    return seed
 
 
 @pytest.fixture

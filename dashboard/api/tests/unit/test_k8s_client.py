@@ -9,6 +9,7 @@ from clients.k8s import K8sClient
 from core.enums import JobStatus, PodStatus
 from kubernetes_asyncio.client.exceptions import ApiException
 from pytest_mock import MockerFixture
+from tests.support import pod
 
 
 def test_constructing_the_client_does_not_load_incluster_config(mocker: MockerFixture) -> None:
@@ -23,7 +24,6 @@ def test_constructing_the_client_does_not_load_incluster_config(mocker: MockerFi
 @pytest.fixture
 def k8s_lib(mocker: MockerFixture) -> MagicMock:
     """Stand-ins for the lazily imported kubernetes_asyncio symbols (cached per process after first use)."""
-    mocker.patch("clients.k8s._load_k8s")
     lib = MagicMock()
     lib.ApiClient.return_value.close = AsyncMock()
     for name in ("ApiClient", "CoreV1Api", "BatchV1Api"):
@@ -58,15 +58,6 @@ async def test_aclose_closes_and_forgets_the_api_client(k8s_lib: MagicMock) -> N
     assert k8s_lib.ApiClient.call_count == 2
 
 
-def _pod(phase: str, started: datetime | None) -> MagicMock:
-    pod = MagicMock()
-    pod.metadata.deletion_timestamp = None
-    pod.status.phase = phase
-    pod.status.container_statuses = []
-    pod.status.start_time = started
-    return pod
-
-
 class TestGetPodInfo:
     """get_pod_info maps one pod read to a (status, start_time) tuple."""
 
@@ -75,7 +66,7 @@ class TestGetPodInfo:
     ) -> None:
         core, _ = mock_k8s
         started = datetime(2026, 8, 17, 12, 0, tzinfo=UTC)
-        core.read_namespaced_pod.return_value = _pod("Running", started)
+        core.read_namespaced_pod.return_value = pod("Running", started)
 
         assert await clients.k8s.get_pod_info("notebook-exp1") == (PodStatus.RUNNING, started)
 
@@ -83,7 +74,7 @@ class TestGetPodInfo:
         self, mock_k8s: tuple[AsyncMock, AsyncMock], clients: Clients
     ) -> None:
         core, _ = mock_k8s
-        core.read_namespaced_pod.return_value = _pod("Pending", None)
+        core.read_namespaced_pod.return_value = pod("Pending", None)
 
         assert await clients.k8s.get_pod_info("notebook-exp1") == (PodStatus.PENDING, None)
 
@@ -246,3 +237,37 @@ class TestCreateNotebookPodUid:
 
         assert await clients.k8s.create_notebook_pod("notebook-exp1", "exp1", "/dash/notebook/exp1", "tok") == "old-uid"
         core.create_namespaced_pod.assert_not_called()
+
+
+class TestDeletes:
+    """Deletes hit the API directly: a gone resource is deleted, any other API error propagates."""
+
+    async def test_missing_pod_counts_as_deleted(self, mock_k8s: tuple[AsyncMock, AsyncMock], clients: Clients) -> None:
+        core, _ = mock_k8s
+        core.delete_namespaced_pod.side_effect = ApiException(status=404)
+
+        await clients.k8s.delete_pod("notebook-x")
+
+        core.read_namespaced_pod.assert_not_called()
+
+    async def test_forbidden_delete_propagates(self, mock_k8s: tuple[AsyncMock, AsyncMock], clients: Clients) -> None:
+        _, batch = mock_k8s
+        batch.delete_namespaced_job.side_effect = ApiException(status=403)
+
+        with pytest.raises(ApiException):
+            await clients.k8s.delete_job("analysis-x")
+
+    async def test_existing_job_is_not_recreated(self, mock_k8s: tuple[AsyncMock, AsyncMock], clients: Clients) -> None:
+        _, batch = mock_k8s
+        batch.create_namespaced_job.side_effect = ApiException(status=409)
+
+        await clients.k8s.create_job("analysis-x", "image", "exp01", "true")
+
+    async def test_ping_propagates_errors_other_than_missing(
+        self, mock_k8s: tuple[AsyncMock, AsyncMock], clients: Clients
+    ) -> None:
+        _, batch = mock_k8s
+        batch.read_namespaced_job.side_effect = ApiException(status=403)
+
+        with pytest.raises(ApiException):
+            await clients.k8s.ping_resource("job", "analysis-x")

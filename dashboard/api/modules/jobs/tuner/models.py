@@ -56,8 +56,7 @@ class TunerJob(Base):
     @property
     def tuner_status(self) -> JobStatus:
         """Status of the job on the tuner; the status dict carries raw JSON strings."""
-        value = str(self._status().get("status", JobStatus.UNKNOWN))
-        return JobStatus.from_string(value) if value.upper() in JobStatus.__members__ else JobStatus.UNKNOWN
+        return JobStatus.parse(self._status().get("status", JobStatus.UNKNOWN))
 
     @property
     def is_live(self) -> bool:

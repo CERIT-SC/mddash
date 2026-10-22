@@ -3,19 +3,19 @@
 from __future__ import annotations
 
 import contextlib
-import json
 import logging
-import os
-import tempfile
 from dataclasses import asdict, dataclass
 from enum import Enum
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from core.worker_jobs import read_status_doc, write_status_doc
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 STATUS_FILENAME = ".archive-status.json"
-STATUS_TMP_SUFFIX = ".tmp"
 
 
 class ArchiveState(str, Enum):
@@ -65,47 +65,13 @@ def status_path(experiment_id: str, data_dir: Path) -> Path:
 
 def read_status(experiment_id: str, data_dir: Path) -> ArchiveStatus | None:
     """Return None if the file does not exist or is corrupt."""
-    path = status_path(experiment_id, data_dir)
-    try:
-        content = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return None
-    except OSError:
-        logger.exception("Failed to read archive status file %s", path)
-        return None
-
-    try:
-        return ArchiveStatus.from_dict(json.loads(content))
-    except json.JSONDecodeError:
-        logger.error("Corrupt archive status file %s", path)
-        return None
+    data = read_status_doc(status_path(experiment_id, data_dir))
+    return None if data is None else ArchiveStatus.from_dict(data)
 
 
-def write_status(status: ArchiveStatus, experiment_id: str, data_dir: Path) -> bool:
+def write_status(status: ArchiveStatus, experiment_id: str, data_dir: Path) -> None:
     """Atomic write via temp file, fsync, rename."""
-    path = status_path(experiment_id, data_dir)
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    content = json.dumps(status.to_dict(), indent=2)
-
-    fd, tmp_name = tempfile.mkstemp(
-        dir=str(path.parent),
-        prefix=STATUS_FILENAME + ".",
-        suffix=STATUS_TMP_SUFFIX,
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(content)
-            f.flush()
-            os.fsync(f.fileno())
-        Path(tmp_name).replace(path)
-    except OSError:
-        logger.exception("Failed to write archive status file %s", path)
-        with contextlib.suppress(OSError):
-            Path(tmp_name).unlink()
-        raise
-
-    return True
+    write_status_doc(status_path(experiment_id, data_dir), status.to_dict())
 
 
 def create_queued_status(attempt_id: str, direction: str) -> ArchiveStatus:

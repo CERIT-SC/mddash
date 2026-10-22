@@ -7,7 +7,8 @@ import sqlalchemy as sa
 from core.cache import simulation_log_lines_cache, simulation_log_lines_lock
 from core.db import Base
 from core.enums import Engine, JobStatus
-from core.utils import count_lines
+from core.errors import BadRequest, Forbidden, InternalServerError, NotFound, UnprocessableEntity
+from core.utils import count_lines, tail
 from sqlalchemy import select
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 
@@ -81,25 +82,6 @@ class SimulationJob(RecordedStatus, Base):
         self._fetched_status = status
 
     @property
-    def settled(self) -> bool:
-        """Terminal statuses never change, so they need no MDRun read."""
-        return self._last_known_status is not None and self._last_known_status.is_terminal
-
-    @property
-    def status(self) -> JobStatus:
-        """
-        Current status of the MDRun job, as of the last `refresh_status()`.
-
-        Raises:
-            RuntimeError: If a non-terminal job was not refreshed in this request.
-        """
-        if self._last_known_status is not None and self._last_known_status.is_terminal:
-            return self._last_known_status
-        if self._fetched_status is None:
-            raise RuntimeError(f"Status of job {self.id} read before RunService.refresh_status()")
-        return self._fetched_status
-
-    @property
     def is_live(self) -> bool:
         """The job may still advance without user action."""
         return self.status.is_live
@@ -133,6 +115,34 @@ class SimulationJob(RecordedStatus, Base):
     def _log_files(self) -> dict[str, Path]:
         """Log streams keyed by the log endpoint's ``type`` values (engine log key is ``gmx`` or ``mdout``)."""
         raise NotImplementedError
+
+    def _readable_logs(self) -> dict[str, Path]:
+        """Files the log endpoint serves, keyed by its ``type`` values."""
+        return self._log_files()
+
+    def get_log(self, log_type: str, tail_lines: int | None = None) -> str:
+        """
+        Read one of the run's logs, or its last `tail_lines` lines (sync file I/O).
+
+        Raises:
+            BadRequest: If the log type is not one this engine writes.
+        """
+        logs = self._readable_logs()
+        if (log_file := logs.get(log_type)) is None:
+            allowed = ", ".join(f"'{name}'" for name in logs)
+            raise BadRequest(f"Invalid log type '{log_type}'. Use one of {allowed}.")
+        try:
+            if tail_lines:
+                return tail(log_file, tail_lines)
+            return log_file.read_text()
+        except FileNotFoundError:
+            raise NotFound(f"Log file not found: {log_file.name}") from None
+        except PermissionError:
+            raise Forbidden(f"Permission denied accessing log file: {log_file.name}") from None
+        except UnicodeDecodeError:
+            raise UnprocessableEntity(f"Unable to decode log file: {log_file.name}") from None
+        except OSError as e:
+            raise InternalServerError("System error reading log file.") from e
 
     @property
     def nsteps(self) -> int | None:

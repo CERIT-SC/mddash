@@ -10,7 +10,7 @@ import jsonschema
 from core.config import DATA_DIR
 from core.enums import Engine, JobStatus
 from core.errors import ApiError, BadRequest, NotFound
-from core.utils import FileInfo, get_files_with_extensions
+from core.utils import FileEntry, get_files_with_extensions
 from core.validators import check_path
 
 from modules.simulations.manifest_schema import resolve_schema_url, schema_url
@@ -517,12 +517,12 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
         return self._validation
 
     @staticmethod
-    def list_files(experiment_id: str) -> list[FileInfo]:
+    def list_files(experiment_id: str) -> list[FileEntry]:
         """
         Discover `.simulation.json` files under the experiment directory.
 
         Returns:
-            Sorted list of FileInfo objects.
+            Sorted list of FileEntry objects.
         """
         exp_dir = DATA_DIR / experiment_id
         if not exp_dir.is_dir():
@@ -622,14 +622,22 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
             display_name = payload.get("name") or simulation_path.removesuffix(SIMULATION_SUFFIX)
             raise BadRequest(f"Simulation '{display_name}' already exists.")
 
+        return cls._save(experiment, simulation_path, payload)
+
+    @classmethod
+    def _save(
+        cls, experiment: "Experiment", simulation_path: str, payload: dict, *, current_name: str | None = None
+    ) -> "Simulation":
+        """Validate `payload` as the manifest content and write it (paths rebased to manifest-relative)."""
         content = _build_content(experiment.engine, payload)
         content["files"] = _rebase_files_to_manifest(content["files"], simulation_path)
         _validate_content_or_raise(content, experiment.engine)
-        cls._require_unique_name(experiment_id, str(content.get("name", "")))
+        cls._require_unique_name(experiment.id, str(content.get("name", "")), current_name=current_name)
 
+        simulation_file = DATA_DIR / experiment.id / simulation_path
         simulation_file.parent.mkdir(parents=True, exist_ok=True)
         simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        return cls(experiment_id, simulation_path, raw=content, experiment=experiment)
+        return cls(experiment.id, simulation_path, raw=content, experiment=experiment)
 
     @staticmethod
     def existing_path(experiment_id: str, simulation_path: str) -> str:
@@ -662,26 +670,14 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
     @classmethod
     def update(cls, experiment: "Experiment", simulation_path: str, payload: dict) -> "Simulation":
         """
-        Edit an unlocked simulation manifest.
-
-        Returns:
-            The updated Simulation instance.
+        Edit an unlocked simulation manifest (400 when the path or content is invalid, 404 when it is missing).
 
         Raises:
-            BadRequest: If the path is unsafe, does not end with '.simulation.json',
-                is job-locked, or content is invalid.
-            NotFound: If the file does not exist.
+            ApiError: If the manifest is locked by its jobs or a read-only file.
         """
-        experiment_id = experiment.id
-        simulation_path = Path(simulation_path).as_posix()
-        check_path(simulation_path, DATA_DIR / experiment_id)
-        if not simulation_path.endswith(SIMULATION_SUFFIX):
-            raise BadRequest(f"Path must end with '{SIMULATION_SUFFIX}'.")
-        simulation_file = DATA_DIR / experiment_id / simulation_path
-        if not simulation_file.is_file():
-            raise NotFound(f"Simulation '{simulation_path}' not found.")
-
-        current = cls._from_file(experiment_id, simulation_path, experiment)
+        simulation_path = cls.existing_path(experiment.id, simulation_path)
+        # A read-only manifest reads as locked, so an editable one is writable as-is.
+        current = cls._from_file(experiment.id, simulation_path, experiment)
         if current.locked:
             raise ApiError(
                 HTTPStatus.BAD_REQUEST,
@@ -690,22 +686,4 @@ class Simulation:  # ruff:ignore[too-many-public-methods]
                 "This simulation is in use by a running job; stop the job before editing it.",
             )
 
-        content = _build_content(experiment.engine, payload)
-        content["files"] = _rebase_files_to_manifest(content["files"], simulation_path)
-        _validate_content_or_raise(content, experiment.engine)
-        cls._require_unique_name(experiment_id, str(content.get("name", "")), current_name=current.name)
-
-        if simulation_file.exists() and not os.access(simulation_file, os.W_OK):
-            try:
-                simulation_file.chmod(WRITABLE_MODE)
-            except OSError:
-                logger.warning("Failed to make simulation '%s' writable", simulation_path, exc_info=True)
-
-        simulation_file.write_text(json.dumps(content, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-        try:
-            simulation_file.chmod(WRITABLE_MODE)
-        except OSError:
-            logger.warning("Failed to restore writable mode for '%s'", simulation_path, exc_info=True)
-
-        return cls(experiment_id, simulation_path, raw=content, experiment=experiment)
+        return cls._save(experiment, simulation_path, payload, current_name=current.name)

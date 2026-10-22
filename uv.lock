@@ -371,7 +371,7 @@ requires-dist = [
     { name = "aiosqlite", specifier = ">=0.21" },
     { name = "alembic", specifier = ">=1.13" },
     { name = "anyio", specifier = ">=4.6" },
-    { name = "cachetools" },
+    { name = "cachetools", specifier = ">=7.2.0" },
     { name = "fastapi", specifier = ">=0.125" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "itsdangerous", specifier = ">=2.2" },
@@ -379,7 +379,7 @@ requires-dist = [
     { name = "kubernetes-asyncio", specifier = ">=32" },
     { name = "pydantic", specifier = ">=2.10" },
     { name = "python-multipart", specifier = ">=0.0.20" },
-    { name = "pyyaml" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36" },
     { name = "uvicorn", specifier = ">=0.38" },
 ]

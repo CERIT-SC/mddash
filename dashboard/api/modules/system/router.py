@@ -1,5 +1,5 @@
 import time
-from typing import Literal
+from typing import Literal, cast
 
 import anyio
 from clients.k8s import parse_memory
@@ -8,7 +8,6 @@ from core.enums import NotebookTier as NotebookTierValue
 from core.responses import problems
 from core.utils import get_du_size
 from fastapi import APIRouter
-from pydantic import TypeAdapter
 
 from modules.notebooks.catalog import load_catalog
 from modules.notebooks.schemas import NotebookConfig, NotebookModule, NotebookTier
@@ -21,7 +20,6 @@ router = APIRouter(prefix=API_PREFIX)
 _STARTED_AT = time.monotonic()
 
 Health = Literal["API is up!"]
-_modules = TypeAdapter(list[NotebookModule])
 
 
 @router.get(
@@ -54,7 +52,7 @@ async def health() -> Health:
 )
 async def get_notebook_modules() -> list[NotebookModule]:
     """Curated notebook module display metadata (no internal paths or URLs)."""
-    return _modules.validate_python(load_catalog().to_public())
+    return cast("list[NotebookModule]", load_catalog().to_public())
 
 
 @router.get(

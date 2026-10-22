@@ -1,10 +1,10 @@
 from http import HTTPStatus
+from typing import cast
 
 from core.config import API_PREFIX
 from core.responses import problems
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from pydantic import TypeAdapter
 
 from modules.experiments.dependencies import ExperimentDep
 from modules.mdrepo.dependencies import TokensDep
@@ -12,8 +12,6 @@ from modules.publishing.schemas import MDPositPublication, MDRepoPublication, Pu
 from modules.publishing.service import PublishingServiceDep
 
 router = APIRouter(prefix=f"{API_PREFIX}/experiments", tags=["Experiments"])
-
-_publish_status = TypeAdapter(PublishStatus)
 
 
 @router.post(
@@ -49,4 +47,4 @@ async def publish(
 )
 async def publish_status(experiment: ExperimentDep, service: PublishingServiceDep) -> PublishStatus:
     """Durable MDRepo upload status: the PVC state document merged with live Kubernetes Job state."""
-    return _publish_status.validate_python(await service.status(experiment))
+    return cast("PublishStatus", await service.status(experiment))

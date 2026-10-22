@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import contextlib
-import json
 import logging
-import os
-import tempfile
 from dataclasses import asdict, dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from core.worker_jobs import read_status_doc, write_status_doc
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 STATUS_FILENAME = ".mdrepo-upload.json"
-STATUS_TMP_SUFFIX = ".tmp"
 MAX_FAILED_KEYS = 50
 MAX_ERROR_SUMMARY = 500
 
@@ -115,20 +114,8 @@ def status_path(experiment_id: str, data_dir: Path) -> Path:
 
 def read_status(experiment_id: str, data_dir: Path) -> UploadStatus | None:
     """Return None if the file does not exist or is corrupt."""
-    path = status_path(experiment_id, data_dir)
-    try:
-        content = path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return None
-    except OSError:
-        logger.exception("Failed to read upload status file %s", path)
-        return None
-
-    try:
-        return UploadStatus.from_dict(json.loads(content))
-    except json.JSONDecodeError:
-        logger.error("Corrupt upload status file %s", path)
-        return None
+    data = read_status_doc(status_path(experiment_id, data_dir))
+    return None if data is None else UploadStatus.from_dict(data)
 
 
 def write_status(
@@ -138,9 +125,7 @@ def write_status(
     *,
     expected_attempt_id: str | None = None,
 ) -> bool:
-    """Atomic write via temp file, fsync, rename; returns False if attempt-fenced."""
-    path = status_path(experiment_id, data_dir)
-
+    """Atomic write; returns False if attempt-fenced (another attempt owns the doc)."""
     if expected_attempt_id is not None:
         existing = read_status(experiment_id, data_dir)
         if existing is not None and existing.attempt_id != expected_attempt_id:
@@ -150,27 +135,7 @@ def write_status(
                 expected_attempt_id,
             )
             return False
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    content = json.dumps(status.to_dict(), indent=2)
-
-    fd, tmp_name = tempfile.mkstemp(
-        dir=str(path.parent),
-        prefix=STATUS_FILENAME + ".",
-        suffix=STATUS_TMP_SUFFIX,
-    )
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(content)
-            f.flush()
-            os.fsync(f.fileno())
-        Path(tmp_name).replace(path)
-    except OSError:
-        logger.exception("Failed to write upload status file %s", path)
-        with contextlib.suppress(OSError):
-            Path(tmp_name).unlink()
-        raise
-
+    write_status_doc(status_path(experiment_id, data_dir), status.to_dict())
     return True
 
 

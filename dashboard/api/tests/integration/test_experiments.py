@@ -4,11 +4,14 @@ Integration tests for experiment API routes.
 Tests the full request/response cycle with mocked external dependencies.
 """
 
+from collections.abc import Iterator
 from http import HTTPStatus
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
+import pytest
 import respx
 from core.errors import InternalServerError
 from core.utils import secure_filename
@@ -17,8 +20,20 @@ from httpx import AsyncClient
 from modules.mdrepo.dependencies import get_tokens
 from modules.models import Experiment, Notebook
 from sqlalchemy.ext.asyncio import AsyncSession as Session
+from tests.support import SeedExperiment
 
 EXPERIMENT_ID_LENGTH = 5
+
+
+@pytest.fixture(autouse=True)
+def git() -> Iterator[SimpleNamespace]:
+    """Notebook-repo clones never touch the network; tests assert on `git.clone` / `git.clone_module`."""
+    with patch("clients.git.GitClient.clone") as clone, patch("clients.git.GitClient.clone_module") as clone_module:
+        yield SimpleNamespace(clone=clone, clone_module=clone_module)
+
+
+def _pdb_form(name: str, pdb: str) -> dict[str, str]:
+    return {"type": "pdb", "experiment-name": name, "pdb": pdb, "notebooks-repo": "https://github.com/test/repo.git"}
 
 
 class TestListExperiments:
@@ -35,10 +50,7 @@ class TestListExperiments:
     async def test_returns_experiments(self, client: AsyncClient, db_session: Session) -> None:
         """Should return list of all experiments."""
         # Create test experiment directly in DB
-        exp = Experiment()
-        exp.id = "testx"
-        exp.name = "Test Experiment"
-        exp.module_category = "membrane-protein"
+        exp = Experiment(id="testx", name="Test Experiment", module_category="membrane-protein")
         db_session.add(exp)
         await db_session.flush()
 
@@ -64,9 +76,7 @@ class TestListExperiments:
         from core.enums import AnalysisType, JobStatus
         from modules.models import AnalysisJob
 
-        exp = Experiment()
-        exp.id = "testx"
-        exp.name = "Test Experiment"
+        exp = Experiment(id="testx", name="Test Experiment")
         db_session.add(exp)
         await db_session.flush()
 
@@ -100,9 +110,7 @@ class TestListExperiments:
         from sqlalchemy import event
 
         for exp_id in ("exp01", "exp02"):
-            exp = Experiment()
-            exp.id = exp_id
-            exp.name = f"Test {exp_id}"
+            exp = Experiment(id=exp_id, name=f"Test {exp_id}")
             db_session.add(exp)
             await db_session.flush()
             db_session.add(Notebook(experiment_id=exp_id))
@@ -163,9 +171,7 @@ class TestGetExperiment:
 
     async def test_returns_experiment_by_id(self, client: AsyncClient, db_session: Session) -> None:
         """Should return experiment details for valid ID."""
-        exp = Experiment()
-        exp.id = "abcde"
-        exp.name = "My Experiment"
+        exp = Experiment(id="abcde", name="My Experiment")
         db_session.add(exp)
         await db_session.flush()
 
@@ -195,9 +201,7 @@ class TestPublishExperiment:
         self, app: FastAPI, client: AsyncClient, db_session: Session
     ) -> None:
         """Authenticated but no finished run and no existing publication → 409, no MDRepo draft."""
-        exp = Experiment()
-        exp.id = "pubc1"
-        exp.name = "Publish Gate"
+        exp = Experiment(id="pubc1", name="Publish Gate")
         db_session.add(exp)
         await db_session.commit()
 
@@ -214,60 +218,53 @@ class TestCreateExperiment:
     """Tests for POST /api/experiments."""
 
     async def test_create_from_pdb_success(
-        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
+        self,
+        http_mock: respx.MockRouter,
+        client: AsyncClient,
+        sample_pdb_content: bytes,
+        tmp_path: Path,
+        git: SimpleNamespace,
     ) -> None:
         """Should create experiment from valid PDB ID."""
-        with (
-            patch("clients.git.GitClient.clone") as mock_clone,
-        ):
-            # Mock successful PDB download
-            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
+        # Mock successful PDB download
+        http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
-            response = await client.post(
-                "/dash/api/experiments",
-                data={
-                    "type": "pdb",
-                    "experiment-name": "Test PDB Experiment",
-                    "pdb": "1ABC",
-                    "notebooks-repo": "https://github.com/test/repo.git",
-                },
-            )
+        response = await client.post(
+            "/dash/api/experiments",
+            data=_pdb_form("Test PDB Experiment", "1ABC"),
+        )
 
-            assert response.status_code == HTTPStatus.CREATED
-            data = response.json()
-            assert data["name"] == "Test PDB Experiment"
-            assert data["notebooks_repo"] == "https://github.com/test/repo.git"
-            assert len(data["id"]) == EXPERIMENT_ID_LENGTH
-            mock_clone.assert_called_once()
+        assert response.status_code == HTTPStatus.CREATED
+        data = response.json()
+        assert data["name"] == "Test PDB Experiment"
+        assert data["notebooks_repo"] == "https://github.com/test/repo.git"
+        assert len(data["id"]) == EXPERIMENT_ID_LENGTH
+        git.clone.assert_called_once()
 
     async def test_create_from_pdb_not_found(
         self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
     ) -> None:
         """Should return 404 when PDB ID doesn't exist."""
-        with (
-            patch("clients.git.GitClient.clone"),
-        ):
-            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(404))
+        http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(404))
 
-            response = await client.post(
-                "/dash/api/experiments",
-                data={
-                    "type": "pdb",
-                    "experiment-name": "Invalid PDB",
-                    "pdb": "XXXX",
-                    "notebooks-repo": "https://github.com/test/repo.git",
-                },
-            )
+        response = await client.post(
+            "/dash/api/experiments",
+            data=_pdb_form("Invalid PDB", "XXXX"),
+        )
 
-            assert response.status_code == HTTPStatus.NOT_FOUND
+        assert response.status_code == HTTPStatus.NOT_FOUND
 
     async def test_create_from_pdb_url_success(
-        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
+        self,
+        http_mock: respx.MockRouter,
+        client: AsyncClient,
+        sample_pdb_content: bytes,
+        tmp_path: Path,
+        git: SimpleNamespace,
     ) -> None:
         """Should create experiment from a direct URL to a PDB file."""
         pdb_url = "https://www.ebi.ac.uk/pdbe/entry-files/download/pdb3vte.ent"
         with (
-            patch("clients.git.GitClient.clone") as mock_clone,
             patch("core.validators._getaddrinfo_ips", return_value=["193.62.193.80"]),
         ):
             mock_get = http_mock.get(url__regex=r".*").mock(
@@ -276,12 +273,7 @@ class TestCreateExperiment:
 
             response = await client.post(
                 "/dash/api/experiments",
-                data={
-                    "type": "pdb",
-                    "experiment-name": "PDB URL Experiment",
-                    "pdb": pdb_url,
-                    "notebooks-repo": "https://github.com/test/repo.git",
-                },
+                data=_pdb_form("PDB URL Experiment", pdb_url),
             )
 
             assert response.status_code == HTTPStatus.CREATED
@@ -292,7 +284,7 @@ class TestCreateExperiment:
             # The URL should be fetched directly, not the RCSB ID URL
             assert mock_get.call_count == 1
             assert str(mock_get.calls.last.request.url) == pdb_url
-            mock_clone.assert_called_once()
+            git.clone.assert_called_once()
 
     async def test_create_from_pdb_url_rejects_html_response(
         self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
@@ -301,19 +293,13 @@ class TestCreateExperiment:
         pdb_url = "https://example.org/login"
         html_content = b"<!DOCTYPE html><html><body>Please log in</body></html>"
         with (
-            patch("clients.git.GitClient.clone"),
             patch("core.validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=html_content))
 
             response = await client.post(
                 "/dash/api/experiments",
-                data={
-                    "type": "pdb",
-                    "experiment-name": "HTML Response",
-                    "pdb": pdb_url,
-                    "notebooks-repo": "https://github.com/test/repo.git",
-                },
+                data=_pdb_form("HTML Response", pdb_url),
             )
 
             assert response.status_code == HTTPStatus.BAD_REQUEST
@@ -324,26 +310,18 @@ class TestCreateExperiment:
         self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
     ) -> None:
         """Should return 400 when an RCSB PDB ID returns non-PDB content."""
-        with (
-            patch("clients.git.GitClient.clone"),
-        ):
-            mock_get = http_mock.get(url__regex=r".*").mock(
-                return_value=httpx.Response(200, content=b"<html><body>not a pdb</body></html>")
-            )
+        mock_get = http_mock.get(url__regex=r".*").mock(
+            return_value=httpx.Response(200, content=b"<html><body>not a pdb</body></html>")
+        )
 
-            response = await client.post(
-                "/dash/api/experiments",
-                data={
-                    "type": "pdb",
-                    "experiment-name": "Bad RCSB",
-                    "pdb": "1ABC",
-                    "notebooks-repo": "https://github.com/test/repo.git",
-                },
-            )
+        response = await client.post(
+            "/dash/api/experiments",
+            data=_pdb_form("Bad RCSB", "1ABC"),
+        )
 
-            assert response.status_code == HTTPStatus.BAD_REQUEST
-            assert mock_get.call_count == 1
-            assert str(mock_get.calls.last.request.url) == "https://files.rcsb.org/download/1ABC.pdb"
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert mock_get.call_count == 1
+        assert str(mock_get.calls.last.request.url) == "https://files.rcsb.org/download/1ABC.pdb"
 
     async def test_create_from_pdb_url_not_found(
         self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
@@ -351,76 +329,48 @@ class TestCreateExperiment:
         """Should return 404 when a PDB URL returns 404."""
         pdb_url = "https://example.org/missing.pdb"
         with (
-            patch("clients.git.GitClient.clone"),
             patch("core.validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(404))
 
             response = await client.post(
                 "/dash/api/experiments",
-                data={
-                    "type": "pdb",
-                    "experiment-name": "Missing URL",
-                    "pdb": pdb_url,
-                    "notebooks-repo": "https://github.com/test/repo.git",
-                },
+                data=_pdb_form("Missing URL", pdb_url),
             )
 
             assert response.status_code == HTTPStatus.NOT_FOUND
 
     async def test_create_from_pdb_url_rejects_file_scheme(self, client: AsyncClient, tmp_path: Path) -> None:
         """Should return 400 when a PDB URL uses a non-http(s) scheme."""
-        with (
-            patch("clients.git.GitClient.clone"),
-        ):
-            response = await client.post(
-                "/dash/api/experiments",
-                data={
-                    "type": "pdb",
-                    "experiment-name": "Bad Scheme",
-                    "pdb": "file:///etc/passwd",
-                    "notebooks-repo": "https://github.com/test/repo.git",
-                },
-            )
+        response = await client.post(
+            "/dash/api/experiments",
+            data=_pdb_form("Bad Scheme", "file:///etc/passwd"),
+        )
 
-            assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert response.status_code == HTTPStatus.BAD_REQUEST
 
     async def test_create_from_pdb_url_rejects_internal_host(
         self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
     ) -> None:
         """Should return 400 when a PDB URL points at an internal SSRF target."""
-        with (
-            patch("clients.git.GitClient.clone"),
-        ):
-            response = await client.post(
-                "/dash/api/experiments",
-                data={
-                    "type": "pdb",
-                    "experiment-name": "SSRF Attempt",
-                    "pdb": "http://169.254.169.254/latest/meta-data/",
-                    "notebooks-repo": "https://github.com/test/repo.git",
-                },
-            )
+        response = await client.post(
+            "/dash/api/experiments",
+            data=_pdb_form("SSRF Attempt", "http://169.254.169.254/latest/meta-data/"),
+        )
 
-            assert response.status_code == HTTPStatus.BAD_REQUEST
-            assert not http_mock.calls
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert not http_mock.calls
 
     async def test_create_from_pdb_url_rejects_hostname_resolving_internal(
         self, http_mock: respx.MockRouter, client: AsyncClient, tmp_path: Path
     ) -> None:
         """Should return 400 when a PDB URL hostname resolves to an internal IP."""
         with (
-            patch("clients.git.GitClient.clone"),
             patch("core.validators._getaddrinfo_ips", return_value=["10.43.0.1"]),
         ):
             response = await client.post(
                 "/dash/api/experiments",
-                data={
-                    "type": "pdb",
-                    "experiment-name": "SSRF Hostname",
-                    "pdb": "https://kubernetes.default.svc/api",
-                    "notebooks-repo": "https://github.com/test/repo.git",
-                },
+                data=_pdb_form("SSRF Hostname", "https://kubernetes.default.svc/api"),
             )
 
             assert response.status_code == HTTPStatus.BAD_REQUEST
@@ -433,7 +383,6 @@ class TestCreateExperiment:
         external_url = "https://example.org/pdb3vte.ent"
         internal_url = "http://169.254.169.254/latest/meta-data/"
         with (
-            patch("clients.git.GitClient.clone"),
             patch("core.validators._getaddrinfo_ips", return_value=["93.184.216.34"]),
         ):
             mock_get = http_mock.get(url__regex=r".*").mock(
@@ -442,12 +391,7 @@ class TestCreateExperiment:
 
             response = await client.post(
                 "/dash/api/experiments",
-                data={
-                    "type": "pdb",
-                    "experiment-name": "Redirect SSRF",
-                    "pdb": external_url,
-                    "notebooks-repo": "https://github.com/test/repo.git",
-                },
+                data=_pdb_form("Redirect SSRF", external_url),
             )
 
             assert response.status_code == HTTPStatus.BAD_REQUEST
@@ -456,11 +400,15 @@ class TestCreateExperiment:
             assert str(mock_get.calls.last.request.url) == external_url
 
     async def test_create_uses_default_notebooks_repo(
-        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
+        self,
+        http_mock: respx.MockRouter,
+        client: AsyncClient,
+        sample_pdb_content: bytes,
+        tmp_path: Path,
+        git: SimpleNamespace,
     ) -> None:
         """Should use default notebooks repo when not provided."""
         with (
-            patch("clients.git.GitClient.clone") as mock_clone,
             patch("modules.experiments.service.DEFAULT_NOTEBOOKS_REPO", "https://github.com/default/repo.git"),
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
@@ -478,30 +426,27 @@ class TestCreateExperiment:
             assert response.status_code == HTTPStatus.CREATED
             data = response.json()
             assert data["notebooks_repo"] == "https://github.com/default/repo.git"
-            mock_clone.assert_called_once()
+            git.clone.assert_called_once()
 
     async def test_create_fails_on_clone_error(
-        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
+        self,
+        http_mock: respx.MockRouter,
+        client: AsyncClient,
+        sample_pdb_content: bytes,
+        tmp_path: Path,
+        git: SimpleNamespace,
     ) -> None:
         """Should return error when git clone fails."""
-        with (
-            patch("clients.git.GitClient.clone") as mock_clone,
-        ):
-            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
+        http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
-            mock_clone.side_effect = InternalServerError("Failed to clone repository")
+        git.clone.side_effect = InternalServerError("Failed to clone repository")
 
-            response = await client.post(
-                "/dash/api/experiments",
-                data={
-                    "type": "pdb",
-                    "experiment-name": "Clone Fail Test",
-                    "pdb": "1ABC",
-                    "notebooks-repo": "https://github.com/test/repo.git",
-                },
-            )
+        response = await client.post(
+            "/dash/api/experiments",
+            data=_pdb_form("Clone Fail Test", "1ABC"),
+        )
 
-            assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
 
     async def test_create_rejects_invalid_notebooks_repo_url(self, client: AsyncClient) -> None:
         """Should return 400 for invalid notebooks repo URL."""
@@ -529,81 +474,78 @@ class TestCreateExperiment:
 
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
-    async def test_create_from_files_success(self, client: AsyncClient, tmp_path: Path) -> None:
+    async def test_create_from_files_success(self, client: AsyncClient, tmp_path: Path, git: SimpleNamespace) -> None:
         """Should create experiment from uploaded files."""
-        with (
-            patch("clients.git.GitClient.clone") as mock_clone,
-        ):
-            data = {
-                "type": "file",
-                "experiment-name": "Test File Experiment",
-                "notebooks-repo": "https://github.com/test/repo.git",
-            }
-            files = [("simulation-files", ("test1.gro", b"content1")), ("simulation-files", ("test2.itp", b"content2"))]
+        data = {
+            "type": "file",
+            "experiment-name": "Test File Experiment",
+            "notebooks-repo": "https://github.com/test/repo.git",
+        }
+        files = [("simulation-files", ("test1.gro", b"content1")), ("simulation-files", ("test2.itp", b"content2"))]
 
-            response = await client.post("/dash/api/experiments", data=data, files=files)
+        response = await client.post("/dash/api/experiments", data=data, files=files)
 
-            assert response.status_code == HTTPStatus.CREATED
-            data = response.json()
-            assert data["name"] == "Test File Experiment"
-            assert data["module_category"] is None
-            assert "module_id" not in data
-            mock_clone.assert_called_once()
+        assert response.status_code == HTTPStatus.CREATED
+        data = response.json()
+        assert data["name"] == "Test File Experiment"
+        assert data["module_category"] is None
+        assert "module_id" not in data
+        git.clone.assert_called_once()
 
-            # Verify files were saved
-            exp_id = data["id"]
-            exp_dir = tmp_path / exp_id
-            assert (exp_dir / "test1.gro").exists()
-            assert (exp_dir / "test2.itp").exists()
+        # Verify files were saved
+        exp_id = data["id"]
+        exp_dir = tmp_path / exp_id
+        assert (exp_dir / "test1.gro").exists()
+        assert (exp_dir / "test2.itp").exists()
 
     async def test_create_with_malicious_filenames(self, client: AsyncClient, tmp_path: Path) -> None:
         """Should sanitize malicious filenames during upload."""
-        with (
-            patch("clients.git.GitClient.clone"),
-        ):
-            malicious_filename_1 = "../../../etc/passwd"
-            malicious_filename_2 = "<script>alert(1)</script>.js"
+        malicious_filename_1 = "../../../etc/passwd"
+        malicious_filename_2 = "<script>alert(1)</script>.js"
 
-            data = {
-                "type": "file",
-                "experiment-name": "Malicious Files Experiment",
-                "notebooks-repo": "https://github.com/test/repo.git",
-            }
-            files = [
-                ("simulation-files", (malicious_filename_1, b"hack")),
-                ("simulation-files", (malicious_filename_2, b"script")),
-            ]
+        data = {
+            "type": "file",
+            "experiment-name": "Malicious Files Experiment",
+            "notebooks-repo": "https://github.com/test/repo.git",
+        }
+        files = [
+            ("simulation-files", (malicious_filename_1, b"hack")),
+            ("simulation-files", (malicious_filename_2, b"script")),
+        ]
 
-            response = await client.post("/dash/api/experiments", data=data, files=files)
+        response = await client.post("/dash/api/experiments", data=data, files=files)
 
-            assert response.status_code == HTTPStatus.CREATED
-            data = response.json()
+        assert response.status_code == HTTPStatus.CREATED
+        data = response.json()
 
-            # Verify files were saved with sanitized names
-            exp_id = data["id"]
-            exp_dir = tmp_path / exp_id
+        # Verify files were saved with sanitized names
+        exp_id = data["id"]
+        exp_dir = tmp_path / exp_id
 
-            expected_name_1 = secure_filename(malicious_filename_1)
-            expected_name_2 = secure_filename(malicious_filename_2)
+        expected_name_1 = secure_filename(malicious_filename_1)
+        expected_name_2 = secure_filename(malicious_filename_2)
 
-            # Ensure sanitization actually does something
-            assert expected_name_1 != malicious_filename_1
-            assert expected_name_2 != malicious_filename_2
+        # Ensure sanitization actually does something
+        assert expected_name_1 != malicious_filename_1
+        assert expected_name_2 != malicious_filename_2
 
-            assert (exp_dir / expected_name_1).exists()
-            assert (exp_dir / expected_name_2).exists()
+        assert (exp_dir / expected_name_1).exists()
+        assert (exp_dir / expected_name_2).exists()
 
 
 class TestCreateExperimentCuratedModule:
     """Tests for POST /api/experiments with curated notebook module selection."""
 
     async def test_curated_uses_selective_checkout(
-        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
+        self,
+        http_mock: respx.MockRouter,
+        client: AsyncClient,
+        sample_pdb_content: bytes,
+        tmp_path: Path,
+        git: SimpleNamespace,
     ) -> None:
         """Curated creation should use the selective module checkout, not the full clone."""
         with (
-            patch("clients.git.GitClient.clone") as mock_full,
-            patch("clients.git.GitClient.clone_module") as mock_module,
             patch("modules.experiments.service.DEFAULT_NOTEBOOKS_REPO", "https://github.com/default/repo.git"),
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
@@ -620,58 +562,63 @@ class TestCreateExperimentCuratedModule:
             )
 
             assert response.status_code == HTTPStatus.CREATED
-            mock_full.assert_not_called()
-            mock_module.assert_called_once()
+            git.clone.assert_not_called()
+            git.clone_module.assert_called_once()
             data = response.json()
             assert data["notebooks_repo"] == "https://github.com/default/repo.git"
             assert data["module_category"] == "protein"
             assert "module_id" not in data
 
-    async def test_curated_rejects_invalid_module(self, client: AsyncClient, tmp_path: Path) -> None:
+    async def test_curated_rejects_invalid_module(
+        self, client: AsyncClient, tmp_path: Path, git: SimpleNamespace
+    ) -> None:
         """Curated creation should reject an unknown or engine-incompatible module ID."""
-        with (
-            patch("clients.git.GitClient.clone_module") as mock_module,
-        ):
-            response = await client.post(
-                "/dash/api/experiments",
-                data={
-                    "type": "file",
-                    "experiment-name": "Invalid Module",
-                    "engine": "AMBER",
-                    "notebook-module": "gromacs-protein",
-                },
-                files=[("simulation-files", ("test.gro", b"content"))],
-            )
+        response = await client.post(
+            "/dash/api/experiments",
+            data={
+                "type": "file",
+                "experiment-name": "Invalid Module",
+                "engine": "AMBER",
+                "notebook-module": "gromacs-protein",
+            },
+            files=[("simulation-files", ("test.gro", b"content"))],
+        )
 
-            assert response.status_code == HTTPStatus.BAD_REQUEST
-            mock_module.assert_not_called()
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        git.clone_module.assert_not_called()
 
     async def test_custom_mode_without_module_uses_full_clone(
-        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
+        self,
+        http_mock: respx.MockRouter,
+        client: AsyncClient,
+        sample_pdb_content: bytes,
+        tmp_path: Path,
+        git: SimpleNamespace,
     ) -> None:
         """Without a module ID, custom mode should use the full clone path."""
-        with (
-            patch("clients.git.GitClient.clone") as mock_full,
-            patch("clients.git.GitClient.clone_module") as mock_module,
-        ):
-            http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
+        http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
 
-            response = await client.post(
-                "/dash/api/experiments",
-                data={
-                    "type": "pdb",
-                    "experiment-name": "Custom Experiment",
-                    "pdb": "1ABC",
-                    "notebooks-repo": "https://github.com/custom/repo.git",
-                },
-            )
+        response = await client.post(
+            "/dash/api/experiments",
+            data={
+                "type": "pdb",
+                "experiment-name": "Custom Experiment",
+                "pdb": "1ABC",
+                "notebooks-repo": "https://github.com/custom/repo.git",
+            },
+        )
 
-            assert response.status_code == HTTPStatus.CREATED
-            mock_full.assert_called_once()
-            mock_module.assert_not_called()
+        assert response.status_code == HTTPStatus.CREATED
+        git.clone.assert_called_once()
+        git.clone_module.assert_not_called()
 
     async def test_curated_module_with_repository_stores_module_url(
-        self, http_mock: respx.MockRouter, client: AsyncClient, sample_pdb_content: bytes, tmp_path: Path
+        self,
+        http_mock: respx.MockRouter,
+        client: AsyncClient,
+        sample_pdb_content: bytes,
+        tmp_path: Path,
+        git: SimpleNamespace,
     ) -> None:
         """A curated module with a repository field should store that URL in the experiment."""
         from modules.notebooks import catalog as notebook_modules
@@ -689,8 +636,6 @@ class TestCreateExperimentCuratedModule:
         catalog = notebook_modules.NotebookModulesCatalog(modules=(binder_module,))
 
         with (
-            patch("clients.git.GitClient.clone") as mock_full,
-            patch("clients.git.GitClient.clone_module") as mock_module,
             patch("modules.experiments.service.load_catalog", return_value=catalog),
         ):
             http_mock.get(url__regex=r".*").mock(return_value=httpx.Response(200, content=sample_pdb_content))
@@ -710,8 +655,8 @@ class TestCreateExperimentCuratedModule:
             data = response.json()
             assert data["notebooks_repo"] == "https://github.com/bioexcel/biobb_wf_md_setup_membrane.git"
             # Root-path module uses full clone, not sparse checkout
-            mock_full.assert_called_once()
-            mock_module.assert_not_called()
+            git.clone.assert_called_once()
+            git.clone_module.assert_not_called()
 
 
 class TestEditExperiment:
@@ -719,9 +664,7 @@ class TestEditExperiment:
 
     async def test_update_experiment_name(self, client: AsyncClient, db_session: Session) -> None:
         """Should update experiment name."""
-        exp = Experiment()
-        exp.id = "editx"
-        exp.name = "Original Name"
+        exp = Experiment(id="editx", name="Original Name")
         db_session.add(exp)
         await db_session.flush()
 
@@ -750,9 +693,7 @@ class TestEditExperiment:
 
     async def test_update_with_no_data(self, client: AsyncClient, db_session: Session) -> None:
         """Should return 400 when no data provided."""
-        exp = Experiment()
-        exp.id = "nodta"
-        exp.name = "Test"
+        exp = Experiment(id="nodta", name="Test")
         db_session.add(exp)
         await db_session.flush()
 
@@ -778,21 +719,18 @@ class TestDeleteExperiment:
         exp_dir = tmp_path / "delme"
         exp_dir.mkdir()
 
-        with patch("modules.experiments.models.DATA_DIR", tmp_path):
-            exp = Experiment()
-            exp.id = "delme"
-            exp.name = "To Delete"
-            db_session.add(exp)
-            await db_session.flush()
+        exp = Experiment(id="delme", name="To Delete")
+        db_session.add(exp)
+        await db_session.flush()
 
-            notebook = Notebook()
-            notebook.experiment_id = "delme"
-            db_session.add(notebook)
-            await db_session.commit()
+        notebook = Notebook()
+        notebook.experiment_id = "delme"
+        db_session.add(notebook)
+        await db_session.commit()
 
-            response = await client.delete("/dash/api/experiments/delme")
+        response = await client.delete("/dash/api/experiments/delme")
 
-            assert response.status_code == HTTPStatus.NO_CONTENT
+        assert response.status_code == HTTPStatus.NO_CONTENT
 
     async def test_delete_nonexistent_experiment(self, client: AsyncClient) -> None:
         """Should return 404 when deleting non-existent experiment."""
@@ -804,24 +742,12 @@ class TestDeleteExperiment:
 class TestPublishStatus:
     """Tests for GET /api/experiments/<id>/publish/status."""
 
-    async def _seed_experiment(self, db_session: Session, tmp_path: Path) -> None:
-        """Seed a minimal experiment for status tests."""
-        (tmp_path / "pstat").mkdir(parents=True, exist_ok=True)
-        exp = Experiment()
-        exp.id = "pstat"
-        exp.name = "Status Test"
-        db_session.add(exp)
-        await db_session.flush()
-        nb = Notebook()
-        nb.experiment_id = "pstat"
-        db_session.add(nb)
-        await db_session.commit()
-
-    async def test_status_no_upload(self, client: AsyncClient, db_session: Session, tmp_path: Path) -> None:
+    async def test_status_no_upload(
+        self, client: AsyncClient, db_session: Session, tmp_path: Path, seed_experiment: SeedExperiment
+    ) -> None:
         """Status with no upload returns null state."""
-        with patch("modules.experiments.models.DATA_DIR", tmp_path):
-            await self._seed_experiment(db_session, tmp_path)
-            response = await client.get("/dash/api/experiments/pstat/publish/status")
+        await seed_experiment("pstat", name="Status Test")
+        response = await client.get("/dash/api/experiments/pstat/publish/status")
 
         assert response.status_code == HTTPStatus.OK
         data = response.json()
@@ -830,17 +756,21 @@ class TestPublishStatus:
 
     @patch("modules.publishing.submission.is_upload_active", return_value=True)
     async def test_status_active_upload(
-        self, mock_active: MagicMock, client: AsyncClient, db_session: Session, tmp_path: Path
+        self,
+        mock_active: MagicMock,
+        client: AsyncClient,
+        db_session: Session,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
     ) -> None:
         """Status with an active upload reflects the PVC file."""
         from modules.publishing.status import create_queued_status, write_status
 
-        with patch("modules.experiments.models.DATA_DIR", tmp_path):
-            await self._seed_experiment(db_session, tmp_path)
-            status = create_queued_status("att-1")
-            write_status(status, "pstat", tmp_path)
+        await seed_experiment("pstat", name="Status Test")
+        status = create_queued_status("att-1")
+        write_status(status, "pstat", tmp_path)
 
-            response = await client.get("/dash/api/experiments/pstat/publish/status")
+        response = await client.get("/dash/api/experiments/pstat/publish/status")
 
         assert response.status_code == HTTPStatus.OK
         data = response.json()
@@ -849,20 +779,24 @@ class TestPublishStatus:
 
     @patch("modules.publishing.submission.is_upload_active", return_value=False)
     async def test_status_job_missing_reports_failed(
-        self, mock_active: MagicMock, client: AsyncClient, db_session: Session, tmp_path: Path
+        self,
+        mock_active: MagicMock,
+        client: AsyncClient,
+        db_session: Session,
+        tmp_path: Path,
+        seed_experiment: SeedExperiment,
     ) -> None:
         """PVC says running but Job is gone → failed with job_missing reason."""
         from modules.publishing.status import UploadState, UploadStatus, write_status
 
-        with patch("modules.experiments.models.DATA_DIR", tmp_path):
-            await self._seed_experiment(db_session, tmp_path)
-            status = UploadStatus(
-                attempt_id="att-1",
-                state=UploadState.RUNNING.value,
-            )
-            write_status(status, "pstat", tmp_path)
+        await seed_experiment("pstat", name="Status Test")
+        status = UploadStatus(
+            attempt_id="att-1",
+            state=UploadState.RUNNING.value,
+        )
+        write_status(status, "pstat", tmp_path)
 
-            response = await client.get("/dash/api/experiments/pstat/publish/status")
+        response = await client.get("/dash/api/experiments/pstat/publish/status")
 
         assert response.status_code == HTTPStatus.OK
         data = response.json()
@@ -888,18 +822,15 @@ class TestDeleteDuringUpload:
 
         mock_read.return_value = MagicMock(state=UploadState.RUNNING.value, attempt_id="att-1")
 
-        with patch("modules.experiments.models.DATA_DIR", tmp_path):
-            (tmp_path / "delup").mkdir(parents=True, exist_ok=True)
-            exp = Experiment()
-            exp.id = "delup"
-            exp.name = "Upload Active"
-            db_session.add(exp)
-            await db_session.flush()
-            nb = Notebook()
-            nb.experiment_id = "delup"
-            db_session.add(nb)
-            await db_session.commit()
+        (tmp_path / "delup").mkdir(parents=True, exist_ok=True)
+        exp = Experiment(id="delup", name="Upload Active")
+        db_session.add(exp)
+        await db_session.flush()
+        nb = Notebook()
+        nb.experiment_id = "delup"
+        db_session.add(nb)
+        await db_session.commit()
 
-            response = await client.delete("/dash/api/experiments/delup")
+        response = await client.delete("/dash/api/experiments/delup")
 
         assert response.status_code == HTTPStatus.CONFLICT

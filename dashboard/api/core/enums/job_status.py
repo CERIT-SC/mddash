@@ -28,3 +28,11 @@ class JobStatus(str, Enum):
     def from_string(cls, value: str) -> "JobStatus":
         """Match a string to a member. Matching ignores case."""
         return cls(value.upper())
+
+    @classmethod
+    def parse(cls, value: object) -> "JobStatus":
+        """Match an upstream value to a member, UNKNOWN when it names none (ignores case)."""
+        try:
+            return cls(str(value).upper())
+        except ValueError:
+            return cls.UNKNOWN

@@ -23,29 +23,13 @@ ANALYSIS_RUNTIME_PREP_TASKS = {
 
 
 def get_incomplete_task_dirs(task_name: str) -> list[Path]:
-    """
-    Build plausible incomplete-task directories for a third-party mwf task.
-
-    Args:
-        task_name: The mwf task flag, such as ``inter`` or ``clusters``.
-
-    Returns:
-        Candidate project-relative and MD-relative incomplete task directories.
-    """
+    """Directory mwf leaves for an incomplete `task_name` run, relative to the experiment dir (a list for the cleanup loop)."""
     incomplete_dir = f"{MWF_INCOMPLETE_PREFIX}{task_name}"
     return [Path(incomplete_dir)]
 
 
 def get_analysis_runtime_prep_commands(analysis_name: AnalysisType) -> list[str]:
-    """
-    Build analysis-specific shell prep for known third-party mwf quirks.
-
-    Args:
-        analysis_name: The requested mwf analysis.
-
-    Returns:
-        Extra shell commands needed before invoking mwf for this analysis.
-    """
+    """Build analysis-specific shell prep for known third-party mwf quirks."""
     task_names = ANALYSIS_RUNTIME_PREP_TASKS.get(analysis_name, ())
     if not task_names:
         return []
@@ -61,15 +45,7 @@ def get_analysis_runtime_prep_commands(analysis_name: AnalysisType) -> list[str]
 
 
 def get_runtime_prelude_commands(analysis_name: AnalysisType) -> list[str]:
-    """
-    Build shell commands that prepare the third-party mwf container runtime.
-
-    Args:
-        analysis_name: The requested mwf analysis.
-
-    Returns:
-        Shell commands that should run before invoking mwf.
-    """
+    """Build shell commands that prepare the third-party mwf container runtime."""
     commands = [
         'export HOME="$PWD/.mddash-home"',
         'mkdir -p "$HOME"',
@@ -80,15 +56,7 @@ def get_runtime_prelude_commands(analysis_name: AnalysisType) -> list[str]:
 
 
 def format_mwf_inputs_yaml(analysis_name: AnalysisType) -> str:
-    """
-    Build the minimal inputs.yaml content for an analysis job.
-
-    Args:
-        analysis_name: The requested mwf analysis.
-
-    Returns:
-        The YAML content passed to mwf as inputs.yaml.
-    """
+    """Build the minimal inputs.yaml content for an analysis job."""
     lines = ["name: mddash", "type: trajectory", "pbc_selection: auto"]
     if analysis_name in AUTO_INTERACTION_ANALYSES:
         lines.extend(["interactions:", "  - auto"])
@@ -119,9 +87,6 @@ def format_mwf_analysis_command(
 
     AMBER trajectories are typically un-imaged, so stable-bonds checking is
     skipped via -t stabonds to avoid spurious failures.
-
-    Returns:
-        Shell command string used to execute the requested mwf analysis.
 
     Raises:
         ValueError: If both structure_file and topology_file are None.

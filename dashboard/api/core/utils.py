@@ -49,7 +49,7 @@ EXCLUDED_FILES: list[str] = [
 
 
 @dataclass
-class FileInfo:
+class FileEntry:
     """Data class representing a file with its name, size, and relative path."""
 
     name: str
@@ -66,27 +66,13 @@ def file_download_url(experiment_id: str, path: str) -> str:
 
 
 def generate_id(length: int = 5) -> str:
-    """
-    Generate a random lowercase alphabetic ID.
-
-    Args:
-        length: Length of the ID to generate.
-
-    Returns:
-        Random string of lowercase letters.
-    """
+    """Generate a random lowercase alphabetic ID."""
     return "".join(random.choice(LETTERS) for _ in range(length))
 
 
 def get_unique_id(id_dir: Path) -> str:
     """
     Generate a unique ID that doesn't exist in the given directory.
-
-    Args:
-        id_dir: Directory to check for existing IDs.
-
-    Returns:
-        Unique 5-character lowercase alphabetic ID.
 
     Raises:
         ValueError: If too many experiments exist (all IDs exhausted).
@@ -109,18 +95,9 @@ def get_unique_id(id_dir: Path) -> str:
 
 def get_files_with_extensions(
     dir: Path, ext: str | list[str] | None = None, base_dir: Path | None = None
-) -> list[FileInfo]:
+) -> list[FileEntry]:
     """
     Get all files in a directory, optionally filtered by extension.
-
-    Args:
-        dir: Directory to search for files.
-        ext: File extension(s) to filter by (e.g., 'txt', ['tpr', 'gro']).
-             If None, returns all files.
-        base_dir: Base directory for calculating relative paths (used internally for recursion).
-
-    Returns:
-        list[FileInfo]: List of FileInfo objects with file name, size, and relative path.
 
     Raises:
         ValueError: If dir is not a directory.
@@ -144,11 +121,11 @@ def get_files_with_extensions(
         if item.is_file():
             relative_path = str(item.relative_to(base_dir))
             if extensions is None:
-                files.append(FileInfo(name=item.name, size=item.stat().st_size, path=relative_path))
+                files.append(FileEntry(name=item.name, size=item.stat().st_size, path=relative_path))
             else:
                 file_ext = item.suffix.lstrip(".").lower()
                 if file_ext in extensions:
-                    files.append(FileInfo(name=item.name, size=item.stat().st_size, path=relative_path))
+                    files.append(FileEntry(name=item.name, size=item.stat().st_size, path=relative_path))
         elif item.is_dir():
             files.extend(get_files_with_extensions(item, ext, base_dir))
 
@@ -181,16 +158,7 @@ def strip_run_control_args(extra_args: str) -> str:
 
 
 def is_excluded_path(path: Path, base_dir: Path) -> bool:
-    """
-    Determine whether a path should be excluded from uploads.
-
-    Args:
-        path: Path to evaluate.
-        base_dir: Base directory for relative path matching.
-
-    Returns:
-        True if the path should be excluded.
-    """
+    """Determine whether a path should be excluded from uploads."""
     try:
         relative_path = path.relative_to(base_dir)
     except ValueError:
@@ -210,13 +178,6 @@ def count_lines(file: Path | str, chunk_size: int = 1024 * 1024) -> int | None:
 
     The last, possibly unterminated line of a still-growing log is deliberately
     not counted until its newline lands.
-
-    Args:
-        file: Path to the file.
-        chunk_size: Read buffer size in bytes.
-
-    Returns:
-        The number of newline characters, or None when the file cannot be read.
     """
     file_path = Path(file) if isinstance(file, str) else file
     try:
@@ -230,16 +191,7 @@ def count_lines(file: Path | str, chunk_size: int = 1024 * 1024) -> int | None:
 
 
 def tail(file: Path | str, n: int = 10) -> str:
-    """
-    Read last n lines of a file efficiently by reading chunks from the end.
-
-    Args:
-        file: Path to the file.
-        n: Number of lines to read from the end of the file.
-
-    Returns:
-        str: Last n lines of the file as a string.
-    """
+    """Read last n lines of a file efficiently by reading chunks from the end."""
     file_path = Path(file) if isinstance(file, str) else file
     with file_path.open("rb") as f:
         f.seek(0, os.SEEK_END)
@@ -282,13 +234,6 @@ def tail_bytes(file: Path | str, budget: int = _TAIL_BUDGET_BYTES) -> str:
 
     A byte budget, not a line window: engine trailers span hundreds of lines,
     pushing markers past any fixed line count.
-
-    Args:
-        file: Path to the file.
-        budget: Number of bytes to read from the end of the file.
-
-    Returns:
-        str: Last ``budget`` bytes decoded as text (errors replaced).
     """
     file_path = Path(file) if isinstance(file, str) else file
     size = file_path.stat().st_size
@@ -306,15 +251,7 @@ DU_INTERVAL = 30 * 60  # 30 minutes
 
 
 def get_du_size(data_dir: Path) -> int | None:
-    """
-    Read the last measured storage size of data_dir.
-
-    Args:
-        data_dir: Directory whose size to read.
-
-    Returns:
-        Total size in bytes, or None if not yet measured.
-    """
+    """Read the last measured storage size of data_dir."""
     try:
         return int((data_dir / DU_SIZE_FILENAME).read_text().strip())
     except Exception:

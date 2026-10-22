@@ -24,9 +24,10 @@ from core.config import DATA_DIR
 from core.errors import ApiError, BadRequest, InternalServerError, NotFound
 from core.validators import validate_fetch_target, validate_http_url
 
+from modules.simulations.manifest import Simulation
+
 if TYPE_CHECKING:
     from modules.experiments.models import Experiment
-    from modules.simulations.manifest import Simulation
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,7 @@ _DOWNLOAD_CHUNK_BYTES = 128 * 1024
 
 
 def list_simulations(experiment: Experiment) -> list[Simulation]:
-    """List the simulations of an experiment (deferred import: Simulation imports the Experiment model)."""
-    from modules.simulations.manifest import Simulation  # ruff:ignore[import-outside-top-level]
-
+    """List the simulations of an experiment."""
     return Simulation.list(experiment.id, experiment)
 
 

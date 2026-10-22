@@ -1,7 +1,6 @@
 """Unit tests for the structured Experiment source."""
 
 from pathlib import Path
-from unittest.mock import patch
 
 from core.enums import SourceType
 from modules.models import Experiment
@@ -42,8 +41,7 @@ class TestSourceFiles:
     def test_pdb_lists_input_pdb_when_present(self, tmp_path: Path) -> None:
         (tmp_path / "src05").mkdir()
         (tmp_path / "src05" / "input.pdb").write_bytes(b"ATOM    1  N   GLY A   1\n")
-        with patch("modules.experiments.models.DATA_DIR", tmp_path):
-            source = Experiment(id="src05", name="PDB", source_type=SourceType.PDB, source_ref="1LYZ").source
+        source = Experiment(id="src05", name="PDB", source_type=SourceType.PDB, source_ref="1LYZ").source
         assert source is not None
         assert [f["name"] for f in source["files"]] == ["input.pdb"]
         assert source["files"][0]["size"] == len("ATOM    1  N   GLY A   1\n")
@@ -53,10 +51,9 @@ class TestSourceFiles:
         (tmp_path / "src06").mkdir()
         (tmp_path / "src06" / "b.pdb").write_bytes(b"bb")
         (tmp_path / "src06" / "a.tpr").write_bytes(b"a")
-        with patch("modules.experiments.models.DATA_DIR", tmp_path):
-            source = Experiment(
-                id="src06", name="Files", source_type=SourceType.FILE, source_files=["b.pdb", "a.tpr", "gone.xtc"]
-            ).source
+        source = Experiment(
+            id="src06", name="Files", source_type=SourceType.FILE, source_files=["b.pdb", "a.tpr", "gone.xtc"]
+        ).source
         assert source is not None
         assert [f["name"] for f in source["files"]] == ["a.tpr", "b.pdb"]
         # Creation history outlives deleted files.

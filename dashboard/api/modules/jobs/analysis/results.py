@@ -18,23 +18,13 @@ MWF_INCOMPLETE_PREFIX = "incomplete_"
 
 
 def mwf_output_dir(simulation_path: str) -> str:
-    """
-    Per-simulation MWF output directory, e.g. analysis/mwf/protein.
-
-    Returns:
-        MWF output subdirectory path relative to the experiment dir.
-    """
+    """Per-simulation MWF output directory, e.g. analysis/mwf/protein."""
     stem = Path(simulation_path).stem
     return f"{MWF_DIR}/{stem}"
 
 
 def find_result_file(experiment_id: str, simulation_path: str, name: str) -> Path | None:
-    """
-    Find a result file by normalized name under the simulation's mwf output directory.
-
-    Returns:
-        The first matching Path, or None if not found.
-    """
+    """Find a result file by normalized name under the simulation's mwf output directory."""
     filename = f"{ANALYSIS_RESULT_PREFIX}{name.replace('-', '_')}{ANALYSIS_RESULT_SUFFIX}"
     mwf_dir = DATA_DIR / experiment_id / mwf_output_dir(simulation_path)
     if not mwf_dir.is_dir():
@@ -44,12 +34,7 @@ def find_result_file(experiment_id: str, simulation_path: str, name: str) -> Pat
 
 
 def list_result_files(experiment_id: str, simulation_path: str) -> list[Path]:
-    """
-    List all mda.*.json result files under the simulation's mwf output directory.
-
-    Returns:
-        Sorted list of matching Paths, or empty list if directory doesn't exist.
-    """
+    """List all mda.*.json result files under the simulation's mwf output directory."""
     mwf_dir = DATA_DIR / experiment_id / mwf_output_dir(simulation_path)
     if not mwf_dir.is_dir():
         return []

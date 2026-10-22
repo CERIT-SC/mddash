@@ -14,8 +14,8 @@ dependencies = [
     "httpx>=0.28",
     "kubernetes-asyncio>=32",
     "anyio>=4.6",
-    "cachetools",
-    "pyyaml",
+    "cachetools>=7.2.0",
+    "pyyaml>=6.0.3",
     "jsonschema>=4.18",
 ]
 

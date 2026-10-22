@@ -201,22 +201,7 @@ class TestExtractMetadataBulk:
         assert len(await metadump.extract_metadata_bulk([tpr])) == 1
 
 
-class TestExtractMetadata:
-    """Tests for the single-file extract_metadata convenience wrapper."""
-
-    async def test_returns_single_result(
-        self, http_mock: respx.MockRouter, tpr: Path, metadump: MetadumpClient
-    ) -> None:
-        """Should unwrap the list result and return a single dict."""
-        _submit(http_mock, "uuid-1")
-        _results(http_mock, "uuid-1")
-        _statuses(http_mock, "uuid-1", "completed")
-        _delete(http_mock)
-
-        result = await metadump.extract_metadata(tpr)
-
-        assert result["metadata"] == _SAMPLE_METADATA
-
+class TestPolling:
     def test_max_polls_constant(self) -> None:
         """MAX_POLLS should equal TIMEOUT_SEC // POLL_INTERVAL_SEC."""
         assert metadump_module.MAX_POLLS == metadump_module.TIMEOUT_SEC // metadump_module.POLL_INTERVAL_SEC

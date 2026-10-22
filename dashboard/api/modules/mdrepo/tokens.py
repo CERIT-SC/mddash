@@ -178,7 +178,3 @@ class MDRepoTokenManager:
     def has_session(self) -> bool:
         """Whether the user authenticated with MDRepo at some point (an access or refresh token is stored)."""
         return bool(self.session.get(MDREPO_TOKEN_KEY) or self.session.get(MDREPO_REFRESH_TOKEN_KEY))
-
-    def has_tokens(self) -> bool:
-        """Whether an access token is stored."""
-        return MDREPO_TOKEN_KEY in self.session

@@ -19,67 +19,40 @@ from core.config import (
     PVC_NAME,
 )
 from core.enums import JobStatus, PodStatus
+from kubernetes_asyncio import config as k8s_config
+from kubernetes_asyncio.client import (
+    ApiClient,
+    BatchV1Api,
+    CoreV1Api,
+    V1DeleteOptions,
+    V1ObjectMeta,
+    V1OwnerReference,
+    V1Service,
+    V1ServicePort,
+    V1ServiceSpec,
+)
+from kubernetes_asyncio.client.exceptions import ApiException
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
     from datetime import datetime
 
     from core.enums import NotebookTier
 
-    # Available at runtime via _load_k8s() populating module globals.
-    from kubernetes_asyncio.client import (  # ruff:ignore[runtime-import-in-type-checking-block]
-        ApiClient,
-        BatchV1Api,
-        CoreV1Api,
-        V1DeleteOptions,
-        V1ObjectMeta,
-        V1OwnerReference,
-        V1Service,
-        V1ServicePort,
-        V1ServiceSpec,
-    )
-    from kubernetes_asyncio.client.exceptions import ApiException  # ruff:ignore[runtime-import-in-type-checking-block]
-
 logger = logging.getLogger(__name__)
 
-_k8s_loaded = False
 
-
-def _load_k8s() -> None:
-    """Import kubernetes_asyncio symbols into module globals on first k8s use (the import is slow)."""
-    global _k8s_loaded  # ruff:ignore[global-statement]
-    if _k8s_loaded:
-        return
-    from kubernetes_asyncio.client import (  # ruff:ignore[import-outside-top-level]
-        ApiClient,
-        BatchV1Api,
-        CoreV1Api,
-        V1DeleteOptions,
-        V1ObjectMeta,
-        V1OwnerReference,
-        V1Service,
-        V1ServicePort,
-        V1ServiceSpec,
-    )
-    from kubernetes_asyncio.client.exceptions import ApiException  # ruff:ignore[import-outside-top-level]
-
-    globals().update(
-        ApiClient=ApiClient,
-        BatchV1Api=BatchV1Api,
-        CoreV1Api=CoreV1Api,
-        V1DeleteOptions=V1DeleteOptions,
-        V1ObjectMeta=V1ObjectMeta,
-        V1OwnerReference=V1OwnerReference,
-        V1Service=V1Service,
-        V1ServicePort=V1ServicePort,
-        V1ServiceSpec=V1ServiceSpec,
-        ApiException=ApiException,
-    )
-    _k8s_loaded = True
+async def _unless_missing(call: Awaitable[object]) -> None:
+    """Await a delete; a resource that is already gone counts as deleted."""
+    try:
+        await call
+    except ApiException as e:
+        if e.status != HTTPStatus.NOT_FOUND:
+            raise
 
 
 def is_api_exception(exc: BaseException, status: int | None = None) -> bool:
     """Whether `exc` is a Kubernetes ApiException (optionally with a given HTTP status)."""
-    _load_k8s()
     return isinstance(exc, ApiException) and (status is None or exc.status == status)
 
 
@@ -211,17 +184,13 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
 
     def _get_api_client(self) -> ApiClient:
         if self._api_client is None:
-            _load_k8s()
-            from kubernetes_asyncio import config  # ruff:ignore[import-outside-top-level]
-
-            config.load_incluster_config()
+            k8s_config.load_incluster_config()
             self._api_client = ApiClient()
         return self._api_client
 
     @property
     def core_v1(self) -> CoreV1Api:
         """CoreV1Api client, created on first use."""
-        _load_k8s()
         if self._core_v1 is None:
             self._core_v1 = CoreV1Api(self._get_api_client())
         return self._core_v1
@@ -229,7 +198,6 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
     @property
     def batch_v1(self) -> BatchV1Api:
         """BatchV1Api client, created on first use."""
-        _load_k8s()
         if self._batch_v1 is None:
             self._batch_v1 = BatchV1Api(self._get_api_client())
         return self._batch_v1
@@ -348,10 +316,6 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
             command: The shell command to run.
             resources: Optional resource requests/limits dict.
         """
-        if await self.ping_resource("job", name):
-            logger.warning(f"Job {name} already exists in namespace {NAMESPACE}. Skipping creation.")
-            return
-
         volume_name = "shared-data"
         job_container = get_container(
             name, image, experiment_id, volume_name, ["sh", "-c", command], resources=resources
@@ -373,11 +337,16 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
                 },
             },
         }
-        await self.batch_v1.create_namespaced_job(namespace=NAMESPACE, body=cast("Any", job_manifest))
+        try:
+            await self.batch_v1.create_namespaced_job(namespace=NAMESPACE, body=cast("Any", job_manifest))
+        except ApiException as e:
+            if e.status != HTTPStatus.CONFLICT:
+                raise
+            logger.warning(f"Job {name} already exists in namespace {NAMESPACE}. Skipping creation.")
 
     async def ping_resource(self, resource_type: str, name: str) -> bool:
         """
-        Whether a resource exists in the namespace (False on any API error).
+        Whether a resource exists in the namespace (a 404 reads as absent; other API errors propagate).
 
         Raises:
             ValueError: If resource_type is not a supported type.
@@ -399,30 +368,28 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
                 case _:
                     raise ValueError(f"Unsupported resource type: {resource_type}")
             return True
-        except ApiException:
-            return False
+        except ApiException as e:
+            if e.status == HTTPStatus.NOT_FOUND:
+                return False
+            raise
 
     async def delete_pod(self, name: str) -> None:
         """Delete a pod if it exists."""
-        if not await self.ping_resource("pod", name):
-            return
-        await self.core_v1.delete_namespaced_pod(name=name, namespace=NAMESPACE)
+        await _unless_missing(self.core_v1.delete_namespaced_pod(name=name, namespace=NAMESPACE))
 
     async def delete_job(self, name: str) -> None:
         """Delete a job (background propagation) if it exists."""
-        if not await self.ping_resource("job", name):
-            return
-        await self.batch_v1.delete_namespaced_job(
-            name=name,
-            namespace=NAMESPACE,
-            body=V1DeleteOptions(propagation_policy="Background", grace_period_seconds=5),
+        await _unless_missing(
+            self.batch_v1.delete_namespaced_job(
+                name=name,
+                namespace=NAMESPACE,
+                body=V1DeleteOptions(propagation_policy="Background", grace_period_seconds=5),
+            )
         )
 
     async def delete_service(self, name: str) -> None:
         """Delete a service if it exists."""
-        if not await self.ping_resource("svc", name):
-            return
-        await self.core_v1.delete_namespaced_service(name=name, namespace=NAMESPACE)
+        await _unless_missing(self.core_v1.delete_namespaced_service(name=name, namespace=NAMESPACE))
 
     async def create_service(self, name: str, target_name: str, target_uid: str) -> None:
         """
@@ -631,18 +598,14 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
             raise
 
     async def delete_job_foreground(self, name: str) -> None:
-        """Delete a Job with foreground propagation (pods first)."""
-        if not await self.ping_resource("job", name):
-            return
-        try:
-            await self.batch_v1.delete_namespaced_job(
+        """Delete a Job with foreground propagation (pods first) if it exists."""
+        await _unless_missing(
+            self.batch_v1.delete_namespaced_job(
                 name=name,
                 namespace=NAMESPACE,
                 body=V1DeleteOptions(propagation_policy="Foreground", grace_period_seconds=0),
             )
-        except ApiException as e:
-            if e.status != HTTPStatus.NOT_FOUND:
-                raise
+        )
 
     async def list_pods_by_label(self, label_selector: str) -> list:
         """Pods matching a label selector."""

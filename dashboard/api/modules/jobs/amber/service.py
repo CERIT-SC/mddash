@@ -30,21 +30,19 @@ class AmberService(RunService[AmberJob]):
         """
         Start a run from the simulation manifest, replacing a terminal run.
 
-        A live run is a 409 (`reject_live_run`).
+        A live run is a 409 (`replace_terminal_run`).
 
         Raises:
             BadRequest: If the binary or Ewald preset is unknown.
         """
         check_simulation_path(simulation_path)
         experiment = await get_experiment_or_404(self._session, experiment_id)
-        prior = await self.reject_live_run(experiment.id, simulation_path)
         try:
             amber_binary = AmberBinary.from_string(binary)
             ewald_preset = EwaldPreset.from_string(ewald)
         except ValueError as exc:
             raise BadRequest("Invalid compute parameters.") from exc
-        if prior is not None:
-            await self.remove(experiment.id, simulation_path)
+        await self.replace_terminal_run(experiment.id, simulation_path)
 
         simulation = await anyio.to_thread.run_sync(
             Simulation.load_ready, experiment, simulation_path, ["topology", "coordinates", "control"]

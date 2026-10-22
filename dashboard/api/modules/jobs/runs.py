@@ -13,6 +13,7 @@ from core.errors import BadRequest, Conflict, NotFound
 from sqlalchemy.exc import IntegrityError
 
 from modules.jobs.models import SimulationJob
+from modules.jobs.status import refresh_recorded
 from modules.simulations.manifest import Simulation
 
 logger = logging.getLogger(__name__)
@@ -38,17 +39,11 @@ class RunService[J: SimulationJob]:
 
     async def refresh_status(self, job: SimulationJob) -> JobStatus:
         """Fetch the MDRun status (short TTL cache); terminal states never change, so they skip the fetch."""
-        if job.settled:
-            return job.status
-        try:
-            fetched = simulation_status_cache.get(job.id)
-            if fetched is None:
-                fetched = JobStatus.from_string((await self._mdrun.get_job(job.MDRUN_ENGINE, job.id))["status"])
-                simulation_status_cache[job.id] = fetched
-            job.record_status(fetched)
-        except Exception:
-            logger.exception(f"Error fetching job status for job {job.id}")
-            job.record_status_unavailable()
+
+        async def fetch() -> JobStatus:
+            return JobStatus.from_string((await self._mdrun.get_job(job.MDRUN_ENGINE, job.id))["status"])
+
+        await refresh_recorded(job, job.id, simulation_status_cache, fetch)
         return job.status
 
     async def list_jobs(self, experiment_id: str) -> Sequence[J]:
@@ -129,24 +124,20 @@ class RunService[J: SimulationJob]:
         simulation_status_cache.pop(job.id, None)
         await self._session.commit()
 
-    async def reject_live_run(self, experiment_id: str, simulation_path: str) -> J | None:
+    async def replace_terminal_run(self, experiment_id: str, simulation_path: str) -> None:
         """
-        Return the terminal run (finished, stopped, or failed) a new run would replace, if any.
+        Clear the way for a new run: a terminal run (finished, stopped, or failed) is deleted.
 
         Raises:
             Conflict: If a live run already exists for this simulation.
         """
         prior = await self.find(experiment_id, simulation_path)
-        if prior is not None:
-            await self.refresh_status(prior)
-            if prior.is_live:
-                raise Conflict(ACTIVE_RUN_CONFLICT)
-        return prior
-
-    async def replace_terminal_run(self, experiment_id: str, simulation_path: str) -> None:
-        """Clear the way for a new run: a terminal run is deleted, a live one is a 409."""
-        if await self.reject_live_run(experiment_id, simulation_path) is not None:
-            await self.remove(experiment_id, simulation_path)
+        if prior is None:
+            return
+        await self.refresh_status(prior)
+        if prior.is_live:
+            raise Conflict(ACTIVE_RUN_CONFLICT)
+        await self.remove(experiment_id, simulation_path)
 
     async def commit_new_run(self, job: J, simulation: Simulation) -> J:
         """

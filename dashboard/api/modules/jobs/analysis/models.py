@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Self
 import sqlalchemy as sa
 from core.config import DATA_DIR
 from core.db import Base
-from core.enums import AnalysisType, JobStatus
+from core.enums import AnalysisType
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
 
@@ -49,29 +49,9 @@ class AnalysisJob(RecordedStatus, Base):
         return select(cls).options(selectinload(cls.experiment))
 
     @property
-    def settled_status(self) -> JobStatus | None:
-        """FINISHED or ERROR once reached: such a job never changes again."""
-        status = self._last_known_status
-        return status if status in {JobStatus.FINISHED, JobStatus.ERROR} else None
-
-    @property
     def job_name(self) -> str:
         """Name of the analysis K8s Job."""
         return f"analysis-{self.id}"
-
-    @property
-    def status(self) -> JobStatus:
-        """
-        Current status of the K8s job, as of the last `AnalysisService.refresh_status()`.
-
-        Raises:
-            RuntimeError: If an unsettled job was not refreshed in this request.
-        """
-        if settled := self.settled_status:
-            return settled
-        if self._fetched_status is None:
-            raise RuntimeError(f"Status of analysis job {self.id} read before AnalysisService.refresh_status()")
-        return self._fetched_status
 
     def cleanup_temp_files(self) -> None:
         """Remove temporary files left in the experiment directory by a job run."""

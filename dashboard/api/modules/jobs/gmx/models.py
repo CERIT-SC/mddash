@@ -8,8 +8,7 @@ from typing import ClassVar
 import sqlalchemy as sa
 from core.config import DATA_DIR
 from core.enums import DeviceType, Engine, JobStatus
-from core.errors import BadRequest, Forbidden, InternalServerError, NotFound, UnprocessableEntity
-from core.utils import nsteps_override, tail, tail_bytes
+from core.utils import nsteps_override, tail_bytes
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -135,48 +134,6 @@ class GromacsJob(SimulationJob):
     def _log_files(self) -> dict[str, Path]:
         """GROMACS log streams keyed by the log endpoint's ``type`` values."""
         return {"gmx": self._gmx_log, "stdout": self._stdout_log, "stderr": self._stderr_log}
-
-    def get_log(self, type: str = "gmx", tail_lines: int | None = None) -> str:
-        """
-        Get the log of the job.
-
-        Args:
-            type: Type of log to retrieve (default is 'gmx').
-            tail_lines: Number of lines to retrieve from the end of the log file.
-
-        Returns:
-            Log content as a string.
-
-        Raises:
-            BadRequest: If the log type is invalid.
-            NotFound: If the log file does not exist.
-            Forbidden: If access to the log file is denied.
-            UnprocessableEntity: If the log file cannot be decoded.
-            InternalServerError: If a system error occurs while reading the log file.
-        """
-        match type:
-            case "gmx":
-                log_file = self._gmx_log
-            case "stdout":
-                log_file = self._stdout_log
-            case "stderr":
-                log_file = self._stderr_log
-            case _:
-                raise BadRequest(description=f"Invalid log type '{type}'. Use 'gmx', 'stdout', or 'stderr'.")
-
-        try:
-            if tail_lines:
-                return tail(log_file, tail_lines)
-            with log_file.open("r") as f:
-                return f.read()
-        except FileNotFoundError:
-            raise NotFound(description=f"Log file not found: {log_file.name}")
-        except PermissionError:
-            raise Forbidden(description=f"Permission denied accessing log file: {log_file.name}")
-        except UnicodeDecodeError:
-            raise UnprocessableEntity(description=f"Unable to decode log file: {log_file.name}")
-        except OSError as e:
-            raise InternalServerError(description="System error reading log file.") from e
 
     def cleanup_files(self) -> None:
         """

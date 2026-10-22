@@ -19,6 +19,7 @@ from modules.jobs.analysis.models import AnalysisJob
 from modules.jobs.analysis.service import AnalysisService
 from modules.models import Experiment, GromacsJob, Notebook
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.support import write_simulation
 
 
 @pytest.fixture
@@ -149,23 +150,13 @@ async def _experiment(db_session: AsyncSession, nsteps: int | None = None) -> Ex
 
 
 async def _start(service: AnalysisService, experiment: Experiment, tmp_path: Path) -> AnalysisJob:
-    trajectory_file = tmp_path / "traj.xtc"
-    trajectory_file.touch()
-    topology_file = tmp_path / "topol.tpr"
-    topology_file.touch()
-    return await service.start(
-        experiment,
-        simulation_path="test.simulation.json",
-        analysis_name=AnalysisType.RMSDS,
-        structure_file=None,
-        trajectory_file=trajectory_file,
-        topology_file=topology_file,
-        preprocessing_mode=PreprocessingMode.AS_IS,
-    )
+    files = {"run_input": "topol.tpr", "reference_structure": "struct.pdb", "trajectory": "traj.xtc"}
+    write_simulation(tmp_path / experiment.id, "test.simulation.json", files, inputs=tuple(files))
+    return await service.submit(experiment, "test.simulation.json", AnalysisType.RMSDS, PreprocessingMode.AS_IS)
 
 
 class TestAnalysisJobStartQuotaCheck:
-    """Tests for the quota-headroom guard in AnalysisJob.start()."""
+    """Tests for the quota-headroom guard in AnalysisService.submit()."""
 
     async def test_raises_forbidden_when_quota_exceeded(
         self, db_session: AsyncSession, tmp_path: Path, service: AnalysisService, clients: Clients
@@ -219,7 +210,7 @@ class TestAnalysisJobStartQuotaCheck:
 
 
 class TestAnalysisJobStartSimProgress:
-    """Tests for the simulation-progress snapshot in AnalysisJob.start()."""
+    """Tests for the simulation-progress snapshot in AnalysisService.submit()."""
 
     async def _progress(
         self,

@@ -10,7 +10,6 @@ from uuid import uuid4
 
 import pytest
 from clients import Clients
-from clients.k8s import K8sClient
 from clients.mdrun import MDRunClient
 from core import db as db_module
 from core.enums import AmberBinary, DeviceType, Engine, EwaldPreset, JobStatus
@@ -20,42 +19,24 @@ from modules.jobs.gmx.models import GromacsJob
 from modules.jobs.service import JobsService
 from modules.models import Experiment
 from modules.simulations.manifest import Simulation
-from modules.simulations.manifest_schema import schema_url
 from pytest_mock import MockerFixture
 from sqlalchemy.ext.asyncio import AsyncSession
+from tests.support import SeedExperiment, write_simulation
 
-GMX_FILES = {
-    "run_input": "production/protein.tpr",
-    "reference_structure": "analysis/protein-reference.gro",
-    "trajectory": "production/protein.xtc",
-}
-
-AMBER_FILES = {
-    "topology": "prod.prmtop",
-    "coordinates": "prod.inpcrd",
-    "control": "prod.mdin",
-    "reference_structure": "reference.pdb",
-    "trajectory": "prod.nc",
-}
+GMX_INPUTS = ("run_input", "reference_structure")
+AMBER_INPUTS = ("topology", "coordinates", "control", "reference_structure")
 
 
 @pytest.fixture
-async def experiment_id(db_session: AsyncSession) -> str:
-    """Seed a minimal experiment; DATA_DIR is patched to tmp_path by conftest."""
-    db_session.add(Experiment(id="lifec", name="Lifecycle", notebooks_repo="https://github.com/t/r.git"))
-    await db_session.commit()
-    return "lifec"
+async def experiment_id(seed_experiment: SeedExperiment) -> str:
+    exp_id, _ = await seed_experiment("lifec", name="Lifecycle")
+    return exp_id
 
 
 @pytest.fixture
-async def amber_experiment_id(db_session: AsyncSession) -> str:
-    db_session.add(
-        Experiment(
-            id="lifeca", name="Lifecycle AMBER", notebooks_repo="https://github.com/t/r.git", engine=Engine.AMBER
-        )
-    )
-    await db_session.commit()
-    return "lifeca"
+async def amber_experiment_id(seed_experiment: SeedExperiment) -> str:
+    exp_id, _ = await seed_experiment("lifeca", name="Lifecycle AMBER", engine=Engine.AMBER)
+    return exp_id
 
 
 async def _fresh[J: (GromacsJob, AmberJob)](db_session: AsyncSession, model: type[J], job_id: str) -> J | None:
@@ -76,49 +57,12 @@ async def _runs(db_session: AsyncSession, experiment_id: str, sim_path: str) -> 
     return list((await db_session.execute(stmt)).scalars().all())
 
 
-async def _sim(db_session: AsyncSession, experiment_id: str, sim_path: str) -> Simulation:
+async def _sim(db_session: AsyncSession, clients: Clients, experiment_id: str, sim_path: str) -> Simulation:
     db_session.expunge_all()
     experiment = await db_session.get(Experiment, experiment_id)
     assert experiment is not None
-    await JobsService(db_session, Clients.create(k8s=K8sClient(core_v1=AsyncMock(), batch_v1=AsyncMock()))).refresh(
-        experiment
-    )
+    await JobsService(db_session, clients).refresh(experiment)
     return Simulation.get(experiment_id, sim_path, experiment)
-
-
-def _write_gmx_simulation(exp_dir: Path, extra_args: str = "", name: str = "protein") -> str:
-    """Write a valid GMX manifest plus its input files."""
-    exp_dir.mkdir(parents=True, exist_ok=True)
-    simulation_path = "protein.simulation.json"
-    content = {
-        "$schema": schema_url(Engine.GMX),
-        "name": name,
-        "engine": "GMX",
-        "files": GMX_FILES,
-        "extra_args": extra_args,
-    }
-    (exp_dir / simulation_path).write_text(json.dumps(content))
-    for role in ("run_input", "reference_structure"):
-        f = exp_dir / GMX_FILES[role]
-        f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_text(f"demo {role}\n")
-    return simulation_path
-
-
-def _write_amber_simulation(exp_dir: Path) -> str:
-    exp_dir.mkdir(parents=True, exist_ok=True)
-    simulation_path = "prod.simulation.json"
-    content = {
-        "$schema": schema_url(Engine.AMBER),
-        "name": "prod",
-        "engine": "AMBER",
-        "files": AMBER_FILES,
-        "extra_args": "",
-    }
-    (exp_dir / simulation_path).write_text(json.dumps(content))
-    for role in ("topology", "coordinates", "control", "reference_structure"):
-        (exp_dir / AMBER_FILES[role]).write_text(f"demo {role}\n")
-    return simulation_path
 
 
 async def _add_gmx_job(
@@ -227,7 +171,7 @@ class TestStop:
         self, client: AsyncClient, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
     ) -> None:
         mdrun = _stop_mocks(mocker)
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
         job = await _add_gmx_job(db_session, experiment_id, sim_path, "job-live", JobStatus.RUNNING)
         log = tmp_path / experiment_id / "production/protein.log"
         log.write_text("growing log\n")
@@ -251,7 +195,7 @@ class TestStop:
             return {"id": _job_id, "status": "finished" if mdrun["stop"].called else "running"}
 
         mdrun["get_gmx"].side_effect = finished_outcome
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
         job = await _add_gmx_job(db_session, experiment_id, sim_path, "job-fast", JobStatus.RUNNING)
 
         response = await client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/stop")
@@ -265,7 +209,7 @@ class TestStop:
         self, client: AsyncClient, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
     ) -> None:
         _mock_mdrun(mocker)
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
         await _add_gmx_job(db_session, experiment_id, sim_path, "job-done", JobStatus.FINISHED)
 
         response = await client.post(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}/stop")
@@ -281,7 +225,9 @@ class TestStop:
         self, client: AsyncClient, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
     ) -> None:
         mdrun = _stop_mocks(mocker, engine="amber")
-        sim_path = _write_amber_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(
+            tmp_path / experiment_id, "prod.simulation.json", engine=Engine.AMBER, name="prod", inputs=AMBER_INPUTS
+        )
         job = await _add_amber_job(db_session, experiment_id, sim_path, "amber-live", JobStatus.RUNNING)
 
         response = await client.post(f"/dash/api/experiments/{experiment_id}/amber/{sim_path}/stop")
@@ -300,7 +246,7 @@ class TestSubmit:
         self, client: AsyncClient, experiment_id: str, tmp_path: Path, mocker: MockerFixture
     ) -> None:
         mdrun = _mock_mdrun(mocker)
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
 
         response = await client.post(
             f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}",
@@ -315,7 +261,7 @@ class TestSubmit:
     ) -> None:
         """A concurrent submit committing first wins; the loser rolls back and tears down its MDRun job."""
         mdrun = _mock_mdrun(mocker)
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
 
         async def concurrent_winner(**kwargs: object) -> dict:
             async with db_module.session_factory()() as rival_session:
@@ -358,7 +304,7 @@ class TestSubmit:
     ) -> None:
         """A live run blocks submit until it is stopped."""
         mdrun = _mock_mdrun(mocker, status="running")
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
         await _add_gmx_job(db_session, experiment_id, sim_path, f"job-{status.value}", status)
 
         response = await client.post(
@@ -386,7 +332,7 @@ class TestSubmit:
     ) -> None:
         """A finished, stopped, or failed run is deleted and the new run starts with fresh params."""
         mdrun = _mock_mdrun(mocker)
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
         await _add_gmx_job(db_session, experiment_id, sim_path, f"job-{status.value}", status)
 
         response = await client.post(
@@ -409,7 +355,13 @@ class TestSubmit:
         mocker: MockerFixture,
     ) -> None:
         mdrun = _mock_mdrun(mocker)
-        sim_path = _write_amber_simulation(tmp_path / amber_experiment_id)
+        sim_path = write_simulation(
+            tmp_path / amber_experiment_id,
+            "prod.simulation.json",
+            engine=Engine.AMBER,
+            name="prod",
+            inputs=AMBER_INPUTS,
+        )
         await _add_amber_job(db_session, amber_experiment_id, sim_path, "amber-fin", JobStatus.FINISHED)
 
         response = await client.post(
@@ -427,7 +379,7 @@ class TestSubmit:
     ) -> None:
         """The sanctioned re-run path: DELETE wipes the history, then POST creates a fresh run."""
         mdrun = _mock_mdrun(mocker)
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
         await _add_gmx_job(db_session, experiment_id, sim_path, "job-old", JobStatus.STOPPED)
 
         assert (
@@ -449,7 +401,7 @@ class TestExtend:
     async def _setup_finished_run(
         self, db_session: AsyncSession, exp_id: str, tmp_path: Path, extra_args: str = "", **job_kwargs: object
     ) -> str:
-        sim_path = _write_gmx_simulation(tmp_path / exp_id, extra_args=extra_args)
+        sim_path = write_simulation(tmp_path / exp_id, inputs=GMX_INPUTS, extra_args=extra_args)
         await _add_gmx_job(db_session, exp_id, sim_path, "run-1", JobStatus.FINISHED, **job_kwargs)
         return sim_path
 
@@ -771,7 +723,7 @@ class TestExtend:
         self, client: AsyncClient, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
     ) -> None:
         mdrun = _mock_mdrun(mocker, status="running")
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
         await _add_gmx_job(db_session, experiment_id, sim_path, "run-live", JobStatus.RUNNING)
         self._write_checkpoint(tmp_path / experiment_id)
 
@@ -786,7 +738,7 @@ class TestExtend:
         self, client: AsyncClient, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
     ) -> None:
         _mock_mdrun(mocker)
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
         self._write_checkpoint(tmp_path / experiment_id)
 
         response = await client.post(
@@ -840,7 +792,7 @@ class TestRunRow:
         self, client: AsyncClient, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
     ) -> None:
         _mock_mdrun(mocker)
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
         await _add_gmx_job(db_session, experiment_id, sim_path, "the-run", JobStatus.FINISHED, _nsteps=150000)
 
         response = await client.get(f"/dash/api/experiments/{experiment_id}/gmx/{sim_path}")
@@ -853,7 +805,7 @@ class TestRunRow:
     ) -> None:
         mdrun = _mock_mdrun(mocker)
         exp_dir = tmp_path / experiment_id
-        sim_path = _write_gmx_simulation(exp_dir)
+        sim_path = write_simulation(exp_dir, inputs=GMX_INPUTS)
         await _add_gmx_job(db_session, experiment_id, sim_path, "the-run", JobStatus.FINISHED)
         trajectory = exp_dir / "production/protein.xtc"
         trajectory.write_text("partial trajectory\n")
@@ -867,25 +819,35 @@ class TestRunRow:
         assert (exp_dir / sim_path).exists(), "delete keeps the manifest"
 
     async def test_stopped_run_keeps_analyzing(
-        self, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+        self,
+        db_session: AsyncSession,
+        experiment_id: str,
+        tmp_path: Path,
+        mocker: MockerFixture,
+        clients: Clients,
     ) -> None:
         _mock_mdrun(mocker)
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
         await _add_gmx_job(db_session, experiment_id, sim_path, "run-stopped", JobStatus.STOPPED)
 
-        sim = await _sim(db_session, experiment_id, sim_path)
+        sim = await _sim(db_session, clients, experiment_id, sim_path)
         assert sim.step == 3
         assert sim.status == "analyzing"
         assert not sim.live
 
     async def test_running_run_is_live(
-        self, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
+        self,
+        db_session: AsyncSession,
+        experiment_id: str,
+        tmp_path: Path,
+        mocker: MockerFixture,
+        clients: Clients,
     ) -> None:
         _mock_mdrun(mocker, status="running")
-        sim_path = _write_gmx_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
         await _add_gmx_job(db_session, experiment_id, sim_path, "run-running", JobStatus.RUNNING)
 
-        sim = await _sim(db_session, experiment_id, sim_path)
+        sim = await _sim(db_session, clients, experiment_id, sim_path)
         assert (sim.step, sim.status) == (2, "simulating")
         assert sim.live
 
@@ -906,7 +868,7 @@ class TestAppendedLogParsing:
 
     async def _job_with_appended_log(self, db_session: AsyncSession, exp_id: str, tmp_path: Path) -> GromacsJob:
         exp_dir = tmp_path / exp_id
-        sim_path = _write_gmx_simulation(exp_dir)
+        sim_path = write_simulation(exp_dir, inputs=GMX_INPUTS)
         (exp_dir / "production/protein.log").write_text(f"{self.SEGMENT_1}\n{self.SEGMENT_2}\n")
         return await _add_gmx_job(db_session, exp_id, sim_path, "run-2", JobStatus.RUNNING)
 
@@ -935,7 +897,9 @@ class TestRoutePathGuards:
         self, client: AsyncClient, db_session: AsyncSession, experiment_id: str, tmp_path: Path, mocker: MockerFixture
     ) -> None:
         mdrun = _mock_mdrun(mocker)
-        sim_path = _write_amber_simulation(tmp_path / experiment_id)
+        sim_path = write_simulation(
+            tmp_path / experiment_id, "prod.simulation.json", engine=Engine.AMBER, name="prod", inputs=AMBER_INPUTS
+        )
         await _add_amber_job(db_session, experiment_id, sim_path, "amber-done", JobStatus.FINISHED)
 
         response = await client.post(
@@ -950,7 +914,7 @@ class TestRoutePathGuards:
         self, client: AsyncClient, experiment_id: str, tmp_path: Path, mocker: MockerFixture
     ) -> None:
         _mock_mdrun(mocker)
-        _write_gmx_simulation(tmp_path / experiment_id)
+        write_simulation(tmp_path / experiment_id, inputs=GMX_INPUTS)
 
         response = await client.post(
             f"/dash/api/experiments/{experiment_id}/gmx/protein.simulation.json/stoppe",

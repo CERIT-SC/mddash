@@ -20,8 +20,8 @@ from fastapi import Depends
 from modules.experiments.models import Experiment
 from modules.jobs.analysis.command import format_mwf_analysis_command
 from modules.jobs.analysis.models import AnalysisJob
-from modules.jobs.models import SimulationJob
 from modules.jobs.runs import RunService
+from modules.jobs.status import refresh_recorded
 from modules.simulations.manifest import Simulation
 
 logger = logging.getLogger(__name__)
@@ -71,20 +71,11 @@ class AnalysisService:
 
     async def refresh_status(self, job: AnalysisJob) -> JobStatus:
         """Fetch the K8s Job status (short TTL cache); a finished job's temp files are cleaned once."""
-        if settled := job.settled_status:
-            job.record_status(settled)
-            return settled
-
-        try:
-            fetched = analysis_status_cache.get(job.id)
-            if fetched is None:
-                fetched = await self._k8s.get_job_status(job.job_name)
-                analysis_status_cache[job.id] = fetched
-            if job.record_status(fetched) and fetched == JobStatus.FINISHED:
-                await anyio.to_thread.run_sync(job.cleanup_temp_files)
-        except Exception:
-            logger.exception(f"Error fetching analysis job status for {job.id}")
-            job.record_status_unavailable()
+        changed = await refresh_recorded(
+            job, job.id, analysis_status_cache, lambda: self._k8s.get_job_status(job.job_name)
+        )
+        if changed and job.status == JobStatus.FINISHED:
+            await anyio.to_thread.run_sync(job.cleanup_temp_files)
         return job.status
 
     async def list_jobs(self, experiment_id: str, simulation_path: str | None = None) -> Sequence[AnalysisJob]:
@@ -118,47 +109,15 @@ class AnalysisService:
         analysis_name: AnalysisType,
         preprocessing_mode: PreprocessingMode,
     ) -> AnalysisJob:
-        """Submit an analysis of a simulation's trajectory."""
+        """
+        Start an analysis K8s Job of a simulation's trajectory, replacing the simulation's previous analyses.
+
+        Raises:
+            Forbidden: If the namespace quota has no room for the Job.
+        """
         trajectory, structure, topology = await anyio.to_thread.run_sync(
             analysis_inputs, experiment, simulation_path, preprocessing_mode
         )
-        job = await self.start(
-            experiment,
-            simulation_path=simulation_path,
-            analysis_name=analysis_name,
-            structure_file=structure,
-            trajectory_file=trajectory,
-            topology_file=topology,
-            preprocessing_mode=preprocessing_mode,
-        )
-        await self.refresh_status(job)
-        return job
-
-    async def start(
-        self,
-        experiment: Experiment,
-        simulation_path: str,
-        analysis_name: AnalysisType,
-        structure_file: Path | None,
-        trajectory_file: Path,
-        topology_file: Path | None,
-        preprocessing_mode: PreprocessingMode,
-    ) -> AnalysisJob:
-        """
-        Start an analysis K8s Job for a single analysis type, replacing the simulation's previous analyses.
-
-        Args:
-            experiment: The experiment to run analysis on.
-            simulation_path: The simulation manifest path this analysis belongs to.
-            analysis_name: The mwf analysis task name (e.g. "rmsds", "pca").
-            structure_file: Structure file within the experiment dir; None when the topology serves as structure.
-            trajectory_file: Trajectory file within the experiment dir.
-            topology_file: Topology file, when required for preprocessing or analysis.
-            preprocessing_mode: Selected preprocessing mode applied before analysis.
-
-        Raises:
-            Forbidden: If the job cannot be started due to insufficient cluster resources.
-        """
         previous_jobs = [j for j in experiment.analysis_jobs if j.simulation_path == simulation_path]
         for prev in previous_jobs:
             with suppress(Exception):  # job may already be cleaned up by K8s
@@ -171,18 +130,7 @@ class AnalysisService:
 
         # Snapshot the run's progress now: the inputs copied at job start are
         # exactly the data this analysis will cover.
-        run_job = (
-            (
-                await self._session.execute(
-                    SimulationJob
-                    .query()
-                    .filter_by(experiment_id=experiment.id, simulation_path=simulation_path)
-                    .order_by(SimulationJob.created_at.desc())
-                )
-            )
-            .scalars()
-            .first()
-        )
+        run_job = await self._runs.find(experiment.id, simulation_path)
         sim_progress: float | None = None
         if run_job is not None:
             await self._runs.refresh_status(run_job)
@@ -192,9 +140,9 @@ class AnalysisService:
 
         command = format_mwf_analysis_command(
             analysis_name=analysis_name,
-            structure_file=structure_file,
-            trajectory_file=trajectory_file,
-            topology_file=topology_file,
+            structure_file=structure,
+            trajectory_file=trajectory,
+            topology_file=topology,
             preprocessing_mode=preprocessing_mode,
             simulation_path=simulation_path,
             engine=experiment.engine,
@@ -221,15 +169,16 @@ class AnalysisService:
             experiment=experiment,
             simulation_path=simulation_path,
             analysis_name=analysis_name,
-            structure_file=structure_file.as_posix() if structure_file else None,
-            trajectory_file=trajectory_file.as_posix(),
-            topology_file=topology_file.as_posix() if topology_file else None,
+            structure_file=structure.as_posix() if structure else None,
+            trajectory_file=trajectory.as_posix(),
+            topology_file=topology.as_posix() if topology else None,
             sim_progress=sim_progress,
         )
         self._session.add(job)
         await self._session.commit()
 
         logger.info(f"Started analysis job {job_id} ({analysis_name}) for experiment {experiment.id}")
+        await self.refresh_status(job)
         return job
 
     async def logs(self, experiment_id: str, job_id: str, tail: int) -> str:

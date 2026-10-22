@@ -1,17 +1,15 @@
 from http import HTTPStatus
+from typing import cast
 
 from core.config import API_PREFIX
 from core.responses import problems
 from fastapi import APIRouter
-from pydantic import TypeAdapter
 
 from modules.archive.schemas import ArchiveAttempt, ArchiveStatus
 from modules.archive.service import ArchiveServiceDep
 from modules.experiments.dependencies import ExperimentDep
 
 router = APIRouter(prefix=f"{API_PREFIX}/experiments", tags=["Experiments"])
-
-_archive_status = TypeAdapter(ArchiveStatus)
 
 
 @router.post(
@@ -51,4 +49,4 @@ async def restore(experiment: ExperimentDep, service: ArchiveServiceDep) -> Arch
 )
 async def archive_status(experiment: ExperimentDep, service: ArchiveServiceDep) -> ArchiveStatus:
     """Archive/restore status (status doc reconciled with live Jobs)."""
-    return _archive_status.validate_python(await service.status(experiment))
+    return cast("ArchiveStatus", await service.status(experiment))

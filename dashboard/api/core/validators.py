@@ -16,9 +16,6 @@ def check_experiment_id(experiment_id: str) -> None:
     """
     Validate that an experiment ID is a 5-character lowercase string.
 
-    Args:
-        experiment_id: The experiment ID to validate.
-
     Raises:
         BadRequest: If the ID format is invalid.
     """
@@ -29,10 +26,6 @@ def check_experiment_id(experiment_id: str) -> None:
 def check_filename(filename: str, allowed_extensions: list[str] | None = None) -> None:
     """
     Validate a filename for security and optional extension restrictions.
-
-    Args:
-        filename: The filename to validate.
-        allowed_extensions: Optional list of allowed file extensions (without dots).
 
     Raises:
         BadRequest: If the filename is invalid or extension not allowed.
@@ -58,10 +51,6 @@ def check_filename(filename: str, allowed_extensions: list[str] | None = None) -
 def check_path(path: str, base_dir: Path) -> None:
     """
     Validate a path is safe and within the allowed base directory.
-
-    Args:
-        path: The relative path to validate.
-        base_dir: The base directory the path must stay within.
 
     Raises:
         BadRequest: If the path is invalid.
@@ -91,9 +80,6 @@ def validate_analysis_structure_path(
     """
     Validate that at least one of structure or topology is provided.
 
-    Returns:
-        Validated structure path, or None when structure is absent.
-
     Raises:
         BadRequest: If neither structure nor topology is provided.
     """
@@ -117,9 +103,6 @@ def validate_analysis_topology_path(
 ) -> Path | None:
     """
     Validate an optional topology file against the selected analysis mode.
-
-    Returns:
-        The validated topology path, or None when no topology is required.
 
     Raises:
         BadRequest: If the topology is missing, invalid, unsupported, or outside the allowed directory.
@@ -151,11 +134,6 @@ def validate_analysis_topology_path(
 def check_positive_int(value: str, param_name: str = "value", max_value: int | None = None) -> None:
     """
     Validate that a string represents a positive integer within bounds.
-
-    Args:
-        value: The string value to validate.
-        param_name: Name of the parameter for error messages.
-        max_value: Optional maximum allowed value.
 
     Raises:
         BadRequest: If the value is not a valid positive integer or exceeds max.
@@ -225,21 +203,13 @@ def _assert_http_url_safe(
 
 
 def _is_reserved_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    """
-    Check whether an IP is loopback, private, link-local, reserved, multicast, or unspecified.
-
-    Returns:
-        True if the IP is internal/reserved and must not be fetched.
-    """
+    """Check whether an IP is loopback, private, link-local, reserved, multicast, or unspecified."""
     return ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified
 
 
 def _getaddrinfo_ips(hostname: str) -> list[str]:
     """
     Resolve hostname to deduplicated literal IP strings via getaddrinfo.
-
-    Returns:
-        The deduplicated list of resolved IP strings.
 
     Raises:
         BadRequest: If the hostname cannot be resolved.
@@ -262,9 +232,6 @@ def validate_http_url(url: str) -> str:
 
     Rejects non-http(s) schemes, embedded credentials, and missing hosts.
     Reserved-IP checks are handled by :func:`validate_fetch_target`.
-
-    Returns:
-        The validated, normalized URL.
 
     Raises:
         BadRequest: If the URL is empty, has an unsupported scheme, embeds credentials, or is missing a host.

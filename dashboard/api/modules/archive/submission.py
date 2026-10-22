@@ -9,17 +9,21 @@ from typing import TYPE_CHECKING, Any
 from core.cache import archive_status_cache
 from core.config import (
     ARCHIVE_WORKER_IMAGE,
-    IMAGE_PULL_POLICY,
-    NAMESPACE,
-    PVC_NAME,
     S3_ACCESS_KEY,
     S3_BUCKET,
     S3_ENDPOINT,
     S3_SECRET_KEY,
 )
+from core.worker_jobs import (
+    DELETION_TIMEOUT,
+    EXPERIMENT_LABEL,
+    SubmissionError,
+    delete_worker_job,
+    dns1123_name,
+    worker_job_manifest,
+)
 
 from modules.archive.status import ArchiveDirection, create_queued_status, delete_status, read_status, write_status
-from modules.publishing.submission import dns1123_name
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -29,24 +33,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 ARCHIVE_APP_LABEL = "archive-worker"
-PRESERVE_LABEL = "mddash.io/preserve-on-stop"
-EXPERIMENT_LABEL = "mddash.io/experiment"
-
-ACTIVE_DEADLINE_SECONDS = 86400
-JOB_TTL_SECONDS = 300
 ADMISSION_TIMEOUT = 30
-JOB_DELETION_TIMEOUT = 30
-JOB_RESOURCES = {
-    "requests": {"cpu": "100m", "memory": "128Mi"},
-    "limits": {"cpu": "500m", "memory": "256Mi"},
-}
 
 _TRACKED_DIRECTIONS = (ArchiveDirection.ARCHIVE.value, ArchiveDirection.RESTORE.value)
 _ALL_MODES = (*_TRACKED_DIRECTIONS, "purge")
-
-
-class SubmissionError(Exception):
-    """Raised when archive Job submission fails."""
 
 
 def job_name(direction: str, experiment_id: str) -> str:
@@ -54,55 +44,20 @@ def job_name(direction: str, experiment_id: str) -> str:
 
 
 def _job_manifest(name: str, direction: str, experiment_id: str, attempt_id: str) -> dict[str, Any]:
-    labels = {"app": ARCHIVE_APP_LABEL, EXPERIMENT_LABEL: experiment_id, PRESERVE_LABEL: "true"}
-    return {
-        "apiVersion": "batch/v1",
-        "kind": "Job",
-        "metadata": {"name": name, "namespace": NAMESPACE, "labels": labels},
-        "spec": {
-            "backoffLimit": 0,
-            "activeDeadlineSeconds": ACTIVE_DEADLINE_SECONDS,
-            "ttlSecondsAfterFinished": JOB_TTL_SECONDS,
-            "template": {
-                "metadata": {"labels": labels},
-                "spec": {
-                    "restartPolicy": "Never",
-                    "automountServiceAccountToken": False,
-                    "securityContext": {
-                        "fsGroup": 1000,
-                        "fsGroupChangePolicy": "OnRootMismatch",
-                        "runAsNonRoot": True,
-                        "seccompProfile": {"type": "RuntimeDefault"},
-                    },
-                    "containers": [
-                        {
-                            "securityContext": {
-                                "runAsUser": 1000,
-                                "runAsGroup": 1000,
-                                "runAsNonRoot": True,
-                                "allowPrivilegeEscalation": False,
-                                "capabilities": {"drop": ["ALL"]},
-                                "seccompProfile": {"type": "RuntimeDefault"},
-                            },
-                            "name": "worker",
-                            "image": ARCHIVE_WORKER_IMAGE,
-                            "imagePullPolicy": IMAGE_PULL_POLICY,
-                            "resources": JOB_RESOURCES,
-                            "args": [direction, "--experiment-id", experiment_id, "--attempt-id", attempt_id],
-                            "env": [
-                                {"name": "S3_BUCKET", "value": S3_BUCKET},
-                                {"name": "S3_ENDPOINT", "value": S3_ENDPOINT},
-                                {"name": "S3_ACCESS_KEY", "value": S3_ACCESS_KEY},
-                                {"name": "S3_SECRET_KEY", "value": S3_SECRET_KEY},
-                            ],
-                            "volumeMounts": [{"mountPath": "/mddash", "name": "shared-data"}],
-                        }
-                    ],
-                    "volumes": [{"name": "shared-data", "persistentVolumeClaim": {"claimName": PVC_NAME}}],
-                },
-            },
-        },
-    }
+    return worker_job_manifest(
+        name=name,
+        app=ARCHIVE_APP_LABEL,
+        experiment_id=experiment_id,
+        container="worker",
+        image=ARCHIVE_WORKER_IMAGE,
+        args=[direction, "--experiment-id", experiment_id, "--attempt-id", attempt_id],
+        env=[
+            {"name": "S3_BUCKET", "value": S3_BUCKET},
+            {"name": "S3_ENDPOINT", "value": S3_ENDPOINT},
+            {"name": "S3_ACCESS_KEY", "value": S3_ACCESS_KEY},
+            {"name": "S3_SECRET_KEY", "value": S3_SECRET_KEY},
+        ],
+    )
 
 
 async def _submit(k8s: K8sClient, direction: str, experiment_id: str, data_dir: Path) -> str:
@@ -120,7 +75,7 @@ async def _submit(k8s: K8sClient, direction: str, experiment_id: str, data_dir: 
 
         await delete_jobs(k8s, experiment_id)
         # Foreground deletion races a same-name recreate ("object is being deleted"); wait it out.
-        if not await k8s.wait_for_resource_absence("job", name, max_wait=JOB_DELETION_TIMEOUT):
+        if not await k8s.wait_for_resource_absence("job", name, max_wait=DELETION_TIMEOUT):
             raise SubmissionError(f"Previous archive Job {name} is still terminating; retry shortly.")
 
         attempt_id = secrets.token_hex(8)
@@ -185,8 +140,7 @@ async def submit_purge_job(k8s: K8sClient, experiment_id: str) -> None:
         return
     name = job_name("purge", experiment_id)
     try:
-        await k8s.delete_job_foreground(name)
-        await k8s.wait_for_resource_absence("job", name, max_wait=JOB_DELETION_TIMEOUT)
+        await delete_worker_job(k8s, name)
         await k8s.create_job_raw(_job_manifest(name, "purge", experiment_id, secrets.token_hex(8)))
         logger.info("Purge Job %s submitted for experiment %s", name, experiment_id)
     except Exception:

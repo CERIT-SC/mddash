@@ -107,9 +107,9 @@ class TestCatalogLookup:
 
         assert catalog.get("gromacs-protein") is not None
         assert catalog.get("does-not-exist") is None
-        assert catalog.get_module_for_engine("gromacs-protein", "GMX") is not None
-        assert catalog.get_module_for_engine("gromacs-protein", "AMBER") is None
-        assert catalog.get_module_for_engine("nope", "GMX") is None
+        assert catalog.get("gromacs-protein", "GMX") is not None
+        assert catalog.get("gromacs-protein", "AMBER") is None
+        assert catalog.get("nope", "GMX") is None
 
     def test_to_public_excludes_internal_paths_and_is_serializable(self) -> None:
         """to_public should expose display metadata without paths, and be JSON-serializable."""

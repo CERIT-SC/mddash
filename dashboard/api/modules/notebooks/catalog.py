@@ -39,12 +39,7 @@ class NotebookModule:
         return self.path == ROOT_PATH
 
     def to_public(self) -> dict:
-        """
-        Display metadata for the UI, excluding internal Git paths.
-
-        Returns:
-            A dictionary with id, name, engine, author, category, and optional description.
-        """
+        """Display metadata for the UI, excluding internal Git paths."""
         data: dict = {
             "id": self.id,
             "name": self.name,
@@ -70,12 +65,7 @@ class NotebookModulesCatalog:
     def get(self, module_id: str, engine: str) -> NotebookModule | None: ...
 
     def get(self, module_id: str, engine: str | None = None) -> NotebookModule | None:
-        """
-        Return the module with the given ID, optionally requiring a matching engine.
-
-        Returns:
-            The matching module, or None.
-        """
+        """Return the module with the given ID, optionally requiring a matching engine."""
         for module in self.modules:
             if module.id == module_id:
                 if engine is None or module.engine == engine:
@@ -83,22 +73,8 @@ class NotebookModulesCatalog:
                 return None
         return None
 
-    def get_module_for_engine(self, module_id: str, engine: str) -> NotebookModule | None:
-        """
-        Return the module matching both ID and engine.
-
-        Returns:
-            The matching module, or None.
-        """
-        return self.get(module_id, engine)
-
     def to_public(self) -> list[dict]:
-        """
-        Return display metadata for all modules, excluding internal Git paths.
-
-        Returns:
-            A list of public module dictionaries.
-        """
+        """Return display metadata for all modules, excluding internal Git paths."""
         return [m.to_public() for m in self.modules]
 
     def __iter__(self) -> Iterator[NotebookModule]:
@@ -112,9 +88,6 @@ def _load_schema() -> dict:
 def _build_catalog(data: dict) -> NotebookModulesCatalog:
     """
     Construct a NotebookModulesCatalog from validated raw data, enforcing unique IDs.
-
-    Returns:
-        The validated NotebookModulesCatalog.
 
     Raises:
         ValueError: If module IDs are not unique.
@@ -143,12 +116,7 @@ def _build_catalog(data: dict) -> NotebookModulesCatalog:
 
 @lru_cache(maxsize=1)
 def load_catalog(path: Path | None = None) -> NotebookModulesCatalog:
-    """
-    Load and validate the curated notebook modules catalog from the bundled JSON file.
-
-    Returns:
-        The validated NotebookModulesCatalog.
-    """
+    """Load and validate the curated notebook modules catalog from the bundled JSON file."""
     catalog_path = path or CATALOG_PATH
     raw = json.loads(catalog_path.read_text(encoding="utf-8"))
     schema = _load_schema()
@@ -159,9 +127,6 @@ def load_catalog(path: Path | None = None) -> NotebookModulesCatalog:
 def load_catalog_or_exit(path: Path | None = None) -> NotebookModulesCatalog:
     """
     Load the catalog or exit with a fatal error. Used at startup.
-
-    Returns:
-        The validated NotebookModulesCatalog.
 
     Raises:
         SystemExit: If the catalog cannot be loaded or validated.

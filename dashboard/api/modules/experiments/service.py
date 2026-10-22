@@ -115,7 +115,7 @@ class ExperimentService:
         module = None
         if notebook_module_id:
             # Curated mode: server resolves module and repository; no client URL trusted.
-            module = load_catalog().get_module_for_engine(notebook_module_id, engine.value)
+            module = load_catalog().get(notebook_module_id, engine.value)
             if module is None:
                 raise BadRequest(f"Unknown or incompatible notebook module: {notebook_module_id}")
             repo = module.repository or DEFAULT_NOTEBOOKS_REPO
