@@ -371,7 +371,18 @@ tuner:
       {{- end }}
       numGpu: {{ $numGpu }}
       resources:
-{{ $cfg.tuner.worker.resources | toYAML | indent 8 }}
+        limits:
+          cpu: "{{ $cfg.tuner.worker.resources.limits.cpu }}"
+          memory: "{{ $cfg.tuner.worker.resources.limits.memory }}"
+          {{- if $numGpu }}
+          {{ $cfg.gpuType }}: "{{ $numGpu }}"
+          {{- end }}
+        requests:
+          cpu: "{{ $cfg.tuner.worker.resources.requests.cpu }}"
+          memory: "{{ $cfg.tuner.worker.resources.requests.memory }}"
+          {{- if $numGpu }}
+          {{ $cfg.gpuType }}: "{{ $numGpu }}"
+          {{- end }}
 
 seaweedfs:
   enabled: {{ $swEnabled }}
