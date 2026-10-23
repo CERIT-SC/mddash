@@ -1,6 +1,6 @@
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
-import { defineConfig } from "vitest/config"
+import { defineConfig } from "vite"
 
 // One HTML entry per JupyterHub template. Entry filenames must match the
 // upstream template names exactly: JupyterHub looks templates up by filename
@@ -30,9 +30,5 @@ export default defineConfig({
         ].map((name) => [name, new URL(`./${name}.html`, import.meta.url).pathname]),
       ),
     },
-  },
-  test: {
-    environment: "jsdom",
-    setupFiles: ["./test/setup.ts"],
   },
 })

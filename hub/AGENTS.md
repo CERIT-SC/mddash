@@ -7,7 +7,7 @@ The in-repo JupyterHub image (`mddash-hub`) powers MDDash's hub. It combines sto
 ## Structure
 
 - `Dockerfile` runs a multi-stage build. Node with pnpm builds `ui/`. The runtime stage is `quay.io/jupyterhub/k8s-hub:4.4.2` with pinned `egi-notebooks-hub` (git commit `4ffff9e`, matching the previously used `eginotebooks/hub` image).
-- `ui/` is a Vite, React 19, Tailwind v4, and `@e-infra/design-system` multi-page app. It has one HTML entry per JupyterHub template (`login`, `home`, `spawn`, `spawn_pending`, `stop_pending`, `not_running`, `token`, `admin`, `oauth`, `logout`, `error`, `404`). Tests are colocated vitest/jsdom specs (`src/**/*.test.tsx`, setup in `test/setup.ts`); `pnpm --filter hub-ui test` runs them (also via root `make test-hub-ui`).
+- `ui/` is a Vite, React 19, Tailwind v4, and `@e-infra/design-system` multi-page app. It has one HTML entry per JupyterHub template (`login`, `home`, `spawn`, `spawn_pending`, `stop_pending`, `not_running`, `token`, `admin`, `oauth`, `logout`, `error`, `404`).
 - `Makefile` builds and pushes the image (same pattern as `landing/`).
 
 ## Patterns

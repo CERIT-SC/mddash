@@ -10,7 +10,7 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "rootDir": ".",
-    "types": ["@testing-library/jest-dom"],
+    "types": [],
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
@@ -19,5 +19,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src", "test", "vite.config.ts"]
+  "include": ["src", "vite.config.ts"]
 }
