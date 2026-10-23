@@ -50,14 +50,12 @@ ray:
     minReplicas: 0
     maxReplicas: 5
     numCpu: 32
-    numGpu: 1
+    numGpu: 0
     nodeSelector: {}
     resources:
       limits:
         cpu: "32"
         memory: "128Gi"
-        nvidia.com/gpu: "1"
       requests:
         cpu: "32"
         memory: "16Gi"
-        nvidia.com/gpu: "1"

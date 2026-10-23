@@ -120,10 +120,11 @@ history: ## Show Helm release history
 rollback: ## Rollback to previous revision. Set REVISION=N for a specific revision.
 	@if [ -n "$(REVISION)" ]; then \
 		echo "Rolling back to revision $(REVISION)..."; \
-		helm rollback $(package) $(REVISION) --namespace $(namespace); \
+		helm rollback $(package) $(REVISION) --namespace $(namespace) --wait=legacy --force-conflicts; \
 	else \
 		echo "Rolling back to previous revision..."; \
-		helm rollback $(package) --namespace $(namespace); \
+		helm rollback $(package) --namespace $(namespace) --wait=legacy --force-conflicts; \
 	fi
+	$(MAKE) ray-wait
 	@echo "Rollback complete"
 	@$(MAKE) status
