@@ -11,6 +11,8 @@ import { getAppConfig } from "../lib/config"
 import { mount } from "../lib/mount"
 import { serverStatus, type ServerStatus } from "../lib/status"
 
+type Transition = Extract<ServerStatus, "starting" | "stopping">
+
 interface HomeConfig {
   /** Template-time snapshot used until the live /api/user response lands. */
   defaultServerActive: boolean
@@ -25,16 +27,14 @@ export function HomePage() {
   const api = useMemo(() => new HubApi(cfg.baseUrl, cfg.xsrf), [cfg.baseUrl, cfg.xsrf])
 
   const [user, setUser] = useState<HubUserModel | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [optimistic, setOptimistic] = useState<ServerStatus | null>(null)
+  const [requested, setRequested] = useState<Transition | null>(null)
+  // Set only on POST resolve; drives the redirect. refresh never clears it — early getUser is stale.
+  const [optimistic, setOptimistic] = useState<Transition | null>(null)
 
   const refresh = useCallback(() => {
     return api
       .getUser(cfg.userName)
-      .then((u) => {
-        setUser(u)
-        setOptimistic(null)
-      })
+      .then((u) => setUser(u))
       .catch(() => toast.error("Could not load server status."))
   }, [api, cfg.userName])
 
@@ -45,6 +45,7 @@ export function HomePage() {
   const server = user?.servers?.[""]
   const liveStatus: ServerStatus = user ? serverStatus(server) : cfg.defaultServerActive ? "running" : "stopped"
   const status = optimistic ?? liveStatus
+  const shown = requested ?? status
   const serverUrl = cfg.serverUrl || `${cfg.baseUrl}user/${encodeURIComponent(cfg.userName)}/`
 
   // Route both transitions to spawn-pending (the hub picks the pending template);
@@ -55,25 +56,40 @@ export function HomePage() {
     }
   }, [status, cfg.baseUrl, cfg.userName])
 
+  // Redirect only after the hub registers the transition; navigating earlier can abort the POST.
   const start = useCallback(() => {
-    setBusy(true)
-    setOptimistic("starting")
-    api.startServer(cfg.userName).catch((e: Error) => {
-      toast.error(e.message)
-      setOptimistic(null)
-      setBusy(false)
-    })
+    setRequested("starting")
+    api
+      .startServer(cfg.userName)
+      .then(() => setOptimistic("starting"))
+      .catch((e: Error) => {
+        toast.error(e.message)
+        setRequested(null)
+      })
   }, [api, cfg.userName])
 
   const stop = useCallback(() => {
-    setBusy(true)
-    setOptimistic("stopping")
-    api.stopServer(cfg.userName).catch((e: Error) => {
-      toast.error(e.message)
-      setOptimistic(null)
-      setBusy(false)
-    })
+    setRequested("stopping")
+    api
+      .stopServer(cfg.userName)
+      .then(() => setOptimistic("stopping"))
+      .catch((e: Error) => {
+        toast.error(e.message)
+        setRequested(null)
+      })
   }, [api, cfg.userName])
+
+  // bfcache restores this page frozen on Back; reset transition state and re-fetch.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return
+      setRequested(null)
+      setOptimistic(null)
+      void refresh()
+    }
+    window.addEventListener("pageshow", onPageShow)
+    return () => window.removeEventListener("pageshow", onPageShow)
+  }, [refresh])
 
   // Dashboard "Stop server" lands here with ?stop: hub pages own the stop call
   // (the dashboard can't reach the hub API. The _xsrf cookie is scoped to /hub),
@@ -97,30 +113,30 @@ export function HomePage() {
       announcement={cfg.announcement}
     >
       <PageHero>
-        <StatusIcon tone={status === "running" ? "success" : "primary"} icon={Atom} />
+        <StatusIcon tone={shown === "running" ? "success" : "primary"} icon={Atom} />
 
         <HeroHeading>
           <H1>
-            {status === "running" ? "Your server is running" : null}
-            {status === "stopped" ? "A Virtual Research Environment for Molecular Dynamics" : null}
-            {status === "starting" ? "Starting your server…" : null}
-            {status === "stopping" ? "Stopping your server…" : null}
+            {shown === "running" ? "Your server is running" : null}
+            {shown === "stopped" ? "A Virtual Research Environment for Molecular Dynamics" : null}
+            {shown === "starting" ? "Starting your server…" : null}
+            {shown === "stopping" ? "Stopping your server…" : null}
           </H1>
-          {status === "stopped" ? (
+          {shown === "stopped" ? (
             <Lead className="mx-auto max-w-md">
               MDDash lets you prepare, tune, run, analyze, and publish MD simulations — all in the browser, without
               touching the command line.
             </Lead>
           ) : (
             <Muted className="text-base">
-              {status === "running" ? "Your personal notebook environment is up." : null}
-              {status === "starting" ? "You will be redirected automatically when it's ready for you." : null}
-              {status === "stopping" ? "You can start it again once it has finished stopping." : null}
+              {shown === "running" ? "Your personal notebook environment is up." : null}
+              {shown === "starting" ? "You will be redirected automatically when it's ready for you." : null}
+              {shown === "stopping" ? "You can start it again once it has finished stopping." : null}
             </Muted>
           )}
         </HeroHeading>
 
-        {status === "running" ? (
+        {shown === "running" ? (
           <>
             <Button size="lg" asChild>
               <a href={serverUrl} className="no-underline">
@@ -133,7 +149,7 @@ export function HomePage() {
               size="sm"
               className="border-error text-error hover:bg-error/10"
               onClick={stop}
-              disabled={busy}
+              disabled={requested !== null}
             >
               <Square fill="currentColor" size={16} />
               Stop my server
@@ -141,10 +157,10 @@ export function HomePage() {
           </>
         ) : null}
 
-        {status === "stopped" ? (
+        {shown === "stopped" ? (
           <>
             <PipelineSteps />
-            <Button size="lg" onClick={start} disabled={busy}>
+            <Button size="lg" onClick={start} disabled={requested !== null}>
               <Play size={16} />
               Start my server
             </Button>
