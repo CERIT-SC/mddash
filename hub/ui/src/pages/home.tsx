@@ -27,10 +27,8 @@ export function HomePage() {
   const api = useMemo(() => new HubApi(cfg.baseUrl, cfg.xsrf), [cfg.baseUrl, cfg.xsrf])
 
   const [user, setUser] = useState<HubUserModel | null>(null)
-  // In-flight transition feedback; renders the transition copy without driving the redirect.
   const [requested, setRequested] = useState<Transition | null>(null)
-  // Set when the transition POST resolves; feeds the redirect effect. refresh never clears it:
-  // a getUser issued before that POST returns stale state and would strand the page.
+  // Set only on POST resolve; drives the redirect. refresh never clears it — early getUser is stale.
   const [optimistic, setOptimistic] = useState<Transition | null>(null)
 
   const refresh = useCallback(() => {
@@ -58,8 +56,7 @@ export function HomePage() {
     }
   }, [status, cfg.baseUrl, cfg.userName])
 
-  // Redirect only after the hub has registered the transition: navigating
-  // earlier can abort the POST or make spawn-pending render not_running.
+  // Redirect only after the hub registers the transition; navigating earlier can abort the POST.
   const start = useCallback(() => {
     setRequested("starting")
     api
@@ -82,8 +79,7 @@ export function HomePage() {
       })
   }, [api, cfg.userName])
 
-  // bfcache restores this page verbatim on Back: reset transition state and
-  // re-fetch, or the page is stuck showing the transition forever.
+  // bfcache restores this page frozen on Back; reset transition state and re-fetch.
   useEffect(() => {
     const onPageShow = (e: PageTransitionEvent) => {
       if (!e.persisted) return
