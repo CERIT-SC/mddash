@@ -220,12 +220,12 @@ tuner:
     pullPolicy: IfNotPresent
     maxReplicas: 1  # TODO: increase to 3 when more resources are available
     idleTimeoutSeconds: 3600
+    # Whole GPUs per worker, requested as gpuType. 0 makes workers CPU-only (and unpinned).
+    numGpus: 1
     resources:
       limits:
         cpu: "2"  # TODO: ask for more. Should be at least 32.
         memory: "64Gi"
-        nvidia.com/gpu: "1"
       requests:
         cpu: "2"  # Should be same as limit.
         memory: "16Gi"
-        nvidia.com/gpu: "1"

@@ -358,30 +358,27 @@ tuner:
 
     worker:
       maxReplicas: {{ $cfg.tuner.worker.maxReplicas }}
-      {{- if $gpuProduct }}
+      {{- $numGpus := index $cfg.tuner.worker "numGpus" | default 0 -}}
+      {{- if and $gpuProduct $numGpus }}
       nodeSelector:
         nvidia.com/gpu.product: "{{ $gpuProduct }}"
       {{- end }}
-      numCpu: {{ $cfg.tuner.worker.resources.limits.cpu }}
-      {{- $numGpu := 0 -}}
-      {{- range $k, $v := $cfg.tuner.worker.resources.limits -}}
-        {{- if or (strings.HasPrefix "nvidia.com/" $k) (strings.Contains (strings.ToLower $k) "gpu") -}}
-          {{- $numGpu = $v -}}
-        {{- end -}}
-      {{- end }}
-      numGpu: {{ $numGpu }}
+      numCpu: {{ index $cfg.tuner.worker.resources.limits "cpu" }}
+      numGpu: {{ $numGpus }}
       resources:
         limits:
-          cpu: "{{ $cfg.tuner.worker.resources.limits.cpu }}"
-          memory: "{{ $cfg.tuner.worker.resources.limits.memory }}"
-          {{- if $numGpu }}
-          {{ $cfg.gpuType }}: "{{ $numGpu }}"
+          {{- range $k, $v := $cfg.tuner.worker.resources.limits }}
+          {{ $k }}: {{ $v | quote }}
+          {{- end }}
+          {{- if $numGpus }}
+          {{ $cfg.gpuType }}: {{ $numGpus | quote }}
           {{- end }}
         requests:
-          cpu: "{{ $cfg.tuner.worker.resources.requests.cpu }}"
-          memory: "{{ $cfg.tuner.worker.resources.requests.memory }}"
-          {{- if $numGpu }}
-          {{ $cfg.gpuType }}: "{{ $numGpu }}"
+          {{- range $k, $v := $cfg.tuner.worker.resources.requests }}
+          {{ $k }}: {{ $v | quote }}
+          {{- end }}
+          {{- if $numGpus }}
+          {{ $cfg.gpuType }}: {{ $numGpus | quote }}
           {{- end }}
 
 seaweedfs:
