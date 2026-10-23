@@ -36,25 +36,32 @@ render: ## Render Helm values template
 install: render update ## Install Helm chart
 ifeq ($(ENV),prod)
 	helm install $(package) oci://$(chart_registry)/$(chart_name) --version $(IMAGE_TAG) \
-		--namespace $(namespace) $(values_file) $(timeout) --wait \
+		--namespace $(namespace) $(values_file) $(timeout) --wait=legacy \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 else
 	helm install $(package) $(chart_path) --namespace $(namespace) \
-		$(values_file) $(timeout) --wait \
+		$(values_file) $(timeout) --wait=legacy \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 endif
+	$(MAKE) ray-wait
 
 .PHONY: upgrade
 upgrade: render ## Upgrade Helm release
 ifeq ($(ENV),prod)
 		helm upgrade --install $(package) oci://$(chart_registry)/$(chart_name) --version $(IMAGE_TAG) \
-		--namespace $(namespace) $(values_file) $(timeout) --rollback-on-failure --wait --force-conflicts \
+		--namespace $(namespace) $(values_file) $(timeout) --rollback-on-failure --wait=legacy --force-conflicts \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 else
 	helm upgrade --install $(package) $(chart_path) --namespace $(namespace) \
-		$(values_file) $(timeout) --rollback-on-failure --wait --force-conflicts \
+		$(values_file) $(timeout) --rollback-on-failure --wait=legacy --force-conflicts \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 endif
+	$(MAKE) ray-wait
+
+.PHONY: ray-wait
+ray-wait: ## Wait for the tuner RayCluster head to become ready
+	kubectl -n $(namespace) wait raycluster/tuner-raycluster --for=jsonpath='{.status.state}'=ready --timeout=5m
+	kubectl -n $(namespace) wait pod -l ray.io/cluster=tuner-raycluster,ray.io/node-type=head --for=condition=Ready --timeout=5m
 
 .PHONY: deploy
 deploy: upgrade ## Deploy, alias for upgrade
@@ -113,10 +120,11 @@ history: ## Show Helm release history
 rollback: ## Rollback to previous revision. Set REVISION=N for a specific revision.
 	@if [ -n "$(REVISION)" ]; then \
 		echo "Rolling back to revision $(REVISION)..."; \
-		helm rollback $(package) $(REVISION) --namespace $(namespace); \
+		helm rollback $(package) $(REVISION) --namespace $(namespace) --wait=legacy --force-conflicts; \
 	else \
 		echo "Rolling back to previous revision..."; \
-		helm rollback $(package) --namespace $(namespace); \
+		helm rollback $(package) --namespace $(namespace) --wait=legacy --force-conflicts; \
 	fi
+	$(MAKE) ray-wait
 	@echo "Rollback complete"
 	@$(MAKE) status

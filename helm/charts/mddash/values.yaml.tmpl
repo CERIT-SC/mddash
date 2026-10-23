@@ -3,6 +3,7 @@
 {{- $helmPackage := $cfg.helm.package -}}
 {{- $imageTag := getenv "IMAGE_TAG" -}}
 {{- $registry := $cfg.registry -}}
+{{- $gpuProduct := index $cfg "gpuProduct" | default "" -}}
 {{- /* Configs predating the seaweedfs section default to external (absent == disabled). */ -}}
 {{- $sws := index $cfg.s3 "seaweedfs" | default dict -}}
 {{- $swEnabled := index $sws "enabled" | default false -}}
@@ -139,6 +140,8 @@ jupyterhub:
         value: "{{ $cfg.analysis.image }}"
       GPU_TYPE:
         value: "{{ $cfg.gpuType }}"
+      GPU_PRODUCT:
+        value: "{{ $gpuProduct }}"
       DEFAULT_NOTEBOOKS_REPO:
         value: "{{ $cfg.defaultNotebooksRepo }}"
       # MDRepo OAuth for publishing experiments
@@ -317,6 +320,8 @@ mdrun-api:
       value: "{{ $cfg.amberImage }}"
     - name: GPU_TYPE
       value: "{{ $cfg.gpuType }}"
+    - name: GPU_PRODUCT
+      value: "{{ $gpuProduct }}"
 
 tuner:
   image:
@@ -353,16 +358,28 @@ tuner:
 
     worker:
       maxReplicas: {{ $cfg.tuner.worker.maxReplicas }}
-      numCpu: {{ $cfg.tuner.worker.resources.limits.cpu }}
-      {{- $numGpu := 0 -}}
-      {{- range $k, $v := $cfg.tuner.worker.resources.limits -}}
-        {{- if or (strings.HasPrefix "nvidia.com/" $k) (strings.Contains (strings.ToLower $k) "gpu") -}}
-          {{- $numGpu = $v -}}
-        {{- end -}}
+      {{- $numGpus := index $cfg.tuner.worker "numGpus" | default 0 -}}
+      {{- if and $gpuProduct $numGpus }}
+      nodeSelector:
+        nvidia.com/gpu.product: "{{ $gpuProduct }}"
       {{- end }}
-      numGpu: {{ $numGpu }}
+      numCpu: {{ index $cfg.tuner.worker.resources.limits "cpu" }}
+      numGpu: {{ $numGpus }}
       resources:
-{{ $cfg.tuner.worker.resources | toYAML | indent 8 }}
+        limits:
+          {{- range $k, $v := $cfg.tuner.worker.resources.limits }}
+          {{ $k }}: {{ $v | quote }}
+          {{- end }}
+          {{- if $numGpus }}
+          {{ $cfg.gpuType }}: {{ $numGpus | quote }}
+          {{- end }}
+        requests:
+          {{- range $k, $v := $cfg.tuner.worker.resources.requests }}
+          {{ $k }}: {{ $v | quote }}
+          {{- end }}
+          {{- if $numGpus }}
+          {{ $cfg.gpuType }}: {{ $numGpus | quote }}
+          {{- end }}
 
 seaweedfs:
   enabled: {{ $swEnabled }}

@@ -6,7 +6,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from config import AMBER_IMAGE, GMX_IMAGE, GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
+from config import AMBER_IMAGE, GMX_IMAGE, GPU_PRODUCT, GPU_TYPE, S3_ACCESS_KEY, S3_ENDPOINT, S3_SECRET_KEY
 from enums import JobStatus
 from kubernetes import client, config
 from kubernetes.client.rest import ApiException
@@ -143,6 +143,7 @@ def _build_job_manifest(
     sim_image: str,
     sim_command: str,
     sim_resources: dict[str, Any],
+    use_gpu: bool,
     sim_env: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     s3_init = _s3_init_command(exp_dir, remote)
@@ -162,6 +163,7 @@ def _build_job_manifest(
                 "spec": {
                     "restartPolicy": "Never",
                     "securityContext": {"fsGroup": 1000},
+                    **({"nodeSelector": {"nvidia.com/gpu.product": GPU_PRODUCT}} if use_gpu and GPU_PRODUCT else {}),
                     "initContainers": [
                         {
                             "name": "s3-init",
@@ -209,8 +211,7 @@ def _build_job_manifest(
     }
 
 
-def _gmx_resources(np: int, ntomp: int, nb: str, pme: str) -> dict[str, Any]:
-    use_gpu = nb == "gpu" or pme == "gpu"
+def _gmx_resources(np: int, ntomp: int, use_gpu: bool) -> dict[str, Any]:
     return {
         "requests": {
             "cpu": str(np * ntomp),
@@ -309,6 +310,7 @@ def create_gromacs_job(
     ntomp = int(ntomp)
     nb = nb.lower()
     pme = pme.lower()
+    use_gpu = nb == "gpu" or pme == "gpu"
 
     exp_dir = f"/data/{experiment_id}"
     remote = f"s3remote:{bucket_name}/{experiment_id}/"
@@ -351,7 +353,8 @@ def create_gromacs_job(
         sync_remote=sync_remote,
         sim_image=GMX_IMAGE,
         sim_command=gromacs_command,
-        sim_resources=_gmx_resources(np, ntomp, nb, pme),
+        sim_resources=_gmx_resources(np, ntomp, use_gpu),
+        use_gpu=use_gpu,
         sim_env=[
             {"name": "OMP_NUM_THREADS", "value": str(ntomp)},
             {"name": "TZ", "value": "UTC"},
@@ -421,6 +424,7 @@ def create_amber_job(
         sim_image=AMBER_IMAGE,
         sim_command=amber_command,
         sim_resources=_amber_resources(binary, np, ntomp, use_gpu),
+        use_gpu=use_gpu,
         sim_env=[
             {"name": "OMP_NUM_THREADS", "value": str(ntomp)},
             {"name": "TZ", "value": "UTC"},

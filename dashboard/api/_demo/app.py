@@ -46,6 +46,7 @@ _DEMO_ENV_DEFAULTS = {
     "GMX_CPU_LIMIT": "2000m",
     "GMX_MEMORY_LIMIT": "2Gi",
     "GPU_TYPE": "nvidia.com/gpu",
+    "GPU_PRODUCT": "NVIDIA-A40",
     "TUNER_USER": "demo",
     "TUNER_PASSWORD": "demo",
     "S3_BUCKET": "demo-bucket",
