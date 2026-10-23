@@ -30,6 +30,15 @@
     </noscript>
     <div id="root"></div>
     <script type="module" src="/src/pages/login.tsx"></script>
+    <!-- Chat state is per signed-in session; MUST stay before the widget
+         script, the async bundle would otherwise restore the session first. -->
+    <script>
+      try {
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith("talqo:")) localStorage.removeItem(key)
+        }
+      } catch {}
+    </script>
     <script
       async
       src="https://preview.talqo.chat/widget.js"
