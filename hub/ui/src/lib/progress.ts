@@ -62,7 +62,6 @@ export function useSpawnProgress(progressUrl: string) {
         if (evt.ready) {
           setStatus("ready")
           es.close()
-          window.location.reload()
         } else if (evt.failed) {
           setStatus("failed")
           es.close()
