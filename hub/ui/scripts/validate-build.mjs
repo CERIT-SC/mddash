@@ -9,7 +9,7 @@ import { readFileSync, readdirSync } from "node:fs"
 const CSP =
   "default-src 'self'; script-src 'self' 'unsafe-inline' https://preview.talqo.chat; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://preview.talqo.chat; base-uri 'self'; form-action 'self'"
 
-// A partial host/token edit across the 13 embedding files would silently drop the assistant.
+// A partial host/token edit across the 12 hub entries would silently drop the assistant.
 const TALQO_SRC = "https://preview.talqo.chat/widget.js"
 const TALQO_TOKEN = 'data-talqo-embed-token="IZeaJR7LDQ85F84H2RZMuXjIlpWW_woO02h5dZdJNoc"'
 
