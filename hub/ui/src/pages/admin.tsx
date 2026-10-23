@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 
 import {
   Alert,
+  AlertDescription,
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -124,7 +125,9 @@ export function AdminPage() {
             </div>
 
             {forbidden ? (
-              <Alert variant="error">You do not have permission to administer this hub.</Alert>
+              <Alert variant="error">
+                <AlertDescription>You do not have permission to administer this hub.</AlertDescription>
+              </Alert>
             ) : users === null ? (
               <div className="flex flex-col gap-2">
                 {[0, 1, 2].map((i) => (
