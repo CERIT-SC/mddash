@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 
-import { Alert, Button, H1, H2, Lead, Muted, Progress, Separator } from "@e-infra/design-system"
+import { Alert, AlertDescription, Button, H1, H2, Lead, Muted, Progress, Separator } from "@e-infra/design-system"
 import { Atom, RefreshCw, Square, TriangleAlert } from "lucide-react"
 
 import {
@@ -129,8 +129,16 @@ export function SpawnPendingPage() {
 
         {!failed ? <WaitHint>This may take a few minutes</WaitHint> : null}
 
-        {retryError ? <Alert variant="error">{retryError}</Alert> : null}
-        {cancelError ? <Alert variant="error">{cancelError}</Alert> : null}
+        {retryError ? (
+          <Alert variant="error">
+            <AlertDescription>{retryError}</AlertDescription>
+          </Alert>
+        ) : null}
+        {cancelError ? (
+          <Alert variant="error">
+            <AlertDescription>{cancelError}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <Separator className="w-full" />
 
