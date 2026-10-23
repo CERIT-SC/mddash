@@ -4,7 +4,7 @@ MDDash is a browser-based Virtual Research Environment for molecular dynamics (M
 
 Authentication is via e-INFRA CZ single sign-on ("Sign in with e-INFRA CZ"); any e-INFRA CZ account can sign in.
 
-A Talqo chat assistant widget is embedded on every page (landing, JupyterHub, and dashboard) for in-browser help.
+A Talqo chat assistant widget is embedded on JupyterHub and dashboard pages for in-browser help.
 
 ## The five-stage workflow
 

@@ -7,7 +7,11 @@ import { readFileSync, readdirSync } from "node:fs"
 
 // All entries must carry the same CSP; enforcing it here catches copy drift.
 const CSP =
-  "default-src 'self'; script-src 'self' 'unsafe-inline' https://talqo.chat; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://talqo.chat; base-uri 'self'; form-action 'self'"
+  "default-src 'self'; script-src 'self' 'unsafe-inline' https://preview.talqo.chat; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://preview.talqo.chat; base-uri 'self'; form-action 'self'"
+
+// A partial host/token edit across the 12 hub entries would silently drop the assistant.
+const TALQO_SRC = "https://preview.talqo.chat/widget.js"
+const TALQO_TOKEN = 'data-talqo-embed-token="IZeaJR7LDQ85F84H2RZMuXjIlpWW_woO02h5dZdJNoc"'
 
 const ENTRIES = [
   "login.html",
@@ -37,6 +41,10 @@ for (const entry of ENTRIES) {
   }
   if (!html.includes(CSP)) {
     console.error(`FAIL ${entry}: CSP meta is missing or diverges from the shared policy`)
+    failed = true
+  }
+  if (!html.includes(TALQO_SRC) || !html.includes(TALQO_TOKEN)) {
+    console.error(`FAIL ${entry}: Talqo embed is missing or diverges from the shared snippet`)
     failed = true
   }
   if (!html.includes("window.appConfig = {")) {
