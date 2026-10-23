@@ -17,9 +17,6 @@ chart_path := charts/mddash
 chart_name := mddash-jupyterhub
 values_file := -f $(chart_path)/values.yaml
 timeout := --timeout 10m
-# The default watcher wait never sees the RayCluster as current: KubeRay writes
-# status.observedGeneration only on state change. legacy covers native resources; ray-wait covers Ray.
-wait := --wait=legacy
 
 .PHONY: help
 help: ## Show this help
@@ -39,11 +36,11 @@ render: ## Render Helm values template
 install: render update ## Install Helm chart
 ifeq ($(ENV),prod)
 	helm install $(package) oci://$(chart_registry)/$(chart_name) --version $(IMAGE_TAG) \
-		--namespace $(namespace) $(values_file) $(timeout) $(wait) \
+		--namespace $(namespace) $(values_file) $(timeout) --wait=legacy \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 else
 	helm install $(package) $(chart_path) --namespace $(namespace) \
-		$(values_file) $(timeout) $(wait) \
+		$(values_file) $(timeout) --wait=legacy \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 endif
 	$(MAKE) ray-wait
@@ -52,16 +49,15 @@ endif
 upgrade: render ## Upgrade Helm release
 ifeq ($(ENV),prod)
 		helm upgrade --install $(package) oci://$(chart_registry)/$(chart_name) --version $(IMAGE_TAG) \
-		--namespace $(namespace) $(values_file) $(timeout) --rollback-on-failure $(wait) --force-conflicts \
+		--namespace $(namespace) $(values_file) $(timeout) --rollback-on-failure --wait=legacy --force-conflicts \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 else
 	helm upgrade --install $(package) $(chart_path) --namespace $(namespace) \
-		$(values_file) $(timeout) --rollback-on-failure $(wait) --force-conflicts \
+		$(values_file) $(timeout) --rollback-on-failure --wait=legacy --force-conflicts \
 		--set-file jupyterhub.hub.extraConfig.pre-spawn-hook=$(chart_path)/files/pre_spawn_hook.py
 endif
 	$(MAKE) ray-wait
 
-# Follows every helm install/upgrade: $(wait) covers native resources only, not the RayCluster CR.
 .PHONY: ray-wait
 ray-wait: ## Wait for the tuner RayCluster head to become ready
 	kubectl -n $(namespace) wait raycluster/tuner-raycluster --for=jsonpath='{.status.state}'=ready --timeout=5m
