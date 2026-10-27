@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 
-import { Alert, Button, H1, H2, Lead, Muted, Progress, Separator } from "@e-infra/design-system"
+import { Alert, AlertDescription, Button, H1, H2, Lead, Muted, Progress, Separator } from "@e-infra/design-system"
 import { Atom, RefreshCw, Square, TriangleAlert } from "lucide-react"
 
 import {
@@ -34,9 +34,14 @@ export function SpawnPendingPage() {
   const [retrying, setRetrying] = useState(false)
   const [retryError, setRetryError] = useState<string | null>(null)
 
+  // A cancel in flight owns navigation; reloading now would abort its DELETE.
+  useEffect(() => {
+    if (status === "ready" && !cancelling) window.location.reload()
+  }, [status, cancelling])
+
   // Stream gone but server not ready. Fall back to polling for the outcome.
   useEffect(() => {
-    if (status === "ready" || status === "failed") return
+    if (status === "ready" || status === "failed" || cancelling) return
     if (!streamEnded) return
     let cancelled = false
     const poll = async () => {
@@ -59,7 +64,7 @@ export function SpawnPendingPage() {
       cancelled = true
       clearInterval(id)
     }
-  }, [api, cfg.userName, cfg.baseUrl, status, streamEnded])
+  }, [api, cfg.userName, cfg.baseUrl, status, streamEnded, cancelling])
 
   const retry = async () => {
     setRetrying(true)
@@ -86,7 +91,8 @@ export function SpawnPendingPage() {
   }
 
   const failed = status === "failed"
-  const showProgress = !failed && !streamEnded
+  const ready = status === "ready"
+  const showProgress = !failed && !streamEnded && !cancelling
 
   return (
     <AuthedLayout
@@ -100,9 +106,13 @@ export function SpawnPendingPage() {
         <StatusIcon tone={failed ? "error" : "primary"} icon={failed ? TriangleAlert : Atom} />
 
         <HeroHeading ariaLive>
-          <H1>{failed ? "Failed to start your server" : "Starting your server…"}</H1>
+          <H1>
+            {failed ? "Failed to start your server" : cancelling ? "Stopping your server…" : "Starting your server…"}
+          </H1>
           {failed ? (
             <Lead>{FAILED_LEAD}</Lead>
+          ) : cancelling ? (
+            <Muted className="text-base">You can start it again once it has finished stopping.</Muted>
           ) : (
             <Muted className="text-base">You will be redirected automatically when it's ready for you.</Muted>
           )}
@@ -125,12 +135,22 @@ export function SpawnPendingPage() {
           </div>
         ) : null}
 
-        {!failed && streamEnded ? <Muted aria-live="polite">Waiting for server to become ready…</Muted> : null}
+        {!failed && streamEnded && !cancelling ? (
+          <Muted aria-live="polite">Waiting for server to become ready…</Muted>
+        ) : null}
 
-        {!failed ? <WaitHint>This may take a few minutes</WaitHint> : null}
+        {!failed && !cancelling ? <WaitHint>This may take a few minutes</WaitHint> : null}
 
-        {retryError ? <Alert variant="error">{retryError}</Alert> : null}
-        {cancelError ? <Alert variant="error">{cancelError}</Alert> : null}
+        {retryError ? (
+          <Alert variant="error">
+            <AlertDescription>{retryError}</AlertDescription>
+          </Alert>
+        ) : null}
+        {cancelError ? (
+          <Alert variant="error">
+            <AlertDescription>{cancelError}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <Separator className="w-full" />
 
@@ -146,7 +166,7 @@ export function SpawnPendingPage() {
           )}
         </DetailsLog>
 
-        {!failed ? (
+        {!failed && (!ready || cancelling) ? (
           <Button
             variant="outline"
             size="sm"
