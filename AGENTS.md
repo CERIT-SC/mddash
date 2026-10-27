@@ -84,6 +84,12 @@ make lint-workflows  # when editing GitHub Actions workflows (requires actionlin
 - Production application releases use `make release VERSION=x.y.z`, which creates the SemVer tag and lets `release.yml` deploy prod and create the GitHub Release. `make all ENV=prod` is rejected. Operators only need `ENV=prod` for `status`/`logs`/`history`/`rollback`.
 - Helm: `make -C helm render` (render values), `make -C helm update` (update deps).
 
+## Design specs
+
+- Specs and plans are working documents. They never land on `master`.
+- Leave them uncommitted. If one must be committed to share it, delete it from the branch before the PR merges.
+- Put the decisions reviewers need in the PR description, not a link to a spec.
+
 ## CI/CD
 
 - `master` pushes trigger `cd.yml` (calls CI, then deploys dev); `v*` SemVer tags trigger `release.yml` (calls CI, deploys prod, creates GitHub Release). PRs run CI only.
