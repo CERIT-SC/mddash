@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test"
 
-// Seed: DNA study eeeee, simulation "dna": FINISHED RMSD plus a Clusters job RUNNING for 25s after
-// API start. That live job hides Re-calculate, so assert the rendered result, not the run controls.
+// Seed: DNA study eeeee, FINISHED RMSD analysis on simulation "dna".
+// A seeded Clusters job there hides Re-calculate for the first 25s.
 test("view finished AMBER analysis results and the trajectory viewer", async ({ page }) => {
   await page.goto("experiments/eeeee")
   await page.getByRole("button", { name: /Go to section 4: Analyze/ }).click()

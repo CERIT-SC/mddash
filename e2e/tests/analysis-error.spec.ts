@@ -1,8 +1,7 @@
 import { expect, test } from "@playwright/test"
 
 // Pockets has no cache payload. The miss ends the job in ERROR without network.
-// Seed: villin study ddddd, simulation "villin_equilibration": no seeded analyses, unlike "villin",
-// whose Clusters job runs for 25s after API start and hides Calculate meanwhile.
+// Seed: villin study ddddd, simulation "villin_equilibration" ("villin" hides Calculate for 25s).
 test("pockets analysis ends in a durable error state", async ({ page }) => {
   await page.goto("experiments/ddddd")
   await page.getByRole("tab", { name: "villin_equilibration", exact: true }).click()
