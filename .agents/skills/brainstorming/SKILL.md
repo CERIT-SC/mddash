@@ -71,7 +71,7 @@ Approval applies to the artifact presented, not to later artifacts that do not y
 
 ### Documentation
 
-For a bounded design, the approved conversation is sufficient. For an architectural design, create a spec when requested or required by the project workflow; otherwise prefer keeping the approved design in the conversation. Follow the project's convention for where specs live and whether they are committed (this repo: never on `master`, see `AGENTS.md`). Absent one, use `docs/specs/YYYY-MM-DD-<topic>-design.md` and do not commit without explicit authorization.
+For a bounded design, the approved conversation is sufficient. For an architectural design, create a spec when requested or required by the project workflow; otherwise prefer keeping the approved design in the conversation. Use the project's convention or, absent one, `docs/specs/YYYY-MM-DD-<topic>-design.md`. Do not commit without explicit authorization.
 
 Record behavior, interfaces, constraints, important tradeoffs, and verification. Omit conversation transcripts and discarded approaches unless their rationale constrains the final design.
 
