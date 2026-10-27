@@ -1,7 +1,7 @@
 # Per-user usage monitoring - design
 
 - Issue: [CERIT-SC/mddash#169](https://github.com/CERIT-SC/mddash/issues/169): *"Add some monitoring so we can see usage by individual users."* MDRun first (most expensive), optionally paired with Grafana; Tuner and user namespaces are nice-to-have.
-- Status is Draft, awaiting review.
+- Status is Approved (2026-10-27).
 - Scope is operator-facing usage attribution and dashboards. Per-user quotas, billing, user-facing usage views, alerting, and log aggregation are out of scope.
 
 ## Summary
