@@ -223,6 +223,7 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
         Create a JupyterLab notebook pod for experiment setup.
 
         GROMACS and AmberTools binaries are bundled in the notebook image, so no sidecar is needed.
+        The pod runs user code, so it gets no service account token.
 
         Returns:
             The UID of the pod, for use as an owner reference on its service.
@@ -285,6 +286,7 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
             "kind": "Pod",
             "metadata": {"name": name, "namespace": NAMESPACE, "labels": labels},
             "spec": {
+                "automountServiceAccountToken": False,
                 "securityContext": {
                     "fsGroup": 1000,
                     "fsGroupChangePolicy": "OnRootMismatch",
@@ -313,7 +315,7 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
         resources: dict | None = None,
     ) -> None:
         """
-        Create a Job running `sh -c command` in /mddash/{experiment_id} (no retries, shared PVC).
+        Create a Job running `sh -c command` in /mddash/{experiment_id} (no retries, shared PVC, no SA token).
 
         Args:
             name: The name of the job to create.
@@ -336,6 +338,7 @@ class K8sClient:  # ruff:ignore[too-many-public-methods]
                     "metadata": {"labels": {"job": name}},
                     "spec": {
                         "restartPolicy": "Never",
+                        "automountServiceAccountToken": False,
                         "securityContext": {"fsGroup": 1000, "fsGroupChangePolicy": "OnRootMismatch"},
                         "containers": [job_container],
                         "volumes": [{"name": volume_name, "persistentVolumeClaim": {"claimName": PVC_NAME}}],
