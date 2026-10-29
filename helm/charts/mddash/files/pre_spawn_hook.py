@@ -25,10 +25,8 @@ logger = logging.getLogger(__name__)
 
 PRESERVE_LABEL = "mddash.io/preserve-on-stop"
 
-# User code in the notebook container must not reach the Kubernetes API: with a token it could read the
-# shared S3 credentials from the pod spec (get pods) or by mounting a Secret into a pod it creates
-# (create pods). The pod-wide ServiceAccount token is disabled and a projected token is mounted only into
-# the api sidecar, the sole container that calls the API (notebooks, analysis jobs, services, logs).
+# Only the api sidecar (the one container that calls the Kubernetes API) is given a ServiceAccount
+# token; the notebook and other containers get none, keeping user code away from cluster credentials.
 _API_SA_VOLUME = "api-serviceaccount-token"
 _API_SA_MOUNT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount"
 
@@ -299,7 +297,7 @@ def _sa_token_volume() -> dict:
     Projected ServiceAccount token for the api sidecar.
 
     Mirrors the default ``kube-api-access`` projection (token, cluster CA, namespace) so
-    ``load_incluster_config()`` keeps working in api while no other container carries a token.
+    ``load_incluster_config()`` works in api.
     """
     return {
         "name": _API_SA_VOLUME,
@@ -724,7 +722,7 @@ async def pre_spawn_hook(spawner: "KubeSpawner") -> None:  # ruff:ignore[too-man
         spawner.namespace = user_namespace
         spawner.dns_name = spawner.dns_name_template.format(namespace=user_namespace, name=spawner.pod_name)
         spawner.service_account = "default"
-        # Drop the pod-wide SA token; only the api sidecar gets a projected token (see _API_SA_VOLUME).
+        # No pod-wide SA token; only the api sidecar gets one (mounted via _API_SA_VOLUME).
         spawner.automount_service_account_token = False
         spawner.volumes = [
             {"name": volume_name, "persistentVolumeClaim": {"claimName": pvc_name}},
