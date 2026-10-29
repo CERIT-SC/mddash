@@ -239,6 +239,26 @@ class TestCreateNotebookPodUid:
         core.create_namespaced_pod.assert_not_called()
 
 
+class TestUserCodePodsGetNoServiceAccountToken:
+    """Notebook pods and analysis Jobs run user code, so they get no service account token."""
+
+    async def test_notebook_pod(self, mock_k8s: tuple[AsyncMock, AsyncMock], clients: Clients) -> None:
+        core, _ = mock_k8s
+        core.read_namespaced_pod.side_effect = ApiException(status=404)
+
+        await clients.k8s.create_notebook_pod("notebook-exp1", "exp1", "/dash/notebook/exp1", "tok")
+
+        assert core.create_namespaced_pod.call_args.kwargs["body"]["spec"]["automountServiceAccountToken"] is False
+
+    async def test_analysis_job(self, mock_k8s: tuple[AsyncMock, AsyncMock], clients: Clients) -> None:
+        _, batch = mock_k8s
+
+        await clients.k8s.create_job("analysis-x", "image", "exp01", "true")
+
+        pod_spec = batch.create_namespaced_job.call_args.kwargs["body"]["spec"]["template"]["spec"]
+        assert pod_spec["automountServiceAccountToken"] is False
+
+
 class TestDeletes:
     """Deletes hit the API directly: a gone resource is deleted, any other API error propagates."""
 
