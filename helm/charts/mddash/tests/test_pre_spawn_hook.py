@@ -147,6 +147,7 @@ class _FakeSpawner:
         self.volumes: list[dict[str, object]] | None = None
         self.environment: dict[str, str] = {}
         self.extra_containers: list[dict[str, object]] | None = None
+        self.automount_service_account_token: bool | None = None
 
     def get_env(self) -> dict[str, str]:
         return dict(self._env)
@@ -639,6 +640,32 @@ def test_api_container_passes_through_config_env(monkeypatch: pytest.MonkeyPatch
     assert {"name": "vol", "mountPath": "/mddash"} in container["volumeMounts"]
 
 
+def test_api_container_mounts_projected_sa_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The api sidecar carries the projected ServiceAccount token so it alone can call the Kubernetes API."""
+    module = _load_module(monkeypatch)
+    _set_images(monkeypatch, API_IMAGE="api:1", NS_MAX_NOTEBOOKS="5")
+    sc = module._get_security_context()
+
+    container = module._api_container(
+        "/user/alice", "alice", "mddash-user-alice-ns", "hub-ns", "bucket", "pvc", "vol", sc
+    )
+
+    assert container is not None
+    token_mounts = [m for m in container["volumeMounts"] if m["name"] == module._API_SA_VOLUME]
+    assert token_mounts == [{"name": module._API_SA_VOLUME, "mountPath": module._API_SA_MOUNT_PATH, "readOnly": True}]
+
+
+def test_sa_token_volume_projects_token_ca_and_namespace(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The projected volume mirrors the default kube-api-access sources: token, cluster CA, namespace."""
+    module = _load_module(monkeypatch)
+
+    volume = module._sa_token_volume()
+
+    assert volume["name"] == module._API_SA_VOLUME
+    source_kinds = {next(iter(source)) for source in volume["projected"]["sources"]}
+    assert source_kinds == {"serviceAccountToken", "configMap", "downwardAPI"}
+
+
 def test_s3_sync_container_mounts_shared_volume(monkeypatch: pytest.MonkeyPatch) -> None:
     """The s3-sync container mounts the shared volume and receives S3 credentials."""
     module = _load_module(monkeypatch)
@@ -834,13 +861,21 @@ def test_pre_spawn_hook_provisions_full_user_environment(monkeypatch: pytest.Mon
 
     assert spawner.namespace == expected_namespace
     assert spawner.service_account == "default"
-    assert spawner.volumes == [{"name": "mddash-volume", "persistentVolumeClaim": {"claimName": "mddash-user-pvc"}}]
+    assert spawner.volumes == [
+        {"name": "mddash-volume", "persistentVolumeClaim": {"claimName": "mddash-user-pvc"}},
+        module._sa_token_volume(),
+    ]
+    assert spawner.automount_service_account_token is False
     assert spawner.environment["JUPYTERHUB_API_URL"] == "http://hub.hub-ns.svc.cluster.local:8081/hub/api"
     assert (
         spawner.environment["JUPYTERHUB_ACTIVITY_URL"]
         == "http://hub.hub-ns.svc.cluster.local:8081/hub/api/users/alice/activity"
     )
     assert [c["name"] for c in spawner.extra_containers] == ["proxy", "auth", "api", "s3-sync"]
+    sidecars = {c["name"]: c for c in spawner.extra_containers}
+    assert any(m["name"] == module._API_SA_VOLUME for m in sidecars["api"]["volumeMounts"])
+    for name in ("proxy", "auth", "s3-sync"):
+        assert all(m["name"] != module._API_SA_VOLUME for m in sidecars[name].get("volumeMounts", []))
 
     assert core_api.read_namespace.calls
     assert core_api.list_namespaced_resource_quota.calls
